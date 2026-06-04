@@ -9,7 +9,9 @@ import com.foxhole.beta.core.data.InsecureTlsProfileConsentRequiredException
 import com.foxhole.beta.core.data.ProfileImportPayloadTooLargeException
 import com.foxhole.beta.core.data.requireLocalProfileImportWithinLimit
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 internal fun HomeViewModel.onPasteFromClipboardInternal() {
     val text = clipboard.primaryClip?.firstTextItem(getApplication())
@@ -21,18 +23,32 @@ internal fun HomeViewModel.onPasteFromClipboardInternal() {
 }
 
 internal fun HomeViewModel.importProfileRawInternal(value: String) {
-    if (value.isBlank()) {
-        snackbars.tryEmit(errorBanner(R.string.profile_import_failed))
-        return
-    }
-    val boundedValue =
-        try {
-            requireLocalProfileImportWithinLimit(value)
-        } catch (_: ProfileImportPayloadTooLargeException) {
-            snackbars.tryEmit(errorBanner(R.string.profile_import_too_large))
-            return
+    profileImportInProgressMutable.value = true
+    viewModelScope.launch {
+        val boundedValue =
+            try {
+                withContext(Dispatchers.Default) {
+                    value
+                        .takeUnless(String::isBlank)
+                        ?.let(::requireLocalProfileImportWithinLimit)
+                }
+            } catch (_: ProfileImportPayloadTooLargeException) {
+                profileImportInProgressMutable.value = false
+                snackbars.tryEmit(errorBanner(R.string.profile_import_too_large))
+                return@launch
+            }
+        if (boundedValue == null) {
+            profileImportInProgressMutable.value = false
+            snackbars.tryEmit(errorBanner(R.string.profile_import_failed))
+            return@launch
         }
-    importRaw(boundedValue)
+        importRawWithInsecureTlsDecision(
+            value = boundedValue,
+            allowInsecureTlsForProfile = false,
+            excludeInsecureTlsOptions = false,
+            precheckInsecureTlsWarning = true,
+        )
+    }
 }
 
 internal fun HomeViewModel.importRawInternal(value: String) {

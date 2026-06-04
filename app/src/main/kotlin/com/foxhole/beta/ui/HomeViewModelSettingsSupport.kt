@@ -577,11 +577,25 @@ internal suspend fun HomeViewModel.syncLocalGuardWithPermissionRequest() {
     }
     val mode = container.settingsRepository.current().localGuardModeOrNull()
     if (mode != null && android.net.VpnService.prepare(getApplication<Application>()) != null) {
-        pendingConnectRequest =
-            PendingConnectRequest(
-                action = PendingConnectAction.LOCAL_GUARD,
+        val accepted =
+            enqueueVpnPermissionRequest(
+                PendingConnectRequest(
+                    action = PendingConnectAction.LOCAL_GUARD,
+                ),
             )
-        emitVpnPermissionRequest()
+        if (!accepted && pendingConnectRequest?.action != PendingConnectAction.LOCAL_GUARD) {
+            pendingLocalGuardPermissionSync = true
+            container.diagnosticsLogger.record(
+                "connection",
+                "local guard permission sync deferred: active vpn permission request",
+            )
+        }
+        if (!accepted && pendingConnectRequest?.action == PendingConnectAction.LOCAL_GUARD) {
+            container.diagnosticsLogger.record(
+                "connection",
+                "local guard permission sync already pending",
+            )
+        }
         return
     }
     container.connectionController.syncLocalGuard()

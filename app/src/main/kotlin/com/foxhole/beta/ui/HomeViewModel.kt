@@ -774,6 +774,7 @@ class HomeViewModel(
     val requestVpnPermission = requestVpnPermissionChannel.receiveAsFlow()
     val requestNotificationPermission = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     internal var pendingConnectRequest: PendingConnectRequest? = null
+    internal var pendingLocalGuardPermissionSync: Boolean = false
     internal val ipRefreshCoordinator = IpRefreshCoordinator()
     internal var ipInfoRefreshJob: Job? = null
     internal var ipInfoRefreshToken: Long = 0L
@@ -1024,13 +1025,15 @@ class HomeViewModel(
                 "permissions",
                 "ignored vpn permission result without active request granted=$granted",
             )
+            drainPendingLocalGuardPermissionSync()
             return
         }
         if (!granted) {
-            if (request?.profileId == FoxholeVpnService.TOR_ONLY_PROFILE_ID) {
+            if (request.profileId == FoxholeVpnService.TOR_ONLY_PROFILE_ID) {
                 clearTorOperation()
             }
             snackbars.tryEmit(errorBanner(R.string.vpn_permission_denied))
+            drainPendingLocalGuardPermissionSync()
             return
         }
         when (request.action) {
@@ -1049,6 +1052,7 @@ class HomeViewModel(
                     container.connectionController.syncLocalGuard()
                 }
         }
+        drainPendingLocalGuardPermissionSync()
     }
 
     fun onRefreshProfile() {
@@ -1809,8 +1813,33 @@ class HomeViewModel(
 
     fun onAppTrafficStatsEnabledChanged(value: Boolean) = onAppTrafficStatsEnabledChangedInternal(value)
 
-    internal fun emitVpnPermissionRequest() {
+    internal fun enqueueVpnPermissionRequest(request: PendingConnectRequest): Boolean {
+        val active = pendingConnectRequest
+        if (active != null) {
+            container.diagnosticsLogger.record(
+                "permissions",
+                "ignored vpn permission request while active request is pending " +
+                    "active=${active.action.name.lowercase()} requested=${request.action.name.lowercase()}",
+            )
+            return false
+        }
+        pendingConnectRequest = request
         requestVpnPermissionChannel.trySend(Unit)
+        return true
+    }
+
+    private fun drainPendingLocalGuardPermissionSync() {
+        if (!pendingLocalGuardPermissionSync) {
+            return
+        }
+        pendingLocalGuardPermissionSync = false
+        container.diagnosticsLogger.record(
+            "connection",
+            "local guard permission sync retrying after vpn permission result",
+        )
+        viewModelScope.launch {
+            syncLocalGuardWithPermissionRequest()
+        }
     }
 
     companion object {

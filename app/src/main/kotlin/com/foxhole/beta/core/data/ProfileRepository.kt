@@ -578,11 +578,10 @@ class ProfileRepository(
         val loaded = loadResolvedConfig(profileId, protocolOptionIdOverride)
         val repaired = repairResolvedConfigIfNeeded(loaded)
         val effectiveAllowInsecureTls =
-            loaded.settings.expert.allowInsecureTls ||
-                loaded.secret.requiresInsecureTls ||
-                loaded.selectedOption?.requiresInsecureTls == true ||
-                loaded.selectedOption?.normalizedConfigJson?.requiresInsecureTls(json) == true ||
-                repaired.runtimeConfig.requiresInsecureTls(json)
+            allowsInsecureTlsForStoredProfileRuntime(
+                allowInsecureTlsGlobally = loaded.settings.expert.allowInsecureTls,
+                secret = loaded.secret,
+            )
         val sanitized =
             withContext(Dispatchers.IO) {
                 parser.sanitizeResolvedConfig(
@@ -630,9 +629,10 @@ class ProfileRepository(
                 raw = loaded.resolvedConfig,
                 settings = loaded.settings,
                 allowInsecureTls =
-                    loaded.settings.expert.allowInsecureTls ||
-                        loaded.secret.requiresInsecureTls ||
-                        loaded.selectedOption?.requiresInsecureTls == true,
+                    allowsInsecureTlsForStoredProfileRuntime(
+                        allowInsecureTlsGlobally = loaded.settings.expert.allowInsecureTls,
+                        secret = loaded.secret,
+                    ),
             )
         val runtimeConfig = repaired ?: loaded.resolvedConfig
         require(runtimeConfig.trimStart().startsWith("{")) { "stored profile config is not valid JSON" }
@@ -660,12 +660,11 @@ class ProfileRepository(
         val entity = dao.getById(profileId) ?: error("profile not found")
         val secret = secretStore.read(entity.secretRef) ?: error("profile secret is missing")
         val settings = settingsRepository.current()
-        val selectedOption = secret.selectedStoredProtocolOptionForRuntime(protocolOptionIdOverride)
         val effectiveAllowInsecureTls =
-            settings.expert.allowInsecureTls ||
-                secret.requiresInsecureTls ||
-                selectedOption?.requiresInsecureTls == true ||
-                selectedOption?.normalizedConfigJson?.requiresInsecureTls(json) == true
+            allowsInsecureTlsForStoredProfileRuntime(
+                allowInsecureTlsGlobally = settings.expert.allowInsecureTls,
+                secret = secret,
+            )
         val sanitized =
             withContext(Dispatchers.IO) {
                 parser.sanitizeResolvedConfig(

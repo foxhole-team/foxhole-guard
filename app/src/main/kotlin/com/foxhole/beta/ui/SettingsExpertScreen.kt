@@ -59,6 +59,7 @@ fun ExpertSettingsScreen(
         title = stringResource(R.string.expert_settings),
         snackbarHostState = snackbarHostState,
         onNavigateUp = onNavigateUp,
+        tag = "expert_settings_screen",
         actions = {
             SettingsHelpAction(
                 title = stringResource(R.string.expert_settings),

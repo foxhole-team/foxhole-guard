@@ -198,6 +198,13 @@ val verifyReleaseBuildConfigDefaults by tasks.registering {
         require("public static final boolean ALLOW_INSECURE_TLS_BY_DEFAULT = false;" in content) {
             "release BuildConfig must set ALLOW_INSECURE_TLS_BY_DEFAULT=false"
         }
+        val expectedDiagnosticLogcat = if (enableReleaseProbe) "true" else "false"
+        require("public static final boolean ENABLE_DIAGNOSTIC_LOGCAT = $expectedDiagnosticLogcat;" in content) {
+            "release BuildConfig must set ENABLE_DIAGNOSTIC_LOGCAT=$expectedDiagnosticLogcat"
+        }
+        require("public static final boolean ENABLE_STRICT_MODE = false;" in content) {
+            "release BuildConfig must set ENABLE_STRICT_MODE=false"
+        }
     }
 }
 
@@ -208,6 +215,18 @@ tasks.matching { task -> task.name == "assembleRelease" }.configureEach {
 
 tasks.named("check") {
     dependsOn(verifyReleaseBuildConfigDefaults)
+}
+
+tasks.matching { task ->
+    task.name in
+        setOf(
+            "lintAnalyzeDebug",
+            "lintAnalyzeDebugUnitTest",
+            "lintAnalyzeDebugAndroidTest",
+            "lintAnalyzeRelease",
+        )
+}.configureEach {
+    dependsOn("kspDebugKotlin", "kspReleaseKotlin")
 }
 
 android {

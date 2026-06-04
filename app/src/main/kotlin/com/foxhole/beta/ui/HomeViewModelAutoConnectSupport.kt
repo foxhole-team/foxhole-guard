@@ -79,13 +79,13 @@ internal fun HomeViewModel.onAutoConnectActiveProfileInternal() {
         }
         val prepareIntent = android.net.VpnService.prepare(getApplication())
         if (prepareIntent != null) {
-            pendingConnectRequest =
+            enqueueVpnPermissionRequest(
                 PendingConnectRequest(
                     profileId = profileId,
                     protocolOptionId = protocolOptionId,
                     action = PendingConnectAction.AUTO_CONNECT,
-                )
-            emitVpnPermissionRequest()
+                ),
+            )
         } else {
             connect(profileId, protocolOptionId = protocolOptionId)
         }
@@ -108,12 +108,12 @@ internal fun HomeViewModel.onAutoConnectActiveProfileInternal() {
     }
     val prepareIntent = android.net.VpnService.prepare(getApplication())
     if (prepareIntent != null) {
-        pendingConnectRequest =
+        enqueueVpnPermissionRequest(
             PendingConnectRequest(
                 profileId = profileId,
                 action = PendingConnectAction.AUTO_CONNECT,
-            )
-        emitVpnPermissionRequest()
+            ),
+        )
     } else {
         startAutoConnect(profileId)
     }
@@ -132,12 +132,12 @@ internal fun HomeViewModel.requestReconnectInternal(profileId: Long) {
     }
     val prepareIntent = android.net.VpnService.prepare(getApplication())
     if (prepareIntent != null) {
-        pendingConnectRequest =
+        enqueueVpnPermissionRequest(
             PendingConnectRequest(
                 profileId = profileId,
                 action = PendingConnectAction.RECONNECT,
-            )
-        emitVpnPermissionRequest()
+            ),
+        )
     } else {
         reconnect(profileId)
     }

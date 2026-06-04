@@ -146,15 +146,70 @@ class ProfileInsecureTlsSupportTest {
     }
 
     @Test
+    fun `runtime insecure tls allowance ignores raw option markers without consent`() {
+        val secret =
+            StoredProfileSecret(
+                requiresInsecureTls = false,
+                insecureTlsConsentGranted = false,
+                protocolOptions =
+                    listOf(
+                        StoredProfileProtocolOption(
+                            id = "hysteria2",
+                            displayName = "Hysteria2",
+                            protocolHint = ProtocolHint.HYSTERIA2,
+                            normalizedConfigJson = insecureConfig(ProtocolHint.HYSTERIA2),
+                            requiresInsecureTls = true,
+                        ),
+                    ),
+            )
+
+        assertFalse(
+            allowsInsecureTlsForStoredProfileRuntime(
+                allowInsecureTlsGlobally = false,
+                secret = secret,
+            ),
+        )
+        assertTrue(
+            allowsInsecureTlsForStoredProfileRuntime(
+                allowInsecureTlsGlobally = true,
+                secret = secret,
+            ),
+        )
+    }
+
+    @Test
     fun `legacy stored profile-level insecure tls marker counts as refresh consent`() {
         val secret = StoredProfileSecret(requiresInsecureTls = true)
 
         assertTrue(secret.hasInsecureTlsConsent())
+        assertTrue(
+            allowsInsecureTlsForStoredProfileRuntime(
+                allowInsecureTlsGlobally = false,
+                secret = secret,
+            ),
+        )
         assertFalse(
             shouldRequireInsecureTlsRefreshConsent(
                 allowInsecureTlsGlobally = false,
                 profileInsecureTlsConsentGranted = secret.hasInsecureTlsConsent(),
                 strictParseFailedForInsecureTls = true,
+            ),
+        )
+    }
+
+    @Test
+    fun `explicit stored insecure tls denial overrides profile marker for runtime`() {
+        val secret =
+            StoredProfileSecret(
+                requiresInsecureTls = true,
+                insecureTlsConsentGranted = false,
+            )
+
+        assertFalse(secret.hasInsecureTlsConsent())
+        assertFalse(
+            allowsInsecureTlsForStoredProfileRuntime(
+                allowInsecureTlsGlobally = false,
+                secret = secret,
             ),
         )
     }

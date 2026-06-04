@@ -221,13 +221,13 @@ internal fun HomeViewModel.requestManualConnectPermissionOrConnect(
 ) {
     val prepareIntent = android.net.VpnService.prepare(getApplication())
     if (prepareIntent != null) {
-        pendingConnectRequest =
+        enqueueVpnPermissionRequest(
             PendingConnectRequest(
                 profileId = profileId,
                 protocolOptionId = protocolOptionId,
                 action = PendingConnectAction.MANUAL,
-            )
-        emitVpnPermissionRequest()
+            ),
+        )
     } else {
         connect(profileId, protocolOptionId = protocolOptionId)
     }

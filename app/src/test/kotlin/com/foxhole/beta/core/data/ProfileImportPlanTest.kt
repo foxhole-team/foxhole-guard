@@ -3,11 +3,12 @@ package com.foxhole.beta.core.data
 import com.foxhole.beta.core.importer.ProfileImportParser
 import com.foxhole.beta.core.model.ProfileSourceType
 import com.foxhole.beta.core.network.testRemoteHostResolver
-import java.io.File
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.File
 
 class ProfileImportPlanTest {
     private val json =
@@ -88,6 +89,28 @@ class ProfileImportPlanTest {
         assertTrue(summaryBlock.contains(".protocolOptions"))
         assertTrue(summaryBlock.contains(".map { option -> option.protocolHint }"))
         assertTrue(summaryBlock.contains(".ifEmpty { listOf(profile.protocolHint) }"))
+    }
+
+    @Test
+    fun `runtime config insecure tls allowance uses stored consent boundary`() {
+        val source = projectFile("src/main/kotlin/com/foxhole/beta/core/data/ProfileRepository.kt").readText()
+        val runtimeLoadBlock =
+            source.substringAfter("suspend fun getResolvedConfig(")
+                .substringBefore("private suspend fun loadResolvedConfig(")
+        val repairBlock =
+            source.substringAfter("private fun repairResolvedConfigIfNeeded(")
+                .substringBefore("private fun refreshSubscriptionIfMissing(")
+        val editBlock =
+            source.substringAfter("suspend fun updateResolvedConfig(")
+                .substringBefore("suspend fun getSession(")
+
+        listOf(runtimeLoadBlock, repairBlock, editBlock).forEach { block ->
+            assertTrue(block.contains("allowsInsecureTlsForStoredProfileRuntime("))
+            assertFalse(block.contains("selectedOption?.requiresInsecureTls"))
+        }
+        assertFalse(runtimeLoadBlock.contains("repaired.runtimeConfig.requiresInsecureTls(json)"))
+        assertFalse(runtimeLoadBlock.contains("selectedOption?.normalizedConfigJson?.requiresInsecureTls(json)"))
+        assertFalse(editBlock.contains("selectedOption?.normalizedConfigJson?.requiresInsecureTls(json)"))
     }
 
     private fun buildSmartConfigPayload(): String =

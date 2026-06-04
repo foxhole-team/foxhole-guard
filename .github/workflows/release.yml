@@ -22,7 +22,103 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  release-connected-tests:
+    name: release emulator connected and macro gates
+    runs-on: ubuntu-24.04
+    timeout-minutes: 70
+    steps:
+      - name: checkout
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
+        with:
+          submodules: recursive
+
+      - name: setup android libbox build
+        uses: ./.github/actions/setup-android-libbox
+
+      - name: prebuild connected test artifacts
+        run: ./gradlew --no-daemon --console=plain --stacktrace assembleDebug assembleDebugAndroidTest :macrobenchmark:assembleAndroidTest
+
+      - name: reclaim disk for emulator
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Disk before cleanup:"
+          df -h
+          sudo rm -rf \
+            "${ANDROID_NDK_HOME:-}" \
+            "$HOME/go/pkg/mod" \
+            "$HOME/go/pkg/sumdb" \
+            "$HOME/.cache/go-build" \
+            "$GITHUB_WORKSPACE/third_party/sing-box"
+          echo "Disk after cleanup:"
+          df -h
+
+      - name: enable kvm
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: precreate emulator avd
+        shell: bash
+        run: |
+          set -euo pipefail
+          ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
+          SDKMANAGER="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+          AVDMANAGER="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/avdmanager"
+          if [[ ! -x "$SDKMANAGER" || ! -x "$AVDMANAGER" ]]; then
+            echo "Android command-line tools are missing under $ANDROID_SDK_ROOT" >&2
+            exit 1
+          fi
+          export ANDROID_AVD_HOME="$HOME/.android/avd"
+          echo "ANDROID_AVD_HOME=$ANDROID_AVD_HOME" >> "$GITHUB_ENV"
+          mkdir -p "$ANDROID_AVD_HOME"
+          set +o pipefail
+          yes | "$SDKMANAGER" --licenses >/dev/null
+          set -o pipefail
+          "$SDKMANAGER" --channel=0 --install "emulator" "platform-tools" "platforms;android-35" "system-images;android-35;default;x86_64"
+          echo no | "$AVDMANAGER" create avd --force -n foxhole-release-ci --abi "default/x86_64" --package "system-images;android-35;default;x86_64" --device "pixel_7"
+          test -f "$ANDROID_AVD_HOME/foxhole-release-ci.avd/config.ini"
+          echo "hw.cpu.ncore=2" >> "$ANDROID_AVD_HOME/foxhole-release-ci.avd/config.ini"
+
+      - name: run release emulator gates
+        uses: ReactiveCircus/android-emulator-runner@e89f39f1abbbd05b1113a29cf4db69e7540cae5a
+        env:
+          FOXHOLE_EXTRA_CONNECTED_TEST_SPECS: com.foxhole.beta.vpn.TorRuntimeInstallerDeviceTest,com.foxhole.beta.vpn.DnsFilterAssetInstallerDeviceTest,com.foxhole.beta.vpn.VpnRuntimeSmokeTest
+          FOXHOLE_LIVE_VPN_SMOKE: 1
+          FOXHOLE_REQUIRE_RUNTIME_STRESS: 1
+          FOXHOLE_RUNTIME_STRESS_CYCLES: 20
+          FOXHOLE_RUNTIME_STRESS_SUBSCRIPTION_URL: ${{ secrets.FOXHOLE_RUNTIME_STRESS_SUBSCRIPTION_URL }}
+          FOXHOLE_RUNTIME_STRESS_SUBSCRIPTION_BASE64: ${{ secrets.FOXHOLE_RUNTIME_STRESS_SUBSCRIPTION_BASE64 }}
+          FOXHOLE_ALLOW_INSECURE_TLS_FOR_LIVE_SUBSCRIPTION: ${{ secrets.FOXHOLE_ALLOW_INSECURE_TLS_FOR_LIVE_SUBSCRIPTION || '0' }}
+          FOXHOLE_REQUIRE_FULL_MACROBENCHMARK: 1
+        with:
+          api-level: 35
+          arch: x86_64
+          profile: pixel_7
+          disk-size: 2048M
+          avd-name: foxhole-release-ci
+          force-avd-creation: false
+          disable-animations: true
+          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: |
+            bash scripts/run-connected-android-tests.sh
+            bash scripts/run-ci-macrobenchmark.sh "${{ github.event_name }}" "${{ github.ref }}"
+
+      - name: upload release connected reports
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: release-connected-reports-${{ github.ref_name }}
+          path: |
+            build/connected-test-specs
+            app/build/reports/androidTests
+            app/build/outputs/androidTest-results
+            macrobenchmark/build/reports
+            macrobenchmark/build/outputs
+
   release:
+    needs: release-connected-tests
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     env:

@@ -801,6 +801,7 @@ fun TrafficSettingsScreen(
         title = title,
         snackbarHostState = snackbarHostState,
         onNavigateUp = onNavigateUp,
+        tag = "traffic_settings_screen",
     ) {
         item {
             SettingsControlGroup {
@@ -1420,6 +1421,7 @@ fun ApplicationSettingsScreen(
         title = stringResource(R.string.app_settings),
         snackbarHostState = snackbarHostState,
         onNavigateUp = onNavigateUp,
+        tag = "application_settings_screen",
     ) {
         item {
             SettingsControlGroup {

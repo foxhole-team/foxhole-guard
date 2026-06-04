@@ -72,6 +72,7 @@ class HomeMacrobenchmark {
         measureSettingsDetailTransition(
             SettingsDetailTarget(
                 tag = "settings_traffic_action",
+                detailTag = "traffic_settings_screen",
                 labels = listOf("Network", "Сеть"),
                 tapYRatio = 0.18f,
             ),
@@ -82,6 +83,7 @@ class HomeMacrobenchmark {
         measureSettingsDetailTransition(
             SettingsDetailTarget(
                 tag = "settings_dns_action",
+                detailTag = "dns_settings_screen",
                 labels = listOf("DNS"),
                 tapYRatio = 0.24f,
             ),
@@ -92,6 +94,7 @@ class HomeMacrobenchmark {
         measureSettingsDetailTransition(
             SettingsDetailTarget(
                 tag = "settings_security_action",
+                detailTag = "security_settings_screen",
                 labels = listOf("Security", "Безопасность"),
                 tapYRatio = 0.38f,
             ),
@@ -102,6 +105,7 @@ class HomeMacrobenchmark {
         measureSettingsDetailTransition(
             SettingsDetailTarget(
                 tag = "settings_application_action",
+                detailTag = "application_settings_screen",
                 labels = listOf("App settings", "Настройки приложения"),
                 tapYRatio = 0.62f,
             ),
@@ -112,6 +116,7 @@ class HomeMacrobenchmark {
         measureSettingsDetailTransition(
             SettingsDetailTarget(
                 tag = "settings_expert_action",
+                detailTag = "expert_settings_screen",
                 labels = listOf("Expert Settings", "Экспертные настройки"),
                 optional = true,
             ),
@@ -122,6 +127,7 @@ class HomeMacrobenchmark {
         measureSettingsDetailTransition(
             SettingsDetailTarget(
                 tag = "settings_diagnostics_action",
+                detailTag = "diagnostics_settings_screen",
                 labels = listOf("Logs", "Журналы"),
                 tapYRatio = 0.68f,
             ),
@@ -132,6 +138,7 @@ class HomeMacrobenchmark {
         measureSettingsDetailTransition(
             SettingsDetailTarget(
                 tag = "settings_statistics_action",
+                detailTag = "statistics_settings_screen",
                 labels = listOf("Statistics", "Статистика"),
                 tapYRatio = 0.74f,
             ),
@@ -161,20 +168,15 @@ class HomeMacrobenchmark {
 
     private fun openSettingsHome() {
         repeat(OPEN_SETTINGS_ATTEMPTS) { attempt ->
-            if (isSettingsHomeVisible()) {
-                resetSettingsScrollToTop()
+            if (settleSettingsHome()) {
                 return
             }
             clickSettingsBottomNav()
-            device.waitForIdle()
-            if (isSettingsHomeVisible()) {
-                resetSettingsScrollToTop()
+            if (settleSettingsHome()) {
                 return
             }
             swipeDashboardToSettings()
-            device.waitForIdle()
-            if (isSettingsHomeVisible()) {
-                resetSettingsScrollToTop()
+            if (settleSettingsHome()) {
                 return
             }
             if (attempt == 0) {
@@ -182,7 +184,7 @@ class HomeMacrobenchmark {
             }
             device.waitForIdle()
         }
-        resetSettingsScrollToTop()
+        error("Settings home did not open; ${visibleSettingsState()}")
     }
 
     private fun openSettingsDetail(target: SettingsDetailTarget): Boolean {
@@ -193,7 +195,12 @@ class HomeMacrobenchmark {
             row?.let {
                 if (clickCenter(row)) {
                     device.waitForIdle()
-                    return true
+                    if (waitForSettingsDetail(target)) {
+                        return true
+                    }
+                    if (!isSettingsHomeVisible()) {
+                        error("Settings detail screen did not open: ${target.detailTag}; ${visibleSettingsState()}")
+                    }
                 }
                 device.waitForIdle()
                 return@repeat
@@ -209,9 +216,22 @@ class HomeMacrobenchmark {
             resetSettingsScrollToTop()
             device.click(device.displayWidth / 2, (device.displayHeight * tapYRatio).toInt())
             device.waitForIdle()
-            return true
+            if (waitForSettingsDetail(target)) {
+                return true
+            }
+            error("Settings detail screen did not open: ${target.detailTag}; ${visibleSettingsState()}")
         }
         error("Settings detail row was not found: ${target.tag}, ${target.labels.joinToString()}")
+    }
+
+    private fun waitForSettingsDetail(target: SettingsDetailTarget): Boolean {
+        repeat(DETAIL_OPEN_POLL_COUNT) {
+            if (findByTestTag(target.detailTag) != null) {
+                return true
+            }
+            Thread.sleep(DETAIL_OPEN_POLL_DELAY_MS)
+        }
+        return false
     }
 
     private fun findByTestTag(tag: String) =
@@ -224,6 +244,36 @@ class HomeMacrobenchmark {
 
     private fun isSettingsHomeVisible() =
         findByTestTag("settings_screen") != null || findByAnyText(SETTINGS_HOME_ANCHOR_LABELS) != null
+
+    private fun settleSettingsHome(): Boolean {
+        if (!waitForSettingsHomeVisible()) {
+            return false
+        }
+        resetSettingsScrollToTop()
+        return waitForSettingsHomeVisible()
+    }
+
+    private fun waitForSettingsHomeVisible(): Boolean {
+        repeat(SETTINGS_HOME_OPEN_POLL_COUNT) {
+            if (isSettingsHomeVisible()) {
+                return true
+            }
+            Thread.sleep(DETAIL_OPEN_POLL_DELAY_MS)
+        }
+        return false
+    }
+
+    private fun visibleSettingsState(): String {
+        val visibleTags =
+            SETTINGS_DEBUG_TAGS
+                .filter { tag -> findByTestTag(tag) != null }
+                .joinToString()
+        val visibleLabels =
+            SETTINGS_DEBUG_LABELS
+                .filter { label -> device.findObject(By.text(label)) != null }
+                .joinToString()
+        return "visibleTags=${visibleTags.ifBlank { "none" }} visibleLabels=${visibleLabels.ifBlank { "none" }}"
+    }
 
     private fun clickSettingsBottomNav() {
         val settingsNavX = (device.displayWidth * SETTINGS_NAV_X_RATIO).toInt()
@@ -277,6 +327,7 @@ class HomeMacrobenchmark {
 
     private data class SettingsDetailTarget(
         val tag: String,
+        val detailTag: String,
         val labels: List<String>,
         val tapYRatio: Float? = null,
         val optional: Boolean = false,
@@ -298,7 +349,32 @@ class HomeMacrobenchmark {
         private const val OPEN_SETTINGS_ATTEMPTS = 3
         private const val SETTINGS_FIND_ATTEMPTS = 4
         private const val SETTINGS_RESET_SCROLL_ATTEMPTS = 3
+        private const val SETTINGS_HOME_OPEN_POLL_COUNT = 60
+        private const val DETAIL_OPEN_POLL_COUNT = 120
+        private const val DETAIL_OPEN_POLL_DELAY_MS = 50L
         private val SETTINGS_HOME_ANCHOR_LABELS = listOf("Smart start", "Умный старт", "DNS")
+        private val SETTINGS_DEBUG_TAGS =
+            listOf(
+                "settings_screen",
+                "home_dashboard_list",
+                "traffic_settings_screen",
+                "dns_settings_screen",
+                "security_settings_screen",
+                "application_settings_screen",
+                "expert_settings_screen",
+                "diagnostics_settings_screen",
+                "statistics_settings_screen",
+            )
+        private val SETTINGS_DEBUG_LABELS =
+            listOf(
+                "Settings",
+                "Network",
+                "DNS",
+                "Security",
+                "App settings",
+                "Logs",
+                "Statistics",
+            )
         private val BENCHMARK_COMPILATION_MODE =
             CompilationMode.Partial(
                 baselineProfileMode = BaselineProfileMode.Disable,

@@ -117,6 +117,7 @@ fun StatisticsScreen(
         title = stringResource(R.string.statistics_title),
         snackbarHostState = snackbarHostState,
         onNavigateUp = onNavigateUp,
+        tag = "statistics_settings_screen",
         actions = {
             IconButton(onClick = { settingsVisible = true }) {
                 Icon(

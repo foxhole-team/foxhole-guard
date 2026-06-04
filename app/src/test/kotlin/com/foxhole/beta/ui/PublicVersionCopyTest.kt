@@ -16,8 +16,7 @@ class PublicVersionCopyTest {
     }
 
     @Test
-    fun `public surfaces use build version copy`() {
-        val releaseVersionName = BuildConfig.VERSION_NAME.removeSuffix("-Debug")
+    fun `public surfaces stay on public beta release copy`() {
         val publicSurfaceFiles =
             listOf(
                 "README.md",
@@ -30,8 +29,8 @@ class PublicVersionCopyTest {
         publicSurfaceFiles.forEach { path ->
             val content = projectFile(path).readText()
 
-            assertTrue("$path should mention $releaseVersionName", content.contains(releaseVersionName))
-            assertFalse("$path should not mention public beta 1.0", content.contains("public beta 1.0"))
+            assertTrue("$path should mention public beta 1.0", content.contains("public beta 1.0", ignoreCase = true))
+            assertFalse("$path should not mention stable 1.0", content.contains("stable 1.0", ignoreCase = true))
         }
     }
 

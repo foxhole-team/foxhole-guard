@@ -107,7 +107,7 @@ jobs:
 
   connected-tests:
     name: emulator UI/regression connected tests
-    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' || github.event_name == 'schedule' || (github.event_name == 'push' && github.ref == 'refs/heads/dev')
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' || github.event_name == 'schedule' || (github.event_name == 'push' && (github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/main'))
     runs-on: ubuntu-24.04
     timeout-minutes: 70
     steps:

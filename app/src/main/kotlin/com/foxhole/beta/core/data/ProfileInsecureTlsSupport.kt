@@ -73,6 +73,12 @@ internal fun shouldRequireInsecureTlsRefreshConsent(
         !profileInsecureTlsConsentGranted &&
         strictParseFailedForInsecureTls
 
+internal fun allowsInsecureTlsForStoredProfileRuntime(
+    allowInsecureTlsGlobally: Boolean,
+    secret: StoredProfileSecret,
+): Boolean =
+    allowInsecureTlsGlobally || secret.hasInsecureTlsConsent()
+
 internal fun ParsedImport.requiresInsecureTls(json: Json): Boolean =
     normalizedConfigJson?.requiresInsecureTls(json) == true ||
         protocolOptions.any { option -> option.normalizedConfigJson.requiresInsecureTls(json) }

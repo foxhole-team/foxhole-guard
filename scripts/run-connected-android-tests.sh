@@ -53,6 +53,12 @@ required_test_specs() {
   else
     printf '%s\n' "${DEFAULT_REQUIRED_TEST_SPECS[@]}"
   fi
+  if [[ -n "${FOXHOLE_EXTRA_CONNECTED_TEST_SPECS:-}" ]]; then
+    printf '%s\n' "$FOXHOLE_EXTRA_CONNECTED_TEST_SPECS" |
+      tr ',' '\n' |
+      sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//' |
+      awk 'NF > 0'
+  fi
   if [[ "${FOXHOLE_REQUIRE_RUNTIME_STRESS:-0}" == "1" ]]; then
     printf '%s\n' "com.foxhole.beta.ProfileRuntimeSessionAndroidTest#manualSmartSubscriptionRuntimeStressCycles"
   fi
@@ -99,6 +105,17 @@ copy_spec_artifacts() {
     fi
   done
   printf '%s' "$spec_dir"
+}
+
+is_required_test_spec() {
+  local candidate="$1"
+  local required_spec
+  for required_spec in "${REQUIRED_TEST_SPECS[@]}"; do
+    if [[ "$required_spec" == "$candidate" ]]; then
+      return 0
+    fi
+  done
+  return 1
 }
 
 parse_spec_xml() {
@@ -179,7 +196,10 @@ run_test_spec() {
   )
   if [[ "$test_spec" == com.foxhole.beta.vpn.VpnRuntimeSmokeTest* && "${FOXHOLE_LIVE_VPN_SMOKE:-0}" == "1" ]]; then
     adb shell cmd appops set "$TARGET_PACKAGE" ACTIVATE_VPN allow >/dev/null 2>&1 || true
-    instrumentation_args+=("-Pandroid.testInstrumentationRunnerArguments.foxhole.liveVpnSmoke=1")
+    instrumentation_args+=(
+      "-Pandroid.testInstrumentationRunnerArguments.foxhole.liveVpnSmoke=1"
+      "-Pandroid.testInstrumentationRunnerArguments.foxhole.requestVpnPermission=1"
+    )
   fi
 
   if [[ "$test_spec" == "com.foxhole.beta.ProfileRuntimeSessionAndroidTest#manualSmartSubscriptionRuntimeStressCycles" &&
@@ -263,10 +283,16 @@ done
 
 if [[ "${FOXHOLE_INCLUDE_OPTIONAL_CONNECTED_TESTS:-0}" == "1" ]]; then
   for test_spec in "${OPTIONAL_TEST_SPECS[@]}"; do
+    if is_required_test_spec "$test_spec"; then
+      continue
+    fi
     run_test_spec "$test_spec" "0"
   done
 else
   for test_spec in "${OPTIONAL_TEST_SPECS[@]}"; do
+    if is_required_test_spec "$test_spec"; then
+      continue
+    fi
     printf '%s\toptional-not-run\t0\t0\t0\t0\t0\t\n' "$test_spec" >> "$SUMMARY_FILE"
   done
 fi

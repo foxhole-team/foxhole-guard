@@ -477,6 +477,7 @@ private fun DiagnosticsScreenContent(
         title = stringResource(R.string.diagnostics_and_usage),
         snackbarHostState = snackbarHostState,
         onNavigateUp = onNavigateUp,
+        tag = "diagnostics_settings_screen",
         actions = {
             SettingsHelpAction(
                 title = stringResource(R.string.help_diagnostics_support_title),

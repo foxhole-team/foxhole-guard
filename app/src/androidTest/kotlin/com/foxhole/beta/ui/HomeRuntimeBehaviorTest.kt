@@ -36,6 +36,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -376,6 +378,20 @@ class HomeRuntimeBehaviorTest {
     }
 
     @Test
+    fun rootNavigationComposesOnlyActiveSection() {
+        waitUntilOnlyRootSectionVisible(activeTag = "home_dashboard_list", inactiveTag = "settings_screen")
+        composeRule.onAllNodesWithTag("settings_screen", useUnmergedTree = true).assertCountEquals(0)
+
+        composeRule.onNodeWithTag("bottom_nav_settings").performClick()
+        waitUntilOnlyRootSectionVisible(activeTag = "settings_screen", inactiveTag = "home_dashboard_list")
+        composeRule.onAllNodesWithTag("home_dashboard_list", useUnmergedTree = true).assertCountEquals(0)
+
+        composeRule.onNodeWithTag("bottom_nav_dashboard").performClick()
+        waitUntilOnlyRootSectionVisible(activeTag = "home_dashboard_list", inactiveTag = "settings_screen")
+        composeRule.onAllNodesWithTag("settings_screen", useUnmergedTree = true).assertCountEquals(0)
+    }
+
+    @Test
     fun manualNetworkRefreshButtonStartsFullDashboardRefresh() {
         waitUntilNetworkBlockSettles()
         val viewModel =
@@ -430,6 +446,75 @@ class HomeRuntimeBehaviorTest {
         composeRule.waitForIdle()
 
         composeRule.onAllNodesWithText(deniedMessage).assertCountEquals(0)
+    }
+
+    @Test
+    fun vpnPermissionRequestWhilePendingDoesNotSupersedeActiveRequest() {
+        val viewModel =
+            ViewModelProvider(
+                composeRule.activity,
+                HomeViewModel.factory(app()),
+            )[HomeViewModel::class.java]
+
+        composeRule.runOnUiThread {
+            app().container.diagnosticsLogger.clear()
+            viewModel.pendingConnectRequest =
+                PendingConnectRequest(
+                    profileId = 10L,
+                    action = PendingConnectAction.MANUAL,
+                )
+
+            val accepted =
+                viewModel.enqueueVpnPermissionRequest(
+                    PendingConnectRequest(
+                        profileId = 20L,
+                        action = PendingConnectAction.RECONNECT,
+                    ),
+                )
+
+            assertFalse(accepted)
+            assertEquals(10L, viewModel.pendingConnectRequest?.profileId)
+            assertEquals(PendingConnectAction.MANUAL, viewModel.pendingConnectRequest?.action)
+        }
+
+        composeRule.waitUntil(timeoutMillis = 3_000) {
+            app().container.diagnosticsLogger.entries.value.any {
+                it.tag == "permissions" &&
+                    it.message.contains("ignored vpn permission request while active request is pending") &&
+                    it.message.contains("active=manual") &&
+                    it.message.contains("requested=reconnect")
+            }
+        }
+    }
+
+    @Test
+    fun deferredLocalGuardPermissionSyncRetriesAfterActivePermissionResult() {
+        val viewModel =
+            ViewModelProvider(
+                composeRule.activity,
+                HomeViewModel.factory(app()),
+            )[HomeViewModel::class.java]
+
+        composeRule.runOnUiThread {
+            app().container.diagnosticsLogger.clear()
+            viewModel.pendingConnectRequest =
+                PendingConnectRequest(
+                    profileId = 10L,
+                    action = PendingConnectAction.MANUAL,
+                )
+            viewModel.pendingLocalGuardPermissionSync = true
+
+            viewModel.onVpnPermissionResult(granted = false)
+
+            assertFalse(viewModel.pendingLocalGuardPermissionSync)
+        }
+
+        composeRule.waitUntil(timeoutMillis = 3_000) {
+            app().container.diagnosticsLogger.entries.value.any {
+                it.tag == "connection" &&
+                    it.message == "local guard permission sync retrying after vpn permission result"
+            }
+        }
     }
 
     private fun waitUntilNetworkBlockSettles() {
@@ -515,6 +600,17 @@ class HomeRuntimeBehaviorTest {
     ) {
         composeRule.waitUntil(timeoutMillis = timeoutMs) {
             composeRule.onAllNodesWithTag(tag, useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.waitForIdle()
+    }
+
+    private fun waitUntilOnlyRootSectionVisible(
+        activeTag: String,
+        inactiveTag: String,
+    ) {
+        composeRule.waitUntil(timeoutMillis = NAVIGATION_RESPONSIVENESS_TIMEOUT_MS) {
+            composeRule.onAllNodesWithTag(activeTag, useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() &&
+                composeRule.onAllNodesWithTag(inactiveTag, useUnmergedTree = true).fetchSemanticsNodes().isEmpty()
         }
         composeRule.waitForIdle()
     }

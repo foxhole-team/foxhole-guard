@@ -22,7 +22,7 @@ Foxhole contains no ads, analytics, or telemetry.
 
 ## Status
 
-- Current version: `1.0.0-beta1`
+- Current public release: `public beta 1.0`
 - Platform: Android
 - Other platform versions are not planned for now
 

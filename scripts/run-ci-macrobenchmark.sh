@@ -5,6 +5,7 @@ readonly EVENT_NAME="${1:?GitHub event name is required}"
 readonly GITHUB_REF_NAME="${2:?GitHub ref is required}"
 readonly GRADLEW="${GRADLEW:-./gradlew}"
 readonly TARGET_PACKAGE="${FOXHOLE_ANDROID_TEST_TARGET_PACKAGE:-com.foxhole.beta.debug}"
+readonly REQUIRE_FULL_SUITE="${FOXHOLE_REQUIRE_FULL_MACROBENCHMARK:-0}"
 
 install_target_app() {
   adb wait-for-device
@@ -24,7 +25,13 @@ if [[ "$EVENT_NAME" == "pull_request" ]]; then
     -Pmacrobenchmark.targetPackage="$TARGET_PACKAGE" \
     -Pandroid.testInstrumentationRunnerArguments.class=com.foxhole.beta.macrobenchmark.HomeMacrobenchmark#startup
   python3 scripts/verify-macrobenchmark-thresholds.py
-elif [[ "$EVENT_NAME" == "schedule" || "$GITHUB_REF_NAME" == "refs/heads/dev" ]]; then
+elif [[
+  "$REQUIRE_FULL_SUITE" == "1" ||
+  "$EVENT_NAME" == "schedule" ||
+  "$GITHUB_REF_NAME" == "refs/heads/dev" ||
+  "$GITHUB_REF_NAME" == "refs/heads/main" ||
+  "$GITHUB_REF_NAME" == refs/tags/*
+]]; then
   install_target_app
   "$GRADLEW" --no-daemon --console=plain --stacktrace :macrobenchmark:connectedCheck \
     -Pmacrobenchmark.targetPackage="$TARGET_PACKAGE"

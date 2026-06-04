@@ -284,6 +284,49 @@ class HomeDashboardHotPathTest {
     }
 
     @Test
+    fun `vpn permission request enqueue does not overwrite active pending request`() {
+        val viewModelSource = testSourceFile("HomeViewModel.kt").readText()
+        val enqueueBlock =
+            viewModelSource.substringAfter("internal fun enqueueVpnPermissionRequest")
+                .substringBefore("private fun drainPendingLocalGuardPermissionSync")
+
+        assertTrue(enqueueBlock.contains("val active = pendingConnectRequest"))
+        assertTrue(enqueueBlock.contains("if (active != null)"))
+        assertTrue(enqueueBlock.contains("return false"))
+        assertTrue(enqueueBlock.contains("pendingConnectRequest = request"))
+        assertTrue(enqueueBlock.contains("return true"))
+        listOf(
+            "HomeViewModelAutoConnectSupport.kt",
+            "HomeViewModelConnectionToggleSupport.kt",
+            "HomeViewModelSettingsSupport.kt",
+        ).forEach { fileName ->
+            assertFalse(testSourceFile(fileName).readText().contains("pendingConnectRequest ="))
+        }
+    }
+
+    @Test
+    fun `local guard permission sync defers when another vpn request is pending`() {
+        val settingsSource = testSourceFile("HomeViewModelSettingsSupport.kt").readText()
+        val syncBlock =
+            settingsSource.substringAfter("internal suspend fun HomeViewModel.syncLocalGuardWithPermissionRequest()")
+                .substringBefore("internal fun shouldDeferLocalGuardSyncForActiveProfileRuntime")
+        val permissionBlock =
+            testSourceFile("HomeViewModel.kt").readText()
+                .substringAfter("fun onVpnPermissionResult(granted: Boolean)")
+                .substringBefore("fun onRefreshProfile()")
+
+        assertTrue(syncBlock.contains("val accepted ="))
+        assertTrue(syncBlock.contains("enqueueVpnPermissionRequest"))
+        assertTrue(
+            syncBlock.contains(
+                "if (!accepted && pendingConnectRequest?.action != PendingConnectAction.LOCAL_GUARD)",
+            ),
+        )
+        assertTrue(syncBlock.contains("pendingLocalGuardPermissionSync = true"))
+        assertTrue(permissionBlock.contains("drainPendingLocalGuardPermissionSync()"))
+    }
+
+    @Test
     fun `profile file import reads content off main dispatcher`() {
         val appSource = testSourceFile("FoxholeApp.kt").readText()
         val importBlock =
@@ -292,6 +335,30 @@ class HomeDashboardHotPathTest {
 
         assertTrue(importBlock.contains("withContext(Dispatchers.IO)"))
         assertTrue(importBlock.indexOf("withContext(Dispatchers.IO)") < importBlock.indexOf("openInputStream(uri)"))
+    }
+
+    @Test
+    fun `profile raw import validates payload size off main dispatcher`() {
+        val source = testSourceFile("HomeViewModelProfileImportSupport.kt").readText()
+        val importBlock =
+            source.substringAfter("internal fun HomeViewModel.importProfileRawInternal(value: String)")
+                .substringBefore("internal fun HomeViewModel.importRawInternal(value: String)")
+
+        assertTrue(importBlock.contains("viewModelScope.launch"))
+        assertTrue(importBlock.contains("withContext(Dispatchers.Default)"))
+        assertFalse(importBlock.substringBefore("viewModelScope.launch").contains("isBlank"))
+        assertTrue(
+            importBlock.indexOf("viewModelScope.launch") <
+                importBlock.indexOf("withContext(Dispatchers.Default)"),
+        )
+        assertTrue(
+            importBlock.indexOf("withContext(Dispatchers.Default)") <
+                importBlock.indexOf("takeUnless(String::isBlank)"),
+        )
+        assertTrue(
+            importBlock.indexOf("withContext(Dispatchers.Default)") <
+                importBlock.indexOf("::requireLocalProfileImportWithinLimit"),
+        )
     }
 
     @Test
