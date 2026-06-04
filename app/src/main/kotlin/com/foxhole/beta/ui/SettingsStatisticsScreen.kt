@@ -136,10 +136,8 @@ fun StatisticsScreen(
             item(key = "statistics-overview", contentType = "statistics-card") {
                 StatisticsOverviewHeroCard(
                     statistics = statistics,
-                    appRows = appRows,
                     dnsSummary = dnsSummary,
-                    countryRows = countryRows,
-                    anomalyEvents = anomalyEventsForRange,
+                    firewallEnabled = firewallEnabled,
                 )
             }
             if (statisticsSettings.appTrafficEnabled && appStatsSwitchChecked) {

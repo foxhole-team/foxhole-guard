@@ -530,7 +530,7 @@ fun HomeScreen(
     }
 
     FoxholeScaffold(
-        title = stringResource(R.string.app_name),
+        title = stringResource(R.string.dashboard_brand_title),
         snackbarHostState = snackbarHostState,
         bannerTopPadding = HomeDashboardBannerTopPadding,
         topChromeScrimProgress = topChromeScrimProgress,
@@ -1146,7 +1146,12 @@ fun HomeScreen(
                                                     connectionMetricsAvailable = connectionMetricsAvailable,
                                                     selectedServerPingText =
                                                         dashboardProtocolModel.selectedServerPingMs
-                                                            ?.let { latencyMs -> latencyPillValueText(latencyMs) },
+                                                            ?.let { latencyMs ->
+                                                                stringResource(
+                                                                    R.string.latency_pill_value,
+                                                                    latencyMs.coerceAtLeast(1L),
+                                                                )
+                                                            },
                                                     selectedServerPingUnavailable =
                                                         dashboardProtocolModel.selectedServerPingUnavailable,
                                                     noDataText =
@@ -1892,11 +1897,10 @@ internal fun shouldComposeTrafficMapHeavyContent(
     activeReorderCard: DashboardCard?,
 ): Boolean =
     activeReorderCard != null ||
-        startupStage >= DASHBOARD_STARTUP_STAGE_WARM_RETURN ||
         startupStage >= DASHBOARD_STARTUP_STAGE_ALL
 
 internal fun initialDashboardStartupStage(dashboardAlreadyWarm: Boolean): Int =
-    if (dashboardAlreadyWarm) DASHBOARD_STARTUP_STAGE_WARM_RETURN else DASHBOARD_STARTUP_STAGE_INITIAL
+    if (dashboardAlreadyWarm) DASHBOARD_STARTUP_STAGE_ALL else DASHBOARD_STARTUP_STAGE_INITIAL
 
 private object DashboardStartupCompositionWarmState {
     private var entered = false
@@ -1910,10 +1914,10 @@ private object DashboardStartupCompositionWarmState {
 
 private fun dashboardCardStartupStage(card: DashboardCard): Int =
     when (card) {
-        DashboardCard.TRAFFIC_MAP -> 2
+        DashboardCard.TRAFFIC_MAP -> DASHBOARD_STARTUP_STAGE_ALL
         DashboardCard.NETWORK -> 1
-        DashboardCard.PROFILES -> 2
-        DashboardCard.ACTIONS -> 3
+        DashboardCard.ACTIONS -> 2
+        DashboardCard.PROFILES -> 3
         DashboardCard.TRAFFIC -> DASHBOARD_STARTUP_STAGE_ALL
     }
 
@@ -1968,9 +1972,8 @@ private const val DASHBOARD_CARD_ACTIVE_Z_INDEX = 100f
 private const val DASHBOARD_CARD_REORDER_THRESHOLD_FRACTION = 0.5f
 private const val DASHBOARD_CARD_EDGE_RESISTANCE_FRACTION = 0.18f
 private const val DASHBOARD_STARTUP_STAGE_INITIAL = 0
-private const val DASHBOARD_STARTUP_STAGE_WARM_RETURN = 2
 private const val DASHBOARD_STARTUP_STAGE_ALL = 4
-private const val DASHBOARD_CARD_STARTUP_STAGE_DELAY_MS = 16L
+private const val DASHBOARD_CARD_STARTUP_STAGE_DELAY_MS = 96L
 private val DashboardCardReorderFallbackMoveDistance = 96.dp
 private val ImportMenuWidthChrome = 62.dp
 private val ImportMenuMinWidth = 188.dp

@@ -289,7 +289,7 @@ internal fun DnsProtectionAppRowView(
         modifier = Modifier.fillMaxWidth(),
     ) {
         StatisticsRowSurface {
-            AppIcon(packageName = row.packageName, modifier = Modifier.size(36.dp))
+            StatisticsAppIcon(packageName = row.packageName, modifier = Modifier.size(36.dp))
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
                     text = row.label,

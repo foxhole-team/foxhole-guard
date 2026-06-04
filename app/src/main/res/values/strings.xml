@@ -3,6 +3,7 @@
     <string name="switch_state_on">On</string>
     <string name="switch_state_off">Off</string>
     <string name="app_name">FoxHole</string>
+    <string name="dashboard_brand_title">FOXHOLE</string>
     <string name="beta_badge">BETA</string>
     <string name="home_status_connected">Connected</string>
     <string name="home_status_not_connected">Disconnected</string>
@@ -405,6 +406,8 @@
     <string name="statistics_profile_rx_tx">Received %1$s\nSent %2$s</string>
     <string name="clear_statistics_history_content_description">Clear history</string>
     <string name="statistics_total_traffic">Total traffic</string>
+    <string name="statistics_traffic_scope_vpn_only">VPN connections only</string>
+    <string name="statistics_traffic_scope_all_traffic">All traffic</string>
     <string name="statistics_vpn_sessions">VPN sessions</string>
     <string name="statistics_successful_connections">Successful connections</string>
     <string name="statistics_errors">Errors</string>
@@ -431,6 +434,7 @@
     <string name="statistics_transports_title">Transport protocols</string>
     <string name="statistics_transports_empty">Transport protocol data updates automatically</string>
     <string name="statistics_apps_title">Applications</string>
+    <string name="app_statistics_other_label">Other applications</string>
     <string name="statistics_apps_top_title">Top 5 apps by traffic usage</string>
     <string name="statistics_app_detail_top_destinations">Top 5 app connection network addresses</string>
     <string name="statistics_app_detail_all_destinations">All connection addresses</string>
@@ -493,6 +497,7 @@
     <string name="statistics_dns_blocked_queries">Blocked</string>
     <string name="statistics_dns_allowed_queries">Allowed</string>
     <string name="statistics_dns_block_ratio">Block ratio</string>
+    <string name="statistics_dns_block_ratio_percent">Block share, %</string>
     <string name="statistics_dns_categories_title">DNS categories</string>
     <string name="statistics_dns_categories_estimated">Category split is estimated from enabled filters</string>
     <string name="statistics_dns_traffic_share_title">DNS block traffic share</string>

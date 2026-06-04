@@ -41,6 +41,7 @@ import com.foxhole.beta.R
 import com.foxhole.beta.core.model.AppTrafficWindow
 import com.foxhole.beta.core.model.NetworkActivityEvent
 import com.foxhole.beta.core.statistics.ChartColorToken
+import com.foxhole.beta.core.statistics.OTHER_PACKAGE
 import com.foxhole.beta.core.traffic.TorGeoIpCountryResolver
 import com.foxhole.beta.ui.statistics.StatisticsDashboardCard
 import com.foxhole.beta.ui.statistics.StatisticsEmptyState
@@ -128,7 +129,7 @@ internal fun AppTrafficRowView(
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        AppIcon(packageName = row.packageName, modifier = Modifier.size(36.dp))
+        StatisticsAppIcon(packageName = row.packageName, modifier = Modifier.size(36.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(row.label, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.SemiBold)
             Text(
@@ -251,16 +252,14 @@ internal fun AppTrafficDetail(
             .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        AppTrafficDetailHeader(row = row)
         DetailMetricGrid(
             metrics =
-            listOfNotNull(
-                metricIfPositive(
-                    stringResource(R.string.home_total_label),
-                    row.totalBytes,
-                    formatBytes(context, row.totalBytes),
-                ),
+            listOf(
+                stringResource(R.string.home_total_label) to formatBytes(context, row.totalBytes),
                 appSamples.maxOfOrNull(AppTrafficWindow::startedAtMs)
-                    ?.let { stringResource(R.string.statistics_last_activity) to it.formatLastActivity() },
+                    ?.let { stringResource(R.string.statistics_last_activity) to it.formatLastActivity() }
+                    ?: (stringResource(R.string.statistics_last_activity) to "0"),
             ),
         )
         if (appSamples.isNotEmpty()) {
@@ -270,12 +269,11 @@ internal fun AppTrafficDetail(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             AppTrafficMiniChart(samples = appSamples)
-            ChartLegend()
         }
         val loadedConnectionRows = connectionRows
         Text(
             text = stringResource(R.string.statistics_app_detail_network_journal_title),
-            style = MaterialTheme.typography.titleSmall,
+            style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.SemiBold,
         )
         if (!networkActivityLoggingEnabled) {
@@ -311,6 +309,35 @@ internal fun AppTrafficDetail(
             }
         } else {
             EmptySectionText(text = stringResource(R.string.statistics_no_data))
+        }
+    }
+}
+
+@Composable
+private fun AppTrafficDetailHeader(row: AppTrafficRow) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        StatisticsAppIcon(packageName = row.packageName, modifier = Modifier.size(38.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = row.label,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text =
+                row.packageName.takeUnless { it == OTHER_PACKAGE }
+                    ?: stringResource(R.string.app_statistics_other_label),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
     }
 }

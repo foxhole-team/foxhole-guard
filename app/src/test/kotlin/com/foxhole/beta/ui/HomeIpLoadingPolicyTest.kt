@@ -335,7 +335,7 @@ class HomeIpLoadingPolicyTest {
     }
 
     @Test
-    fun `keeps previous ip visible while route transition refresh is pending`() {
+    fun `hides previous ip while route transition refresh is pending`() {
         val previousIp =
             IpInfo(
                 ip = "8.8.8.8",
@@ -363,9 +363,9 @@ class HomeIpLoadingPolicyTest {
                 deviceInternetAvailable = true,
             )
 
-        assertEquals(previousIp, model.visibleIpInfo)
+        assertNull(model.visibleIpInfo)
         assertTrue(model.showLoading)
-        assertFalse(model.showIpInfoLoading)
+        assertTrue(model.showIpInfoLoading)
         assertTrue(model.showConnectionDetailsLoading)
     }
 

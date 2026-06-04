@@ -458,8 +458,8 @@ internal fun ProtocolStatCard(
     val visible = rememberOneShotVisible("protocol:${item.protocol.name}")
     val successRate = item.successRateOrNull
     val errorRate = item.errorRateOrNull
-    val successText = successRate?.let(::formatPercent) ?: stringResource(R.string.smart_profile_metric_unavailable)
-    val errorText = errorRate?.let(::formatPercent) ?: stringResource(R.string.smart_profile_metric_unavailable)
+    val successText = successRate?.let(::formatPercent) ?: "0%"
+    val errorText = errorRate?.let(::formatPercent) ?: "0%"
     val footerText =
         if (item.quality == ProtocolQuality.TRAFFIC_ONLY) {
             stringResource(

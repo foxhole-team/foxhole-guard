@@ -8,7 +8,6 @@ import android.view.ViewOutlineProvider
 import android.widget.FrameLayout
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.FastOutLinearInEasing
@@ -19,7 +18,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -347,20 +345,8 @@ fun FoxholeApp(
                     },
                 ) {
                 composable(AppRoute.HOME) {
-                    AnimatedContent(
-                        targetState = rootSection,
-                        modifier = Modifier.fillMaxSize(),
-                        transitionSpec = {
-                            if (targetState.ordinal > initialState.ordinal) {
-                                detailForwardEnter() togetherWith detailForwardExit()
-                            } else {
-                                detailBackEnter() togetherWith detailBackExit()
-                            }
-                        },
-                        label = "root-section-transition",
-                    ) { section ->
-                        when (section) {
-                            AppSection.DASHBOARD -> {
+                    when (rootSection) {
+                        AppSection.DASHBOARD -> {
                             val state by viewModel.homeRouteState.collectAsStateWithLifecycle()
                             HomeScreen(
                                 state = state,
@@ -415,7 +401,7 @@ fun FoxholeApp(
                                 onDashboardCardOrderChanged = viewModel::onDashboardCardOrderChanged,
                             )
                         }
-                            AppSection.SETTINGS -> {
+                        AppSection.SETTINGS -> {
                             val expertVisible by viewModel.settingsHomeExpertVisible.collectAsStateWithLifecycle()
                             SettingsHomeScreen(
                                 expertVisible = expertVisible,
@@ -435,7 +421,6 @@ fun FoxholeApp(
                                 onOpenStatistics = { navigateToSettingsDetail(AppRoute.STATISTICS) },
                                 onOpenAbout = { navigateToSettingsDetail(AppRoute.ABOUT) },
                             )
-                        }
                         }
                     }
                 }

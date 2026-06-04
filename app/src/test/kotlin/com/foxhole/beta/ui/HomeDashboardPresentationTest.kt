@@ -1384,7 +1384,7 @@ class HomeDashboardPresentationTest {
     }
 
     @Test
-    fun `network model hides local device address during reconnect even when freshly fetched`() {
+    fun `network model skeletons ip side during reconnect even when device address was freshly fetched`() {
         val localDeviceIp =
             IpInfo(
                 ip = "10.13.13.110",
@@ -1413,7 +1413,7 @@ class HomeDashboardPresentationTest {
 
         assertEquals(null, model.visibleIpInfo)
         assertTrue(model.showConnectionStatus)
-        assertFalse(model.showIpInfoLoading)
+        assertTrue(model.showIpInfoLoading)
         assertTrue(model.showConnectionDetailsLoading)
     }
 
@@ -1465,7 +1465,7 @@ class HomeDashboardPresentationTest {
     }
 
     @Test
-    fun `network model keeps ip side stable during reconnect without route ip`() {
+    fun `network model skeletons ip side during reconnect without route ip`() {
         val model =
             resolveHomeDashboardNetworkModel(
                 state =
@@ -1484,7 +1484,41 @@ class HomeDashboardPresentationTest {
             )
 
         assertTrue(model.showConnectionStatus)
-        assertFalse(model.showIpInfoLoading)
+        assertTrue(model.showIpInfoLoading)
+        assertTrue(model.showConnectionDetailsLoading)
+    }
+
+    @Test
+    fun `network model hides stale public device ip during route connect from the first frame`() {
+        val deviceIp =
+            IpInfo(
+                ip = "198.51.100.20",
+                countryCode = "US",
+                countryName = "United States",
+                city = "New York",
+                isp = "Device network",
+                fetchedAt = 1_000L,
+            )
+        val model =
+            resolveHomeDashboardNetworkModel(
+                state =
+                    HomeRouteUiState(
+                        profilesLoaded = true,
+                        connection =
+                            ConnectionSnapshot(
+                                state = ConnectionState.CONNECTING,
+                                trafficMode = TrafficMode.TUNNEL,
+                                profileId = 42L,
+                                lastChangeAt = 2_000L,
+                            ),
+                    ),
+                visibleIpInfo = deviceIp,
+                deviceInternetAvailable = true,
+            )
+
+        assertEquals(null, model.visibleIpInfo)
+        assertTrue(model.showConnectionStatus)
+        assertTrue(model.showIpInfoLoading)
         assertTrue(model.showConnectionDetailsLoading)
     }
 
@@ -1767,7 +1801,7 @@ class HomeDashboardPresentationTest {
     }
 
     @Test
-    fun `network model keeps previous ip during route transition while details load`() {
+    fun `network model hides previous ip during route transition while details load`() {
         val ipInfo =
             IpInfo(
                 ip = "203.0.113.10",
@@ -1794,16 +1828,16 @@ class HomeDashboardPresentationTest {
                 deviceInternetAvailable = true,
             )
 
-        assertEquals(ipInfo, model.visibleIpInfo)
+        assertEquals(null, model.visibleIpInfo)
         assertEquals(R.string.home_network_connection_info_title, model.titleRes)
         assertTrue(model.showConnectionStatus)
         assertTrue(model.showLoading)
-        assertFalse(model.showIpInfoLoading)
+        assertTrue(model.showIpInfoLoading)
         assertTrue(model.showConnectionDetailsLoading)
     }
 
     @Test
-    fun `network model keeps fresh route ip during route transition`() {
+    fun `network model waits for connected state before showing route ip during transition`() {
         val ipInfo =
             IpInfo(
                 ip = "203.0.113.10",
@@ -1830,11 +1864,11 @@ class HomeDashboardPresentationTest {
                 deviceInternetAvailable = true,
             )
 
-        assertEquals(ipInfo, model.visibleIpInfo)
+        assertEquals(null, model.visibleIpInfo)
         assertEquals(R.string.home_network_connection_info_title, model.titleRes)
         assertTrue(model.showConnectionStatus)
         assertTrue(model.showLoading)
-        assertFalse(model.showIpInfoLoading)
+        assertTrue(model.showIpInfoLoading)
         assertTrue(model.showConnectionDetailsLoading)
     }
 

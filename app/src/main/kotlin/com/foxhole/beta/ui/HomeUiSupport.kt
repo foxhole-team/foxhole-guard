@@ -785,12 +785,16 @@ private fun HomeRouteUiState.shouldShowHomeNetworkIpInfoLoading(
     val manualRefreshNeedsSkeleton =
         explicitIpInfoSkeletonLoading &&
             (deviceInternetAvailable != false || hasDashboardRouteProfile())
+    val missingIpRouteTransitionLoading =
+        routeTransitionRunning &&
+            hasDashboardRouteProfile()
     val missingIpAnalysisLoading =
         routeTransitionRunning &&
             autoConnect.running &&
             connection.state !in ACTIVE_CONNECTION_STATES
     val missingIpCanShowSkeleton =
-        missingIpAnalysisLoading ||
+        missingIpRouteTransitionLoading ||
+            missingIpAnalysisLoading ||
             shouldShowDashboardNetworkLoading(
                 visibleIpInfo = dashboardIpInfo,
                 explicitLoading = explicitIpInfoSkeletonLoading,
@@ -913,7 +917,7 @@ private fun HomeRouteUiState.shouldKeepDashboardIpInfo(info: IpInfo): Boolean =
         hasFailedDashboardRoute() -> info.isPublicFreshForRouteTransition(connection.lastChangeAt)
         hasStoppedDashboardRouteRuntime() -> info.isPublicFreshForRouteTransition(connection.lastChangeAt)
         hasStoppedUnknownDashboardRouteRuntime() -> info.isPublicFreshForRouteTransition(connection.lastChangeAt)
-        hasActiveDashboardRouteTransition() -> true
+        hasActiveDashboardRouteTransition() -> false
         hasActiveDashboardRouteRuntime() -> shouldKeepActiveDashboardRouteIpInfo(info)
         else -> true
     }

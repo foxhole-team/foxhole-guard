@@ -4,6 +4,7 @@
     <string name="switch_state_on">Включено</string>
     <string name="switch_state_off">Отключено</string>
     <string name="app_name">FoxHole</string>
+    <string name="dashboard_brand_title">FOXHOLE</string>
     <string name="beta_badge">BETA</string>
     <string name="home_status_connected">Подключен</string>
     <string name="home_status_not_connected">Отключен</string>
@@ -410,6 +411,8 @@
     <string name="statistics_profile_rx_tx">Получено %1$s\nПередано %2$s</string>
     <string name="clear_statistics_history_content_description">Очистить историю</string>
     <string name="statistics_total_traffic">Всего трафика</string>
+    <string name="statistics_traffic_scope_vpn_only">Только VPN подключения</string>
+    <string name="statistics_traffic_scope_all_traffic">Весь трафик</string>
     <string name="statistics_vpn_sessions">Сессий VPN</string>
     <string name="statistics_successful_connections">Успешных подключений</string>
     <string name="statistics_errors">Ошибок</string>
@@ -438,6 +441,7 @@
     <string name="statistics_transports_title">Транспортные протоколы</string>
     <string name="statistics_transports_empty">Данные по транспортным протоколам обновятся автоматически</string>
     <string name="statistics_apps_title">Приложения</string>
+    <string name="app_statistics_other_label">Другие приложения</string>
     <string name="statistics_apps_top_title">Топ 5 приложений по расходу трафика</string>
     <string name="statistics_app_detail_top_destinations">Топ 5 сетевых адресов подключения приложения</string>
     <string name="statistics_app_detail_all_destinations">Все сетевые адреса подключения</string>
@@ -502,6 +506,7 @@
     <string name="statistics_dns_blocked_queries">Заблокировано</string>
     <string name="statistics_dns_allowed_queries">Разрешено</string>
     <string name="statistics_dns_block_ratio">Доля блокировок</string>
+    <string name="statistics_dns_block_ratio_percent">Доля блокировок в %</string>
     <string name="statistics_dns_categories_title">Категории DNS</string>
     <string name="statistics_dns_categories_estimated">Разбивка категорий рассчитана по включённым фильтрам</string>
     <string name="statistics_dns_traffic_share_title">Доля трафика по DNS-блокировкам</string>

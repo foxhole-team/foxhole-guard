@@ -15,6 +15,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Apps
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -35,6 +38,7 @@ import androidx.compose.ui.unit.dp
 import com.foxhole.beta.R
 import com.foxhole.beta.core.model.AppTrafficWindow
 import com.foxhole.beta.core.statistics.ChartColorToken
+import com.foxhole.beta.core.statistics.OTHER_PACKAGE
 import com.foxhole.beta.ui.statistics.charts.AnimatedProgressRing
 import com.foxhole.beta.ui.statistics.charts.AnimatedSegmentDonutChart
 import com.foxhole.beta.ui.statistics.charts.SegmentedBarSegment
@@ -50,6 +54,10 @@ import kotlin.math.max
 import kotlin.math.roundToInt
 
 private const val DECIMAL_MEGABYTE_BYTES = 1_000_000L
+private const val DECIMAL_KILOBYTE_BYTES = 1_000L
+private const val TIMELINE_TRAFFIC_SCALE_TINY_STEP_BYTES = 100L * DECIMAL_KILOBYTE_BYTES
+private const val TIMELINE_TRAFFIC_SCALE_SMALL_STEP_BYTES = DECIMAL_MEGABYTE_BYTES
+private const val TIMELINE_TRAFFIC_SCALE_MEDIUM_STEP_BYTES = 10L * DECIMAL_MEGABYTE_BYTES
 private const val TIMELINE_TRAFFIC_SCALE_STEP_BYTES = 100L * DECIMAL_MEGABYTE_BYTES
 private const val MAX_TIMELINE_TRAFFIC_TICKS = 8
 
@@ -142,7 +150,7 @@ internal fun DnsProtectionChart(rows: List<DnsProtectionAppRow>) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.End,
                 )
-                AppIcon(packageName = row.packageName, modifier = Modifier.size(26.dp))
+                StatisticsAppIcon(packageName = row.packageName, modifier = Modifier.size(26.dp))
                 Text(
                     text = row.label,
                     modifier = Modifier.widthIn(min = 70.dp, max = 112.dp),
@@ -605,7 +613,7 @@ internal fun AppTrafficStackedBarRow(
                 )
             }
         }
-        AppIcon(packageName = row.packageName, modifier = Modifier.size(34.dp))
+        StatisticsAppIcon(packageName = row.packageName, modifier = Modifier.size(34.dp))
         Column(
             modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.spacedBy(5.dp),
@@ -818,7 +826,8 @@ internal fun timelineTrafficTickValues(yMax: Long): List<Long> {
 private fun timelineTrafficTickStep(yMax: Long): Long {
     val targetIntervals = (MAX_TIMELINE_TRAFFIC_TICKS - 1).coerceAtLeast(1).toLong()
     val rawStep = divideRoundUp(yMax, targetIntervals)
-    return roundUpToTimelineTrafficStep(rawStep)
+    val stepBase = timelineTrafficScaleStep(yMax)
+    return divideRoundUp(rawStep, stepBase) * stepBase
 }
 
 internal fun niceTimelineTrafficScale(maxBytes: Long): Long =
@@ -828,11 +837,19 @@ internal fun niceTimelineTrafficScale(maxBytes: Long): Long =
 internal fun statisticsCountryChartColors(): List<Color> = chartCountryColors()
 
 internal fun niceTrafficScale(maxBytes: Long): Long {
-    return roundUpToTimelineTrafficStep(maxBytes.coerceAtLeast(TIMELINE_TRAFFIC_SCALE_STEP_BYTES))
+    return roundUpToTimelineTrafficStep(maxBytes.coerceAtLeast(TIMELINE_TRAFFIC_SCALE_TINY_STEP_BYTES))
 }
 
 private fun roundUpToTimelineTrafficStep(value: Long): Long =
-    divideRoundUp(value, TIMELINE_TRAFFIC_SCALE_STEP_BYTES) * TIMELINE_TRAFFIC_SCALE_STEP_BYTES
+    timelineTrafficScaleStep(value).let { step -> divideRoundUp(value, step) * step }
+
+private fun timelineTrafficScaleStep(value: Long): Long =
+    when {
+        value <= DECIMAL_MEGABYTE_BYTES -> TIMELINE_TRAFFIC_SCALE_TINY_STEP_BYTES
+        value <= 10L * DECIMAL_MEGABYTE_BYTES -> TIMELINE_TRAFFIC_SCALE_SMALL_STEP_BYTES
+        value <= TIMELINE_TRAFFIC_SCALE_STEP_BYTES -> TIMELINE_TRAFFIC_SCALE_MEDIUM_STEP_BYTES
+        else -> TIMELINE_TRAFFIC_SCALE_STEP_BYTES
+    }
 
 private fun divideRoundUp(
     value: Long,
@@ -845,3 +862,28 @@ private fun divideRoundUp(
     }
 
 internal fun formatPercent(value: Float): String = "${(value.coerceIn(0f, 1f) * 100f).roundToInt()}%"
+
+@Composable
+internal fun StatisticsAppIcon(
+    packageName: String,
+    modifier: Modifier = Modifier,
+) {
+    if (packageName == OTHER_PACKAGE || packageName.isBlank()) {
+        Surface(
+            modifier = modifier,
+            shape = MaterialTheme.shapes.medium,
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.62f),
+            contentColor = MaterialTheme.colorScheme.primary,
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    imageVector = Icons.Outlined.Apps,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+        }
+    } else {
+        AppIcon(packageName = packageName, modifier = modifier)
+    }
+}

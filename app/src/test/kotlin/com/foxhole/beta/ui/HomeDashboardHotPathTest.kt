@@ -85,14 +85,14 @@ class HomeDashboardHotPathTest {
 
     @Test
     fun `startup composition adds remaining dashboard cards in short stages`() {
-        assertTrue(
+        assertFalse(
             shouldComposeDashboardCardNow(
                 card = DashboardCard.TRAFFIC_MAP,
                 startupStage = 2,
                 activeReorderCard = null,
             ),
         )
-        assertTrue(
+        assertFalse(
             shouldComposeDashboardCardNow(
                 card = DashboardCard.PROFILES,
                 startupStage = 2,
@@ -102,6 +102,13 @@ class HomeDashboardHotPathTest {
         assertTrue(
             shouldComposeDashboardCardNow(
                 card = DashboardCard.ACTIONS,
+                startupStage = 2,
+                activeReorderCard = null,
+            ),
+        )
+        assertTrue(
+            shouldComposeDashboardCardNow(
+                card = DashboardCard.PROFILES,
                 startupStage = 3,
                 activeReorderCard = null,
             ),
@@ -124,6 +131,13 @@ class HomeDashboardHotPathTest {
 
     @Test
     fun `startup composition restores traffic card after first frame window`() {
+        assertTrue(
+            shouldComposeDashboardCardNow(
+                card = DashboardCard.TRAFFIC_MAP,
+                startupStage = 4,
+                activeReorderCard = null,
+            ),
+        )
         assertTrue(
             shouldComposeDashboardCardNow(
                 card = DashboardCard.TRAFFIC,
@@ -166,14 +180,14 @@ class HomeDashboardHotPathTest {
                 activeReorderCard = null,
             ),
         )
-        assertFalse(
+        assertTrue(
             shouldComposeDashboardCardNow(
                 card = DashboardCard.ACTIONS,
                 startupStage = warmStage,
                 activeReorderCard = null,
             ),
         )
-        assertFalse(
+        assertTrue(
             shouldComposeDashboardCardNow(
                 card = DashboardCard.TRAFFIC,
                 startupStage = warmStage,
@@ -196,15 +210,15 @@ class HomeDashboardHotPathTest {
                 activeReorderCard = null,
             ),
         )
-        assertTrue(
+        assertFalse(
             shouldComposeTrafficMapHeavyContent(
-                startupStage = 2,
+                startupStage = 3,
                 activeReorderCard = null,
             ),
         )
         assertTrue(
             shouldComposeTrafficMapHeavyContent(
-                startupStage = 3,
+                startupStage = 4,
                 activeReorderCard = null,
             ),
         )
@@ -221,11 +235,11 @@ class HomeDashboardHotPathTest {
         val homeSource = testSourceFile("HomeScreen.kt").readText()
         val trafficMapSource = testSourceFile("TrafficMapDashboardCard.kt").readText()
 
-        assertTrue(homeSource.contains("DASHBOARD_CARD_STARTUP_STAGE_DELAY_MS = 16L"))
+        assertTrue(homeSource.contains("DASHBOARD_CARD_STARTUP_STAGE_DELAY_MS = 96L"))
         assertTrue(trafficMapSource.contains("TRAFFIC_MAP_HEAVY_CONTENT_SETTLE_DELAY_MS = 650L"))
         assertTrue(trafficMapSource.contains("delay(TRAFFIC_MAP_HEAVY_CONTENT_SETTLE_DELAY_MS)"))
+        assertFalse(homeSource.contains("DASHBOARD_CARD_STARTUP_STAGE_DELAY_MS = 16L"))
         assertFalse(homeSource.contains("DASHBOARD_CARD_STARTUP_STAGE_DELAY_MS = 32L"))
-        assertFalse(homeSource.contains("DASHBOARD_CARD_STARTUP_STAGE_DELAY_MS = 48L"))
     }
 
     @Test
@@ -237,19 +251,20 @@ class HomeDashboardHotPathTest {
     }
 
     @Test
-    fun `dashboard and settings root sections animate without keep alive prewarm panes`() {
+    fun `dashboard and settings root sections switch without animated double composition`() {
         val appSource = testSourceFile("FoxholeApp.kt").readText()
         val homeRouteBlock =
             appSource.substringAfter("composable(AppRoute.HOME)")
                 .substringBefore("composable(AppRoute.PROFILES)")
 
-        assertTrue(homeRouteBlock.contains("AnimatedContent("))
-        assertTrue(homeRouteBlock.contains("targetState = rootSection"))
-        assertTrue(homeRouteBlock.contains("when (section)"))
-        assertTrue(homeRouteBlock.contains("detailForwardEnter() togetherWith detailForwardExit()"))
-        assertTrue(homeRouteBlock.contains("detailBackEnter() togetherWith detailBackExit()"))
+        assertTrue(homeRouteBlock.contains("when (rootSection)"))
         assertTrue(homeRouteBlock.contains("AppSection.DASHBOARD ->"))
         assertTrue(homeRouteBlock.contains("AppSection.SETTINGS ->"))
+        assertFalse(homeRouteBlock.contains("AnimatedContent("))
+        assertFalse(homeRouteBlock.contains("targetState = rootSection"))
+        assertFalse(homeRouteBlock.contains("label = \"root-section-transition\""))
+        assertFalse(homeRouteBlock.contains("detailForwardEnter() togetherWith detailForwardExit()"))
+        assertFalse(homeRouteBlock.contains("detailBackEnter() togetherWith detailBackExit()"))
         assertFalse(homeRouteBlock.contains("RootSectionKeepAliveHost"))
         assertFalse(appSource.contains("RootSectionKeepAlivePane"))
         assertFalse(appSource.contains("ROOT_SETTINGS_PREWARM_DELAY_MS"))
