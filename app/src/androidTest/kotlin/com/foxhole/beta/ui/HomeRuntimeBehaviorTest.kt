@@ -59,6 +59,7 @@ class HomeRuntimeBehaviorTest {
                         app.container.settingsRepository.updateFirewallEnabled(false)
                         app.container.settingsRepository.updateNetworkActivityLogging(false)
                         app.container.settingsRepository.updateNetworkActivityPersistentLogging(false)
+                        app.container.settingsRepository.updateTrafficMapEnabled(true)
                         if (hasActiveFoxholeVpnNetwork(app.packageName)) {
                             FoxholeVpnRuntimeBridge.update(
                                 ConnectionSnapshot(

@@ -114,16 +114,17 @@ class ProfileRuntimeSessionAndroidTest {
         runBlocking {
             val app = ApplicationProvider.getApplicationContext<FoxholeApplication>()
             resetRelevantSettings(app)
+            app.container.settingsRepository.updateAllowPrivateOutboundHosts(true)
 
             clearProfiles(app)
-            val importedVless = app.container.profileRepository.importProfile(DIRECT_VLESS_REALITY_URI)
+            val importedVless = app.container.profileRepository.importProfile(DIRECT_VLESS_REALITY_PRESERVE_URI)
             val vlessSession = app.container.profileRepository.getSession(importedVless.id)
             val vlessRoot = json.parseToJsonElement(vlessSession.configJson).jsonObject
             val vlessOutbound = vlessRoot["outbounds"]!!.jsonArray.first().jsonObject
             val vlessTls = vlessOutbound["tls"]!!.jsonObject
             val vlessReality = vlessTls["reality"]!!.jsonObject
             val vlessUtls = vlessTls["utls"]!!.jsonObject
-            assertEquals("axn666.nl", vlessOutbound["server"]!!.jsonPrimitive.content)
+            assertEquals(PRESERVE_FIXTURE_HOST, vlessOutbound["server"]!!.jsonPrimitive.content)
             assertEquals("8447", vlessOutbound["server_port"]!!.jsonPrimitive.content)
             assertEquals("www.microsoft.com", vlessTls["server_name"]!!.jsonPrimitive.content)
             assertEquals("chrome", vlessUtls["fingerprint"]!!.jsonPrimitive.content)
@@ -134,15 +135,15 @@ class ProfileRuntimeSessionAndroidTest {
             assertEquals("03d0b309d56c352b", vlessReality["short_id"]!!.jsonPrimitive.content)
 
             clearProfiles(app)
-            val importedHysteria2 = app.container.profileRepository.importProfile(DIRECT_HYSTERIA2_URI)
+            val importedHysteria2 = app.container.profileRepository.importProfile(DIRECT_HYSTERIA2_PRESERVE_URI)
             val hysteria2Session = app.container.profileRepository.getSession(importedHysteria2.id)
             val hysteria2Root = json.parseToJsonElement(hysteria2Session.configJson).jsonObject
             val hysteria2Outbound = hysteria2Root["outbounds"]!!.jsonArray.first().jsonObject
             val hysteria2Tls = hysteria2Outbound["tls"]!!.jsonObject
 
-            assertEquals("axn666.nl", hysteria2Outbound["server"]!!.jsonPrimitive.content)
+            assertEquals(PRESERVE_FIXTURE_HOST, hysteria2Outbound["server"]!!.jsonPrimitive.content)
             assertEquals("8443", hysteria2Outbound["server_port"]!!.jsonPrimitive.content)
-            assertEquals("axn666.nl", hysteria2Tls["server_name"]!!.jsonPrimitive.content)
+            assertEquals(PRESERVE_FIXTURE_HOST, hysteria2Tls["server_name"]!!.jsonPrimitive.content)
             assertEquals(
                 "RLS3MLv81RhMPNr5xHRnqGmEPUkIFxxI1fTbAqzmZ+s=",
                 hysteria2Outbound["password"]!!.jsonPrimitive.content,
@@ -1951,6 +1952,12 @@ class ProfileRuntimeSessionAndroidTest {
 
         private const val DIRECT_HYSTERIA2_URI =
             "hysteria2://RLS3MLv81RhMPNr5xHRnqGmEPUkIFxxI1fTbAqzmZ+s=@axn666.nl:8443?sni=axn666.nl"
+
+        private const val PRESERVE_FIXTURE_HOST = "example.com"
+        private val DIRECT_VLESS_REALITY_PRESERVE_URI =
+            DIRECT_VLESS_REALITY_URI.replace("axn666.nl", PRESERVE_FIXTURE_HOST)
+        private val DIRECT_HYSTERIA2_PRESERVE_URI =
+            DIRECT_HYSTERIA2_URI.replace("axn666.nl", PRESERVE_FIXTURE_HOST)
 
         private const val EXACT_USER_XRAY_CONFIG =
             """
