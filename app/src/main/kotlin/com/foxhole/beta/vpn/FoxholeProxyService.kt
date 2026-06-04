@@ -793,6 +793,7 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
             collapsedText = ::notificationCollapsedText,
             expandedText = ::notificationExpandedText,
             stateLabel = ::notificationStateLabel,
+            smallIconRes = R.drawable.ic_notification_proxy,
             showAction = true,
         )
 

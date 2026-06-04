@@ -50,7 +50,7 @@ class InstalledAppSecurityNotifier(
             )
         val notification =
             NotificationCompat.Builder(appContext, CHANNEL_ID)
-                .setSmallIcon(R.drawable.ic_notification_vpn)
+                .setSmallIcon(R.drawable.ic_notification_firewall)
                 .setContentTitle(appContext.getString(R.string.installed_app_notification_title))
                 .setContentText(body)
                 .setStyle(NotificationCompat.BigTextStyle().bigText(body))

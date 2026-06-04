@@ -99,7 +99,7 @@ internal fun Service.buildConnectionNotification(
     collapsedText: (NotificationSnapshot) -> String,
     expandedText: (NotificationSnapshot) -> String?,
     stateLabel: (NotificationSnapshot) -> String,
-    @DrawableRes smallIconRes: Int = R.drawable.notification_icon,
+    @DrawableRes smallIconRes: Int = R.drawable.ic_notification_vpn,
     showAction: Boolean = false,
 ): Notification {
     val openIntent =

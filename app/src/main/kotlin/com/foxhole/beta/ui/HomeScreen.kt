@@ -538,7 +538,7 @@ fun HomeScreen(
             SettingsHelpAction(
                 title = stringResource(R.string.help_quick_start_title),
                 body = stringResource(R.string.help_quick_start_body),
-                icon = Icons.Outlined.RocketLaunch,
+                icon = FoxholeIcons.SmartStart,
             )
         },
     ) { padding ->
@@ -657,7 +657,7 @@ fun HomeScreen(
                 ) {
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         HomeCardHeader(
-                            icon = Icons.Outlined.AccountTree,
+                            icon = FoxholeIcons.Profile,
                             title =
                                 stringResource(
                                     if (localGuardProfileRuntimeActive) {
@@ -992,11 +992,11 @@ fun HomeScreen(
                                     FoxholeCard(modifier = Modifier.testTag("home_network_card")) {
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         HomeCardHeader(
-                            icon = Icons.Outlined.Public,
+                            icon = FoxholeIcons.Network,
                             title = stringResource(R.string.home_network_title),
                             trailing = {
                                 HomeHeaderActionButton(
-                                    icon = Icons.Outlined.Refresh,
+                                    icon = FoxholeIcons.Refresh,
                                     contentDescription = stringResource(R.string.refresh_ip_info),
                                     onClick = onRefreshIpInfo,
                                     enabled = !state.autoConnect.running,
@@ -1034,7 +1034,7 @@ fun HomeScreen(
                                             listOf(
                                                 Icons.Outlined.Language,
                                                 Icons.Outlined.LocationCity,
-                                                Icons.Outlined.Public,
+                                                FoxholeIcons.Network,
                                                 Icons.Outlined.Business,
                                             ),
                                         modifier =
@@ -1108,7 +1108,7 @@ fun HomeScreen(
                                         )
                                         HomeNetworkSubtleDivider()
                                         HomeNetworkDetailLine(
-                                            icon = Icons.Outlined.Public,
+                                            icon = FoxholeIcons.Network,
                                             label = stringResource(R.string.home_network_ip_label),
                                             value = ipValue.text,
                                             valueLoading = ipValue.loading,
@@ -1175,7 +1175,7 @@ fun HomeScreen(
                                             val transportTypeText = dashboardTransportTypeLabel(dashboardProtocolPresentation.protocolHint)
                                             HomeNetworkColumnTitle(stringResource(R.string.home_network_profile_info_title))
                                             HomeNetworkDetailLine(
-                                                icon = Icons.Outlined.Speed,
+                                                icon = FoxholeIcons.Latency,
                                                 label = stringResource(R.string.home_network_server_ping_label),
                                                 value = serverPingValue.text,
                                                 valueLoading = serverPingValue.loading,
@@ -1183,13 +1183,13 @@ fun HomeScreen(
                                             )
                                             HomeNetworkSubtleDivider()
                                             HomeNetworkDetailLine(
-                                                icon = Icons.Outlined.Dns,
+                                                icon = FoxholeIcons.Dns,
                                                 label = stringResource(R.string.home_network_dns_label),
                                                 value = dnsStatusText,
                                             )
                                             HomeNetworkSubtleDivider()
                                             HomeNetworkDetailLine(
-                                                icon = Icons.Outlined.SwapVert,
+                                                icon = FoxholeIcons.Traffic,
                                                 label = stringResource(R.string.home_network_transport_type_label),
                                                 value = transportTypeText,
                                                 valueMonospace = transportTypeText != "-",
@@ -1265,7 +1265,7 @@ fun HomeScreen(
                                     FoxholeCard {
                                         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                             HomeCardHeader(
-                                                icon = Icons.Outlined.SwapVert,
+                                                icon = FoxholeIcons.Traffic,
                                                 title = stringResource(R.string.home_traffic_title),
                                                 titleContent = {
                                                     Text(
@@ -1449,7 +1449,7 @@ fun HomeScreen(
             title = stringResource(R.string.smart_start_first_analysis_title),
             body = stringResource(R.string.smart_start_first_analysis_body),
             confirmLabel = stringResource(R.string.smart_start_first_analysis_continue),
-            icon = Icons.Outlined.Speed,
+            icon = FoxholeIcons.SmartStart,
             dismissLabel = stringResource(R.string.close),
             onDismiss = { smartStartFirstAnalysisProfileId = null },
             onConfirm = {

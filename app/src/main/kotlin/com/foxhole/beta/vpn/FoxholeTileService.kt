@@ -127,7 +127,7 @@ class FoxholeTileService : TileService() {
     ) {
         val tile = qsTile ?: return
         tile.label = getString(R.string.app_name)
-        tile.icon = Icon.createWithResource(this, R.drawable.foxhole_logo_bitmap)
+        tile.icon = Icon.createWithResource(this, R.drawable.ic_tile_vpn)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             tile.subtitle = subtitle
         }

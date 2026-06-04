@@ -192,7 +192,7 @@ private fun LazyListScope.settingsHomeNavigationItems(
         SettingsNavigationGroup(name = "SettingsGroup:network") {
             SettingsGroupedNavigationRow(
                 modifier = Modifier.testTag("settings_smart_start_action"),
-                icon = Icons.Outlined.Speed,
+                icon = FoxholeIcons.SmartStart,
                 title = stringResource(R.string.smart_start_settings_title),
                 summary = stringResource(R.string.smart_start_settings_summary),
                 summaryMaxLines = 3,
@@ -201,7 +201,7 @@ private fun LazyListScope.settingsHomeNavigationItems(
             SettingsGroupDivider()
             SettingsGroupedNavigationRow(
                 modifier = Modifier.testTag("settings_traffic_action"),
-                icon = Icons.Outlined.Public,
+                icon = FoxholeIcons.Traffic,
                 title = stringResource(R.string.traffic_settings),
                 summary = stringResource(R.string.settings_home_network_summary),
                 onClick = onOpenTraffic,
@@ -209,7 +209,7 @@ private fun LazyListScope.settingsHomeNavigationItems(
             SettingsGroupDivider()
             SettingsGroupedNavigationRow(
                 modifier = Modifier.testTag("settings_dns_action"),
-                icon = Icons.Outlined.Dns,
+                icon = FoxholeIcons.Dns,
                 title = stringResource(R.string.dns_settings_title),
                 summary = stringResource(R.string.settings_home_dns_summary),
                 onClick = onOpenDns,
@@ -217,7 +217,7 @@ private fun LazyListScope.settingsHomeNavigationItems(
             SettingsGroupDivider()
             SettingsGroupedNavigationRow(
                 modifier = Modifier.testTag("settings_network_rules_action"),
-                icon = Icons.Outlined.Router,
+                icon = FoxholeIcons.NetworkRules,
                 title = stringResource(R.string.network_rules_settings_title),
                 summary = stringResource(R.string.network_rules_settings_summary),
                 summaryMaxLines = Int.MAX_VALUE,
@@ -240,7 +240,7 @@ private fun LazyListScope.settingsHomeNavigationItems(
             SettingsNavigationGroup(name = "SettingsGroup:app") {
                 SettingsGroupedNavigationRow(
                     modifier = Modifier.testTag("settings_application_action"),
-                    icon = Icons.Outlined.PhoneAndroid,
+                    icon = FoxholeIcons.Application,
                     title = stringResource(R.string.app_settings),
                     summary = stringResource(R.string.settings_home_application_summary),
                     onClick = onOpenApplication,
@@ -249,7 +249,7 @@ private fun LazyListScope.settingsHomeNavigationItems(
                     SettingsGroupDivider()
                     SettingsGroupedNavigationRow(
                         modifier = Modifier.testTag("settings_expert_action"),
-                        icon = Icons.Outlined.Tune,
+                        icon = FoxholeIcons.Expert,
                         title = stringResource(R.string.expert_settings),
                         summary = stringResource(R.string.settings_home_advanced_summary),
                         onClick = onOpenExpert,
@@ -258,7 +258,7 @@ private fun LazyListScope.settingsHomeNavigationItems(
                 SettingsGroupDivider()
                 SettingsGroupedNavigationRow(
                     modifier = Modifier.testTag("settings_diagnostics_action"),
-                    icon = Icons.AutoMirrored.Outlined.Article,
+                    icon = FoxholeIcons.Diagnostics,
                     title = stringResource(R.string.diagnostics_and_usage),
                     summary = stringResource(R.string.settings_home_diagnostics_summary),
                     onClick = onOpenDiagnostics,
@@ -266,7 +266,7 @@ private fun LazyListScope.settingsHomeNavigationItems(
                 SettingsGroupDivider()
                 SettingsGroupedNavigationRow(
                     modifier = Modifier.testTag("settings_statistics_action"),
-                    icon = Icons.Outlined.BarChart,
+                    icon = FoxholeIcons.Statistics,
                     title = stringResource(R.string.statistics_title),
                     summary = stringResource(R.string.settings_home_statistics_summary),
                     onClick = onOpenStatistics,
@@ -274,7 +274,7 @@ private fun LazyListScope.settingsHomeNavigationItems(
                 SettingsGroupDivider()
                 SettingsGroupedNavigationRow(
                     modifier = Modifier.testTag("settings_about_action"),
-                    icon = Icons.Outlined.Info,
+                    icon = FoxholeIcons.About,
                     title = stringResource(R.string.about_settings_title),
                     summary = stringResource(R.string.about_settings_summary),
                     summaryMaxLines = Int.MAX_VALUE,
@@ -317,11 +317,11 @@ private fun SettingsSecurityRoutingNavigationGroup(
     onOpenRoutingSites: () -> Unit,
     onOpenPrivacyRoute: () -> Unit,
 ) {
-    val torRouteIcon = ImageVector.vectorResource(R.drawable.ic_tor_route)
+    val torRouteIcon = ImageVector.vectorResource(FoxholeIcons.Drawables.TorRoute)
     SettingsNavigationGroup(name = "SettingsGroup:security-routing") {
         SettingsGroupedNavigationRow(
             modifier = Modifier.testTag("settings_security_action"),
-            icon = Icons.Outlined.Shield,
+            icon = FoxholeIcons.Security,
             title = stringResource(R.string.security_settings_title),
             summary = stringResource(R.string.security_settings_summary),
             titleTrailingContent = {
@@ -332,7 +332,7 @@ private fun SettingsSecurityRoutingNavigationGroup(
         SettingsGroupDivider()
         SettingsGroupedNavigationRow(
             modifier = Modifier.testTag("settings_routing_sites_action"),
-            icon = Icons.Outlined.Language,
+            icon = FoxholeIcons.RoutingSites,
             title = stringResource(R.string.routing_sites_title),
             summary = stringResource(R.string.settings_home_sites_summary),
             onClick = onOpenRoutingSites,
@@ -340,7 +340,7 @@ private fun SettingsSecurityRoutingNavigationGroup(
         SettingsGroupDivider()
         SettingsGroupedNavigationRow(
             modifier = Modifier.testTag("settings_routing_apps_action"),
-            icon = Icons.Outlined.Apps,
+            icon = FoxholeIcons.RoutingApps,
             title = stringResource(R.string.routing_apps_title),
             summary = stringResource(R.string.settings_home_apps_summary),
             onClick = onOpenRoutingApps,
@@ -500,7 +500,7 @@ fun SmartStartSettingsScreen(
             SettingsHelpAction(
                 title = stringResource(R.string.auto_connect),
                 body = stringResource(R.string.help_smart_start_full_body),
-                icon = Icons.Outlined.Speed,
+                icon = FoxholeIcons.SmartStart,
             ) {
                 Text(
                     text = stringResource(R.string.help_protocol_statuses_title),
@@ -528,7 +528,7 @@ fun SmartStartSettingsScreen(
                     title = stringResource(R.string.smart_start_enable_title),
                     checked = state.settings.connection.smartStartEnabled,
                     summary = stringResource(R.string.smart_start_enable_summary),
-                    leadingIcon = Icons.Outlined.Speed,
+                    leadingIcon = FoxholeIcons.SmartStart,
                     onCheckedChange = onSmartStartEnabledChanged,
                     summaryMaxLines = Int.MAX_VALUE,
                     grouped = true,
@@ -579,8 +579,8 @@ fun SmartStartSettingsScreen(
                     label = { smartStartRetryAttemptsLabel(it) },
                     onSelect = onSmartStartSubscriptionRetryAttemptsChanged,
                     summary = stringResource(R.string.smart_start_subscription_retry_attempts_summary),
-                    leadingIcon = Icons.Outlined.Speed,
-                    optionIcon = { Icons.Outlined.Speed },
+                    leadingIcon = FoxholeIcons.AutoMode,
+                    optionIcon = { FoxholeIcons.AutoMode },
                     enabled = subscriptionRetrySettingsEnabled,
                     summaryMaxLines = 3,
                     grouped = true,
@@ -614,7 +614,7 @@ fun SmartStartSettingsScreen(
                     enabled = smartStartSettingsEnabled,
                     onCheckedChange = onSmartStartFailoverEnabledChanged,
                     summary = stringResource(R.string.smart_start_failover_summary),
-                    leadingIcon = Icons.Outlined.SwapVert,
+                    leadingIcon = FoxholeIcons.Traffic,
                     summaryMaxLines = 4,
                     grouped = true,
                 )
@@ -629,8 +629,8 @@ fun SmartStartSettingsScreen(
                     label = { smartStartTimeoutLabel(it) },
                     onSelect = onSmartStartProtocolSelectionTimeoutChanged,
                     summary = stringResource(R.string.smart_start_protocol_timeout_summary),
-                    leadingIcon = Icons.Outlined.Speed,
-                    optionIcon = { Icons.Outlined.Speed },
+                    leadingIcon = FoxholeIcons.Latency,
+                    optionIcon = { FoxholeIcons.Latency },
                     enabled = smartStartSettingsEnabled,
                     summaryMaxLines = 3,
                     grouped = true,
@@ -663,7 +663,7 @@ fun SmartStartSettingsScreen(
                     label = { smartStartTransportPriorityLabel(it) },
                     onSelect = onSmartStartTransportPrioritySelected,
                     summary = stringResource(R.string.smart_start_transport_priority_summary),
-                    leadingIcon = Icons.Outlined.SwapVert,
+                    leadingIcon = FoxholeIcons.Traffic,
                     optionIcon = ::smartStartTransportPriorityIcon,
                     enabled = smartStartSettingsEnabled,
                     summaryMaxLines = 3,
@@ -723,9 +723,9 @@ private fun smartStartTransportPriorityLabel(value: SmartStartTransportPriority)
 
 private fun smartStartTransportPriorityIcon(value: SmartStartTransportPriority): ImageVector =
     when (value) {
-        SmartStartTransportPriority.ALL -> Icons.Outlined.SwapVert
-        SmartStartTransportPriority.UDP -> Icons.Outlined.Speed
-        SmartStartTransportPriority.TCP -> Icons.Outlined.Public
+        SmartStartTransportPriority.ALL -> FoxholeIcons.Traffic
+        SmartStartTransportPriority.UDP -> FoxholeIcons.Latency
+        SmartStartTransportPriority.TCP -> FoxholeIcons.Network
     }
 
 @Suppress("CyclomaticComplexMethod", "LongMethod", "LongParameterList", "UNUSED_PARAMETER")
@@ -806,7 +806,7 @@ fun TrafficSettingsScreen(
         item {
             SettingsControlGroup {
                 SettingsNavigationRow(
-                    icon = Icons.Outlined.Shield,
+                    icon = FoxholeIcons.Security,
                     title = stringResource(R.string.kill_switch_title),
                     summary = stringResource(R.string.kill_switch_summary),
                     summaryMaxLines = 4,
@@ -852,7 +852,7 @@ fun TrafficSettingsScreen(
                         selected = state.settings.traffic.tunStack,
                         label = { tunStackLabel(it) },
                         onSelect = onTunStackSelected,
-                        leadingIcon = Icons.Outlined.Shield,
+                        leadingIcon = FoxholeIcons.Security,
                         optionIcon = ::tunStackIcon,
                         grouped = true,
                     )
@@ -860,7 +860,7 @@ fun TrafficSettingsScreen(
                     SettingValueRow(
                         title = stringResource(R.string.mtu),
                         value = state.settings.traffic.mtu.toString(),
-                        leadingIcon = Icons.Outlined.Tune,
+                        leadingIcon = FoxholeIcons.Expert,
                         onClick = { mtuDialog = true },
                         grouped = true,
                     )
@@ -876,7 +876,7 @@ fun TrafficSettingsScreen(
                         selected = state.settings.expert.localSurfaces.proxyMode,
                         label = { proxySurfaceModeLabel(it) },
                         onSelect = onProxySurfaceModeSelected,
-                        leadingIcon = Icons.Outlined.SwapVert,
+                        leadingIcon = FoxholeIcons.ProxySurface,
                         optionIcon = ::proxySurfaceModeIcon,
                         grouped = true,
                     )
@@ -884,7 +884,7 @@ fun TrafficSettingsScreen(
                     SettingSwitchRow(
                         title = stringResource(R.string.proxy_auth_title),
                         checked = state.settings.expert.localSurfaces.auth.enabled,
-                        leadingIcon = Icons.Outlined.Shield,
+                        leadingIcon = FoxholeIcons.Auth,
                         onCheckedChange = onLocalProxyAuthEnabledChanged,
                         grouped = true,
                     )
@@ -900,7 +900,7 @@ fun TrafficSettingsScreen(
                     SettingValueRow(
                         title = stringResource(R.string.proxy_surface_endpoint_title),
                         value = proxySurfaceEndpointSummary(state.settings.expert.localSurfaces.proxyMode, state.settings.expert.localSurfaces),
-                        leadingIcon = Icons.Outlined.Public,
+                        leadingIcon = FoxholeIcons.ProxyEndpoint,
                         onClick = null,
                         grouped = true,
                     )
@@ -908,7 +908,7 @@ fun TrafficSettingsScreen(
                     SettingValueRow(
                         title = stringResource(R.string.port),
                         value = state.settings.expert.localSurfaces.surfaceFor(state.settings.expert.localSurfaces.proxyMode).port.toString(),
-                        leadingIcon = Icons.Outlined.Router,
+                        leadingIcon = FoxholeIcons.NetworkRules,
                         onClick = { proxyPortDialog = true },
                         grouped = true,
                     )
@@ -917,7 +917,7 @@ fun TrafficSettingsScreen(
                 SettingSwitchRow(
                     title = stringResource(R.string.proxy_lan_access_title),
                     checked = state.settings.expert.localSurfaces.allowLanAccess,
-                    leadingIcon = Icons.Outlined.Router,
+                    leadingIcon = FoxholeIcons.Lan,
                     onCheckedChange = { enabled ->
                         if (!enabled || wifiLanAddress != null) {
                             onLocalProxyLanAccessChanged(enabled)
@@ -949,7 +949,7 @@ fun TrafficSettingsScreen(
                         selected = state.settings.expert.localSurfaces.lanProxyMode,
                         label = { proxySurfaceModeLabel(it) },
                         onSelect = onLanProxySurfaceModeSelected,
-                        leadingIcon = Icons.Outlined.SwapVert,
+                        leadingIcon = FoxholeIcons.ProxySurface,
                         optionIcon = ::proxySurfaceModeIcon,
                         grouped = true,
                     )
@@ -957,7 +957,7 @@ fun TrafficSettingsScreen(
                     SettingSwitchRow(
                         title = stringResource(R.string.lan_proxy_auth_title),
                         checked = state.settings.expert.localSurfaces.lanAuth.enabled,
-                        leadingIcon = Icons.Outlined.Shield,
+                        leadingIcon = FoxholeIcons.Auth,
                         onCheckedChange = onLanProxyAuthEnabledChanged,
                         grouped = true,
                     )
@@ -977,7 +977,7 @@ fun TrafficSettingsScreen(
                             surfaces = state.settings.expert.localSurfaces,
                             wifiLanAddress = wifiLanAddress,
                         ),
-                        leadingIcon = Icons.Outlined.Public,
+                        leadingIcon = FoxholeIcons.Lan,
                         onClick = null,
                         grouped = true,
                     )
@@ -985,7 +985,7 @@ fun TrafficSettingsScreen(
                     SettingValueRow(
                         title = stringResource(R.string.port),
                         value = state.settings.expert.localSurfaces.surfaceFor(state.settings.expert.localSurfaces.lanProxyMode).port.toString(),
-                        leadingIcon = Icons.Outlined.Router,
+                        leadingIcon = FoxholeIcons.Lan,
                         onClick = { lanProxyPortDialog = true },
                         grouped = true,
                     )
@@ -994,7 +994,7 @@ fun TrafficSettingsScreen(
                 SettingSwitchRow(
                     title = stringResource(R.string.prefer_ipv6_routes),
                     checked = state.settings.traffic.preferIpv6,
-                    leadingIcon = Icons.Outlined.Public,
+                    leadingIcon = FoxholeIcons.IpStrategy,
                     onCheckedChange = onPreferIpv6Changed,
                     grouped = true,
                 )
@@ -1003,7 +1003,7 @@ fun TrafficSettingsScreen(
                     title = stringResource(R.string.bypass_lan),
                     checked = state.settings.expert.bypassLan,
                     summary = stringResource(R.string.bypass_lan_summary),
-                    leadingIcon = Icons.Outlined.Router,
+                    leadingIcon = FoxholeIcons.Lan,
                     onCheckedChange = onBypassLanChanged,
                     summaryMaxLines = 3,
                     grouped = true,
@@ -1046,7 +1046,7 @@ fun TrafficSettingsScreen(
                     onSelect = onLatencyProbeMethodSelected,
                     summary = stringResource(R.string.latency_probe_method_summary),
                     summaryMaxLines = 5,
-                    leadingIcon = Icons.Outlined.Speed,
+                    leadingIcon = FoxholeIcons.Latency,
                     optionIcon = ::latencyProbeMethodIcon,
                     grouped = true,
                 )
@@ -1054,7 +1054,7 @@ fun TrafficSettingsScreen(
                 SettingValueRow(
                     title = stringResource(R.string.ip_info_endpoint),
                     value = state.settings.connection.ipInfoEndpoint,
-                    leadingIcon = Icons.Outlined.Public,
+                    leadingIcon = FoxholeIcons.Network,
                     onClick = { endpointDialog = true },
                     grouped = true,
                 )
@@ -1065,7 +1065,7 @@ fun TrafficSettingsScreen(
     if (mtuDialog) {
         IntValueDialog(
             title = stringResource(R.string.mtu),
-            icon = Icons.Outlined.Tune,
+            icon = FoxholeIcons.Expert,
             initialValue = state.settings.traffic.mtu,
             onDismiss = { mtuDialog = false },
             onConfirm = onMtuChanged,
@@ -1076,7 +1076,7 @@ fun TrafficSettingsScreen(
         val mode = state.settings.expert.localSurfaces.proxyMode
         IntValueDialog(
             title = stringResource(R.string.port),
-            icon = Icons.Outlined.Router,
+            icon = FoxholeIcons.NetworkRules,
             initialValue = state.settings.expert.localSurfaces.surfaceFor(mode).port,
             onDismiss = { proxyPortDialog = false },
             onConfirm = { port -> updateSurfacePort(mode, port) },
@@ -1087,7 +1087,7 @@ fun TrafficSettingsScreen(
         val mode = state.settings.expert.localSurfaces.lanProxyMode
         IntValueDialog(
             title = stringResource(R.string.port),
-            icon = Icons.Outlined.Router,
+            icon = FoxholeIcons.Lan,
             initialValue = state.settings.expert.localSurfaces.surfaceFor(mode).port,
             onDismiss = { lanProxyPortDialog = false },
             onConfirm = { port -> updateSurfacePort(mode, port) },
@@ -1097,7 +1097,7 @@ fun TrafficSettingsScreen(
     if (endpointDialog) {
         TextValueDialog(
             title = stringResource(R.string.ip_info_endpoint),
-            icon = Icons.Outlined.Public,
+            icon = FoxholeIcons.Network,
             initialValue = state.settings.connection.ipInfoEndpoint,
             singleLine = true,
             onDismiss = { endpointDialog = false },
@@ -1126,7 +1126,7 @@ fun NetworkRulesSettingsScreen(
                     title = stringResource(R.string.network_rules_wifi_title),
                     checked = networkRules.wifiRulesEnabled,
                     summary = stringResource(R.string.network_rules_wifi_summary),
-                    leadingIcon = Icons.Outlined.Router,
+                    leadingIcon = FoxholeIcons.Wifi,
                     onCheckedChange = { enabled ->
                         onNetworkRulesChanged(networkRules.copy(wifiRulesEnabled = enabled))
                     },
@@ -1146,7 +1146,7 @@ fun NetworkRulesSettingsScreen(
                     title = stringResource(R.string.network_rules_cellular_title),
                     checked = networkRules.cellularRulesEnabled,
                     summary = stringResource(R.string.network_rules_cellular_summary),
-                    leadingIcon = Icons.Outlined.PhoneAndroid,
+                    leadingIcon = FoxholeIcons.Cellular,
                     onCheckedChange = { enabled ->
                         onNetworkRulesChanged(networkRules.copy(cellularRulesEnabled = enabled))
                     },
@@ -1172,7 +1172,7 @@ fun NetworkRulesSettingsScreen(
                     title = stringResource(R.string.network_rules_skip_speed_tests_mobile_title),
                     checked = networkRules.skipSpeedTestsOnCellular,
                     summary = stringResource(R.string.network_rules_skip_speed_tests_mobile_summary),
-                    leadingIcon = Icons.Outlined.Speed,
+                    leadingIcon = FoxholeIcons.Latency,
                     onCheckedChange = { enabled ->
                         onNetworkRulesChanged(networkRules.copy(skipSpeedTestsOnCellular = enabled))
                     },
@@ -1219,7 +1219,7 @@ private fun NetworkRulesMobileProfileRows(
             } else {
                 stringResource(R.string.network_rules_mobile_profile_summary)
             },
-        leadingIcon = Icons.Outlined.SwapVert,
+        leadingIcon = FoxholeIcons.Cellular,
         onCheckedChange = { enabled ->
             onNetworkRulesChanged(
                 networkRules.copy(
@@ -1256,7 +1256,7 @@ private fun NetworkRulesMobileProfileRows(
         onSelect = { profileId ->
             onNetworkRulesChanged(networkRules.copy(cellularProfileId = profileId))
         },
-        leadingIcon = Icons.Outlined.PhoneAndroid,
+        leadingIcon = FoxholeIcons.Cellular,
         optionIcon = { Icons.Outlined.VpnKey },
         enabled = networkRules.useCellularProfile && profiles.isNotEmpty(),
         grouped = true,
@@ -1276,7 +1276,7 @@ fun PrivacyRouteSettingsScreen(
     onPrivacyRouteSelectedPackagesChanged: (List<String>) -> Unit,
 ) {
     var privacyRouteScopeMenuExpanded by rememberSaveable { mutableStateOf(false) }
-    val torRouteIcon = ImageVector.vectorResource(R.drawable.ic_tor_route)
+    val torRouteIcon = ImageVector.vectorResource(FoxholeIcons.Drawables.TorRoute)
     val selectedPackages = state.settings.privacyRoute.selectedPackages
     val selectedPackageSet = selectedPackages.toSet()
     val selectedApps =
@@ -1322,7 +1322,7 @@ fun PrivacyRouteSettingsScreen(
                     enabled = state.settings.privacyRoute.enabled,
                     onCheckedChange = onPrivacyRouteBypassVpnTunnelChanged,
                     summary = stringResource(R.string.privacy_route_bypass_vpn_summary),
-                    leadingIcon = Icons.Outlined.Public,
+                    leadingIcon = FoxholeIcons.Network,
                     summaryMaxLines = 3,
                     grouped = true,
                 )
@@ -1336,7 +1336,7 @@ fun PrivacyRouteSettingsScreen(
                     selected = state.settings.privacyRoute.scope,
                     label = { privacyRouteScopeLabel(it) },
                     onSelect = onPrivacyRouteScopeSelected,
-                    leadingIcon = Icons.Outlined.Apps,
+                    leadingIcon = FoxholeIcons.RoutingApps,
                     optionIcon = ::privacyRouteScopeIcon,
                     grouped = true,
                 )
@@ -1350,7 +1350,7 @@ fun PrivacyRouteSettingsScreen(
                     AppGridSectionContent(
                         title = stringResource(R.string.privacy_route_selected_apps_title),
                         subtitle = stringResource(R.string.privacy_route_selected_apps_summary),
-                        leadingIcon = Icons.Outlined.Apps,
+                        leadingIcon = FoxholeIcons.RoutingApps,
                         apps = selectedApps,
                         emptyText = stringResource(R.string.privacy_route_selected_apps_empty),
                         headerActionLabel = stringResource(R.string.add_label),
@@ -1434,7 +1434,7 @@ fun ApplicationSettingsScreen(
                     selected = state.settings.ui.themeMode,
                     label = { themeModeLabel(it) },
                     onSelect = onThemeSelected,
-                    leadingIcon = Icons.Outlined.Tune,
+                    leadingIcon = FoxholeIcons.Theme,
                     optionIcon = ::themeModeIcon,
                     grouped = true,
                 )
@@ -1448,7 +1448,7 @@ fun ApplicationSettingsScreen(
                     selected = state.settings.ui.locale,
                     label = { localeLabel(it) },
                     onSelect = onLocaleSelected,
-                    leadingIcon = Icons.Outlined.Public,
+                    leadingIcon = FoxholeIcons.RoutingSites,
                     optionIcon = ::localeIcon,
                     grouped = true,
                 )
@@ -1456,7 +1456,7 @@ fun ApplicationSettingsScreen(
                 SettingSwitchRow(
                     title = stringResource(R.string.auto_start_on_boot),
                     checked = state.settings.connection.autoStartOnBoot,
-                    leadingIcon = Icons.Outlined.PhoneAndroid,
+                    leadingIcon = FoxholeIcons.AutoStart,
                     onCheckedChange = onAutoStartChanged,
                     grouped = true,
                 )
@@ -1465,7 +1465,7 @@ fun ApplicationSettingsScreen(
                     modifier = Modifier.testTag("settings_block_screenshots_toggle"),
                     title = stringResource(R.string.block_screenshots_title),
                     checked = state.settings.expert.blockScreenshots,
-                    leadingIcon = Icons.Outlined.Shield,
+                    leadingIcon = FoxholeIcons.ScreenshotsBlocked,
                     onCheckedChange = onBlockScreenshotsChanged,
                     grouped = true,
                 )
@@ -1474,7 +1474,7 @@ fun ApplicationSettingsScreen(
                     title = stringResource(R.string.show_advanced_settings_title),
                     checked = state.settings.ui.showExpertSettings,
                     summary = stringResource(R.string.show_advanced_settings_summary),
-                    leadingIcon = Icons.Outlined.Tune,
+                    leadingIcon = FoxholeIcons.Expert,
                     onCheckedChange = onShowExpertSettingsChanged,
                     summaryMaxLines = Int.MAX_VALUE,
                     grouped = true,
@@ -1484,7 +1484,7 @@ fun ApplicationSettingsScreen(
                     title = stringResource(R.string.network_card_setting_title),
                     checked = state.settings.ui.networkCardEnabled,
                     summary = stringResource(R.string.network_card_setting_summary),
-                    leadingIcon = Icons.Outlined.Public,
+                    leadingIcon = FoxholeIcons.Network,
                     onCheckedChange = onNetworkCardEnabledChanged,
                     summaryMaxLines = Int.MAX_VALUE,
                     grouped = true,
@@ -1494,7 +1494,7 @@ fun ApplicationSettingsScreen(
                     title = stringResource(R.string.traffic_card_setting_title),
                     checked = state.settings.ui.trafficCardEnabled,
                     summary = stringResource(R.string.traffic_card_setting_summary),
-                    leadingIcon = Icons.Outlined.SwapVert,
+                    leadingIcon = FoxholeIcons.Traffic,
                     onCheckedChange = onTrafficCardEnabledChanged,
                     summaryMaxLines = Int.MAX_VALUE,
                     grouped = true,
@@ -1519,7 +1519,7 @@ fun ApplicationSettingsScreen(
                     title = stringResource(R.string.show_tor_quick_launch_title),
                     checked = state.settings.ui.showTorQuickLaunch,
                     summary = stringResource(R.string.show_tor_quick_launch_summary),
-                    leadingIcon = Icons.Outlined.RocketLaunch,
+                    leadingIcon = FoxholeIcons.SmartStart,
                     onCheckedChange = onShowTorQuickLaunchChanged,
                     summaryMaxLines = Int.MAX_VALUE,
                     grouped = true,
@@ -1529,7 +1529,7 @@ fun ApplicationSettingsScreen(
                     title = stringResource(R.string.show_firewall_status_title),
                     checked = state.settings.ui.showFirewallStatus,
                     summary = stringResource(R.string.show_firewall_status_summary),
-                    leadingIcon = Icons.Outlined.Shield,
+                    leadingIcon = FoxholeIcons.Security,
                     onCheckedChange = onShowFirewallStatusChanged,
                     summaryMaxLines = Int.MAX_VALUE,
                     grouped = true,
@@ -1568,8 +1568,8 @@ private fun privacyRouteScopeLabel(value: PrivacyRouteScope): String =
 
 private fun privacyRouteScopeIcon(value: PrivacyRouteScope): ImageVector =
     when (value) {
-        PrivacyRouteScope.SELECTED_APPS -> Icons.Outlined.Apps
-        PrivacyRouteScope.ALL_APPS -> Icons.Outlined.PhoneAndroid
+        PrivacyRouteScope.SELECTED_APPS -> FoxholeIcons.RoutingApps
+        PrivacyRouteScope.ALL_APPS -> FoxholeIcons.Apps
     }
 
 @Composable
@@ -1582,9 +1582,9 @@ private fun proxySurfaceModeLabel(value: ProxySurfaceMode): String =
 
 private fun proxySurfaceModeIcon(value: ProxySurfaceMode): ImageVector =
     when (value) {
-        ProxySurfaceMode.SOCKS5 -> Icons.Outlined.Shield
-        ProxySurfaceMode.HTTP -> Icons.Outlined.Public
-        ProxySurfaceMode.ALL -> Icons.Outlined.Apps
+        ProxySurfaceMode.SOCKS5 -> FoxholeIcons.ProxySurface
+        ProxySurfaceMode.HTTP -> FoxholeIcons.Network
+        ProxySurfaceMode.ALL -> FoxholeIcons.Apps
     }
 
 @Suppress("UNUSED_PARAMETER")
@@ -1619,26 +1619,26 @@ private fun LocalSurfaceSettings.surfaceFor(mode: ProxySurfaceMode): ProxyInboun
 
 private fun latencyProbeMethodIcon(value: LatencyProbeMethod): ImageVector =
     when (value) {
-        LatencyProbeMethod.HTTP -> Icons.Outlined.Public
-        LatencyProbeMethod.ICMP -> Icons.Outlined.Speed
-        LatencyProbeMethod.TCP -> Icons.Outlined.SwapVert
+        LatencyProbeMethod.HTTP -> FoxholeIcons.Network
+        LatencyProbeMethod.ICMP -> FoxholeIcons.Latency
+        LatencyProbeMethod.TCP -> FoxholeIcons.Traffic
     }
 
 private fun tunStackIcon(value: TunStack): ImageVector =
     when (value) {
-        TunStack.SYSTEM -> Icons.Outlined.PhoneAndroid
-        TunStack.GVISOR -> Icons.Outlined.Shield
+        TunStack.SYSTEM -> FoxholeIcons.Application
+        TunStack.GVISOR -> FoxholeIcons.Security
     }
 
 private fun domainStrategyIcon(value: DomainStrategy): ImageVector =
     when (value) {
-        DomainStrategy.AS_IS -> Icons.Outlined.Tune
+        DomainStrategy.AS_IS -> FoxholeIcons.Expert
         DomainStrategy.PREFER_IPV4,
         DomainStrategy.IPV4_ONLY,
-        -> Icons.Outlined.Public
+        -> FoxholeIcons.Network
         DomainStrategy.PREFER_IPV6,
         DomainStrategy.IPV6_ONLY,
-        -> Icons.Outlined.AccountTree
+        -> FoxholeIcons.IpStrategy
     }
 
 @Composable
@@ -1662,10 +1662,10 @@ private fun themeModeIcon(value: ThemeMode): ImageVector =
 
 private fun localeIcon(value: AppLocale): ImageVector =
     when (value) {
-        AppLocale.SYSTEM -> Icons.Outlined.PhoneAndroid
+        AppLocale.SYSTEM -> FoxholeIcons.Application
         AppLocale.RU,
         AppLocale.EN,
-        -> Icons.Outlined.Language
+        -> FoxholeIcons.RoutingSites
     }
 
 @Composable
@@ -1676,7 +1676,7 @@ fun HelpScreen(
     val topics =
         listOf(
             HelpTopic(
-                icon = Icons.Outlined.RocketLaunch,
+                icon = FoxholeIcons.SmartStart,
                 title = stringResource(R.string.help_quick_start_title),
                 body = stringResource(R.string.help_quick_start_body),
             ),
@@ -1686,24 +1686,24 @@ fun HelpScreen(
                 body = stringResource(R.string.help_profiles_subscriptions_body),
             ),
             HelpTopic(
-                icon = Icons.Outlined.Speed,
+                icon = FoxholeIcons.Latency,
                 title = stringResource(R.string.auto_connect),
                 body = stringResource(R.string.help_smart_start_full_body),
             ),
             HelpTopic(
-                icon = Icons.Outlined.QueryStats,
+                icon = FoxholeIcons.Statistics,
                 title = stringResource(R.string.help_protocol_statuses_title),
                 body = stringResource(R.string.help_protocol_statuses_body),
                 content = HelpTopicContent.PROTOCOL_STATUSES,
             ),
             HelpTopic(
-                icon = Icons.Outlined.Shield,
+                icon = FoxholeIcons.Security,
                 title = stringResource(R.string.help_connection_modes_title),
                 body = stringResource(R.string.help_connection_modes_body),
                 content = HelpTopicContent.CONNECTION_MODES,
             ),
             HelpTopic(
-                icon = Icons.Outlined.Tune,
+                icon = FoxholeIcons.Expert,
                 title = stringResource(R.string.expert_settings),
                 body = stringResource(R.string.help_expert_full_body),
             ),
@@ -1857,7 +1857,7 @@ private fun HelpConnectionModesContent() {
             body = stringResource(R.string.help_connection_split_direct_body),
         )
         HelpConnectionModeRow(
-            icon = Icons.Outlined.Public,
+            icon = FoxholeIcons.ProxySurface,
             title = stringResource(R.string.traffic_mode_proxy),
             body = stringResource(R.string.help_connection_proxy_body),
         )

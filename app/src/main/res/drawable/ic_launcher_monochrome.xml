@@ -3,6 +3,6 @@
     <item
         android:width="72dp"
         android:height="72dp"
-        android:drawable="@drawable/foxhole_logo"
+        android:drawable="@drawable/foxhole_logo_monochrome"
         android:gravity="center" />
 </layer-list>

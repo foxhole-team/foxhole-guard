@@ -35,7 +35,7 @@ class AnomalyNotifier(
         val body = event.notificationBody()
         val notification =
             NotificationCompat.Builder(appContext, CHANNEL_ID)
-                .setSmallIcon(R.drawable.ic_notification_vpn)
+                .setSmallIcon(R.drawable.ic_notification_anomaly)
                 .setContentTitle(title)
                 .setContentText(body)
                 .setStyle(NotificationCompat.BigTextStyle().bigText(body))

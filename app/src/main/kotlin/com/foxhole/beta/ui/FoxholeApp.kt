@@ -43,8 +43,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Dashboard
-import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -155,13 +153,13 @@ private enum class AppSection(
 ) {
     DASHBOARD(
         rootRoute = AppRoute.HOME,
-        icon = Icons.Outlined.Dashboard,
+        icon = FoxholeIcons.Dashboard,
         titleRes = R.string.dashboard,
         testTag = "bottom_nav_dashboard",
     ),
     SETTINGS(
         rootRoute = AppRoute.SETTINGS,
-        icon = Icons.Outlined.Settings,
+        icon = FoxholeIcons.Settings,
         titleRes = R.string.settings,
         testTag = "bottom_nav_settings",
     ),
@@ -1192,7 +1190,7 @@ private fun RowScope.FoxholeBottomBarItem(
                     Modifier.graphicsLayer(
                         scaleX = iconScale,
                         scaleY = iconScale,
-                    ).size(18.dp),
+                    ).size(FoxholeIconSizes.Navigation),
             )
             Text(
                 text = stringResource(section.titleRes),

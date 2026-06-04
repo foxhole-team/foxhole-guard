@@ -461,7 +461,7 @@ internal fun HomeLanProxyChip(onClick: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(
-                imageVector = Icons.Outlined.Public,
+                imageVector = FoxholeIcons.Lan,
                 contentDescription = null,
                 modifier = Modifier.size(10.dp),
                 tint = color,
@@ -953,7 +953,7 @@ private fun TorTransitionAlertDialog(
         title = {
             FoxholeDialogTitle(
                 title = title,
-                icon = Icons.Outlined.Shield,
+                icon = ImageVector.vectorResource(FoxholeIcons.Drawables.TorRoute),
                 iconTint = MaterialTheme.colorScheme.primary,
             )
         },
@@ -1335,7 +1335,7 @@ private fun HomeTorConnectedTable(
         ) {
             Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp)) {
                 HomeTorInfoRow(
-                    icon = Icons.Outlined.Public,
+                    icon = FoxholeIcons.Network,
                     label = stringResource(R.string.privacy_route_modal_current_ip),
                     value = torIpPresentation.ipText,
                     valueMonospace = torIpPresentation.hasIp,
@@ -1503,7 +1503,7 @@ private fun HomeFirewallFeatureDialogContent(state: HomeRouteUiState) {
     ) {
         Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp)) {
             HomeTorInfoRow(
-                icon = Icons.Outlined.Shield,
+                icon = ImageVector.vectorResource(FoxholeIcons.Drawables.Firewall),
                 label = stringResource(R.string.firewall_modal_mode),
                 value = runtimeMode,
             )
@@ -1565,13 +1565,13 @@ private fun HomeLanProxyFeatureDialogContent(
     ) {
         Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp)) {
             HomeTorInfoRow(
-                icon = Icons.Outlined.Router,
+                icon = FoxholeIcons.ProxySurface,
                 label = stringResource(R.string.firewall_modal_mode),
                 value = lanSurface?.label ?: "-",
             )
             HomeNetworkSubtleDivider()
             HomeTorInfoRow(
-                icon = Icons.Outlined.Public,
+                icon = FoxholeIcons.Lan,
                 label = stringResource(R.string.proxy_surface_endpoint_title),
                 value = endpoint,
                 valueMonospace = lanAvailable,
@@ -1584,14 +1584,14 @@ private fun HomeLanProxyFeatureDialogContent(
             )
             HomeNetworkSubtleDivider()
             HomeTorInfoRow(
-                icon = Icons.Outlined.Router,
+                icon = FoxholeIcons.Lan,
                 label = stringResource(R.string.port),
                 value = lanSurface?.settings?.port?.toString() ?: "-",
                 valueMonospace = true,
             )
             HomeNetworkSubtleDivider()
             HomeTorInfoRow(
-                icon = Icons.Outlined.Shield,
+                icon = FoxholeIcons.Auth,
                 label = stringResource(R.string.lan_proxy_auth_title),
                 value =
                     stringResource(
@@ -1886,10 +1886,10 @@ private fun HomeTorRouteIcons(
 @Composable
 private fun homeConnectionFeatureIcon(feature: HomeConnectionFeature): ImageVector =
     when (feature) {
-        HomeConnectionFeature.KILL_SWITCH -> Icons.Outlined.Shield
-        HomeConnectionFeature.FIREWALL -> Icons.Outlined.Shield
-        HomeConnectionFeature.TOR -> ImageVector.vectorResource(R.drawable.ic_tor_route)
-        HomeConnectionFeature.LAN_PROXY -> Icons.Outlined.Public
+        HomeConnectionFeature.KILL_SWITCH -> FoxholeIcons.Security
+        HomeConnectionFeature.FIREWALL -> ImageVector.vectorResource(FoxholeIcons.Drawables.Firewall)
+        HomeConnectionFeature.TOR -> ImageVector.vectorResource(FoxholeIcons.Drawables.TorRoute)
+        HomeConnectionFeature.LAN_PROXY -> FoxholeIcons.Lan
     }
 
 @Composable
@@ -2140,9 +2140,9 @@ internal fun HomeConnectionStatusLoadingBlock(
         ),
         icons =
             listOf(
-                Icons.Outlined.Speed,
-                Icons.Outlined.Dns,
-                Icons.Outlined.SwapVert,
+                FoxholeIcons.Latency,
+                FoxholeIcons.Dns,
+                FoxholeIcons.Traffic,
                 Icons.Outlined.AccessTime,
             ),
         modifier = modifier,
@@ -2463,7 +2463,7 @@ internal fun HomeConnectionActions(
                 ),
         ) {
             Icon(
-                Icons.Outlined.Speed,
+                FoxholeIcons.SmartStart,
                 contentDescription = null,
                 tint = autoConnectColor,
             )
