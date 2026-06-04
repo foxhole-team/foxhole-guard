@@ -63,6 +63,21 @@ class RuntimeStaticSafetyGuardTest {
         )
     }
 
+    @Test
+    fun `local guard fallback reachability probes are bound to candidate vpn network`() {
+        val source = projectFile("src/main/kotlin/com/foxhole/beta/vpn/FoxholeVpnService.kt").readText()
+        val fallbackBlock =
+            source.between(
+                "private suspend fun probeLocalGuardFallbackReachability(",
+                "private suspend fun handleLocalGuardPreflight(",
+            )
+
+        assertTrue(fallbackBlock.contains("network = network"))
+        assertTrue(fallbackBlock.contains("resolverNetwork = network"))
+        assertTrue(fallbackBlock.contains("network.getAllByName(LOCAL_GUARD_CONNECTIVITY_DNS_PROBE_HOST)"))
+        assertFalse(fallbackBlock.contains("InetAddress.getAllByName(LOCAL_GUARD_CONNECTIVITY_DNS_PROBE_HOST)"))
+    }
+
     private fun assertNoMatches(
         pattern: Regex,
         allowlistedPaths: Set<String> = emptySet(),

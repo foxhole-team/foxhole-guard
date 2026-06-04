@@ -309,7 +309,50 @@ internal class ConnectionTelemetryProbe(
         timeoutMs: Long,
         network: Network?,
     ): Long {
-        val address = resolvedAddress ?: resolveServerPingAddress(host, network)
+        val resolvedAddresses =
+            runCatching { resolveServerPingAddresses(host, network) }
+                .getOrElse { error ->
+                    if (resolvedAddress == null) {
+                        throw error
+                    }
+                    emptyList()
+                }
+        val addressCandidates =
+            serverPingAddressCandidates(
+                resolvedAddress = resolvedAddress,
+                resolvedAddresses = resolvedAddresses,
+            )
+        var firstFailure: Throwable? = null
+        addressCandidates.forEach { address ->
+            val attempt =
+                runCatching {
+                    measureServerTcpConnectLatencyCandidate(
+                        address = address,
+                        port = port,
+                        timeoutMs = timeoutMs,
+                        network = network,
+                    )
+                }
+            attempt.getOrNull()?.let { return it }
+            val failure = attempt.exceptionOrNull()
+            if (failure !is IOException) {
+                throw failure ?: error("server tcp ping failed")
+            }
+            if (firstFailure == null) {
+                firstFailure = failure
+            } else {
+                firstFailure?.addSuppressed(failure)
+            }
+        }
+        throw firstFailure ?: error("server tcp ping target unavailable")
+    }
+
+    private fun measureServerTcpConnectLatencyCandidate(
+        address: InetAddress,
+        port: Int,
+        timeoutMs: Long,
+        network: Network?,
+    ): Long {
         if (network != null) {
             val boundAttempt =
                 runCatching {
@@ -354,8 +397,11 @@ internal class ConnectionTelemetryProbe(
         val startedAt = SystemClock.elapsedRealtime()
         // Availability probe only: opens a bounded TCP connect to the configured server target and sends no payload.
         Socket().use { socket ->
-            check(protectDirectSocket(socket)) { "server tcp ping socket protect failed" }
-            network?.bindSocket(socket)
+            if (network == null) {
+                check(protectDirectSocket(socket)) { "server tcp ping socket protect failed" }
+            } else {
+                network.bindSocket(socket)
+            }
             socket.soTimeout = timeoutMs.toInt()
             socket.connect(
                 InetSocketAddress(address, port),
@@ -446,6 +492,12 @@ private fun resolveServerPingAddress(
     host: String,
     network: Network?,
 ): InetAddress =
+    resolveServerPingAddresses(host, network).first()
+
+private fun resolveServerPingAddresses(
+    host: String,
+    network: Network?,
+): List<InetAddress> =
     resolveServerPingAddresses(
         host = host,
         primaryResolver = { hostname ->
@@ -453,7 +505,14 @@ private fun resolveServerPingAddress(
                 ?: InetAddress.getAllByName(hostname).toList()
         },
         fallback = network?.let(::NetworkBoundPublicDnsFallback) ?: PublicDohDnsFallback,
-    ).first()
+    )
+
+internal fun serverPingAddressCandidates(
+    resolvedAddress: InetAddress?,
+    resolvedAddresses: List<InetAddress>,
+): List<InetAddress> =
+    (listOfNotNull(resolvedAddress) + resolvedAddresses)
+        .distinctBy { address -> address.hostAddress.orEmpty().ifBlank { address.hostName } }
 
 internal fun resolveServerPingAddresses(
     host: String,

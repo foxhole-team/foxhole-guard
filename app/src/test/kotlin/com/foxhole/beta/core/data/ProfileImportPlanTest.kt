@@ -3,6 +3,7 @@ package com.foxhole.beta.core.data
 import com.foxhole.beta.core.importer.ProfileImportParser
 import com.foxhole.beta.core.model.ProfileSourceType
 import com.foxhole.beta.core.network.testRemoteHostResolver
+import java.io.File
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -76,6 +77,19 @@ class ProfileImportPlanTest {
         assertTrue(plan is ImportProfilePlan.Single)
     }
 
+    @Test
+    fun `subscription parse diagnostics summarize smart protocol options`() {
+        val source = projectFile("src/main/kotlin/com/foxhole/beta/core/data/ProfileRepository.kt").readText()
+        val summaryBlock =
+            source.substringAfter("private fun ParsedSubscriptionImport.protocolSummary(): String =")
+                .substringBefore("private fun ParsedSubscriptionImport.hasUnconsentedInsecureTlsProfiles")
+
+        assertTrue(summaryBlock.contains(".flatMap { profile ->"))
+        assertTrue(summaryBlock.contains(".protocolOptions"))
+        assertTrue(summaryBlock.contains(".map { option -> option.protocolHint }"))
+        assertTrue(summaryBlock.contains(".ifEmpty { listOf(profile.protocolHint) }"))
+    }
+
     private fun buildSmartConfigPayload(): String =
         """
         # === vless / direct ===
@@ -83,4 +97,8 @@ class ProfileImportPlanTest {
         # === trojan / tor+i2p ===
         trojan://secret@tor.example.com:443?security=tls&type=tcp#Foxhole smart tor i2p
         """.trimIndent()
+
+    private fun projectFile(path: String): File =
+        listOf(File(path), File("app/$path"), File("../app/$path"))
+            .first { file -> file.exists() }
 }

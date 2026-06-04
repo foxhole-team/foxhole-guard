@@ -16,15 +16,10 @@ import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
@@ -45,7 +40,6 @@ import com.foxhole.beta.ui.showBanner
 import com.foxhole.beta.ui.theme.FoxholeAppBackground
 import com.foxhole.beta.ui.theme.FoxholeTheme
 import eightbitlab.com.blurview.BlurTarget
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import android.graphics.Color as AndroidColor
 
@@ -106,35 +100,21 @@ class MainActivity : AppCompatActivity() {
 
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
-                delay(ACTIVITY_VIEWMODEL_STARTUP_DELAY_MS)
                 homeViewModel.secureScreenEnabled.collect(::applySecureScreenPolicy)
             }
         }
 
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.RESUMED) {
-                delay(ACTIVITY_VIEWMODEL_STARTUP_DELAY_MS)
                 homeViewModel.onAppForegrounded()
             }
         }
 
         composeView.setContent {
-            var appContentReady by remember { mutableStateOf(false) }
             val systemDarkTheme = isSystemInDarkTheme()
             val snackbarHostState = remember { SnackbarHostState() }
             val snackbarHapticGate = remember { FoxholeBannerHapticGate() }
-            val themeMode =
-                if (appContentReady) {
-                    homeViewModel.themeMode.collectAsStateWithLifecycle().value
-                } else {
-                    initialThemeMode
-                }
-
-            LaunchedEffect(Unit) {
-                withFrameNanos { }
-                delay(ACTIVITY_APP_CONTENT_STARTUP_DELAY_MS)
-                appContentReady = true
-            }
+            val themeMode = homeViewModel.themeMode.collectAsStateWithLifecycle(initialValue = initialThemeMode).value
 
             LaunchedEffect(themeMode, systemDarkTheme) {
                 applyEdgeToEdgeSystemBars(
@@ -143,38 +123,36 @@ class MainActivity : AppCompatActivity() {
                 )
             }
 
-            if (appContentReady) {
-                LaunchedEffect(Unit) {
-                    homeViewModel.requestVpnPermission.collect {
-                        val intent = android.net.VpnService.prepare(this@MainActivity)
-                        if (intent == null) {
-                            homeViewModel.onVpnPermissionResult(true)
-                        } else {
-                            vpnPermissionLauncher.launch(intent)
-                        }
+            LaunchedEffect(Unit) {
+                homeViewModel.requestVpnPermission.collect {
+                    val intent = android.net.VpnService.prepare(this@MainActivity)
+                    if (intent == null) {
+                        homeViewModel.onVpnPermissionResult(true)
+                    } else {
+                        vpnPermissionLauncher.launch(intent)
                     }
                 }
+            }
 
-                LaunchedEffect(Unit) {
-                    homeViewModel.requestNotificationPermission.collect {
-                        requestPostNotificationsIfNeeded()
-                    }
+            LaunchedEffect(Unit) {
+                homeViewModel.requestNotificationPermission.collect {
+                    requestPostNotificationsIfNeeded()
                 }
+            }
 
-                LaunchedEffect(Unit) {
-                    homeViewModel.snackbars.collect { banner ->
-                        handleSnackbarHaptic(
-                            event = banner,
-                            context = this@MainActivity,
-                            gate = snackbarHapticGate,
-                        )
-                        val result = snackbarHostState.showBanner(banner)
-                        if (
-                            result == SnackbarResult.ActionPerformed &&
-                            banner.action == FoxholeBannerAction.ACCEPT_PROTOCOL_RECOMMENDATION
-                        ) {
-                            homeViewModel.onProtocolRecommendationAccepted()
-                        }
+            LaunchedEffect(Unit) {
+                homeViewModel.snackbars.collect { banner ->
+                    handleSnackbarHaptic(
+                        event = banner,
+                        context = this@MainActivity,
+                        gate = snackbarHapticGate,
+                    )
+                    val result = snackbarHostState.showBanner(banner)
+                    if (
+                        result == SnackbarResult.ActionPerformed &&
+                        banner.action == FoxholeBannerAction.ACCEPT_PROTOCOL_RECOMMENDATION
+                    ) {
+                        homeViewModel.onProtocolRecommendationAccepted()
                     }
                 }
             }
@@ -183,16 +161,12 @@ class MainActivity : AppCompatActivity() {
                 themeMode = themeMode,
             ) {
                 FoxholeAppBackground {
-                    if (appContentReady) {
-                        FoxholeApp(
-                            viewModel = homeViewModel,
-                            snackbarHostState = snackbarHostState,
-                            bottomDockOverlayHost = contentRoot,
-                            bottomDockBlurTarget = blurTarget,
-                        )
-                    } else {
-                        Box(modifier = Modifier.fillMaxSize())
-                    }
+                    FoxholeApp(
+                        viewModel = homeViewModel,
+                        snackbarHostState = snackbarHostState,
+                        bottomDockOverlayHost = contentRoot,
+                        bottomDockBlurTarget = blurTarget,
+                    )
                 }
             }
         }
@@ -268,6 +242,3 @@ class MainActivity : AppCompatActivity() {
             ThemeMode.LIGHT -> false
         }
 }
-
-private const val ACTIVITY_APP_CONTENT_STARTUP_DELAY_MS = 180L
-private const val ACTIVITY_VIEWMODEL_STARTUP_DELAY_MS = 1_200L

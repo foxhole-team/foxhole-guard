@@ -243,7 +243,7 @@ class TrafficMapRepositoryTest {
     }
 
     @Test
-    fun `traffic map state does not draw device route when vpn endpoint is known but device origin is unknown`() {
+    fun `traffic map state uses active vpn endpoint as origin fallback when device origin is unknown`() {
         val state =
             TrafficMapRepository().trafficMapStateSnapshot(
                 originIpInfo = null,
@@ -261,9 +261,10 @@ class TrafficMapRepositoryTest {
                 destinations = emptyList(),
             )
 
-        assertNull(state.originCountryCode)
+        assertEquals("NL", state.originCountryCode)
         assertEquals("NL", state.destinations.single().countryCode)
-        assertEquals(0, state.edges.size)
+        assertEquals(1, state.edges.size)
+        assertTrue(state.highlightedCountries.contains("NL"))
     }
 
     @Test

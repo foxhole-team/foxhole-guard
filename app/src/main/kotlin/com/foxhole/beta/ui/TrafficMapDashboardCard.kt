@@ -131,13 +131,7 @@ internal fun TrafficMapDashboardCard(
     contentReady: Boolean = true,
     legendLoading: Boolean = false,
 ) {
-    val state =
-        if (contentReady) {
-            val collectedState by stateFlow.collectAsStateWithLifecycle()
-            collectedState
-        } else {
-            remember { TrafficMapUiState() }
-        }
+    val state by stateFlow.collectAsStateWithLifecycle()
     TrafficMapDashboardCard(
         state = state,
         modifier = modifier,
@@ -233,13 +227,21 @@ internal fun TrafficMapDashboardCard(
 
 @Composable
 private fun rememberTrafficMapHeavyContentReady(enabled: Boolean): Boolean {
-    var ready by remember(enabled) { mutableStateOf(false) }
+    var ready by remember(enabled) {
+        mutableStateOf(enabled && TrafficMapCountryShapeCache.current().isNotEmpty())
+    }
     LaunchedEffect(enabled) {
-        ready = false
-        if (enabled) {
-            delay(TRAFFIC_MAP_HEAVY_CONTENT_SETTLE_DELAY_MS)
-            ready = true
+        if (!enabled) {
+            ready = false
+            return@LaunchedEffect
         }
+        if (TrafficMapCountryShapeCache.current().isNotEmpty()) {
+            ready = true
+            return@LaunchedEffect
+        }
+        ready = false
+        delay(TRAFFIC_MAP_HEAVY_CONTENT_SETTLE_DELAY_MS)
+        ready = true
     }
     return enabled && ready
 }
@@ -386,11 +388,12 @@ private fun TrafficMapCanvas(
                 val viewport = trafficMapViewport(size)
                 val maxLineStroke = TRAFFIC_MAP_ROUTE_MAX_STROKE_DP.dp.toPx()
                 val minLineStroke = TRAFFIC_MAP_ROUTE_MIN_STROKE_DP.dp.toPx()
-                val destinationRadius = 3.3.dp.toPx()
-                val glowRadius = 8.dp.toPx()
-                val phoneWidth = 8.dp.toPx()
-                val phoneHeight = 12.dp.toPx()
-                val phoneCorner = CornerRadius(2.2.dp.toPx(), 2.2.dp.toPx())
+                val routeHaloStrokeExtra = TRAFFIC_MAP_ROUTE_HALO_STROKE_EXTRA_DP.dp.toPx()
+                val destinationRadius = 3.6.dp.toPx()
+                val glowRadius = 9.dp.toPx()
+                val phoneWidth = 8.5.dp.toPx()
+                val phoneHeight = 12.8.dp.toPx()
+                val phoneCorner = CornerRadius(2.4.dp.toPx(), 2.4.dp.toPx())
                 val phoneScreenInset = 1.4.dp.toPx()
                 val phoneHomeRadius = 0.65.dp.toPx()
                 val origin = project(originLat, originLon, viewport)
@@ -449,6 +452,18 @@ private fun TrafficMapCanvas(
                     }
 
                     routeDrawModels.forEach { route ->
+                        drawPath(
+                            path = route.path,
+                            color =
+                                colors.routeHalo.copy(
+                                    alpha = (route.alpha * TRAFFIC_MAP_ROUTE_HALO_ALPHA_MULTIPLIER).coerceAtMost(1f),
+                                ),
+                            style =
+                                Stroke(
+                                    width = route.strokeWidth + routeHaloStrokeExtra,
+                                    cap = StrokeCap.Round,
+                                ),
+                        )
                         drawPath(
                             path = route.path,
                             color = colors.routeLine.copy(alpha = route.alpha),
@@ -1264,6 +1279,7 @@ private fun DrawScope.drawPhoneMarker(
 internal data class TrafficMapColors(
     val countryFill: Color,
     val routeLine: Color,
+    val routeHalo: Color,
     val destination: Color,
     val origin: Color,
     val phoneScreen: Color,
@@ -1284,16 +1300,18 @@ internal fun trafficMapColors(
 ): TrafficMapColors =
     if (darkTheme) {
         TrafficMapColors(
-            countryFill = TRAFFIC_MAP_DEFAULT_COUNTRY_FILL,
+            countryFill = TRAFFIC_MAP_DARK_COUNTRY_FILL,
             routeLine = TRAFFIC_MAP_ROUTE_GREEN,
+            routeHalo = TRAFFIC_MAP_DARK_ROUTE_HALO,
             destination = TRAFFIC_MAP_ROUTE_GREEN,
             origin = TRAFFIC_MAP_ROUTE_GREEN,
             phoneScreen = surfaceColor.copy(alpha = 0.92f),
         )
     } else {
         TrafficMapColors(
-            countryFill = TRAFFIC_MAP_DEFAULT_COUNTRY_FILL,
+            countryFill = TRAFFIC_MAP_LIGHT_COUNTRY_FILL,
             routeLine = TRAFFIC_MAP_ROUTE_GREEN,
+            routeHalo = TRAFFIC_MAP_LIGHT_ROUTE_HALO,
             destination = TRAFFIC_MAP_ROUTE_GREEN,
             origin = TRAFFIC_MAP_ROUTE_GREEN,
             phoneScreen = surfaceColor.copy(alpha = 0.94f),
@@ -1332,12 +1350,18 @@ private data class TrafficMapPowerState(
 }
 
 private val TRAFFIC_MAP_CARD_TOTAL_HEIGHT = 184.dp
-private val TRAFFIC_MAP_DEFAULT_COUNTRY_FILL = Color.Gray
-private val TRAFFIC_MAP_ROUTE_GREEN = Color(0xFF7BD69D)
-private const val TRAFFIC_MAP_ROUTE_MIN_STROKE_DP = 1.1f
-private const val TRAFFIC_MAP_ROUTE_MAX_STROKE_DP = 2.6f
-private const val TRAFFIC_MAP_ROUTE_MIN_ALPHA = 0.42f
-private const val TRAFFIC_MAP_ROUTE_ALPHA_RANGE = 0.34f
+private val TRAFFIC_MAP_DARK_COUNTRY_FILL = Color(0xFF3E3F41)
+private val TRAFFIC_MAP_LIGHT_COUNTRY_FILL = Color(0xFF414345)
+private val TRAFFIC_MAP_DEFAULT_COUNTRY_FILL = TRAFFIC_MAP_DARK_COUNTRY_FILL
+private val TRAFFIC_MAP_ROUTE_GREEN = Color(0xFF8CE8B3)
+private val TRAFFIC_MAP_DARK_ROUTE_HALO = Color(0xFF050606)
+private val TRAFFIC_MAP_LIGHT_ROUTE_HALO = Color(0xFFFFFFFF)
+private const val TRAFFIC_MAP_ROUTE_MIN_STROKE_DP = 0.35f
+private const val TRAFFIC_MAP_ROUTE_MAX_STROKE_DP = 0.72f
+private const val TRAFFIC_MAP_ROUTE_MIN_ALPHA = 0.32f
+private const val TRAFFIC_MAP_ROUTE_ALPHA_RANGE = 0.18f
+private const val TRAFFIC_MAP_ROUTE_HALO_STROKE_EXTRA_DP = 0.2f
+private const val TRAFFIC_MAP_ROUTE_HALO_ALPHA_MULTIPLIER = 0.08f
 private const val TRAFFIC_MAP_HEAVY_CONTENT_SETTLE_DELAY_MS = 650L
 private const val TRAFFIC_MAP_POWER_STATE_STARTUP_DELAY_MS = 1_200L
 private const val TRAFFIC_MAP_WEIGHT = 0.74f

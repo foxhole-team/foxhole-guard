@@ -238,8 +238,8 @@ private const val TOP_CHROME_SCRIM_LIGHT_ALPHA = 0.24f
 private const val TOP_CHROME_FROST_DARK_ALPHA = 0.018f
 private const val TOP_CHROME_FROST_LIGHT_ALPHA = 0.030f
 private const val TOP_CHROME_MIN_SCROLL_ALPHA = 0.64f
-private const val BOTTOM_DOCK_CONTAINER_DARK_ALPHA = 0.54f
-private const val BOTTOM_DOCK_CONTAINER_LIGHT_ALPHA = 0.68f
+private const val BOTTOM_DOCK_CONTAINER_DARK_ALPHA = 1f
+private const val BOTTOM_DOCK_CONTAINER_LIGHT_ALPHA = 1f
 private const val BOTTOM_DOCK_BORDER_ALPHA = 0.24f
 
 internal fun foxholeTopChromeBackgroundColor(): Int = Color.Transparent.toArgb()
@@ -1331,7 +1331,7 @@ internal fun FoxholeBottomDockGlassLayer(
                             Brush.verticalGradient(
                                 colorStops =
                                     arrayOf(
-                                        0.00f to containerColor.copy(alpha = containerColor.alpha * 0.96f),
+                                        0.00f to containerColor,
                                         0.54f to containerColor,
                                         1.00f to containerColor,
                                     ),

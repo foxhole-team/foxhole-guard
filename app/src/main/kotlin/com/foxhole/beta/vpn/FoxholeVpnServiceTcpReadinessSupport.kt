@@ -48,7 +48,6 @@ internal suspend fun FoxholeVpnService.prepareTcpRuntimeReadiness(
             val address = resolveProbeAddress(target.host, upstreamNetwork)
             val startedAt = SystemClock.elapsedRealtime()
             Socket().use { socket ->
-                check(protect(socket)) { "tcp target preflight socket protect failed" }
                 upstreamNetwork.bindSocket(socket)
                 socket.soTimeout = TCP_RUNTIME_PREFLIGHT_TIMEOUT_MS.toInt()
                 socket.connect(

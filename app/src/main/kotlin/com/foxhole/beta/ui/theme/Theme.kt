@@ -135,7 +135,7 @@ internal val LocalFoxholeUiPalette =
             valuePillContainerColor = FoxholeDarkPrimaryContainer,
             valuePillBorderColor = Color.Transparent,
             valuePillContentColor = FoxholeDarkPrimary,
-            bottomBarContainerColor = FoxholeDarkSurface.copy(alpha = 0.88f),
+            bottomBarContainerColor = FoxholeDarkSurface,
             bottomBarBorderColor = FoxholeDarkSurfaceStrong.copy(alpha = 0.46f),
             bottomBarIndicatorColor = Color.White.copy(alpha = 0.10f),
         )
@@ -186,7 +186,7 @@ private fun defaultFoxholeUiPalette(
             valuePillContainerColor = colorScheme.primaryContainer,
             valuePillBorderColor = colorScheme.outline.copy(alpha = if (useDarkPalette) 0.70f else 0.62f),
             valuePillContentColor = colorScheme.primary,
-            bottomBarContainerColor = colorScheme.surface.copy(alpha = 0.88f),
+            bottomBarContainerColor = colorScheme.surface,
             bottomBarBorderColor = colorScheme.outlineVariant.copy(alpha = if (useDarkPalette) 0.46f else 0.48f),
             bottomBarIndicatorColor =
                 if (useDarkPalette) {
@@ -209,7 +209,7 @@ private fun systemFoxholeUiPalette(
         valuePillContainerColor = colorScheme.primaryContainer,
         valuePillBorderColor = colorScheme.outlineVariant,
         valuePillContentColor = colorScheme.onPrimaryContainer,
-        bottomBarContainerColor = colorScheme.surfaceContainerHigh.copy(alpha = 0.92f),
+        bottomBarContainerColor = colorScheme.surfaceContainerHigh,
         bottomBarBorderColor = colorScheme.outlineVariant.copy(alpha = if (useDarkPalette) 0.50f else 0.56f),
         bottomBarIndicatorColor =
             if (useDarkPalette) {

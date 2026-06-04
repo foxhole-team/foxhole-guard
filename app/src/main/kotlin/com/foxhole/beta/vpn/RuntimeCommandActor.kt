@@ -406,7 +406,7 @@ internal class RuntimeCommandActor(
     private fun QueuedRuntimeCommand.isCoalescedByRunning(running: QueuedRuntimeCommand): Boolean =
         when (running.priority) {
             RuntimeCommandPriority.KILL.value ->
-                priority <= running.priority
+                priority != RuntimeCommandPriority.SWITCH.value && priority <= running.priority
             RuntimeCommandPriority.USER_STOP.value ->
                 priority == RuntimeCommandPriority.USER_STOP.value ||
                     priority == RuntimeCommandPriority.STOP.value
@@ -563,7 +563,8 @@ internal class RuntimeCommandActor(
                 queued.priority <= priority &&
                     queued.priority >= RuntimeCommandPriority.STOP.value
             RuntimeCommandPriority.STOP.value ->
-                queued.priority == RuntimeCommandPriority.STOP.value
+                queued.priority >= RuntimeCommandPriority.STOP.value &&
+                    queued.priority <= RuntimeCommandPriority.SWITCH.value
             else ->
                 queued.priority <= priority && queued.reason == reason
         }

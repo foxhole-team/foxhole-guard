@@ -11,6 +11,7 @@ import com.foxhole.beta.core.diagnostics.DiagnosticsLogger
 import com.foxhole.beta.core.importer.ProfileImportParser
 import com.foxhole.beta.core.network.IpInfoRepository
 import com.foxhole.beta.core.network.NetworkFingerprintProvider
+import com.foxhole.beta.core.network.PublicRemoteDns
 import com.foxhole.beta.core.settings.SettingsRepository
 import com.foxhole.beta.core.traffic.LibboxTrafficMapConnectionSource
 import com.foxhole.beta.core.traffic.TrafficMapRepository
@@ -67,12 +68,17 @@ internal class FoxholeDataGraphModule(
 ) {
     val profileDatabase: ProfileDatabase by lazy { ProfileDatabase.create(appContext) }
     val secretStore: EncryptedProfileSecretStore by lazy { EncryptedProfileSecretStore(appContext, core.json) }
-    val importParser: ProfileImportParser by lazy { ProfileImportParser(core.json) }
+    private val publicRemoteDns: PublicRemoteDns by lazy { PublicRemoteDns(core.httpClient.dns::lookup) }
+    val importParser: ProfileImportParser by lazy {
+        ProfileImportParser(core.json, remoteHostResolver = publicRemoteDns::lookup)
+    }
     val routingRepository: RoutingRepository by lazy { RoutingRepository({ profileDatabase }, core.httpClient, core.json) }
     val torRuntimeInstaller: TorRuntimeInstaller by lazy { TorRuntimeInstaller(appContext, core.diagnosticsLogger) }
     val torManager: TorManager by lazy { TorProcessManager(torRuntimeInstaller, core.diagnosticsLogger) }
     val dnsFilterAssetInstaller: DnsFilterAssetInstaller by lazy { DnsFilterAssetInstaller(appContext, core.json) }
-    val dnsFilterUpdateClient: DnsFilterUpdateClient by lazy { DnsFilterUpdateClient(core.httpClient, core.json) }
+    val dnsFilterUpdateClient: DnsFilterUpdateClient by lazy {
+        DnsFilterUpdateClient(core.httpClient, core.json, resolver = publicRemoteDns::lookup)
+    }
     val dnsFilterUpdateRepository: DnsFilterUpdateRepository by lazy {
         DnsFilterUpdateRepository(
             settingsRepository = core.settingsRepository,

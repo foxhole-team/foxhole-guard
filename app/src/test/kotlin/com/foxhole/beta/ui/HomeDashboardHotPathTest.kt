@@ -237,21 +237,76 @@ class HomeDashboardHotPathTest {
     }
 
     @Test
-    fun `dashboard and settings root sections stay warm after first visit`() {
+    fun `dashboard and settings root sections animate without keep alive prewarm panes`() {
         val appSource = testSourceFile("FoxholeApp.kt").readText()
         val homeRouteBlock =
             appSource.substringAfter("composable(AppRoute.HOME)")
                 .substringBefore("composable(AppRoute.PROFILES)")
 
-        assertTrue(homeRouteBlock.contains("RootSectionKeepAliveHost"))
-        assertTrue(appSource.contains("RootSectionKeepAlivePane(active = selectedSection == AppSection.DASHBOARD)"))
-        assertTrue(appSource.contains("RootSectionKeepAlivePane(active = selectedSection == AppSection.SETTINGS)"))
-        assertTrue(appSource.contains("delay(ROOT_SETTINGS_PREWARM_DELAY_MS)"))
-        assertTrue(appSource.contains("ROOT_SETTINGS_PREWARM_DELAY_MS = 4_800L"))
-        assertTrue(appSource.contains("clearAndSetSemantics {}"))
-        assertFalse(appSource.contains("measurable.measure(constraints)"))
-        assertTrue(appSource.contains(".layout { _, _ ->"))
-        assertFalse(homeRouteBlock.contains("when (rootSection)"))
+        assertTrue(homeRouteBlock.contains("AnimatedContent("))
+        assertTrue(homeRouteBlock.contains("targetState = rootSection"))
+        assertTrue(homeRouteBlock.contains("when (section)"))
+        assertTrue(homeRouteBlock.contains("detailForwardEnter() togetherWith detailForwardExit()"))
+        assertTrue(homeRouteBlock.contains("detailBackEnter() togetherWith detailBackExit()"))
+        assertTrue(homeRouteBlock.contains("AppSection.DASHBOARD ->"))
+        assertTrue(homeRouteBlock.contains("AppSection.SETTINGS ->"))
+        assertFalse(homeRouteBlock.contains("RootSectionKeepAliveHost"))
+        assertFalse(appSource.contains("RootSectionKeepAlivePane"))
+        assertFalse(appSource.contains("ROOT_SETTINGS_PREWARM_DELAY_MS"))
+        assertFalse(appSource.contains("delay(ROOT_SETTINGS_PREWARM_DELAY_MS)"))
+        assertFalse(appSource.contains("rootSectionKeepAlivePane"))
+    }
+
+    @Test
+    fun `main activity renders app content without fixed startup gate`() {
+        val activitySource = testSourceFile("MainActivity.kt").readText()
+
+        assertFalse(activitySource.contains("appContentReady"))
+        assertFalse(activitySource.contains("ACTIVITY_APP_CONTENT_STARTUP_DELAY_MS"))
+        assertFalse(activitySource.contains("ACTIVITY_VIEWMODEL_STARTUP_DELAY_MS"))
+        assertFalse(activitySource.contains("withFrameNanos"))
+    }
+
+    @Test
+    fun `stale vpn permission callback is ignored instead of denied`() {
+        val viewModelSource = testSourceFile("HomeViewModel.kt").readText()
+        val permissionBlock =
+            viewModelSource.substringAfter("fun onVpnPermissionResult(granted: Boolean)")
+                .substringBefore("fun onRefreshProfile()")
+
+        assertTrue(permissionBlock.contains("if (request == null)"))
+        assertTrue(permissionBlock.contains("ignored vpn permission result without active request"))
+        assertTrue(permissionBlock.indexOf("if (request == null)") < permissionBlock.indexOf("if (!granted)"))
+        assertFalse(
+            permissionBlock.substringAfter("if (request == null)").substringBefore("if (!granted)")
+                .contains("vpn_permission_denied"),
+        )
+    }
+
+    @Test
+    fun `profile file import reads content off main dispatcher`() {
+        val appSource = testSourceFile("FoxholeApp.kt").readText()
+        val importBlock =
+            appSource.substringAfter("val importProfileLauncher =")
+                .substringBefore("Scaffold(")
+
+        assertTrue(importBlock.contains("withContext(Dispatchers.IO)"))
+        assertTrue(importBlock.indexOf("withContext(Dispatchers.IO)") < importBlock.indexOf("openInputStream(uri)"))
+    }
+
+    @Test
+    fun `dashboard reorder persists only after drag session ends`() {
+        val homeSource = testSourceFile("HomeScreen.kt").readText()
+        val moveBlock =
+            homeSource.substringAfter("fun moveDashboardCard(")
+                .substringBefore("var pinnedIpInfo")
+        val finishBlock =
+            homeSource.substringAfter("fun updateActiveReorderCard(")
+                .substringBefore("fun moveDashboardCard(")
+
+        assertFalse(moveBlock.contains("onDashboardCardOrderChanged(nextOrder)"))
+        assertTrue(finishBlock.contains("pendingCommittedDashboardCardOrder = dashboardCardOrder"))
+        assertTrue(finishBlock.contains("onDashboardCardOrderChanged(dashboardCardOrder)"))
     }
 
     @Test

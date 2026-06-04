@@ -1202,7 +1202,12 @@ class ProfileRepository(
 
     private fun ParsedSubscriptionImport.protocolSummary(): String =
         profiles
-            .map(ParsedSubscriptionProfile::protocolHint)
+            .flatMap { profile ->
+                profile
+                    .protocolOptions
+                    .map { option -> option.protocolHint }
+                    .ifEmpty { listOf(profile.protocolHint) }
+            }
             .distinct()
             .joinToString(separator = ",") { hint -> hint.name.lowercase() }
 

@@ -370,6 +370,75 @@ class RuntimeCommandActorTest {
         }
 
     @Test
+    fun `switch after running kill waits and then starts`() =
+        runBlocking {
+            val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+            val actor = actor(scope)
+            val events = Collections.synchronizedList(mutableListOf<String>())
+            val killStarted = CompletableDeferred<Unit>()
+            val releaseKill = CompletableDeferred<Unit>()
+            val switchCompleted = CompletableDeferred<Unit>()
+
+            actor.launch(RuntimeCommandPriority.KILL, reason = "kill") {
+                events += "kill-start"
+                killStarted.complete(Unit)
+                releaseKill.await()
+                events += "kill-end"
+            }
+            withTimeout(1_000L) { killStarted.await() }
+
+            actor.launch(RuntimeCommandPriority.SWITCH, reason = "connect:1:default") {
+                events += "switch"
+                switchCompleted.complete(Unit)
+            }
+
+            delay(100L)
+            assertEquals(listOf("kill-start"), events.toList())
+
+            releaseKill.complete(Unit)
+            withTimeout(1_000L) { switchCompleted.await() }
+            assertEquals(listOf("kill-start", "kill-end", "switch"), events.toList())
+            actor.close()
+        }
+
+    @Test
+    fun `stop after switch queued behind running kill cancels pending switch`() =
+        runBlocking {
+            val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+            val actor = actor(scope)
+            val events = Collections.synchronizedList(mutableListOf<String>())
+            val killStarted = CompletableDeferred<Unit>()
+            val releaseKill = CompletableDeferred<Unit>()
+            val switchCompleted = CompletableDeferred<Unit>()
+
+            actor.launch(RuntimeCommandPriority.KILL, reason = "kill") {
+                events += "kill-start"
+                killStarted.complete(Unit)
+                releaseKill.await()
+                events += "kill-end"
+            }
+            withTimeout(1_000L) { killStarted.await() }
+
+            actor.launch(RuntimeCommandPriority.SWITCH, reason = "connect:1:default") {
+                events += "switch"
+                switchCompleted.complete(Unit)
+            }
+            delay(100L)
+            assertEquals(listOf("kill-start"), events.toList())
+
+            actor.launch(RuntimeCommandPriority.STOP, reason = "permission-revoked") {
+                events += "stop"
+            }
+
+            releaseKill.complete(Unit)
+            delay(250L)
+
+            assertFalse(switchCompleted.isCompleted)
+            assertEquals(listOf("kill-start", "kill-end"), events.toList())
+            actor.close()
+        }
+
+    @Test
     fun `stop runs immediately while current command is still cancelling`() =
         runBlocking {
             val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)

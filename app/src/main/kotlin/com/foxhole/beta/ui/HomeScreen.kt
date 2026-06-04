@@ -295,11 +295,27 @@ fun HomeScreen(
     var dashboardCardOrder by remember {
         mutableStateOf(normalizedDashboardCardOrder(state.settings.ui.dashboardCardOrder))
     }
+    var pendingCommittedDashboardCardOrder by remember { mutableStateOf<List<DashboardCard>?>(null) }
 
-    LaunchedEffect(state.settings.ui.dashboardCardOrder, activeReorderCard) {
-        if (activeReorderCard == null) {
-            dashboardCardOrder = normalizedDashboardCardOrder(state.settings.ui.dashboardCardOrder)
+    LaunchedEffect(state.settings.ui.dashboardCardOrder, activeReorderCard, pendingCommittedDashboardCardOrder) {
+        val settingsOrder = normalizedDashboardCardOrder(state.settings.ui.dashboardCardOrder)
+        if (pendingCommittedDashboardCardOrder == settingsOrder) {
+            pendingCommittedDashboardCardOrder = null
         }
+        if (activeReorderCard == null && pendingCommittedDashboardCardOrder == null) {
+            dashboardCardOrder = settingsOrder
+        }
+    }
+
+    fun updateActiveReorderCard(card: DashboardCard?) {
+        if (card == null && activeReorderCard != null) {
+            val settingsOrder = normalizedDashboardCardOrder(state.settings.ui.dashboardCardOrder)
+            if (dashboardCardOrder != settingsOrder) {
+                pendingCommittedDashboardCardOrder = dashboardCardOrder
+                onDashboardCardOrderChanged(dashboardCardOrder)
+            }
+        }
+        activeReorderCard = card
     }
 
     fun moveDashboardCard(
@@ -312,10 +328,9 @@ fun HomeScreen(
                 visibleOrder = visibleDashboardCardOrder(dashboardCardOrder, state.settings.ui),
                 card = card,
                 steps = steps,
-            )
+        )
         if (nextOrder != null) {
             dashboardCardOrder = nextOrder
-            onDashboardCardOrderChanged(nextOrder)
         }
         return nextOrder != null
     }
@@ -582,7 +597,7 @@ fun HomeScreen(
                                             .dashboardCardZIndex(activeReorderCard, DashboardCard.TRAFFIC_MAP),
                                     card = DashboardCard.TRAFFIC_MAP,
                                     activeCard = activeReorderCard,
-                                    onActiveCardChange = { activeReorderCard = it },
+                                    onActiveCardChange = ::updateActiveReorderCard,
                                     onMove = ::moveDashboardCard,
                                 ) {
                                     TrafficMapDashboardCard(
@@ -619,7 +634,7 @@ fun HomeScreen(
                                             .dashboardCardZIndex(activeReorderCard, DashboardCard.PROFILES),
                                 card = DashboardCard.PROFILES,
                                 activeCard = activeReorderCard,
-                                onActiveCardChange = { activeReorderCard = it },
+                                onActiveCardChange = ::updateActiveReorderCard,
                                 onMove = ::moveDashboardCard,
                             ) {
                                 FoxholeCard(
@@ -802,7 +817,7 @@ fun HomeScreen(
                                             .dashboardCardZIndex(activeReorderCard, DashboardCard.ACTIONS),
                                 card = DashboardCard.ACTIONS,
                                 activeCard = activeReorderCard,
-                                onActiveCardChange = { activeReorderCard = it },
+                                onActiveCardChange = ::updateActiveReorderCard,
                                 onMove = ::moveDashboardCard,
                             ) {
                                 FoxholeCard {
@@ -952,7 +967,7 @@ fun HomeScreen(
                                             .dashboardCardZIndex(activeReorderCard, DashboardCard.NETWORK),
                                     card = DashboardCard.NETWORK,
                                     activeCard = activeReorderCard,
-                                    onActiveCardChange = { activeReorderCard = it },
+                                    onActiveCardChange = ::updateActiveReorderCard,
                                     onMove = ::moveDashboardCard,
                                 ) {
                                     FoxholeCard(modifier = Modifier.testTag("home_network_card")) {
@@ -1200,7 +1215,7 @@ fun HomeScreen(
                                             .dashboardCardZIndex(activeReorderCard, DashboardCard.TRAFFIC),
                                     card = DashboardCard.TRAFFIC,
                                     activeCard = activeReorderCard,
-                                    onActiveCardChange = { activeReorderCard = it },
+                                    onActiveCardChange = ::updateActiveReorderCard,
                                     onMove = ::moveDashboardCard,
                                 ) {
                                     val traffic by trafficStateFlow.collectAsStateWithLifecycle()

@@ -91,6 +91,20 @@ class ConnectionTelemetryProbeTest {
     }
 
     @Test
+    fun `server ping address candidates keep readiness address before resolved fallbacks`() {
+        val readinessAddress = InetAddress.getByName("93.184.216.34")
+        val fallbackAddress = InetAddress.getByName("104.26.12.205")
+
+        val addresses =
+            serverPingAddressCandidates(
+                resolvedAddress = readinessAddress,
+                resolvedAddresses = listOf(fallbackAddress, readinessAddress),
+            )
+
+        assertEquals(listOf(readinessAddress, fallbackAddress), addresses)
+    }
+
+    @Test
     fun `server tcp ping refuses vpn network handle`() {
         assertEquals(
             true,
@@ -122,7 +136,8 @@ class ConnectionTelemetryProbeTest {
         assertEquals(true, directServerPingBlock.contains("network = null"))
         assertEquals(true, directServerPingBlock.contains("Socket().use { socket ->"))
         assertEquals(true, directServerPingBlock.contains("check(protectDirectSocket(socket))"))
-        assertEquals(true, directServerPingBlock.contains("network?.bindSocket(socket)"))
+        assertEquals(true, directServerPingBlock.contains("if (network == null)"))
+        assertEquals(true, directServerPingBlock.contains("network.bindSocket(socket)"))
         assertEquals(false, directServerPingBlock.contains("network?.socketFactory?.createSocket()"))
     }
 
@@ -147,8 +162,8 @@ class ConnectionTelemetryProbeTest {
                 .substringBefore("TcpRuntimeReadinessResult(")
 
         assertEquals(true, preflightBlock.contains("Socket().use { socket ->"))
-        assertEquals(true, preflightBlock.contains("check(protect(socket))"))
         assertEquals(true, preflightBlock.contains("upstreamNetwork.bindSocket(socket)"))
+        assertEquals(false, preflightBlock.contains("check(protect(socket))"))
         assertEquals(false, preflightBlock.contains("upstreamNetwork.socketFactory.createSocket()"))
     }
 

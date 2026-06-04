@@ -131,7 +131,8 @@ class TrafficMapRepository(
         runtimeAvailable: Boolean,
         destinations: List<TrafficMapPoint>,
     ): TrafficMapUiState {
-        val origin = originInfo?.countryCode?.let(::trafficMapOrigin)
+        val effectiveOriginInfo = originInfo ?: routeInfo
+        val origin = effectiveOriginInfo?.countryCode?.let(::trafficMapOrigin)
         val activeRouteDestination = routeInfo?.let(::trafficMapRouteDestination)
         val visibleDestinations =
             mergeActiveRouteDestination(
@@ -139,17 +140,17 @@ class TrafficMapRepository(
                 liveDestinations = destinations,
             )
                 .take(MaxTrafficMapDestinations)
-                .map { point -> offsetTrafficMapDestinationFromOriginCountry(point, originInfo?.countryCode) }
+                .map { point -> offsetTrafficMapDestinationFromOriginCountry(point, effectiveOriginInfo?.countryCode) }
         val highlightedCountries =
-            (visibleDestinations.map(TrafficMapPoint::countryCode) + listOfNotNull(originInfo?.countryCode))
+            (visibleDestinations.map(TrafficMapPoint::countryCode) + listOfNotNull(effectiveOriginInfo?.countryCode))
                 .map { countryCode -> countryCode.uppercase(Locale.US) }
                 .toSet()
         return TrafficMapUiState(
             originLat = origin?.lat ?: FallbackTrafficMapOrigin.lat,
             originLon = origin?.lon ?: FallbackTrafficMapOrigin.lon,
-            originCountryCode = originInfo?.countryCode,
-            originCountryName = originInfo?.countryName,
-            originCity = originInfo?.city,
+            originCountryCode = effectiveOriginInfo?.countryCode,
+            originCountryName = effectiveOriginInfo?.countryName,
+            originCity = effectiveOriginInfo?.city,
             isAvailable = runtimeAvailable,
             destinations = visibleDestinations,
             edges =

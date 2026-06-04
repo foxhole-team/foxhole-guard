@@ -1823,7 +1823,14 @@ class SettingsRepository(
         copy(
             enabled = enabled,
             username = username.trim().ifBlank { DEFAULT_PROXY_LOGIN },
-            password = password.trim().ifBlank { randomLocalProxyPassword() },
+            password =
+                password.trim().let { normalizedPassword ->
+                    if (normalizedPassword.isBlank() || normalizedPassword.isLegacyGeneratedLocalProxyPassword()) {
+                        randomLocalProxyPassword()
+                    } else {
+                        normalizedPassword
+                    }
+                },
             apiSecret =
                 apiSecret.trim().ifBlank {
                     UUID.randomUUID().toString().replace("-", "") + UUID.randomUUID().toString().take(8)
@@ -1858,8 +1865,11 @@ class SettingsRepository(
         private const val MAX_MTU = 9_000
         private const val DEFAULT_PROXY_LOGIN = "foxhole"
         private const val PROXY_PASSWORD_PREFIX = "foxhole-"
-        private const val PROXY_PASSWORD_RANDOM_LENGTH = 4
-        private const val PROXY_PASSWORD_ALPHABET = "abcdefghijklmnopqrstuvwxyz0123456789"
+        private const val PROXY_PASSWORD_RANDOM_LENGTH = 22
+        private const val LEGACY_PROXY_PASSWORD_RANDOM_LENGTH = 4
+        private const val LEGACY_PROXY_PASSWORD_ALPHABET = "abcdefghijklmnopqrstuvwxyz0123456789"
+        private const val PROXY_PASSWORD_ALPHABET =
+            "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
         private const val INSTALLED_APP_CHANGE_HISTORY_LIMIT = 60
         private val secureRandom = SecureRandom()
 
@@ -1870,6 +1880,11 @@ class SettingsRepository(
                     append(PROXY_PASSWORD_ALPHABET[secureRandom.nextInt(PROXY_PASSWORD_ALPHABET.length)])
                 }
             }
+
+        private fun String.isLegacyGeneratedLocalProxyPassword(): Boolean =
+            length == PROXY_PASSWORD_PREFIX.length + LEGACY_PROXY_PASSWORD_RANDOM_LENGTH &&
+                startsWith(PROXY_PASSWORD_PREFIX) &&
+                drop(PROXY_PASSWORD_PREFIX.length).all { it in LEGACY_PROXY_PASSWORD_ALPHABET }
     }
 }
 

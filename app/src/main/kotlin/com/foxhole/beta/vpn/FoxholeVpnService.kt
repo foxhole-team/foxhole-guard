@@ -1202,12 +1202,14 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
                 container.ipInfoRepository.probe(
                     endpoint = DNS_INDEPENDENT_IP_INFO_ENDPOINT,
                     callTimeoutMs = LOCAL_GUARD_CONNECTIVITY_PROBE_TIMEOUT_MS,
+                    network = network,
+                    resolverNetwork = network,
                 )
             }
         val dnsResult =
             runCatchingUnlessCancelled {
                 withContext(Dispatchers.IO) {
-                    InetAddress.getAllByName(LOCAL_GUARD_CONNECTIVITY_DNS_PROBE_HOST).isNotEmpty()
+                    network.getAllByName(LOCAL_GUARD_CONNECTIVITY_DNS_PROBE_HOST).isNotEmpty()
                 }
             }
         val reachable = httpResult.isSuccess && dnsResult.getOrDefault(false)

@@ -977,7 +977,14 @@ class HomeViewModel(
     fun onVpnPermissionResult(granted: Boolean) {
         val request = pendingConnectRequest
         pendingConnectRequest = null
-        if (!granted || request == null) {
+        if (request == null) {
+            container.diagnosticsLogger.record(
+                "permissions",
+                "ignored vpn permission result without active request granted=$granted",
+            )
+            return
+        }
+        if (!granted) {
             if (request?.profileId == FoxholeVpnService.TOR_ONLY_PROFILE_ID) {
                 clearTorOperation()
             }

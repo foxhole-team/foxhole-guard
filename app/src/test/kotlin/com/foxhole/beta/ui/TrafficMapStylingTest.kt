@@ -10,34 +10,36 @@ import org.junit.Test
 
 class TrafficMapStylingTest {
     @Test
-    fun `traffic map uses default gray land color in both themes`() {
+    fun `traffic map uses dark gray land and translucent route colors in both themes`() {
         val darkColors = trafficMapColors(darkTheme = true, surfaceColor = Color(0xFF101011))
         val lightColors = trafficMapColors(darkTheme = false, surfaceColor = Color.White)
 
         assertEquals(
-            Color.Gray,
+            Color(0xFF3E3F41),
             darkColors.countryFill,
         )
         assertEquals(
-            darkColors.countryFill,
+            Color(0xFF414345),
             lightColors.countryFill,
         )
         assertEquals(
-            Color(0xFF7BD69D),
+            Color(0xFF8CE8B3),
             lightColors.routeLine,
         )
         assertEquals(
-            Color(0xFF7BD69D),
+            Color(0xFF8CE8B3),
             darkColors.destination,
         )
         assertEquals(
-            Color(0xFF7BD69D),
+            Color(0xFF8CE8B3),
             lightColors.origin,
         )
+        assertEquals(Color(0xFF050606), darkColors.routeHalo)
+        assertEquals(Color.White, lightColors.routeHalo)
     }
 
     @Test
-    fun `traffic map route lines use visible green stroke constants`() {
+    fun `traffic map route lines use thin translucent stroke constants`() {
         val source =
             listOf(
                 java.io.File("src/main/kotlin/com/foxhole/beta/ui/TrafficMapDashboardCard.kt"),
@@ -45,10 +47,13 @@ class TrafficMapStylingTest {
                 java.io.File("../app/src/main/kotlin/com/foxhole/beta/ui/TrafficMapDashboardCard.kt"),
             ).first { file -> file.isFile }.readText()
 
-        assertTrue(source.contains("TRAFFIC_MAP_ROUTE_MIN_STROKE_DP = 1.1f"))
-        assertTrue(source.contains("TRAFFIC_MAP_ROUTE_MAX_STROKE_DP = 2.6f"))
-        assertTrue(source.contains("TRAFFIC_MAP_ROUTE_MIN_ALPHA = 0.42f"))
-        assertTrue(source.contains("TRAFFIC_MAP_ROUTE_ALPHA_RANGE = 0.34f"))
+        assertTrue(source.contains("TRAFFIC_MAP_ROUTE_MIN_STROKE_DP = 0.35f"))
+        assertTrue(source.contains("TRAFFIC_MAP_ROUTE_MAX_STROKE_DP = 0.72f"))
+        assertTrue(source.contains("TRAFFIC_MAP_ROUTE_MIN_ALPHA = 0.32f"))
+        assertTrue(source.contains("TRAFFIC_MAP_ROUTE_ALPHA_RANGE = 0.18f"))
+        assertTrue(source.contains("TRAFFIC_MAP_ROUTE_HALO_STROKE_EXTRA_DP = 0.2f"))
+        assertTrue(source.contains("TRAFFIC_MAP_ROUTE_HALO_ALPHA_MULTIPLIER = 0.08f"))
+        assertTrue(source.contains("colors.routeHalo.copy("))
         assertTrue(source.contains("colors.routeLine.copy(alpha = route.alpha)"))
         assertTrue(source.contains("TRAFFIC_MAP_ROUTE_GREEN"))
     }
@@ -93,7 +98,7 @@ class TrafficMapStylingTest {
     }
 
     @Test
-    fun `traffic map startup prewarms nearby gray land bitmap buckets`() {
+    fun `traffic map startup prewarms nearby dark land bitmap buckets`() {
         val source =
             listOf(
                 java.io.File("src/main/kotlin/com/foxhole/beta/ui/TrafficMapDashboardCard.kt"),
@@ -186,7 +191,7 @@ class TrafficMapStylingTest {
     }
 
     @Test
-    fun `traffic map defers json backed canvas until content is ready`() {
+    fun `traffic map keeps collected state and cached shapes while content settles`() {
         val source =
             listOf(
                 java.io.File("src/main/kotlin/com/foxhole/beta/ui/TrafficMapDashboardCard.kt"),
@@ -198,11 +203,15 @@ class TrafficMapStylingTest {
                 .substringBefore("@Composable\nprivate fun TrafficMapCanvasLoadingBlock")
 
         assertTrue(cardBlock.contains("contentReady: Boolean = true"))
+        assertTrue(cardBlock.contains("val state by stateFlow.collectAsStateWithLifecycle()"))
+        assertFalse(cardBlock.contains("remember { TrafficMapUiState() }"))
         assertTrue(cardBlock.contains("rememberTrafficMapHeavyContentReady(contentReady && !mapDisabledForPower)"))
         assertTrue(cardBlock.contains("if (heavyContentReady)"))
         assertTrue(cardBlock.contains("val countryShapesLoading = heavyContentReady && countryShapes.isEmpty()"))
         assertTrue(cardBlock.contains("} else if (!heavyContentReady || countryShapesLoading)"))
         assertTrue(cardBlock.contains("TrafficMapCanvasLoadingBlock"))
+        assertTrue(source.contains("mutableStateOf(enabled && TrafficMapCountryShapeCache.current().isNotEmpty())"))
+        assertTrue(source.contains("if (TrafficMapCountryShapeCache.current().isNotEmpty())"))
         assertTrue(source.contains("delay(TRAFFIC_MAP_HEAVY_CONTENT_SETTLE_DELAY_MS)"))
         assertTrue(source.contains("home_traffic_world_map_loading"))
     }

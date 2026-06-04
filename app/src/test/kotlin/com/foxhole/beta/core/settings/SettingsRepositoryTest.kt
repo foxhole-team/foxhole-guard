@@ -98,6 +98,19 @@ class SettingsRepositoryTest {
     }
 
     @Test
+    fun `local proxy generated password has release entropy and rotates legacy defaults`() {
+        val source = settingsRepositorySource()
+        val normalizeBlock =
+            source.substringAfter("private fun com.foxhole.beta.core.model.LocalAuthSettings.normalized()")
+                .substringBefore("private fun ProxyInboundSettings.normalized()")
+
+        assertTrue(source.contains("PROXY_PASSWORD_RANDOM_LENGTH = 22"))
+        assertTrue(source.contains("LEGACY_PROXY_PASSWORD_RANDOM_LENGTH = 4"))
+        assertTrue(normalizeBlock.contains("normalizedPassword.isLegacyGeneratedLocalProxyPassword()"))
+        assertFalse(source.contains("private const val PROXY_PASSWORD_RANDOM_LENGTH = 4"))
+    }
+
+    @Test
     fun `selected split apps restore include mode when routing was full tunnel`() {
         assertEquals(
             PerAppRoutingMode.INCLUDE_SELECTED_APPS,
@@ -923,4 +936,10 @@ class SettingsRepositoryTest {
         )
     }
 
+    private fun settingsRepositorySource(): String =
+        listOf(
+            java.io.File("src/main/kotlin/com/foxhole/beta/core/settings/SettingsRepository.kt"),
+            java.io.File("app/src/main/kotlin/com/foxhole/beta/core/settings/SettingsRepository.kt"),
+            java.io.File("../app/src/main/kotlin/com/foxhole/beta/core/settings/SettingsRepository.kt"),
+        ).first { file -> file.isFile }.readText()
 }
