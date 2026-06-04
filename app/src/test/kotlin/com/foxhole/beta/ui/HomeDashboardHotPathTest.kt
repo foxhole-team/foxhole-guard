@@ -155,18 +155,18 @@ class HomeDashboardHotPathTest {
     }
 
     @Test
-    fun `dashboard root entry restores cached map content immediately`() {
+    fun `dashboard root entry stages heavy cached content after first frame`() {
         val coldStage = initialDashboardStartupStage(dashboardAlreadyWarm = false)
         val warmStage = initialDashboardStartupStage(dashboardAlreadyWarm = true)
 
-        assertTrue(
+        assertFalse(
             shouldComposeDashboardCardNow(
                 card = DashboardCard.TRAFFIC_MAP,
                 startupStage = coldStage,
                 activeReorderCard = null,
             ),
         )
-        assertTrue(
+        assertFalse(
             shouldComposeDashboardCardNow(
                 card = DashboardCard.TRAFFIC_MAP,
                 startupStage = warmStage,
@@ -180,21 +180,21 @@ class HomeDashboardHotPathTest {
                 activeReorderCard = null,
             ),
         )
-        assertTrue(
+        assertFalse(
             shouldComposeDashboardCardNow(
                 card = DashboardCard.ACTIONS,
                 startupStage = warmStage,
                 activeReorderCard = null,
             ),
         )
-        assertTrue(
+        assertFalse(
             shouldComposeDashboardCardNow(
                 card = DashboardCard.TRAFFIC,
                 startupStage = warmStage,
                 activeReorderCard = null,
             ),
         )
-        assertTrue(
+        assertFalse(
             shouldComposeTrafficMapHeavyContent(
                 startupStage = warmStage,
                 activeReorderCard = null,
@@ -245,6 +245,7 @@ class HomeDashboardHotPathTest {
         val settingsSource = testSourceFile("SettingsScreens.kt").readText()
 
         assertFalse(settingsSource.contains("SETTINGS_HOME_STARTUP_STAGE_DELAY_MS"))
+        assertTrue(settingsSource.contains("withFrameNanos"))
     }
 
     @Test
@@ -434,6 +435,24 @@ class HomeDashboardHotPathTest {
         assertTrue(networkLoadingBlock.contains("shimmerProgress = shimmerProgress"))
         assertTrue(legendLoadingBlock.contains("val shimmerProgress = rememberFoxholeSkeletonProgress()"))
         assertTrue(legendLoadingBlock.contains("shimmerProgress = shimmerProgress"))
+        assertTrue(legendLoadingBlock.contains("val skeletonRow"))
+        assertTrue(legendLoadingBlock.contains("skeletonRow(false, false)"))
+        assertTrue(legendLoadingBlock.contains("skeletonRow(true, false)"))
+        assertTrue(legendLoadingBlock.contains("skeletonRow(true, true)"))
+        assertFalse(legendLoadingBlock.contains("padding(top = 24.dp)"))
+    }
+
+    @Test
+    fun `traffic map header keeps device location slot during transient origin refresh`() {
+        val trafficMapSource = testSourceFile("TrafficMapDashboardCard.kt").readText()
+        val headerBlock =
+            trafficMapSource.substringAfter("private fun TrafficMapCardHeader(")
+                .substringBefore("@Composable\nprivate fun rememberTrafficMapHeavyContentReady")
+
+        assertTrue(headerBlock.contains("retainedOriginLabel"))
+        assertTrue(headerBlock.contains("Modifier.width(86.dp).height(8.dp)"))
+        assertTrue(headerBlock.contains("Modifier.width(62.dp).height(8.dp)"))
+        assertFalse(headerBlock.contains("if (state.originCountryCode != null)"))
     }
 
     @Test
@@ -542,6 +561,58 @@ class HomeDashboardHotPathTest {
         assertTrue(networkModelBlock.contains("state.connection"))
         assertTrue(networkModelBlock.contains("state.ipInfoLoading"))
         assertTrue(networkModelBlock.contains("state.autoConnect.running"))
+    }
+
+    @Test
+    fun `dns filter enable preflight downloads fresh rule set before applying`() {
+        val settingsSource = testSourceFile("HomeViewModelSettingsSupport.kt").readText()
+        val preflightBlock =
+            settingsSource.substringAfter("private suspend fun HomeViewModel.ensureVerifiedDownloadedDnsRuleSet")
+                .substringBefore("internal fun HomeViewModel.onDnsBypassPackagesChangedInternal")
+        val beforeRefreshBlock =
+            preflightBlock.substringBefore("container.dnsFilterUpdateRepository.refreshNow(")
+
+        assertTrue(preflightBlock.contains("container.dnsFilterUpdateRepository.refreshNow("))
+        assertFalse(beforeRefreshBlock.contains("container.dnsFilterAssetInstaller.prepareVerifiedOrNull()"))
+    }
+
+    @Test
+    fun `app picker defaults to user applications`() {
+        val appPickerSource = testSourceFile("RoutingAppScreens.kt").readText()
+
+        assertTrue(appPickerSource.contains("mutableStateOf(InstalledAppFilter.USER)"))
+        assertFalse(appPickerSource.contains("mutableStateOf(InstalledAppFilter.ALL)"))
+    }
+
+    @Test
+    fun `app picker uses set membership on visible rows`() {
+        val appPickerSource = testSourceFile("RoutingAppScreens.kt").readText()
+
+        assertTrue(appPickerSource.contains("val draftSelectionSet = remember(draftSelection)"))
+        assertTrue(appPickerSource.contains("val checked = app.packageName in draftSelectionSet || locked"))
+        assertFalse(appPickerSource.contains("draftSelection.contains(app.packageName)"))
+    }
+
+    @Test
+    fun `protocol selector width measurement is memoized`() {
+        val protocolSource = testSourceFile("ProfileProtocolUi.kt").readText()
+        val selectorWidthBlock =
+            protocolSource.substringAfter("private fun rememberProtocolSelectorFixedWidth(")
+                .substringBefore("internal fun protocolSelectorWidthBasisPx")
+
+        assertTrue(selectorWidthBlock.contains("return remember("))
+        assertTrue(selectorWidthBlock.contains("textMeasurer.measure("))
+    }
+
+    @Test
+    fun `tor renew ip action reads as a primary button`() {
+        val homeSupportSource = testSourceFile("HomeScreenSupport.kt").readText()
+        val torActionBlock =
+            homeSupportSource.substringAfter("val changeIpInProgress =")
+                .substringBefore("internal data class HomeTorIpPresentation")
+
+        assertTrue(torActionBlock.contains("Button("))
+        assertFalse(torActionBlock.contains("OutlinedButton("))
     }
 
     private fun testSourceFile(name: String): java.io.File =

@@ -56,6 +56,7 @@ fun StatisticsScreen(
     var selectedProfileId by rememberSaveable { mutableStateOf<Long?>(null) }
     var clearConfirmVisible by rememberSaveable { mutableStateOf(false) }
     var appStatsEnablePendingUsageAccess by rememberSaveable { mutableStateOf(false) }
+    var allAppRowsSnapshot by remember { mutableStateOf<List<AppTrafficRow>>(emptyList()) }
     var appTrafficRange by rememberSaveable { mutableStateOf(StatisticsDisplayRange.HOURS_24) }
     var dnsRange by rememberSaveable { mutableStateOf(StatisticsDisplayRange.HOURS_24) }
     var anomalyRange by rememberSaveable { mutableStateOf(StatisticsDisplayRange.HOURS_24) }
@@ -68,6 +69,7 @@ fun StatisticsScreen(
     val statistics = dashboard.statistics
     val appRows = dashboard.appRows
     val topApps = remember(appRows) { appRows.take(APP_TRAFFIC_CHART_LIMIT) }
+    val visibleAllAppRows = allAppRowsSnapshot.takeIf(List<AppTrafficRow>::isNotEmpty) ?: appRows
     val countryRows = dashboard.countryRows
     val topCountryLimit =
         if (countryRows.size > STATISTICS_TOP_PREVIEW_LIMIT) {
@@ -152,7 +154,10 @@ fun StatisticsScreen(
                         range = appTrafficRange,
                         onRangeSelected = { appTrafficRange = it },
                         onOpenUsageAccess = { openUsageAccessSettings(context) },
-                        onShowAll = { allAppsVisible = true },
+                        onShowAll = {
+                            allAppRowsSnapshot = appRows
+                            allAppsVisible = true
+                        },
                         onRowClick = { row -> selectedApp = row.packageName },
                     )
                 }
@@ -311,7 +316,11 @@ fun StatisticsScreen(
             title = { Text(stringResource(R.string.app_statistics_all_title)) },
             text = {
                 LazyColumn(modifier = Modifier.heightIn(max = 520.dp)) {
-                    items(appRows, key = AppTrafficRow::packageName) { row ->
+                    items(
+                        items = visibleAllAppRows,
+                        key = AppTrafficRow::packageName,
+                        contentType = { "app-traffic-row" },
+                    ) { row ->
                         AppTrafficRowView(
                             row = row,
                             onClick = {

@@ -29,6 +29,7 @@ data class HomeUiState(
     val settings: FoxholeSettings = FoxholeSettings(),
     val connection: ConnectionSnapshot = ConnectionSnapshot(),
     val ipInfo: IpInfo? = null,
+    val deviceIpInfo: IpInfo? = null,
     val torIpInfo: IpInfo? = null,
     val ipInfoLoading: Boolean = false,
     val ipInfoRefreshReason: IpInfoRefreshReason? = null,
@@ -79,6 +80,7 @@ internal data class HomeConnectionStreams(
     val settings: FoxholeSettings,
     val connection: ConnectionSnapshot,
     val ipInfo: IpInfo?,
+    val deviceIpInfo: IpInfo?,
     val torIpInfo: IpInfo?,
 )
 
@@ -91,6 +93,7 @@ internal data class HomeProfileStreams(
 internal data class HomeRealtimeStreams(
     val connection: ConnectionSnapshot,
     val ipInfo: IpInfo?,
+    val deviceIpInfo: IpInfo?,
     val torIpInfo: IpInfo?,
 )
 

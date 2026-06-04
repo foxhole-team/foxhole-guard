@@ -329,7 +329,7 @@ internal fun AppGridSectionContent(
                     text = title,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
                 subtitle?.takeIf(String::isNotBlank)?.let { text ->
@@ -517,11 +517,12 @@ fun AppPickerScreen(
 ) {
     var query by rememberSaveable { mutableStateOf("") }
     var filterMenuExpanded by rememberSaveable { mutableStateOf(false) }
-    var appFilter by rememberSaveable { mutableStateOf(InstalledAppFilter.ALL) }
+    var appFilter by rememberSaveable { mutableStateOf(InstalledAppFilter.USER) }
     val popupsAllowed = rememberAppPickerPopupsAllowed { filterMenuExpanded = false }
     var draftSelection by rememberSaveable(selectedPackages) {
         mutableStateOf(selectedPackages)
     }
+    val draftSelectionSet = remember(draftSelection) { draftSelection.toSet() }
     val filteredApps = remember(state.installedApps, query, appFilter) {
         filterApps(state.installedApps, query)
             .filter { app ->
@@ -591,9 +592,13 @@ fun AppPickerScreen(
                 )
             }
         }
-        items(filteredApps, key = InstalledAppOption::packageName) { app ->
+        items(
+            items = filteredApps,
+            key = InstalledAppOption::packageName,
+            contentType = { "installed-app-row" },
+        ) { app ->
             val locked = app.packageName in lockedPackages
-            val checked = draftSelection.contains(app.packageName) || locked
+            val checked = app.packageName in draftSelectionSet || locked
             SelectableInstalledAppRow(
                 app = app,
                 checked = checked,
@@ -601,7 +606,7 @@ fun AppPickerScreen(
                 onToggle = { value ->
                     if (!locked) {
                         val nextSelection =
-                            draftSelection
+                            draftSelectionSet
                                 .toMutableSet()
                                 .apply {
                                     if (value) {
@@ -846,14 +851,14 @@ private fun SiteRuleCard(
                         text = rule.siteRuleTokens().firstOrNull() ?: rule.name,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
+                        maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                     )
                     Text(
                         text = rule.siteRuleTokens().drop(1).joinToString().ifBlank { siteActionLabel(rule.action) },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
+                        maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                     )
                 }

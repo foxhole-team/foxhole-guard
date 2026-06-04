@@ -57,11 +57,13 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -133,10 +135,7 @@ fun SettingsHomeScreen(
     onOpenAbout: () -> Unit,
 ) {
     DebugRecompositionCounter("SettingsHomeScreen")
-    val startupStage =
-        remember {
-            initialSettingsHomeStartupStage(SettingsHomeStartupCompositionWarmState.markEntered())
-        }
+    val startupStage = rememberSettingsHomeStartupStage()
     SettingsScaffold(
         title = stringResource(R.string.settings),
         snackbarHostState = snackbarHostState,
@@ -276,9 +275,28 @@ private fun LazyListScope.settingsHomeNavigationItems(
     }
 }
 
-@Suppress("UNUSED_PARAMETER")
 internal fun initialSettingsHomeStartupStage(settingsAlreadyWarm: Boolean): Int =
-    SETTINGS_HOME_STARTUP_STAGE_ALL
+    if (settingsAlreadyWarm) {
+        SETTINGS_HOME_STARTUP_STAGE_SECURITY
+    } else {
+        SETTINGS_HOME_STARTUP_STAGE_NETWORK
+    }
+
+@Composable
+private fun rememberSettingsHomeStartupStage(): Int {
+    var startupStage by remember {
+        mutableStateOf(initialSettingsHomeStartupStage(SettingsHomeStartupCompositionWarmState.markEntered()))
+    }
+    LaunchedEffect(Unit) {
+        var nextStage = startupStage
+        while (nextStage < SETTINGS_HOME_STARTUP_STAGE_ALL) {
+            withFrameNanos { }
+            nextStage += 1
+            startupStage = nextStage
+        }
+    }
+    return startupStage
+}
 
 internal fun shouldComposeSettingsHomeSecurityGroup(startupStage: Int): Boolean =
     startupStage >= SETTINGS_HOME_STARTUP_STAGE_SECURITY
@@ -296,6 +314,7 @@ private object SettingsHomeStartupCompositionWarmState {
     }
 }
 
+private const val SETTINGS_HOME_STARTUP_STAGE_NETWORK = 0
 private const val SETTINGS_HOME_STARTUP_STAGE_SECURITY = 1
 private const val SETTINGS_HOME_STARTUP_STAGE_APP = 2
 private const val SETTINGS_HOME_STARTUP_STAGE_ALL = SETTINGS_HOME_STARTUP_STAGE_APP
@@ -421,7 +440,7 @@ private fun SettingsGroupedNavigationRow(
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = contentAlpha),
-                    maxLines = 1,
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
                 titleTrailingContent?.invoke(this)
@@ -1309,7 +1328,6 @@ fun PrivacyRouteSettingsScreen(
                 SettingSwitchRow(
                     title = stringResource(R.string.privacy_route_bypass_vpn_title),
                     checked = state.settings.privacyRoute.bypassVpnTunnel,
-                    enabled = state.settings.privacyRoute.enabled,
                     onCheckedChange = onPrivacyRouteBypassVpnTunnelChanged,
                     summary = stringResource(R.string.privacy_route_bypass_vpn_summary),
                     leadingIcon = FoxholeIcons.Network,
@@ -1364,7 +1382,7 @@ fun PrivacyRouteSettingsScreen(
     }
 }
 
-@Suppress("CyclomaticComplexMethod", "LongMethod", "UnusedParameter")
+@Suppress("CyclomaticComplexMethod", "LongMethod", "LongParameterList", "UnusedParameter")
 @Composable
 fun ApplicationSettingsScreen(
     state: SettingsRouteUiState,
@@ -1382,6 +1400,7 @@ fun ApplicationSettingsScreen(
     onShowFirewallStatusChanged: (Boolean) -> Unit,
     onShowTorQuickLaunchChanged: (Boolean) -> Unit,
     onSmartStartDashboardControlsEnabledChanged: (Boolean) -> Unit,
+    onOpenQuickSettingsTile: () -> Unit,
 ) {
     val systemThemeLabel = stringResource(R.string.theme_mode_system)
     val darkThemeLabel = stringResource(R.string.theme_mode_dark)
@@ -1523,6 +1542,15 @@ fun ApplicationSettingsScreen(
                     onCheckedChange = onShowFirewallStatusChanged,
                     summaryMaxLines = Int.MAX_VALUE,
                     grouped = true,
+                )
+                SettingsControlGroupDivider()
+                SettingsNavigationRow(
+                    icon = FoxholeIcons.QuickSettings,
+                    title = stringResource(R.string.quick_settings_tile_title),
+                    summary = stringResource(R.string.quick_settings_tile_summary),
+                    summaryMaxLines = Int.MAX_VALUE,
+                    grouped = true,
+                    onClick = onOpenQuickSettingsTile,
                 )
             }
         }

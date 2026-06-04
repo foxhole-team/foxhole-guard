@@ -355,6 +355,12 @@
     <string name="show_tor_quick_launch_summary">Включает быстрый доступ к запуску TOR в дашборде</string>
     <string name="show_firewall_status_title">Быстрый доступ к фаерволу</string>
     <string name="show_firewall_status_summary">Включает быстрый доступ к фаерволу в дашборде</string>
+    <string name="quick_settings_tile_title">Включить быстрый доступ</string>
+    <string name="quick_settings_tile_summary">Добавляет плитку FoxHole в шторку Android для управления одним нажатием</string>
+    <string name="quick_settings_tile_added">Плитка быстрого доступа добавлена</string>
+    <string name="quick_settings_tile_already_added">Быстрый доступ уже включен</string>
+    <string name="quick_settings_tile_not_added">Плитка быстрого доступа не добавлена</string>
+    <string name="quick_settings_tile_open_settings_hint">Откройте редактирование быстрых настроек и добавьте плитку FoxHole</string>
     <string name="app_settings">Настройки приложения</string>
     <string name="expert_settings">Экспертные настройки</string>
     <string name="expert_unlock_confirm_title">Включить экспертные настройки?</string>
@@ -642,6 +648,7 @@
         <item quantity="other">%1$d дня</item>
     </plurals>
     <string name="dns_filter_refresh_complete">DNS rule set проверен и загружен</string>
+    <string name="dns_filter_refresh_started">Загрузка DNS rule set</string>
     <string name="dns_filter_refresh_failed">Не удалось проверить DNS rule set</string>
     <string name="dns_through_vpn_title">DNS через VPN</string>
     <string name="dns_through_vpn_summary">Отправлять DNS-запросы Foxhole через активный туннель</string>

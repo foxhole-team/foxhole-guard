@@ -849,7 +849,7 @@ internal fun ProfileFieldDialog(
     )
 }
 
-internal val appIconCache = LruCache<String, ImageBitmap>(128)
+internal val appIconCache = LruCache<String, ImageBitmap>(512)
 
 internal fun filterApps(
     apps: List<InstalledAppOption>,

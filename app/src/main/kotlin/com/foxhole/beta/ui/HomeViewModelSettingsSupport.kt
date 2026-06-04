@@ -245,6 +245,7 @@ private fun HomeViewModel.preflightAndApplyDnsRuleSetSettings(value: DnsSettings
     viewModelScope.launch {
         dnsFilterRefreshInProgressMutable.value = true
         try {
+            emitInfo(getApplication<Application>().getString(R.string.dns_filter_refresh_started))
             val verifiedRuleSetReady = ensureVerifiedDownloadedDnsRuleSet(value)
             if (!verifiedRuleSetReady) {
                 emitError(getApplication<Application>().getString(R.string.dns_filter_refresh_failed))
@@ -259,12 +260,6 @@ private fun HomeViewModel.preflightAndApplyDnsRuleSetSettings(value: DnsSettings
 }
 
 private suspend fun HomeViewModel.ensureVerifiedDownloadedDnsRuleSet(value: DnsSettings): Boolean {
-    val existingVerified =
-        runCatching { container.dnsFilterAssetInstaller.prepareVerifiedOrNull() != null }
-            .getOrDefault(false)
-    if (existingVerified) {
-        return true
-    }
     val updateResult =
         runCatching {
             container.dnsFilterUpdateRepository.refreshNow(
@@ -808,6 +803,12 @@ internal fun HomeViewModel.onPrivacyRouteModeSelectedInternal(value: PrivacyRout
     }
 }
 
+internal fun HomeViewModel.onPrivacyRouteModeConfiguredInternal(value: PrivacyRouteMode) {
+    viewModelScope.launch {
+        container.settingsRepository.updatePrivacyRouteMode(value)
+    }
+}
+
 private fun HomeViewModel.shouldBlockTorOverUdpVpnEnable(): Boolean {
     val state = controlUiState.value
     val snapshot = state.connection
@@ -818,7 +819,8 @@ private fun HomeViewModel.shouldBlockTorOverUdpVpnEnable(): Boolean {
     ) {
         return false
     }
-    val protocolHint = snapshot.protocolHint ?: state.activeProfile?.protocolOptionOrDefault(null)?.protocolHint
+    val protocolHint =
+        snapshot.protocolHint ?: state.activeProfile?.protocolOptionOrDefault(null)?.protocolHint
     return protocolHint?.isUdpTransport() == true
 }
 
@@ -834,14 +836,34 @@ internal fun HomeViewModel.onPrivacyRouteScopeSelectedInternal(value: PrivacyRou
     }
 }
 
+internal fun HomeViewModel.onPrivacyRouteScopeConfiguredInternal(value: PrivacyRouteScope) {
+    viewModelScope.launch {
+        container.settingsRepository.updatePrivacyRouteScope(value)
+    }
+}
+
 internal fun HomeViewModel.onPrivacyRouteBypassVpnTunnelChangedInternal(value: Boolean) {
     updateRuntimeSettingAndMaybeReload {
         container.settingsRepository.updatePrivacyRouteBypassVpnTunnel(value)
     }
 }
 
+internal fun HomeViewModel.onPrivacyRouteBypassVpnTunnelConfiguredInternal(value: Boolean) {
+    viewModelScope.launch {
+        container.settingsRepository.updatePrivacyRouteBypassVpnTunnel(value)
+    }
+}
+
 internal fun HomeViewModel.onPrivacyRouteSelectedPackagesChangedInternal(value: List<String>) {
     updateRuntimeSettingAndMaybeReload {
+        container.settingsRepository.updatePrivacyRouteSelectedPackages(
+            value.filterNot { it == getApplication<Application>().packageName },
+        )
+    }
+}
+
+internal fun HomeViewModel.onPrivacyRouteSelectedPackagesConfiguredInternal(value: List<String>) {
+    viewModelScope.launch {
         container.settingsRepository.updatePrivacyRouteSelectedPackages(
             value.filterNot { it == getApplication<Application>().packageName },
         )

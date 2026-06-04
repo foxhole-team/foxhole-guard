@@ -848,80 +848,110 @@ private fun rememberProtocolSelectorFixedWidth(
         )
     val favoriteLegend = stringResource(R.string.smart_profile_legend_favorite)
     val recommendedLegend = stringResource(R.string.smart_profile_legend_reconnect_recommended)
-    val iconSizePx = with(density) { if (compact) 13.dp.roundToPx() else 18.dp.roundToPx() }
-    val markSpacingPx = with(density) { if (compact) 4.dp.roundToPx() else 8.dp.roundToPx() }
-    val secondarySpacingPx = with(density) { if (compact) 4.dp.roundToPx() else 8.dp.roundToPx() }
-    val starIconPx = with(density) { if (compact) 9.dp.roundToPx() else 10.dp.roundToPx() }
-    val starGapPx = with(density) { 1.dp.roundToPx() }
-    val chevronSizePx = with(density) { if (compact) 17.dp.roundToPx() else 18.dp.roundToPx() }
-    val chevronGapPx = with(density) { if (compact) 4.dp.roundToPx() else 6.dp.roundToPx() }
-    val leadingPaddingPx = with(density) { if (compact) 10.dp.roundToPx() else 14.dp.roundToPx() }
-    val trailingPaddingPx = with(density) { if (compact) 8.dp.roundToPx() else 10.dp.roundToPx() }
-    val compactWidthSlackPx = with(density) { if (compact) 8.dp.roundToPx() else 0 }
-    val dropdownHorizontalPaddingPx = with(density) { 24.dp.roundToPx() }
-    val dropdownTrailingGapPx = 0
-    val dropdownCheckWidthPx = 0
-    fun textWidth(text: String, style: TextStyle): Int =
-        textMeasurer.measure(
-            text = AnnotatedString(text),
-            style = style,
-        ).size.width
-    fun conditionStarsWidthPx(option: ProfileProtocolOption): Int {
-        val starCount =
-            smartProfileConditionStarCount(
-                favorite = option.id == favoriteProtocolOptionId,
-                recommended = option.id in recommendedProtocolOptionIds,
-                topRecommended = option.id == recommendedProtocolOptionId,
-            )
-        return if (starCount <= 0) {
-            0
-        } else {
-            starCount * starIconPx + (starCount - 1) * starGapPx
-        }
-    }
-    val widestContentPx =
-        protocolOptions.maxOfOrNull { option ->
-            val primaryWidth =
-                textWidth(
-                    text = protocolDisplayLabel(option.protocolHint),
-                    style = primaryStyle,
+    return remember(
+        protocolOptions,
+        compact,
+        recommendedProtocolOptionId,
+        recommendedProtocolOptionIds,
+        favoriteProtocolOptionId,
+        density.density,
+        density.fontScale,
+        primaryStyle,
+        secondaryStyle,
+        legendStyle,
+        favoriteLegend,
+        recommendedLegend,
+        textMeasurer,
+    ) {
+        val iconSizePx = with(density) { if (compact) 13.dp.roundToPx() else 18.dp.roundToPx() }
+        val markSpacingPx = with(density) { if (compact) 4.dp.roundToPx() else 8.dp.roundToPx() }
+        val secondarySpacingPx = with(density) { if (compact) 4.dp.roundToPx() else 8.dp.roundToPx() }
+        val starIconPx = with(density) { if (compact) 9.dp.roundToPx() else 10.dp.roundToPx() }
+        val starGapPx = with(density) { 1.dp.roundToPx() }
+        val chevronSizePx = with(density) { if (compact) 17.dp.roundToPx() else 18.dp.roundToPx() }
+        val chevronGapPx = with(density) { if (compact) 4.dp.roundToPx() else 6.dp.roundToPx() }
+        val leadingPaddingPx = with(density) { if (compact) 10.dp.roundToPx() else 14.dp.roundToPx() }
+        val trailingPaddingPx = with(density) { if (compact) 8.dp.roundToPx() else 10.dp.roundToPx() }
+        val compactWidthSlackPx = with(density) { if (compact) 8.dp.roundToPx() else 0 }
+        val dropdownHorizontalPaddingPx = with(density) { 24.dp.roundToPx() }
+        val dropdownTrailingGapPx = 0
+        val dropdownCheckWidthPx = 0
+        fun textWidth(text: String, style: TextStyle): Int =
+            textMeasurer.measure(
+                text = AnnotatedString(text),
+                style = style,
+            ).size.width
+        fun conditionStarsWidthPx(option: ProfileProtocolOption): Int {
+            val starCount =
+                smartProfileConditionStarCount(
+                    favorite = option.id == favoriteProtocolOptionId,
+                    recommended = option.id in recommendedProtocolOptionIds,
+                    topRecommended = option.id == recommendedProtocolOptionId,
                 )
-            val secondaryWidth =
-                protocolSelectorSecondaryLabel(option)?.let { secondary ->
-                    secondarySpacingPx +
-                        textWidth(
-                            text = secondary,
-                            style = secondaryStyle,
-                        )
-                } ?: 0
-            iconSizePx +
-                markSpacingPx +
-                primaryWidth +
-                secondaryWidth +
-                conditionStarsWidthPx(option)
-        } ?: 0
-    val openerWidthPx = leadingPaddingPx + widestContentPx + chevronGapPx + chevronSizePx + trailingPaddingPx + compactWidthSlackPx
-    val dropdownRowWidthPx = dropdownHorizontalPaddingPx + widestContentPx + dropdownTrailingGapPx + dropdownCheckWidthPx
-    val hasLegendBasis = protocolOptions.any { option -> option.id == favoriteProtocolOptionId || option.id in recommendedProtocolOptionIds }
-    val legendWidthPx =
-        if (hasLegendBasis) {
-            textWidth(favoriteLegend, legendStyle) +
-                textWidth(recommendedLegend, legendStyle) +
-                with(density) { if (compact) 48.dp.toPx() else 56.dp.toPx() }
+            return if (starCount <= 0) {
+                0
+            } else {
+                starCount * starIconPx + (starCount - 1) * starGapPx
+            }
+        }
+        val widestContentPx =
+            protocolOptions.maxOfOrNull { option ->
+                val primaryWidth =
+                    textWidth(
+                        text = protocolDisplayLabel(option.protocolHint),
+                        style = primaryStyle,
+                    )
+                val secondaryWidth =
+                    protocolSelectorSecondaryLabel(option)?.let { secondary ->
+                        secondarySpacingPx +
+                            textWidth(
+                                text = secondary,
+                                style = secondaryStyle,
+                            )
+                    } ?: 0
+                iconSizePx +
+                    markSpacingPx +
+                    primaryWidth +
+                    secondaryWidth +
+                    conditionStarsWidthPx(option)
+            } ?: 0
+        val openerWidthPx =
+            leadingPaddingPx +
+                widestContentPx +
+                chevronGapPx +
+                chevronSizePx +
+                trailingPaddingPx +
+                compactWidthSlackPx
+        val dropdownRowWidthPx =
+            dropdownHorizontalPaddingPx +
+                widestContentPx +
+                dropdownTrailingGapPx +
+                dropdownCheckWidthPx
+        val hasLegendBasis =
+            protocolOptions.any { option ->
+                option.id == favoriteProtocolOptionId ||
+                    option.id in recommendedProtocolOptionIds
+            }
+        val legendWidthPx =
+            if (hasLegendBasis) {
+                textWidth(favoriteLegend, legendStyle) +
+                    textWidth(recommendedLegend, legendStyle) +
+                    with(density) { if (compact) 48.dp.toPx() else 56.dp.toPx() }
+            } else {
+                0f
+            }
+        val estimatedWidth =
+            with(density) {
+                protocolSelectorWidthBasisPx(
+                    protocolLabelWidthPx = maxOf(openerWidthPx, dropdownRowWidthPx).toFloat(),
+                    legendWidthPx = legendWidthPx,
+                ).toDp()
+            }
+        if (compact) {
+            estimatedWidth.coerceIn(CompactProtocolSelectorMinWidth, CompactProtocolSelectorMaxWidth)
         } else {
-            0f
+            estimatedWidth.coerceIn(RegularProtocolSelectorMinWidth, RegularProtocolSelectorMaxWidth)
         }
-    val estimatedWidth =
-        with(density) {
-            protocolSelectorWidthBasisPx(
-                protocolLabelWidthPx = maxOf(openerWidthPx, dropdownRowWidthPx).toFloat(),
-                legendWidthPx = legendWidthPx,
-            ).toDp()
-        }
-    return if (compact) {
-        estimatedWidth.coerceIn(CompactProtocolSelectorMinWidth, CompactProtocolSelectorMaxWidth)
-    } else {
-        estimatedWidth.coerceIn(RegularProtocolSelectorMinWidth, RegularProtocolSelectorMaxWidth)
     }
 }
 

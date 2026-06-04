@@ -350,6 +350,12 @@
     <string name="show_tor_quick_launch_summary">Enables quick TOR launch access on Dashboard</string>
     <string name="show_firewall_status_title">Firewall quick access</string>
     <string name="show_firewall_status_summary">Enables quick Firewall access on Dashboard</string>
+    <string name="quick_settings_tile_title">Enable quick access</string>
+    <string name="quick_settings_tile_summary">Add the FoxHole tile to Android Quick Settings for one-tap control</string>
+    <string name="quick_settings_tile_added">Quick access tile added</string>
+    <string name="quick_settings_tile_already_added">Quick access tile is already enabled</string>
+    <string name="quick_settings_tile_not_added">Quick access tile was not added</string>
+    <string name="quick_settings_tile_open_settings_hint">Open Quick Settings editing and add the FoxHole tile</string>
     <string name="app_settings">App settings</string>
     <string name="expert_settings">Expert Settings</string>
     <string name="expert_unlock_confirm_title">Enable expert settings?</string>
@@ -621,6 +627,7 @@
         <item quantity="other">%1$d days</item>
     </plurals>
     <string name="dns_filter_refresh_complete">DNS rule set checked and loaded</string>
+    <string name="dns_filter_refresh_started">Downloading DNS rule set</string>
     <string name="dns_filter_refresh_failed">Could not check DNS rule set</string>
     <string name="dns_through_vpn_title">DNS through VPN</string>
     <string name="dns_through_vpn_summary">Send Foxhole DNS queries through the active tunnel</string>

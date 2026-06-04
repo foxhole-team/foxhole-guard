@@ -392,11 +392,12 @@ internal fun <T> DropdownSettingRow(
                         ) {
                             Text(
                                 text = optionLabels[index],
+                                modifier = Modifier.weight(1f),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = optionContentColor,
-                                maxLines = 1,
-                                softWrap = false,
+                                maxLines = 2,
                                 overflow = TextOverflow.Clip,
+                                softWrap = true,
                             )
                         }
                     }
@@ -447,7 +448,7 @@ internal fun SettingSwitchRow(
     leadingIconContainerColor: Color = Color.Unspecified,
     titleTrailingContent: (@Composable RowScope.() -> Unit)? = null,
     enabled: Boolean = true,
-    titleMaxLines: Int = 1,
+    titleMaxLines: Int = 2,
     summaryMaxLines: Int = 3,
     grouped: Boolean = false,
     modifier: Modifier = Modifier,
@@ -560,7 +561,7 @@ private fun SettingsControlRow(
     leadingIconContainerColor: Color = Color.Unspecified,
     leadingIconTint: Color = MaterialTheme.colorScheme.onSurfaceVariant,
     titleTrailingContent: (@Composable RowScope.() -> Unit)? = null,
-    titleMaxLines: Int = 1,
+    titleMaxLines: Int = 2,
     summaryMaxLines: Int = 3,
     onClick: (() -> Unit)?,
     trailingContent: (@Composable RowScope.() -> Unit)? = null,

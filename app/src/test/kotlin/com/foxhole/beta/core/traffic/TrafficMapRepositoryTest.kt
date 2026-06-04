@@ -3,6 +3,15 @@ package com.foxhole.beta.core.traffic
 import com.foxhole.beta.core.model.IpInfo
 import com.foxhole.beta.core.model.TrafficMapPoint
 import com.foxhole.beta.core.model.TrafficMapPointRole
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
@@ -209,6 +218,46 @@ class TrafficMapRepositoryTest {
     }
 
     @Test
+    fun `traffic map flow retains device origin through transient refresh gaps`() =
+        runBlocking {
+            val originIpInfo =
+                MutableStateFlow<IpInfo?>(
+                    IpInfo(
+                        ip = "198.51.100.20",
+                        ipv4 = "198.51.100.20",
+                        countryCode = "US",
+                        countryName = "United States",
+                        city = "New York",
+                        isp = "Device ISP",
+                        fetchedAt = 1_000L,
+                    ),
+                )
+            val stateScope = CoroutineScope(Dispatchers.Default)
+            try {
+                val state =
+                    TrafficMapRepository().trafficMapState(
+                        scope = stateScope,
+                        originIpInfo = originIpInfo,
+                        routeIpInfo = MutableStateFlow<IpInfo?>(null),
+                        torIpInfo = MutableStateFlow<IpInfo?>(null),
+                        runtimeAvailable = MutableStateFlow(true),
+                    )
+
+                withTimeout(1_000L) {
+                    state.filter { it.originCountryCode == "US" }.first()
+                }
+                originIpInfo.value = null
+                delay(50L)
+
+                assertEquals("US", state.value.originCountryCode)
+                assertEquals("United States", state.value.originCountryName)
+                assertEquals("New York", state.value.originCity)
+            } finally {
+                stateScope.cancel()
+            }
+        }
+
+    @Test
     fun `traffic map state shows active vpn endpoint as route node when live samples are still empty`() {
         val state =
             TrafficMapRepository().trafficMapStateSnapshot(
@@ -348,6 +397,54 @@ class TrafficMapRepositoryTest {
         assertEquals("FR", state.destinations.single().countryCode)
         assertEquals(3, state.edges.size)
         assertTrue(state.highlightedCountries.containsAll(listOf("US", "NL", "DE", "FR")))
+    }
+
+    @Test
+    fun `traffic map route rows summarize live destination sessions and traffic`() {
+        val state =
+            TrafficMapRepository().trafficMapStateSnapshot(
+                originIpInfo =
+                    IpInfo(
+                        ip = "198.51.100.20",
+                        ipv4 = "198.51.100.20",
+                        countryCode = "US",
+                        countryName = "United States",
+                        city = "New York",
+                        isp = "Device ISP",
+                        fetchedAt = 1_000L,
+                    ),
+                routeIpInfo =
+                    IpInfo(
+                        ip = "203.0.113.20",
+                        ipv4 = "203.0.113.20",
+                        countryCode = "NL",
+                        countryName = "Netherlands",
+                        city = "Amsterdam",
+                        isp = "Tunnel ISP",
+                        fetchedAt = 2_000L,
+                    ),
+                torIpInfo =
+                    IpInfo(
+                        ip = "203.0.113.44",
+                        ipv4 = "203.0.113.44",
+                        countryCode = "DE",
+                        countryName = "Germany",
+                        city = "Frankfurt",
+                        isp = "Tor Exit",
+                        fetchedAt = 2_500L,
+                    ),
+                runtimeAvailable = true,
+                destinations =
+                    listOf(
+                        trafficMapPoint("FR").copy(bytes = 2_048L, connections = 2),
+                        trafficMapPoint("CH").copy(bytes = 3_072L, connections = 3),
+                    ),
+            )
+
+        assertEquals(5, state.vpnRoute?.connections)
+        assertEquals(5_120L, state.vpnRoute?.bytes)
+        assertEquals(5, state.torExit?.connections)
+        assertEquals(5_120L, state.torExit?.bytes)
     }
 
     @Test

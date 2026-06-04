@@ -370,6 +370,123 @@ class HomeIpLoadingPolicyTest {
     }
 
     @Test
+    fun `does not keep network skeleton after route vpn stop without pending refresh`() {
+        val staleRouteIp =
+            IpInfo(
+                ip = "8.8.8.8",
+                ipv4 = "8.8.8.8",
+                countryCode = "US",
+                countryName = "United States",
+                city = "Mountain View",
+                isp = "Example VPN",
+                fetchedAt = 1_000L,
+            )
+
+        val model =
+            resolveHomeDashboardNetworkModel(
+                state = HomeRouteUiState(
+                    profilesLoaded = true,
+                    connection = ConnectionSnapshot(
+                        state = ConnectionState.IDLE,
+                        trafficMode = TrafficMode.TUNNEL,
+                        profileId = 7L,
+                        lastChangeAt = 5_000L,
+                    ),
+                ),
+                visibleIpInfo = staleRouteIp,
+                deviceInternetAvailable = true,
+            )
+
+        assertNull(model.visibleIpInfo)
+        assertFalse(model.showLoading)
+        assertFalse(model.showIpInfoLoading)
+        assertFalse(model.showConnectionDetailsLoading)
+    }
+
+    @Test
+    fun `does not show network skeleton after route vpn stop while public ip refresh is pending`() {
+        val staleRouteIp =
+            IpInfo(
+                ip = "8.8.8.8",
+                ipv4 = "8.8.8.8",
+                countryCode = "US",
+                countryName = "United States",
+                city = "Mountain View",
+                isp = "Example VPN",
+                fetchedAt = 1_000L,
+            )
+
+        val model =
+            resolveHomeDashboardNetworkModel(
+                state = HomeRouteUiState(
+                    profilesLoaded = true,
+                    ipInfoLoading = true,
+                    ipInfoRefreshReason = IpInfoRefreshReason.FOREGROUND,
+                    connection = ConnectionSnapshot(
+                        state = ConnectionState.IDLE,
+                        trafficMode = TrafficMode.TUNNEL,
+                        profileId = 7L,
+                        lastChangeAt = 5_000L,
+                    ),
+                ),
+                visibleIpInfo = staleRouteIp,
+                deviceInternetAvailable = true,
+            )
+
+        assertNull(model.visibleIpInfo)
+        assertFalse(model.showLoading)
+        assertFalse(model.showIpInfoLoading)
+        assertFalse(model.showConnectionDetailsLoading)
+    }
+
+    @Test
+    fun `uses refreshed device ip after route vpn stop without skeleton`() {
+        val staleRouteIp =
+            IpInfo(
+                ip = "8.8.8.8",
+                ipv4 = "8.8.8.8",
+                countryCode = "US",
+                countryName = "United States",
+                city = "Mountain View",
+                isp = "Example VPN",
+                fetchedAt = 1_000L,
+            )
+        val deviceIp =
+            IpInfo(
+                ip = "198.51.100.10",
+                ipv4 = "198.51.100.10",
+                countryCode = "GB",
+                countryName = "United Kingdom",
+                city = "London",
+                isp = "Device ISP",
+                fetchedAt = 5_500L,
+            )
+
+        val model =
+            resolveHomeDashboardNetworkModel(
+                state = HomeRouteUiState(
+                    profilesLoaded = true,
+                    deviceIpInfo = deviceIp,
+                    ipInfoLoading = true,
+                    ipInfoRefreshReason = IpInfoRefreshReason.FOREGROUND,
+                    connection = ConnectionSnapshot(
+                        state = ConnectionState.IDLE,
+                        trafficMode = TrafficMode.TUNNEL,
+                        profileId = 7L,
+                        lastChangeAt = 5_000L,
+                    ),
+                ),
+                visibleIpInfo = staleRouteIp,
+                deviceInternetAvailable = true,
+            )
+
+        assertEquals(deviceIp, model.visibleIpInfo)
+        assertFalse(model.showLoading)
+        assertFalse(model.showIpInfoLoading)
+        assertFalse(model.showConnectionDetailsLoading)
+    }
+
+    @Test
     fun `shows ip skeleton while smart start is running without a resolved route ip`() {
         assertTrue(
             shouldShowPendingNetworkLoading(

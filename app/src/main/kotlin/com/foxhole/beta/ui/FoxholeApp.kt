@@ -1,7 +1,11 @@
 package com.foxhole.beta.ui
 
+import android.app.StatusBarManager
+import android.content.ComponentName
 import android.content.Context
+import android.content.Intent
 import android.graphics.drawable.GradientDrawable
+import android.os.Build
 import android.view.Gravity
 import android.view.ViewGroup
 import android.view.ViewOutlineProvider
@@ -102,13 +106,17 @@ import com.foxhole.beta.ui.theme.FoxholeTheme
 import com.foxhole.beta.ui.theme.LocalFoxholeDarkTheme
 import com.foxhole.beta.ui.theme.LocalFoxholeThemeMode
 import com.foxhole.beta.ui.theme.LocalFoxholeUiPalette
+import com.foxhole.beta.vpn.FoxholeTileService
 import eightbitlab.com.blurview.BlurTarget
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.abs
 import kotlin.math.min
 import kotlin.math.roundToInt
+import android.graphics.drawable.Icon as AndroidIcon
+import android.provider.Settings as AndroidSettings
 
 private object AppRoute {
     const val HOME = "home"
@@ -327,14 +335,20 @@ fun FoxholeApp(
                         }
                     },
                     exitTransition = {
-                        if (targetState.destination.route.isSettingsDetailRoute()) {
+                        if (
+                            initialState.destination.route.isSettingsDetailRoute() &&
+                            targetState.destination.route.isSettingsDetailRoute()
+                        ) {
                             detailForwardExit()
                         } else {
                             rootExit()
                         }
                     },
                     popEnterTransition = {
-                        if (initialState.destination.route.isSettingsDetailRoute()) {
+                        if (
+                            initialState.destination.route.isSettingsDetailRoute() &&
+                            targetState.destination.route.isSettingsDetailRoute()
+                        ) {
                             detailBackEnter()
                         } else {
                             rootEnter()
@@ -673,11 +687,11 @@ fun FoxholeApp(
                         state = state,
                         snackbarHostState = snackbarHostState,
                         onNavigateUp = navController::navigateUp,
-                        onPrivacyRouteModeSelected = viewModel::onPrivacyRouteModeSelected,
-                        onPrivacyRouteScopeSelected = viewModel::onPrivacyRouteScopeSelected,
-                        onPrivacyRouteBypassVpnTunnelChanged = viewModel::onPrivacyRouteBypassVpnTunnelChanged,
+                        onPrivacyRouteModeSelected = viewModel::onPrivacyRouteModeConfigured,
+                        onPrivacyRouteScopeSelected = viewModel::onPrivacyRouteScopeConfigured,
+                        onPrivacyRouteBypassVpnTunnelChanged = viewModel::onPrivacyRouteBypassVpnTunnelConfigured,
                         onOpenPrivacyRouteApps = { navigateToSettingsDetail(AppRoute.PRIVACY_ROUTE_APPS_PICKER) },
-                        onPrivacyRouteSelectedPackagesChanged = viewModel::onPrivacyRouteSelectedPackagesChanged,
+                        onPrivacyRouteSelectedPackagesChanged = viewModel::onPrivacyRouteSelectedPackagesConfigured,
                     )
                 }
                 composable(AppRoute.ROUTING_APPS) {
@@ -740,7 +754,7 @@ fun FoxholeApp(
                         state = state,
                         snackbarHostState = snackbarHostState,
                         onNavigateUp = navController::navigateUp,
-                        onSelectionChanged = viewModel::onPrivacyRouteSelectedPackagesChanged,
+                        onSelectionChanged = viewModel::onPrivacyRouteSelectedPackagesConfigured,
                     )
                 }
                 composable(AppRoute.DNS_APPS_PICKER) {
@@ -788,6 +802,13 @@ fun FoxholeApp(
                         onShowFirewallStatusChanged = viewModel::onShowFirewallStatusChanged,
                         onShowTorQuickLaunchChanged = viewModel::onShowTorQuickLaunchChanged,
                         onSmartStartDashboardControlsEnabledChanged = viewModel::onSmartStartDashboardControlsEnabledChanged,
+                        onOpenQuickSettingsTile = {
+                            requestQuickSettingsTile(
+                                context = context,
+                                snackbarHostState = snackbarHostState,
+                                scope = scope,
+                            )
+                        },
                     )
                 }
                 composable(AppRoute.ABOUT) {
@@ -1468,6 +1489,52 @@ private fun NavHostController.navigateToSection(
         popUpTo(graph.findStartDestination().id) {
             saveState = true
         }
+    }
+}
+
+private fun requestQuickSettingsTile(
+    context: Context,
+    snackbarHostState: SnackbarHostState,
+    scope: CoroutineScope,
+) {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        context.getSystemService(StatusBarManager::class.java)?.let { statusBarManager ->
+            statusBarManager.requestAddTileService(
+                ComponentName(context, FoxholeTileService::class.java),
+                context.getString(R.string.app_name),
+                AndroidIcon.createWithResource(context, R.drawable.ic_tile_vpn),
+                context.mainExecutor,
+            ) { result: Int ->
+                val messageRes =
+                    when (result) {
+                        StatusBarManager.TILE_ADD_REQUEST_RESULT_TILE_ADDED -> R.string.quick_settings_tile_added
+                        StatusBarManager.TILE_ADD_REQUEST_RESULT_TILE_ALREADY_ADDED -> R.string.quick_settings_tile_already_added
+                        StatusBarManager.TILE_ADD_REQUEST_RESULT_TILE_NOT_ADDED -> R.string.quick_settings_tile_not_added
+                        else -> R.string.quick_settings_tile_not_added
+                    }
+                scope.launch {
+                    snackbarHostState.showSnackbar(context.getString(messageRes))
+                }
+            }
+            return
+        }
+    }
+
+    val opened =
+        runCatching {
+            context.startActivity(
+                Intent(AndroidSettings.ACTION_SETTINGS)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            )
+        }.isSuccess
+    val messageRes =
+        if (opened) {
+            R.string.quick_settings_tile_open_settings_hint
+        } else {
+            R.string.quick_settings_tile_not_added
+        }
+    scope.launch {
+        snackbarHostState.showSnackbar(context.getString(messageRes))
     }
 }
 

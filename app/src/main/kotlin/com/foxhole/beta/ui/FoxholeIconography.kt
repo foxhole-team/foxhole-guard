@@ -33,6 +33,7 @@ import androidx.compose.material.icons.outlined.SwapVert
 import androidx.compose.material.icons.outlined.Troubleshoot
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.outlined.VisibilityOff
+import androidx.compose.material.icons.outlined.Widgets
 import androidx.compose.material.icons.outlined.Wifi
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.Dp
@@ -78,6 +79,7 @@ internal object FoxholeIcons {
     val ScreenshotsBlockedStrong: ImageVector = Icons.Outlined.NoPhotography
     val ProxySurface: ImageVector = Icons.Outlined.Hub
     val ProxyEndpoint: ImageVector = Icons.Outlined.Lan
+    val QuickSettings: ImageVector = Icons.Outlined.Widgets
 
     object Drawables {
         val TorRoute: Int = R.drawable.ic_tor_route

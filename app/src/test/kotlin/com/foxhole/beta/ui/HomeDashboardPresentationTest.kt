@@ -2207,7 +2207,7 @@ class HomeDashboardPresentationTest {
     }
 
     @Test
-    fun `network model hides previous tunnel ip after ordinary vpn disconnect`() {
+    fun `network model hides previous tunnel ip after ordinary vpn disconnect without pending refresh skeleton`() {
         val staleTunnelIp =
             IpInfo(
                 ip = "203.0.113.10",
@@ -2520,6 +2520,13 @@ class HomeDashboardPresentationTest {
                 HomeConnectionFeatureStatus.OFF,
             ),
             homeConnectionFeatureIndicators(HomeRouteUiState(settings = Settings())).map { it.status },
+        )
+        assertFalse(
+            homeConnectionFeatureIndicators(
+                HomeRouteUiState(
+                    settings = Settings(ui = UiSettings(showTorQuickLaunch = false)),
+                ),
+            ).any { it.feature == HomeConnectionFeature.TOR },
         )
         assertEquals(
             HomeConnectionFeatureStatus.PENDING,

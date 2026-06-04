@@ -1675,7 +1675,7 @@ internal fun FoxholePreferenceCard(
     leadingIconContainerColor: Color = Color.Unspecified,
     leadingIconTint: Color = MaterialTheme.colorScheme.onSurfaceVariant,
     titleTrailingContent: (@Composable RowScope.() -> Unit)? = null,
-    titleMaxLines: Int = 1,
+    titleMaxLines: Int = 2,
     summaryMaxLines: Int = 3,
 ) {
     val uiPalette = LocalFoxholeUiPalette.current

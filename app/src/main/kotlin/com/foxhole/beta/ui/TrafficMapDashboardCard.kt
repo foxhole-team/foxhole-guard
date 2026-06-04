@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -240,29 +239,74 @@ private fun TrafficMapCardHeader(
     colors: TrafficMapColors,
 ) {
     val title = stringResource(R.string.traffic_map_title)
-    val originLabel = remember(state.originCity, state.originCountryName, state.originCountryCode) {
+    val currentOriginLabel = remember(state.originCity, state.originCountryName, state.originCountryCode) {
         state.originLocationLabel()
+            .takeIf {
+                state.originCountryCode != null ||
+                    !state.originCountryName.isNullOrBlank() ||
+                    !state.originCity.isNullOrBlank()
+            }
     }
-    HomeCardHeader(
-        icon = Icons.Outlined.Map,
-        title = title,
-        trailing = {
-            if (state.originCountryCode != null) {
-                Row(
+    var retainedOriginLabel by rememberSaveable { mutableStateOf<String?>(null) }
+    LaunchedEffect(currentOriginLabel) {
+        if (currentOriginLabel != null) {
+            retainedOriginLabel = currentOriginLabel
+        }
+    }
+    val visibleOriginLabel = currentOriginLabel ?: retainedOriginLabel
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Row(
+            modifier = Modifier.weight(TRAFFIC_MAP_WEIGHT),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Surface(
+                shape = MaterialTheme.shapes.medium,
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.56f),
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Map,
+                    contentDescription = null,
                     modifier =
-                        Modifier
-                            .widthIn(min = 136.dp, max = 184.dp),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.PhoneAndroid,
-                        contentDescription = null,
-                        tint = colors.origin,
-                        modifier = Modifier.size(13.dp),
-                    )
+                    Modifier
+                        .padding(5.dp)
+                        .size(16.dp),
+                    tint = MaterialTheme.colorScheme.primary,
+                )
+            }
+            Text(
+                text = title,
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        Box(
+            modifier = Modifier.weight(TRAFFIC_MAP_LEGEND_WEIGHT),
+            contentAlignment = Alignment.CenterStart,
+        ) {
+            Row(
+                modifier =
+                    Modifier
+                        .widthIn(min = 136.dp, max = 184.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.PhoneAndroid,
+                    contentDescription = null,
+                    tint = colors.origin,
+                    modifier = Modifier.size(13.dp),
+                )
+                if (visibleOriginLabel != null) {
                     Text(
-                        text = originLabel,
+                        text = visibleOriginLabel,
                         modifier = Modifier.weight(1f),
                         style = MaterialTheme.typography.labelSmall.copy(
                             fontSize = 9.sp,
@@ -273,10 +317,25 @@ private fun TrafficMapCardHeader(
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                     )
+                } else {
+                    val shimmerProgress = rememberFoxholeSkeletonProgress()
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(3.dp),
+                    ) {
+                        FoxholeSkeletonBlock(
+                            modifier = Modifier.width(86.dp).height(8.dp),
+                            shimmerProgress = shimmerProgress,
+                        )
+                        FoxholeSkeletonBlock(
+                            modifier = Modifier.width(62.dp).height(8.dp),
+                            shimmerProgress = shimmerProgress,
+                        )
+                    }
                 }
             }
-        },
-    )
+        }
+    }
 }
 
 @Composable
@@ -335,50 +394,56 @@ private fun TrafficMapCanvasLoadingBlock(modifier: Modifier = Modifier) {
 @Composable
 private fun TrafficMapLegendLoadingBlock(modifier: Modifier = Modifier) {
     val shimmerProgress = rememberFoxholeSkeletonProgress()
-    Column(
-        modifier = modifier.padding(top = 24.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
+    val skeletonRow: @Composable (Boolean, Boolean) -> Unit = { showMetrics, dimmed ->
+        val skeletonColor =
+            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = if (dimmed) 0.72f else 1f)
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(5.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            FoxholeSkeletonBlock(
-                modifier = Modifier.size(16.dp),
-                shimmerProgress = shimmerProgress,
-            )
-            Column(
-                verticalArrangement = Arrangement.spacedBy(3.dp),
+            Row(
+                modifier = Modifier.weight(if (showMetrics) 0.94f else 1f),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 FoxholeSkeletonBlock(
-                    modifier = Modifier.width(56.dp).height(9.dp),
+                    modifier = Modifier.size(7.dp).clip(CircleShape),
+                    color = skeletonColor,
                     shimmerProgress = shimmerProgress,
                 )
                 FoxholeSkeletonBlock(
-                    modifier = Modifier.width(42.dp).height(8.dp),
+                    modifier = Modifier.width(14.dp).height(10.dp),
+                    color = skeletonColor,
+                    shimmerProgress = shimmerProgress,
+                )
+                FoxholeSkeletonBlock(
+                    modifier = Modifier.width(24.dp).height(10.dp),
+                    color = skeletonColor,
+                    shimmerProgress = shimmerProgress,
+                )
+            }
+            if (showMetrics) {
+                FoxholeSkeletonBlock(
+                    modifier = Modifier.weight(0.48f).height(10.dp),
+                    color = skeletonColor,
+                    shimmerProgress = shimmerProgress,
+                )
+                FoxholeSkeletonBlock(
+                    modifier = Modifier.weight(0.68f).height(10.dp),
+                    color = skeletonColor,
                     shimmerProgress = shimmerProgress,
                 )
             }
         }
-        Spacer(modifier = Modifier.height(2.dp))
-        Column(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(5.dp),
-        ) {
-            FoxholeSkeletonBlock(
-                modifier = Modifier.fillMaxWidth(0.92f).height(8.dp),
-                shimmerProgress = shimmerProgress,
-            )
-            FoxholeSkeletonBlock(
-                modifier = Modifier.fillMaxWidth(0.74f).height(8.dp),
-                shimmerProgress = shimmerProgress,
-            )
-            FoxholeSkeletonBlock(
-                modifier = Modifier.fillMaxWidth(0.52f).height(8.dp),
-                shimmerProgress = shimmerProgress,
-            )
-        }
+    }
+    Column(
+        modifier = modifier.fillMaxHeight(),
+        verticalArrangement = Arrangement.spacedBy(3.dp),
+    ) {
+        skeletonRow(false, false)
+        skeletonRow(true, false)
+        skeletonRow(true, true)
     }
 }
 
@@ -730,7 +795,6 @@ private fun TrafficMapLegend(
     state: TrafficMapUiState,
     modifier: Modifier = Modifier,
 ) {
-    val context = LocalContext.current
     val colors = trafficMapColors()
     val destinations = remember(state.destinations) { state.destinations }
     val routePoints = remember(state.vpnRoute, state.torExit) { listOfNotNull(state.vpnRoute, state.torExit) }
@@ -768,25 +832,20 @@ private fun TrafficMapLegend(
             ) {
                 state.vpnRoute?.let { point ->
                     TrafficMapLegendDestinationRow(
-                        context = context,
                         point = point,
                         markerColor = colors.vpnRoute,
                         textColor = colors.legendText,
-                        showMetrics = false,
                     )
                 }
                 state.torExit?.let { point ->
                     TrafficMapLegendDestinationRow(
-                        context = context,
                         point = point,
                         markerColor = colors.torExit,
                         textColor = colors.legendText,
-                        showMetrics = false,
                     )
                 }
                 destinations.forEach { point ->
                     TrafficMapLegendDestinationRow(
-                        context = context,
                         point = point,
                         markerColor = colors.destination,
                         textColor = colors.legendText,
@@ -863,7 +922,6 @@ private fun TrafficMapUiState.originLocationLabel(): String =
 
 @Composable
 private fun TrafficMapLegendDestinationRow(
-    context: Context,
     point: TrafficMapPoint,
     markerColor: Color,
     textColor: Color,
@@ -921,7 +979,7 @@ private fun TrafficMapLegendDestinationRow(
                 color = textColor,
             )
             TrafficMapLegendCell(
-                text = formatBytes(context, point.bytes),
+                text = formatTrafficMapLegendBytes(point.bytes),
                 modifier = Modifier.weight(0.68f),
                 textAlign = TextAlign.End,
                 color = textColor,

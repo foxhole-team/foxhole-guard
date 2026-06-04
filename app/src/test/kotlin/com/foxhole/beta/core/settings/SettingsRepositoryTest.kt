@@ -100,6 +100,26 @@ class SettingsRepositoryTest {
     }
 
     @Test
+    fun `privacy route mode changes do not override tor quick launch visibility`() {
+        val source = settingsRepositorySource()
+        val updateBlock =
+            source.substringAfter("suspend fun updatePrivacyRouteMode")
+                .substringBefore("suspend fun updatePrivacyRouteScope")
+
+        assertFalse(updateBlock.contains("showTorQuickLaunch"))
+    }
+
+    @Test
+    fun `privacy route bypass preference is preserved while route is disabled`() {
+        val source = settingsRepositorySource()
+        val normalizedBlock =
+            source.substringAfter("private fun PrivacyRouteSettings.normalized()")
+                .substringBefore("private fun DnsSettings.normalized()")
+
+        assertFalse(normalizedBlock.contains("bypassVpnTunnel = bypassVpnTunnel && enabled"))
+    }
+
+    @Test
     fun `local proxy generated password has release entropy and rotates legacy defaults`() {
         val source = settingsRepositorySource()
         val normalizeBlock =

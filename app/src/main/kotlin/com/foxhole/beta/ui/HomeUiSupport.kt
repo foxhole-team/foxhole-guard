@@ -809,6 +809,8 @@ private fun HomeRouteUiState.shouldShowHomeNetworkIpInfoLoading(
 
 private fun HomeRouteUiState.shouldShowExplicitIpInfoSkeletonLoading(dashboardIpInfo: IpInfo?): Boolean =
     ipInfoLoading &&
+        !(hasStoppedDashboardRouteRuntime() && ipInfoRefreshReason != IpInfoRefreshReason.MANUAL) &&
+        !(hasStoppedUnknownDashboardRouteRuntime() && ipInfoRefreshReason != IpInfoRefreshReason.MANUAL) &&
         (
             dashboardIpInfo == null ||
                 ipInfoRefreshReason == null ||
@@ -890,6 +892,7 @@ private fun HomeRouteUiState.dashboardVisibleIpInfo(visibleIpInfo: IpInfo?): IpI
         when {
             connection.profileId == FoxholeVpnService.TOR_ONLY_PROFILE_ID -> torIpInfo
             shouldPreferTorRouteIpInfoOnDashboard() -> torIpInfo
+            shouldUseDeviceIpInfoAfterStoppedRoute() -> deviceIpInfo
             else -> visibleIpInfo
         }
     return candidate?.takeIf { shouldKeepDashboardIpInfo(it) }
@@ -909,12 +912,17 @@ private fun HomeRouteUiState.shouldPinVpnIpDuringTorOperation(): Boolean =
         connection.state == ConnectionState.CONNECTED &&
         hasDashboardRouteProfile()
 
+private fun HomeRouteUiState.shouldUseDeviceIpInfoAfterStoppedRoute(): Boolean =
+    deviceIpInfo?.hasVisiblePublicAddress() == true &&
+        (hasStoppedDashboardRouteRuntime() || hasStoppedUnknownDashboardRouteRuntime())
+
 private fun HomeRouteUiState.shouldKeepDashboardIpInfo(info: IpInfo): Boolean =
     when {
         !info.hasVisiblePublicAddress() -> false
         homeAnalysisOnlyRunning() -> !hasDashboardRouteProfile() || shouldKeepActiveDashboardRouteIpInfo(info)
         shouldPinVpnIpDuringTorOperation() -> true
         hasFailedDashboardRoute() -> info.isPublicFreshForRouteTransition(connection.lastChangeAt)
+        shouldUseDeviceIpInfoAfterStoppedRoute() && info == deviceIpInfo -> true
         hasStoppedDashboardRouteRuntime() -> info.isPublicFreshForRouteTransition(connection.lastChangeAt)
         hasStoppedUnknownDashboardRouteRuntime() -> info.isPublicFreshForRouteTransition(connection.lastChangeAt)
         hasActiveDashboardRouteTransition() -> false

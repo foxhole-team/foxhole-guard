@@ -163,11 +163,13 @@ class HomeViewModel(
         combine(
             container.connectionController.snapshot,
             container.connectionController.ipInfo,
+            container.connectionController.deviceIpInfo,
             torIpInfoMutable,
-        ) { connection, ipInfo, torIpInfo ->
+        ) { connection, ipInfo, deviceIpInfo, torIpInfo ->
             HomeRealtimeStreams(
                 connection = connection,
                 ipInfo = ipInfo,
+                deviceIpInfo = deviceIpInfo,
                 torIpInfo = torIpInfo,
             )
         }
@@ -183,6 +185,7 @@ class HomeViewModel(
                 settings = profileStreams.settings,
                 connection = realtimeStreams.connection,
                 ipInfo = realtimeStreams.ipInfo,
+                deviceIpInfo = realtimeStreams.deviceIpInfo,
                 torIpInfo = realtimeStreams.torIpInfo,
             )
         }
@@ -380,6 +383,7 @@ class HomeViewModel(
                 settings = connectionStreams.settings,
                 connection = connectionStreams.connection,
                 ipInfo = connectionStreams.ipInfo,
+                deviceIpInfo = connectionStreams.deviceIpInfo,
                 torIpInfo = localStreams.torIpInfo,
                 ipInfoLoading =
                 shouldShowIpInfoLoading(
@@ -945,10 +949,12 @@ class HomeViewModel(
                 } else if (shouldRefreshIdleIp && !autoConnectUiStateMutable.value.running) {
                     startIpInfoRefresh(
                         reportFailures = false,
-                        showLoading = true,
-                        clearExistingIp = true,
+                        showLoading = false,
+                        clearExistingIp = false,
                         fetchMode = IpInfoFetchMode.ENTRY_QUICK,
-                        minimumLoadingDurationMs = AUTO_IP_REFRESH_MIN_LOADING_MS,
+                        minimumLoadingDurationMs = 0L,
+                        reason = IpInfoRefreshReason.FOREGROUND,
+                        targetOverride = IpInfoRefreshTarget.UPSTREAM,
                     )
                 }
             }
@@ -1455,13 +1461,25 @@ class HomeViewModel(
 
     fun onPrivacyRouteModeSelected(value: PrivacyRouteMode) = onPrivacyRouteModeSelectedInternal(value)
 
+    fun onPrivacyRouteModeConfigured(value: PrivacyRouteMode) =
+        onPrivacyRouteModeConfiguredInternal(value)
+
     fun onPrivacyRouteScopeSelected(value: PrivacyRouteScope) = onPrivacyRouteScopeSelectedInternal(value)
 
-    fun onPrivacyRouteBypassVpnTunnelChanged(value: Boolean) = onPrivacyRouteBypassVpnTunnelChangedInternal(value)
+    fun onPrivacyRouteScopeConfigured(value: PrivacyRouteScope) =
+        onPrivacyRouteScopeConfiguredInternal(value)
 
-    fun onPrivacyRouteSelectedPackagesChanged(value: List<String>) = onPrivacyRouteSelectedPackagesChangedInternal(
-        value
-    )
+    fun onPrivacyRouteBypassVpnTunnelChanged(value: Boolean) =
+        onPrivacyRouteBypassVpnTunnelChangedInternal(value)
+
+    fun onPrivacyRouteBypassVpnTunnelConfigured(value: Boolean) =
+        onPrivacyRouteBypassVpnTunnelConfiguredInternal(value)
+
+    fun onPrivacyRouteSelectedPackagesChanged(value: List<String>) =
+        onPrivacyRouteSelectedPackagesChangedInternal(value)
+
+    fun onPrivacyRouteSelectedPackagesConfigured(value: List<String>) =
+        onPrivacyRouteSelectedPackagesConfiguredInternal(value)
 
     fun onEnableDirectTorQuickStart() = onEnableDirectTorQuickStartInternal()
 

@@ -105,6 +105,54 @@ class FoxholeNavigationPresentationTest {
     }
 
     @Test
+    fun `settings detail transitions keep root host static`() {
+        val source =
+            listOf(
+                java.io.File("src/main/kotlin/com/foxhole/beta/ui/FoxholeApp.kt"),
+                java.io.File("app/src/main/kotlin/com/foxhole/beta/ui/FoxholeApp.kt"),
+                java.io.File("../app/src/main/kotlin/com/foxhole/beta/ui/FoxholeApp.kt"),
+            ).first { file -> file.isFile }.readText()
+        val navHostBlock =
+            source.substringAfter("NavHost(")
+                .substringBefore(") {\n                composable(AppRoute.HOME)")
+
+        assertTrue(navHostBlock.contains("initialState.destination.route.isSettingsDetailRoute() &&"))
+        assertTrue(navHostBlock.contains("targetState.destination.route.isSettingsDetailRoute()"))
+        assertFalse(
+            navHostBlock.contains(
+                "if (targetState.destination.route.isSettingsDetailRoute()) {\n                            detailForwardExit()",
+            ),
+        )
+        assertFalse(
+            navHostBlock.contains(
+                "if (initialState.destination.route.isSettingsDetailRoute()) {\n                            detailBackEnter()",
+            ),
+        )
+    }
+
+    @Test
+    fun `privacy route settings save configuration without runtime tor control`() {
+        val source =
+            listOf(
+                java.io.File("src/main/kotlin/com/foxhole/beta/ui/FoxholeApp.kt"),
+                java.io.File("app/src/main/kotlin/com/foxhole/beta/ui/FoxholeApp.kt"),
+                java.io.File("../app/src/main/kotlin/com/foxhole/beta/ui/FoxholeApp.kt"),
+            ).first { file -> file.isFile }.readText()
+        val privacyRouteBlock =
+            source.substringAfter("composable(AppRoute.PRIVACY_ROUTE) {")
+                .substringBefore("composable(AppRoute.ROUTING_APPS)")
+
+        assertTrue(privacyRouteBlock.contains("viewModel::onPrivacyRouteModeConfigured"))
+        assertTrue(privacyRouteBlock.contains("viewModel::onPrivacyRouteScopeConfigured"))
+        assertTrue(privacyRouteBlock.contains("viewModel::onPrivacyRouteBypassVpnTunnelConfigured"))
+        assertTrue(privacyRouteBlock.contains("viewModel::onPrivacyRouteSelectedPackagesConfigured"))
+        assertFalse(privacyRouteBlock.contains("= viewModel::onPrivacyRouteModeSelected"))
+        assertFalse(privacyRouteBlock.contains("= viewModel::onPrivacyRouteScopeSelected"))
+        assertFalse(privacyRouteBlock.contains("= viewModel::onPrivacyRouteBypassVpnTunnelChanged"))
+        assertFalse(privacyRouteBlock.contains("= viewModel::onPrivacyRouteSelectedPackagesChanged"))
+    }
+
+    @Test
     fun `bottom dock container stays opaque in chrome and theme palettes`() {
         val chromeSource =
             listOf(

@@ -90,6 +90,8 @@ class TrafficMapRepository(
         combine(
             originIpInfo
                 .map(::trafficMapOriginInfo)
+                .distinctUntilChanged()
+                .runningFold(null as TrafficMapOriginInfo?) { retained, next -> next ?: retained }
                 .distinctUntilChanged(),
             routeIpInfo
                 .map(::trafficMapOriginInfo)
@@ -103,19 +105,25 @@ class TrafficMapRepository(
                 .map { available -> available == true },
             retainedConnectionAccumulatorState
                 .map { accumulator ->
-                    trafficMapPointsFromAggregates(
-                        aggregates = accumulator.countryAggregates(),
-                        limit = MaxTrafficMapDestinations,
+                    val aggregates = accumulator.countryAggregates()
+                    TrafficMapDestinationSnapshot(
+                        points =
+                            trafficMapPointsFromAggregates(
+                                aggregates = aggregates,
+                                limit = MaxTrafficMapDestinations,
+                            ),
+                        routeAggregate = trafficMapRouteAggregate(aggregates),
                     )
                 }
                 .distinctUntilChanged(),
-        ) { originInfo, routeInfo, torInfo, available, destinations ->
+        ) { originInfo, routeInfo, torInfo, available, destinationSnapshot ->
             buildTrafficMapUiState(
                 originInfo = originInfo,
                 routeInfo = routeInfo,
                 torInfo = torInfo,
                 runtimeAvailable = available,
-                destinations = destinations,
+                destinations = destinationSnapshot.points,
+                routeAggregate = destinationSnapshot.routeAggregate,
             )
         }
             .distinctUntilChanged()
@@ -134,6 +142,7 @@ class TrafficMapRepository(
             torInfo = trafficMapOriginInfo(torIpInfo),
             runtimeAvailable = runtimeAvailable,
             destinations = destinations,
+            routeAggregate = trafficMapRouteAggregate(destinations),
         )
 
     private fun buildTrafficMapUiState(
@@ -142,31 +151,10 @@ class TrafficMapRepository(
         torInfo: TrafficMapOriginInfo?,
         runtimeAvailable: Boolean,
         destinations: List<TrafficMapPoint>,
+        routeAggregate: TrafficMapRouteAggregate,
     ): TrafficMapUiState {
         val mapAnchorInfo = originInfo ?: routeInfo ?: torInfo
         val origin = mapAnchorInfo?.countryCode?.let(::trafficMapOrigin)
-        val vpnRoute =
-            routeInfo
-                ?.let(::trafficMapRoutePoint)
-                ?.let { point ->
-                    offsetTrafficMapPointFromSameCountries(
-                        point = point,
-                        anchorCountryCodes = listOf(originInfo?.countryCode),
-                        latOffset = SameCountryVpnRouteLatOffset,
-                        lonOffset = SameCountryVpnRouteLonOffset,
-                    )
-                }
-        val torExit =
-            torInfo
-                ?.let(::trafficMapTorPoint)
-                ?.let { point ->
-                    offsetTrafficMapPointFromSameCountries(
-                        point = point,
-                        anchorCountryCodes = listOf(vpnRoute?.countryCode, originInfo?.countryCode),
-                        latOffset = SameCountryTorExitLatOffset,
-                        lonOffset = SameCountryTorExitLonOffset,
-                    )
-                }
         val liveRouteSourceInfo = torInfo ?: routeInfo ?: originInfo
         val visibleDestinations =
             destinations
@@ -177,6 +165,28 @@ class TrafficMapRepository(
                         anchorCountryCodes = listOf(liveRouteSourceInfo?.countryCode),
                         latOffset = SameCountryDestinationLatOffset,
                         lonOffset = SameCountryDestinationLonOffset,
+                    )
+                }
+        val vpnRoute =
+            routeInfo
+                ?.let { info -> trafficMapRoutePoint(info, routeAggregate) }
+                ?.let { point ->
+                    offsetTrafficMapPointFromSameCountries(
+                        point = point,
+                        anchorCountryCodes = listOf(originInfo?.countryCode),
+                        latOffset = SameCountryVpnRouteLatOffset,
+                        lonOffset = SameCountryVpnRouteLonOffset,
+                    )
+                }
+        val torExit =
+            torInfo
+                ?.let { info -> trafficMapTorPoint(info, routeAggregate) }
+                ?.let { point ->
+                    offsetTrafficMapPointFromSameCountries(
+                        point = point,
+                        anchorCountryCodes = listOf(vpnRoute?.countryCode, originInfo?.countryCode),
+                        latOffset = SameCountryTorExitLatOffset,
+                        lonOffset = SameCountryTorExitLonOffset,
                     )
                 }
         val highlightedCountries =
@@ -319,31 +329,59 @@ class TrafficMapRepository(
             }
     }
 
-    private fun trafficMapRoutePoint(routeInfo: TrafficMapOriginInfo): TrafficMapPoint? {
+    private fun trafficMapRouteAggregate(destinations: List<TrafficMapPoint>): TrafficMapRouteAggregate =
+        TrafficMapRouteAggregate(
+            bytes = destinations.sumOf(TrafficMapPoint::bytes),
+            connections = destinations.sumOf(TrafficMapPoint::connections),
+        )
+
+    private fun trafficMapRouteAggregate(aggregates: Map<String, TrafficMapAggregate>): TrafficMapRouteAggregate =
+        TrafficMapRouteAggregate(
+            bytes = aggregates.values.sumOf(TrafficMapAggregate::bytes),
+            connections = aggregates.values.sumOf(TrafficMapAggregate::connections),
+        )
+
+    private fun trafficMapRoutePoint(
+        routeInfo: TrafficMapOriginInfo,
+        aggregate: TrafficMapRouteAggregate,
+    ): TrafficMapPoint? {
         val coordinate = trafficMapOrigin(routeInfo.countryCode) ?: return null
         return TrafficMapPoint(
             countryCode = coordinate.countryCode,
             label = routeInfo.countryName ?: coordinate.label,
             lat = coordinate.lat,
             lon = coordinate.lon,
-            bytes = 0L,
-            connections = 1,
+            bytes = aggregate.bytes,
+            connections = aggregate.connections,
             role = TrafficMapPointRole.VPN_ROUTE,
         )
     }
 
-    private fun trafficMapTorPoint(torInfo: TrafficMapOriginInfo): TrafficMapPoint? {
+    private fun trafficMapTorPoint(
+        torInfo: TrafficMapOriginInfo,
+        aggregate: TrafficMapRouteAggregate,
+    ): TrafficMapPoint? {
         val coordinate = trafficMapOrigin(torInfo.countryCode) ?: return null
         return TrafficMapPoint(
             countryCode = coordinate.countryCode,
             label = torInfo.countryName ?: coordinate.label,
             lat = coordinate.lat,
             lon = coordinate.lon,
-            bytes = 0L,
-            connections = 1,
+            bytes = aggregate.bytes,
+            connections = aggregate.connections,
             role = TrafficMapPointRole.TOR_EXIT,
         )
     }
+
+    private data class TrafficMapRouteAggregate(
+        val bytes: Long,
+        val connections: Int,
+    )
+
+    private data class TrafficMapDestinationSnapshot(
+        val points: List<TrafficMapPoint>,
+        val routeAggregate: TrafficMapRouteAggregate,
+    )
 
     internal companion object {
         const val MaxTrafficMapDestinations = 30

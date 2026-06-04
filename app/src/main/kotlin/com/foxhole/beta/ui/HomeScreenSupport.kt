@@ -53,6 +53,7 @@ import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.Speed
 import androidx.compose.material.icons.outlined.SwapVert
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -402,7 +403,7 @@ internal fun HomeModeDropdown(
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = if (selectedOption) FontWeight.SemiBold else FontWeight.Medium,
                         color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1,
+                        maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
@@ -630,13 +631,15 @@ internal fun homeConnectionFeatureIndicators(state: HomeRouteUiState): List<Home
                 ),
             )
         }
-        add(
-            HomeConnectionFeatureIndicator(
-                feature = HomeConnectionFeature.TOR,
-                titleRes = R.string.tor_badge,
-                status = homeTorFeatureStatus(state),
-            ),
-        )
+        if (state.settings.ui.showTorQuickLaunch) {
+            add(
+                HomeConnectionFeatureIndicator(
+                    feature = HomeConnectionFeature.TOR,
+                    titleRes = R.string.tor_badge,
+                    status = homeTorFeatureStatus(state),
+                ),
+            )
+        }
         if (state.settings.expert.localSurfaces.allowLanAccess) {
             add(
                 HomeConnectionFeatureIndicator(
@@ -1369,19 +1372,14 @@ private fun HomeTorConnectedTable(
         }
         val changeIpInProgress = state.torOperation.kind == HomeTorOperationKind.CHANGING_LOCATION
         val pulseAlpha by rememberTorActionButtonPulse(active = changeIpInProgress)
-        OutlinedButton(
+        Button(
             onClick = onRenewTorIp,
             enabled = state.connection.state == ConnectionState.CONNECTED && !state.reconnectInProgress && !loading,
             modifier = Modifier.fillMaxWidth().testTag("home_tor_renew_ip_action"),
-            border =
-                BorderStroke(
-                    width = 1.dp,
-                    color = MaterialTheme.colorScheme.primary.copy(alpha = if (changeIpInProgress) 0.58f else 0.34f),
-                ),
             colors =
-                ButtonDefaults.outlinedButtonColors(
-                    contentColor = MaterialTheme.colorScheme.primary,
-                    containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.06f),
+                ButtonDefaults.buttonColors(
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                    containerColor = MaterialTheme.colorScheme.primary,
                     disabledContainerColor =
                         if (changeIpInProgress) {
                             MaterialTheme.colorScheme.primary.copy(alpha = pulseAlpha)
@@ -1787,7 +1785,7 @@ private fun HomeFeatureInfoLabel(
             modifier = Modifier.weight(1f),
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
+            maxLines = 2,
             overflow = TextOverflow.Ellipsis,
         )
     }

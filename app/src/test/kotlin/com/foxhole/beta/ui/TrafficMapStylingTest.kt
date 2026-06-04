@@ -88,6 +88,15 @@ class TrafficMapStylingTest {
     }
 
     @Test
+    fun `traffic map legend bytes stay compact for narrow table cells`() {
+        assertEquals("0 B", formatTrafficMapLegendBytes(0L))
+        assertEquals("512 B", formatTrafficMapLegendBytes(512L))
+        assertEquals("1.0 KB", formatTrafficMapLegendBytes(1_024L))
+        assertEquals("12.1 KB", formatTrafficMapLegendBytes(12_345L))
+        assertEquals("118 MB", formatTrafficMapLegendBytes(123_456_789L))
+    }
+
+    @Test
     fun `traffic map draws only filled land before routes`() {
         val source =
             listOf(

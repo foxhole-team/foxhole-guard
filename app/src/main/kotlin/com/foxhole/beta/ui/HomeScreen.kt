@@ -72,6 +72,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -387,6 +388,7 @@ fun HomeScreen(
     val networkModel =
         remember(
             selectedVisibleNetworkIpInfo,
+            state.deviceIpInfo,
             deviceInternetAvailable,
             state.connection,
             state.torIpInfo,
@@ -502,10 +504,7 @@ fun HomeScreen(
     val dashboardListState = rememberLazyListState()
     val topChromeScrimProgress = rememberFoxholeTopChromeScrimProgress(dashboardListState)
     val connectionHeaderScrolled by remember { derivedStateOf { topChromeScrimProgress() > 0.01f } }
-    val dashboardStartupStage =
-        remember {
-            initialDashboardStartupStage(DashboardStartupCompositionWarmState.markEntered())
-        }
+    val dashboardStartupStage = rememberDashboardStartupStage()
     val trafficCardRuntimeVisible =
         state.settings.ui.trafficCardEnabled &&
             shouldComposeDashboardCardNow(
@@ -1819,7 +1818,7 @@ private fun ImportDropdownItemText(
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onSurface,
-            maxLines = 1,
+            maxLines = 2,
             overflow = TextOverflow.Ellipsis,
         )
         Text(
@@ -1901,9 +1900,28 @@ internal fun shouldComposeTrafficMapHeavyContent(
     activeReorderCard != null ||
         startupStage >= DASHBOARD_STARTUP_STAGE_ALL
 
-@Suppress("UNUSED_PARAMETER")
 internal fun initialDashboardStartupStage(dashboardAlreadyWarm: Boolean): Int =
-    DASHBOARD_STARTUP_STAGE_ALL
+    if (dashboardAlreadyWarm) {
+        DASHBOARD_STARTUP_STAGE_NETWORK
+    } else {
+        DASHBOARD_STARTUP_STAGE_EMPTY
+    }
+
+@Composable
+private fun rememberDashboardStartupStage(): Int {
+    var startupStage by remember {
+        mutableStateOf(initialDashboardStartupStage(DashboardStartupCompositionWarmState.markEntered()))
+    }
+    LaunchedEffect(Unit) {
+        var nextStage = startupStage
+        while (nextStage < DASHBOARD_STARTUP_STAGE_ALL) {
+            withFrameNanos { }
+            nextStage += 1
+            startupStage = nextStage
+        }
+    }
+    return startupStage
+}
 
 private object DashboardStartupCompositionWarmState {
     private var entered = false
@@ -1918,9 +1936,9 @@ private object DashboardStartupCompositionWarmState {
 private fun dashboardCardStartupStage(card: DashboardCard): Int =
     when (card) {
         DashboardCard.TRAFFIC_MAP -> DASHBOARD_STARTUP_STAGE_ALL
-        DashboardCard.NETWORK -> 1
-        DashboardCard.ACTIONS -> 2
-        DashboardCard.PROFILES -> 3
+        DashboardCard.NETWORK -> DASHBOARD_STARTUP_STAGE_NETWORK
+        DashboardCard.ACTIONS -> DASHBOARD_STARTUP_STAGE_ACTIONS
+        DashboardCard.PROFILES -> DASHBOARD_STARTUP_STAGE_PROFILES
         DashboardCard.TRAFFIC -> DASHBOARD_STARTUP_STAGE_ALL
     }
 
@@ -1974,6 +1992,10 @@ private fun rememberHomeNetworkEmptyStartupSkeleton(
 private const val DASHBOARD_CARD_ACTIVE_Z_INDEX = 100f
 private const val DASHBOARD_CARD_REORDER_THRESHOLD_FRACTION = 0.5f
 private const val DASHBOARD_CARD_EDGE_RESISTANCE_FRACTION = 0.18f
+private const val DASHBOARD_STARTUP_STAGE_EMPTY = 0
+private const val DASHBOARD_STARTUP_STAGE_NETWORK = 1
+private const val DASHBOARD_STARTUP_STAGE_ACTIONS = 2
+private const val DASHBOARD_STARTUP_STAGE_PROFILES = 3
 private const val DASHBOARD_STARTUP_STAGE_ALL = 4
 private val DashboardCardReorderFallbackMoveDistance = 96.dp
 private val ImportMenuWidthChrome = 62.dp
