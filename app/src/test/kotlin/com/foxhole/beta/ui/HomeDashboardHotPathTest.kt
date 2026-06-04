@@ -155,7 +155,7 @@ class HomeDashboardHotPathTest {
     }
 
     @Test
-    fun `dashboard root entry stages heavy cached content after first frame`() {
+    fun `dashboard cold entry stages content but warm return keeps layout stable`() {
         val coldStage = initialDashboardStartupStage(dashboardAlreadyWarm = false)
         val warmStage = initialDashboardStartupStage(dashboardAlreadyWarm = true)
 
@@ -166,7 +166,28 @@ class HomeDashboardHotPathTest {
                 activeReorderCard = null,
             ),
         )
-        assertFalse(
+        assertTrue(
+            shouldComposeDashboardCardNow(
+                card = DashboardCard.NETWORK,
+                startupStage = warmStage,
+                activeReorderCard = null,
+            ),
+        )
+        assertTrue(
+            shouldComposeDashboardCardNow(
+                card = DashboardCard.ACTIONS,
+                startupStage = warmStage,
+                activeReorderCard = null,
+            ),
+        )
+        assertTrue(
+            shouldComposeDashboardCardNow(
+                card = DashboardCard.PROFILES,
+                startupStage = warmStage,
+                activeReorderCard = null,
+            ),
+        )
+        assertTrue(
             shouldComposeDashboardCardNow(
                 card = DashboardCard.TRAFFIC_MAP,
                 startupStage = warmStage,
@@ -175,26 +196,12 @@ class HomeDashboardHotPathTest {
         )
         assertTrue(
             shouldComposeDashboardCardNow(
-                card = DashboardCard.NETWORK,
-                startupStage = warmStage,
-                activeReorderCard = null,
-            ),
-        )
-        assertFalse(
-            shouldComposeDashboardCardNow(
-                card = DashboardCard.ACTIONS,
-                startupStage = warmStage,
-                activeReorderCard = null,
-            ),
-        )
-        assertFalse(
-            shouldComposeDashboardCardNow(
                 card = DashboardCard.TRAFFIC,
                 startupStage = warmStage,
                 activeReorderCard = null,
             ),
         )
-        assertFalse(
+        assertTrue(
             shouldComposeTrafficMapHeavyContent(
                 startupStage = warmStage,
                 activeReorderCard = null,

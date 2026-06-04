@@ -668,7 +668,7 @@ private fun rememberTrafficMapLandLayerBitmap(
                 shapes = shapes,
                 canvasSize = canvasSize,
                 color = color,
-            ) ?: TrafficMapLandLayerCache.latestBitmap()
+            )
         }
     val bitmap by produceState(
         initialValue = cachedBitmap,
@@ -1142,7 +1142,6 @@ private object TrafficMapLandLayerCache {
     private const val MAX_ENTRIES = 8
     private const val SIZE_BUCKET_PX = 32
     private val lock = Any()
-    private var latestBitmap: ImageBitmap? = null
     private val inFlight =
         mutableMapOf<TrafficMapLandLayerKey, kotlinx.coroutines.CompletableDeferred<ImageBitmap>>()
     private val bitmaps =
@@ -1162,11 +1161,6 @@ private object TrafficMapLandLayerCache {
             return bitmaps[key]
         }
     }
-
-    fun latestBitmap(): ImageBitmap? =
-        synchronized(lock) {
-            latestBitmap
-        }
 
     suspend fun bitmap(
         shapes: List<TrafficMapCountryShape>,
@@ -1312,7 +1306,6 @@ private object TrafficMapLandLayerCache {
         bitmap: ImageBitmap,
     ) {
         bitmaps[key] = bitmap
-        latestBitmap = bitmap
         while (bitmaps.size > MAX_ENTRIES) {
             val eldest = bitmaps.entries.firstOrNull()?.key ?: break
             bitmaps.remove(eldest)

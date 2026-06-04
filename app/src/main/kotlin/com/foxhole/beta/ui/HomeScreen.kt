@@ -1902,7 +1902,7 @@ internal fun shouldComposeTrafficMapHeavyContent(
 
 internal fun initialDashboardStartupStage(dashboardAlreadyWarm: Boolean): Int =
     if (dashboardAlreadyWarm) {
-        DASHBOARD_STARTUP_STAGE_NETWORK
+        DASHBOARD_STARTUP_STAGE_ALL
     } else {
         DASHBOARD_STARTUP_STAGE_EMPTY
     }

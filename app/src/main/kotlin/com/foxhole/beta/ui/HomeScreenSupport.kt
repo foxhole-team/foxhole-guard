@@ -208,7 +208,6 @@ internal fun HomeHeaderActionButton(
 }
 
 @Composable
-@Suppress("UnusedParameter")
 internal fun HomeNetworkDetailLine(
     label: String,
     value: String,
@@ -227,6 +226,14 @@ internal fun HomeNetworkDetailLine(
             horizontalArrangement = Arrangement.spacedBy(5.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            icon?.let {
+                Icon(
+                    imageVector = it,
+                    contentDescription = null,
+                    modifier = Modifier.size(13.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.78f),
+                )
+            }
             Text(
                 text = label,
                 modifier = Modifier.weight(1f),
