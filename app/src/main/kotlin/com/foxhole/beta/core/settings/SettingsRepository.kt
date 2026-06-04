@@ -1820,22 +1820,7 @@ class SettingsRepository(
     }
 
     private fun com.foxhole.beta.core.model.LocalAuthSettings.normalized(): com.foxhole.beta.core.model.LocalAuthSettings =
-        copy(
-            enabled = enabled,
-            username = username.trim().ifBlank { DEFAULT_PROXY_LOGIN },
-            password =
-                password.trim().let { normalizedPassword ->
-                    if (normalizedPassword.isBlank() || normalizedPassword.isLegacyGeneratedLocalProxyPassword()) {
-                        randomLocalProxyPassword()
-                    } else {
-                        normalizedPassword
-                    }
-                },
-            apiSecret =
-                apiSecret.trim().ifBlank {
-                    UUID.randomUUID().toString().replace("-", "") + UUID.randomUUID().toString().take(8)
-                },
-        )
+        normalizeLocalProxyAuthForStorage(this)
 
     private fun ProxyInboundSettings.normalized(): ProxyInboundSettings =
         copy(
@@ -1872,6 +1857,26 @@ class SettingsRepository(
             "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
         private const val INSTALLED_APP_CHANGE_HISTORY_LIMIT = 60
         private val secureRandom = SecureRandom()
+
+        internal fun normalizeLocalProxyAuthForStorage(value: LocalAuthSettings): LocalAuthSettings {
+            val normalizedPassword = value.password.trim()
+            val password =
+                if (normalizedPassword.isBlank() || normalizedPassword.isLegacyGeneratedLocalProxyPassword()) {
+                    randomLocalProxyPassword()
+                } else {
+                    normalizedPassword
+                }
+            val apiSecret =
+                value.apiSecret.trim().ifBlank {
+                    UUID.randomUUID().toString().replace("-", "") + UUID.randomUUID().toString().take(8)
+                }
+            return value.copy(
+                enabled = value.enabled,
+                username = value.username.trim().ifBlank { DEFAULT_PROXY_LOGIN },
+                password = password,
+                apiSecret = apiSecret,
+            )
+        }
 
         private fun randomLocalProxyPassword(): String =
             buildString(PROXY_PASSWORD_PREFIX.length + PROXY_PASSWORD_RANDOM_LENGTH) {

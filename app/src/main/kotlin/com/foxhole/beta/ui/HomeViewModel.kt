@@ -328,6 +328,22 @@ class HomeViewModel(
                 reconnectState = reconnectState,
             )
         }
+    private val statisticsActivityStreams =
+        combine(
+            container.anomalyRepository.recentEvents,
+            appActivityStreams,
+            container.anomalyRepository.recentTrafficWindows,
+            reconnectState,
+        ) { anomalyEvents, appActivityStreams, trafficWindows, reconnectState ->
+            homeActivityStreamsPreview(
+                diagnosticEntries = emptyList(),
+                anomalyEvents = anomalyEvents,
+                appTrafficWindows = appActivityStreams.appTrafficWindows,
+                networkActivityEvents = appActivityStreams.networkActivityEvents,
+                trafficWindows = trafficWindows,
+                reconnectState = reconnectState,
+            )
+        }
 
     private val coreUiState: StateFlow<HomeUiState> =
         combine(
@@ -404,6 +420,14 @@ class HomeViewModel(
 
     val dashboardTraffic: StateFlow<TrafficSnapshot> =
         container.connectionController.traffic
+            .distinctUntilChanged { previous, next ->
+                previous.hasSameDashboardTrafficContentAs(next)
+            }
+            .stateIn(
+                viewModelScope,
+                SharingStarted.WhileSubscribed(5_000),
+                container.connectionController.traffic.value,
+            )
 
     val uiState: StateFlow<HomeUiState> =
         combine(
@@ -428,10 +452,17 @@ class HomeViewModel(
 
     private val statisticsUiState: StateFlow<HomeUiState> =
         combine(
-            uiState,
+            coreUiState,
+            statisticsActivityStreams,
             dashboardTraffic,
-        ) { state, traffic ->
-            state.copy(traffic = traffic)
+        ) { core, activityStreams, traffic ->
+            core.copy(
+                traffic = traffic,
+                anomalyEvents = activityStreams.anomalyEvents,
+                appTrafficWindows = activityStreams.appTrafficWindows,
+                networkActivityEvents = activityStreams.networkActivityEvents,
+                trafficWindows = activityStreams.trafficWindows,
+            )
         }
             .distinctUntilChanged()
             .flowOn(Dispatchers.Default)

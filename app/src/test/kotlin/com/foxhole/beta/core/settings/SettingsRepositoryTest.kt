@@ -12,6 +12,7 @@ import com.foxhole.beta.core.model.DiagnosticsRetention
 import com.foxhole.beta.core.model.DnsSettings
 import com.foxhole.beta.core.model.ExpertSettings
 import com.foxhole.beta.core.model.LatencyProbeMethod
+import com.foxhole.beta.core.model.LocalAuthSettings
 import com.foxhole.beta.core.model.NETWORK_FINGERPRINT_SCHEMA_CURRENT
 import com.foxhole.beta.core.model.PerAppRoutingMode
 import com.foxhole.beta.core.model.SMART_START_PROTOCOL_TIMEOUT_DEFAULT_SECONDS
@@ -33,6 +34,7 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -101,13 +103,44 @@ class SettingsRepositoryTest {
     fun `local proxy generated password has release entropy and rotates legacy defaults`() {
         val source = settingsRepositorySource()
         val normalizeBlock =
-            source.substringAfter("private fun com.foxhole.beta.core.model.LocalAuthSettings.normalized()")
-                .substringBefore("private fun ProxyInboundSettings.normalized()")
+            source.substringAfter("internal fun normalizeLocalProxyAuthForStorage")
+                .substringBefore("private fun randomLocalProxyPassword()")
 
         assertTrue(source.contains("PROXY_PASSWORD_RANDOM_LENGTH = 22"))
         assertTrue(source.contains("LEGACY_PROXY_PASSWORD_RANDOM_LENGTH = 4"))
         assertTrue(normalizeBlock.contains("normalizedPassword.isLegacyGeneratedLocalProxyPassword()"))
         assertFalse(source.contains("private const val PROXY_PASSWORD_RANDOM_LENGTH = 4"))
+    }
+
+    @Test
+    fun `local proxy auth normalization rotates legacy password and preserves strong custom secret`() {
+        val rotated =
+            SettingsRepository.normalizeLocalProxyAuthForStorage(
+                LocalAuthSettings(
+                    username = " ",
+                    password = "foxhole-ab12",
+                    apiSecret = " ",
+                ),
+            )
+
+        assertEquals("foxhole", rotated.username)
+        assertTrue(rotated.password.startsWith("foxhole-"))
+        assertEquals("foxhole-".length + 22, rotated.password.length)
+        assertNotEquals("foxhole-ab12", rotated.password)
+        assertEquals(40, rotated.apiSecret.length)
+
+        val custom =
+            SettingsRepository.normalizeLocalProxyAuthForStorage(
+                LocalAuthSettings(
+                    username = "  alice  ",
+                    password = "custom-secret-with-enough-entropy",
+                    apiSecret = "  api-secret  ",
+                ),
+            )
+
+        assertEquals("alice", custom.username)
+        assertEquals("custom-secret-with-enough-entropy", custom.password)
+        assertEquals("api-secret", custom.apiSecret)
     }
 
     @Test

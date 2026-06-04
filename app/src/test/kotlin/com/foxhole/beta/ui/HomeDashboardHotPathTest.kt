@@ -395,6 +395,18 @@ class HomeDashboardHotPathTest {
     }
 
     @Test
+    fun `dashboard traffic flow suppresses sampled at only runtime ticks`() {
+        val viewModelSource = testSourceFile("HomeViewModel.kt").readText()
+        val dashboardTrafficBlock =
+            viewModelSource.substringAfter("val dashboardTraffic: StateFlow<TrafficSnapshot> =")
+                .substringBefore("val uiState:")
+
+        assertTrue(dashboardTrafficBlock.contains("container.connectionController.traffic"))
+        assertTrue(dashboardTrafficBlock.contains("hasSameDashboardTrafficContentAs"))
+        assertTrue(dashboardTrafficBlock.contains("stateIn("))
+    }
+
+    @Test
     fun `statistics route does not collect traffic map twice in compose`() {
         val appSource = testSourceFile("FoxholeApp.kt").readText()
         val statisticsRouteMarker = "composable(AppRoute.STATISTICS)"
@@ -421,6 +433,23 @@ class HomeDashboardHotPathTest {
         assertTrue(statisticsRouteBlock.contains("StatisticsRouteUiState()"))
         assertFalse(statisticsRouteBlock.contains("toSettingsRouteUiState("))
         assertFalse(statisticsRouteBlock.contains("dnsFilterRefreshInProgressMutable"))
+    }
+
+    @Test
+    fun `statistics route state is not subscribed to diagnostics log updates`() {
+        val viewModelSource = testSourceFile("HomeViewModel.kt").readText()
+        val statisticsActivityStreamsBlock =
+            viewModelSource.substringAfter("private val statisticsActivityStreams")
+                .substringBefore("private val coreUiState")
+        val statisticsUiStateBlock =
+            viewModelSource.substringAfter("private val statisticsUiState:")
+                .substringBefore("val themeMode:")
+
+        assertFalse(statisticsActivityStreamsBlock.contains("diagnosticsLogger.entries"))
+        assertTrue(statisticsUiStateBlock.contains("coreUiState"))
+        assertTrue(statisticsUiStateBlock.contains("statisticsActivityStreams"))
+        assertFalse(statisticsUiStateBlock.contains("diagnosticEntries ="))
+        assertFalse(statisticsUiStateBlock.contains("uiState,"))
     }
 
     @Test

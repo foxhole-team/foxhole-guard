@@ -196,6 +196,13 @@ internal fun homeActivityStreamsPreview(
     )
 }
 
+internal fun TrafficSnapshot.hasSameDashboardTrafficContentAs(other: TrafficSnapshot): Boolean =
+    available == other.available &&
+        rxBytesPerSec == other.rxBytesPerSec &&
+        txBytesPerSec == other.txBytesPerSec &&
+        rxTotalBytes == other.rxTotalBytes &&
+        txTotalBytes == other.txTotalBytes
+
 private fun <T> List<T>.takeLatest(
     limit: Int,
     timestamp: (T) -> Long,

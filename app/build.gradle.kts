@@ -577,7 +577,12 @@ val verifyJacocoFocusedCoverage by tasks.registering {
                     "com/foxhole/beta/core/importer",
                     "com/foxhole/beta/core/smart",
                 ),
-                0.70,
+                0.75,
+            ),
+            Triple(
+                "runtime vpn instruction coverage",
+                listOf("com/foxhole/beta/vpn"),
+                0.28,
             ),
         ).forEach { (label, prefixes, minimum) ->
             val actual = instructionCoverageForPrefixes(prefixes)
@@ -603,7 +608,7 @@ tasks.register<JacocoCoverageVerification>("jacocoDebugUnitTestCoverageVerificat
     violationRules {
         rule {
             limit {
-                minimum = "0.21".toBigDecimal()
+                minimum = "0.215".toBigDecimal()
             }
         }
     }

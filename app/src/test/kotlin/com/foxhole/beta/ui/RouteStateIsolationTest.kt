@@ -4,6 +4,7 @@ import com.foxhole.beta.core.diagnostics.DiagnosticEntry
 import com.foxhole.beta.core.model.InstalledAppOption
 import com.foxhole.beta.core.model.TrafficSnapshot
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -114,6 +115,24 @@ class RouteStateIsolationTest {
         val route = HomeUiState(traffic = traffic).toHomeRouteUiState(includeLiveTraffic = false)
 
         assertEquals(TrafficSnapshot(), route.traffic)
+    }
+
+    @Test
+    fun `dashboard traffic content ignores sampled at only updates`() {
+        val base =
+            TrafficSnapshot(
+                available = true,
+                rxBytesPerSec = 512L,
+                txBytesPerSec = 128L,
+                rxTotalBytes = 4096L,
+                txTotalBytes = 1024L,
+                sampledAt = 42L,
+            )
+
+        assertTrue(base.hasSameDashboardTrafficContentAs(base.copy(sampledAt = 43L)))
+        assertFalse(base.hasSameDashboardTrafficContentAs(base.copy(rxBytesPerSec = 768L)))
+        assertFalse(base.hasSameDashboardTrafficContentAs(base.copy(txTotalBytes = 2048L)))
+        assertFalse(base.hasSameDashboardTrafficContentAs(base.copy(available = false)))
     }
 
     @Test
