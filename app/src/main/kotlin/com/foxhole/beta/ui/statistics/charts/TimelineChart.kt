@@ -15,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
@@ -35,11 +36,13 @@ import com.foxhole.beta.core.statistics.timestampToChartX
 fun TimelineChart(
     model: ChartModel,
     modifier: Modifier = Modifier,
-    height: Dp = 170.dp,
+    height: Dp = 184.dp,
     lineStrokeWidth: Dp? = null,
 ) {
     val tokens = chartVisualTokens()
-    val resolvedLineStrokeWidth = lineStrokeWidth ?: tokens.lineStrokeWidth
+    val resolvedLineStrokeWidth =
+        (lineStrokeWidth ?: tokens.lineStrokeWidth)
+            .coerceAtLeast(tokens.lineStrokeWidthCompact)
     val colorsBySeries = model.series.associate { series -> series.id to chartColor(series.colorToken) }
     val visible = remember(model.id) { mutableStateOf(false) }
     LaunchedEffect(model.id) {
@@ -59,8 +62,8 @@ fun TimelineChart(
         ) {
             val geometry =
                 TimelineChartGeometry(
-                    left = 2.dp.toPx(),
-                    right = size.width - 2.dp.toPx(),
+                    left = 6.dp.toPx(),
+                    right = size.width - 6.dp.toPx(),
                     top = 10.dp.toPx(),
                     bottom = size.height - 18.dp.toPx(),
                     yMax = model.yAxis.max.coerceAtLeast(1.0),
@@ -97,8 +100,8 @@ private fun DrawScope.drawTimelineGrid(
     tokens: ChartTokens,
     geometry: TimelineChartGeometry,
 ) {
-    val dash = PathEffect.dashPathEffect(floatArrayOf(8f, 8f))
-    val gridStrokeWidth = 1.dp.toPx()
+    val dash = PathEffect.dashPathEffect(floatArrayOf(6f, 9f))
+    val gridStrokeWidth = tokens.gridStrokeWidth.toPx()
     val yRange = (model.yAxis.max - model.yAxis.min).coerceAtLeast(1.0)
     val yTicks = model.yAxis.ticks.ifEmpty {
         listOf(
@@ -141,13 +144,13 @@ private fun DrawScope.drawTimelineGrid(
         color = tokens.axisColor,
         start = Offset(geometry.left, geometry.top),
         end = Offset(geometry.left, geometry.bottom),
-        strokeWidth = 1.dp.toPx(),
+        strokeWidth = tokens.axisStrokeWidth.toPx(),
     )
     drawLine(
         color = tokens.axisColor,
         start = Offset(geometry.left, geometry.bottom),
         end = Offset(geometry.right, geometry.bottom),
-        strokeWidth = 1.dp.toPx(),
+        strokeWidth = tokens.axisStrokeWidth.toPx(),
     )
 }
 
@@ -195,7 +198,28 @@ private fun DrawScope.drawLineOrAreaSeries(
     if (series.kind == ChartSeriesKind.AREA && offsets.isNotEmpty()) {
         drawPath(
             path = areaPath(offsets, geometry.bottom),
-            color = color.copy(alpha = 0.18f),
+            brush =
+            Brush.verticalGradient(
+                colors =
+                listOf(
+                    color.copy(alpha = 0.20f),
+                    color.copy(alpha = 0.03f),
+                ),
+                startY = geometry.top,
+                endY = geometry.bottom,
+            ),
+        )
+    }
+    if (offsets.isNotEmpty()) {
+        drawPath(
+            path = linePath(offsets),
+            color = color.copy(alpha = 0.10f),
+            style =
+            Stroke(
+                width = lineStrokeWidth.toPx() + 2.dp.toPx(),
+                cap = StrokeCap.Round,
+                join = StrokeJoin.Round,
+            ),
         )
     }
     drawPath(
@@ -220,8 +244,8 @@ private fun DrawScope.drawBarSeries(
 ) {
     val slotWidth =
         ((geometry.right - geometry.left) / series.points.size.coerceAtLeast(1).toFloat())
-            .coerceAtLeast(1.dp.toPx())
-    val barWidth = (slotWidth * 0.28f).coerceIn(1.dp.toPx(), 7.dp.toPx())
+            .coerceAtLeast(tokens.barMinWidth.toPx())
+    val barWidth = (slotWidth * 0.28f).coerceIn(tokens.barMinWidth.toPx(), 7.dp.toPx())
     val radius = tokens.barCornerRadius.toPx()
     series.points.forEach { point ->
         val x = chartX(model, point.x, geometry)

@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -41,6 +42,7 @@ import com.foxhole.beta.ui.statistics.charts.SegmentedLinearBar
 import com.foxhole.beta.ui.statistics.charts.VerticalValueBarChart
 import com.foxhole.beta.ui.statistics.charts.chartColor
 import com.foxhole.beta.ui.statistics.charts.chartCountryColors
+import com.foxhole.beta.ui.statistics.statisticsVisualTokens
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -265,9 +267,9 @@ internal fun DnsTrafficShareRing(
     val color = dnsCategoryColor(metric.category)
     Surface(
         modifier = modifier,
-        shape = MaterialTheme.shapes.small,
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.24f),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.36f)),
+        shape = RoundedCornerShape(statisticsVisualTokens().dimens.innerRadius),
+        color = statisticsVisualTokens().colors.rowContainer,
+        border = BorderStroke(1.dp, statisticsVisualTokens().colors.metricTileBorder),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(10.dp),
@@ -281,7 +283,7 @@ internal fun DnsTrafficShareRing(
                     visible = visible,
                     contentDescription = ringDescription,
                     modifier = Modifier.size(58.dp),
-                    strokeWidth = 8.dp,
+                    strokeWidth = com.foxhole.beta.ui.statistics.charts.chartVisualTokens().ringStrokeWidthCompact,
                     animationLabel = "dns-traffic-share-ring-${metric.category.name}",
                 )
                 Text(
@@ -302,7 +304,7 @@ internal fun DnsTrafficShareRing(
                 Text(
                     text = formatBytes(context, metric.estimatedBytes),
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = statisticsVisualTokens().colors.mutedText,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -330,7 +332,7 @@ internal fun DnsAppDropStack(row: DnsProtectionAppRow) {
         contentDescription = description,
         modifier = Modifier
             .fillMaxWidth()
-            .height(7.dp),
+            .height(statisticsVisualTokens().dimens.smallBarHeight),
     )
 }
 
@@ -341,8 +343,8 @@ internal fun StatisticsRangePillDropdown(
     onExpandedChange: (Boolean) -> Unit,
     onSelect: (StatisticsDisplayRange) -> Unit,
 ) {
-    val triggerWidth = 112.dp
-    val menuWidth = 132.dp
+    val triggerWidth = 118.dp
+    val menuWidth = 144.dp
     Box(
         modifier = Modifier.width(triggerWidth),
         contentAlignment = Alignment.TopEnd,
@@ -369,7 +371,7 @@ internal fun StatisticsRangePillDropdown(
                         onExpandedChange(false)
                     },
                     selected = selected,
-                    highlightSelected = false,
+                    highlightSelected = true,
                 ) {
                     Text(
                         text = statisticsDisplayRangeLabel(range),
@@ -516,7 +518,7 @@ internal fun AppTrafficTimelineChart(
         )
     com.foxhole.beta.ui.statistics.charts.TimelineChart(
         model = model,
-        lineStrokeWidth = 0.65.dp,
+        lineStrokeWidth = com.foxhole.beta.ui.statistics.charts.chartVisualTokens().lineStrokeWidthCompact,
     )
 }
 
@@ -526,7 +528,28 @@ internal fun AppTrafficTopStackedChart(
     onRowClick: (AppTrafficRow) -> Unit,
 ) {
     val maxTotal = rows.maxOfOrNull(AppTrafficRow::totalBytes)?.coerceAtLeast(1L) ?: 1L
+    val context = LocalContext.current
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = stringResource(R.string.statistics_apps_title),
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = formatBytes(context, rows.sumOf(AppTrafficRow::totalBytes)),
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+            )
+        }
         ChartLegend()
         rows.forEachIndexed { index, row ->
             AppTrafficStackedBarRow(
@@ -547,6 +570,7 @@ internal fun AppTrafficStackedBarRow(
     onClick: () -> Unit,
 ) {
     val context = LocalContext.current
+    val tokens = statisticsVisualTokens()
     val sentColor = chartColor(ChartColorToken.TX)
     val receivedColor = chartColor(ChartColorToken.RX)
     val barDescription =
@@ -560,18 +584,26 @@ internal fun AppTrafficStackedBarRow(
         Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(vertical = 4.dp),
+            .padding(vertical = 6.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
-            text = (index + 1).toString(),
-            modifier = Modifier.width(22.dp),
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.End,
-        )
-        AppIcon(packageName = row.packageName, modifier = Modifier.size(32.dp))
+        Surface(
+            modifier = Modifier.size(24.dp),
+            shape = RoundedCornerShape(12.dp),
+            color = tokens.colors.rowContainer,
+            contentColor = tokens.colors.mutedText,
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Text(
+                    text = (index + 1).toString(),
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    textAlign = TextAlign.Center,
+                )
+            }
+        }
+        AppIcon(packageName = row.packageName, modifier = Modifier.size(34.dp))
         Column(
             modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.spacedBy(5.dp),
@@ -616,25 +648,41 @@ internal fun AppTrafficStackedBarRow(
                 contentDescription = barDescription,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(6.dp),
+                    .height(tokens.dimens.smallBarHeight),
             )
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text(
-                    text = "${stringResource(R.string.traffic_sent)} ${formatBytes(context, row.txBytes)}",
-                    style = MaterialTheme.typography.labelSmall,
+                LegendValueText(
                     color = sentColor,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
+                    text = "${stringResource(R.string.traffic_sent)} ${formatBytes(context, row.txBytes)}",
                 )
-                Text(
-                    text = "${stringResource(R.string.traffic_received)} ${formatBytes(context, row.rxBytes)}",
-                    style = MaterialTheme.typography.labelSmall,
+                LegendValueText(
                     color = receivedColor,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
+                    text = "${stringResource(R.string.traffic_received)} ${formatBytes(context, row.rxBytes)}",
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun LegendValueText(
+    color: Color,
+    text: String,
+) {
+    val mutedText = statisticsVisualTokens().colors.mutedText
+    Row(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(modifier = Modifier.size(7.dp)) {
+            Canvas(modifier = Modifier.size(7.dp).clearAndSetSemantics {}) {
+                drawCircle(color)
+            }
+        }
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelSmall,
+            color = mutedText,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 
@@ -653,10 +701,15 @@ internal fun LegendItem(color: Color, text: String) {
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(modifier = Modifier.size(10.dp).padding(1.dp)) {
-            Canvas(modifier = Modifier.size(8.dp).clearAndSetSemantics {}) { drawCircle(color) }
+        Box(modifier = Modifier.size(9.dp).padding(1.dp)) {
+            Canvas(modifier = Modifier.size(7.dp).clearAndSetSemantics {}) { drawCircle(color) }
         }
-        Text(text = text, style = MaterialTheme.typography.labelMedium)
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Medium,
+            color = statisticsVisualTokens().colors.mutedText,
+        )
     }
 }
 

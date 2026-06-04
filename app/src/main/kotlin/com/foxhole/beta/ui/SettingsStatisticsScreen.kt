@@ -133,51 +133,14 @@ fun StatisticsScreen(
                 StatisticsDisabledState(onEnable = { onStatisticsEnabledChanged(true) })
             }
         } else {
-            if (statisticsSettings.profileTrafficEnabled) {
-                item(key = "profile-traffic", contentType = "statistics-card") {
-                    ProfileTrafficOverviewCard(
-                        statistics = statistics,
-                        state = state,
-                        onClear = { clearConfirmVisible = true },
-                        onProfileClick = { profileId -> selectedProfileId = profileId },
-                    )
-                }
-            }
-            if (statisticsSettings.vpnProtocolsEnabled && statistics.vpnProtocols.isNotEmpty()) {
-                item(key = "protocols", contentType = "statistics-card") {
-                    ProtocolStatisticsSection(items = statistics.vpnProtocols)
-                }
-            }
-            if (statisticsSettings.profileComparisonsEnabled && statistics.profileComparisons.isNotEmpty()) {
-                item(key = "profile-comparisons", contentType = "statistics-card") {
-                    ProfileComparisonsSection(items = statistics.profileComparisons)
-                }
-            }
-            if (statisticsSettings.transportsEnabled && statistics.transports.isNotEmpty()) {
-                item(key = "transports", contentType = "statistics-card") {
-                    TransportStatisticsSection(items = statistics.transports)
-                }
-            }
-            if (statisticsSettings.dnsFilteringEnabled && dnsFilteringAvailable) {
-                item(key = "dns-protection", contentType = "statistics-card") {
-                    DnsProtectionCard(
-                        summary = dnsSummary,
-                        range = dnsRange,
-                        onRangeSelected = { dnsRange = it },
-                    )
-                }
-            }
-            if (statisticsSettings.anomalyMetricsEnabled && anomalyEventsForRange.isNotEmpty()) {
-                item(key = "anomalies", contentType = "statistics-card") {
-                    AnomalyStatisticsCard(
-                        events = anomalyEventsForRange,
-                        totalEventsCount = state.anomalyEvents.size,
-                        installedApps = state.installedApps,
-                        range = anomalyRange,
-                        onRangeSelected = { anomalyRange = it },
-                        onShowAllEvents = { allAnomaliesVisible = true },
-                    )
-                }
+            item(key = "statistics-overview", contentType = "statistics-card") {
+                StatisticsOverviewHeroCard(
+                    statistics = statistics,
+                    appRows = appRows,
+                    dnsSummary = dnsSummary,
+                    countryRows = countryRows,
+                    anomalyEvents = anomalyEventsForRange,
+                )
             }
             if (statisticsSettings.appTrafficEnabled && appStatsSwitchChecked) {
                 item(key = "app-statistics", contentType = "statistics-card") {
@@ -196,6 +159,25 @@ fun StatisticsScreen(
                     )
                 }
             }
+            if (statisticsSettings.profileTrafficEnabled) {
+                item(key = "profile-traffic", contentType = "statistics-card") {
+                    ProfileTrafficOverviewCard(
+                        statistics = statistics,
+                        state = state,
+                        onClear = { clearConfirmVisible = true },
+                        onProfileClick = { profileId -> selectedProfileId = profileId },
+                    )
+                }
+            }
+            if (statisticsSettings.dnsFilteringEnabled && dnsFilteringAvailable) {
+                item(key = "dns-protection", contentType = "statistics-card") {
+                    DnsProtectionCard(
+                        summary = dnsSummary,
+                        range = dnsRange,
+                        onRangeSelected = { dnsRange = it },
+                    )
+                }
+            }
             if (shouldShowCountryTrafficCard(statisticsSettings)) {
                 item(key = "country-traffic", contentType = "statistics-card") {
                     CountryTrafficCard(
@@ -207,6 +189,33 @@ fun StatisticsScreen(
                         onEnableNetworkActivityLogging = { onNetworkActivityLoggingChanged(true) },
                         onShowAll = { allCountriesVisible = true },
                     )
+                }
+            }
+            if (statisticsSettings.anomalyMetricsEnabled && anomalyEventsForRange.isNotEmpty()) {
+                item(key = "anomalies", contentType = "statistics-card") {
+                    AnomalyStatisticsCard(
+                        events = anomalyEventsForRange,
+                        totalEventsCount = state.anomalyEvents.size,
+                        installedApps = state.installedApps,
+                        range = anomalyRange,
+                        onRangeSelected = { anomalyRange = it },
+                        onShowAllEvents = { allAnomaliesVisible = true },
+                    )
+                }
+            }
+            if (statisticsSettings.vpnProtocolsEnabled && statistics.vpnProtocols.isNotEmpty()) {
+                item(key = "protocols", contentType = "statistics-card") {
+                    ProtocolStatisticsSection(items = statistics.vpnProtocols)
+                }
+            }
+            if (statisticsSettings.transportsEnabled && statistics.transports.isNotEmpty()) {
+                item(key = "transports", contentType = "statistics-card") {
+                    TransportStatisticsSection(items = statistics.transports)
+                }
+            }
+            if (statisticsSettings.profileComparisonsEnabled && statistics.profileComparisons.isNotEmpty()) {
+                item(key = "profile-comparisons", contentType = "statistics-card") {
+                    ProfileComparisonsSection(items = statistics.profileComparisons)
                 }
             }
         }

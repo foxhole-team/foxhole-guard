@@ -1,5 +1,6 @@
 package com.foxhole.beta.ui
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -9,8 +10,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.WarningAmber
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -34,6 +33,12 @@ import com.foxhole.beta.core.model.AnomalyEvent
 import com.foxhole.beta.core.model.AnomalySeverity
 import com.foxhole.beta.core.model.AnomalyType
 import com.foxhole.beta.core.model.InstalledAppOption
+import com.foxhole.beta.ui.statistics.StatisticsCardTone
+import com.foxhole.beta.ui.statistics.StatisticsDashboardCard
+import com.foxhole.beta.ui.statistics.StatisticsEmptyState
+import com.foxhole.beta.ui.statistics.StatisticsMetricTileGrid
+import com.foxhole.beta.ui.statistics.StatisticsMetricTileModel
+import com.foxhole.beta.ui.statistics.statisticsVisualTokens
 import com.foxhole.beta.ui.theme.LocalFoxholeSemanticColors
 
 @Composable
@@ -51,67 +56,62 @@ internal fun AnomalyStatisticsCard(
         remember(recentEvents) {
             recentEvents.mapNotNull(AnomalyEvent::packageName).distinct().size
         }
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHighest),
-        shape = MaterialTheme.shapes.medium,
-    ) {
-        Column(
-            modifier = Modifier.padding(CardInnerPadding),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            SectionHeader(
-                icon = Icons.Outlined.WarningAmber,
-                title = stringResource(R.string.statistics_anomaly_summary_title),
-                trailing = {
-                    StatisticsRangePillDropdown(
-                        value = range,
-                        expanded = rangeExpanded,
-                        onExpandedChange = { rangeExpanded = it },
-                        onSelect = onRangeSelected,
-                    )
-                },
+    val highEvents = recentEvents.count { event -> event.severity == AnomalySeverity.HIGH }
+    val tokens = statisticsVisualTokens()
+    StatisticsDashboardCard(
+        icon = Icons.Outlined.WarningAmber,
+        title = stringResource(R.string.statistics_anomaly_summary_title),
+        tone = if (highEvents > 0) StatisticsCardTone.Danger else StatisticsCardTone.Warning,
+        trailing = {
+            StatisticsRangePillDropdown(
+                value = range,
+                expanded = rangeExpanded,
+                onExpandedChange = { rangeExpanded = it },
+                onSelect = onRangeSelected,
             )
-            if (recentEvents.isEmpty()) {
-                EmptySectionText(text = stringResource(R.string.statistics_anomaly_empty))
-            } else {
-                DetailMetricGrid(
-                    metrics =
-                    listOfNotNull(
-                        metricIfPositive(
-                            stringResource(R.string.statistics_anomaly_events),
-                            recentEvents.size,
-                        ),
-                        metricIfPositive(
-                            stringResource(R.string.statistics_anomaly_high_events),
-                            recentEvents.count { event -> event.severity == AnomalySeverity.HIGH },
-                        ),
-                        metricIfPositive(
-                            stringResource(R.string.statistics_anomaly_notified_events),
-                            recentEvents.count(AnomalyEvent::notificationShown),
-                        ),
-                        metricIfPositive(
-                            stringResource(R.string.statistics_anomaly_apps),
-                            appsCount,
-                        ),
+        },
+    ) {
+        if (recentEvents.isEmpty()) {
+            StatisticsEmptyState(
+                icon = Icons.Outlined.WarningAmber,
+                title = stringResource(R.string.statistics_anomaly_empty),
+            )
+        } else {
+            StatisticsMetricTileGrid(
+                metrics =
+                listOf(
+                    StatisticsMetricTileModel(
+                        label = stringResource(R.string.statistics_anomaly_events),
+                        value = recentEvents.size.toString(),
                     ),
-                )
-                if (recentEvents.isNotEmpty()) {
-                    Text(
-                        text = stringResource(R.string.statistics_anomaly_recent_events),
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        recentEvents.take(STATISTICS_TOP_PREVIEW_LIMIT).forEach { event ->
-                            AnomalyEventRow(event = event, installedApps = installedApps)
-                        }
-                    }
-                    if (recentEvents.size > STATISTICS_TOP_PREVIEW_LIMIT || totalEventsCount > recentEvents.size) {
-                        TextButton(onClick = onShowAllEvents) {
-                            Text(stringResource(R.string.statistics_anomaly_show_all_events))
-                        }
-                    }
+                    StatisticsMetricTileModel(
+                        label = stringResource(R.string.statistics_anomaly_high_events),
+                        value = highEvents.toString(),
+                        accent = if (highEvents > 0) tokens.colors.danger else tokens.colors.mutedText,
+                    ),
+                    StatisticsMetricTileModel(
+                        label = stringResource(R.string.statistics_anomaly_notified_events),
+                        value = recentEvents.count(AnomalyEvent::notificationShown).toString(),
+                    ),
+                    StatisticsMetricTileModel(
+                        label = stringResource(R.string.statistics_anomaly_apps),
+                        value = appsCount.toString(),
+                    ),
+                ),
+            )
+            Text(
+                text = stringResource(R.string.statistics_anomaly_recent_events),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                recentEvents.take(STATISTICS_TOP_PREVIEW_LIMIT).forEach { event ->
+                    AnomalyEventRow(event = event, installedApps = installedApps)
+                }
+            }
+            if (recentEvents.size > STATISTICS_TOP_PREVIEW_LIMIT || totalEventsCount > recentEvents.size) {
+                TextButton(onClick = onShowAllEvents) {
+                    Text(stringResource(R.string.statistics_anomaly_show_all_events))
                 }
             }
         }
@@ -138,6 +138,7 @@ internal fun AnomalyEventRow(
     Surface(
         shape = MaterialTheme.shapes.small,
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.34f),
+        border = BorderStroke(1.dp, eventColor.copy(alpha = 0.28f)),
     ) {
         Row(
             modifier = Modifier
@@ -146,7 +147,7 @@ internal fun AnomalyEventRow(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Canvas(modifier = Modifier.size(10.dp)) {
+            Canvas(modifier = Modifier.size(8.dp)) {
                 drawCircle(eventColor)
             }
             Column(modifier = Modifier.weight(1f)) {
@@ -172,12 +173,18 @@ internal fun AnomalyEventRow(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            Text(
-                text = event.score.toString(),
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.SemiBold,
-                color = eventColor,
-            )
+            Surface(
+                shape = MaterialTheme.shapes.extraLarge,
+                color = eventColor.copy(alpha = 0.14f),
+                contentColor = eventColor,
+            ) {
+                Text(
+                    text = event.score.toString(),
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
         }
     }
 }

@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -29,7 +28,6 @@ import androidx.compose.material.icons.outlined.Route
 import androidx.compose.material.icons.outlined.SettingsEthernet
 import androidx.compose.material.icons.outlined.Storage
 import androidx.compose.material.icons.outlined.Tune
-import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -72,9 +70,17 @@ import com.foxhole.beta.core.model.StatisticsRetention
 import com.foxhole.beta.core.model.StatisticsUiState
 import com.foxhole.beta.core.model.TransportProtocol
 import com.foxhole.beta.core.model.TransportStatisticsUiItem
+import com.foxhole.beta.ui.statistics.StatisticsCardTone
+import com.foxhole.beta.ui.statistics.StatisticsDashboardCard
+import com.foxhole.beta.ui.statistics.StatisticsDivider
+import com.foxhole.beta.ui.statistics.StatisticsEmptyState
+import com.foxhole.beta.ui.statistics.StatisticsMetricTileGrid
+import com.foxhole.beta.ui.statistics.StatisticsMetricTileModel
+import com.foxhole.beta.ui.statistics.StatisticsRowSurface
 import com.foxhole.beta.ui.statistics.charts.AnimatedSplitDonutChart
 import com.foxhole.beta.ui.statistics.charts.SegmentedBarSegment
 import com.foxhole.beta.ui.statistics.charts.SegmentedLinearBar
+import com.foxhole.beta.ui.statistics.statisticsVisualTokens
 import java.util.Locale
 import kotlin.math.max
 
@@ -85,39 +91,31 @@ internal fun ProfileTrafficOverviewCard(
     onClear: () -> Unit,
     onProfileClick: (Long) -> Unit,
 ) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHighest),
-        shape = MaterialTheme.shapes.medium,
-    ) {
-        Column(
-            modifier = Modifier.padding(CardInnerPadding),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.CenterVertically,
+    StatisticsDashboardCard(
+        icon = Icons.Outlined.Storage,
+        title = stringResource(R.string.statistics_profile_traffic_title),
+        trailing = {
+            Surface(
+                modifier = Modifier.size(36.dp),
+                shape = MaterialTheme.shapes.extraLarge,
+                color = statisticsVisualTokens().colors.rowContainer,
+                contentColor = statisticsVisualTokens().colors.mutedText,
             ) {
-                Text(
-                    text = stringResource(R.string.statistics_profile_traffic_title),
-                    modifier = Modifier.weight(1f),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                )
                 IconButton(onClick = onClear) {
                     Icon(
                         imageVector = Icons.Outlined.DeleteSweep,
                         contentDescription = stringResource(R.string.clear_statistics_history_content_description),
+                        modifier = Modifier.size(18.dp),
                     )
                 }
             }
-            ProfileTrafficList(
-                items = statistics.profileTraffic,
-                state = state,
-                onProfileClick = onProfileClick,
-            )
-        }
+        },
+    ) {
+        ProfileTrafficList(
+            items = statistics.profileTraffic,
+            state = state,
+            onProfileClick = onProfileClick,
+        )
     }
 }
 
@@ -128,10 +126,9 @@ internal fun ProfileTrafficList(
     onProfileClick: (Long) -> Unit,
 ) {
     if (items.isEmpty()) {
-        Text(
-            text = stringResource(R.string.diagnostics_usage_empty),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        StatisticsEmptyState(
+            icon = Icons.Outlined.Storage,
+            title = stringResource(R.string.diagnostics_usage_empty),
         )
         return
     }
@@ -142,29 +139,38 @@ internal fun ProfileTrafficList(
                 .sortedByDescending(ProfileTrafficUiItem::totalBytes)
                 .take(PROFILE_TRAFFIC_PREVIEW_LIMIT)
         }
+    val maxTotalBytes = remember(previewItems) {
+        previewItems.maxOfOrNull(ProfileTrafficUiItem::totalBytes)?.coerceAtLeast(1L) ?: 1L
+    }
     val detailsByProfileId =
         remember(previewItems, state.profiles, state.settings.smartProfilePreferences) {
             previewItems.associate { item -> item.profileId to profileStatisticsDetail(state, item) }
         }
-    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+    val tokens = statisticsVisualTokens()
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         previewItems
             .forEachIndexed { index, item ->
                 val detail = detailsByProfileId.getValue(item.profileId)
-                Row(
+                StatisticsRowSurface(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onProfileClick(item.profileId) }
-                        .padding(vertical = 6.dp),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
+                        .heightIn(min = 50.dp)
+                        .clickable { onProfileClick(item.profileId) },
                 ) {
-                    Icon(
-                        imageVector = Icons.Outlined.Storage,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(18.dp),
-                    )
-                    Column(modifier = Modifier.weight(1f)) {
+                    Surface(
+                        modifier = Modifier.size(30.dp),
+                        shape = MaterialTheme.shapes.large,
+                        color = tokens.colors.headerIconContainer,
+                        contentColor = tokens.colors.headerIconTint,
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Outlined.Storage,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp),
+                            )
+                        }
+                    }
+                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text(
                             text = item.profileName,
                             style = MaterialTheme.typography.bodyMedium,
@@ -179,9 +185,22 @@ internal fun ProfileTrafficList(
                                 detail.avgLatencyMs.formatLatency(),
                             ),
                             style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = tokens.colors.mutedText,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
+                        )
+                        SegmentedLinearBar(
+                            segments =
+                            listOf(
+                                SegmentedBarSegment(
+                                    color = MaterialTheme.colorScheme.primary,
+                                    ratio = 1f,
+                                    minVisibleWidth = tokens.dimens.smallBarHeight,
+                                ),
+                            ),
+                            scale = (item.totalBytes.toFloat() / maxTotalBytes.toFloat()).coerceIn(0f, 1f),
+                            contentDescription = "${item.profileName}: ${formatBytes(context, item.totalBytes)}",
+                            modifier = Modifier.fillMaxWidth().height(tokens.dimens.smallBarHeight),
                         )
                     }
                     Column(horizontalAlignment = Alignment.End) {
@@ -192,7 +211,7 @@ internal fun ProfileTrafficList(
                                 formatBytes(context, item.txBytes),
                             ),
                             style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = tokens.colors.mutedText,
                             textAlign = TextAlign.End,
                         )
                         Text(
@@ -204,7 +223,7 @@ internal fun ProfileTrafficList(
                     }
                 }
                 if (index != previewItems.lastIndex) {
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.32f))
+                    StatisticsDivider()
                 }
             }
     }
@@ -220,64 +239,71 @@ internal fun CountryTrafficCard(
     onEnableNetworkActivityLogging: () -> Unit,
     onShowAll: () -> Unit,
 ) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHighest),
-        shape = MaterialTheme.shapes.medium,
+    StatisticsDashboardCard(
+        icon = Icons.Outlined.Public,
+        title = stringResource(R.string.statistics_country_traffic_top_title),
     ) {
-        Column(
-            modifier = Modifier.padding(CardInnerPadding),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            SectionHeader(
+        if (!enabled) {
+            StatisticsEmptyState(
                 icon = Icons.Outlined.Public,
-                title = stringResource(R.string.statistics_country_traffic_top_title),
+                title = stringResource(R.string.traffic_map_live_requires_firewall),
+                actionLabel = stringResource(R.string.statistics_country_enable_firewall_action),
+                onAction = onEnableFirewall,
             )
-            if (!enabled) {
-                Text(
-                    text = stringResource(R.string.traffic_map_live_requires_firewall),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                TextButton(onClick = onEnableFirewall) {
-                    Text(stringResource(R.string.statistics_country_enable_firewall_action))
-                }
-            } else if (!networkActivityLoggingEnabled && rows.isEmpty()) {
-                Text(
-                    text = stringResource(R.string.statistics_country_network_log_disabled),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                TextButton(onClick = onEnableNetworkActivityLogging) {
-                    Text(stringResource(R.string.statistics_app_detail_enable_network_log_action))
-                }
-            } else if (rows.isEmpty()) {
-                EmptySectionText(text = stringResource(R.string.traffic_map_waiting_connections))
-            } else {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(210.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalAlignment = Alignment.Bottom,
-                ) {
-                    CountryVerticalBarChart(
-                        points = rows,
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight(),
-                    )
-                    CountryTrafficList(
-                        points = rows,
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight(),
-                    )
-                }
-                if (totalRowsCount > rows.size) {
-                    TextButton(onClick = onShowAll) {
-                        Text(stringResource(R.string.show_all_label))
+        } else if (!networkActivityLoggingEnabled && rows.isEmpty()) {
+            StatisticsEmptyState(
+                icon = Icons.Outlined.Public,
+                title = stringResource(R.string.statistics_country_network_log_disabled),
+                actionLabel = stringResource(R.string.statistics_app_detail_enable_network_log_action),
+                onAction = onEnableNetworkActivityLogging,
+            )
+        } else if (rows.isEmpty()) {
+            StatisticsEmptyState(
+                icon = Icons.Outlined.Public,
+                title = stringResource(R.string.traffic_map_waiting_connections),
+            )
+        } else {
+            val tokens = statisticsVisualTokens()
+            BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                if (maxWidth < 360.dp) {
+                    Column(verticalArrangement = Arrangement.spacedBy(tokens.dimens.sectionGap)) {
+                        CountryVerticalBarChart(
+                            points = rows,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(160.dp),
+                        )
+                        CountryTrafficList(
+                            points = rows,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
                     }
+                } else {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(220.dp),
+                        horizontalArrangement = Arrangement.spacedBy(tokens.dimens.cardVerticalGap),
+                        verticalAlignment = Alignment.Bottom,
+                    ) {
+                        CountryVerticalBarChart(
+                            points = rows,
+                            modifier = Modifier
+                                .weight(1.1f)
+                                .fillMaxHeight(),
+                        )
+                        CountryTrafficList(
+                            points = rows,
+                            modifier = Modifier
+                                .weight(0.9f)
+                                .fillMaxHeight(),
+                        )
+                    }
+                }
+            }
+            if (totalRowsCount > rows.size) {
+                TextButton(onClick = onShowAll) {
+                    Text(stringResource(R.string.show_all_label))
                 }
             }
         }
@@ -287,16 +313,12 @@ internal fun CountryTrafficCard(
 @Composable
 internal fun CountryTrafficRow(row: CountryTrafficUiRow) {
     val context = LocalContext.current
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 7.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
+    StatisticsRowSurface {
         Text(
             text = countryEmoji(row.countryCode),
+            modifier = Modifier.width(22.dp),
             style = MaterialTheme.typography.bodyMedium,
+            textAlign = TextAlign.Center,
         )
         Column(modifier = Modifier.weight(1f)) {
             Text(
@@ -314,7 +336,7 @@ internal fun CountryTrafficRow(row: CountryTrafficUiRow) {
                     row.sessions,
                 ),
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = statisticsVisualTokens().colors.mutedText,
             )
         }
         Text(
@@ -334,25 +356,17 @@ internal fun StatisticsDisabledState(onEnable: () -> Unit) {
             .heightIn(min = 420.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+        StatisticsDashboardCard(
+            icon = Icons.Outlined.BarChart,
+            title = stringResource(R.string.statistics_disabled_title),
+            tone = StatisticsCardTone.Elevated,
         ) {
-            Icon(
-                imageVector = Icons.Outlined.BarChart,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(34.dp),
+            StatisticsEmptyState(
+                icon = Icons.Outlined.BarChart,
+                title = stringResource(R.string.app_statistics_disabled_body),
+                actionLabel = stringResource(R.string.statistics_enable_action),
+                onAction = onEnable,
             )
-            Text(
-                text = stringResource(R.string.statistics_disabled_title),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                textAlign = TextAlign.Center,
-            )
-            Button(onClick = onEnable) {
-                Text(stringResource(R.string.statistics_enable_action))
-            }
         }
     }
 }
@@ -370,15 +384,22 @@ internal fun CountryTrafficList(
     ) {
         points.forEachIndexed { index, point ->
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Canvas(modifier = Modifier.size(9.dp).clearAndSetSemantics {}) {
+                Canvas(modifier = Modifier.size(8.dp).clearAndSetSemantics {}) {
                     drawCircle(color = colors[index % colors.size])
                 }
                 Text(
-                    text = "${countryEmoji(point.countryCode)} ${point.label}",
+                    text = countryEmoji(point.countryCode),
+                    modifier = Modifier.width(22.dp),
+                    style = MaterialTheme.typography.labelMedium,
+                    maxLines = 1,
+                    textAlign = TextAlign.Center,
+                )
+                Text(
+                    text = point.label,
                     modifier = Modifier.weight(1f),
                     style = MaterialTheme.typography.labelMedium,
                     maxLines = 1,
@@ -433,6 +454,7 @@ internal fun ProtocolStatCard(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
+    val tokens = statisticsVisualTokens()
     val visible = rememberOneShotVisible("protocol:${item.protocol.name}")
     val successRate = item.successRateOrNull
     val errorRate = item.errorRateOrNull
@@ -454,12 +476,12 @@ internal fun ProtocolStatCard(
         }
     Card(
         modifier = modifier,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.38f)),
-        shape = MaterialTheme.shapes.small,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.42f)),
+        colors = CardDefaults.cardColors(containerColor = tokens.colors.rowContainer),
+        shape = MaterialTheme.shapes.large,
+        border = BorderStroke(tokens.dimens.cardBorderWidth, tokens.colors.metricTileBorder),
     ) {
         Column(
-            modifier = Modifier.padding(8.dp),
+            modifier = Modifier.padding(10.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
@@ -486,7 +508,8 @@ internal fun ProtocolStatCard(
                         errorText,
                         formatBytes(context, item.totalBytes),
                     ),
-                    modifier = Modifier.size(76.dp),
+                    modifier = Modifier.size(tokens.dimens.donutSmallSize),
+                    strokeWidth = com.foxhole.beta.ui.statistics.charts.chartVisualTokens().ringStrokeWidthCompact,
                     animationLabel = "protocol-donut-${item.protocol.name}",
                 )
                 Text(
@@ -495,15 +518,27 @@ internal fun ProtocolStatCard(
                     fontWeight = FontWeight.SemiBold,
                 )
             }
-            Text(
-                text = stringResource(R.string.statistics_errors_percent, errorText),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.error,
-            )
+            Surface(
+                shape = MaterialTheme.shapes.extraLarge,
+                color =
+                if ((errorRate ?: 0f) > 0f) {
+                    tokens.colors.danger.copy(alpha = 0.12f)
+                } else {
+                    tokens.colors.positive.copy(alpha = 0.10f)
+                },
+                contentColor = if ((errorRate ?: 0f) > 0f) tokens.colors.danger else tokens.colors.positive,
+            ) {
+                Text(
+                    text = stringResource(R.string.statistics_errors_percent, errorText),
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
             Text(
                 text = footerText,
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = tokens.colors.mutedText,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -527,9 +562,11 @@ internal fun ProfileComparisonsSection(items: List<ProfileComparisonUiItem>) {
 
 @Composable
 internal fun ProfileComparisonCard(item: ProfileComparisonUiItem) {
+    val tokens = statisticsVisualTokens()
     Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHighest),
-        shape = MaterialTheme.shapes.small,
+        colors = CardDefaults.cardColors(containerColor = tokens.colors.rowContainer),
+        shape = MaterialTheme.shapes.large,
+        border = BorderStroke(tokens.dimens.cardBorderWidth, tokens.colors.metricTileBorder),
     ) {
         Column(
             modifier = Modifier.padding(10.dp),
@@ -551,7 +588,7 @@ internal fun ProfileComparisonCard(item: ProfileComparisonUiItem) {
                     stable = item.left.stability >= item.right.stability,
                     problematic = item.left.errorRate > item.right.errorRate,
                 )
-                HorizontalDivider(modifier = Modifier.width(30.dp), color = MaterialTheme.colorScheme.outlineVariant)
+                HorizontalDivider(modifier = Modifier.width(30.dp), color = tokens.colors.divider)
                 ComparisonSide(
                     side = item.right,
                     modifier = Modifier.weight(1f),
@@ -570,10 +607,23 @@ internal fun ComparisonSide(
     problematic: Boolean,
     modifier: Modifier = Modifier,
 ) {
+    val tokens = statisticsVisualTokens()
+    val borderColor =
+        when {
+            problematic -> tokens.colors.danger.copy(alpha = 0.42f)
+            stable -> tokens.colors.positive.copy(alpha = 0.38f)
+            else -> tokens.colors.metricTileBorder
+        }
     Surface(
         modifier = modifier,
-        shape = MaterialTheme.shapes.small,
-        color = MaterialTheme.colorScheme.surface,
+        shape = MaterialTheme.shapes.large,
+        color =
+        if (stable) {
+            tokens.colors.rowContainerSelected.copy(alpha = 0.42f)
+        } else {
+            tokens.colors.cardContainerElevated
+        },
+        border = BorderStroke(tokens.dimens.cardBorderWidth, borderColor),
         tonalElevation = 1.dp,
     ) {
         Column(
@@ -597,7 +647,7 @@ internal fun ComparisonSide(
                     stringResource(R.string.statistics_even)
                 },
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = tokens.colors.mutedText,
             )
             Text(
                 text =
@@ -610,7 +660,7 @@ internal fun ComparisonSide(
                     side.avgLatencyMs.formatLatency(),
                 ),
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = tokens.colors.mutedText,
             )
         }
     }
@@ -649,20 +699,25 @@ internal fun TransportRow(
         "${transportLabel(item.transport)} $usageText ${formatBytes(context, item.totalBytes)}"
     val barColor =
         when (item.transport) {
-            TransportProtocol.TCP -> MaterialTheme.colorScheme.primary
-            TransportProtocol.UDP -> MaterialTheme.colorScheme.tertiary
-            TransportProtocol.UNKNOWN -> MaterialTheme.colorScheme.onSurfaceVariant
+            TransportProtocol.TCP -> statisticsVisualTokens().colors.tx
+            TransportProtocol.UDP -> statisticsVisualTokens().colors.rx
+            TransportProtocol.UNKNOWN -> statisticsVisualTokens().colors.mutedText
         }
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        Canvas(modifier = Modifier.size(8.dp).clearAndSetSemantics {}) {
+            drawCircle(barColor)
+        }
         Text(
             text = transportLabel(item.transport),
-            modifier = Modifier.widthIn(min = 74.dp),
+            modifier = Modifier.width(78.dp),
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
         )
         SegmentedLinearBar(
             segments =
@@ -676,19 +731,19 @@ internal fun TransportRow(
             contentDescription = barDescription,
             modifier = Modifier
                 .weight(1f)
-                .height(10.dp),
+                .height(statisticsVisualTokens().dimens.mediumBarHeight),
         )
         Column(horizontalAlignment = Alignment.End) {
             Text(
                 text = usageText,
-                style = MaterialTheme.typography.labelMedium,
+                style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold,
                 textAlign = TextAlign.End,
             )
             Text(
                 text = formatBytes(context, item.totalBytes),
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = statisticsVisualTokens().colors.mutedText,
                 textAlign = TextAlign.End,
             )
         }
@@ -701,22 +756,19 @@ internal fun Float?.orZero(): Float = this ?: 0f
 internal fun StatisticsSectionCard(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     title: String,
+    subtitle: String? = null,
+    tone: StatisticsCardTone = StatisticsCardTone.Neutral,
     trailing: @Composable RowScope.() -> Unit = {},
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHighest),
-        shape = MaterialTheme.shapes.medium,
-    ) {
-        Column(
-            modifier = Modifier.padding(CardInnerPadding),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            SectionHeader(icon = icon, title = title, trailing = trailing)
-            content()
-        }
-    }
+    StatisticsDashboardCard(
+        icon = icon,
+        title = title,
+        subtitle = subtitle,
+        tone = tone,
+        trailing = trailing,
+        content = content,
+    )
 }
 
 @Composable
@@ -753,10 +805,9 @@ internal fun SectionHeader(
 
 @Composable
 internal fun EmptySectionText(text: String) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.bodyMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    StatisticsEmptyState(
+        icon = Icons.Outlined.BarChart,
+        title = text,
     )
 }
 
@@ -1038,11 +1089,7 @@ internal fun AppConnectionRowView(connection: AppConnectionRow) {
     val context = LocalContext.current
     val countryName = connection.countryName ?: stringResource(R.string.statistics_app_detail_country_unknown)
     val cityName = connection.city ?: stringResource(R.string.statistics_app_detail_city_unknown)
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 7.dp),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
+    StatisticsRowSurface {
         Text(
             text = countryEmoji(connection.countryCode),
             style = MaterialTheme.typography.titleMedium,
@@ -1074,7 +1121,7 @@ internal fun AppConnectionRowView(connection: AppConnectionRow) {
                     connection.lastSeenAt.formatLastActivity(),
                 ).joinToString(" • "),
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = statisticsVisualTokens().colors.mutedText,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -1094,38 +1141,12 @@ internal fun DetailMetricGrid(metrics: List<Pair<String, String>>) {
         EmptySectionText(text = stringResource(R.string.statistics_no_data))
         return
     }
-    Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
-        metrics.forEachIndexed { index, (label, value) ->
-            Row(
-                modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 7.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = label,
-                    modifier = Modifier.weight(1f),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    text = value,
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    textAlign = TextAlign.End,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-            if (index != metrics.lastIndex) {
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.36f))
-            }
-        }
-    }
+    StatisticsMetricTileGrid(
+        metrics =
+        metrics.map { (label, value) ->
+            StatisticsMetricTileModel(label = label, value = value)
+        },
+    )
 }
 
 internal data class ProtocolAccumulator(

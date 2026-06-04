@@ -1,5 +1,6 @@
 package com.foxhole.beta.ui
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -18,8 +19,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -34,6 +33,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -42,7 +42,10 @@ import com.foxhole.beta.core.model.AppTrafficWindow
 import com.foxhole.beta.core.model.NetworkActivityEvent
 import com.foxhole.beta.core.statistics.ChartColorToken
 import com.foxhole.beta.core.traffic.TorGeoIpCountryResolver
+import com.foxhole.beta.ui.statistics.StatisticsDashboardCard
+import com.foxhole.beta.ui.statistics.StatisticsEmptyState
 import com.foxhole.beta.ui.statistics.charts.chartColor
+import com.foxhole.beta.ui.statistics.statisticsVisualTokens
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -61,56 +64,52 @@ internal fun AppTrafficStatisticsCard(
     onRowClick: (AppTrafficRow) -> Unit,
 ) {
     var rangeExpanded by rememberSaveable { mutableStateOf(false) }
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHighest),
-        shape = MaterialTheme.shapes.medium,
-    ) {
-        Column(
-            modifier = Modifier.padding(CardInnerPadding),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            SectionHeader(
-                icon = Icons.Outlined.Apps,
-                title = stringResource(R.string.statistics_apps_top_title),
-                trailing = {
-                    StatisticsRangePillDropdown(
-                        value = range,
-                        expanded = rangeExpanded,
-                        onExpandedChange = { rangeExpanded = it },
-                        onSelect = onRangeSelected,
-                    )
-                },
+    StatisticsDashboardCard(
+        icon = Icons.Outlined.Apps,
+        title = stringResource(R.string.statistics_apps_top_title),
+        subtitle = stringResource(R.string.app_statistics_enabled_summary),
+        trailing = {
+            StatisticsRangePillDropdown(
+                value = range,
+                expanded = rangeExpanded,
+                onExpandedChange = { rangeExpanded = it },
+                onSelect = onRangeSelected,
             )
-            if (!usageAccessGranted) {
-                Text(
-                    text = stringResource(R.string.statistics_usage_access_summary),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                TextButton(onClick = onOpenUsageAccess) {
-                    Text(stringResource(R.string.statistics_usage_access_action))
+        },
+    ) {
+        if (!usageAccessGranted) {
+            StatisticsEmptyState(
+                icon = Icons.Outlined.Apps,
+                title = stringResource(R.string.statistics_usage_access_summary),
+                actionLabel = stringResource(R.string.statistics_usage_access_action),
+                onAction = onOpenUsageAccess,
+            )
+        } else if (!enabled) {
+            StatisticsEmptyState(
+                icon = Icons.Outlined.Apps,
+                title = stringResource(R.string.app_statistics_disabled_body),
+            )
+        } else if (rows.isEmpty()) {
+            StatisticsEmptyState(
+                icon = Icons.Outlined.Apps,
+                title = stringResource(R.string.app_statistics_empty),
+            )
+        } else {
+            AppTrafficTopStackedChart(
+                rows = rows,
+                onRowClick = onRowClick,
+            )
+            if (allRowsCount > rows.size) {
+                TextButton(onClick = onShowAll) {
+                    Text(stringResource(R.string.show_all_label))
                 }
-            } else if (!enabled) {
-                Text(
-                    text = stringResource(R.string.app_statistics_disabled_body),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            } else if (rows.isEmpty()) {
-                EmptySectionText(text = stringResource(R.string.app_statistics_empty))
-            } else {
-                AppTrafficTopStackedChart(
-                    rows = rows,
-                    onRowClick = onRowClick,
-                )
-                if (allRowsCount > rows.size) {
-                    TextButton(onClick = onShowAll) {
-                        Text(stringResource(R.string.show_all_label))
-                    }
-                }
-                AppTrafficTimelineChart(samples = samples, range = range, nowMs = nowMs)
             }
+            Text(
+                text = stringResource(R.string.statistics_chart_axes_app_timeline),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+            )
+            AppTrafficTimelineChart(samples = samples, range = range, nowMs = nowMs)
         }
     }
 }
@@ -120,15 +119,16 @@ internal fun AppTrafficRowView(
     row: AppTrafficRow,
     onClick: (() -> Unit)? = null,
 ) {
+    val tokens = statisticsVisualTokens()
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
-            .padding(vertical = 8.dp),
+            .padding(vertical = tokens.dimens.rowVerticalPadding),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        AppIcon(packageName = row.packageName, modifier = Modifier.size(42.dp))
+        AppIcon(packageName = row.packageName, modifier = Modifier.size(36.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(row.label, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.SemiBold)
             Text(
@@ -149,19 +149,35 @@ internal fun TrafficCells(tx: Long, rx: Long) {
     val context = LocalContext.current
     val txColor = chartColor(ChartColorToken.TX)
     val rxColor = chartColor(ChartColorToken.RX)
+    val mutedText = statisticsVisualTokens().colors.mutedText
     Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(horizontalAlignment = Alignment.End) {
-            Text(
-                formatBytes(context, tx),
-                style = MaterialTheme.typography.labelMedium,
-                color = txColor,
-            )
-            Text(formatBytes(context, rx), style = MaterialTheme.typography.labelMedium, color = rxColor)
+            TrafficCellLine(color = txColor, text = formatBytes(context, tx), mutedText = mutedText)
+            TrafficCellLine(color = rxColor, text = formatBytes(context, rx), mutedText = mutedText)
         }
         Text(
             formatBytes(context, tx + rx),
             style = MaterialTheme.typography.labelLarge,
             fontWeight = FontWeight.SemiBold
+        )
+    }
+}
+
+@Composable
+private fun TrafficCellLine(
+    color: androidx.compose.ui.graphics.Color,
+    text: String,
+    mutedText: androidx.compose.ui.graphics.Color,
+) {
+    Row(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically) {
+        Canvas(modifier = Modifier.size(7.dp).clearAndSetSemantics {}) {
+            drawCircle(color)
+        }
+        Text(
+            text,
+            style = MaterialTheme.typography.labelMedium,
+            color = mutedText,
+            maxLines = 1,
         )
     }
 }

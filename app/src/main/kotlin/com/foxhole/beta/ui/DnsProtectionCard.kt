@@ -10,13 +10,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Dns
-import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -35,6 +36,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.foxhole.beta.R
+import com.foxhole.beta.ui.statistics.StatisticsMetricTileGrid
+import com.foxhole.beta.ui.statistics.StatisticsMetricTileModel
+import com.foxhole.beta.ui.statistics.StatisticsRowSurface
+import com.foxhole.beta.ui.statistics.statisticsVisualTokens
 import kotlin.math.roundToLong
 
 @Composable
@@ -53,8 +58,9 @@ internal fun DnsProtectionCard(
     val blockedDomainRows = summary.domainRows
     val topBlockedDomainRows = remember(blockedDomainRows) { blockedDomainRows.take(STATISTICS_TOP_PREVIEW_LIMIT) }
     StatisticsSectionCard(
-        icon = Icons.Outlined.Public,
+        icon = Icons.Outlined.Dns,
         title = stringResource(R.string.statistics_dns_filtering_title),
+        subtitle = stringResource(R.string.statistics_dns_real_summary),
         trailing = {
             StatisticsRangePillDropdown(
                 value = range,
@@ -64,30 +70,33 @@ internal fun DnsProtectionCard(
             )
         },
     ) {
+        val tokens = statisticsVisualTokens()
         Text(
             text = stringResource(R.string.statistics_dns_active_list),
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.primary,
             fontWeight = FontWeight.SemiBold,
         )
-        Text(
-            text = stringResource(R.string.statistics_dns_real_summary),
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        DetailMetricGrid(
+        StatisticsMetricTileGrid(
             metrics =
-            listOfNotNull(
-                metricIfPositive(
-                    stringResource(R.string.statistics_dns_blocked_queries),
-                    summary.blockedQueries,
+            listOf(
+                StatisticsMetricTileModel(
+                    label = stringResource(R.string.statistics_dns_blocked_queries),
+                    value = summary.blockedQueries.toString(),
+                    accent = tokens.colors.danger,
                 ),
-                metricIfPositive(
-                    stringResource(R.string.statistics_dns_allowed_queries),
-                    summary.allowedQueries,
+                StatisticsMetricTileModel(
+                    label = stringResource(R.string.statistics_dns_allowed_queries),
+                    value = summary.allowedQueries.toString(),
+                    accent = tokens.colors.positive,
                 ),
-                stringResource(R.string.statistics_dns_block_ratio) to formatPercent(summary.blockRatio),
+                StatisticsMetricTileModel(
+                    label = stringResource(R.string.statistics_dns_block_ratio),
+                    value = formatPercent(summary.blockRatio),
+                    accent = if (summary.blockRatio > 0f) tokens.colors.warning else tokens.colors.mutedText,
+                ),
             ),
+            columns = 3,
         )
         if (summary.categoryRows.isNotEmpty()) {
             Text(
@@ -135,7 +144,7 @@ internal fun DnsProtectionCard(
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 topBlockedDomainRows.forEach { row ->
                     DnsProtectionDomainRowView(row = row)
                 }
@@ -277,46 +286,46 @@ internal fun DnsProtectionAppRowView(
     totalBytesText: String,
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 7.dp),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth(),
     ) {
-        AppIcon(packageName = row.packageName, modifier = Modifier.size(34.dp))
-        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(
-                text = row.label,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            DnsAppDropStack(row)
-            Text(
-                text = row.packageName,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-        Column(horizontalAlignment = Alignment.End) {
-            Text(
-                text = formatPercent(row.blockRatio),
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Text(
-                text =
-                pluralStringResource(
-                    R.plurals.statistics_dns_blocked_app_value,
-                    row.estimatedBlockedQueries,
-                    row.estimatedBlockedQueries,
-                    totalBytesText,
-                ),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.End,
-            )
+        StatisticsRowSurface {
+            AppIcon(packageName = row.packageName, modifier = Modifier.size(36.dp))
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    text = row.label,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                DnsAppDropStack(row)
+                Text(
+                    text = row.packageName,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = statisticsVisualTokens().colors.mutedText,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            Column(horizontalAlignment = Alignment.End) {
+                Text(
+                    text = formatPercent(row.blockRatio),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    text =
+                    pluralStringResource(
+                        R.plurals.statistics_dns_blocked_app_value,
+                        row.estimatedBlockedQueries,
+                        row.estimatedBlockedQueries,
+                        totalBytesText,
+                    ),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = statisticsVisualTokens().colors.mutedText,
+                    textAlign = TextAlign.End,
+                )
+            }
         }
     }
 }
@@ -324,38 +333,46 @@ internal fun DnsProtectionAppRowView(
 @Composable
 internal fun DnsProtectionDomainRowView(row: DnsProtectionDomainRow) {
     Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 7.dp),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth(),
     ) {
-        Icon(
-            imageVector = Icons.Outlined.Dns,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(22.dp),
-        )
-        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        StatisticsRowSurface {
+            Surface(
+                modifier = Modifier.size(30.dp),
+                shape = RoundedCornerShape(12.dp),
+                color = statisticsVisualTokens().colors.headerIconContainer,
+                contentColor = statisticsVisualTokens().colors.headerIconTint,
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = Icons.Outlined.Dns,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                    )
+                }
+            }
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    text = row.domain,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = stringResource(R.string.statistics_dns_domain_quality_real),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = statisticsVisualTokens().colors.mutedText,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
             Text(
-                text = row.domain,
-                style = MaterialTheme.typography.bodyMedium,
+                text = stringResource(R.string.statistics_dns_blocked_domain_value, row.blockedQueries),
+                style = MaterialTheme.typography.labelMedium,
                 fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                text = stringResource(R.string.statistics_dns_domain_quality_real),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.End,
             )
         }
-        Text(
-            text = stringResource(R.string.statistics_dns_blocked_domain_value, row.blockedQueries),
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.SemiBold,
-            textAlign = TextAlign.End,
-        )
     }
 }
 

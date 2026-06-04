@@ -37,6 +37,7 @@ fun AnimatedSplitDonutChart(
     visible: Boolean,
     contentDescription: String,
     modifier: Modifier = Modifier,
+    strokeWidth: Dp? = null,
     successColor: Color = chartColor(ChartColorToken.SUCCESS),
     errorColor: Color = chartColor(ChartColorToken.ERROR),
     animationLabel: String = "split-donut-progress",
@@ -48,7 +49,7 @@ fun AnimatedSplitDonutChart(
         label = animationLabel,
     )
     Canvas(modifier = modifier.semantics { this.contentDescription = contentDescription }) {
-        val stroke = Stroke(width = tokens.ringStrokeWidth.toPx(), cap = StrokeCap.Round)
+        val stroke = Stroke(width = (strokeWidth ?: tokens.ringStrokeWidth).toPx(), cap = StrokeCap.Round)
         val successSweep = 360f * successRate.coerceIn(0f, 1f) * progress
         val errorSweep = 360f * errorRate.coerceIn(0f, 1f) * progress
         drawArc(
@@ -82,6 +83,7 @@ fun AnimatedSegmentDonutChart(
     visible: Boolean,
     contentDescription: String,
     modifier: Modifier = Modifier,
+    strokeWidth: Dp? = null,
     animationLabel: String = "segment-donut-progress",
 ) {
     val tokens = chartVisualTokens()
@@ -92,7 +94,7 @@ fun AnimatedSegmentDonutChart(
         label = animationLabel,
     )
     Canvas(modifier = modifier.semantics { this.contentDescription = contentDescription }) {
-        val stroke = Stroke(width = tokens.ringStrokeWidth.toPx(), cap = StrokeCap.Round)
+        val stroke = Stroke(width = (strokeWidth ?: tokens.ringStrokeWidth).toPx(), cap = StrokeCap.Round)
         var start = -90f
         drawArc(
             color = tokens.ringTrackColor,
@@ -173,8 +175,8 @@ fun VerticalValueBarChart(
         val chartTop = 8.dp.toPx()
         val chartBottom = size.height - 4.dp.toPx()
         val chartHeight = (chartBottom - chartTop).coerceAtLeast(1f)
-        val dash = PathEffect.dashPathEffect(floatArrayOf(8f, 8f))
-        val gridStrokeWidth = 1.dp.toPx()
+        val dash = PathEffect.dashPathEffect(floatArrayOf(6f, 9f))
+        val gridStrokeWidth = tokens.gridStrokeWidth.toPx()
         listOf(0f, 0.5f, 1f).forEach { ratio ->
             val y = chartBottom - chartHeight * ratio
             drawLine(
@@ -186,7 +188,7 @@ fun VerticalValueBarChart(
             )
         }
         val slotWidth = size.width / values.size.coerceAtLeast(1).toFloat()
-        val barWidth = (slotWidth * 0.48f).coerceAtMost(18.dp.toPx())
+        val barWidth = (slotWidth * 0.48f).coerceIn(tokens.barMinWidth.toPx(), 20.dp.toPx())
         val radius = CornerRadius(tokens.barCornerRadius.toPx(), tokens.barCornerRadius.toPx())
         values.forEachIndexed { index, value ->
             val normalized = value.toFloat() / maxValue.coerceAtLeast(1L).toFloat()
