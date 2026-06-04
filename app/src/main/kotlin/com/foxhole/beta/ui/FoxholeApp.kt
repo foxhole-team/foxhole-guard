@@ -382,6 +382,8 @@ fun FoxholeApp(
                                 },
                                 onImportFromQr = { qrScannerVisible = true },
                                 onRefreshProfile = viewModel::onRefreshProfile,
+                                onRestartProfile = viewModel::onRestartActiveProfile,
+                                onRefreshAndRestartProfile = viewModel::onRefreshAndRestartActiveProfile,
                                 onToggleConnection = viewModel::onToggleConnection,
                                 onAutoConnect = viewModel::onAutoConnectActiveProfile,
                                 onTrafficModeSelected = viewModel::onTrafficModeSelected,

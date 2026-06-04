@@ -1035,6 +1035,31 @@ class HomeViewModel(
         }
     }
 
+    fun onRestartActiveProfile() {
+        val activeProfile = controlUiState.value.activeProfile ?: return
+        val snapshot = controlUiState.value.connection
+        if (snapshot.state != ConnectionState.CONNECTED || snapshot.profileId != activeProfile.id) {
+            return
+        }
+        requestReconnect(activeProfile.id)
+    }
+
+    fun onRefreshAndRestartActiveProfile() {
+        val activeProfile = controlUiState.value.activeProfile ?: return
+        if (activeProfile.sourceType != ProfileSourceType.SUBSCRIPTION_URL) {
+            onRestartActiveProfile()
+            return
+        }
+        viewModelScope.launch {
+            refreshProfileWithInsecureTlsDecision(
+                profileId = activeProfile.id,
+                allowInsecureTlsForProfile = false,
+                excludeInsecureTlsOptions = false,
+                restartActiveRuntime = true,
+            )
+        }
+    }
+
     fun onSelectProfile(profileId: Long) {
         cancelAutoConnect(clearUiOnly = true)
         viewModelScope.launch {

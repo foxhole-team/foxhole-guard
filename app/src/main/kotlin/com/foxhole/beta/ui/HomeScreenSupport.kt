@@ -2302,12 +2302,7 @@ private fun connectionDurationTickDelayMillis(elapsedMs: Long): Long =
         else -> 1_000L
     }
 
-internal fun dashboardProfileTitle(title: String): String =
-    if (title.length <= 25) {
-        title
-    } else {
-        "${title.take(23)}.."
-    }
+internal fun dashboardProfileTitle(title: String): String = title
 
 @Suppress("CyclomaticComplexMethod", "LongMethod")
 @Composable

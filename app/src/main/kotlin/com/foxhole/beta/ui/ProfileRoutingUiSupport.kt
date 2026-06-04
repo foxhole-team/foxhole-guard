@@ -1063,7 +1063,7 @@ internal fun InlineSmartProfileTitle(
         ) {
             Text(
                 text = title,
-                modifier = Modifier.weight(1f, fill = false),
+                modifier = Modifier.weight(1f),
                 style = style,
                 fontWeight = fontWeight,
                 maxLines = maxLines,

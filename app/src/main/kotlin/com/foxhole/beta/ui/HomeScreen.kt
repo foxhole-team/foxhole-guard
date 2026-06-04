@@ -139,6 +139,8 @@ fun HomeScreen(
     onImportFromFile: () -> Unit,
     onImportFromQr: () -> Unit,
     onRefreshProfile: () -> Unit,
+    onRestartProfile: () -> Unit,
+    onRefreshAndRestartProfile: () -> Unit,
     onToggleConnection: () -> Unit,
     onAutoConnect: () -> Unit,
     onTrafficModeSelected: (TrafficMode) -> Unit,
@@ -167,7 +169,9 @@ fun HomeScreen(
     DebugRecompositionCounter("HomeScreen")
     val context = LocalContext.current
     var importMenuExpanded by rememberSaveable { mutableStateOf(false) }
-    var showRefreshProfileDialog by rememberSaveable { mutableStateOf(false) }
+    var pendingRefreshProfileAction by rememberSaveable {
+        mutableStateOf<HomeDashboardProfileActionKind?>(null)
+    }
     var smartRefreshConfirmationProfileId by rememberSaveable { mutableStateOf<Long?>(null) }
     var smartStartFirstAnalysisProfileId by rememberSaveable { mutableStateOf<Long?>(null) }
     var acceptedSmartStartFirstAnalysisProfileId by rememberSaveable { mutableStateOf<Long?>(null) }
@@ -275,14 +279,10 @@ fun HomeScreen(
     val dashboardSelectedLatencyMs = dashboardLatencyPresentation.latencyMs
     val dashboardSelectedLatencyDown = dashboardLatencyPresentation.isDown
     val dashboardSelectedLatencyUnavailable = dashboardLatencyPresentation.isUnavailable
-    val dashboardLatencyPillVisible =
-        dashboardSelectedLatencyMs != null ||
-            dashboardSelectedLatencyDown ||
-            dashboardSelectedLatencyUnavailable
-    val dashboardProtocolPresentation = dashboardProtocolModel.presentation
     val dashboardConnectionDetailsReady = dashboardProtocolModel.connectionDetailsReady
     val dashboardConnectionMetricsLoading = dashboardProtocolModel.connectionMetricsLoading
-    val dashboardLatencySkeletonVisible = dashboardConnectionMetricsLoading && dashboardLatencyPillVisible
+    val dashboardLatencySkeletonVisible = dashboardConnectionMetricsLoading && state.activeProfile != null
+    val dashboardProtocolPresentation = dashboardProtocolModel.presentation
     val protocolMetricsAnalysisState =
         remember(
             state.protocolMetricsRefreshingOptionId,
@@ -426,6 +426,17 @@ fun HomeScreen(
     val isSmartDashboardProfile = profileModel.isSmartDashboardProfile
     val selectedProfileId = profileModel.selectedProfileId
     val localGuardProfileRuntimeActive = profileModel.localGuardActive
+    val profileActionPresentation =
+        remember(
+            state.activeProfile,
+            state.connection.state,
+            state.connection.profileId,
+        ) {
+            resolveHomeDashboardProfileActionPresentation(
+                activeProfile = state.activeProfile,
+                connection = state.connection,
+            )
+        }
     val activeProfileId = selectedProfileId
     val firstAnalysisProtocolMenuActive = firstAnalysisProtocolMenuProfileId == activeProfileId
     val firstAnalysisProtocolMenuBusy = state.autoConnect.running || state.protocolMetricsRefreshing
@@ -921,8 +932,16 @@ fun HomeScreen(
                             }
                         }
                         OutlinedButton(
-                            onClick = { showRefreshProfileDialog = true },
-                            enabled = state.activeProfile?.sourceType == ProfileSourceType.SUBSCRIPTION_URL,
+                            onClick = {
+                                when (profileActionPresentation.kind) {
+                                    HomeDashboardProfileActionKind.REFRESH_SUBSCRIPTION ->
+                                        pendingRefreshProfileAction = profileActionPresentation.kind
+                                    HomeDashboardProfileActionKind.REFRESH_AND_RESTART_SUBSCRIPTION ->
+                                        pendingRefreshProfileAction = profileActionPresentation.kind
+                                    HomeDashboardProfileActionKind.RESTART -> onRestartProfile()
+                                }
+                            },
+                            enabled = profileActionPresentation.enabled,
                             modifier =
                                 Modifier
                                     .weight(1f)
@@ -937,7 +956,7 @@ fun HomeScreen(
                                 modifier = Modifier.size(dashboardSecondaryActionIconSize),
                             )
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text(stringResource(R.string.refresh))
+                            Text(stringResource(profileActionPresentation.labelRes))
                         }
                     }
                                 }
@@ -1122,18 +1141,18 @@ fun HomeScreen(
                                         ) {
                                             val connectionDurationText = rememberConnectionDurationText(state.connection)
                                             val connectionMetricsAvailable = state.connection.state == ConnectionState.CONNECTED
-                                            val serverPingText =
-                                                when {
-                                                    !connectionMetricsAvailable -> stringResource(R.string.smart_start_protocol_status_no_data)
-                                                    dashboardProtocolModel.selectedServerPingMs != null ->
-                                                        latencyPillValueText(
-                                                            dashboardProtocolModel.selectedServerPingMs,
-                                                        )
-                                                    dashboardProtocolModel.selectedServerPingUnavailable ->
-                                                        stringResource(R.string.latency_pill_unavailable)
-                                                    else ->
-                                                        stringResource(R.string.smart_profile_metric_unavailable)
-                                                }
+                                            val serverPingValue =
+                                                homeNetworkServerPingDetailValue(
+                                                    connectionMetricsAvailable = connectionMetricsAvailable,
+                                                    selectedServerPingText =
+                                                        dashboardProtocolModel.selectedServerPingMs
+                                                            ?.let { latencyMs -> latencyPillValueText(latencyMs) },
+                                                    selectedServerPingUnavailable =
+                                                        dashboardProtocolModel.selectedServerPingUnavailable,
+                                                    noDataText =
+                                                        stringResource(R.string.smart_start_protocol_status_no_data),
+                                                    unavailableText = stringResource(R.string.latency_pill_unavailable),
+                                                )
                                             val remoteDnsServer =
                                                 networkIpInfo?.remoteDnsServers?.firstOrNull { server -> server.isNotBlank() }
                                             val localDnsServer =
@@ -1158,7 +1177,8 @@ fun HomeScreen(
                                             HomeNetworkDetailLine(
                                                 icon = Icons.Outlined.Speed,
                                                 label = stringResource(R.string.home_network_server_ping_label),
-                                                value = serverPingText,
+                                                value = serverPingValue.text,
+                                                valueLoading = serverPingValue.loading,
                                                 valueMonospace = connectionMetricsAvailable && dashboardProtocolModel.selectedServerPingMs != null,
                                             )
                                             HomeNetworkSubtleDivider()
@@ -1395,12 +1415,16 @@ fun HomeScreen(
         }
     }
 
-    if (showRefreshProfileDialog) {
+    pendingRefreshProfileAction?.let { pendingAction ->
         ProfileRefreshConfirmDialog(
-            onDismiss = { showRefreshProfileDialog = false },
+            onDismiss = { pendingRefreshProfileAction = null },
             onConfirm = {
-                showRefreshProfileDialog = false
-                onRefreshProfile()
+                pendingRefreshProfileAction = null
+                when (pendingAction) {
+                    HomeDashboardProfileActionKind.REFRESH_AND_RESTART_SUBSCRIPTION -> onRefreshAndRestartProfile()
+                    HomeDashboardProfileActionKind.REFRESH_SUBSCRIPTION -> onRefreshProfile()
+                    HomeDashboardProfileActionKind.RESTART -> onRestartProfile()
+                }
             },
         )
     }

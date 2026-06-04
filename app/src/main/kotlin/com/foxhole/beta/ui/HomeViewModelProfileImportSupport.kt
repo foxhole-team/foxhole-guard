@@ -189,13 +189,22 @@ internal suspend fun HomeViewModel.refreshProfileWithInsecureTlsDecision(
     profileId: Long,
     allowInsecureTlsForProfile: Boolean,
     excludeInsecureTlsOptions: Boolean,
+    restartActiveRuntime: Boolean = false,
 ) {
     runCatching {
-        refreshProfileAndMaybeReconnect(
-            profileId = profileId,
-            excludeInsecureTlsOptions = excludeInsecureTlsOptions,
-            allowInsecureTlsForProfile = allowInsecureTlsForProfile,
-        )
+        if (restartActiveRuntime) {
+            refreshProfileAndRestartActiveRuntimeInternal(
+                profileId = profileId,
+                excludeInsecureTlsOptions = excludeInsecureTlsOptions,
+                allowInsecureTlsForProfile = allowInsecureTlsForProfile,
+            )
+        } else {
+            refreshProfileAndMaybeReconnect(
+                profileId = profileId,
+                excludeInsecureTlsOptions = excludeInsecureTlsOptions,
+                allowInsecureTlsForProfile = allowInsecureTlsForProfile,
+            )
+        }
     }.onFailure { error ->
         if (error is InsecureTlsProfileConsentRequiredException) {
             insecureTlsImportWarningMutable.value =
@@ -205,6 +214,31 @@ internal suspend fun HomeViewModel.refreshProfileWithInsecureTlsDecision(
             handleProfileRefreshFailure(profileId, error)
         }
     }
+}
+
+private suspend fun HomeViewModel.refreshProfileAndRestartActiveRuntimeInternal(
+    profileId: Long,
+    excludeInsecureTlsOptions: Boolean,
+    allowInsecureTlsForProfile: Boolean,
+) {
+    container.connectionController.refreshProfile(
+        profileId = profileId,
+        excludeInsecureTlsOptions = excludeInsecureTlsOptions,
+        allowInsecureTlsForProfile = allowInsecureTlsForProfile,
+    )
+    val activeRuntime =
+        container.connectionController.snapshot.value.profileId == profileId &&
+            container.connectionController.snapshot.value.state in HomeViewModel.ACTIVE_CONNECTION_STATES
+    if (activeRuntime) {
+        requestReconnect(profileId)
+    }
+    val messageRes =
+        if (activeRuntime) {
+            R.string.profile_refreshed_reconnecting
+        } else {
+            R.string.profile_refreshed
+        }
+    emitSuccess(getApplication<Application>().getString(messageRes))
 }
 
 internal suspend fun HomeViewModel.handleProfileRefreshFailureInternal(

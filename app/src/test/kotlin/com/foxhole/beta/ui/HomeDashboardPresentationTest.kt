@@ -34,6 +34,106 @@ import org.junit.Test
 @Suppress("LargeClass")
 class HomeDashboardPresentationTest {
     @Test
+    fun `dashboard profile action refreshes disconnected subscriptions`() {
+        val action =
+            resolveHomeDashboardProfileActionPresentation(
+                activeProfile = smartProfile(),
+                connection = ConnectionSnapshot(state = ConnectionState.IDLE),
+            )
+
+        assertEquals(R.string.refresh, action.labelRes)
+        assertTrue(action.enabled)
+        assertEquals(HomeDashboardProfileActionKind.REFRESH_SUBSCRIPTION, action.kind)
+    }
+
+    @Test
+    fun `dashboard profile action restarts connected subscriptions after refresh`() {
+        val action =
+            resolveHomeDashboardProfileActionPresentation(
+                activeProfile = smartProfile(),
+                connection = ConnectionSnapshot(state = ConnectionState.CONNECTED, profileId = 1L),
+            )
+
+        assertEquals(R.string.reconnect, action.labelRes)
+        assertTrue(action.enabled)
+        assertEquals(HomeDashboardProfileActionKind.REFRESH_AND_RESTART_SUBSCRIPTION, action.kind)
+    }
+
+    @Test
+    fun `dashboard profile action restarts connected non subscription profiles`() {
+        val action =
+            resolveHomeDashboardProfileActionPresentation(
+                activeProfile = smartProfile().copy(sourceType = ProfileSourceType.SHARE_URI),
+                connection = ConnectionSnapshot(state = ConnectionState.CONNECTED, profileId = 1L),
+            )
+
+        assertEquals(R.string.reconnect, action.labelRes)
+        assertTrue(action.enabled)
+        assertEquals(HomeDashboardProfileActionKind.RESTART, action.kind)
+    }
+
+    @Test
+    fun `dashboard profile action disables restart for disconnected non subscription profiles`() {
+        val action =
+            resolveHomeDashboardProfileActionPresentation(
+                activeProfile = smartProfile().copy(sourceType = ProfileSourceType.SHARE_URI),
+                connection = ConnectionSnapshot(state = ConnectionState.IDLE),
+            )
+
+        assertEquals(R.string.reconnect, action.labelRes)
+        assertFalse(action.enabled)
+        assertEquals(HomeDashboardProfileActionKind.RESTART, action.kind)
+    }
+
+    @Test
+    fun `server ping detail shows skeleton while connected ping is still pending`() {
+        assertEquals(
+            HomeNetworkDetailValue(text = "", loading = true),
+            homeNetworkServerPingDetailValue(
+                connectionMetricsAvailable = true,
+                selectedServerPingText = null,
+                selectedServerPingUnavailable = false,
+                noDataText = "No data",
+                unavailableText = "unavailable",
+            ),
+        )
+    }
+
+    @Test
+    fun `server ping detail distinguishes no data unavailable and measured values`() {
+        assertEquals(
+            HomeNetworkDetailValue(text = "No data", loading = false),
+            homeNetworkServerPingDetailValue(
+                connectionMetricsAvailable = false,
+                selectedServerPingText = null,
+                selectedServerPingUnavailable = false,
+                noDataText = "No data",
+                unavailableText = "unavailable",
+            ),
+        )
+        assertEquals(
+            HomeNetworkDetailValue(text = "unavailable", loading = false),
+            homeNetworkServerPingDetailValue(
+                connectionMetricsAvailable = true,
+                selectedServerPingText = null,
+                selectedServerPingUnavailable = true,
+                noDataText = "No data",
+                unavailableText = "unavailable",
+            ),
+        )
+        assertEquals(
+            HomeNetworkDetailValue(text = "72 ms", loading = false),
+            homeNetworkServerPingDetailValue(
+                connectionMetricsAvailable = true,
+                selectedServerPingText = "72 ms",
+                selectedServerPingUnavailable = false,
+                noDataText = "No data",
+                unavailableText = "unavailable",
+            ),
+        )
+    }
+
+    @Test
     fun `primary action stays stop while reconnecting even if reconnect is required`() {
         assertEquals(
             HomePrimaryAction.STOP,
@@ -365,6 +465,28 @@ class HomeDashboardPresentationTest {
                 ),
             )
 
+        assertTrue(model.connectionMetricsLoading)
+    }
+
+    @Test
+    fun `protocol model shows latency loading for single profiles during restart`() {
+        val model =
+            resolveHomeDashboardProtocolModel(
+                HomeRouteUiState(
+                    activeProfile =
+                        smartProfile().copy(
+                            sourceType = ProfileSourceType.SHARE_URI,
+                            protocolOptions = emptyList(),
+                            selectedProtocolOptionId = null,
+                        ),
+                    connection = ConnectionSnapshot(state = ConnectionState.IDLE),
+                    reconnectInProgress = true,
+                ),
+            )
+
+        assertNull(model.latencyPresentation.latencyMs)
+        assertFalse(model.latencyPresentation.isDown)
+        assertFalse(model.latencyPresentation.isUnavailable)
         assertTrue(model.connectionMetricsLoading)
     }
 

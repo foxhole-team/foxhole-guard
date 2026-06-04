@@ -144,6 +144,18 @@ internal data class HomeNetworkDetailValue(
     val loading: Boolean,
 )
 
+internal enum class HomeDashboardProfileActionKind {
+    REFRESH_SUBSCRIPTION,
+    REFRESH_AND_RESTART_SUBSCRIPTION,
+    RESTART,
+}
+
+internal data class HomeDashboardProfileActionPresentation(
+    val labelRes: Int,
+    val enabled: Boolean,
+    val kind: HomeDashboardProfileActionKind,
+)
+
 internal data class HomeNetworkDetailLoadingPolicy(
     val country: Boolean,
     val city: Boolean,
@@ -673,6 +685,43 @@ internal fun resolveHomeDashboardProfileModel(
         localGuardActive = runtimeMode == HomeDashboardRuntimeMode.LOCAL_GUARD,
         isSmartDashboardProfile = state.activeProfile?.let(MultiProtocolProfileSupport::hasMultipleSupportedOptions) == true,
     )
+}
+
+internal fun resolveHomeDashboardProfileActionPresentation(
+    activeProfile: Profile?,
+    connection: ConnectionSnapshot,
+): HomeDashboardProfileActionPresentation {
+    val connectedToActiveProfile =
+        activeProfile != null &&
+            connection.state == ConnectionState.CONNECTED &&
+            connection.profileId == activeProfile.id
+    val subscriptionProfile = activeProfile?.sourceType == ProfileSourceType.SUBSCRIPTION_URL
+    return when {
+        connectedToActiveProfile && subscriptionProfile ->
+            HomeDashboardProfileActionPresentation(
+                labelRes = R.string.reconnect,
+                enabled = true,
+                kind = HomeDashboardProfileActionKind.REFRESH_AND_RESTART_SUBSCRIPTION,
+            )
+        connectedToActiveProfile ->
+            HomeDashboardProfileActionPresentation(
+                labelRes = R.string.reconnect,
+                enabled = true,
+                kind = HomeDashboardProfileActionKind.RESTART,
+            )
+        subscriptionProfile ->
+            HomeDashboardProfileActionPresentation(
+                labelRes = R.string.refresh,
+                enabled = true,
+                kind = HomeDashboardProfileActionKind.REFRESH_SUBSCRIPTION,
+            )
+        else ->
+            HomeDashboardProfileActionPresentation(
+                labelRes = R.string.reconnect,
+                enabled = false,
+                kind = HomeDashboardProfileActionKind.RESTART,
+            )
+    }
 }
 
 internal fun resolveHomeDashboardNetworkModel(
@@ -1648,6 +1697,20 @@ internal fun homeNetworkDetailValue(
         text = value ?: if (loading) "" else "-",
         loading = loading && value == null,
     )
+
+internal fun homeNetworkServerPingDetailValue(
+    connectionMetricsAvailable: Boolean,
+    selectedServerPingText: String?,
+    selectedServerPingUnavailable: Boolean,
+    noDataText: String,
+    unavailableText: String,
+): HomeNetworkDetailValue =
+    when {
+        !connectionMetricsAvailable -> HomeNetworkDetailValue(text = noDataText, loading = false)
+        selectedServerPingText != null -> HomeNetworkDetailValue(text = selectedServerPingText, loading = false)
+        selectedServerPingUnavailable -> HomeNetworkDetailValue(text = unavailableText, loading = false)
+        else -> HomeNetworkDetailValue(text = "", loading = true)
+    }
 
 internal fun homeNetworkGeoRowDetailValue(
     value: String?,
