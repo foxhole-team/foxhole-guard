@@ -404,6 +404,34 @@ class HomeRuntimeBehaviorTest {
         }
     }
 
+    @Test
+    fun staleVpnPermissionResultWithoutPendingRequestOnlyRecordsDiagnostic() {
+        val deniedMessage =
+            InstrumentationRegistry.getInstrumentation()
+                .targetContext
+                .getString(R.string.vpn_permission_denied)
+        val viewModel =
+            ViewModelProvider(
+                composeRule.activity,
+                HomeViewModel.factory(app()),
+            )[HomeViewModel::class.java]
+
+        composeRule.runOnUiThread {
+            app().container.diagnosticsLogger.clear()
+            viewModel.onVpnPermissionResult(granted = false)
+        }
+
+        composeRule.waitUntil(timeoutMillis = 3_000) {
+            app().container.diagnosticsLogger.entries.value.any {
+                it.tag == "permissions" &&
+                    it.message == "ignored vpn permission result without active request granted=false"
+            }
+        }
+        composeRule.waitForIdle()
+
+        composeRule.onAllNodesWithText(deniedMessage).assertCountEquals(0)
+    }
+
     private fun waitUntilNetworkBlockSettles() {
         val expectedIp = "198.51.100.11"
         seedNetworkBlock(expectedIp)
