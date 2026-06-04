@@ -738,6 +738,7 @@ object FoxholeVpnRuntimeBridge {
     private val highFrequencyTrafficUpdatesMutable = MutableStateFlow(false)
     private val immediateTrafficSampleRequestsMutable = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     private val runtimeUiStateMutable = MutableStateFlow(RuntimeUiState())
+
     @Volatile
     private var socketProtector: ((Socket) -> Boolean)? = null
     private var pendingIpRefreshReason: RuntimeIpRefreshReason? = null
@@ -816,7 +817,7 @@ object FoxholeVpnRuntimeBridge {
     }
 
     internal fun protectDirectSocket(socket: Socket): Boolean =
-        socketProtector?.invoke(socket) ?: true
+        socketProtector?.invoke(socket) ?: false
 
     fun setHighFrequencyTrafficUpdates(enabled: Boolean) {
         highFrequencyTrafficUpdatesMutable.value = enabled

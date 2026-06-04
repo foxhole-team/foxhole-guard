@@ -1,7 +1,7 @@
 package com.foxhole.beta.core.diagnostics
 
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -277,4 +277,22 @@ class DiagnosticSanitizerTest {
         assertFalse(second.contains("1.1.1.1"))
         assertFalse(second.contains("secret.example"))
     }
+
+    @Test
+    fun `ip info diagnostic logcat uses export sanitizer`() {
+        val source = testSourceFile("core/network/IpInfoRepository.kt").readText()
+        val diagnosticLogBlock =
+            source.substringAfter("private fun diagnosticLog(message: String)")
+                .substringBefore("private fun String.ipInfoHostLabel()")
+
+        assertTrue(diagnosticLogBlock.contains("DiagnosticSanitizer.sanitizeForExport(message)"))
+        assertFalse(diagnosticLogBlock.contains("\"[ip] \$message\""))
+    }
+
+    private fun testSourceFile(relativePath: String): java.io.File =
+        listOf(
+            java.io.File("src/main/kotlin/com/foxhole/beta/$relativePath"),
+            java.io.File("app/src/main/kotlin/com/foxhole/beta/$relativePath"),
+            java.io.File("../app/src/main/kotlin/com/foxhole/beta/$relativePath"),
+        ).first { file -> file.isFile }
 }

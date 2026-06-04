@@ -8,7 +8,6 @@ import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.click
-import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -347,13 +346,16 @@ class HomeScreenTest {
         composeRule
             .onNodeWithTag("settings_screen")
             .performScrollToNode(hasTestTag("settings_application_action"))
-        composeRule.onNodeWithTag("settings_application_action").tapNearTop()
+        composeRule.onNodeWithTag("settings_application_action").performClick()
         composeRule.waitForIdle()
-        composeRule
-            .onNodeWithTag("settings_screen")
-            .performScrollToNode(hasText(context.getString(R.string.block_screenshots_title)))
-        composeRule.onNodeWithText(context.getString(R.string.block_screenshots_title)).assertIsDisplayed()
-        composeRule.onNodeWithText(context.getString(R.string.block_screenshots_title)).performClick()
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            composeRule
+                .onAllNodesWithTag("settings_block_screenshots_toggle")
+                .fetchSemanticsNodes()
+                .isNotEmpty()
+        }
+        composeRule.onNodeWithTag("settings_block_screenshots_toggle").assertIsDisplayed()
+        composeRule.onNodeWithTag("settings_block_screenshots_toggle").performClick()
         assertSecureFlag(expected = false)
 
         setBlockScreenshots(false)

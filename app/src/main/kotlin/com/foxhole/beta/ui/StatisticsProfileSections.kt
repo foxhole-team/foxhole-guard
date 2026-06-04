@@ -70,7 +70,6 @@ import com.foxhole.beta.core.model.StatisticsMetric
 import com.foxhole.beta.core.model.StatisticsRange
 import com.foxhole.beta.core.model.StatisticsRetention
 import com.foxhole.beta.core.model.StatisticsUiState
-import com.foxhole.beta.core.model.TrafficMapUiState
 import com.foxhole.beta.core.model.TransportProtocol
 import com.foxhole.beta.core.model.TransportStatisticsUiItem
 import com.foxhole.beta.ui.statistics.charts.AnimatedSplitDonutChart
@@ -82,7 +81,7 @@ import kotlin.math.max
 @Composable
 internal fun ProfileTrafficOverviewCard(
     statistics: StatisticsUiState,
-    state: SettingsRouteUiState,
+    state: StatisticsRouteUiState,
     onClear: () -> Unit,
     onProfileClick: (Long) -> Unit,
 ) {
@@ -125,7 +124,7 @@ internal fun ProfileTrafficOverviewCard(
 @Composable
 internal fun ProfileTrafficList(
     items: List<ProfileTrafficUiItem>,
-    state: SettingsRouteUiState,
+    state: StatisticsRouteUiState,
     onProfileClick: (Long) -> Unit,
 ) {
     if (items.isEmpty()) {
@@ -212,9 +211,7 @@ internal fun ProfileTrafficList(
 }
 
 @Composable
-@Suppress("UnusedParameter")
 internal fun CountryTrafficCard(
-    state: TrafficMapUiState,
     rows: List<CountryTrafficUiRow>,
     totalRowsCount: Int,
     enabled: Boolean,
@@ -787,7 +784,7 @@ internal fun StatisticsMetricSwitch(
 @Composable
 @Suppress("CyclomaticComplexMethod")
 internal fun ProfileStatisticsDetail(
-    state: SettingsRouteUiState,
+    state: StatisticsRouteUiState,
     statistics: StatisticsUiState,
     item: ProfileTrafficUiItem,
 ) {

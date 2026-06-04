@@ -1460,6 +1460,7 @@ fun ApplicationSettingsScreen(
                 )
                 SettingsControlGroupDivider()
                 SettingSwitchRow(
+                    modifier = Modifier.testTag("settings_block_screenshots_toggle"),
                     title = stringResource(R.string.block_screenshots_title),
                     checked = state.settings.expert.blockScreenshots,
                     leadingIcon = Icons.Outlined.Shield,

@@ -22,8 +22,8 @@ class HomeForegroundIpPolicyTest {
     }
 
     @Test
-    fun `foreground idle refresh shows loading only while first ip is missing`() {
-        assertTrue(
+    fun `foreground refresh stays silent while first ip is missing`() {
+        assertFalse(
             shouldShowForegroundIpRefreshLoading(
                 connectionState = ConnectionState.IDLE,
                 currentIpInfo = null,

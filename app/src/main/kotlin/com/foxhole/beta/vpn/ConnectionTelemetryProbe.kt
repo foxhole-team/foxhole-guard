@@ -35,7 +35,7 @@ internal class ConnectionTelemetryProbe(
     private val currentVpnInterfaceName: (Network) -> String?,
     private val isVpnNetworkValidated: (Network) -> Boolean,
     private val activeServerPingTarget: () -> ActiveServerPingTarget?,
-    private val protectDirectSocket: (Socket) -> Boolean = { true },
+    private val protectDirectSocket: (Socket) -> Boolean,
 ) {
     suspend fun measureCurrentConnectionLatency(timeoutMs: Long): Long {
         val settings = settingsRepository.current()

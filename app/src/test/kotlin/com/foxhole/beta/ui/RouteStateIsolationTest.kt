@@ -56,7 +56,7 @@ class RouteStateIsolationTest {
     }
 
     @Test
-    fun `statistics route mapping keeps live traffic installed apps and activity payloads`() {
+    fun `statistics route mapping keeps live traffic installed apps and activity payloads without diagnostics`() {
         val traffic = TrafficSnapshot(available = true, rxBytesPerSec = 7L, txBytesPerSec = 8L, sampledAt = 20L)
         val installedApps =
             listOf(
@@ -66,31 +66,16 @@ class RouteStateIsolationTest {
                     isSystemApp = false,
                 ),
             )
-        val diagnosticEntries =
-            listOf(
-                DiagnosticEntry(
-                    timestamp = 2L,
-                    tag = "runtime",
-                    message = "diagnostic",
-                ),
-            )
         val state =
             HomeUiState(
                 traffic = traffic,
                 installedApps = installedApps,
-                diagnosticEntries = diagnosticEntries,
             )
 
-        val route =
-            state.toSettingsRouteUiState(
-                includeLiveTraffic = true,
-                includeInstalledApps = true,
-                includeActivityState = true,
-            )
+        val route = state.toStatisticsRouteUiState()
 
         assertEquals(traffic, route.traffic)
         assertEquals(installedApps, route.installedApps)
-        assertEquals(diagnosticEntries, route.diagnosticEntries)
     }
 
     @Test

@@ -139,6 +139,20 @@ data class SettingsRouteUiState(
     val statisticsDashboard: StatisticsDashboardUiState = StatisticsDashboardUiState(),
 )
 
+data class StatisticsRouteUiState(
+    val settings: Settings = Settings(),
+    val profiles: List<Profile> = emptyList(),
+    val activeProfile: Profile? = null,
+    val traffic: TrafficSnapshot = TrafficSnapshot(),
+    val ipInfo: IpInfo? = null,
+    val installedApps: List<InstalledAppOption> = emptyList(),
+    val anomalyEvents: List<AnomalyEvent> = emptyList(),
+    val appTrafficWindows: List<AppTrafficWindow> = emptyList(),
+    val networkActivityEvents: List<NetworkActivityEvent> = emptyList(),
+    val trafficWindows: List<TrafficWindow> = emptyList(),
+    val statisticsDashboard: StatisticsDashboardUiState = StatisticsDashboardUiState(),
+)
+
 data class StatisticsDashboardUiState(
     val nowMs: Long = System.currentTimeMillis(),
     val statistics: StatisticsUiState = emptyStatisticsUiState(),
@@ -316,6 +330,23 @@ internal fun HomeUiState.toSettingsRouteUiState(
         networkActivityEvents = if (includeActivityState) networkActivityEvents else emptyList(),
         trafficWindows = if (includeActivityState) trafficWindows else emptyList(),
         dnsFilterRefreshInProgress = dnsFilterRefreshInProgress,
+        statisticsDashboard = statisticsDashboard,
+    )
+
+internal fun HomeUiState.toStatisticsRouteUiState(
+    statisticsDashboard: StatisticsDashboardUiState = StatisticsDashboardUiState(),
+): StatisticsRouteUiState =
+    StatisticsRouteUiState(
+        settings = settings,
+        profiles = profiles,
+        activeProfile = activeProfile,
+        traffic = traffic,
+        ipInfo = ipInfo,
+        installedApps = installedApps,
+        anomalyEvents = anomalyEvents,
+        appTrafficWindows = appTrafficWindows,
+        networkActivityEvents = networkActivityEvents,
+        trafficWindows = trafficWindows,
         statisticsDashboard = statisticsDashboard,
     )
 

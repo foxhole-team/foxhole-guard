@@ -60,7 +60,7 @@ class SettingsStatisticsScreenTest {
                 isActive = true,
             )
         val state =
-            SettingsRouteUiState(
+            StatisticsRouteUiState(
                 profiles = listOf(profile),
                 activeProfile = profile,
                 settings = Settings(
@@ -177,7 +177,7 @@ class SettingsStatisticsScreenTest {
                 isActive = true,
             )
         val state =
-            SettingsRouteUiState(
+            StatisticsRouteUiState(
                 profiles = listOf(profile),
                 activeProfile = profile,
                 settings = Settings(
@@ -245,7 +245,7 @@ class SettingsStatisticsScreenTest {
     @Test
     fun `extended statistics mode follows usage access availability`() {
         val state =
-            SettingsRouteUiState(
+            StatisticsRouteUiState(
                 settings = Settings(
                     statistics = StatisticsSettings(enabled = true, appTrafficEnabled = true),
                     appTrafficStatsEnabled = true,
@@ -282,7 +282,7 @@ class SettingsStatisticsScreenTest {
                 isActive = true,
             )
         val baseState =
-            SettingsRouteUiState(
+            StatisticsRouteUiState(
                 profiles = listOf(profile),
                 activeProfile = profile,
                 settings = Settings(

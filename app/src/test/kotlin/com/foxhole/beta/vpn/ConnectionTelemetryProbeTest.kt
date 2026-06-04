@@ -72,15 +72,14 @@ class ConnectionTelemetryProbeTest {
         val address = InetAddress.getByName("93.184.216.34")
         val active =
             activeServerPingTarget(
-                session =
-                    VpnSession(
-                        profileId = 42L,
-                        profileName = "Example",
-                        protocolHint = ProtocolHint.VLESS,
-                        protocolOptionId = "vless-1",
-                        configJson = "{}",
-                        correlationId = "test-session",
-                    ),
+                session = VpnSession(
+                    profileId = 42L,
+                    profileName = "Example",
+                    protocolHint = ProtocolHint.VLESS,
+                    protocolOptionId = "vless-1",
+                    configJson = "{}",
+                    correlationId = "test-session",
+                ),
                 target = VpnHealthProbeTarget("edge.example.com", 443, VpnHealthProbeTransport.TCP),
                 readiness = TcpRuntimeReadinessResult(address = address, latencyMs = 123L),
             )
@@ -139,6 +138,18 @@ class ConnectionTelemetryProbeTest {
         assertEquals(true, directServerPingBlock.contains("if (network == null)"))
         assertEquals(true, directServerPingBlock.contains("network.bindSocket(socket)"))
         assertEquals(false, directServerPingBlock.contains("network?.socketFactory?.createSocket()"))
+    }
+
+    @Test
+    fun `direct server ping protector has no fail open default`() {
+        val probeSource = testVpnSourceFile("ConnectionTelemetryProbe.kt").readText()
+        val controllerSource = testVpnSourceFile("FoxholeConnectionController.kt").readText()
+
+        assertEquals(true, probeSource.contains("private val protectDirectSocket: (Socket) -> Boolean,"))
+        assertEquals(false, probeSource.contains("protectDirectSocket: (Socket) -> Boolean = { true }"))
+        assertEquals(false, probeSource.contains("protectDirectSocket: (Socket) -> Boolean = { false }"))
+        assertEquals(true, controllerSource.contains("socketProtector?.invoke(socket) ?: false"))
+        assertEquals(false, controllerSource.contains("socketProtector?.invoke(socket) ?: true"))
     }
 
     @Test

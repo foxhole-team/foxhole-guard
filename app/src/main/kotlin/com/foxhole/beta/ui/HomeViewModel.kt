@@ -163,14 +163,12 @@ class HomeViewModel(
         combine(
             container.connectionController.snapshot,
             container.connectionController.ipInfo,
-            container.connectionController.traffic,
             torIpInfoMutable,
-        ) { connection, ipInfo, traffic, torIpInfo ->
+        ) { connection, ipInfo, torIpInfo ->
             HomeRealtimeStreams(
                 connection = connection,
                 ipInfo = ipInfo,
                 torIpInfo = torIpInfo,
-                traffic = traffic,
             )
         }
 
@@ -186,7 +184,6 @@ class HomeViewModel(
                 connection = realtimeStreams.connection,
                 ipInfo = realtimeStreams.ipInfo,
                 torIpInfo = realtimeStreams.torIpInfo,
-                traffic = realtimeStreams.traffic,
             )
         }
 
@@ -376,7 +373,6 @@ class HomeViewModel(
                 ),
                 ipInfoRefreshReason = localStreams.ipInfoRefreshReason,
                 dashboardConnectionMetricsLoading = localStreams.dashboardConnectionMetricsLoading,
-                traffic = connectionStreams.traffic,
                 presets = routingStreams.presets,
                 activePreset = routingStreams.activePreset,
                 catalogs = routingStreams.catalogs,
@@ -428,6 +424,24 @@ class HomeViewModel(
                 viewModelScope,
                 SharingStarted.WhileSubscribed(5_000),
                 HomeUiState(settings = initialSettings),
+            )
+
+    private val statisticsUiState: StateFlow<HomeUiState> =
+        combine(
+            uiState,
+            dashboardTraffic,
+        ) { state, traffic ->
+            state.copy(traffic = traffic)
+        }
+            .distinctUntilChanged()
+            .flowOn(Dispatchers.Default)
+            .stateIn(
+                viewModelScope,
+                SharingStarted.WhileSubscribed(5_000),
+                HomeUiState(
+                    settings = initialSettings,
+                    traffic = dashboardTraffic.value,
+                ),
             )
 
     val themeMode: StateFlow<ThemeMode> = container.settingsRepository.themeMode
@@ -544,13 +558,12 @@ class HomeViewModel(
             TrafficMapOriginSelection(
                 connection = connection,
                 routeIpInfo = ipInfo,
-                candidate =
-                    trafficMapOriginIpInfoCandidate(
-                        connection = connection,
-                        deviceIpInfo = deviceIpInfo,
-                        ipInfo = ipInfo,
-                        protocolSearchRunning = protocolSearchRunning,
-                    ),
+                candidate = trafficMapOriginIpInfoCandidate(
+                    connection = connection,
+                    deviceIpInfo = deviceIpInfo,
+                    ipInfo = ipInfo,
+                    protocolSearchRunning = protocolSearchRunning,
+                ),
                 protocolSearchRunning = protocolSearchRunning,
             )
         }
@@ -658,21 +671,15 @@ class HomeViewModel(
                 SettingsRouteUiState(),
             )
 
-    val statisticsRouteState: StateFlow<SettingsRouteUiState> =
+    val statisticsRouteState: StateFlow<StatisticsRouteUiState> =
         combine(
-            uiState,
-            dnsFilterRefreshInProgressMutable,
+            statisticsUiState,
             trafficMapUiState,
             appTrafficUsageAccessGrantedMutable,
             statisticsVisibleMutable,
-        ) { state, dnsFilterRefreshInProgress, trafficMapState, usageAccessGranted, statisticsVisible ->
+        ) { state, trafficMapState, usageAccessGranted, statisticsVisible ->
             val routeState =
-                state.toSettingsRouteUiState(
-                    dnsFilterRefreshInProgress = dnsFilterRefreshInProgress,
-                    includeLiveTraffic = true,
-                    includeInstalledApps = true,
-                    includeActivityState = true,
-                )
+                state.toStatisticsRouteUiState()
             if (statisticsVisible) {
                 routeState.copy(
                     statisticsDashboard =
@@ -691,7 +698,7 @@ class HomeViewModel(
             .stateIn(
                 viewModelScope,
                 SharingStarted.WhileSubscribed(5_000),
-                SettingsRouteUiState(),
+                StatisticsRouteUiState(),
             )
 
     val routingRouteState: StateFlow<RoutingRouteUiState> =
@@ -717,8 +724,12 @@ class HomeViewModel(
             )
 
     val diagnosticsRouteState: StateFlow<DiagnosticsRouteUiState> =
-        uiState
-            .map(HomeUiState::toDiagnosticsRouteUiState)
+        combine(
+            uiState,
+            dashboardTraffic,
+        ) { state, traffic ->
+            state.copy(traffic = traffic).toDiagnosticsRouteUiState()
+        }
             .distinctUntilChanged()
             .flowOn(Dispatchers.Default)
             .stateIn(

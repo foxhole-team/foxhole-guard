@@ -3,6 +3,7 @@ package com.foxhole.beta.core.network
 import android.net.Network
 import android.util.Log
 import com.foxhole.beta.BuildConfig
+import com.foxhole.beta.core.diagnostics.DiagnosticSanitizer
 import com.foxhole.beta.core.model.IpInfo
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -1164,7 +1165,7 @@ private suspend fun Call.awaitResponse(): Response =
 
 private fun diagnosticLog(message: String) {
     if (BuildConfig.ENABLE_DIAGNOSTIC_LOGCAT) {
-        Log.d("FoxholeDiag", "[ip] $message")
+        Log.d("FoxholeDiag", "[ip] ${DiagnosticSanitizer.sanitizeForExport(message)}")
     }
 }
 

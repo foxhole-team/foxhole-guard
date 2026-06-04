@@ -1,7 +1,7 @@
 package com.foxhole.beta.ui
 
 internal fun buildStatisticsDashboardUiState(
-    state: SettingsRouteUiState,
+    state: StatisticsRouteUiState,
     trafficMapState: com.foxhole.beta.core.model.TrafficMapUiState,
     usageAccessGranted: Boolean = true,
 ): StatisticsDashboardUiState {

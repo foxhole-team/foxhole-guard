@@ -335,7 +335,7 @@ class HomeIpLoadingPolicyTest {
     }
 
     @Test
-    fun `keeps tunnel transition loading out of ip side while route refresh is pending`() {
+    fun `keeps previous ip visible while route transition refresh is pending`() {
         val previousIp =
             IpInfo(
                 ip = "8.8.8.8",
@@ -363,7 +363,7 @@ class HomeIpLoadingPolicyTest {
                 deviceInternetAvailable = true,
             )
 
-        assertNull(model.visibleIpInfo)
+        assertEquals(previousIp, model.visibleIpInfo)
         assertTrue(model.showLoading)
         assertFalse(model.showIpInfoLoading)
         assertTrue(model.showConnectionDetailsLoading)
@@ -398,8 +398,8 @@ class HomeIpLoadingPolicyTest {
     }
 
     @Test
-    fun `shows startup network skeleton before loaded internet availability settles`() {
-        assertTrue(
+    fun `does not show startup network skeleton before internet availability settles`() {
+        assertFalse(
             shouldShowPendingNetworkLoading(
                 visibleIpInfo = null,
                 explicitLoading = false,
@@ -434,8 +434,8 @@ class HomeIpLoadingPolicyTest {
     }
 
     @Test
-    fun `shows startup network skeleton while disconnected profile state loads`() {
-        assertTrue(
+    fun `does not show startup network skeleton while disconnected profile state loads`() {
+        assertFalse(
             shouldShowPendingNetworkLoading(
                 visibleIpInfo = null,
                 explicitLoading = false,
@@ -448,8 +448,8 @@ class HomeIpLoadingPolicyTest {
     }
 
     @Test
-    fun `shows pending network loading after app loaded while internet exists and ip is empty`() {
-        assertTrue(
+    fun `does not show pending network loading after app loaded while internet exists and ip is empty`() {
+        assertFalse(
             shouldShowPendingNetworkLoading(
                 visibleIpInfo = null,
                 explicitLoading = false,

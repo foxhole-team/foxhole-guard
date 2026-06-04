@@ -23,10 +23,12 @@ if [[ "$EVENT_NAME" == "pull_request" ]]; then
   "$GRADLEW" --no-daemon --console=plain --stacktrace :macrobenchmark:connectedCheck \
     -Pmacrobenchmark.targetPackage="$TARGET_PACKAGE" \
     -Pandroid.testInstrumentationRunnerArguments.class=com.foxhole.beta.macrobenchmark.HomeMacrobenchmark#startup
+  python3 scripts/verify-macrobenchmark-thresholds.py
 elif [[ "$EVENT_NAME" == "schedule" || "$GITHUB_REF_NAME" == "refs/heads/dev" ]]; then
   install_target_app
   "$GRADLEW" --no-daemon --console=plain --stacktrace :macrobenchmark:connectedCheck \
     -Pmacrobenchmark.targetPackage="$TARGET_PACKAGE"
+  python3 scripts/verify-macrobenchmark-thresholds.py --full-suite
 else
   echo "Skipping macrobenchmark for event=${EVENT_NAME} ref=${GITHUB_REF_NAME}"
 fi

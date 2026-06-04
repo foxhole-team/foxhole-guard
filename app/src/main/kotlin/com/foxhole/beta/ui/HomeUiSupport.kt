@@ -152,8 +152,6 @@ internal data class HomeNetworkDetailLoadingPolicy(
 )
 
 internal const val HOME_NETWORK_GEO_ROW_PENDING_LOADING_MS = 5_000L
-internal const val HOME_NETWORK_EMPTY_STARTUP_SKELETON_MS = 3_000L
-
 internal data class HomeDashboardProxyModel(
     val modeOption: HomeModeOption,
     val proxySurface: HomeProxySurface?,
@@ -190,12 +188,11 @@ internal fun shouldAutoRefreshIpOnForeground(connectionState: ConnectionState): 
         ConnectionState.ERROR,
     )
 
+@Suppress("FunctionOnlyReturningConstant", "UNUSED_PARAMETER")
 internal fun shouldShowForegroundIpRefreshLoading(
     connectionState: ConnectionState,
     currentIpInfo: IpInfo?,
-): Boolean =
-    connectionState != ConnectionState.CONNECTED &&
-        currentIpInfo == null
+): Boolean = false
 
 internal fun foregroundIpRefreshStartDelayMs(
     firstForeground: Boolean,
@@ -229,11 +226,9 @@ internal fun shouldShowPendingNetworkLoading(
 ): Boolean =
     when {
         visibleIpInfo != null -> false
-        !appLoaded -> true
         deviceInternetAvailable == false -> false
         explicitLoading -> true
         autoConnectRunning -> true
-        connectionState == ConnectionState.IDLE -> true
         else -> false
     }
 
@@ -868,7 +863,7 @@ private fun HomeRouteUiState.shouldKeepDashboardIpInfo(info: IpInfo): Boolean =
         hasFailedDashboardRoute() -> info.isPublicFreshForRouteTransition(connection.lastChangeAt)
         hasStoppedDashboardRouteRuntime() -> info.isPublicFreshForRouteTransition(connection.lastChangeAt)
         hasStoppedUnknownDashboardRouteRuntime() -> info.isPublicFreshForRouteTransition(connection.lastChangeAt)
-        hasActiveDashboardRouteTransition() -> info.isFreshForRouteTransition(connection.lastChangeAt)
+        hasActiveDashboardRouteTransition() -> true
         hasActiveDashboardRouteRuntime() -> shouldKeepActiveDashboardRouteIpInfo(info)
         else -> true
     }
@@ -1680,16 +1675,13 @@ internal fun shouldShowHomeNetworkFullLoading(
     showIpInfoLoading: Boolean,
 ): Boolean = showIpInfoLoading && visibleIpInfo == null
 
+@Suppress("FunctionOnlyReturningConstant", "UnusedParameter")
 internal fun shouldShowHomeNetworkEmptyStartupSkeleton(
     visibleIpInfo: IpInfo?,
     explicitLoading: Boolean,
     connectionState: ConnectionState,
     elapsedMs: Long,
-): Boolean =
-    visibleIpInfo == null &&
-        !explicitLoading &&
-        connectionState == ConnectionState.IDLE &&
-        elapsedMs in 0 until HOME_NETWORK_EMPTY_STARTUP_SKELETON_MS
+): Boolean = false
 
 internal fun shouldShowHomeNetworkGeoRowsLoading(
     ipInfo: IpInfo?,

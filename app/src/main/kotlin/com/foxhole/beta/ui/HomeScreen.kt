@@ -1931,23 +1931,11 @@ private fun rememberHomeNetworkEmptyStartupSkeleton(
     explicitLoading: Boolean,
     connectionState: ConnectionState,
 ): Boolean {
-    var elapsedMs by remember(networkIpInfo, explicitLoading, connectionState) { mutableStateOf(0L) }
-    LaunchedEffect(networkIpInfo, explicitLoading, connectionState) {
-        elapsedMs = 0L
-        if (
-            networkIpInfo == null &&
-            !explicitLoading &&
-            connectionState == ConnectionState.IDLE
-        ) {
-            delay(HOME_NETWORK_EMPTY_STARTUP_SKELETON_MS)
-            elapsedMs = HOME_NETWORK_EMPTY_STARTUP_SKELETON_MS
-        }
-    }
     return shouldShowHomeNetworkEmptyStartupSkeleton(
         visibleIpInfo = networkIpInfo,
         explicitLoading = explicitLoading,
         connectionState = connectionState,
-        elapsedMs = elapsedMs,
+        elapsedMs = 0L,
     )
 }
 

@@ -394,7 +394,10 @@ fun FoxholeApp(
                                 onSelectActiveProtocolOptionRequested = viewModel::onSelectActiveProtocolOptionRequested,
                                 onUpdateAutoConnectExcludedOptions = { excludedIds ->
                                     state.activeProfile?.id?.let { profileId ->
-                                        viewModel.onSmartProfileAutoConnectExcludedOptionsChanged(profileId, excludedIds)
+                                        viewModel.onSmartProfileAutoConnectExcludedOptionsChanged(
+                                            profileId = profileId,
+                                            excludedOptionIds = excludedIds,
+                                        )
                                     }
                                 },
                                 onRefreshSmartProfileMetrics = viewModel::refreshSmartProfileMetrics,
@@ -847,15 +850,12 @@ fun FoxholeApp(
                         onDispose { viewModel.onStatisticsUiVisibilityChanged(false) }
                     }
                     val state by viewModel.statisticsRouteState.collectAsStateWithLifecycle()
-                    val trafficMapState by viewModel.trafficMapUiState.collectAsStateWithLifecycle()
                     StatisticsScreen(
                         state = state,
-                        trafficMapState = trafficMapState,
                         snackbarHostState = snackbarHostState,
                         onNavigateUp = navController::navigateUp,
                         onStatisticsEnabledChanged = viewModel::onStatisticsEnabledChanged,
                         onStatisticsRetentionSelected = viewModel::onStatisticsRetentionSelected,
-                        onStatisticsRefreshIntervalSelected = viewModel::onStatisticsRefreshIntervalSelected,
                         onStatisticsMetricEnabledChanged = viewModel::onStatisticsMetricEnabledChanged,
                         onAppTrafficStatsEnabledChanged = viewModel::onAppTrafficStatsEnabledChanged,
                         onNetworkActivityLoggingChanged = viewModel::onNetworkActivityLoggingChanged,

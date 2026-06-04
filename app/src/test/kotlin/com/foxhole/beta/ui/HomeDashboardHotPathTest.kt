@@ -378,6 +378,52 @@ class HomeDashboardHotPathTest {
     }
 
     @Test
+    fun `home route core state is not subscribed to one second traffic ticks`() {
+        val viewModelSource = testSourceFile("HomeViewModel.kt").readText()
+        val realtimeStreamsBlock =
+            viewModelSource.substringAfter("internal val realtimeStreams =")
+                .substringBefore("internal val connectionStreams =")
+        val coreUiStateBlock =
+            viewModelSource.substringAfter("private val coreUiState")
+                .substringBefore("internal val controlUiState")
+
+        assertFalse(realtimeStreamsBlock.contains("connectionController.traffic"))
+        assertFalse(realtimeStreamsBlock.contains("traffic ="))
+        assertFalse(coreUiStateBlock.contains("traffic ="))
+        assertTrue(viewModelSource.contains("val dashboardTraffic: StateFlow<TrafficSnapshot> ="))
+        assertTrue(viewModelSource.contains("container.connectionController.traffic"))
+    }
+
+    @Test
+    fun `statistics route does not collect traffic map twice in compose`() {
+        val appSource = testSourceFile("FoxholeApp.kt").readText()
+        val statisticsRouteMarker = "composable(AppRoute.STATISTICS)"
+        val statisticsRouteBlock =
+            appSource.substringAfter(statisticsRouteMarker)
+                .substringBefore(
+                    "composable(AppRoute.DIAGNOSTICS)",
+                    missingDelimiterValue = appSource.substringAfter(statisticsRouteMarker),
+                )
+
+        assertFalse(statisticsRouteBlock.contains("trafficMapUiState.collectAsStateWithLifecycle"))
+        assertFalse(statisticsRouteBlock.contains("trafficMapState ="))
+    }
+
+    @Test
+    fun `statistics route state uses dedicated model instead of settings state`() {
+        val viewModelSource = testSourceFile("HomeViewModel.kt").readText()
+        val statisticsRouteBlock =
+            viewModelSource.substringAfter("val statisticsRouteState:")
+                .substringBefore("val routingRouteState:")
+
+        assertTrue(statisticsRouteBlock.contains("StateFlow<StatisticsRouteUiState>"))
+        assertTrue(statisticsRouteBlock.contains("toStatisticsRouteUiState()"))
+        assertTrue(statisticsRouteBlock.contains("StatisticsRouteUiState()"))
+        assertFalse(statisticsRouteBlock.contains("toSettingsRouteUiState("))
+        assertFalse(statisticsRouteBlock.contains("dnsFilterRefreshInProgressMutable"))
+    }
+
+    @Test
     fun `network card model is not keyed by full route state`() {
         val homeSource = testSourceFile("HomeScreen.kt").readText()
         val networkModelBlock =

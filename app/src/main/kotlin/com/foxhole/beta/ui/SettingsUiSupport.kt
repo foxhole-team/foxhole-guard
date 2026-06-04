@@ -450,6 +450,7 @@ internal fun SettingSwitchRow(
     titleMaxLines: Int = 1,
     summaryMaxLines: Int = 3,
     grouped: Boolean = false,
+    modifier: Modifier = Modifier,
 ) {
     val switchStateDescription =
         stringResource(
@@ -460,7 +461,7 @@ internal fun SettingSwitchRow(
             },
         )
     val rowModifier =
-        Modifier.semantics(mergeDescendants = true) {
+        modifier.semantics(mergeDescendants = true) {
             contentDescription = title
             stateDescription = switchStateDescription
         }

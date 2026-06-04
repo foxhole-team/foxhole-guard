@@ -100,6 +100,19 @@ class FoxholeVpnRuntimeBridgeTest {
     }
 
     @Test
+    fun `runtime bridge fails closed without direct socket protector`() {
+        val socket = Socket()
+        try {
+            FoxholeVpnRuntimeBridge.updateSocketProtector(null)
+
+            assertFalse(FoxholeVpnRuntimeBridge.protectDirectSocket(socket))
+        } finally {
+            socket.close()
+            FoxholeVpnRuntimeBridge.updateSocketProtector(null)
+        }
+    }
+
+    @Test
     fun `traffic updates do not republish runtime ui state`() {
         val previousSnapshot = FoxholeVpnRuntimeBridge.snapshot.value
         val previousTraffic = FoxholeVpnRuntimeBridge.traffic.value

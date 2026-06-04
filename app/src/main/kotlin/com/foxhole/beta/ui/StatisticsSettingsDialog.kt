@@ -23,7 +23,7 @@ import com.foxhole.beta.core.model.StatisticsSettings
 
 @Composable
 internal fun StatisticsSettingsDialog(
-    state: SettingsRouteUiState,
+    state: StatisticsRouteUiState,
     statisticsSettings: StatisticsSettings,
     appStatsSwitchChecked: Boolean,
     usageAccessGranted: Boolean,
@@ -93,7 +93,7 @@ internal data class StatisticsSettingsDialogActions(
 
 @Composable
 private fun StatisticsStorageSettingsGroup(
-    state: SettingsRouteUiState,
+    state: StatisticsRouteUiState,
     statisticsSettings: StatisticsSettings,
     retentionMenuExpanded: Boolean,
     actions: StatisticsSettingsDialogActions,
@@ -125,7 +125,7 @@ private fun StatisticsStorageSettingsGroup(
 
 @Composable
 private fun StatisticsMetricSettingsGroup(
-    state: SettingsRouteUiState,
+    state: StatisticsRouteUiState,
     statisticsSettings: StatisticsSettings,
     appStatsSwitchChecked: Boolean,
     usageAccessGranted: Boolean,

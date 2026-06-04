@@ -63,7 +63,7 @@ internal data class ProfileProtocolDetail(
 
 @Suppress("ComplexCondition", "CyclomaticComplexMethod", "LongMethod")
 internal fun profileStatisticsDetail(
-    state: SettingsRouteUiState,
+    state: StatisticsRouteUiState,
     item: ProfileTrafficUiItem,
 ): ProfileStatisticsDetailModel {
     val profile = state.profiles.firstOrNull { profile -> profile.id == item.profileId }
@@ -217,7 +217,7 @@ private fun List<ProfileTrafficUiItem>.trafficForProtocolOption(
 }
 
 internal fun statisticsUiState(
-    state: SettingsRouteUiState,
+    state: StatisticsRouteUiState,
     retention: StatisticsRetention,
     usageAccessGranted: Boolean = true,
 ): StatisticsUiState {
@@ -240,7 +240,7 @@ internal fun statisticsUiState(
     )
 }
 
-internal fun protocolTrafficItems(state: SettingsRouteUiState): List<ProfileTrafficUiItem> {
+internal fun protocolTrafficItems(state: StatisticsRouteUiState): List<ProfileTrafficUiItem> {
     val items =
         state.settings.profileTrafficTotals.map { total ->
             ProfileTrafficUiItem(
@@ -283,7 +283,7 @@ internal fun protocolTrafficItems(state: SettingsRouteUiState): List<ProfileTraf
     return items.sortedByDescending(ProfileTrafficUiItem::updatedAt)
 }
 
-internal fun profileTrafficItems(state: SettingsRouteUiState): List<ProfileTrafficUiItem> =
+internal fun profileTrafficItems(state: StatisticsRouteUiState): List<ProfileTrafficUiItem> =
     protocolTrafficItems(state)
         .groupBy(ProfileTrafficUiItem::profileId)
         .values
@@ -301,7 +301,7 @@ internal fun profileTrafficItems(state: SettingsRouteUiState): List<ProfileTraff
         }.sortedByDescending(ProfileTrafficUiItem::updatedAt)
 
 internal fun protocolStatistics(
-    state: SettingsRouteUiState,
+    state: StatisticsRouteUiState,
     profileTraffic: List<ProfileTrafficUiItem>,
 ): List<ProtocolStatisticsUiItem> {
     val profileById = state.profiles.associateBy(Profile::id)
@@ -339,7 +339,7 @@ internal fun protocolStatistics(
 internal fun overallStatistics(
     profileTraffic: List<ProfileTrafficUiItem>,
     protocolStats: List<ProtocolStatisticsUiItem>,
-    state: SettingsRouteUiState,
+    state: StatisticsRouteUiState,
 ): OverallStatisticsUiItem {
     val memoryLatencies =
         state.settings.smartProfilePreferences.flatMap { preference ->
@@ -364,7 +364,7 @@ internal fun overallStatistics(
 }
 
 internal fun profileComparisons(
-    state: SettingsRouteUiState,
+    state: StatisticsRouteUiState,
     profileTraffic: List<ProfileTrafficUiItem>,
 ): List<ProfileComparisonUiItem> {
     val comparisonByProtocol = linkedMapOf<ProtocolHint, MutableMap<Long, ComparisonAccumulator>>()

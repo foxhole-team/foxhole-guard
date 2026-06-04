@@ -80,7 +80,6 @@ internal data class HomeConnectionStreams(
     val connection: ConnectionSnapshot,
     val ipInfo: IpInfo?,
     val torIpInfo: IpInfo?,
-    val traffic: TrafficSnapshot,
 )
 
 internal data class HomeProfileStreams(
@@ -93,7 +92,6 @@ internal data class HomeRealtimeStreams(
     val connection: ConnectionSnapshot,
     val ipInfo: IpInfo?,
     val torIpInfo: IpInfo?,
-    val traffic: TrafficSnapshot,
 )
 
 internal data class HomeRoutingStreams(

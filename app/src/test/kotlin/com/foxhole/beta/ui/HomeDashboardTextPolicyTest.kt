@@ -470,13 +470,13 @@ class HomeDashboardTextPolicyTest {
     }
 
     @Test
-    fun `network card uses bounded startup skeleton while initial ip is absent`() {
-        assertTrue(
+    fun `network card does not use startup skeleton for silent foreground refresh`() {
+        assertFalse(
             shouldShowHomeNetworkEmptyStartupSkeleton(
                 visibleIpInfo = null,
                 explicitLoading = false,
                 connectionState = ConnectionState.IDLE,
-                elapsedMs = HOME_NETWORK_EMPTY_STARTUP_SKELETON_MS - 1,
+                elapsedMs = 0L,
             ),
         )
         assertFalse(
@@ -484,7 +484,7 @@ class HomeDashboardTextPolicyTest {
                 visibleIpInfo = null,
                 explicitLoading = false,
                 connectionState = ConnectionState.IDLE,
-                elapsedMs = HOME_NETWORK_EMPTY_STARTUP_SKELETON_MS,
+                elapsedMs = 3_000L,
             ),
         )
         assertFalse(

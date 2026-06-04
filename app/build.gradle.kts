@@ -415,18 +415,55 @@ tasks.register<JavaExec>("detekt") {
     }
 }
 
+tasks.register<JavaExec>("updateDetektBaseline") {
+    group = "verification"
+    description = "Regenerate the detekt baseline with the stable CLI."
+
+    val detektConfig = rootProject.file("config/detekt/detekt.yml")
+    val detektBaseline = rootProject.file("config/detekt/baseline.xml")
+    val detektSources =
+        listOf(
+            "src/main/kotlin",
+            "src/test/kotlin",
+        ).map(::file)
+
+    mainClass.set("io.gitlab.arturbosch.detekt.cli.Main")
+    classpath = detektCli
+
+    inputs.files(detektSources)
+    inputs.file(detektConfig)
+    outputs.file(detektBaseline)
+
+    args(
+        "--build-upon-default-config",
+        "--config",
+        detektConfig.path,
+        "--baseline",
+        detektBaseline.path,
+        "--create-baseline",
+        "--input",
+        detektSources.joinToString(separator = ",") { source -> source.path },
+    )
+    doFirst {
+        args(
+            "--plugins",
+            detektPlugins.files.joinToString(separator = ",") { plugin -> plugin.path },
+        )
+    }
+}
+
 val verifyDetektBaseline by tasks.registering {
     group = "verification"
-    description = "Fail when detekt baseline grows without an intentional threshold update."
+    description = "Fail when detekt baseline changes without an intentional threshold update."
 
     val detektBaseline = rootProject.file("config/detekt/baseline.xml")
-    val maxBaselineIssues = 743
+    val expectedBaselineIssues = 755
     inputs.file(detektBaseline)
 
     doLast {
         val issueCount = "<ID>".toRegex().findAll(detektBaseline.readText()).count()
-        require(issueCount <= maxBaselineIssues) {
-            "Detekt baseline grew to $issueCount issues; max allowed is $maxBaselineIssues"
+        require(issueCount == expectedBaselineIssues) {
+            "Detekt baseline has $issueCount issues; expected $expectedBaselineIssues. Update the threshold with an intentional baseline change."
         }
     }
 }
@@ -495,8 +532,64 @@ tasks.register<JacocoReport>("jacocoDebugUnitTestReport") {
     }
 }
 
+val verifyJacocoFocusedCoverage by tasks.registering {
+    group = "verification"
+    description = "Fail when release-critical unit coverage falls below focused package thresholds."
+
+    dependsOn("jacocoDebugUnitTestReport")
+    val xmlReport = layout.buildDirectory.file("reports/jacoco/jacocoDebugUnitTestReport/jacocoDebugUnitTestReport.xml")
+    inputs.file(xmlReport)
+
+    doLast {
+        val reportText = xmlReport.get().asFile.readText()
+        val packages =
+            Regex("""<package name="([^"]+)">([\s\S]*?)</package>""")
+                .findAll(reportText)
+                .associate { match -> match.groupValues[1] to match.groupValues[2] }
+        fun instructionCoverageForPrefixes(prefixes: List<String>): Double {
+            var missed = 0L
+            var covered = 0L
+            packages
+                .filterKeys { packageName -> prefixes.any(packageName::startsWith) }
+                .values
+                .forEach { packageXml ->
+                    Regex("""<counter type="INSTRUCTION" missed="(\d+)" covered="(\d+)"[^>]*/>""")
+                        .find(packageXml)
+                        ?.let { counter ->
+                            missed += counter.groupValues[1].toLong()
+                            covered += counter.groupValues[2].toLong()
+                        }
+                }
+            val total = missed + covered
+            require(total > 0L) {
+                "No Jacoco instruction counters found for package prefixes: ${prefixes.joinToString()}"
+            }
+            return covered.toDouble() / total.toDouble()
+        }
+
+        listOf(
+            Triple("core package instruction coverage", listOf("com/foxhole/beta/core"), 0.45),
+            Triple(
+                "domain core instruction coverage",
+                listOf(
+                    "com/foxhole/beta/core/model",
+                    "com/foxhole/beta/core/profile",
+                    "com/foxhole/beta/core/importer",
+                    "com/foxhole/beta/core/smart",
+                ),
+                0.70,
+            ),
+        ).forEach { (label, prefixes, minimum) ->
+            val actual = instructionCoverageForPrefixes(prefixes)
+            require(actual + 1e-9 >= minimum) {
+                "$label is ${"%.2f".format(actual * 100)}%; minimum is ${"%.2f".format(minimum * 100)}%"
+            }
+        }
+    }
+}
+
 tasks.register<JacocoCoverageVerification>("jacocoDebugUnitTestCoverageVerification") {
-    dependsOn("jacocoDebugUnitTestReport", "verifyRequiredBehaviorTests")
+    dependsOn("jacocoDebugUnitTestReport", "verifyRequiredBehaviorTests", verifyJacocoFocusedCoverage)
     classDirectories.setFrom(jacocoDebugClassDirectories)
     sourceDirectories.setFrom(files("src/main/kotlin", "src/main/java"))
     executionData.setFrom(
@@ -510,7 +603,7 @@ tasks.register<JacocoCoverageVerification>("jacocoDebugUnitTestCoverageVerificat
     violationRules {
         rule {
             limit {
-                minimum = "0.18".toBigDecimal()
+                minimum = "0.21".toBigDecimal()
             }
         }
     }

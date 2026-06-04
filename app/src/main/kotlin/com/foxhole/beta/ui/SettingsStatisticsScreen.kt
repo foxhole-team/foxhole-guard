@@ -28,21 +28,17 @@ import com.foxhole.beta.R
 import com.foxhole.beta.core.model.AnomalyEvent
 import com.foxhole.beta.core.model.AppTrafficWindow
 import com.foxhole.beta.core.model.StatisticsMetric
-import com.foxhole.beta.core.model.StatisticsRefreshInterval
 import com.foxhole.beta.core.model.StatisticsRetention
-import com.foxhole.beta.core.model.TrafficMapUiState
 import com.foxhole.beta.core.model.dnsRuleSetFilteringEnabled
 
 @Composable
-@Suppress("ComplexCondition", "CyclomaticComplexMethod", "LongMethod", "UnusedParameter")
+@Suppress("ComplexCondition", "CyclomaticComplexMethod", "LongMethod")
 fun StatisticsScreen(
-    state: SettingsRouteUiState,
-    trafficMapState: TrafficMapUiState,
+    state: StatisticsRouteUiState,
     snackbarHostState: SnackbarHostState,
     onNavigateUp: () -> Unit,
     onStatisticsEnabledChanged: (Boolean) -> Unit,
     onStatisticsRetentionSelected: (StatisticsRetention) -> Unit,
-    onStatisticsRefreshIntervalSelected: (StatisticsRefreshInterval) -> Unit,
     onStatisticsMetricEnabledChanged: (StatisticsMetric, Boolean) -> Unit,
     onAppTrafficStatsEnabledChanged: (Boolean) -> Unit,
     onNetworkActivityLoggingChanged: (Boolean) -> Unit,
@@ -202,7 +198,6 @@ fun StatisticsScreen(
             if (shouldShowCountryTrafficCard(statisticsSettings)) {
                 item(key = "country-traffic", contentType = "statistics-card") {
                     CountryTrafficCard(
-                        state = trafficMapState,
                         rows = topCountryRows,
                         totalRowsCount = countryRows.size,
                         enabled = state.settings.statistics.countryTrafficEnabled && firewallEnabled,
