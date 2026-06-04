@@ -60,6 +60,7 @@ class HomeRuntimeBehaviorTest {
                         app.container.settingsRepository.updateNetworkActivityLogging(false)
                         app.container.settingsRepository.updateNetworkActivityPersistentLogging(false)
                         app.container.settingsRepository.updateTrafficMapEnabled(true)
+                        prewarmTrafficMapCountryShapes(app)
                         if (hasActiveFoxholeVpnNetwork(app.packageName)) {
                             FoxholeVpnRuntimeBridge.update(
                                 ConnectionSnapshot(
@@ -570,12 +571,30 @@ class HomeRuntimeBehaviorTest {
     }
 
     private fun scrollToTrafficMapCard() {
-        runCatching {
-            composeRule
-                .onNodeWithTag("home_dashboard_list")
-                .performScrollToNode(hasTestTag("home_traffic_map_card"))
+        val deadline = SystemClock.elapsedRealtime() + TRAFFIC_MAP_CARD_SCROLL_TIMEOUT_MS
+        var lastFailure: Throwable? = null
+        while (SystemClock.elapsedRealtime() < deadline) {
+            val scrolled =
+                runCatching {
+                    composeRule
+                        .onNodeWithTag("home_dashboard_list")
+                        .performScrollToNode(hasTestTag("home_traffic_map_card"))
+                }.onFailure { failure ->
+                    lastFailure = failure
+                }.isSuccess
+            composeRule.waitForIdle()
+            if (
+                scrolled &&
+                composeRule
+                    .onAllNodesWithTag("home_traffic_map_card", useUnmergedTree = true)
+                    .fetchSemanticsNodes()
+                    .isNotEmpty()
+            ) {
+                return
+            }
+            SystemClock.sleep(100)
         }
-        composeRule.waitForIdle()
+        throw AssertionError("Traffic map card did not become visible", lastFailure)
     }
 
     private fun bytesString(value: Long): String =
@@ -685,6 +704,7 @@ class HomeRuntimeBehaviorTest {
 
     private companion object {
         private const val INITIAL_TRAFFIC_MAP_READY_TIMEOUT_MS = 10_000L
+        private const val TRAFFIC_MAP_CARD_SCROLL_TIMEOUT_MS = 5_000L
         private const val NAVIGATION_RESPONSIVENESS_TIMEOUT_MS = 1_500L
         private const val WARM_DASHBOARD_RETURN_TIMEOUT_MS = 1_200L
         private const val NETWORK_WIDGET_RESPONSIVENESS_TIMEOUT_MS = 1_500L
