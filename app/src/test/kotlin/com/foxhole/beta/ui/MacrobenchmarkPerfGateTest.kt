@@ -196,6 +196,8 @@ class MacrobenchmarkPerfGateTest {
         assertTrue(beforeAfterScript.contains("summary.json"))
         assertTrue(beforeAfterScript.contains("analyze-android-perf-logs.py"))
         assertTrue(analyzer.contains("path.name == \"perf-log-summary.txt\""))
+        assertTrue(analyzer.contains("is_analyzer_summary_line(line)"))
+        assertTrue(analyzer.contains("ANALYZER_SUMMARY_RE"))
     }
 
     @Test

@@ -61,6 +61,14 @@ VPN_DISCONNECTED_RE = re.compile(r"\bDISCONNECTED\b|\bstate[ =:]+disconnected\b"
 FATAL_RE = re.compile(r"\bFATAL EXCEPTION\b|(?:\sE\s+AndroidRuntime\s*:)|\bFatal signal\b", re.IGNORECASE)
 ANR_RE = re.compile(r"\bANR\b|Application Not Responding|Input dispatching timed out", re.IGNORECASE)
 FIRST_FRAME_RE = re.compile(r"\bfirst_frame_after_tap_ms=(\d+(?:\.\d+)?)\b")
+ANALYZER_SUMMARY_RE = re.compile(
+    r"^(Android perf log summary|input files:|lines scanned:|max skipped frames:|"
+    r"total skipped-frame events:|total skipped frames:|OOM count:|FATAL count:|"
+    r"ANR count:|max Java heap seen:|runtime-health snapshot count:|runtime-health line count:|"
+    r"VPN connect/disconnect count:|GC pressure lines:|StrictMode disk-read events:|"
+    r"first frame after tap:|memory maxima:|top OOM stack roots:|top StrictMode stack roots:|"
+    r"GC pressure categories:|parse warnings:)",
+)
 
 
 @dataclass
@@ -180,6 +188,10 @@ def open_text(path: Path) -> TextIO:
     return path.open("rt", encoding="utf-8", errors="replace")
 
 
+def is_analyzer_summary_line(line: str) -> bool:
+    return ANALYZER_SUMMARY_RE.search(line.strip()) is not None
+
+
 def parse_stream(lines: Iterable[str], summary: Summary) -> None:
     pending_oom_frames = 0
     pending_strict_frames = 0
@@ -187,6 +199,8 @@ def parse_stream(lines: Iterable[str], summary: Summary) -> None:
     for raw_line in lines:
         summary.lines += 1
         line = raw_line.rstrip("\n")
+        if is_analyzer_summary_line(line):
+            continue
 
         skipped = SKIPPED_FRAMES_RE.search(line)
         if skipped:
