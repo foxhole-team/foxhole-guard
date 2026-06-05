@@ -11,10 +11,12 @@ import android.view.ViewGroup
 import android.view.ViewOutlineProvider
 import android.widget.FrameLayout
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.PredictiveBackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -105,12 +107,12 @@ import com.foxhole.beta.ui.theme.LocalFoxholeThemeMode
 import com.foxhole.beta.ui.theme.LocalFoxholeUiPalette
 import com.foxhole.beta.vpn.FoxholeTileService
 import eightbitlab.com.blurview.BlurTarget
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.abs
-import kotlin.math.min
 import kotlin.math.roundToInt
 import android.graphics.drawable.Icon as AndroidIcon
 import android.provider.Settings as AndroidSettings
@@ -196,7 +198,16 @@ fun FoxholeApp(
             AppRoute.SETTINGS -> AppSection.SETTINGS
             else -> navBackStackEntry?.destination?.rootSwipeSection()
         }
-    val settingsBackSwipeEnabled = navBackStackEntry?.destination?.settingsBackSwipeEnabled() == true
+    val settingsDetailBackEnabled = currentRoute.isSettingsDetailRoute()
+    val settingsBackProgress = remember { Animatable(0f) }
+    val layoutDirection = LocalLayoutDirection.current
+    val density = LocalDensity.current
+    val predictiveBackOffsetPx = with(density) { DETAIL_PREDICTIVE_BACK_PROGRESS_OFFSET.toPx() }
+    val predictiveBackDirection =
+        when (layoutDirection) {
+            LayoutDirection.Ltr -> 1f
+            LayoutDirection.Rtl -> -1f
+        }
     val settingsDetailNavigationGate = remember { SettingsDetailNavigationGate() }
     val navigationTransitionTelemetry = remember { NavigationTransitionTelemetry() }
     NavigationTransitionTelemetryEffect(currentRoute, navigationTransitionTelemetry)
@@ -242,6 +253,25 @@ fun FoxholeApp(
     }
     BackHandler(enabled = currentRoute.isRootRoute() && currentSection == AppSection.SETTINGS) {
         selectRootSection(AppSection.DASHBOARD)
+    }
+    PredictiveBackHandler(enabled = settingsDetailBackEnabled) { progress ->
+        try {
+            progress.collect { event ->
+                settingsBackProgress.snapTo(event.progress.coerceIn(0f, 1f))
+            }
+            settingsBackProgress.snapTo(0f)
+            navController.navigateUp()
+        } catch (cancelled: CancellationException) {
+            settingsBackProgress.animateTo(
+                targetValue = 0f,
+                animationSpec =
+                    tween(
+                        durationMillis = FoxholeMotionTokens.StandardDurationMs,
+                        easing = FoxholeMotionTokens.NavigationExitEasing,
+                    ),
+            )
+            throw cancelled
+        }
     }
     val backdropBlurHost =
         remember(bottomDockOverlayHost, bottomDockBlurTarget) {
@@ -307,10 +337,6 @@ fun FoxholeApp(
                                     currentSection = rootSwipeSection,
                                     onSectionSelected = selectRootSection,
                                 )
-                            settingsBackSwipeEnabled ->
-                                Modifier.settingsBackSwipeNavigation(
-                                    onNavigateBack = navController::navigateUp,
-                                )
                             else -> Modifier
                         },
                     )
@@ -323,7 +349,14 @@ fun FoxholeApp(
                 NavHost(
                     navController = navController,
                     startDestination = AppRoute.HOME,
-                    modifier = Modifier.fillMaxSize(),
+                    modifier =
+                        Modifier
+                            .fillMaxSize()
+                            .graphicsLayer {
+                                val progress = settingsBackProgress.value.coerceIn(0f, 1f)
+                                translationX = predictiveBackDirection * predictiveBackOffsetPx * progress
+                                alpha = 1f - (DETAIL_PREDICTIVE_BACK_ALPHA_RANGE * progress)
+                            },
                     enterTransition = {
                         if (targetState.destination.route.isSettingsDetailRoute()) {
                             detailForwardEnter()
@@ -1245,62 +1278,6 @@ private fun Modifier.sectionSwipeNavigation(
         )
     }
 
-@Composable
-private fun Modifier.settingsBackSwipeNavigation(
-    onNavigateBack: () -> Unit,
-): Modifier {
-    val layoutDirection = LocalLayoutDirection.current
-    return pointerInput(layoutDirection) {
-        var dragDistance = 0f
-        var edgeEligible = false
-        var consumed = false
-        val switchThreshold = min(size.width * DETAIL_BACK_SWIPE_THRESHOLD_FRACTION, 96.dp.toPx())
-        val edgeWidth = DETAIL_BACK_SWIPE_EDGE_WIDTH.toPx()
-        detectHorizontalDragGestures(
-            onDragStart = { start ->
-                dragDistance = 0f
-                edgeEligible =
-                    when (layoutDirection) {
-                        LayoutDirection.Ltr -> start.x <= edgeWidth
-                        LayoutDirection.Rtl -> start.x >= size.width - edgeWidth
-                    }
-                consumed = false
-            },
-            onHorizontalDrag = { change, dragAmount ->
-                if (consumed || !edgeEligible) {
-                    return@detectHorizontalDragGestures
-                }
-                val directedDrag =
-                    when (layoutDirection) {
-                        LayoutDirection.Ltr -> dragAmount
-                        LayoutDirection.Rtl -> -dragAmount
-                    }
-                if (directedDrag <= 0f) {
-                    dragDistance = 0f
-                    return@detectHorizontalDragGestures
-                }
-                dragDistance += directedDrag
-                if (dragDistance < switchThreshold) {
-                    return@detectHorizontalDragGestures
-                }
-                change.consume()
-                consumed = true
-                onNavigateBack()
-            },
-            onDragEnd = {
-                dragDistance = 0f
-                edgeEligible = false
-                consumed = false
-            },
-            onDragCancel = {
-                dragDistance = 0f
-                edgeEligible = false
-                consumed = false
-            },
-        )
-    }
-}
-
 private fun NavDestination.rootAppSection(): AppSection? =
     when {
         route == AppRoute.HOME -> AppSection.DASHBOARD
@@ -1314,11 +1291,6 @@ private fun NavDestination.rootSwipeSection(): AppSection? =
         AppRoute.SETTINGS -> AppSection.SETTINGS
         else -> null
     }
-
-private fun NavDestination.settingsBackSwipeEnabled(): Boolean {
-    val currentRoute = route ?: return false
-    return currentRoute.startsWith("${AppRoute.SETTINGS}/")
-}
 
 private fun String?.isRootRoute(): Boolean =
     this == AppRoute.HOME || this == AppRoute.SETTINGS
@@ -1535,8 +1507,8 @@ private fun requestQuickSettingsTile(
 }
 
 private const val SECTION_SWIPE_THRESHOLD_FRACTION = 0.22f
-private const val DETAIL_BACK_SWIPE_THRESHOLD_FRACTION = 0.18f
-private val DETAIL_BACK_SWIPE_EDGE_WIDTH = 32.dp
+private val DETAIL_PREDICTIVE_BACK_PROGRESS_OFFSET = 24.dp
+private const val DETAIL_PREDICTIVE_BACK_ALPHA_RANGE = 0.08f
 private const val DETAIL_FADE_IN_MS = FoxholeMotionTokens.NavigationFadeDurationMs
 private const val DETAIL_FADE_OUT_MS = FoxholeMotionTokens.FastDurationMs
 private const val DETAIL_TRANSITION_MS = FoxholeMotionTokens.NavigationEnterDurationMs

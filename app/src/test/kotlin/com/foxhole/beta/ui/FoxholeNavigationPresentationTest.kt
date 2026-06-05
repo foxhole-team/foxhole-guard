@@ -150,6 +150,26 @@ class FoxholeNavigationPresentationTest {
     }
 
     @Test
+    fun `settings details use predictive back progress instead of custom edge swipe`() {
+        val source =
+            listOf(
+                java.io.File("src/main/kotlin/com/foxhole/beta/ui/FoxholeApp.kt"),
+                java.io.File("app/src/main/kotlin/com/foxhole/beta/ui/FoxholeApp.kt"),
+                java.io.File("../app/src/main/kotlin/com/foxhole/beta/ui/FoxholeApp.kt"),
+            ).first { file -> file.isFile }.readText()
+
+        assertTrue(source.contains("PredictiveBackHandler(enabled = settingsDetailBackEnabled)"))
+        assertTrue(source.contains("progress.collect { event ->"))
+        assertTrue(source.contains("settingsBackProgress.snapTo(event.progress.coerceIn(0f, 1f))"))
+        assertTrue(source.contains("settingsBackProgress.animateTo("))
+        assertTrue(source.contains("navController.navigateUp()"))
+        assertTrue(source.contains("translationX = predictiveBackDirection * predictiveBackOffsetPx * progress"))
+        assertTrue(source.contains("DETAIL_PREDICTIVE_BACK_PROGRESS_OFFSET = 24.dp"))
+        assertFalse(source.contains("settingsBackSwipeNavigation"))
+        assertFalse(source.contains("DETAIL_BACK_SWIPE_EDGE_WIDTH"))
+    }
+
+    @Test
     fun `privacy route settings save configuration without runtime tor control`() {
         val source =
             listOf(
