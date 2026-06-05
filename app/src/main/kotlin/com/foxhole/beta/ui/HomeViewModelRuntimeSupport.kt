@@ -5,6 +5,7 @@ package com.foxhole.beta.ui
 import android.app.Application
 import android.content.Intent
 import android.content.pm.ApplicationInfo
+import android.content.pm.PackageInfo
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.SystemClock
@@ -947,7 +948,8 @@ internal fun HomeViewModel.loadInstalledAppsInternal(force: Boolean = false) {
         try {
             val installed =
                 withContext(Dispatchers.IO) {
-                    val packageManager = getApplication<Application>().packageManager
+                    val application = getApplication<Application>()
+                    val packageManager = application.packageManager
                     val installedApplications =
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                             packageManager.getInstalledApplications(
@@ -965,9 +967,10 @@ internal fun HomeViewModel.loadInstalledAppsInternal(force: Boolean = false) {
                         }
                         .associateBy(ApplicationInfo::packageName)
                         .values
-                        .filterNot { it.packageName == getApplication<Application>().packageName }
+                        .filterNot { it.packageName == application.packageName }
                         .map { applicationInfo ->
                             val packageName = applicationInfo.packageName
+                            val packageInfo = packageManager.packageInfoOrNull(packageName)
                             val flags = applicationInfo.flags
                             val isSystemApp =
                                 flags and ApplicationInfo.FLAG_SYSTEM != 0 ||
@@ -978,6 +981,8 @@ internal fun HomeViewModel.loadInstalledAppsInternal(force: Boolean = false) {
                                     packageManager
                                 )?.toString().orEmpty().ifBlank { packageName },
                                 isSystemApp = isSystemApp,
+                                versionCode = packageInfo.versionCodeOrNull(),
+                                lastUpdateTime = packageInfo?.lastUpdateTime,
                             )
                         }.sortedWith(
                             compareBy<InstalledAppOption>(
@@ -1019,3 +1024,23 @@ internal fun HomeViewModel.onTrafficUiVisibilityChangedInternal(visible: Boolean
         clearProfileLatencyRefresh()
     }
 }
+
+private fun PackageManager.packageInfoOrNull(packageName: String): PackageInfo? =
+    runCatching {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            getPackageInfo(packageName, PackageManager.PackageInfoFlags.of(0))
+        } else {
+            @Suppress("DEPRECATION")
+            getPackageInfo(packageName, 0)
+        }
+    }.getOrNull()
+
+private fun PackageInfo?.versionCodeOrNull(): Long? =
+    this?.let { packageInfo ->
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            packageInfo.longVersionCode
+        } else {
+            @Suppress("DEPRECATION")
+            packageInfo.versionCode.toLong()
+        }
+    }

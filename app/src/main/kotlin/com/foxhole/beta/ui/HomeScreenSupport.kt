@@ -1881,6 +1881,8 @@ private fun HomeTorRouteIcons(
     selectedApps.take(4).forEach { app ->
         AppIcon(
             packageName = app.packageName,
+            versionCode = app.versionCode,
+            lastUpdateTime = app.lastUpdateTime,
             modifier = Modifier.size(24.dp),
             contentPadding = 1.dp,
             fallbackIconSize = 16.dp,

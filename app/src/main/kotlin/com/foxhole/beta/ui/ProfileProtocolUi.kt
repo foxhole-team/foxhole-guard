@@ -1002,7 +1002,12 @@ internal fun SelectedAppRow(
             horizontalArrangement = Arrangement.spacedBy(14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            AppIcon(packageName = app.packageName, modifier = Modifier.size(56.dp))
+            AppIcon(
+                packageName = app.packageName,
+                versionCode = app.versionCode,
+                lastUpdateTime = app.lastUpdateTime,
+                modifier = Modifier.size(56.dp),
+            )
             AppTextBlock(app = app, modifier = Modifier.weight(1f))
             IconButton(onClick = onRemove) {
                 Icon(Icons.Outlined.RemoveCircleOutline, contentDescription = stringResource(R.string.delete_label))
@@ -1027,7 +1032,12 @@ internal fun SelectableInstalledAppRow(
             horizontalArrangement = Arrangement.spacedBy(14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            AppIcon(packageName = app.packageName, modifier = Modifier.size(56.dp))
+            AppIcon(
+                packageName = app.packageName,
+                versionCode = app.versionCode,
+                lastUpdateTime = app.lastUpdateTime,
+                modifier = Modifier.size(56.dp),
+            )
             AppTextBlock(app = app, modifier = Modifier.weight(1f))
             FoxholeSwitch(
                 checked = checked,
@@ -1076,11 +1086,19 @@ internal fun AppTypePill(isSystemApp: Boolean) {
 @Composable
 internal fun AppIcon(
     packageName: String,
+    versionCode: Long? = null,
+    lastUpdateTime: Long? = null,
     modifier: Modifier = Modifier,
     contentPadding: Dp = 4.dp,
     fallbackIconSize: Dp = 24.dp,
 ) {
-    val bitmap = rememberAppIconBitmap(packageName = packageName, bitmapSize = 48.dp)
+    val bitmap =
+        rememberAppIconBitmap(
+            packageName = packageName,
+            versionCode = versionCode,
+            lastUpdateTime = lastUpdateTime,
+            bitmapSize = 48.dp,
+        )
 
     Surface(
         modifier = modifier,
@@ -1113,11 +1131,21 @@ internal fun AppIcon(
 @Composable
 internal fun rememberAppIconBitmap(
     packageName: String,
+    versionCode: Long? = null,
+    lastUpdateTime: Long? = null,
     bitmapSize: Dp,
 ): ImageBitmap? {
     val context = LocalContext.current
     val sizePx = with(LocalDensity.current) { bitmapSize.roundToPx() }
-    val cacheKey = remember(packageName, sizePx) { "$packageName@$sizePx" }
+    val cacheKey =
+        remember(packageName, versionCode, lastUpdateTime, sizePx) {
+            AppIconCacheKey(
+                packageName = packageName,
+                versionCode = versionCode,
+                lastUpdateTime = lastUpdateTime,
+                sizePx = sizePx,
+            )
+        }
     val cached = remember(cacheKey) { appIconCache.get(cacheKey) }
     val bitmap by produceState<ImageBitmap?>(initialValue = cached, cacheKey, sizePx) {
         if (value != null) {

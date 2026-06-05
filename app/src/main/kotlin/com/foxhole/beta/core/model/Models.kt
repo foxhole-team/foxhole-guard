@@ -581,6 +581,8 @@ data class InstalledAppOption(
     val packageName: String,
     val label: String,
     val isSystemApp: Boolean,
+    val versionCode: Long? = null,
+    val lastUpdateTime: Long? = null,
     val installerPackageName: String? = null,
     val riskLevel: InstalledAppRiskLevel = InstalledAppRiskLevel.LOW,
     val riskSignals: List<InstalledAppRiskSignal> = emptyList(),

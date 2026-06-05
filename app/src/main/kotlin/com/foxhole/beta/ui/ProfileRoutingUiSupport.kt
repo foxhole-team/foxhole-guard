@@ -850,7 +850,14 @@ internal fun ProfileFieldDialog(
     )
 }
 
-internal val appIconCache = LruCache<String, ImageBitmap>(512)
+internal data class AppIconCacheKey(
+    val packageName: String,
+    val versionCode: Long?,
+    val lastUpdateTime: Long?,
+    val sizePx: Int,
+)
+
+internal val appIconCache = LruCache<AppIconCacheKey, ImageBitmap>(512)
 
 internal data class InstalledAppSearchIndexRow(
     val app: InstalledAppOption,

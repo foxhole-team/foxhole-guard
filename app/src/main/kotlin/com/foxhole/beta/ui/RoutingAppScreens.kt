@@ -470,7 +470,13 @@ private fun AppGridTile(
     onRemove: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val dragBitmap = rememberAppIconBitmap(packageName = app.packageName, bitmapSize = 72.dp)
+    val dragBitmap =
+        rememberAppIconBitmap(
+            packageName = app.packageName,
+            versionCode = app.versionCode,
+            lastUpdateTime = app.lastUpdateTime,
+            bitmapSize = 72.dp,
+        )
     val dragContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.92f)
     val dragFallbackColor = MaterialTheme.colorScheme.primary
     val haptic = LocalHapticFeedback.current
@@ -514,6 +520,8 @@ private fun AppGridTile(
             Box(modifier = Modifier.size(76.dp)) {
                 AppIcon(
                     packageName = app.packageName,
+                    versionCode = app.versionCode,
+                    lastUpdateTime = app.lastUpdateTime,
                     modifier = Modifier.align(Alignment.Center).size(68.dp),
                 )
                 Surface(

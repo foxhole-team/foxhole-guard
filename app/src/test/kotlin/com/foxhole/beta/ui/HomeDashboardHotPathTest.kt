@@ -4,6 +4,7 @@ import com.foxhole.beta.core.model.DashboardCard
 import com.foxhole.beta.core.model.InstalledAppOption
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -651,6 +652,35 @@ class HomeDashboardHotPathTest {
         assertEquals(listOf(apps[0]), filterIndexedApps(index, " TELE "))
         assertEquals(listOf(apps[1]), filterIndexedApps(index, "android.set"))
         assertEquals(apps, filterIndexedApps(index, " "))
+    }
+
+    @Test
+    fun `app icon cache key includes package version update time and size`() {
+        val first = AppIconCacheKey(packageName = "com.example.app", versionCode = 10L, lastUpdateTime = 100L, sizePx = 48)
+        val updated = first.copy(versionCode = 11L)
+        val reinstalled = first.copy(lastUpdateTime = 200L)
+        val larger = first.copy(sizePx = 72)
+
+        assertNotEquals(first, updated)
+        assertNotEquals(first, reinstalled)
+        assertNotEquals(first, larger)
+    }
+
+    @Test
+    fun `installed app icons use package manager metadata for cache invalidation`() {
+        val runtimeSource = testSourceFile("HomeViewModelRuntimeSupport.kt").readText()
+        val protocolSource = testSourceFile("ProfileProtocolUi.kt").readText()
+        val routingSource = testSourceFile("RoutingAppScreens.kt").readText()
+        val homeSupportSource = testSourceFile("HomeScreenSupport.kt").readText()
+
+        assertTrue(runtimeSource.contains("val packageInfo = packageManager.packageInfoOrNull(packageName)"))
+        assertTrue(runtimeSource.contains("versionCode = packageInfo.versionCodeOrNull()"))
+        assertTrue(runtimeSource.contains("lastUpdateTime = packageInfo?.lastUpdateTime"))
+        assertTrue(protocolSource.contains("AppIconCacheKey("))
+        assertTrue(protocolSource.contains("versionCode = versionCode"))
+        assertTrue(protocolSource.contains("lastUpdateTime = lastUpdateTime"))
+        assertTrue(routingSource.contains("versionCode = app.versionCode"))
+        assertTrue(homeSupportSource.contains("lastUpdateTime = app.lastUpdateTime"))
     }
 
     @Test
