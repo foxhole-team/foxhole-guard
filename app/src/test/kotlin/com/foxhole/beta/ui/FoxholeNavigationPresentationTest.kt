@@ -174,6 +174,23 @@ class FoxholeNavigationPresentationTest {
     }
 
     @Test
+    fun `settings detail navigation exposes macrobenchmark trace section`() {
+        val source =
+            listOf(
+                java.io.File("src/main/kotlin/com/foxhole/beta/ui/FoxholeApp.kt"),
+                java.io.File("app/src/main/kotlin/com/foxhole/beta/ui/FoxholeApp.kt"),
+                java.io.File("../app/src/main/kotlin/com/foxhole/beta/ui/FoxholeApp.kt"),
+            ).first { file -> file.isFile }.readText()
+        val navigationBlock =
+            source.substringAfter("private fun NavHostController.navigateToSettingsDetail(")
+                .substringBefore("private fun NavHostController.navigateToSection(")
+
+        assertTrue(navigationBlock.contains("traceSettingsNavigationSection(\"Settings/navigation\")"))
+        assertTrue(navigationBlock.contains("telemetry.recordNavigateCall(route)"))
+        assertTrue(navigationBlock.contains("navigate(route)"))
+    }
+
+    @Test
     fun `privacy route settings save configuration without runtime tor control`() {
         val source =
             listOf(

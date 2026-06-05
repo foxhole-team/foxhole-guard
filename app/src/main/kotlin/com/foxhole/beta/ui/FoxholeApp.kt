@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
+import android.os.Trace
 import android.view.Gravity
 import android.view.ViewGroup
 import android.view.ViewOutlineProvider
@@ -1345,9 +1346,11 @@ private fun NavHostController.navigateToSettingsDetail(
                 routeTo = route,
                 tapTimeMs = decision.atMs,
             )
-            telemetry.recordNavigateCall(route)
-            navigate(route) {
-                launchSingleTop = true
+            traceSettingsNavigationSection("Settings/navigation") {
+                telemetry.recordNavigateCall(route)
+                navigate(route) {
+                    launchSingleTop = true
+                }
             }
         }
         is SettingsDetailNavigationDecision.Rejected -> {
@@ -1357,6 +1360,15 @@ private fun NavHostController.navigateToSettingsDetail(
                 reason = decision.reason,
             )
         }
+    }
+}
+
+private inline fun <T> traceSettingsNavigationSection(name: String, block: () -> T): T {
+    Trace.beginSection(name)
+    return try {
+        block()
+    } finally {
+        Trace.endSection()
     }
 }
 

@@ -659,6 +659,17 @@ class HomeDashboardHotPathTest {
     }
 
     @Test
+    fun `app picker and icon loading expose macrobenchmark trace sections`() {
+        val routingSource = testSourceFile("RoutingAppScreens.kt").readText()
+        val protocolSource = testSourceFile("ProfileProtocolUi.kt").readText()
+
+        assertTrue(routingSource.contains("traceAppPickerSection(\"AppPicker/filter\")"))
+        assertTrue(routingSource.contains("filterIndexedApps(appSearchIndex, query)"))
+        assertTrue(protocolSource.contains("traceAppIconSection(\"AppIcon/load\")"))
+        assertTrue(protocolSource.contains("withContext(Dispatchers.IO)"))
+    }
+
+    @Test
     fun `app icon cache key includes package version update time and size`() {
         val first = AppIconCacheKey(packageName = "com.example.app", versionCode = 10L, lastUpdateTime = 100L, sizePx = 48)
         val updated = first.copy(versionCode = 11L)

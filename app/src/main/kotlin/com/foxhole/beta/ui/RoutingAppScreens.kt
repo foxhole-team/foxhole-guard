@@ -4,6 +4,7 @@ package com.foxhole.beta.ui
 
 import android.content.ClipData
 import android.content.ClipDescription
+import android.os.Trace
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.draganddrop.dragAndDropSource
@@ -572,14 +573,16 @@ fun AppPickerScreen(
     val draftSelectionSet = remember(draftSelection) { draftSelection.toSet() }
     val appSearchIndex = remember(state.installedApps) { buildInstalledAppSearchIndex(state.installedApps) }
     val filteredApps = remember(appSearchIndex, query, appFilter) {
-        filterIndexedApps(appSearchIndex, query)
-            .filter { app ->
-                when (appFilter) {
-                    InstalledAppFilter.ALL -> true
-                    InstalledAppFilter.USER -> !app.isSystemApp
-                    InstalledAppFilter.SYSTEM -> app.isSystemApp
+        traceAppPickerSection("AppPicker/filter") {
+            filterIndexedApps(appSearchIndex, query)
+                .filter { app ->
+                    when (appFilter) {
+                        InstalledAppFilter.ALL -> true
+                        InstalledAppFilter.USER -> !app.isSystemApp
+                        InstalledAppFilter.SYSTEM -> app.isSystemApp
+                    }
                 }
-            }
+        }
     }
 
     SettingsScaffold(
@@ -696,6 +699,15 @@ private fun rememberAppPickerPopupsAllowed(onClosePopups: () -> Unit): Boolean {
         }
     }
     return popupsAllowed
+}
+
+private inline fun <T> traceAppPickerSection(name: String, block: () -> T): T {
+    Trace.beginSection(name)
+    return try {
+        block()
+    } finally {
+        Trace.endSection()
+    }
 }
 
 @Composable

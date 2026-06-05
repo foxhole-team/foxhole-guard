@@ -1,6 +1,7 @@
 package com.foxhole.beta.ui
 
 import android.graphics.Bitmap
+import android.os.Trace
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -1153,15 +1154,17 @@ internal fun rememberAppIconBitmap(
         }
         val resolved =
             withContext(Dispatchers.IO) {
-                runCatching {
-                    context.packageManager
-                        .getApplicationIcon(packageName)
-                        .toBitmap(
-                            width = sizePx,
-                            height = sizePx,
-                            config = Bitmap.Config.ARGB_8888,
-                        ).asImageBitmap()
-                }.getOrNull()
+                traceAppIconSection("AppIcon/load") {
+                    runCatching {
+                        context.packageManager
+                            .getApplicationIcon(packageName)
+                            .toBitmap(
+                                width = sizePx,
+                                height = sizePx,
+                                config = Bitmap.Config.ARGB_8888,
+                            ).asImageBitmap()
+                    }.getOrNull()
+                }
             }
         if (resolved != null) {
             appIconCache.put(cacheKey, resolved)
@@ -1169,6 +1172,15 @@ internal fun rememberAppIconBitmap(
         value = resolved
     }
     return bitmap
+}
+
+private inline fun <T> traceAppIconSection(name: String, block: () -> T): T {
+    Trace.beginSection(name)
+    return try {
+        block()
+    } finally {
+        Trace.endSection()
+    }
 }
 
 @Composable
