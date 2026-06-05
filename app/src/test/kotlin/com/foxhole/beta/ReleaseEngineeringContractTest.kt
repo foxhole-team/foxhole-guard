@@ -138,6 +138,44 @@ class ReleaseEngineeringContractTest {
     }
 
     @Test
+    fun `device runtime proof runner captures fresh logs and debug state`() {
+        val runner = projectFile("../scripts/run-device-runtime-proof.sh").readText()
+        val runtimeStressRunner = projectFile("../scripts/run-runtime-stress-gate.sh").readText()
+
+        listOf(
+            "ANDROID_SERIAL must be set",
+            "build/device-runtime-proof",
+            "live-logcat-threadtime.log",
+            "FOXHOLE_DEVICE_PROOF_RUN_CONNECTED",
+            "FOXHOLE_DEVICE_PROOF_RUN_RUNTIME_STRESS",
+            "FOXHOLE_DEVICE_PROOF_RUN_LOCAL_FIREWALL",
+            "FOXHOLE_DEVICE_PROOF_RUN_MACROBENCHMARK",
+            "scripts/run-connected-android-tests.sh",
+            "scripts/run-runtime-stress-gate.sh",
+            "LiveLocalFirewallGuardRuntimeTest",
+            "scripts/run-ci-macrobenchmark.sh",
+            "scripts/collect-foxhole-debug-state.sh",
+            "scripts/analyze-android-perf-logs.py",
+            ":app:installDebug",
+        ).forEach { marker ->
+            assertTrue("Missing device runtime proof marker: $marker", runner.contains(marker))
+        }
+        listOf(
+            "FOXHOLE_RUNTIME_STRESS_ARTIFACT_DIR",
+            "logcat-threadtime.log",
+            "scripts/collect-foxhole-debug-state.sh",
+            "scripts/analyze-android-perf-logs.py",
+            "--fail-on-fatal",
+            "--fail-on-anr",
+            "--fail-on-oom",
+            "--fail-on-strict-disk",
+            ":app:installDebug",
+        ).forEach { marker ->
+            assertTrue("Missing runtime stress artifact marker: $marker", runtimeStressRunner.contains(marker))
+        }
+    }
+
+    @Test
     fun `android workflow keeps release probe on internal release only`() {
         val workflow = projectFile("../.github/workflows/android.yml").readText()
         val releaseStep =
