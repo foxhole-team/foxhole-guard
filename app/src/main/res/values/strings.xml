@@ -24,6 +24,9 @@
     <string name="traffic_map_live_requires_firewall">No active connections</string>
     <string name="traffic_map_waiting_connections">No active connections</string>
     <string name="traffic_map_waiting_connections_helper">Start VPN or enable local guard to see live destination countries.</string>
+    <string name="traffic_map_status_live">Live</string>
+    <string name="traffic_map_status_live_recent">Live, last 3s</string>
+    <string name="traffic_map_status_stale">Stale</string>
     <string name="traffic_map_route_header">Route</string>
     <string name="traffic_map_top_countries_header">Top countries</string>
     <string name="traffic_map_unknown_country">Unknown</string>
@@ -51,6 +54,14 @@
     <string name="traffic_map_filter_tor">TOR</string>
     <string name="traffic_map_filter_direct">Direct</string>
     <string name="traffic_map_filter_new">New</string>
+    <string name="traffic_map_country_detail_share">Share</string>
+    <string name="traffic_map_country_detail_sample">Sample</string>
+    <string name="traffic_map_country_detail_new">New country</string>
+    <string name="traffic_map_country_detail_role_destination">Destination country</string>
+    <string name="traffic_map_country_detail_role_vpn">VPN route country</string>
+    <string name="traffic_map_country_detail_role_tor">TOR exit country</string>
+    <string name="traffic_map_country_detail_role_unknown">Unsupported country bucket</string>
+    <string name="traffic_map_country_detail_app_stats_required">App details require per-app statistics.</string>
     <string name="traffic_map_power_save_disabled">Map is disabled to reduce battery usage</string>
     <string name="usage_access_consent_title">Allow per-app traffic statistics?</string>
     <string name="usage_access_consent_body">FoxHole will locally read app network traffic statistics to show per-app traffic, detect anomalies, and help configure routing. The data is stored on this device in the encrypted local database and is not sent to FoxHole servers. You can turn it off and delete the data in Settings.</string>

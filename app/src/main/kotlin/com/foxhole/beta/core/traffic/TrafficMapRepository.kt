@@ -120,6 +120,7 @@ class TrafficMapRepository(
                         limit = MaxTrafficMapDestinations,
                         countryRegistry = countryRegistry(),
                         lastSampleAtMs = accumulator.lastSampleAtMs,
+                        newCountryCodes = accumulator.newCountryCodes,
                     )
                 }
                 .distinctUntilChanged(),
@@ -138,6 +139,7 @@ class TrafficMapRepository(
                 totalConnections = destinationSnapshot.totalConnections,
                 countryCount = destinationSnapshot.countryCount,
                 lastSampleAtMs = destinationSnapshot.lastSampleAtMs,
+                newCountryCodes = destinationSnapshot.newCountryCodes,
             )
         }
             .distinctUntilChanged()
@@ -149,6 +151,7 @@ class TrafficMapRepository(
         torIpInfo: IpInfo? = null,
         runtimeAvailable: Boolean,
         destinations: List<TrafficMapPoint>,
+        newCountryCodes: Set<String> = emptySet(),
     ): TrafficMapUiState =
         buildTrafficMapUiState(
             originInfo = trafficMapOriginInfo(originIpInfo),
@@ -164,6 +167,7 @@ class TrafficMapRepository(
             totalConnections = destinations.sumOf(TrafficMapPoint::connections),
             countryCount = destinations.size,
             lastSampleAtMs = null,
+            newCountryCodes = newCountryCodes,
         )
 
     private fun buildTrafficMapUiState(
@@ -180,6 +184,7 @@ class TrafficMapRepository(
         totalConnections: Int,
         countryCount: Int,
         lastSampleAtMs: Long?,
+        newCountryCodes: Set<String>,
     ): TrafficMapUiState {
         val mapAnchorInfo = originInfo ?: routeInfo ?: torInfo
         val origin = mapAnchorInfo?.countryCode?.let(::trafficMapOrigin)
@@ -224,6 +229,7 @@ class TrafficMapRepository(
                     destinations = visibleDestinations,
                     vpnRoute = vpnRoute,
                     torExit = torExit,
+                    newCountryCodes = newCountryCodes,
                 ),
             sampleWindowLabel =
                 trafficMapSampleWindowLabel(
@@ -323,6 +329,7 @@ class TrafficMapRepository(
         destinations: List<TrafficMapPoint>,
         vpnRoute: TrafficMapPoint?,
         torExit: TrafficMapPoint?,
+        newCountryCodes: Set<String>,
     ): List<TrafficMapCountryVisual> {
         val maxBytes =
             maxOf(
@@ -352,7 +359,14 @@ class TrafficMapRepository(
                 add(point.toTrafficMapCountryVisual(CountryTrafficRole.TOR_EXIT, maxBytes, isRouteNode = true))
             }
             destinations.forEach { point ->
-                add(point.toTrafficMapCountryVisual(CountryTrafficRole.DESTINATION, maxBytes, isRouteNode = false))
+                add(
+                    point.toTrafficMapCountryVisual(
+                        role = CountryTrafficRole.DESTINATION,
+                        maxBytes = maxBytes,
+                        isRouteNode = false,
+                        isNewCountry = point.countryCode in newCountryCodes,
+                    ),
+                )
             }
         }
     }
@@ -481,6 +495,7 @@ internal data class TrafficMapDestinationSnapshot(
     val totalConnections: Int,
     val countryCount: Int,
     val lastSampleAtMs: Long?,
+    val newCountryCodes: Set<String>,
 )
 
 data class TrafficMapCountryCoordinate(
@@ -509,15 +524,23 @@ internal data class TrafficMapSampleBatch(
 internal data class TrafficMapConnectionAccumulator(
     val samplesById: LinkedHashMap<String, TrafficMapConnectionSample> = linkedMapOf(),
     val lastSampleAtMs: Long? = null,
+    val newCountryCodes: Set<String> = emptySet(),
 ) {
     fun updatedForBatch(batch: TrafficMapSampleBatch): TrafficMapConnectionAccumulator {
         if (!batch.runtimeAvailable) {
             return TrafficMapConnectionAccumulator()
         }
-        return TrafficMapConnectionAccumulator().updatedWith(batch.samples)
+        val previousCountryCodes = countryAggregates().keys
+        return TrafficMapConnectionAccumulator().updatedWith(
+            samples = batch.samples,
+            previousCountryCodes = previousCountryCodes,
+        )
     }
 
-    fun updatedWith(samples: List<TrafficMapConnectionSample>): TrafficMapConnectionAccumulator {
+    fun updatedWith(
+        samples: List<TrafficMapConnectionSample>,
+        previousCountryCodes: Set<String> = countryAggregates().keys,
+    ): TrafficMapConnectionAccumulator {
         if (samples.isEmpty()) {
             return this
         }
@@ -535,9 +558,11 @@ internal data class TrafficMapConnectionAccumulator(
             val oldestKey = next.keys.firstOrNull() ?: break
             next.remove(oldestKey)
         }
+        val nextCountryCodes = aggregateTrafficMapSamples(next.values.toList()).keys
         return TrafficMapConnectionAccumulator(
             samplesById = next,
             lastSampleAtMs = System.currentTimeMillis(),
+            newCountryCodes = nextCountryCodes - previousCountryCodes,
         )
     }
 
@@ -591,6 +616,7 @@ internal fun trafficMapDestinationSnapshotFromAggregates(
     limit: Int,
     countryRegistry: TrafficMapCountryRegistry = TrafficMapCountryRegistry.legacyFallback(),
     lastSampleAtMs: Long? = null,
+    newCountryCodes: Set<String> = emptySet(),
 ): TrafficMapDestinationSnapshot {
     val visibleLimit = limit.coerceAtLeast(0)
     var supportedCountryCount = 0
@@ -636,6 +662,7 @@ internal fun trafficMapDestinationSnapshotFromAggregates(
         totalConnections = totalConnections,
         countryCount = supportedCountryCount + unknownBucketCount,
         lastSampleAtMs = lastSampleAtMs,
+        newCountryCodes = newCountryCodes,
     )
 }
 
@@ -664,6 +691,7 @@ private fun TrafficMapPoint.toTrafficMapCountryVisual(
     role: CountryTrafficRole,
     maxBytes: Long,
     isRouteNode: Boolean,
+    isNewCountry: Boolean = false,
 ): TrafficMapCountryVisual {
     val intensity =
         sqrt(bytes.coerceAtLeast(0L).toDouble() / maxBytes.coerceAtLeast(1L).toDouble())
@@ -675,7 +703,7 @@ private fun TrafficMapPoint.toTrafficMapCountryVisual(
         connections = connections,
         role = role,
         intensity = intensity,
-        isNewCountry = false,
+        isNewCountry = isNewCountry,
         isRouteNode = isRouteNode,
     )
 }

@@ -169,6 +169,14 @@ class TrafficMapDetailControlsTest {
             ),
         )
     }
+
+    @Test
+    fun `detail share label keeps tiny and empty traffic honest`() {
+        assertEquals("0%", trafficMapDetailShareLabel(bytes = 0L, totalBytes = 0L))
+        assertEquals("<1%", trafficMapDetailShareLabel(bytes = 1L, totalBytes = 200L))
+        assertEquals("25%", trafficMapDetailShareLabel(bytes = 25L, totalBytes = 100L))
+        assertEquals("100%", trafficMapDetailShareLabel(bytes = 125L, totalBytes = 100L))
+    }
 }
 
 private fun trafficMapPoint(

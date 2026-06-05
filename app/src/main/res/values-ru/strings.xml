@@ -25,6 +25,9 @@
     <string name="traffic_map_live_requires_firewall">Нет активных подключений</string>
     <string name="traffic_map_waiting_connections">Нет активных подключений</string>
     <string name="traffic_map_waiting_connections_helper">Запустите VPN или включите локальный guard, чтобы увидеть страны назначения.</string>
+    <string name="traffic_map_status_live">Онлайн</string>
+    <string name="traffic_map_status_live_recent">Онлайн, последние 3 с</string>
+    <string name="traffic_map_status_stale">Устарело</string>
     <string name="traffic_map_route_header">Маршрут</string>
     <string name="traffic_map_top_countries_header">Топ стран</string>
     <string name="traffic_map_unknown_country">Неизвестно</string>
@@ -52,6 +55,14 @@
     <string name="traffic_map_filter_tor">TOR</string>
     <string name="traffic_map_filter_direct">Напр.</string>
     <string name="traffic_map_filter_new">Новые</string>
+    <string name="traffic_map_country_detail_share">Доля</string>
+    <string name="traffic_map_country_detail_sample">Срез</string>
+    <string name="traffic_map_country_detail_new">Новая страна</string>
+    <string name="traffic_map_country_detail_role_destination">Страна назначения</string>
+    <string name="traffic_map_country_detail_role_vpn">Страна VPN маршрута</string>
+    <string name="traffic_map_country_detail_role_tor">Страна TOR exit</string>
+    <string name="traffic_map_country_detail_role_unknown">Неподдерживаемые страны</string>
+    <string name="traffic_map_country_detail_app_stats_required">Детали приложений требуют статистику per-app.</string>
     <string name="traffic_map_power_save_disabled">Карта отключена для уменьшения энергопотребления</string>
     <string name="usage_access_consent_title">Разрешить статистику по приложениям?</string>
     <string name="usage_access_consent_body">FoxHole будет локально читать статистику сетевого трафика по приложениям, чтобы показывать per-app traffic, аномалии и помогать настраивать маршрутизацию. Данные хранятся на этом устройстве в зашифрованной локальной базе и не отправляются на серверы FoxHole. Это можно отключить и удалить в настройках.</string>
