@@ -934,6 +934,10 @@ private fun TrafficMapCanvas(
     val drawableVpnRoute = remember(state.vpnRoute) { state.vpnRoute?.toDrawableTrafficMapDestination() }
     val drawableTorExit = remember(state.torExit) { state.torExit?.toDrawableTrafficMapDestination() }
     val drawableEdges = remember(state.edges) { state.edges.toDrawableTrafficMapEdges() }
+    val torRouteDashPhase =
+        rememberTrafficMapTorRouteDashPhase(
+            enabled = drawableEdges.any { edge -> edge.role == TrafficMapEdgeRole.TOR_ROUTE },
+        )
     val originLat = state.originLat
     val originLon = state.originLon
     val originCountryCode = state.originCountryCode
@@ -1187,7 +1191,10 @@ private fun TrafficMapCanvas(
                                     cap = StrokeCap.Round,
                                     pathEffect =
                                         if (route.role == TrafficMapEdgeRole.TOR_ROUTE) {
-                                            PathEffect.dashPathEffect(floatArrayOf(torRouteDash, torRouteGap))
+                                            PathEffect.dashPathEffect(
+                                                intervals = floatArrayOf(torRouteDash, torRouteGap),
+                                                phase = torRouteDashPhase,
+                                            )
                                         } else {
                                             null
                                         },
@@ -1252,6 +1259,26 @@ private fun TrafficMapCanvas(
             )
         }
     }
+}
+
+@Composable
+private fun rememberTrafficMapTorRouteDashPhase(enabled: Boolean): Float {
+    val phase by produceState(initialValue = 0f, enabled) {
+        if (!enabled) {
+            value = 0f
+            return@produceState
+        }
+        while (true) {
+            withFrameNanos { frameTimeNanos ->
+                value =
+                    (
+                        (frameTimeNanos / TRAFFIC_MAP_TOR_ROUTE_DASH_FRAME_DIVISOR_NANOS) %
+                            TRAFFIC_MAP_TOR_ROUTE_DASH_PHASE_STEPS
+                        ).toFloat()
+            }
+        }
+    }
+    return phase
 }
 
 @Composable
@@ -3136,6 +3163,8 @@ private const val TRAFFIC_MAP_ORIGIN_MARKER_KEY = "origin"
 private const val TRAFFIC_MAP_VPN_ROUTE_MARKER_KEY = "route:vpn"
 private const val TRAFFIC_MAP_TOR_EXIT_MARKER_KEY = "route:tor"
 private const val TRAFFIC_MAP_HEAVY_DESTINATION_BYTES = 1_048_576L
+private const val TRAFFIC_MAP_TOR_ROUTE_DASH_FRAME_DIVISOR_NANOS = 16_666_667L
+private const val TRAFFIC_MAP_TOR_ROUTE_DASH_PHASE_STEPS = 11L
 private const val TRAFFIC_MAP_HEAVY_CONTENT_SETTLE_DELAY_MS = 0L
 private const val TRAFFIC_MAP_POWER_STATE_STARTUP_DELAY_MS = 0L
 private const val TRAFFIC_MAP_WEIGHT = 0.62f

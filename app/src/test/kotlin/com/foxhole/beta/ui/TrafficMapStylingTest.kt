@@ -79,6 +79,8 @@ class TrafficMapStylingTest {
         assertTrue(source.contains("TrafficMapTokens.MarkerCollisionDistancePx"))
         assertTrue(source.contains("TrafficMapTokens.TorRouteDashDp"))
         assertTrue(source.contains("PathEffect.dashPathEffect"))
+        assertTrue(source.contains("rememberTrafficMapTorRouteDashPhase"))
+        assertTrue(source.contains("phase = torRouteDashPhase"))
         assertTrue(source.contains("trafficMapSmallCountryCallouts("))
         assertTrue(source.contains("TrafficMapTokens.SmallCountryCalloutMaxAreaPx"))
         assertTrue(source.contains("requiresProjectedCallout("))
