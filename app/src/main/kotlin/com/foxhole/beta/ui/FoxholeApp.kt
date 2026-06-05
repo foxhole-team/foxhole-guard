@@ -1293,9 +1293,23 @@ private fun String?.isRootRoute(): Boolean =
 private fun String?.isSettingsDetailRoute(): Boolean =
     this?.startsWith("${AppRoute.SETTINGS}/") == true
 
-private fun rootEnter(): EnterTransition = EnterTransition.None
+private fun rootEnter(): EnterTransition =
+    fadeIn(
+        animationSpec =
+            tween(
+                durationMillis = ROOT_TRANSITION_MS,
+                easing = FoxholeMotionTokens.NavigationEnterEasing,
+            ),
+    )
 
-private fun rootExit(): ExitTransition = ExitTransition.None
+private fun rootExit(): ExitTransition =
+    fadeOut(
+        animationSpec =
+            tween(
+                durationMillis = ROOT_TRANSITION_MS,
+                easing = FoxholeMotionTokens.NavigationExitEasing,
+            ),
+    )
 
 private fun detailForwardEnter(): EnterTransition =
     fadeIn(
@@ -1309,7 +1323,7 @@ private fun detailForwardEnter(): EnterTransition =
             initialOffsetX = { fullWidth -> detailTransitionOffsetPx(fullWidth) },
             animationSpec =
                 tween(
-                    durationMillis = DETAIL_TRANSITION_MS,
+                    durationMillis = DETAIL_ENTER_TRANSITION_MS,
                     easing = FoxholeMotionTokens.NavigationEnterEasing,
                 ),
         )
@@ -1323,10 +1337,10 @@ private fun detailForwardExit(): ExitTransition =
             ),
     ) +
         slideOutHorizontally(
-            targetOffsetX = { fullWidth -> -detailTransitionOffsetPx(fullWidth) },
+            targetOffsetX = { fullWidth -> -detailSecondaryOffsetPx(fullWidth) },
             animationSpec =
                 tween(
-                    durationMillis = DETAIL_TRANSITION_MS,
+                    durationMillis = DETAIL_EXIT_TRANSITION_MS,
                     easing = FoxholeMotionTokens.NavigationExitEasing,
                 ),
         )
@@ -1340,10 +1354,10 @@ private fun detailBackEnter(): EnterTransition =
             ),
     ) +
         slideInHorizontally(
-            initialOffsetX = { fullWidth -> -detailTransitionOffsetPx(fullWidth) },
+            initialOffsetX = { fullWidth -> -detailSecondaryOffsetPx(fullWidth) },
             animationSpec =
                 tween(
-                    durationMillis = DETAIL_TRANSITION_MS,
+                    durationMillis = DETAIL_EXIT_TRANSITION_MS,
                     easing = FoxholeMotionTokens.NavigationEnterEasing,
                 ),
         )
@@ -1360,13 +1374,18 @@ private fun detailBackExit(): ExitTransition =
             targetOffsetX = { fullWidth -> detailTransitionOffsetPx(fullWidth) },
             animationSpec =
                 tween(
-                    durationMillis = DETAIL_TRANSITION_MS,
+                    durationMillis = DETAIL_EXIT_TRANSITION_MS,
                     easing = FoxholeMotionTokens.NavigationExitEasing,
                 ),
         )
 
 internal fun detailTransitionOffsetPx(fullWidthPx: Int): Int =
     (fullWidthPx * DETAIL_TRANSITION_OFFSET_FRACTION)
+        .roundToInt()
+        .coerceAtLeast(1)
+
+internal fun detailSecondaryOffsetPx(fullWidthPx: Int): Int =
+    (fullWidthPx * DETAIL_SECONDARY_OFFSET_FRACTION)
         .roundToInt()
         .coerceAtLeast(1)
 
@@ -1515,7 +1534,10 @@ private fun requestQuickSettingsTile(
 private const val SECTION_SWIPE_THRESHOLD_FRACTION = 0.22f
 private val DETAIL_PREDICTIVE_BACK_PROGRESS_OFFSET = 24.dp
 private const val DETAIL_PREDICTIVE_BACK_ALPHA_RANGE = 0.08f
+private const val ROOT_TRANSITION_MS = FoxholeMotionTokens.EmphasisDurationMs
 private const val DETAIL_FADE_IN_MS = FoxholeMotionTokens.NavigationFadeDurationMs
-private const val DETAIL_FADE_OUT_MS = FoxholeMotionTokens.FastDurationMs
-private const val DETAIL_TRANSITION_MS = FoxholeMotionTokens.NavigationEnterDurationMs
+private const val DETAIL_FADE_OUT_MS = FoxholeMotionTokens.NavigationExitDurationMs
+private const val DETAIL_ENTER_TRANSITION_MS = FoxholeMotionTokens.NavigationEnterDurationMs
+private const val DETAIL_EXIT_TRANSITION_MS = FoxholeMotionTokens.NavigationExitDurationMs
 private const val DETAIL_TRANSITION_OFFSET_FRACTION = FoxholeMotionTokens.NavigationSlideFraction
+private const val DETAIL_SECONDARY_OFFSET_FRACTION = 0.03f

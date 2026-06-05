@@ -10,6 +10,8 @@ class FoxholeNavigationPresentationTest {
     fun `detail transition uses subtle material-style offset instead of full page slide`() {
         assertEquals(108, detailTransitionOffsetPx(1080))
         assertEquals(1, detailTransitionOffsetPx(1))
+        assertEquals(32, detailSecondaryOffsetPx(1080))
+        assertEquals(1, detailSecondaryOffsetPx(1))
     }
 
     @Test
@@ -22,9 +24,14 @@ class FoxholeNavigationPresentationTest {
             ).first { file -> file.isFile }.readText()
 
         assertTrue(source.contains("DETAIL_FADE_IN_MS = FoxholeMotionTokens.NavigationFadeDurationMs"))
-        assertTrue(source.contains("DETAIL_FADE_OUT_MS = FoxholeMotionTokens.FastDurationMs"))
-        assertTrue(source.contains("DETAIL_TRANSITION_MS = FoxholeMotionTokens.NavigationEnterDurationMs"))
+        assertTrue(source.contains("ROOT_TRANSITION_MS = FoxholeMotionTokens.EmphasisDurationMs"))
+        assertTrue(source.contains("DETAIL_FADE_OUT_MS = FoxholeMotionTokens.NavigationExitDurationMs"))
+        assertTrue(source.contains("DETAIL_ENTER_TRANSITION_MS = FoxholeMotionTokens.NavigationEnterDurationMs"))
+        assertTrue(source.contains("DETAIL_EXIT_TRANSITION_MS = FoxholeMotionTokens.NavigationExitDurationMs"))
         assertTrue(source.contains("DETAIL_TRANSITION_OFFSET_FRACTION = FoxholeMotionTokens.NavigationSlideFraction"))
+        assertTrue(source.contains("DETAIL_SECONDARY_OFFSET_FRACTION = 0.03f"))
+        assertTrue(source.contains("targetOffsetX = { fullWidth -> -detailSecondaryOffsetPx(fullWidth) }"))
+        assertTrue(source.contains("initialOffsetX = { fullWidth -> -detailSecondaryOffsetPx(fullWidth) }"))
         assertTrue(source.contains("easing = FoxholeMotionTokens.NavigationEnterEasing"))
         assertTrue(source.contains("easing = FoxholeMotionTokens.NavigationExitEasing"))
         assertFalse(source.contains("DETAIL_TRANSITION_MS = 150"))

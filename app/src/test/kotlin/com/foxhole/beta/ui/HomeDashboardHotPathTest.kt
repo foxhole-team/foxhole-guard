@@ -428,6 +428,10 @@ class HomeDashboardHotPathTest {
                 .substringBefore("val baseColor")
 
         assertTrue(uiChromeSource.contains("internal fun rememberFoxholeSkeletonProgress(): State<Float>"))
+        assertTrue(uiChromeSource.contains("internal fun foxholeSkeletonShimmerEnabled(): Boolean"))
+        assertTrue(uiChromeSource.contains("PowerManager"))
+        assertTrue(uiChromeSource.contains("Settings.Global.ANIMATOR_DURATION_SCALE"))
+        assertTrue(uiChromeSource.contains("remember { mutableFloatStateOf(0f) }"))
         assertTrue(skeletonBlock.contains("shimmerProgress: State<Float> = rememberFoxholeSkeletonProgress()"))
         assertTrue(uiChromeSource.contains("shimmerProgress.value"))
         assertTrue(uiChromeSource.contains("onDrawWithContent"))

@@ -5,9 +5,11 @@ package com.foxhole.beta.ui
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.os.PowerManager
 import android.os.SystemClock
 import android.os.VibrationEffect
 import android.os.Vibrator
+import android.provider.Settings
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -95,6 +97,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.State
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -103,6 +106,7 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithCache
@@ -1997,16 +2001,37 @@ internal fun FoxholeSearchField(
 
 @Composable
 internal fun rememberFoxholeSkeletonProgress(): State<Float> =
-    rememberInfiniteTransition(label = "foxhole_skeleton_group").animateFloat(
+    if (!foxholeSkeletonShimmerEnabled()) {
+        remember { mutableFloatStateOf(0f) }
+    } else {
+        rememberInfiniteTransition(label = "foxhole_skeleton_group").animateFloat(
         initialValue = 0f,
         targetValue = 1f,
         animationSpec =
             infiniteRepeatable(
                 animation = tween(durationMillis = 1_150, easing = LinearEasing),
                 repeatMode = RepeatMode.Restart,
-        ),
+            ),
         label = "foxhole_skeleton_shimmer",
-    )
+        )
+    }
+
+@Composable
+internal fun foxholeSkeletonShimmerEnabled(): Boolean {
+    val context = LocalContext.current
+    return remember(context) {
+        val powerSaveMode = context.getSystemService<PowerManager>()?.isPowerSaveMode == true
+        val animatorDurationScale =
+            runCatching {
+                Settings.Global.getFloat(
+                    context.contentResolver,
+                    Settings.Global.ANIMATOR_DURATION_SCALE,
+                    1f,
+                )
+            }.getOrDefault(1f)
+        !powerSaveMode && animatorDurationScale > 0f
+    }
+}
 
 @Composable
 internal fun FoxholeSkeletonBlock(
