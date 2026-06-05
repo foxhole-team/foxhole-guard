@@ -198,6 +198,57 @@ class FoxholeNavigationPresentationTest {
     }
 
     @Test
+    fun `navigation first frame telemetry is scoped to destination composition`() {
+        val source =
+            listOf(
+                java.io.File("src/main/kotlin/com/foxhole/beta/ui/FoxholeApp.kt"),
+                java.io.File("app/src/main/kotlin/com/foxhole/beta/ui/FoxholeApp.kt"),
+                java.io.File("../app/src/main/kotlin/com/foxhole/beta/ui/FoxholeApp.kt"),
+            ).first { file -> file.isFile }.readText()
+
+        assertTrue(source.contains("NavigationTransitionTelemetryEffect(currentRoute, navigationTransitionTelemetry)"))
+        listOf(
+            "HOME",
+            "TRAFFIC_MAP_DETAIL",
+            "PROFILES",
+            "SETTINGS",
+            "SMART_START",
+            "TRAFFIC",
+            "DNS",
+            "SECURITY",
+            "ROUTING_APPS",
+            "ROUTING_APPS_PICKER",
+            "DNS_APPS_PICKER",
+            "ROUTING_SITES",
+            "APPLICATION",
+            "DIAGNOSTICS",
+            "STATISTICS",
+            "PRIVACY_LOCAL_DATA",
+        ).forEach { route ->
+            assertTrue(
+                "Missing destination-local telemetry probe for AppRoute.$route",
+                source.contains("NavigationTransitionTelemetryEffect(AppRoute.$route, navigationTransitionTelemetry)"),
+            )
+        }
+    }
+
+    @Test
+    fun `navigation telemetry records first frame from next choreographer frame`() {
+        val source =
+            listOf(
+                java.io.File("src/main/kotlin/com/foxhole/beta/ui/NavigationTransitionTelemetry.kt"),
+                java.io.File("app/src/main/kotlin/com/foxhole/beta/ui/NavigationTransitionTelemetry.kt"),
+                java.io.File("../app/src/main/kotlin/com/foxhole/beta/ui/NavigationTransitionTelemetry.kt"),
+            ).first { file -> file.isFile }.readText()
+
+        assertTrue(source.contains("scheduleFirstFrameCallback { recordFirstFrame(routeTo) }"))
+        assertTrue(source.contains("Choreographer.getInstance().postFrameCallback"))
+        assertTrue(source.contains("Looper.myLooper() == Looper.getMainLooper()"))
+        assertTrue(source.contains("Handler(Looper.getMainLooper()).post"))
+        assertTrue(source.contains("NavigationTransitionTelemetryEffect("))
+    }
+
+    @Test
     fun `privacy route settings save configuration without runtime tor control`() {
         val source =
             listOf(

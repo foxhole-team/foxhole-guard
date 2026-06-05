@@ -1,7 +1,10 @@
 package com.foxhole.beta.ui
 
+import android.os.Handler
+import android.os.Looper
 import android.os.SystemClock
 import android.util.Log
+import android.view.Choreographer
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.withFrameNanos
@@ -54,6 +57,7 @@ internal sealed interface SettingsDetailNavigationDecision {
 
 internal class NavigationTransitionTelemetry(
     private val clock: () -> Long = SystemClock::elapsedRealtime,
+    private val scheduleFirstFrameCallback: (() -> Unit) -> Unit = ::scheduleNavigationFirstFrameCallback,
 ) {
     private val pendingTransition = AtomicReference<PendingNavigationTransition?>(null)
 
@@ -79,14 +83,18 @@ internal class NavigationTransitionTelemetry(
         routeTo: String,
         navigateCallTimeMs: Long = clock(),
     ) {
-        if (!BuildConfig.DEBUG) {
-            return
-        }
-        pendingTransition.updateAndGet { pending ->
-            when {
-                pending == null -> null
-                pending.routeTo != routeTo -> pending
-                else -> pending.copy(navigateCallTimeMs = navigateCallTimeMs)
+        if (BuildConfig.DEBUG) {
+            var shouldScheduleFirstFrame = false
+            while (!shouldScheduleFirstFrame) {
+                val pending = pendingTransition.get()
+                if (pending == null || pending.routeTo != routeTo) {
+                    break
+                }
+                val updated = pending.copy(navigateCallTimeMs = navigateCallTimeMs)
+                shouldScheduleFirstFrame = pendingTransition.compareAndSet(pending, updated)
+            }
+            if (shouldScheduleFirstFrame) {
+                scheduleFirstFrameCallback { recordFirstFrame(routeTo) }
             }
         }
     }
@@ -179,6 +187,21 @@ private data class PendingNavigationTransition(
 )
 
 private fun String?.orUnknownRoute(): String = this ?: "unknown"
+
+private fun scheduleNavigationFirstFrameCallback(callback: () -> Unit) {
+    val postFrameCallback = {
+        Choreographer.getInstance().postFrameCallback {
+            callback()
+        }
+    }
+    if (Looper.myLooper() == Looper.getMainLooper()) {
+        postFrameCallback()
+    } else {
+        Handler(Looper.getMainLooper()).post {
+            postFrameCallback()
+        }
+    }
+}
 
 private const val NAVIGATION_TELEMETRY_TAG = "FoxholeNavigation"
 private const val NAVIGATION_DETAIL_TRANSITION_MS = 280L
