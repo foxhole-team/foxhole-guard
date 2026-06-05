@@ -18,6 +18,7 @@ FULL_SUITE_BENCHMARKS = {
     WARM_STARTUP_BENCHMARK,
     "bottomNavigationRoundTrip",
     "dashboardTrafficMapOpen",
+    "dashboardTrafficMapStress",
     "homeScroll",
     "settingsTrafficTransition",
     "settingsDnsTransition",
@@ -60,6 +61,13 @@ REQUIRED_TRACE_METRIC_LABELS = {
     "dashboardTrafficMapOpen": {
         "TrafficMapLoadShapesSumMs",
         "TrafficMapRenderLandBitmapSumMs",
+        "TrafficMapBuildRoutesSumMs",
+        "TrafficMapDrawSumMs",
+    },
+    "dashboardTrafficMapStress": {
+        "TrafficMapLoadShapesSumMs",
+        "TrafficMapRenderLandBitmapSumMs",
+        "TrafficMapRenderHighlightBitmapSumMs",
         "TrafficMapBuildRoutesSumMs",
         "TrafficMapDrawSumMs",
     },

@@ -2,6 +2,7 @@ package com.foxhole.beta
 
 import android.Manifest
 import android.app.Activity
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.os.Build
@@ -63,6 +64,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        homeViewModel.applyBenchmarkIntent(intent)
         val initialThemeMode = readFastStoredThemeMode(this)
         applyEdgeToEdgeSystemBars(
             themeMode = initialThemeMode,
@@ -174,6 +176,12 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        homeViewModel.applyBenchmarkIntent(intent)
     }
 
     private fun requestPostNotificationsIfNeeded() {

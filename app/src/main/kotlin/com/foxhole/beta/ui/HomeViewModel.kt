@@ -8,6 +8,7 @@ import android.os.SystemClock
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.foxhole.beta.BuildConfig
 import com.foxhole.beta.FoxholeApplication
 import com.foxhole.beta.FoxholeHomeDependencies
 import com.foxhole.beta.R
@@ -44,8 +45,9 @@ import com.foxhole.beta.core.model.StatisticsRefreshInterval
 import com.foxhole.beta.core.model.StatisticsRetention
 import com.foxhole.beta.core.model.SubscriptionRefreshInterval
 import com.foxhole.beta.core.model.ThemeMode
-import com.foxhole.beta.core.model.TrafficSnapshot
+import com.foxhole.beta.core.model.TrafficMapUiState
 import com.foxhole.beta.core.model.TrafficMode
+import com.foxhole.beta.core.model.TrafficSnapshot
 import com.foxhole.beta.core.model.TunStack
 import com.foxhole.beta.core.model.V2RayApiSettings
 import com.foxhole.beta.core.network.IpInfoFetchMode
@@ -145,6 +147,7 @@ class HomeViewModel(
         )
     internal val startupActiveProfileMutable =
         MutableStateFlow(container.settingsRepository.settings.value.lastActiveProfile?.toStartupProfile())
+    private val benchmarkTrafficMapUiStateMutable = MutableStateFlow<TrafficMapUiState?>(null)
 
     internal val profileStreams =
         combine(
@@ -652,7 +655,7 @@ class HomeViewModel(
             .map { settings -> !settings.expert.sanitizeNetworkActivityPrivateData }
             .distinctUntilChanged()
 
-    val trafficMapUiState =
+    private val liveTrafficMapUiState =
         container.trafficMapRepository.trafficMapState(
             scope = viewModelScope,
             originIpInfo = trafficMapOriginIpInfo,
@@ -663,6 +666,24 @@ class HomeViewModel(
             recentNetworkActivityEvents = container.anomalyRepository.recentNetworkActivityEvents,
             showPrivateNetworkDetails = trafficMapShowPrivateNetworkDetails,
         )
+
+    val trafficMapUiState =
+        combine(
+            liveTrafficMapUiState,
+            benchmarkTrafficMapUiStateMutable,
+        ) { liveState, benchmarkState ->
+            if (BuildConfig.DEBUG) {
+                benchmarkState ?: liveState
+            } else {
+                liveState
+            }
+        }
+            .distinctUntilChanged()
+            .stateIn(
+                viewModelScope,
+                SharingStarted.WhileSubscribed(5_000),
+                liveTrafficMapUiState.value,
+            )
 
     private fun RuntimeUiState.hasConnectedPendingDashboardIpRefresh(): Boolean {
         if (phase != RuntimePhase.Connected) {
@@ -1703,6 +1724,17 @@ class HomeViewModel(
     fun createDiagnosticsArchive(sanitize: Boolean = true): File = createDiagnosticsArchiveInternal(sanitize = sanitize)
 
     fun exportDiagnostics(file: File = createDiagnosticsArchive()): Intent = exportDiagnosticsInternal(file)
+
+    fun applyBenchmarkIntent(intent: Intent?) {
+        if (!BuildConfig.DEBUG) {
+            return
+        }
+        when (intent?.getStringExtra(TrafficMapBenchmarkStress.IntentExtra)) {
+            TrafficMapBenchmarkStress.MaxLoadMode ->
+                benchmarkTrafficMapUiStateMutable.value =
+                    TrafficMapBenchmarkStress.buildState(container.trafficMapRepository)
+        }
+    }
 
     internal fun importRaw(value: String) = importRawInternal(value)
 

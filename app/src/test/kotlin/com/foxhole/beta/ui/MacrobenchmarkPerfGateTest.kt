@@ -19,6 +19,7 @@ class MacrobenchmarkPerfGateTest {
             "fun homeScroll()",
             "fun bottomNavigationRoundTrip()",
             "fun dashboardTrafficMapOpen()",
+            "fun dashboardTrafficMapStress()",
             "fun permissionFlow()",
             "fun settingsSmartStartTransition()",
             "fun settingsRoutingAppsPickerSearch()",
@@ -33,6 +34,10 @@ class MacrobenchmarkPerfGateTest {
             "openImportFilePickerAndReturn()",
             "clickConnectAndReturnFromVpnPermission()",
             "openTrafficMapDetailsAndReturn()",
+            "trafficMapStress = true",
+            "TRAFFIC_MAP_BENCHMARK_STRESS_EXTRA",
+            "cmd power set-mode",
+            "cmd uimode night",
             "findTrafficMapDetailsActionAfterScroll()",
             "ensureFoxholeForeground()",
             "scrollDashboardToTrafficMapDetailsAction()",
@@ -56,6 +61,7 @@ class MacrobenchmarkPerfGateTest {
             "\"bottomNavigationRoundTrip\"",
             "\"warmStartup\"",
             "\"dashboardTrafficMapOpen\"",
+            "\"dashboardTrafficMapStress\"",
             "\"homeScroll\"",
             "\"settingsSmartStartTransition\"",
             "\"settingsRoutingAppsPickerSearch\"",
@@ -75,11 +81,32 @@ class MacrobenchmarkPerfGateTest {
             "TRANSITION_FRAME_OVERRUN_P95_MAX_MS",
             "REQUIRED_TRACE_METRIC_LABELS",
             "HomeScreenFirstCompositionSumMs",
+            "TrafficMapRenderHighlightBitmapSumMs",
             "cpuP95",
             "overrunP95",
         ).forEach { marker ->
             assertTrue(thresholdScript.contains(marker))
         }
+    }
+
+    @Test
+    fun `traffic map benchmark stress state is debug gated`() {
+        val viewModelSource = projectFile(
+            "app/src/main/kotlin/com/foxhole/beta/ui/HomeViewModel.kt",
+            "../app/src/main/kotlin/com/foxhole/beta/ui/HomeViewModel.kt",
+        ).readText()
+        val stressSource = projectFile(
+            "app/src/main/kotlin/com/foxhole/beta/ui/TrafficMapBenchmarkStress.kt",
+            "../app/src/main/kotlin/com/foxhole/beta/ui/TrafficMapBenchmarkStress.kt",
+        ).readText()
+
+        assertTrue(viewModelSource.contains("fun applyBenchmarkIntent(intent: Intent?)"))
+        assertTrue(viewModelSource.contains("if (!BuildConfig.DEBUG)"))
+        assertTrue(viewModelSource.contains("benchmarkTrafficMapUiStateMutable"))
+        assertTrue(stressSource.contains("MaxLoadMode = \"max_load\""))
+        assertTrue(stressSource.contains("TrafficMapRepository.MaxTrafficMapDestinations"))
+        assertTrue(stressSource.contains("TrafficMapRepository.MaxRetainedConnectionSamples"))
+        assertTrue(stressSource.contains("StressNewCountryCodes"))
     }
 
     @Test

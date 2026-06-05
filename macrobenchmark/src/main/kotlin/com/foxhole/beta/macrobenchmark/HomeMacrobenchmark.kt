@@ -217,6 +217,45 @@ class HomeMacrobenchmark {
         }
 
     @Test
+    fun dashboardTrafficMapStress() =
+        benchmarkRule.measureRepeated(
+            packageName = PACKAGE_NAME,
+            metrics =
+                frameMetricsWithTrace(
+                    TRAFFIC_MAP_LOAD_SHAPES_TRACE,
+                    TRAFFIC_MAP_RENDER_LAND_BITMAP_TRACE,
+                    TRAFFIC_MAP_RENDER_HIGHLIGHT_BITMAP_TRACE,
+                    TRAFFIC_MAP_BUILD_ROUTES_TRACE,
+                    TRAFFIC_MAP_DRAW_TRACE,
+                ),
+            compilationMode = BENCHMARK_COMPILATION_MODE,
+            iterations = SHORT_ITERATIONS,
+            startupMode = StartupMode.WARM,
+            setupBlock = {
+                setBatterySaver(enabled = false)
+                setNightMode("no")
+                pressHome()
+                startActivityAndWait(foxholeLauncherIntent(trafficMapStress = true))
+                device.waitForIdle()
+            },
+        ) {
+            try {
+                waitForDashboardVisible()
+                openTrafficMapDetailsAndReturn()
+                setNightMode("yes")
+                device.waitForIdle()
+                openTrafficMapDetailsAndReturn()
+                setBatterySaver(enabled = true)
+                device.waitForIdle()
+                scrollDashboardToTrafficMapDetailsAction()
+            } finally {
+                setBatterySaver(enabled = false)
+                setNightMode("no")
+                device.waitForIdle()
+            }
+        }
+
+    @Test
     fun settingsSecurityTransition() =
         measureSettingsDetailTransition(
             SettingsDetailTarget(
@@ -668,11 +707,14 @@ class HomeMacrobenchmark {
         }
     }
 
-    private fun foxholeLauncherIntent() =
+    private fun foxholeLauncherIntent(trafficMapStress: Boolean = false) =
         Intent(Intent.ACTION_MAIN).apply {
             setClassName(PACKAGE_NAME, MAIN_ACTIVITY_CLASS_NAME)
             addCategory(Intent.CATEGORY_LAUNCHER)
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            if (trafficMapStress) {
+                putExtra(TRAFFIC_MAP_BENCHMARK_STRESS_EXTRA, TRAFFIC_MAP_BENCHMARK_STRESS_MAX_LOAD)
+            }
         }
 
     private fun clickCenter(node: UiObject2): Boolean =
@@ -707,6 +749,18 @@ class HomeMacrobenchmark {
         repeat(SETTINGS_RESET_SCROLL_ATTEMPTS) {
             device.swipe(centerX, upperY, centerX, lowerY, SWIPE_STEPS)
             device.waitForIdle()
+        }
+    }
+
+    private fun setBatterySaver(enabled: Boolean) {
+        runCatching {
+            device.executeShellCommand("cmd power set-mode ${if (enabled) 1 else 0}")
+        }
+    }
+
+    private fun setNightMode(mode: String) {
+        runCatching {
+            device.executeShellCommand("cmd uimode night $mode")
         }
     }
 
@@ -756,6 +810,9 @@ class HomeMacrobenchmark {
         private const val TRAFFIC_MAP_RENDER_HIGHLIGHT_BITMAP_TRACE = "TrafficMap/renderHighlightBitmap"
         private const val TRAFFIC_MAP_BUILD_ROUTES_TRACE = "TrafficMap/buildRoutes"
         private const val TRAFFIC_MAP_DRAW_TRACE = "TrafficMap/draw"
+        private const val TRAFFIC_MAP_BENCHMARK_STRESS_EXTRA =
+            "com.foxhole.beta.extra.TRAFFIC_MAP_BENCHMARK_STRESS"
+        private const val TRAFFIC_MAP_BENCHMARK_STRESS_MAX_LOAD = "max_load"
         private val SETTINGS_HOME_PRIMARY_LABELS = listOf("Smart start", "Смарт старт", "Умный старт")
         private val SETTINGS_HOME_SECONDARY_LABELS = listOf("Network", "Сеть", "DNS")
         private val DASHBOARD_ANCHOR_LABELS =
