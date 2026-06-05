@@ -83,6 +83,7 @@ import com.foxhole.beta.core.model.PerAppRoutingMode
 import com.foxhole.beta.core.model.RoutingRule
 import com.foxhole.beta.core.model.RoutingRuleAction
 import com.foxhole.beta.ui.theme.LocalFoxholeUiPalette
+import kotlinx.coroutines.delay
 import androidx.compose.foundation.lazy.grid.items as gridItems
 
 @Composable
@@ -570,6 +571,8 @@ fun AppPickerScreen(
     var draftSelection by rememberSaveable(selectedPackages) {
         mutableStateOf(selectedPackages)
     }
+    val latestOnSelectionChanged by rememberUpdatedState(onSelectionChanged)
+    val latestOnNavigateUp by rememberUpdatedState(onNavigateUp)
     val draftSelectionSet = remember(draftSelection) { draftSelection.toSet() }
     val appSearchIndex = remember(state.installedApps) { buildInstalledAppSearchIndex(state.installedApps) }
     val filteredApps = remember(appSearchIndex, query, appFilter) {
@@ -584,11 +587,23 @@ fun AppPickerScreen(
                 }
         }
     }
+    LaunchedEffect(draftSelection, selectedPackages) {
+        if (draftSelection == selectedPackages) {
+            return@LaunchedEffect
+        }
+        delay(APP_PICKER_SELECTION_SAVE_DEBOUNCE_MS)
+        latestOnSelectionChanged(draftSelection)
+    }
 
     SettingsScaffold(
         title = title,
         snackbarHostState = snackbarHostState,
-        onNavigateUp = onNavigateUp,
+        onNavigateUp = {
+            if (draftSelection != selectedPackages) {
+                latestOnSelectionChanged(draftSelection)
+            }
+            latestOnNavigateUp()
+        },
         tag = "routing_apps_picker_screen",
     ) {
         item {
@@ -668,7 +683,6 @@ fun AppPickerScreen(
                                     }
                                 }.toList()
                         draftSelection = nextSelection
-                        onSelectionChanged(nextSelection)
                     }
                     Unit
                 },
@@ -710,6 +724,8 @@ private inline fun <T> traceAppPickerSection(name: String, block: () -> T): T {
         Trace.endSection()
     }
 }
+
+private const val APP_PICKER_SELECTION_SAVE_DEBOUNCE_MS = 350L
 
 @Composable
 fun RoutingSitesScreen(

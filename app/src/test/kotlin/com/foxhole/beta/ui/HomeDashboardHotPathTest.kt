@@ -674,6 +674,24 @@ class HomeDashboardHotPathTest {
     }
 
     @Test
+    fun `app picker saves selection changes with debounce instead of every toggle`() {
+        val routingSource = testSourceFile("RoutingAppScreens.kt").readText()
+        val pickerBlock =
+            routingSource.substringAfter("fun AppPickerScreen(")
+                .substringBefore("@Composable\nprivate fun rememberAppPickerPopupsAllowed")
+        val toggleBlock =
+            pickerBlock.substringAfter("onToggle = { value ->")
+                .substringBefore("Unit")
+
+        assertTrue(routingSource.contains("APP_PICKER_SELECTION_SAVE_DEBOUNCE_MS = 350L"))
+        assertTrue(pickerBlock.contains("LaunchedEffect(draftSelection, selectedPackages)"))
+        assertTrue(pickerBlock.contains("delay(APP_PICKER_SELECTION_SAVE_DEBOUNCE_MS)"))
+        assertTrue(pickerBlock.contains("latestOnSelectionChanged(draftSelection)"))
+        assertFalse(toggleBlock.contains("onSelectionChanged(nextSelection)"))
+        assertFalse(toggleBlock.contains("latestOnSelectionChanged(nextSelection)"))
+    }
+
+    @Test
     fun `app icon cache key includes package version update time and size`() {
         val first = AppIconCacheKey(packageName = "com.example.app", versionCode = 10L, lastUpdateTime = 100L, sizePx = 48)
         val updated = first.copy(versionCode = 11L)
