@@ -40,6 +40,41 @@ class RuntimeStaticSafetyGuardTest {
     }
 
     @Test
+    fun `runtime supervisor delegates state ownership to state machine`() {
+        val supervisor = projectFile("src/main/kotlin/com/foxhole/beta/vpn/RuntimeSupervisor.kt").readText()
+
+        assertTrue(supervisor.contains("RuntimeStateMachine("))
+        assertTrue(supervisor.contains("stateMachine.dispatch(event)"))
+        assertTrue(supervisor.contains("stateMachine.beginTransition("))
+        assertFalse(supervisor.contains("RuntimeStateStore("))
+        assertFalse(supervisor.contains("AtomicLong"))
+    }
+
+    @Test
+    fun `services do not instantiate runtime state stores directly`() {
+        val offenders =
+            mainKotlinFiles()
+                .filter { file -> file.relativeProjectPath() !in RUNTIME_STATE_OWNER_ALLOWLIST }
+                .flatMap { file ->
+                    file
+                        .readLines()
+                        .mapIndexedNotNull { index, line ->
+                            if ("RuntimeStateStore(" in line) {
+                                "${file.relativeProjectPath()}:${index + 1}:$line"
+                            } else {
+                                null
+                            }
+                        }
+                }
+
+        assertEquals(
+            "Runtime state store construction must stay behind RuntimeStateMachine.",
+            emptyList<String>(),
+            offenders,
+        )
+    }
+
+    @Test
     fun `native runtime start and close helpers do not create detached coroutine scopes`() {
         val source = projectFile("src/main/kotlin/com/foxhole/beta/vpn/RuntimeStopSupport.kt").readText()
         val closeBlock =
@@ -194,6 +229,11 @@ class RuntimeStaticSafetyGuardTest {
                 "app/src/main/kotlin/com/foxhole/beta/vpn/RuntimeProxyEgressValidationSupport.kt",
                 "app/src/main/kotlin/com/foxhole/beta/vpn/RuntimeReconnectCoordinator.kt",
                 "app/src/main/kotlin/com/foxhole/beta/vpn/RuntimeValidationCoordinator.kt",
+            )
+        val RUNTIME_STATE_OWNER_ALLOWLIST =
+            setOf(
+                "app/src/main/kotlin/com/foxhole/beta/vpn/RuntimeStateReducer.kt",
+                "app/src/main/kotlin/com/foxhole/beta/vpn/RuntimeStateMachine.kt",
             )
     }
 }

@@ -6,7 +6,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
-import java.util.concurrent.atomic.AtomicLong
 
 @Suppress("TooManyFunctions")
 internal class RuntimeSupervisor(
@@ -15,8 +14,11 @@ internal class RuntimeSupervisor(
     private val emergencyKill: suspend (String) -> RuntimeKillResult,
     initialState: RuntimeUiState = RuntimeUiState(),
 ) {
-    private val transitionGeneration = AtomicLong(initialState.generation)
-    private val stateStore = RuntimeStateStore(initialState)
+    private val stateMachine =
+        RuntimeStateMachine(
+            diagnosticsLogger = diagnosticsLogger,
+            initialState = initialState,
+        )
     private val ownershipMutable = MutableStateFlow(RuntimeControlPlaneOwnershipState())
     private val commandActor =
         RuntimeCommandActor(
@@ -25,11 +27,11 @@ internal class RuntimeSupervisor(
             emergencyKill = emergencyKill,
         )
 
-    val state: StateFlow<RuntimeUiState> = stateStore.state
+    val state: StateFlow<RuntimeUiState> = stateMachine.state
     val ownership: StateFlow<RuntimeControlPlaneOwnershipState> = ownershipMutable
 
     fun dispatch(event: RuntimeEvent) {
-        stateStore.dispatch(event)
+        stateMachine.dispatch(event)
     }
 
     fun dispatch(
@@ -52,39 +54,14 @@ internal class RuntimeSupervisor(
     fun beginTransition(
         reason: String,
         phase: RuntimePhase? = null,
-    ): Long {
-        val generation = transitionGeneration.incrementAndGet()
-        diagnosticsLogger?.recordStructured(
-            "runtime",
-            "runtime transition generation advanced",
-            "generation=$generation",
-            "reason=$reason",
-        )
-        if (phase != null) {
-            dispatch(RuntimeEvent.PhaseChanged(generation = generation, phase = phase))
-        }
-        return generation
-    }
+    ): Long = stateMachine.beginTransition(reason = reason, phase = phase)
 
     fun isCurrentTransition(
         generation: Long,
         owner: String,
-    ): Boolean {
-        val current = currentGeneration()
-        if (generation == current) {
-            return true
-        }
-        diagnosticsLogger?.recordStructured(
-            "runtime",
-            "stale runtime transition ignored",
-            "owner=$owner",
-            "generation=$generation",
-            "current=$current",
-        )
-        return false
-    }
+    ): Boolean = stateMachine.isCurrentGeneration(generation = generation, owner = owner)
 
-    fun currentGeneration(): Long = transitionGeneration.get()
+    fun currentGeneration(): Long = stateMachine.currentGeneration()
 
     fun queueSnapshot(): RuntimeCommandQueueSnapshot =
         commandActor.queueSnapshot()
