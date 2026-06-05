@@ -90,6 +90,41 @@ class ReleaseEngineeringContractTest {
         }
     }
 
+    @Test
+    fun `android workflow keeps release probe on internal release only`() {
+        val workflow = projectFile("../.github/workflows/android.yml").readText()
+        val releaseStep =
+            workflow
+                .substringAfter("- name: build release")
+                .substringBefore("- name: build internal release probe")
+        val internalProbeStep =
+            workflow
+                .substringAfter("- name: build internal release probe")
+                .substringBefore("- name: verify AdGuard DNS assets in app builds")
+
+        assertTrue(releaseStep.contains(":app:assembleRelease"))
+        assertTrue(releaseStep.contains("verifyReleaseBuildConfigDefaults"))
+        assertFalse(releaseStep.contains("foxhole.releaseProbe=true"))
+        assertTrue(internalProbeStep.contains("foxhole.releaseProbe=true"))
+        assertTrue(internalProbeStep.contains(":app:assembleInternalRelease"))
+        assertFalse(internalProbeStep.contains(":app:assembleRelease"))
+    }
+
+    @Test
+    fun `release workflow runs public release preflight after sbom generation`() {
+        val workflow = projectFile("../.github/workflows/release.yml").readText()
+        val preflightStep =
+            workflow
+                .substringAfter("- name: public release preflight")
+                .substringBefore("- name: verify signed release APKs")
+
+        assertTrue(workflow.contains("- name: generate sbom"))
+        assertTrue(preflightStep.contains("-Pfoxhole.sbom=true"))
+        assertTrue(preflightStep.contains(":app:bundlePublicRelease"))
+        assertTrue(preflightStep.contains(":app:publicReleasePreflight"))
+        assertTrue(workflow.indexOf("- name: generate sbom") < workflow.indexOf("- name: public release preflight"))
+    }
+
     private fun projectFile(path: String): File =
         listOf(File(path), File("app/$path"), File("../app/$path"))
             .first { file -> file.exists() }

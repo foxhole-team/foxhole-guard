@@ -184,6 +184,9 @@ jobs:
       - name: generate sbom
         run: ./gradlew --no-daemon --console=plain --stacktrace cyclonedxBom -Pfoxhole.sbom=true
 
+      - name: public release preflight
+        run: ./gradlew --no-daemon --console=plain --stacktrace -Pfoxhole.sbom=true :app:bundlePublicRelease :app:publicReleasePreflight
+
       - name: verify signed release APKs
         id: release_apk
         shell: bash
