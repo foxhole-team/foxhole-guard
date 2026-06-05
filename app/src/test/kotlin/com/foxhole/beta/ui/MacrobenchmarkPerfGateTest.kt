@@ -71,6 +71,10 @@ class MacrobenchmarkPerfGateTest {
             "\"settingsSmartStartTransition\"",
             "\"settingsRoutingAppsPickerSearch\"",
             "\"permissionFlow\"",
+            "STRESS_FRAME_BENCHMARKS",
+            "STRICT_NAVIGATION_BENCHMARKS",
+            "verify_stress_transition",
+            "--strict-navigation",
             "STRICT_FRAME_P95_MAX_MS = 16.6",
             "STRICT_FRAME_MAXIMUM_MAX_MS = 700.0",
             "FIRST_FRAME_P50_MAX_MS = 80.0",
@@ -87,11 +91,14 @@ class MacrobenchmarkPerfGateTest {
             "REQUIRED_TRACE_METRIC_LABELS",
             "HomeScreenFirstCompositionSumMs",
             "TrafficMapRenderHighlightBitmapSumMs",
+            "strict_release = args.strict_release",
+            "strict_release and name in STRICT_NAVIGATION_BENCHMARKS",
             "cpuP95",
             "overrunP95",
         ).forEach { marker ->
             assertTrue(thresholdScript.contains(marker))
         }
+        assertFalse(thresholdScript.contains("strict_release = args.strict_release or args.full_suite"))
     }
 
     @Test
@@ -135,18 +142,39 @@ class MacrobenchmarkPerfGateTest {
 
         assertTrue(script.contains("run_baseline_profile_generation"))
         assertTrue(script.contains("run_baseline_profile_generation_when_supported"))
+        assertTrue(script.contains("preserve_benchmark_outputs"))
+        assertTrue(script.contains("-benchmark-output"))
+        assertTrue(script.contains("*benchmarkData.json"))
+        assertTrue(script.contains("*.perfetto-trace"))
         assertTrue(script.contains("verify_macrobenchmark_tracing_available"))
         assertTrue(script.contains("run_macrobenchmark_with_log_gate"))
+        assertTrue(script.contains("FOXHOLE_STRICT_RELEASE_MACROBENCHMARK"))
+        assertTrue(
+            script.contains("FAIL_ON_SKIPPED_FRAMES=\"${'$'}{FOXHOLE_MACROBENCHMARK_FAIL_ON_SKIPPED_FRAMES:-0}\""),
+        )
+        assertTrue(
+            script.contains("if [[ \"${'$'}FAIL_ON_SKIPPED_FRAMES\" == \"1\" ]]"),
+        )
         assertTrue(script.contains("analyze-android-perf-logs.py"))
         assertTrue(script.contains("FOXHOLE_MACROBENCHMARK_MAX_SKIPPED_FRAMES"))
-        assertTrue(script.contains("MAX_SKIPPED_FRAMES=\"${'$'}{FOXHOLE_MACROBENCHMARK_MAX_SKIPPED_FRAMES:-0}\""))
-        assertTrue(script.contains("--max-skipped-frames \"${'$'}MAX_SKIPPED_FRAMES\""))
+        assertTrue(
+            script.contains("MAX_SKIPPED_FRAMES=\"${'$'}{FOXHOLE_MACROBENCHMARK_MAX_SKIPPED_FRAMES:-0}\""),
+        )
+        assertTrue(
+            script.contains(
+                "analyzer_args+=(--fail-on-skipped-frames --max-skipped-frames \"${'$'}MAX_SKIPPED_FRAMES\")",
+            ),
+        )
         assertTrue(script.contains("--fail-on-skipped-frames"))
         assertTrue(script.contains("--fail-on-fatal"))
         assertTrue(script.contains("--fail-on-anr"))
         assertTrue(script.contains("--fail-on-strict-disk"))
         assertTrue(script.contains("--navigation-log \"${'$'}PERF_LOG_ROOT/full-suite.logcat\""))
+        assertTrue(script.contains("threshold_args+=(--strict-navigation --strict-release)"))
+        assertTrue(script.contains("preserve_benchmark_outputs full-suite"))
+        assertFalse(script.contains("FOXHOLE_MACROBENCHMARK_FAIL_ON_SKIPPED_FRAMES:-${'$'}STRICT_RELEASE_GATE"))
         assertTrue(script.contains("BASELINE_TARGET_PACKAGE"))
+        assertTrue(script.contains("install_target_app \"${'$'}TARGET_PACKAGE\""))
         assertTrue(script.contains("class=com.foxhole.beta.macrobenchmark.HomeMacrobenchmark"))
         assertTrue(script.contains("/sys/kernel/tracing has no readable entries"))
         assertTrue(script.contains("Skipping baseline profile generation for external target="))

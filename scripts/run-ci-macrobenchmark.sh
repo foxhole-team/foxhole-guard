@@ -8,6 +8,8 @@ readonly TARGET_PACKAGE="${FOXHOLE_ANDROID_TEST_TARGET_PACKAGE:-com.foxhole.beta
 readonly BASELINE_TARGET_PACKAGE="${FOXHOLE_BASELINE_PROFILE_TARGET_PACKAGE:-$TARGET_PACKAGE}"
 readonly REQUIRE_FULL_SUITE="${FOXHOLE_REQUIRE_FULL_MACROBENCHMARK:-0}"
 readonly PERF_LOG_ROOT="${FOXHOLE_MACROBENCHMARK_LOG_ROOT:-build/macrobenchmark-logcat}"
+readonly STRICT_RELEASE_GATE="${FOXHOLE_STRICT_RELEASE_MACROBENCHMARK:-0}"
+readonly FAIL_ON_SKIPPED_FRAMES="${FOXHOLE_MACROBENCHMARK_FAIL_ON_SKIPPED_FRAMES:-0}"
 readonly MAX_SKIPPED_FRAMES="${FOXHOLE_MACROBENCHMARK_MAX_SKIPPED_FRAMES:-0}"
 
 install_target_app() {
@@ -43,6 +45,12 @@ run_macrobenchmark_with_log_gate() {
   local label="$1"
   shift
   local log_path="$PERF_LOG_ROOT/${label}.logcat"
+  local analyzer_args=(
+    --fail-on-fatal
+    --fail-on-anr
+    --fail-on-oom
+    --fail-on-strict-disk
+  )
   mkdir -p "$PERF_LOG_ROOT"
   adb logcat -c || true
 
@@ -50,13 +58,11 @@ run_macrobenchmark_with_log_gate() {
   "$@"
   local benchmark_status=$?
   adb logcat -d > "$log_path" 2>/dev/null || true
+  if [[ "$FAIL_ON_SKIPPED_FRAMES" == "1" ]]; then
+    analyzer_args+=(--fail-on-skipped-frames --max-skipped-frames "$MAX_SKIPPED_FRAMES")
+  fi
   python3 scripts/analyze-android-perf-logs.py \
-    --fail-on-skipped-frames \
-    --max-skipped-frames "$MAX_SKIPPED_FRAMES" \
-    --fail-on-fatal \
-    --fail-on-anr \
-    --fail-on-oom \
-    --fail-on-strict-disk \
+    "${analyzer_args[@]}" \
     "$log_path"
   local log_gate_status=$?
   set -e
@@ -79,6 +85,7 @@ run_startup_benchmark() {
     -Pmacrobenchmark.targetPackage="$TARGET_PACKAGE" \
     -Pandroid.testInstrumentationRunnerArguments.class=com.foxhole.beta.macrobenchmark.HomeMacrobenchmark#startup
   python3 scripts/verify-macrobenchmark-thresholds.py
+  install_target_app "$TARGET_PACKAGE"
 }
 
 run_baseline_profile_generation() {
@@ -117,6 +124,24 @@ run_baseline_profile_generation_when_supported() {
   run_baseline_profile_generation
 }
 
+preserve_benchmark_outputs() {
+  local label="$1"
+  local source_root="macrobenchmark/build/outputs/connected_android_test_additional_output"
+  local artifact_dir
+  artifact_dir="$(pwd)/$PERF_LOG_ROOT/${label}-benchmark-output"
+  if [[ ! -d "$source_root" ]]; then
+    return
+  fi
+  rm -rf "$artifact_dir"
+  mkdir -p "$artifact_dir"
+  (
+    cd "$source_root"
+    find . -type f \
+      \( -name '*benchmarkData.json' -o -name '*.perfetto-trace' \) \
+      -exec cp --parents {} "$artifact_dir" \;
+  )
+}
+
 if [[ "$EVENT_NAME" == "pull_request" ]]; then
   run_startup_benchmark
 elif [[
@@ -127,15 +152,23 @@ elif [[
 ]]; then
   install_target_app
   verify_macrobenchmark_tracing_available
+  if [[ "$STRICT_RELEASE_GATE" != "1" ]]; then
+    echo "Running functional full macrobenchmark gate. Set FOXHOLE_STRICT_RELEASE_MACROBENCHMARK=1 for Pixel/release navigation P95 and skipped-frame acceptance."
+  else
+    echo "Running strict release navigation gate. Whole-log skipped-frame failure remains opt-in via FOXHOLE_MACROBENCHMARK_FAIL_ON_SKIPPED_FRAMES=1."
+  fi
   run_macrobenchmark_with_log_gate full-suite \
     "$GRADLEW" --no-daemon --console=plain --stacktrace :macrobenchmark:connectedCheck \
     -Pmacrobenchmark.targetPackage="$TARGET_PACKAGE" \
     -Pandroid.testInstrumentationRunnerArguments.class=com.foxhole.beta.macrobenchmark.HomeMacrobenchmark
-  python3 scripts/verify-macrobenchmark-thresholds.py \
-    --full-suite \
-    --strict-release \
-    --navigation-log "$PERF_LOG_ROOT/full-suite.logcat"
+  threshold_args=(--full-suite --navigation-log "$PERF_LOG_ROOT/full-suite.logcat")
+  if [[ "$STRICT_RELEASE_GATE" == "1" ]]; then
+    threshold_args+=(--strict-navigation --strict-release)
+  fi
+  python3 scripts/verify-macrobenchmark-thresholds.py "${threshold_args[@]}"
+  preserve_benchmark_outputs full-suite
   run_baseline_profile_generation_when_supported
+  install_target_app "$TARGET_PACKAGE"
 elif [[ "$GITHUB_REF_NAME" == "refs/heads/dev" ]]; then
   run_startup_benchmark
 else

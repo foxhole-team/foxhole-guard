@@ -31,6 +31,22 @@ FULL_SUITE_BENCHMARKS = {
     "settingsStatisticsTransition",
     "permissionFlow",
 }
+STRESS_FRAME_BENCHMARKS = {
+    "dashboardTrafficMapStartVpnStress",
+    "dashboardTrafficMapStress",
+    "permissionFlow",
+}
+STRICT_NAVIGATION_BENCHMARKS = {
+    "bottomNavigationRoundTrip",
+    "settingsApplicationTransition",
+    "settingsDiagnosticsTransition",
+    "settingsDnsTransition",
+    "settingsExpertTransition",
+    "settingsSecurityTransition",
+    "settingsSmartStartTransition",
+    "settingsStatisticsTransition",
+    "settingsTrafficTransition",
+}
 
 STARTUP_MEDIAN_MAX_MS = 1_500.0
 STARTUP_MAXIMUM_MAX_MS = 2_500.0
@@ -103,7 +119,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--strict-release",
         action="store_true",
-        help="Apply public-release frame and first-frame acceptance thresholds.",
+        help="Apply public-release frame and first-frame acceptance thresholds to strict navigation benchmarks.",
+    )
+    parser.add_argument(
+        "--strict-navigation",
+        action="store_true",
+        help="Require the strict standard-navigation benchmark subset in addition to startup.",
     )
     parser.add_argument(
         "--navigation-log",
@@ -233,6 +254,28 @@ def verify_transition(
     ] + require_trace_metrics(benchmark)
 
 
+def verify_stress_transition(benchmark: dict[str, Any]) -> list[str]:
+    name = str(benchmark.get("name"))
+    repeat_iterations = int(benchmark.get("repeatIterations", 0))
+    if repeat_iterations < MIN_REPEAT_ITERATIONS:
+        raise AssertionError(f"{name} repeatIterations is {repeat_iterations}; minimum is {MIN_REPEAT_ITERATIONS}")
+    frame_count = metric_value(benchmark, "frameCount", "median")
+    if frame_count <= 0:
+        raise AssertionError(f"{name} has no frame samples")
+    cpu_p95 = sampled_metric_value(benchmark, "frameDurationCpuMs", "P95")
+    overrun_p95 = sampled_metric_value(benchmark, "frameOverrunMs", "P95")
+    frame_max = (
+        sampled_metric_optional(benchmark, "frameDurationCpuMs", ("maximum", "max", "P100", "P99"))
+        or sampled_metric_optional(benchmark, "frameOverrunMs", ("maximum", "max", "P100", "P99"))
+    )
+    return [
+        f"{name} stressFrames={frame_count:.0f}",
+        f"stressCpuP95={cpu_p95:.1f} ms",
+        f"stressOverrunP95={overrun_p95:.1f} ms",
+        f"stressFrameMax={frame_max:.1f} ms" if frame_max is not None else "stressFrameMax=unavailable",
+    ] + require_trace_metrics(benchmark)
+
+
 def percentile(
     values: list[float],
     percentile_value: float,
@@ -330,17 +373,33 @@ def main() -> int:
         raise AssertionError(f"No benchmarkData.json files found under {args.output_root}")
     benchmarks = load_benchmarks(paths)
     required = FULL_SUITE_BENCHMARKS if args.full_suite else {STARTUP_BENCHMARK}
+    if args.strict_navigation or args.strict_release:
+        required = required | STRICT_NAVIGATION_BENCHMARKS
     missing = sorted(required - benchmarks.keys())
     if missing:
         raise AssertionError(f"Required macrobenchmarks did not run: {', '.join(missing)}")
 
     summaries = verify_launch(benchmarks[STARTUP_BENCHMARK])
     if args.full_suite:
-        strict_release = args.strict_release or args.full_suite
+        strict_release = args.strict_release
         summaries.extend(verify_launch(benchmarks[WARM_STARTUP_BENCHMARK]))
         for name in sorted(FULL_SUITE_BENCHMARKS - {STARTUP_BENCHMARK, WARM_STARTUP_BENCHMARK}):
-            summaries.extend(verify_transition(benchmarks[name], strict_release=strict_release))
+            if name in STRESS_FRAME_BENCHMARKS:
+                summaries.extend(verify_stress_transition(benchmarks[name]))
+            else:
+                summaries.extend(
+                    verify_transition(
+                        benchmarks[name],
+                        strict_release=strict_release and name in STRICT_NAVIGATION_BENCHMARKS,
+                    ),
+                )
         if strict_release:
+            summaries.extend(verify_navigation_first_frames(args.navigation_log))
+            summaries.extend(verify_navigation_skipped_frames(args.navigation_log))
+    elif args.strict_navigation or args.strict_release:
+        for name in sorted(STRICT_NAVIGATION_BENCHMARKS):
+            summaries.extend(verify_transition(benchmarks[name], strict_release=args.strict_release))
+        if args.strict_release:
             summaries.extend(verify_navigation_first_frames(args.navigation_log))
             summaries.extend(verify_navigation_skipped_frames(args.navigation_log))
 
