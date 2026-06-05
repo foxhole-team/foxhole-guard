@@ -465,8 +465,9 @@ class HomeDashboardHotPathTest {
                 .substringBefore("@Composable\nprivate fun rememberTrafficMapHeavyContentReady")
 
         assertTrue(headerBlock.contains("retainedOriginLabel"))
-        assertTrue(headerBlock.contains("Modifier.width(86.dp).height(8.dp)"))
-        assertTrue(headerBlock.contains("Modifier.width(62.dp).height(8.dp)"))
+        assertTrue(headerBlock.contains("TrafficMapTokens.HeaderOriginSkeletonPrimaryWidthDp"))
+        assertTrue(headerBlock.contains("TrafficMapTokens.HeaderOriginSkeletonSecondaryWidthDp"))
+        assertTrue(headerBlock.contains("TrafficMapTokens.HeaderOriginSkeletonHeightDp"))
         assertFalse(headerBlock.contains("if (state.originCountryCode != null)"))
     }
 

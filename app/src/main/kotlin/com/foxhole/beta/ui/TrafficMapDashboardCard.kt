@@ -213,8 +213,8 @@ internal fun TrafficMapDashboardCard(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(TRAFFIC_MAP_CARD_TOTAL_HEIGHT),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
+                .height(TrafficMapTokens.DashboardCardTotalHeight),
+            verticalArrangement = Arrangement.spacedBy(TrafficMapTokens.DashboardSectionGapDp.dp),
         ) {
             val colors = trafficMapColors()
             TrafficMapCardHeader(
@@ -226,7 +226,7 @@ internal fun TrafficMapDashboardCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                horizontalArrangement = Arrangement.spacedBy(TrafficMapTokens.DashboardSectionGapDp.dp),
                 verticalAlignment = Alignment.Top,
             ) {
                 Column(
@@ -307,7 +307,7 @@ private fun TrafficMapCardHeader(
     val visibleOriginLabel = currentOriginLabel ?: retainedOriginLabel
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        horizontalArrangement = Arrangement.spacedBy(TrafficMapTokens.DashboardSectionGapDp.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         TrafficMapHeaderTitleBlock(
@@ -323,7 +323,10 @@ private fun TrafficMapCardHeader(
             Row(
                 modifier =
                     Modifier
-                        .widthIn(min = 136.dp, max = 184.dp),
+                        .widthIn(
+                            min = TrafficMapTokens.HeaderOriginMinWidthDp.dp,
+                            max = TrafficMapTokens.HeaderOriginMaxWidthDp.dp,
+                        ),
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -331,15 +334,15 @@ private fun TrafficMapCardHeader(
                     imageVector = Icons.Outlined.PhoneAndroid,
                     contentDescription = null,
                     tint = colors.origin,
-                    modifier = Modifier.size(13.dp),
+                    modifier = Modifier.size(TrafficMapTokens.HeaderOriginIconDp.dp),
                 )
                 if (visibleOriginLabel != null) {
                     Text(
                         text = visibleOriginLabel,
                         modifier = Modifier.weight(1f),
                         style = MaterialTheme.typography.labelSmall.copy(
-                            fontSize = 9.sp,
-                            lineHeight = 10.sp,
+                            fontSize = TrafficMapTokens.HeaderOriginLabelFontSp.sp,
+                            lineHeight = TrafficMapTokens.HeaderOriginLabelLineSp.sp,
                         ),
                         fontWeight = FontWeight.SemiBold,
                         color = colors.legendText,
@@ -350,14 +353,20 @@ private fun TrafficMapCardHeader(
                     val shimmerProgress = rememberFoxholeSkeletonProgress()
                     Column(
                         modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(3.dp),
+                        verticalArrangement = Arrangement.spacedBy(TrafficMapTokens.HeaderOriginSkeletonGapDp.dp),
                     ) {
                         FoxholeSkeletonBlock(
-                            modifier = Modifier.width(86.dp).height(8.dp),
+                            modifier =
+                                Modifier
+                                    .width(TrafficMapTokens.HeaderOriginSkeletonPrimaryWidthDp.dp)
+                                    .height(TrafficMapTokens.HeaderOriginSkeletonHeightDp.dp),
                             shimmerProgress = shimmerProgress,
                         )
                         FoxholeSkeletonBlock(
-                            modifier = Modifier.width(62.dp).height(8.dp),
+                            modifier =
+                                Modifier
+                                    .width(TrafficMapTokens.HeaderOriginSkeletonSecondaryWidthDp.dp)
+                                    .height(TrafficMapTokens.HeaderOriginSkeletonHeightDp.dp),
                             shimmerProgress = shimmerProgress,
                         )
                     }
@@ -376,20 +385,20 @@ private fun TrafficMapHeaderTitleBlock(
 ) {
     Row(
         modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        horizontalArrangement = Arrangement.spacedBy(TrafficMapTokens.DashboardSectionGapDp.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Surface(
             shape = MaterialTheme.shapes.medium,
-            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.56f),
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = TrafficMapTokens.HeaderIconContainerAlpha),
         ) {
             Icon(
                 imageVector = Icons.Outlined.Map,
                 contentDescription = null,
                 modifier =
                     Modifier
-                        .padding(5.dp)
-                        .size(16.dp),
+                        .padding(TrafficMapTokens.HeaderIconPaddingDp.dp)
+                        .size(TrafficMapTokens.HeaderIconSizeDp.dp),
                 tint = MaterialTheme.colorScheme.primary,
             )
         }
@@ -399,13 +408,13 @@ private fun TrafficMapHeaderTitleBlock(
                 onClick = onOpenDetails,
                 modifier =
                     Modifier
-                        .size(28.dp)
+                        .size(TrafficMapTokens.HeaderDetailsButtonSizeDp.dp)
                         .testTag("home_traffic_map_details_action"),
             ) {
                 Icon(
                     imageVector = Icons.Outlined.ArrowOutward,
                     contentDescription = stringResource(R.string.traffic_map_open_details),
-                    modifier = Modifier.size(16.dp),
+                    modifier = Modifier.size(TrafficMapTokens.HeaderIconSizeDp.dp),
                     tint = MaterialTheme.colorScheme.primary,
                 )
             }
@@ -1302,26 +1311,36 @@ private fun TrafficMapCanvasLoadingBlock(modifier: Modifier = Modifier) {
     Column(
         modifier =
             modifier
-                .padding(top = 12.dp)
+                .padding(top = TrafficMapTokens.LoadingTopPaddingDp.dp)
                 .semantics { contentDescription = loadingDescription },
-        verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterVertically),
+        verticalArrangement = Arrangement.spacedBy(TrafficMapTokens.LoadingGapDp.dp, Alignment.CenterVertically),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         FoxholeSkeletonBlock(
-            modifier = Modifier.fillMaxWidth(0.92f).height(86.dp),
+            modifier =
+                Modifier
+                    .fillMaxWidth(TrafficMapTokens.LoadingMapWidthFraction)
+                    .height(TrafficMapTokens.LoadingMapHeightDp.dp),
             shimmerProgress = shimmerProgress,
         )
         Row(
-            modifier = Modifier.fillMaxWidth(0.72f),
-            horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
+            modifier = Modifier.fillMaxWidth(TrafficMapTokens.LoadingMetricsWidthFraction),
+            horizontalArrangement =
+                Arrangement.spacedBy(TrafficMapTokens.LoadingMetricGapDp.dp, Alignment.CenterHorizontally),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             FoxholeSkeletonBlock(
-                modifier = Modifier.width(42.dp).height(8.dp),
+                modifier =
+                    Modifier
+                        .width(TrafficMapTokens.LoadingMetricPrimaryWidthDp.dp)
+                        .height(TrafficMapTokens.LoadingMetricHeightDp.dp),
                 shimmerProgress = shimmerProgress,
             )
             FoxholeSkeletonBlock(
-                modifier = Modifier.width(72.dp).height(8.dp),
+                modifier =
+                    Modifier
+                        .width(TrafficMapTokens.LoadingMetricSecondaryWidthDp.dp)
+                        .height(TrafficMapTokens.LoadingMetricHeightDp.dp),
                 shimmerProgress = shimmerProgress,
             )
         }
@@ -1336,14 +1355,21 @@ private fun TrafficMapShapeErrorBlock(modifier: Modifier = Modifier) {
     Column(
         modifier =
             modifier
-                .padding(horizontal = 8.dp, vertical = 10.dp)
+                .padding(
+                    horizontal = TrafficMapTokens.ShapeErrorPaddingHorizontalDp.dp,
+                    vertical = TrafficMapTokens.ShapeErrorPaddingVerticalDp.dp,
+                )
                 .semantics { contentDescription = "$title. $helper" },
-        verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterVertically),
+        verticalArrangement = Arrangement.spacedBy(TrafficMapTokens.ShapeErrorGapDp.dp, Alignment.CenterVertically),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(
             text = title,
-            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, lineHeight = 12.sp),
+            style =
+                MaterialTheme.typography.labelSmall.copy(
+                    fontSize = TrafficMapTokens.ShapeErrorTitleFontSp.sp,
+                    lineHeight = TrafficMapTokens.ShapeErrorTitleLineSp.sp,
+                ),
             fontWeight = FontWeight.SemiBold,
             color = colors.inactiveText,
             textAlign = TextAlign.Center,
@@ -1352,7 +1378,11 @@ private fun TrafficMapShapeErrorBlock(modifier: Modifier = Modifier) {
         )
         Text(
             text = helper,
-            style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, lineHeight = 11.sp),
+            style =
+                MaterialTheme.typography.labelSmall.copy(
+                    fontSize = TrafficMapTokens.ShapeErrorHelperFontSp.sp,
+                    lineHeight = TrafficMapTokens.ShapeErrorHelperLineSp.sp,
+                ),
             color = colors.inactiveText,
             textAlign = TextAlign.Center,
             maxLines = 4,
@@ -1510,19 +1540,23 @@ private fun TrafficMapCanvas(
                 val viewport = trafficMapViewport(size)
                 val maxLineStroke = routePresentation.maxRouteStrokeDp.dp.toPx()
                 val minLineStroke = routePresentation.minRouteStrokeDp.dp.toPx()
-                val routeHaloStrokeExtra = TRAFFIC_MAP_ROUTE_HALO_STROKE_EXTRA_DP.dp.toPx()
+                val routeHaloStrokeExtra = TrafficMapTokens.RouteHaloStrokeExtraDp.dp.toPx()
                 val routeDirectionArrowSize = routePresentation.directionArrowSizeDp.dp.toPx()
                 val routePulseRadius = TrafficMapTokens.RoutePulseRadiusDp.dp.toPx()
                 val routePulseStroke = TrafficMapTokens.RoutePulseStrokeDp.dp.toPx()
-                val defaultDestinationRadius = 3.15.dp.toPx()
-                val europeDestinationRadius = 2.35.dp.toPx()
-                val routeNodeRadius = 2.75.dp.toPx()
-                val torNodeRadius = 2.65.dp.toPx()
-                val phoneWidth = 8.5.dp.toPx()
-                val phoneHeight = 12.8.dp.toPx()
-                val phoneCorner = CornerRadius(2.4.dp.toPx(), 2.4.dp.toPx())
-                val phoneScreenInset = 1.4.dp.toPx()
-                val phoneHomeRadius = 0.65.dp.toPx()
+                val defaultDestinationRadius = TrafficMapTokens.DestinationRadiusDp.dp.toPx()
+                val europeDestinationRadius = TrafficMapTokens.EuropeDestinationRadiusDp.dp.toPx()
+                val routeNodeRadius = TrafficMapTokens.RouteNodeRadiusDp.dp.toPx()
+                val torNodeRadius = TrafficMapTokens.TorNodeRadiusDp.dp.toPx()
+                val phoneWidth = TrafficMapTokens.OriginPhoneWidthDp.dp.toPx()
+                val phoneHeight = TrafficMapTokens.OriginPhoneHeightDp.dp.toPx()
+                val phoneCorner =
+                    CornerRadius(
+                        TrafficMapTokens.OriginPhoneCornerDp.dp.toPx(),
+                        TrafficMapTokens.OriginPhoneCornerDp.dp.toPx(),
+                    )
+                val phoneScreenInset = TrafficMapTokens.OriginPhoneScreenInsetDp.dp.toPx()
+                val phoneHomeRadius = TrafficMapTokens.OriginPhoneHomeRadiusDp.dp.toPx()
                 val torRouteDash = TrafficMapTokens.TorRouteDashDp.dp.toPx()
                 val torRouteGap = TrafficMapTokens.TorRouteGapDp.dp.toPx()
                 val smallCountryCalloutRadius = TrafficMapTokens.SmallCountryCalloutRadiusDp.dp.toPx()
@@ -1612,8 +1646,8 @@ private fun TrafficMapCanvas(
                                                 ),
                                             strokeWidth = minLineStroke + ((maxLineStroke - minLineStroke) * weight),
                                             alpha =
-                                                TRAFFIC_MAP_ROUTE_MIN_ALPHA +
-                                                    (TRAFFIC_MAP_ROUTE_ALPHA_RANGE * weight),
+                                                TrafficMapTokens.RouteMinAlpha +
+                                                    (TrafficMapTokens.RouteAlphaRange * weight),
                                             role = edge.role,
                                         )
                                     }
@@ -1687,12 +1721,15 @@ private fun TrafficMapCanvas(
                     }
                     smallCountryCallouts.forEach { callout ->
                         drawCircle(
-                            color = colors.routeHalo.copy(alpha = 0.78f),
+                            color = colors.routeHalo.copy(alpha = TrafficMapTokens.SmallCountryCalloutHaloAlpha),
                             radius = smallCountryCalloutRadius + smallCountryCalloutStroke,
                             center = callout.offset,
                         )
                         drawCircle(
-                            color = colors.countryDestinationHighlight.copy(alpha = 0.92f),
+                            color =
+                                colors.countryDestinationHighlight.copy(
+                                    alpha = TrafficMapTokens.SmallCountryCalloutStrokeAlpha,
+                                ),
                             radius = smallCountryCalloutRadius,
                             center = callout.offset,
                             style = Stroke(width = smallCountryCalloutStroke),
@@ -1705,7 +1742,9 @@ private fun TrafficMapCanvas(
                             path = route.geometry.path,
                             color =
                                 colors.routeHalo.copy(
-                                    alpha = (route.alpha * TRAFFIC_MAP_ROUTE_HALO_ALPHA_MULTIPLIER).coerceAtMost(1f),
+                                    alpha =
+                                        (route.alpha * TrafficMapTokens.RouteHaloAlphaMultiplier)
+                                            .coerceAtMost(1f),
                                 ),
                             style =
                                 Stroke(
@@ -1872,14 +1911,14 @@ private fun DrawScope.drawTrafficMapRouteDirectionCue(
     val haloStroke = arrowSize * 0.34f
     val arrowStroke = arrowSize * 0.18f
     drawLine(
-        color = haloColor.copy(alpha = 0.62f),
+        color = haloColor.copy(alpha = TrafficMapTokens.RouteDirectionCueHaloAlpha),
         start = tip,
         end = left,
         strokeWidth = haloStroke,
         cap = StrokeCap.Round,
     )
     drawLine(
-        color = haloColor.copy(alpha = 0.62f),
+        color = haloColor.copy(alpha = TrafficMapTokens.RouteDirectionCueHaloAlpha),
         start = tip,
         end = right,
         strokeWidth = haloStroke,
@@ -1913,15 +1952,15 @@ private fun DrawScope.drawTrafficMapRoutePulse(
         return
     }
     val progress =
-        TRAFFIC_MAP_ROUTE_PULSE_START_T +
+        TrafficMapTokens.RoutePulseStartT +
             (
                 phase.coerceAtLeast(0f) /
                     (TRAFFIC_MAP_TOR_ROUTE_DASH_PHASE_STEPS - 1L).coerceAtLeast(1L).toFloat()
                 ) *
-            (TRAFFIC_MAP_ROUTE_PULSE_END_T - TRAFFIC_MAP_ROUTE_PULSE_START_T)
+            (TrafficMapTokens.RoutePulseEndT - TrafficMapTokens.RoutePulseStartT)
     val center = route.geometry.pointAt(progress.coerceIn(0f, 1f))
     drawCircle(
-        color = haloColor.copy(alpha = 0.58f),
+        color = haloColor.copy(alpha = TrafficMapTokens.RoutePulseHaloAlpha),
         radius = radius + strokeWidth,
         center = center,
     )
@@ -1937,8 +1976,8 @@ private fun TrafficMapMarkerClusterBadges(targets: List<TrafficMapMarkerHitTarge
     val density = LocalDensity.current
     val badgeSize = TrafficMapTokens.MarkerClusterBadgeSizeDp.dp
     val badgeSizePx = with(density) { badgeSize.toPx() }
-    val badgeLiftPx = with(density) { 14.dp.toPx() }
-    val badgeShiftPx = with(density) { 6.dp.toPx() }
+    val badgeLiftPx = with(density) { TrafficMapTokens.MarkerClusterBadgeLiftDp.dp.toPx() }
+    val badgeShiftPx = with(density) { TrafficMapTokens.MarkerClusterBadgeShiftDp.dp.toPx() }
     targets
         .filter { target -> target.clusterCount > 1 }
         .forEach { target ->
@@ -1958,15 +1997,15 @@ private fun TrafficMapMarkerClusterBadges(targets: List<TrafficMapMarkerHitTarge
                         .testTag("traffic_map_marker_cluster_${target.key.normalizedTrafficMapTestTag()}"),
                 shape = CircleShape,
                 color = MaterialTheme.colorScheme.primary,
-                tonalElevation = 1.dp,
-                shadowElevation = 1.dp,
+                tonalElevation = TrafficMapTokens.MarkerClusterBadgeElevationDp.dp,
+                shadowElevation = TrafficMapTokens.MarkerClusterBadgeElevationDp.dp,
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Text(
                         text = target.clusterCount.coerceAtMost(99).toString(),
                         style = MaterialTheme.typography.labelSmall.copy(
-                            fontSize = 8.sp,
-                            lineHeight = 8.sp,
+                            fontSize = TrafficMapTokens.MarkerClusterTextFontSp.sp,
+                            lineHeight = TrafficMapTokens.MarkerClusterTextLineSp.sp,
                         ),
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onPrimary,
@@ -1983,7 +2022,7 @@ private fun TrafficMapMarkerSemanticsLayer(
     onMarkerSelected: (TrafficMapMarkerHitTarget) -> Unit,
 ) {
     val density = LocalDensity.current
-    val touchTargetSize = 44.dp
+    val touchTargetSize = TrafficMapTokens.MarkerTouchTargetDp.dp
     val touchTargetSizePx = with(density) { touchTargetSize.toPx() }
     targets.forEach { target ->
         Box(
@@ -2010,12 +2049,12 @@ private fun TrafficMapMarkerCallout(
     canvasSize: IntSize,
 ) {
     val density = LocalDensity.current
-    val calloutWidth = 132.dp
+    val calloutWidth = TrafficMapTokens.MarkerCalloutWidthDp.dp
     val calloutOffset =
         remember(target.offset, canvasSize, density) {
             val widthPx = with(density) { calloutWidth.toPx() }
-            val horizontalGap = with(density) { 8.dp.toPx() }
-            val verticalLift = with(density) { 40.dp.toPx() }
+            val horizontalGap = with(density) { TrafficMapTokens.MarkerCalloutHorizontalGapDp.dp.toPx() }
+            val verticalLift = with(density) { TrafficMapTokens.MarkerCalloutVerticalLiftDp.dp.toPx() }
             IntOffset(
                 x = (target.offset.x + horizontalGap)
                     .coerceIn(0f, (canvasSize.width - widthPx).coerceAtLeast(0f))
@@ -2029,17 +2068,21 @@ private fun TrafficMapMarkerCallout(
         modifier =
             Modifier
                 .offset { calloutOffset }
-                .widthIn(min = 96.dp, max = calloutWidth)
+                .widthIn(min = TrafficMapTokens.MarkerCalloutMinWidthDp.dp, max = calloutWidth)
                 .semantics { contentDescription = target.contentDescription }
                 .testTag("traffic_map_marker_callout"),
         shape = MaterialTheme.shapes.small,
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
-        tonalElevation = 2.dp,
-        shadowElevation = 2.dp,
+        color = MaterialTheme.colorScheme.surface.copy(alpha = TrafficMapTokens.MarkerCalloutSurfaceAlpha),
+        tonalElevation = TrafficMapTokens.MarkerCalloutElevationDp.dp,
+        shadowElevation = TrafficMapTokens.MarkerCalloutElevationDp.dp,
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
+            modifier =
+                Modifier.padding(
+                    horizontal = TrafficMapTokens.MarkerCalloutPaddingHorizontalDp.dp,
+                    vertical = TrafficMapTokens.MarkerCalloutPaddingVerticalDp.dp,
+                ),
+            verticalArrangement = Arrangement.spacedBy(TrafficMapTokens.MarkerCalloutGapDp.dp),
         ) {
             Text(
                 text = target.label,
@@ -2051,7 +2094,11 @@ private fun TrafficMapMarkerCallout(
             )
             Text(
                 text = target.detail,
-                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, lineHeight = 12.sp),
+                style =
+                    MaterialTheme.typography.labelSmall.copy(
+                        fontSize = TrafficMapTokens.MarkerCalloutDetailFontSp.sp,
+                        lineHeight = TrafficMapTokens.MarkerCalloutDetailLineSp.sp,
+                    ),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -2489,8 +2536,8 @@ private enum class TrafficMapRoutePresentation(
     val directionArrowSizeDp: Float,
 ) {
     Compact(
-        minRouteStrokeDp = TRAFFIC_MAP_ROUTE_MIN_STROKE_DP,
-        maxRouteStrokeDp = TRAFFIC_MAP_ROUTE_MAX_STROKE_DP,
+        minRouteStrokeDp = TrafficMapTokens.RouteMinStrokeDp,
+        maxRouteStrokeDp = TrafficMapTokens.RouteMaxStrokeDp,
         directionArrowSizeDp = TrafficMapTokens.RouteDirectionArrowSizeDp,
     ),
     Expanded(
@@ -2787,7 +2834,7 @@ private fun TrafficMapMarkerProjection.resolvedTrafficMapMarkerOffset(
                 .map { attempt ->
                     val angleDegrees = role.markerBaseAngleDegrees + (TrafficMapTokens.MarkerCollisionSweepDegrees * attempt)
                     val angleRadians = Math.toRadians(angleDegrees.toDouble())
-                    val radius = minDistancePx * (1f + (attempt / TRAFFIC_MAP_MARKER_COLLISION_RING_SIZE))
+                    val radius = minDistancePx * (1f + (attempt / TrafficMapTokens.MarkerCollisionRingSize))
                     Offset(
                         x = rawOffset.x + (cos(angleRadians) * radius).toFloat(),
                         y = rawOffset.y + (sin(angleRadians) * radius).toFloat(),
@@ -2883,7 +2930,7 @@ private fun List<TrafficMapMarkerPlacement>.edgeEndpointOffset(
 }
 
 private fun List<TrafficMapMarkerPlacement>.markerPlacementsAt(rawOffset: Offset): List<TrafficMapMarkerPlacement> =
-    filter { placement -> placement.rawOffset.distanceTo(rawOffset) <= TRAFFIC_MAP_MARKER_RAW_MATCH_TOLERANCE_PX }
+    filter { placement -> placement.rawOffset.distanceTo(rawOffset) <= TrafficMapTokens.MarkerRawMatchTolerancePx }
 
 private fun DrawableTrafficMapEdge.fromEndpointPreferredMarkerRoles(
     oppositeMatches: List<TrafficMapMarkerPlacement>,
@@ -3156,12 +3203,12 @@ internal fun trafficMapRouteDirectionCue(
     val dx = to.x - from.x
     val dy = to.y - from.y
     val distance = sqrt((dx * dx) + (dy * dy))
-    if (distance < TRAFFIC_MAP_ROUTE_DIRECTION_MIN_DISTANCE_PX) {
+    if (distance < TrafficMapTokens.RouteDirectionMinDistancePx) {
         return null
     }
     val control = trafficMapRouteControlPoint(from = from, to = to, lane = lane, distance = distance)
-    val center = trafficMapQuadraticPoint(from, control, to, TRAFFIC_MAP_ROUTE_DIRECTION_CUE_T)
-    val tangent = trafficMapQuadraticTangent(from, control, to, TRAFFIC_MAP_ROUTE_DIRECTION_CUE_T)
+    val center = trafficMapQuadraticPoint(from, control, to, TrafficMapTokens.RouteDirectionCueT)
+    val tangent = trafficMapQuadraticTangent(from, control, to, TrafficMapTokens.RouteDirectionCueT)
     return TrafficMapRouteDirectionCue(
         center = center,
         angleRadians = atan2(tangent.y, tangent.x),
@@ -3872,8 +3919,8 @@ private object TrafficMapLandLayerCache {
             landLayerKey(
                 shapes = shapes,
                 canvasSize = canvasSize,
-                color = TRAFFIC_MAP_DEFAULT_COUNTRY_FILL,
-                boundaryColor = TRAFFIC_MAP_DEFAULT_COUNTRY_BOUNDARY,
+                color = TrafficMapTokens.DefaultCountryFill,
+                boundaryColor = TrafficMapTokens.DefaultCountryBoundary,
             )
         val owner = kotlinx.coroutines.CompletableDeferred<ImageBitmap>()
         synchronized(lock) {
@@ -3890,8 +3937,8 @@ private object TrafficMapLandLayerCache {
                     size = size,
                     shapes = shapes,
                     viewport = TrafficMapViewport(topLeft = Offset.Zero, size = size),
-                    color = TRAFFIC_MAP_DEFAULT_COUNTRY_FILL,
-                    boundaryColor = TRAFFIC_MAP_DEFAULT_COUNTRY_BOUNDARY,
+                    color = TrafficMapTokens.DefaultCountryFill,
+                    boundaryColor = TrafficMapTokens.DefaultCountryBoundary,
                 )
             synchronized(lock) {
                 storeBitmapLocked(key = key, bitmap = bitmap)
@@ -4011,11 +4058,18 @@ private fun CountryTrafficRole.trafficMapRolePriority(): Int =
 private fun TrafficMapCountryVisual.trafficMapHighlightColor(colors: TrafficMapColors): Color {
     val alpha =
         when (role) {
-            CountryTrafficRole.ORIGIN -> 0.18f + (0.16f * intensity)
-            CountryTrafficRole.DESTINATION -> 0.18f + (0.30f * intensity)
-            CountryTrafficRole.VPN_ROUTE -> 0.32f + (0.23f * intensity)
-            CountryTrafficRole.TOR_EXIT -> 0.32f + (0.23f * intensity)
-        }.coerceIn(0.12f, 0.56f)
+            CountryTrafficRole.ORIGIN ->
+                TrafficMapTokens.OriginHighlightAlphaBase +
+                    (TrafficMapTokens.OriginHighlightAlphaRange * intensity)
+            CountryTrafficRole.DESTINATION ->
+                TrafficMapTokens.DestinationHighlightAlphaBase +
+                    (TrafficMapTokens.DestinationHighlightAlphaRange * intensity)
+            CountryTrafficRole.VPN_ROUTE,
+            CountryTrafficRole.TOR_EXIT,
+            ->
+                TrafficMapTokens.RouteCountryHighlightAlphaBase +
+                    (TrafficMapTokens.RouteCountryHighlightAlphaRange * intensity)
+        }.coerceIn(TrafficMapTokens.CountryHighlightMinAlpha, TrafficMapTokens.CountryHighlightMaxAlpha)
     return when (role) {
         CountryTrafficRole.ORIGIN -> colors.countryOriginHighlight
         CountryTrafficRole.DESTINATION -> colors.countryDestinationHighlight
@@ -4030,7 +4084,14 @@ private fun TrafficMapCountryVisual.trafficMapHighlightStrokeColor(colors: Traff
         CountryTrafficRole.DESTINATION -> colors.countryDestinationHighlight
         CountryTrafficRole.VPN_ROUTE -> colors.vpnRoute
         CountryTrafficRole.TOR_EXIT -> colors.torExit
-    }.copy(alpha = if (isNewCountry) 0.78f else 0.62f)
+    }.copy(
+        alpha =
+            if (isNewCountry) {
+                TrafficMapTokens.NewCountryStrokeAlpha
+            } else {
+                TrafficMapTokens.ExistingCountryStrokeAlpha
+            },
+    )
 
 private fun DrawScope.drawPhoneMarker(
     center: Offset,
@@ -4101,8 +4162,18 @@ internal fun trafficMapColors(
     successColor: Color,
     accentColor: Color,
 ): TrafficMapColors {
-    val landBaseAlpha = if (darkTheme) 0.46f else 0.58f
-    val landDetailAlpha = if (darkTheme) 0.22f else 0.30f
+    val landBaseAlpha =
+        if (darkTheme) {
+            TrafficMapTokens.DarkLandBaseAlpha
+        } else {
+            TrafficMapTokens.LightLandBaseAlpha
+        }
+    val landDetailAlpha =
+        if (darkTheme) {
+            TrafficMapTokens.DarkLandDetailAlpha
+        } else {
+            TrafficMapTokens.LightLandDetailAlpha
+        }
     val countryBase = surfaceVariantColor.copy(alpha = landBaseAlpha).compositeOver(surfaceColor)
     val countryFill = onSurfaceVariantColor.copy(alpha = landDetailAlpha).compositeOver(countryBase)
     val routeHalo =
@@ -4111,26 +4182,74 @@ internal fun trafficMapColors(
         } else {
             Color.White
         }
-    val legendText = onSurfaceVariantColor.copy(alpha = if (darkTheme) 0.88f else 0.92f)
+    val legendText =
+        onSurfaceVariantColor.copy(
+            alpha =
+                if (darkTheme) {
+                    TrafficMapTokens.DarkLegendTextAlpha
+                } else {
+                    TrafficMapTokens.LightLegendTextAlpha
+                },
+        )
     return TrafficMapColors(
         countryFill = countryFill,
-        countryBoundary = onSurfaceVariantColor.copy(alpha = if (darkTheme) 0.18f else 0.24f),
+        countryBoundary =
+            onSurfaceVariantColor.copy(
+                alpha =
+                    if (darkTheme) {
+                        TrafficMapTokens.DarkCountryBoundaryAlpha
+                    } else {
+                        TrafficMapTokens.LightCountryBoundaryAlpha
+                    },
+            ),
         countryDestinationHighlight = accentColor,
-        countryOriginHighlight = accentColor.copy(alpha = if (darkTheme) 0.36f else 0.30f),
+        countryOriginHighlight =
+            accentColor.copy(
+                alpha =
+                    if (darkTheme) {
+                        TrafficMapTokens.DarkOriginHighlightAlpha
+                    } else {
+                        TrafficMapTokens.LightOriginHighlightAlpha
+                    },
+            ),
         routeLine =
             if (darkTheme) {
-                Color.White.copy(alpha = 0.88f)
+                Color.White.copy(alpha = TrafficMapTokens.DarkRouteLineAlpha)
             } else {
-                Color(0xFFFAFAFA)
+                TrafficMapTokens.LightRouteLine
             },
         routeHalo = routeHalo,
-        destination = onSurfaceVariantColor.copy(alpha = if (darkTheme) 0.78f else 0.70f),
+        destination =
+            onSurfaceVariantColor.copy(
+                alpha =
+                    if (darkTheme) {
+                        TrafficMapTokens.DarkDestinationAlpha
+                    } else {
+                        TrafficMapTokens.LightDestinationAlpha
+                    },
+            ),
         vpnRoute = successColor,
-        torExit = Color(0xFFFF8A3D),
+        torExit = TrafficMapTokens.TorExit,
         origin = accentColor,
-        phoneScreen = surfaceColor.copy(alpha = if (darkTheme) 0.92f else 0.94f),
+        phoneScreen =
+            surfaceColor.copy(
+                alpha =
+                    if (darkTheme) {
+                        TrafficMapTokens.DarkPhoneScreenAlpha
+                    } else {
+                        TrafficMapTokens.LightPhoneScreenAlpha
+                    },
+            ),
         legendText = legendText,
-        inactiveText = onSurfaceVariantColor.copy(alpha = if (darkTheme) 0.72f else 0.76f),
+        inactiveText =
+            onSurfaceVariantColor.copy(
+                alpha =
+                    if (darkTheme) {
+                        TrafficMapTokens.DarkInactiveTextAlpha
+                    } else {
+                        TrafficMapTokens.LightInactiveTextAlpha
+                    },
+            ),
     )
 }
 
@@ -4184,22 +4303,7 @@ private data class TrafficMapPowerState(
         get() = powerSaveMode || (batteryPercent != null && batteryPercent < TRAFFIC_MAP_LOW_BATTERY_PERCENT)
 }
 
-private val TRAFFIC_MAP_CARD_TOTAL_HEIGHT = 216.dp
-private val TRAFFIC_MAP_DEFAULT_COUNTRY_FILL = Color(0xFF3E3F41)
-private val TRAFFIC_MAP_DEFAULT_COUNTRY_BOUNDARY = Color(0xFF5B5D61)
-private const val TRAFFIC_MAP_ROUTE_MIN_STROKE_DP = 0.9f
-private const val TRAFFIC_MAP_ROUTE_MAX_STROKE_DP = 2.2f
 private const val TRAFFIC_MAP_ROUTE_STROKE_CACHE_SCALE = 1_000f
-private const val TRAFFIC_MAP_ROUTE_MIN_ALPHA = 0.42f
-private const val TRAFFIC_MAP_ROUTE_ALPHA_RANGE = 0.36f
-private const val TRAFFIC_MAP_ROUTE_HALO_STROKE_EXTRA_DP = 1.4f
-private const val TRAFFIC_MAP_ROUTE_HALO_ALPHA_MULTIPLIER = 0.22f
-private const val TRAFFIC_MAP_ROUTE_DIRECTION_MIN_DISTANCE_PX = 18f
-private const val TRAFFIC_MAP_ROUTE_DIRECTION_CUE_T = 0.66f
-private const val TRAFFIC_MAP_ROUTE_PULSE_START_T = 0.22f
-private const val TRAFFIC_MAP_ROUTE_PULSE_END_T = 0.84f
-private const val TRAFFIC_MAP_MARKER_COLLISION_RING_SIZE = 6f
-private const val TRAFFIC_MAP_MARKER_RAW_MATCH_TOLERANCE_PX = 0.5f
 private const val TRAFFIC_MAP_ORIGIN_MARKER_KEY = "origin"
 private const val TRAFFIC_MAP_VPN_ROUTE_MARKER_KEY = "route:vpn"
 private const val TRAFFIC_MAP_TOR_EXIT_MARKER_KEY = "route:tor"
