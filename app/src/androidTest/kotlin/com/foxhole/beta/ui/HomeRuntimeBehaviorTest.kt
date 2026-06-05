@@ -148,15 +148,12 @@ class HomeRuntimeBehaviorTest {
                 ),
             )
         }
-        composeRule.waitUntil(timeoutMillis = 10_000) {
-            app().container.diagnosticsLogger.entries.value.any {
-                it.tag == "ip" &&
-                    it.message.contains("dashboard refresh started") &&
-                    it.message.contains("reason=post_connect")
-            }
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            viewModel.controlUiState.value.connection.state == ConnectionState.CONNECTED
         }
         composeRule.runOnUiThread {
             viewModel.invalidateIpInfoRefreshes()
+            viewModel.lastForegroundDashboardRefreshElapsedMs = 0L
             app().container.diagnosticsLogger.clear()
         }
 
@@ -164,6 +161,7 @@ class HomeRuntimeBehaviorTest {
         composeRule.waitForIdle()
         composeRule.runOnUiThread {
             viewModel.invalidateIpInfoRefreshes()
+            viewModel.lastForegroundDashboardRefreshElapsedMs = 0L
             FoxholeVpnRuntimeBridge.updateIpInfo(
                 IpInfo(
                     ip = expectedIp,

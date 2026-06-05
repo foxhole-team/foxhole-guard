@@ -86,8 +86,6 @@
     <string name="usage_access_consent_body">FoxHole will locally read app network traffic statistics to show per-app traffic, detect anomalies, and help configure routing. The data is stored on this device in the encrypted local database and is not sent to FoxHole servers. You can turn it off and delete the data in Settings.</string>
     <string name="usage_access_consent_confirm">Allow</string>
     <string name="usage_access_consent_dismiss">Not now</string>
-    <string name="privacy_local_data_title">Privacy &amp; local data</string>
-    <string name="privacy_local_data_summary">Usage Access, local telemetry, retention, and deletion</string>
     <string name="privacy_local_data_usage_access_status_title">Usage access</string>
     <string name="privacy_local_data_usage_access_status_summary">Required only for per-app traffic statistics and app traffic anomalies.</string>
     <string name="privacy_local_data_usage_access_on">On</string>
@@ -477,7 +475,7 @@
     <string name="statistics_settings_content_description">Statistics settings</string>
     <string name="statistics_settings_title">Statistics settings</string>
     <string name="statistics_info_content_description">Statistics information</string>
-    <string name="statistics_info_title">Statistics and local data</string>
+    <string name="statistics_info_title">Statistics information</string>
     <string name="statistics_clear_data_content_description">Clear statistics data</string>
     <string name="statistics_clear_data_title">Clear data</string>
     <string name="statistics_clear_usage_summary">Delete saved traffic totals and history.</string>

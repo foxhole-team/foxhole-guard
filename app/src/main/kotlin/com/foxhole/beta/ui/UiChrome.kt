@@ -702,6 +702,12 @@ internal fun FoxholeTopScrimLayer(
 ) {
     val dark = LocalFoxholeDarkTheme.current
     val scheme = MaterialTheme.colorScheme
+    val baseColor =
+        if (dark) {
+            scheme.background
+        } else {
+            scheme.surface
+        }
     val topScrimColor =
         if (dark) {
             scheme.background.copy(alpha = TOP_CHROME_SCRIM_DARK_ALPHA)
@@ -718,6 +724,7 @@ internal fun FoxholeTopScrimLayer(
         modifier =
             modifier.drawWithCache {
                 onDrawBehind {
+                    drawRect(baseColor)
                     val rawProgress = progress().coerceIn(0f, 1f)
                     val scrimProgress = foxholeTopScrimAlpha(rawProgress)
                     if (scrimProgress > 0f) {

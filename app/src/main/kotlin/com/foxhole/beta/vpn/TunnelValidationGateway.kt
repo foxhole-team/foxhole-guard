@@ -190,7 +190,7 @@ internal class TunnelValidationGateway(
             if (error is CancellationException) {
                 throw error
             }
-            val upstreamNetwork = boundNetworkForAppOwnedRequest(currentUpstreamNetwork()) ?: throw error
+            val upstreamNetwork = currentUpstreamNetwork() ?: throw error
             diagnosticsLogger.record(
                 "ip",
                 "device ip refresh failed on default path, retrying explicit upstream network",

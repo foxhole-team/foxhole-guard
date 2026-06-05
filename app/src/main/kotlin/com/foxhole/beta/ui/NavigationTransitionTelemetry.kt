@@ -204,4 +204,4 @@ private fun scheduleNavigationFirstFrameCallback(callback: () -> Unit) {
 }
 
 private const val NAVIGATION_TELEMETRY_TAG = "FoxholeNavigation"
-private const val NAVIGATION_DETAIL_TRANSITION_MS = 280L
+private const val NAVIGATION_DETAIL_TRANSITION_MS = 150L

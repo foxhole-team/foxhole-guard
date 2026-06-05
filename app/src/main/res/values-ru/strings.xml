@@ -87,8 +87,6 @@
     <string name="usage_access_consent_body">FoxHole будет локально читать статистику сетевого трафика по приложениям, чтобы показывать per-app traffic, аномалии и помогать настраивать маршрутизацию. Данные хранятся на этом устройстве в зашифрованной локальной базе и не отправляются на серверы FoxHole. Это можно отключить и удалить в настройках.</string>
     <string name="usage_access_consent_confirm">Разрешить</string>
     <string name="usage_access_consent_dismiss">Не сейчас</string>
-    <string name="privacy_local_data_title">Приватность и локальные данные</string>
-    <string name="privacy_local_data_summary">Usage Access, локальная телеметрия, хранение и удаление</string>
     <string name="privacy_local_data_usage_access_status_title">Usage access</string>
     <string name="privacy_local_data_usage_access_status_summary">Нужен только для статистики трафика по приложениям и app traffic аномалий.</string>
     <string name="privacy_local_data_usage_access_on">Включен</string>
@@ -482,7 +480,7 @@
     <string name="statistics_settings_content_description">Настройки статистики</string>
     <string name="statistics_settings_title">Настройки статистики</string>
     <string name="statistics_info_content_description">Информация о статистике</string>
-    <string name="statistics_info_title">Статистика и локальные данные</string>
+    <string name="statistics_info_title">Информация о статистике</string>
     <string name="statistics_clear_data_content_description">Очистить данные статистики</string>
     <string name="statistics_clear_data_title">Очистить данные</string>
     <string name="statistics_clear_usage_summary">Удалить сохраненные итоги трафика и историю.</string>

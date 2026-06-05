@@ -438,6 +438,7 @@ fun StatisticsScreen(
             },
             onConfirm = {
                 usageAccessConsentVisible = false
+                onAppTrafficStatsEnabledChanged(true)
                 onAppTrafficUsageAccessConsentChanged(true)
                 openUsageAccessSettings(context)
             },

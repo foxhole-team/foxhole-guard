@@ -341,6 +341,18 @@ class TunnelRuntimeProxyIpRefreshPolicyTest {
     }
 
     @Test
+    fun `device ip fallback retries the real explicit upstream network after default path failure`() {
+        val source = vpnSourceFile("TunnelValidationGateway.kt").readText()
+        val defaultNetworkBlock =
+            source.substringAfter("private suspend fun fetchDeviceIpInfoFromDefaultNetwork")
+                .substringBefore("private suspend fun fetchActiveTunnelIpInfo(")
+
+        assertTrue(defaultNetworkBlock.contains("val upstreamNetwork = currentUpstreamNetwork() ?: throw error"))
+        assertFalse(defaultNetworkBlock.contains("boundNetworkForAppOwnedRequest(currentUpstreamNetwork())"))
+        assertTrue(defaultNetworkBlock.contains("network = upstreamNetwork"))
+    }
+
+    @Test
     fun `tor route ip refresh is runtime proxy only and cannot recover vpn bound result`() {
         val source = vpnSourceFile("TunnelValidationGateway.kt").readText()
         val torRefreshBlock =

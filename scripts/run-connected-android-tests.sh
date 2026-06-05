@@ -434,6 +434,10 @@ run_test_spec() {
   local matrix_result="passed"
   if [[ "$status" -ne 0 ]]; then
     matrix_result="failed"
+  elif [[ "$tests" -eq 0 ]]; then
+    matrix_result="no-tests"
+  elif [[ "$skipped" -gt 0 ]]; then
+    matrix_result="skipped"
   fi
   record_matrix_rows "$test_spec" "$required_label" "$matrix_result" "$tests" "$spec_dir"
   printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
