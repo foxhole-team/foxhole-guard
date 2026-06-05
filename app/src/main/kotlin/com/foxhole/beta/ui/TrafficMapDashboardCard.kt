@@ -60,6 +60,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.compositeOver
@@ -109,9 +110,11 @@ import java.util.concurrent.Executors
 import java.util.concurrent.ThreadFactory
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.math.atan2
+import kotlin.math.cos
 import kotlin.math.floor
 import kotlin.math.min
 import kotlin.math.roundToInt
+import kotlin.math.sin
 import kotlin.math.sqrt
 import android.graphics.Canvas as AndroidCanvas
 import android.graphics.Paint as AndroidPaint
@@ -785,7 +788,23 @@ private fun TrafficMapCanvas(
                 val phoneCorner = CornerRadius(2.4.dp.toPx(), 2.4.dp.toPx())
                 val phoneScreenInset = 1.4.dp.toPx()
                 val phoneHomeRadius = 0.65.dp.toPx()
+                val torRouteDash = TrafficMapTokens.TorRouteDashDp.dp.toPx()
+                val torRouteGap = TrafficMapTokens.TorRouteGapDp.dp.toPx()
                 val origin = project(originLat, originLon, viewport)
+                val markerLayout =
+                    resolveTrafficMapMarkerPlacements(
+                        markers =
+                            trafficMapMarkerProjections(
+                                originCountryCode = originCountryCode,
+                                origin = origin,
+                                destinations = drawableDestinations,
+                                vpnRoute = drawableVpnRoute,
+                                torExit = drawableTorExit,
+                                viewport = viewport,
+                            ),
+                        viewportTopLeft = viewport.topLeft,
+                        viewportSize = viewport.size,
+                    )
                 val maxBytes =
                     (
                         drawableEdges.maxOfOrNull { edge -> edge.bytes }
@@ -824,8 +843,22 @@ private fun TrafficMapCanvas(
                                 drawableEdges
                                     .take(MAX_TRAFFIC_MAP_DRAW_EDGES)
                                     .map { edge ->
-                                        val from = project(edge.fromLat, edge.fromLon, viewport)
-                                        val to = project(edge.toLat, edge.toLon, viewport)
+                                        val rawFrom = project(edge.fromLat, edge.fromLon, viewport)
+                                        val rawTo = project(edge.toLat, edge.toLon, viewport)
+                                        val from =
+                                            markerLayout.edgeEndpointOffset(
+                                                edge = edge,
+                                                fromEndpoint = true,
+                                                rawFrom = rawFrom,
+                                                rawTo = rawTo,
+                                            )
+                                        val to =
+                                            markerLayout.edgeEndpointOffset(
+                                                edge = edge,
+                                                fromEndpoint = false,
+                                                rawFrom = rawFrom,
+                                                rawTo = rawTo,
+                                            )
                                         val weight = sqrt(edge.bytes.toDouble() / maxBytes.toDouble()).toFloat()
                                         TrafficMapRouteDrawModel(
                                             path =
@@ -849,10 +882,33 @@ private fun TrafficMapCanvas(
                 val destinationOffsets =
                     drawableDestinations
                         .take(MAX_TRAFFIC_MAP_DRAW_DESTINATIONS)
-                        .map { point -> point to project(point.lat, point.lon, viewport) }
-                val vpnRouteOffset = drawableVpnRoute?.let { point -> point to project(point.lat, point.lon, viewport) }
-                val torExitOffset = drawableTorExit?.let { point -> point to project(point.lat, point.lon, viewport) }
-                val originMarker = origin.takeIf { originCountryCode != null }
+                        .mapIndexed { index, point ->
+                            point to markerLayout.offsetForMarker(
+                                key = point.destinationMarkerKey(index),
+                                fallback = project(point.lat, point.lon, viewport),
+                            )
+                        }
+                val vpnRouteOffset =
+                    drawableVpnRoute?.let { point ->
+                        point to markerLayout.offsetForMarker(
+                            key = TRAFFIC_MAP_VPN_ROUTE_MARKER_KEY,
+                            fallback = project(point.lat, point.lon, viewport),
+                        )
+                    }
+                val torExitOffset =
+                    drawableTorExit?.let { point ->
+                        point to markerLayout.offsetForMarker(
+                            key = TRAFFIC_MAP_TOR_EXIT_MARKER_KEY,
+                            fallback = project(point.lat, point.lon, viewport),
+                        )
+                    }
+                val originMarker =
+                    originCountryCode?.let {
+                        markerLayout.offsetForMarker(
+                            key = TRAFFIC_MAP_ORIGIN_MARKER_KEY,
+                            fallback = origin,
+                        )
+                    }
 
                 onDrawBehind {
                     traceTrafficMapFrameSection("TrafficMap/draw") {
@@ -912,6 +968,12 @@ private fun TrafficMapCanvas(
                                 Stroke(
                                     width = route.strokeWidth,
                                     cap = StrokeCap.Round,
+                                    pathEffect =
+                                        if (route.role == TrafficMapEdgeRole.TOR_ROUTE) {
+                                            PathEffect.dashPathEffect(floatArrayOf(torRouteDash, torRouteGap))
+                                        } else {
+                                            null
+                                        },
                                 ),
                         )
                     }
@@ -1122,6 +1184,28 @@ private data class DrawableTrafficMapDestination(
     val role: TrafficMapPointRole,
 )
 
+internal enum class TrafficMapMarkerRole {
+    ORIGIN,
+    DESTINATION,
+    VPN_ROUTE,
+    TOR_EXIT,
+}
+
+internal data class TrafficMapMarkerProjection(
+    val key: String,
+    val countryCode: String?,
+    val role: TrafficMapMarkerRole,
+    val rawOffset: Offset,
+)
+
+internal data class TrafficMapMarkerPlacement(
+    val key: String,
+    val countryCode: String?,
+    val role: TrafficMapMarkerRole,
+    val rawOffset: Offset,
+    val offset: Offset,
+)
+
 internal data class DrawableTrafficMapEdge(
     val fromLat: Double,
     val fromLon: Double,
@@ -1161,6 +1245,282 @@ private fun List<TrafficMapEdge>.toDrawableTrafficMapEdges(): List<DrawableTraff
             role = edge.role,
         )
     }
+
+private fun trafficMapMarkerProjections(
+    originCountryCode: String?,
+    origin: Offset,
+    destinations: List<DrawableTrafficMapDestination>,
+    vpnRoute: DrawableTrafficMapDestination?,
+    torExit: DrawableTrafficMapDestination?,
+    viewport: TrafficMapViewport,
+): List<TrafficMapMarkerProjection> =
+    buildList {
+        originCountryCode?.let { countryCode ->
+            add(
+                TrafficMapMarkerProjection(
+                    key = TRAFFIC_MAP_ORIGIN_MARKER_KEY,
+                    countryCode = countryCode.uppercase(Locale.US),
+                    role = TrafficMapMarkerRole.ORIGIN,
+                    rawOffset = origin,
+                ),
+            )
+        }
+        destinations
+            .take(MAX_TRAFFIC_MAP_DRAW_DESTINATIONS)
+            .forEachIndexed { index, destination ->
+                add(
+                    TrafficMapMarkerProjection(
+                        key = destination.destinationMarkerKey(index),
+                        countryCode = destination.countryCode,
+                        role = TrafficMapMarkerRole.DESTINATION,
+                        rawOffset = project(destination.lat, destination.lon, viewport),
+                    ),
+                )
+            }
+        vpnRoute?.let { point ->
+            add(
+                TrafficMapMarkerProjection(
+                    key = TRAFFIC_MAP_VPN_ROUTE_MARKER_KEY,
+                    countryCode = point.countryCode,
+                    role = TrafficMapMarkerRole.VPN_ROUTE,
+                    rawOffset = project(point.lat, point.lon, viewport),
+                ),
+            )
+        }
+        torExit?.let { point ->
+            add(
+                TrafficMapMarkerProjection(
+                    key = TRAFFIC_MAP_TOR_EXIT_MARKER_KEY,
+                    countryCode = point.countryCode,
+                    role = TrafficMapMarkerRole.TOR_EXIT,
+                    rawOffset = project(point.lat, point.lon, viewport),
+                ),
+            )
+        }
+    }
+
+internal fun resolveTrafficMapMarkerPlacements(
+    markers: List<TrafficMapMarkerProjection>,
+    minDistancePx: Float = TrafficMapTokens.MarkerCollisionDistancePx,
+    viewportTopLeft: Offset? = null,
+    viewportSize: Size? = null,
+): List<TrafficMapMarkerPlacement> {
+    if (markers.size <= 1) {
+        return markers.map { marker ->
+            marker.toTrafficMapMarkerPlacement(
+                offset = marker.rawOffset.clampedTrafficMapMarkerOffset(
+                    viewportTopLeft = viewportTopLeft,
+                    viewportSize = viewportSize,
+                    inset = minDistancePx,
+                ),
+            )
+        }
+    }
+    val resolved = mutableListOf<TrafficMapMarkerPlacement>()
+    val placementsByOriginalIndex = arrayOfNulls<TrafficMapMarkerPlacement>(markers.size)
+    markers
+        .withIndex()
+        .sortedWith(
+            compareBy<IndexedValue<TrafficMapMarkerProjection>> { indexed -> indexed.value.role.markerPriority }
+                .thenBy { indexed -> indexed.value.countryCode.orEmpty() }
+                .thenBy { indexed -> indexed.index },
+        )
+        .forEach { indexed ->
+            val marker = indexed.value
+            val resolvedOffset =
+                marker.resolvedTrafficMapMarkerOffset(
+                    resolved = resolved,
+                    minDistancePx = minDistancePx,
+                    viewportTopLeft = viewportTopLeft,
+                    viewportSize = viewportSize,
+                )
+            val placement = marker.toTrafficMapMarkerPlacement(offset = resolvedOffset)
+            resolved += placement
+            placementsByOriginalIndex[indexed.index] = placement
+        }
+    return placementsByOriginalIndex.filterNotNull()
+}
+
+private fun TrafficMapMarkerProjection.resolvedTrafficMapMarkerOffset(
+    resolved: List<TrafficMapMarkerPlacement>,
+    minDistancePx: Float,
+    viewportTopLeft: Offset?,
+    viewportSize: Size?,
+): Offset {
+    val clampedRaw =
+        rawOffset.clampedTrafficMapMarkerOffset(
+            viewportTopLeft = viewportTopLeft,
+            viewportSize = viewportSize,
+            inset = minDistancePx,
+        )
+    val collisionCandidate =
+        if (!clampedRaw.collidesWithAnyTrafficMapMarker(resolved, minDistancePx)) {
+            clampedRaw
+        } else {
+            (0 until TrafficMapTokens.MarkerCollisionMaxAttempts)
+                .asSequence()
+                .map { attempt ->
+                    val angleDegrees = role.markerBaseAngleDegrees + (TrafficMapTokens.MarkerCollisionSweepDegrees * attempt)
+                    val angleRadians = Math.toRadians(angleDegrees.toDouble())
+                    val radius = minDistancePx * (1f + (attempt / TRAFFIC_MAP_MARKER_COLLISION_RING_SIZE))
+                    Offset(
+                        x = rawOffset.x + (cos(angleRadians) * radius).toFloat(),
+                        y = rawOffset.y + (sin(angleRadians) * radius).toFloat(),
+                    ).clampedTrafficMapMarkerOffset(
+                        viewportTopLeft = viewportTopLeft,
+                        viewportSize = viewportSize,
+                        inset = minDistancePx,
+                    )
+                }
+                .firstOrNull { candidate -> !candidate.collidesWithAnyTrafficMapMarker(resolved, minDistancePx) }
+                ?: clampedRaw
+        }
+    return collisionCandidate
+}
+
+private fun TrafficMapMarkerProjection.toTrafficMapMarkerPlacement(offset: Offset): TrafficMapMarkerPlacement =
+    TrafficMapMarkerPlacement(
+        key = key,
+        countryCode = countryCode,
+        role = role,
+        rawOffset = rawOffset,
+        offset = offset,
+    )
+
+private fun Offset.collidesWithAnyTrafficMapMarker(
+    resolved: List<TrafficMapMarkerPlacement>,
+    minDistancePx: Float,
+): Boolean =
+    resolved.any { placement ->
+        distanceTo(placement.offset) < minDistancePx
+    }
+
+private fun Offset.clampedTrafficMapMarkerOffset(
+    viewportTopLeft: Offset?,
+    viewportSize: Size?,
+    inset: Float,
+): Offset {
+    val clamped =
+        if (viewportTopLeft == null || viewportSize == null) {
+            this
+        } else {
+            val minX = viewportTopLeft.x + inset
+            val maxX = viewportTopLeft.x + viewportSize.width - inset
+            val minY = viewportTopLeft.y + inset
+            val maxY = viewportTopLeft.y + viewportSize.height - inset
+            if (maxX < minX || maxY < minY) {
+                this
+            } else {
+                Offset(
+                    x = x.coerceIn(minX, maxX),
+                    y = y.coerceIn(minY, maxY),
+                )
+            }
+        }
+    return clamped
+}
+
+private fun List<TrafficMapMarkerPlacement>.offsetForMarker(
+    key: String,
+    fallback: Offset,
+): Offset =
+    firstOrNull { placement -> placement.key == key }?.offset ?: fallback
+
+private fun List<TrafficMapMarkerPlacement>.edgeEndpointOffset(
+    edge: DrawableTrafficMapEdge,
+    fromEndpoint: Boolean,
+    rawFrom: Offset,
+    rawTo: Offset,
+): Offset {
+    val rawOffset = if (fromEndpoint) rawFrom else rawTo
+    val matches = markerPlacementsAt(rawOffset)
+    if (matches.isEmpty()) {
+        return rawOffset
+    }
+    val oppositeMatches = markerPlacementsAt(if (fromEndpoint) rawTo else rawFrom)
+    val preferredRoles =
+        if (fromEndpoint) {
+            edge.fromEndpointPreferredMarkerRoles(oppositeMatches)
+        } else {
+            edge.toEndpointPreferredMarkerRoles(oppositeMatches)
+        }
+    return preferredRoles
+        .firstNotNullOfOrNull { role -> matches.firstOrNull { placement -> placement.role == role } }
+        ?.offset
+        ?: matches.first().offset
+}
+
+private fun List<TrafficMapMarkerPlacement>.markerPlacementsAt(rawOffset: Offset): List<TrafficMapMarkerPlacement> =
+    filter { placement -> placement.rawOffset.distanceTo(rawOffset) <= TRAFFIC_MAP_MARKER_RAW_MATCH_TOLERANCE_PX }
+
+private fun DrawableTrafficMapEdge.fromEndpointPreferredMarkerRoles(
+    oppositeMatches: List<TrafficMapMarkerPlacement>,
+): List<TrafficMapMarkerRole> =
+    when (role) {
+        TrafficMapEdgeRole.DIRECT -> listOf(TrafficMapMarkerRole.ORIGIN)
+        TrafficMapEdgeRole.VPN_ROUTE ->
+            if (oppositeMatches.any { placement -> placement.role == TrafficMapMarkerRole.VPN_ROUTE }) {
+                listOf(TrafficMapMarkerRole.ORIGIN)
+            } else {
+                listOf(TrafficMapMarkerRole.VPN_ROUTE, TrafficMapMarkerRole.ORIGIN)
+            }
+        TrafficMapEdgeRole.TOR_ROUTE ->
+            if (oppositeMatches.any { placement -> placement.role == TrafficMapMarkerRole.TOR_EXIT }) {
+                listOf(TrafficMapMarkerRole.VPN_ROUTE, TrafficMapMarkerRole.ORIGIN)
+            } else {
+                listOf(TrafficMapMarkerRole.TOR_EXIT, TrafficMapMarkerRole.VPN_ROUTE)
+            }
+    }
+
+private fun DrawableTrafficMapEdge.toEndpointPreferredMarkerRoles(
+    oppositeMatches: List<TrafficMapMarkerPlacement>,
+): List<TrafficMapMarkerRole> =
+    when (role) {
+        TrafficMapEdgeRole.DIRECT -> listOf(TrafficMapMarkerRole.DESTINATION)
+        TrafficMapEdgeRole.VPN_ROUTE ->
+            if (oppositeMatches.any { placement -> placement.role == TrafficMapMarkerRole.ORIGIN }) {
+                listOf(TrafficMapMarkerRole.VPN_ROUTE)
+            } else {
+                listOf(TrafficMapMarkerRole.DESTINATION)
+            }
+        TrafficMapEdgeRole.TOR_ROUTE ->
+            if (
+                oppositeMatches.any { placement ->
+                    placement.role == TrafficMapMarkerRole.VPN_ROUTE || placement.role == TrafficMapMarkerRole.ORIGIN
+                }
+            ) {
+                listOf(TrafficMapMarkerRole.TOR_EXIT)
+            } else {
+                listOf(TrafficMapMarkerRole.DESTINATION)
+            }
+    }
+
+private fun DrawableTrafficMapDestination.destinationMarkerKey(index: Int): String =
+    "destination:$index:$countryCode"
+
+private val TrafficMapMarkerRole.markerPriority: Int
+    get() =
+        when (this) {
+            TrafficMapMarkerRole.ORIGIN -> 0
+            TrafficMapMarkerRole.VPN_ROUTE -> 1
+            TrafficMapMarkerRole.TOR_EXIT -> 2
+            TrafficMapMarkerRole.DESTINATION -> 3
+        }
+
+private val TrafficMapMarkerRole.markerBaseAngleDegrees: Float
+    get() =
+        when (this) {
+            TrafficMapMarkerRole.ORIGIN -> -90f
+            TrafficMapMarkerRole.VPN_ROUTE -> -18f
+            TrafficMapMarkerRole.TOR_EXIT -> 128f
+            TrafficMapMarkerRole.DESTINATION -> 42f
+        }
+
+private fun Offset.distanceTo(other: Offset): Float {
+    val dx = x - other.x
+    val dy = y - other.y
+    return sqrt((dx * dx) + (dy * dy))
+}
 
 @Composable
 private fun TrafficMapLegend(
@@ -2240,6 +2600,11 @@ private const val TRAFFIC_MAP_ROUTE_MIN_ALPHA = 0.42f
 private const val TRAFFIC_MAP_ROUTE_ALPHA_RANGE = 0.36f
 private const val TRAFFIC_MAP_ROUTE_HALO_STROKE_EXTRA_DP = 1.4f
 private const val TRAFFIC_MAP_ROUTE_HALO_ALPHA_MULTIPLIER = 0.22f
+private const val TRAFFIC_MAP_MARKER_COLLISION_RING_SIZE = 6f
+private const val TRAFFIC_MAP_MARKER_RAW_MATCH_TOLERANCE_PX = 0.5f
+private const val TRAFFIC_MAP_ORIGIN_MARKER_KEY = "origin"
+private const val TRAFFIC_MAP_VPN_ROUTE_MARKER_KEY = "route:vpn"
+private const val TRAFFIC_MAP_TOR_EXIT_MARKER_KEY = "route:tor"
 private const val TRAFFIC_MAP_HEAVY_CONTENT_SETTLE_DELAY_MS = 0L
 private const val TRAFFIC_MAP_POWER_STATE_STARTUP_DELAY_MS = 0L
 private const val TRAFFIC_MAP_WEIGHT = 0.62f

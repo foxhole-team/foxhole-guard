@@ -183,40 +183,15 @@ class TrafficMapRepository(
     ): TrafficMapUiState {
         val mapAnchorInfo = originInfo ?: routeInfo ?: torInfo
         val origin = mapAnchorInfo?.countryCode?.let(::trafficMapOrigin)
-        val liveRouteSourceInfo = torInfo ?: routeInfo ?: originInfo
         val visibleDestinations =
             destinations
                 .take(MaxTrafficMapDestinations)
-                .map { point ->
-                    offsetTrafficMapPointFromSameCountries(
-                        point = point,
-                        anchorCountryCodes = listOf(liveRouteSourceInfo?.countryCode),
-                        latOffset = SameCountryDestinationLatOffset,
-                        lonOffset = SameCountryDestinationLonOffset,
-                    )
-                }
         val vpnRoute =
             routeInfo
                 ?.let { info -> trafficMapRoutePoint(info, routeAggregate) }
-                ?.let { point ->
-                    offsetTrafficMapPointFromSameCountries(
-                        point = point,
-                        anchorCountryCodes = listOf(originInfo?.countryCode),
-                        latOffset = SameCountryVpnRouteLatOffset,
-                        lonOffset = SameCountryVpnRouteLonOffset,
-                    )
-                }
         val torExit =
             torInfo
                 ?.let { info -> trafficMapTorPoint(info, routeAggregate) }
-                ?.let { point ->
-                    offsetTrafficMapPointFromSameCountries(
-                        point = point,
-                        anchorCountryCodes = listOf(vpnRoute?.countryCode, originInfo?.countryCode),
-                        latOffset = SameCountryTorExitLatOffset,
-                        lonOffset = SameCountryTorExitLonOffset,
-                    )
-                }
         val highlightedCountries =
             (
                 visibleDestinations.map(TrafficMapPoint::countryCode) +
@@ -468,12 +443,6 @@ class TrafficMapRepository(
         const val MaxTrafficMapDestinations = 30
         const val IsoCountryCodeLength = 2
         const val MaxRetainedConnectionSamples = 512
-        const val SameCountryDestinationLatOffset = 1.15
-        const val SameCountryDestinationLonOffset = 1.85
-        const val SameCountryVpnRouteLatOffset = 1.65
-        const val SameCountryVpnRouteLonOffset = 2.55
-        const val SameCountryTorExitLatOffset = -1.75
-        const val SameCountryTorExitLonOffset = 2.65
         const val TrafficMapMinLat = -55.0
         const val TrafficMapMaxLat = 85.0
         const val TrafficMapMinLon = -179.0
@@ -531,35 +500,6 @@ private data class RetainedTrafficMapSnapshot(
     val accumulator: TrafficMapConnectionAccumulator,
     val countryBytes: Map<String, Long>,
 )
-
-private fun offsetTrafficMapPointFromSameCountries(
-    point: TrafficMapPoint,
-    anchorCountryCodes: List<String?>,
-    latOffset: Double,
-    lonOffset: Double,
-): TrafficMapPoint {
-    val anchorCountries =
-        anchorCountryCodes
-            .mapNotNull { countryCode ->
-                countryCode
-                    ?.trim()
-                    ?.uppercase(Locale.US)
-                    ?.takeIf { value ->
-                        value.length == TrafficMapRepository.IsoCountryCodeLength &&
-                            value.all { character -> character in 'A'..'Z' }
-                    }
-            }.toSet()
-    return if (point.countryCode.uppercase(Locale.US) in anchorCountries) {
-        point.copy(
-            lat = (point.lat + latOffset)
-                .coerceIn(TrafficMapRepository.TrafficMapMinLat, TrafficMapRepository.TrafficMapMaxLat),
-            lon = (point.lon + lonOffset)
-                .coerceIn(TrafficMapRepository.TrafficMapMinLon, TrafficMapRepository.TrafficMapMaxLon),
-        )
-    } else {
-        point
-    }
-}
 
 internal data class TrafficMapSampleBatch(
     val samples: List<TrafficMapConnectionSample>,

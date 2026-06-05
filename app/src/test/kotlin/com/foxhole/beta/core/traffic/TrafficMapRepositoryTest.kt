@@ -14,7 +14,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -545,7 +545,7 @@ class TrafficMapRepositoryTest {
     }
 
     @Test
-    fun `traffic map offsets vpn and tor route nodes when they share the device country`() {
+    fun `traffic map keeps canonical route coordinates when nodes share the device country`() {
         val state =
             TrafficMapRepository().trafficMapStateSnapshot(
                 originIpInfo =
@@ -585,29 +585,13 @@ class TrafficMapRepositoryTest {
 
         assertEquals("US", state.vpnRoute?.countryCode)
         assertEquals("US", state.torExit?.countryCode)
-        assertEquals(
-            origin.lat + TrafficMapRepository.SameCountryVpnRouteLatOffset,
-            state.vpnRoute?.lat ?: 0.0,
-            0.0,
-        )
-        assertEquals(
-            origin.lon + TrafficMapRepository.SameCountryVpnRouteLonOffset,
-            state.vpnRoute?.lon ?: 0.0,
-            0.0,
-        )
-        assertEquals(
-            origin.lat + TrafficMapRepository.SameCountryTorExitLatOffset,
-            state.torExit?.lat ?: 0.0,
-            0.0,
-        )
-        assertEquals(
-            origin.lon + TrafficMapRepository.SameCountryTorExitLonOffset,
-            state.torExit?.lon ?: 0.0,
-            0.0,
-        )
-        assertNotEquals(state.vpnRoute?.lat, state.torExit?.lat)
-        assertNotEquals(state.vpnRoute?.lon, state.torExit?.lon)
+        assertEquals(origin.lat, state.vpnRoute?.lat ?: 0.0, 0.0)
+        assertEquals(origin.lon, state.vpnRoute?.lon ?: 0.0, 0.0)
+        assertEquals(origin.lat, state.torExit?.lat ?: 0.0, 0.0)
+        assertEquals(origin.lon, state.torExit?.lon ?: 0.0, 0.0)
         assertEquals(2, state.edges.size)
+        assertTrue(state.edges.all { edge -> edge.fromLat == origin.lat && edge.toLat == origin.lat })
+        assertFalse(repositorySource().contains("offsetTrafficMapPointFromSameCountries"))
     }
 
     @Test
@@ -691,3 +675,10 @@ private fun trafficMapAssetRegistry(): TrafficMapCountryRegistry {
     val shapes = TrafficMapCountryShapeAssetParser().parse(asset.readText())
     return TrafficMapCountryRegistry.fromShapes(shapes = shapes, locale = Locale.US)
 }
+
+private fun repositorySource(): String =
+    listOf(
+        File("src/main/kotlin/com/foxhole/beta/core/traffic/TrafficMapRepository.kt"),
+        File("app/src/main/kotlin/com/foxhole/beta/core/traffic/TrafficMapRepository.kt"),
+        File("../app/src/main/kotlin/com/foxhole/beta/core/traffic/TrafficMapRepository.kt"),
+    ).first(File::isFile).readText()
