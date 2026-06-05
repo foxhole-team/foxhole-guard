@@ -321,11 +321,67 @@ class TrafficMapStylingTest {
         assertTrue(englishStrings.contains("Start VPN or enable local guard"))
         assertTrue(englishStrings.contains("<string name=\"traffic_map_route_header\">Route</string>"))
         assertTrue(englishStrings.contains("<string name=\"traffic_map_top_countries_header\">Top countries</string>"))
+        assertTrue(
+            englishStrings.contains(
+                "<string name=\"traffic_map_open_details\">Open traffic map details</string>",
+            ),
+        )
         assertTrue(russianStrings.contains("<string name=\"traffic_map_live_requires_firewall\">Нет активных подключений</string>"))
         assertTrue(russianStrings.contains("<string name=\"traffic_map_waiting_connections\">Нет активных подключений</string>"))
         assertTrue(russianStrings.contains("<string name=\"traffic_map_route_header\">Маршрут</string>"))
         assertTrue(russianStrings.contains("<string name=\"traffic_map_top_countries_header\">Топ стран</string>"))
+        assertTrue(
+            russianStrings.contains(
+                "<string name=\"traffic_map_open_details\">Открыть детали карты трафика</string>",
+            ),
+        )
         assertFalse(englishStrings.contains("Waiting for active firewall"))
         assertFalse(russianStrings.contains("Ожидание активного фаервола"))
+    }
+
+    @Test
+    fun `traffic map dashboard opens full detail route with country totals table`() {
+        val appSource =
+            listOf(
+                java.io.File("src/main/kotlin/com/foxhole/beta/ui/FoxholeApp.kt"),
+                java.io.File("app/src/main/kotlin/com/foxhole/beta/ui/FoxholeApp.kt"),
+                java.io.File("../app/src/main/kotlin/com/foxhole/beta/ui/FoxholeApp.kt"),
+            ).first { file -> file.isFile }.readText()
+        val homeSource =
+            listOf(
+                java.io.File("src/main/kotlin/com/foxhole/beta/ui/HomeScreen.kt"),
+                java.io.File("app/src/main/kotlin/com/foxhole/beta/ui/HomeScreen.kt"),
+                java.io.File("../app/src/main/kotlin/com/foxhole/beta/ui/HomeScreen.kt"),
+            ).first { file -> file.isFile }.readText()
+        val mapSource =
+            listOf(
+                java.io.File("src/main/kotlin/com/foxhole/beta/ui/TrafficMapDashboardCard.kt"),
+                java.io.File("app/src/main/kotlin/com/foxhole/beta/ui/TrafficMapDashboardCard.kt"),
+                java.io.File("../app/src/main/kotlin/com/foxhole/beta/ui/TrafficMapDashboardCard.kt"),
+            ).first { file -> file.isFile }.readText()
+
+        assertTrue(appSource.contains("TRAFFIC_MAP_DETAIL = \"traffic-map\""))
+        assertTrue(appSource.contains("composable(AppRoute.TRAFFIC_MAP_DETAIL)"))
+        assertTrue(appSource.contains("TrafficMapDetailScreen("))
+        assertTrue(
+            appSource.contains(
+                "onOpenTrafficMapDetails = { navController.navigate(AppRoute.TRAFFIC_MAP_DETAIL) }",
+            ),
+        )
+        assertTrue(homeSource.contains("onOpenTrafficMapDetails: () -> Unit"))
+        assertTrue(homeSource.contains("onOpenDetails = onOpenTrafficMapDetails"))
+        assertTrue(mapSource.contains("onOpenDetails: (() -> Unit)? = null"))
+        assertTrue(mapSource.contains("home_traffic_map_details_action"))
+        assertTrue(mapSource.contains("internal fun TrafficMapDetailScreen("))
+        assertTrue(mapSource.contains("tag = \"traffic_map_detail_screen\""))
+        assertTrue(mapSource.contains("traffic_map_detail_world_map"))
+        assertTrue(mapSource.contains("traffic_map_detail_country_table"))
+        assertTrue(mapSource.contains("TrafficMapDetailCountryTable("))
+        assertTrue(mapSource.contains("state.destinations.take(MAX_TRAFFIC_MAP_DRAW_DESTINATIONS)"))
+        assertTrue(mapSource.contains("traffic_map_country_header"))
+        assertTrue(mapSource.contains("traffic_map_sessions_header"))
+        assertTrue(mapSource.contains("traffic_map_total_header"))
+        assertTrue(mapSource.contains("state.unknownCountryConnections"))
+        assertTrue(mapSource.contains("state.totalConnections"))
     }
 }

@@ -7,6 +7,7 @@ readonly GRADLEW="${GRADLEW:-./gradlew}"
 readonly TARGET_PACKAGE="${FOXHOLE_ANDROID_TEST_TARGET_PACKAGE:-com.foxhole.beta.debug}"
 readonly BASELINE_TARGET_PACKAGE="${FOXHOLE_BASELINE_PROFILE_TARGET_PACKAGE:-$TARGET_PACKAGE}"
 readonly REQUIRE_FULL_SUITE="${FOXHOLE_REQUIRE_FULL_MACROBENCHMARK:-0}"
+readonly PERF_LOG_ROOT="${FOXHOLE_MACROBENCHMARK_LOG_ROOT:-build/macrobenchmark-logcat}"
 
 install_target_app() {
   local target_package="${1:-$TARGET_PACKAGE}"
@@ -21,9 +22,41 @@ install_target_app() {
   fi
 }
 
+run_macrobenchmark_with_log_gate() {
+  local label="$1"
+  shift
+  local log_path="$PERF_LOG_ROOT/${label}.logcat"
+  mkdir -p "$PERF_LOG_ROOT"
+  adb logcat -c || true
+
+  set +e
+  "$@"
+  local benchmark_status=$?
+  adb logcat -d > "$log_path" 2>/dev/null || true
+  python3 scripts/analyze-android-perf-logs.py \
+    --fail-on-skipped-frames \
+    --fail-on-fatal \
+    --fail-on-anr \
+    --fail-on-oom \
+    --fail-on-strict-disk \
+    "$log_path"
+  local log_gate_status=$?
+  set -e
+
+  if [[ "$benchmark_status" -ne 0 ]]; then
+    echo "Macrobenchmark command failed for ${label} with exit code ${benchmark_status}" >&2
+    return "$benchmark_status"
+  fi
+  if [[ "$log_gate_status" -ne 0 ]]; then
+    echo "Macrobenchmark logcat gate failed for ${label}; see ${log_path}" >&2
+    return "$log_gate_status"
+  fi
+}
+
 run_startup_benchmark() {
   install_target_app "$BASELINE_TARGET_PACKAGE"
-  "$GRADLEW" --no-daemon --console=plain --stacktrace :macrobenchmark:connectedCheck \
+  run_macrobenchmark_with_log_gate startup \
+    "$GRADLEW" --no-daemon --console=plain --stacktrace :macrobenchmark:connectedCheck \
     -Pmacrobenchmark.targetPackage="$TARGET_PACKAGE" \
     -Pandroid.testInstrumentationRunnerArguments.class=com.foxhole.beta.macrobenchmark.HomeMacrobenchmark#startup
   python3 scripts/verify-macrobenchmark-thresholds.py
@@ -66,9 +99,13 @@ elif [[
   "$GITHUB_REF_NAME" == refs/tags/*
 ]]; then
   install_target_app
-  "$GRADLEW" --no-daemon --console=plain --stacktrace :macrobenchmark:connectedCheck \
+  run_macrobenchmark_with_log_gate full-suite \
+    "$GRADLEW" --no-daemon --console=plain --stacktrace :macrobenchmark:connectedCheck \
     -Pmacrobenchmark.targetPackage="$TARGET_PACKAGE"
-  python3 scripts/verify-macrobenchmark-thresholds.py --full-suite
+  python3 scripts/verify-macrobenchmark-thresholds.py \
+    --full-suite \
+    --strict-release \
+    --navigation-log "$PERF_LOG_ROOT/full-suite.logcat"
   run_baseline_profile_generation
 elif [[ "$GITHUB_REF_NAME" == "refs/heads/dev" ]]; then
   run_startup_benchmark

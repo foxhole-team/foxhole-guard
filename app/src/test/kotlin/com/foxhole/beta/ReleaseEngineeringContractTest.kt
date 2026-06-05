@@ -74,12 +74,14 @@ class ReleaseEngineeringContractTest {
         assertTrue(runner.contains("readonly QA_MATRIX_FILE="))
         assertTrue(runner.contains("verify_qa_matrix"))
         assertTrue(runner.contains("Connected QA matrix is missing required passed dimensions"))
+        assertTrue(runner.contains("com.foxhole.beta.core.data.LocalDataRepositoryDeviceTest"))
         assertTrue(runner.contains("com.foxhole.beta.vpn.BootReceiverRestoreAndroidTest"))
         listOf(
             "app_inventory",
             "boot_restore",
             "diagnostics_logs",
             "foreground_service",
+            "local_data_privacy",
             "package_replace_restore",
             "profile_import",
             "proxy_runtime",

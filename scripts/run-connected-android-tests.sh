@@ -32,6 +32,7 @@ readonly DEFAULT_REQUIRED_TEST_SPECS=(
   "com.foxhole.beta.ui.HomeScreenTest#routingAppsPickerFiltersInstalledPackages"
   "com.foxhole.beta.ui.HomeScreenTest#routingSitesScreenOpensAddExceptionDialog"
   "com.foxhole.beta.ui.LiveLogsDialogTest"
+  "com.foxhole.beta.core.data.LocalDataRepositoryDeviceTest"
   "com.foxhole.beta.vpn.ProxyRuntimeSmokeTest"
   "com.foxhole.beta.vpn.BootReceiverRestoreAndroidTest"
 )
@@ -171,6 +172,9 @@ matrix_dimensions_for_spec() {
     com.foxhole.beta.ui.LiveLogsDialogTest)
       printf '%s\n' "diagnostics_logs" "privacy_controls"
       ;;
+    com.foxhole.beta.core.data.LocalDataRepositoryDeviceTest)
+      printf '%s\n' "local_data_privacy" "privacy_controls" "secret_deletion_path"
+      ;;
     com.foxhole.beta.vpn.ProxyRuntimeSmokeTest)
       printf '%s\n' "proxy_runtime" "foreground_service"
       ;;
@@ -212,6 +216,7 @@ required_matrix_dimensions() {
     "direct_share_import" \
     "foreground_service" \
     "gesture_policy" \
+    "local_data_privacy" \
     "navigation" \
     "package_replace_restore" \
     "privacy_controls" \

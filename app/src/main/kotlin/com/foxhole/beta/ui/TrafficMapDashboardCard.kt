@@ -28,12 +28,16 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.ArrowOutward
 import androidx.compose.material.icons.outlined.Map
 import androidx.compose.material.icons.outlined.PhoneAndroid
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -141,6 +145,7 @@ internal fun TrafficMapDashboardCard(
     modifier: Modifier = Modifier,
     contentReady: Boolean = true,
     legendLoading: Boolean = false,
+    onOpenDetails: (() -> Unit)? = null,
 ) {
     val state by stateFlow.collectAsStateWithLifecycle()
     TrafficMapDashboardCard(
@@ -148,6 +153,7 @@ internal fun TrafficMapDashboardCard(
         modifier = modifier,
         contentReady = contentReady,
         legendLoading = legendLoading,
+        onOpenDetails = onOpenDetails,
     )
 }
 
@@ -157,6 +163,7 @@ internal fun TrafficMapDashboardCard(
     modifier: Modifier = Modifier,
     contentReady: Boolean = true,
     legendLoading: Boolean = false,
+    onOpenDetails: (() -> Unit)? = null,
 ) {
     val powerState = rememberTrafficMapPowerState()
     var forceMapEnabled by rememberSaveable { mutableStateOf(false) }
@@ -184,6 +191,7 @@ internal fun TrafficMapDashboardCard(
             TrafficMapCardHeader(
                 state = state,
                 colors = colors,
+                onOpenDetails = onOpenDetails,
             )
             Row(
                 modifier = Modifier
@@ -243,6 +251,7 @@ internal fun TrafficMapDashboardCard(
 private fun TrafficMapCardHeader(
     state: TrafficMapUiState,
     colors: TrafficMapColors,
+    onOpenDetails: (() -> Unit)? = null,
 ) {
     val title = stringResource(R.string.traffic_map_title)
     val currentOriginLabel = remember(state.originCity, state.originCountryName, state.originCountryCode) {
@@ -292,6 +301,22 @@ private fun TrafficMapCardHeader(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
+            if (onOpenDetails != null) {
+                IconButton(
+                    onClick = onOpenDetails,
+                    modifier =
+                        Modifier
+                            .size(28.dp)
+                            .testTag("home_traffic_map_details_action"),
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.ArrowOutward,
+                        contentDescription = stringResource(R.string.traffic_map_open_details),
+                        modifier = Modifier.size(16.dp),
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                }
+            }
         }
         Box(
             modifier = Modifier.weight(TRAFFIC_MAP_LEGEND_WEIGHT),
@@ -342,6 +367,228 @@ private fun TrafficMapCardHeader(
             }
         }
     }
+}
+
+@Composable
+internal fun TrafficMapDetailScreen(
+    stateFlow: StateFlow<TrafficMapUiState>,
+    snackbarHostState: SnackbarHostState,
+    onNavigateUp: () -> Unit,
+) {
+    val state by stateFlow.collectAsStateWithLifecycle()
+    val countryShapes = rememberTrafficMapCountryShapes()
+    val colors = trafficMapColors()
+    FoxholeLazyScaffold(
+        title = stringResource(R.string.traffic_map_title),
+        snackbarHostState = snackbarHostState,
+        onNavigateUp = onNavigateUp,
+        tag = "traffic_map_detail_screen",
+    ) {
+        item(key = "traffic_map_detail_map") {
+            Surface(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .height(244.dp)
+                        .testTag("traffic_map_detail_map_surface"),
+                shape = MaterialTheme.shapes.large,
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.34f),
+            ) {
+                if (countryShapes.isEmpty()) {
+                    TrafficMapCanvasLoadingBlock(
+                        modifier =
+                            Modifier
+                                .fillMaxSize()
+                                .testTag("traffic_map_detail_world_map_loading"),
+                    )
+                } else {
+                    TrafficMapCanvas(
+                        state = state,
+                        countryShapes = countryShapes,
+                        modifier =
+                            Modifier
+                                .fillMaxSize()
+                                .testTag("traffic_map_detail_world_map"),
+                    )
+                }
+            }
+        }
+        item(key = "traffic_map_detail_table") {
+            TrafficMapDetailCountryTable(
+                state = state,
+                colors = colors,
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .testTag("traffic_map_detail_country_table"),
+            )
+        }
+    }
+}
+
+@Composable
+private fun TrafficMapDetailCountryTable(
+    state: TrafficMapUiState,
+    colors: TrafficMapColors,
+    modifier: Modifier = Modifier,
+) {
+    val destinations =
+        remember(state.destinations) {
+            state.destinations.take(MAX_TRAFFIC_MAP_DRAW_DESTINATIONS)
+        }
+    val hiddenCountries =
+        remember(state.destinations, state.hiddenCountryCount) {
+            ((state.destinations.size - destinations.size).coerceAtLeast(0) + state.hiddenCountryCount)
+                .coerceAtLeast(0)
+        }
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(0.dp),
+    ) {
+        TrafficMapDetailHeaderRow(colors = colors)
+        if (destinations.isEmpty() && state.unknownCountryBytes <= 0L) {
+            TrafficMapEmptySummary(
+                state = state,
+                colors = colors,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+        } else {
+            destinations.forEach { point ->
+                TrafficMapDetailDestinationRow(
+                    country = "${countryEmoji(point.countryCode)} ${point.label}",
+                    sessions = point.connections,
+                    total = formatTrafficMapLegendBytes(point.bytes),
+                    colors = colors,
+                )
+            }
+            if (state.unknownCountryBytes > 0L) {
+                TrafficMapDetailDestinationRow(
+                    country = stringResource(R.string.traffic_map_unknown_country),
+                    sessions = state.unknownCountryConnections,
+                    total = formatTrafficMapLegendBytes(state.unknownCountryBytes),
+                    colors = colors,
+                )
+            }
+            if (hiddenCountries > 0) {
+                Text(
+                    text = stringResource(R.string.traffic_map_more_countries, hiddenCountries),
+                    modifier = Modifier.padding(top = 6.dp),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = colors.inactiveText,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+        if (state.totalBytes > 0L || state.totalConnections > 0) {
+            HorizontalDivider(
+                modifier = Modifier.padding(top = 8.dp, bottom = 6.dp),
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.42f),
+            )
+            TrafficMapDetailDestinationRow(
+                country = stringResource(R.string.traffic_map_total_header),
+                sessions = state.totalConnections,
+                total = formatTrafficMapLegendBytes(state.totalBytes),
+                colors = colors,
+                strong = true,
+            )
+        }
+    }
+}
+
+@Composable
+private fun TrafficMapDetailHeaderRow(colors: TrafficMapColors) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        TrafficMapDetailTextCell(
+            text = stringResource(R.string.traffic_map_country_header),
+            modifier = Modifier.weight(0.54f),
+            color = colors.inactiveText,
+            textAlign = TextAlign.Start,
+            strong = true,
+        )
+        TrafficMapDetailTextCell(
+            text = stringResource(R.string.traffic_map_sessions_header),
+            modifier = Modifier.weight(0.18f),
+            color = colors.inactiveText,
+            textAlign = TextAlign.End,
+            strong = true,
+        )
+        TrafficMapDetailTextCell(
+            text = stringResource(R.string.traffic_map_total_header),
+            modifier = Modifier.weight(0.28f),
+            color = colors.inactiveText,
+            textAlign = TextAlign.End,
+            strong = true,
+        )
+    }
+}
+
+@Composable
+private fun TrafficMapDetailDestinationRow(
+    country: String,
+    sessions: Int,
+    total: String,
+    colors: TrafficMapColors,
+    strong: Boolean = false,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        TrafficMapDetailTextCell(
+            text = country,
+            modifier = Modifier.weight(0.54f),
+            color = colors.legendText,
+            textAlign = TextAlign.Start,
+            strong = strong,
+        )
+        TrafficMapDetailTextCell(
+            text = sessions.coerceAtLeast(0).toString(),
+            modifier = Modifier.weight(0.18f),
+            color = colors.legendText,
+            textAlign = TextAlign.End,
+            strong = strong,
+        )
+        TrafficMapDetailTextCell(
+            text = total,
+            modifier = Modifier.weight(0.28f),
+            color = colors.legendText,
+            textAlign = TextAlign.End,
+            strong = strong,
+        )
+    }
+}
+
+@Composable
+private fun TrafficMapDetailTextCell(
+    text: String,
+    modifier: Modifier,
+    color: Color,
+    textAlign: TextAlign,
+    strong: Boolean,
+) {
+    Text(
+        text = text,
+        modifier = modifier,
+        style = MaterialTheme.typography.labelMedium.copy(
+            fontSize = 11.sp,
+            lineHeight = 13.sp,
+        ),
+        fontWeight = if (strong) FontWeight.SemiBold else FontWeight.Medium,
+        color = color,
+        textAlign = textAlign,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+    )
 }
 
 @Composable

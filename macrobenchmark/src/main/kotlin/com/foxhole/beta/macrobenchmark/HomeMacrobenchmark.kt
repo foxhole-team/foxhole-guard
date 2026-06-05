@@ -186,6 +186,7 @@ class HomeMacrobenchmark {
                 frameMetricsWithTrace(
                     TRAFFIC_MAP_LOAD_SHAPES_TRACE,
                     TRAFFIC_MAP_RENDER_LAND_BITMAP_TRACE,
+                    TRAFFIC_MAP_RENDER_HIGHLIGHT_BITMAP_TRACE,
                     TRAFFIC_MAP_BUILD_ROUTES_TRACE,
                     TRAFFIC_MAP_DRAW_TRACE,
                 ),
@@ -210,6 +211,7 @@ class HomeMacrobenchmark {
                 device.swipe(centerX, lowerY, centerX, upperY, SWIPE_STEPS)
                 device.waitForIdle()
             }
+            openTrafficMapDetailsAndReturn()
         }
 
     @Test
@@ -266,6 +268,30 @@ class HomeMacrobenchmark {
                 tapYRatio = 0.74f,
             ),
         )
+
+    @Test
+    fun permissionFlow() =
+        benchmarkRule.measureRepeated(
+            packageName = PACKAGE_NAME,
+            metrics = frameMetricsWithTrace(SETTINGS_NAVIGATION_TRACE),
+            compilationMode = BENCHMARK_COMPILATION_MODE,
+            iterations = SHORT_ITERATIONS,
+            startupMode = StartupMode.WARM,
+            setupBlock = {
+                pressHome()
+                revokeNotificationPermissionIfPossible()
+                startActivityAndWait(foxholeLauncherIntent())
+                device.waitForIdle()
+            },
+        ) {
+            handleRuntimePermissionDialog(approve = false)
+            waitForTestTag("home_dashboard_list")
+            openImportFilePickerAndReturn()
+            clickConnectAndReturnFromVpnPermission()
+            openSettingsHome()
+            device.pressBack()
+            device.waitForIdle()
+        }
 
     private fun measureSettingsDetailTransition(target: SettingsDetailTarget) {
         benchmarkRule.measureRepeated(
@@ -440,11 +466,83 @@ class HomeMacrobenchmark {
         device.click(dashboardNavX, bottomNavY)
     }
 
+    private fun openImportFilePickerAndReturn() {
+        if (!clickTestTag("home_import_action")) {
+            return
+        }
+        device.waitForIdle()
+        if (clickTestTag("home_import_from_file_action")) {
+            device.waitForIdle()
+            device.pressBack()
+            device.waitForIdle()
+        } else {
+            device.pressBack()
+            device.waitForIdle()
+        }
+    }
+
+    private fun clickConnectAndReturnFromVpnPermission() {
+        val connectButton = findByTestTag("home_connect_button") ?: return
+        if (clickCenter(connectButton)) {
+            device.waitForIdle()
+            handleRuntimePermissionDialog(approve = false)
+            device.pressBack()
+            device.waitForIdle()
+        }
+    }
+
+    private fun openTrafficMapDetailsAndReturn() {
+        check(waitForTestTag("home_traffic_map_details_action")) {
+            "Traffic map details action missing; ${visibleSettingsState()}"
+        }
+        val detailsAction =
+            findByTestTag("home_traffic_map_details_action")
+                ?: error("Traffic map details action disappeared; ${visibleSettingsState()}")
+        check(clickCenter(detailsAction)) {
+            "Traffic map details action did not click; ${visibleSettingsState()}"
+        }
+        device.waitForIdle()
+        check(waitForTestTag("traffic_map_detail_screen")) {
+            "Traffic map detail screen did not open; ${visibleSettingsState()}"
+        }
+        check(waitForTestTag("traffic_map_detail_world_map") || waitForTestTag("traffic_map_detail_world_map_loading")) {
+            "Traffic map detail canvas missing; ${visibleSettingsState()}"
+        }
+        device.pressBack()
+        device.waitForIdle()
+        check(waitForTestTag("home_dashboard_list")) {
+            "Dashboard did not return after traffic map detail back; ${visibleSettingsState()}"
+        }
+    }
+
     private fun swipeDashboardToSettings() {
         val startX = (device.displayWidth * ROOT_SWIPE_START_X_RATIO).toInt()
         val endX = (device.displayWidth * ROOT_SWIPE_END_X_RATIO).toInt()
         val centerY = (device.displayHeight * ROOT_SWIPE_Y_RATIO).toInt()
         device.swipe(startX, centerY, endX, centerY, SWIPE_STEPS)
+    }
+
+    private fun clickTestTag(tag: String): Boolean {
+        val node = findByTestTag(tag) ?: return false
+        return clickCenter(node)
+    }
+
+    private fun handleRuntimePermissionDialog(approve: Boolean) {
+        val pattern =
+            if (approve) {
+                Pattern.compile("^(OK|Ok|Allow|Разрешить|Да)$")
+            } else {
+                Pattern.compile("^(Don't allow|Deny|Cancel|Not now|Запретить|Отмена|Не сейчас|Нет)$")
+            }
+        val button = device.findObject(By.text(pattern)) ?: return
+        clickCenter(button)
+        device.waitForIdle()
+    }
+
+    private fun revokeNotificationPermissionIfPossible() {
+        runCatching {
+            device.executeShellCommand("pm revoke $PACKAGE_NAME android.permission.POST_NOTIFICATIONS")
+        }
     }
 
     private fun foxholeLauncherIntent() =
@@ -520,6 +618,7 @@ class HomeMacrobenchmark {
         private const val APP_ICON_LOAD_TRACE = "AppIcon/load"
         private const val TRAFFIC_MAP_LOAD_SHAPES_TRACE = "TrafficMap/loadShapes"
         private const val TRAFFIC_MAP_RENDER_LAND_BITMAP_TRACE = "TrafficMap/renderLandBitmap"
+        private const val TRAFFIC_MAP_RENDER_HIGHLIGHT_BITMAP_TRACE = "TrafficMap/renderHighlightBitmap"
         private const val TRAFFIC_MAP_BUILD_ROUTES_TRACE = "TrafficMap/buildRoutes"
         private const val TRAFFIC_MAP_DRAW_TRACE = "TrafficMap/draw"
         private val SETTINGS_HOME_ANCHOR_LABELS = listOf("Smart start", "Умный старт", "DNS")

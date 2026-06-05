@@ -29,6 +29,7 @@
     <string name="traffic_map_unknown_country">Unknown</string>
     <string name="traffic_map_more_countries">+ %1$d more</string>
     <string name="traffic_map_total_summary">%1$d countries · %2$s</string>
+    <string name="traffic_map_open_details">Open traffic map details</string>
     <string name="traffic_map_support_prompt_title">Enable traffic map helpers?</string>
     <string name="traffic_map_support_prompt_body">The dashboard map uses live VPN connections. For local Firewall mode, country totals, and connection details, also enable country statistics and the network activity journal.</string>
     <string name="traffic_map_support_prompt_confirm">Enable now</string>

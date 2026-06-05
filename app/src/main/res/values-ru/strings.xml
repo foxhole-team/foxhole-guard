@@ -30,6 +30,7 @@
     <string name="traffic_map_unknown_country">Неизвестно</string>
     <string name="traffic_map_more_countries">+ еще %1$d</string>
     <string name="traffic_map_total_summary">%1$d стран · %2$s</string>
+    <string name="traffic_map_open_details">Открыть детали карты трафика</string>
     <string name="traffic_map_support_prompt_title">Включить данные для карты?</string>
     <string name="traffic_map_support_prompt_body">Карта в дашборде берет живые подключения из VPN. Для локального фаервола, статистики стран и деталей подключений включите статистику стран и журнал сетевой активности.</string>
     <string name="traffic_map_support_prompt_confirm">Включить сейчас</string>

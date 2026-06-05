@@ -167,6 +167,7 @@ fun HomeScreen(
     onLocalProxyLanAccessChanged: (Boolean) -> Unit,
     onRenewTorIp: () -> Unit,
     onDashboardCardOrderChanged: (List<DashboardCard>) -> Unit,
+    onOpenTrafficMapDetails: () -> Unit,
 ) {
     DebugRecompositionCounter("HomeScreen")
     remember {
@@ -629,6 +630,7 @@ fun HomeScreen(
                                                 connectionState = state.connection.state,
                                                 appLoaded = state.profilesLoaded,
                                             ),
+                                        onOpenDetails = onOpenTrafficMapDetails,
                                     )
                                 }
                             }

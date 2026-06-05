@@ -58,6 +58,9 @@ VPN_CONTEXT_RE = re.compile(
 )
 VPN_CONNECTED_RE = re.compile(r"\bCONNECTED\b|\bstate[ =:]+connected\b", re.IGNORECASE)
 VPN_DISCONNECTED_RE = re.compile(r"\bDISCONNECTED\b|\bstate[ =:]+disconnected\b", re.IGNORECASE)
+FATAL_RE = re.compile(r"\bFATAL EXCEPTION\b|AndroidRuntime|Fatal signal", re.IGNORECASE)
+ANR_RE = re.compile(r"\bANR\b|Application Not Responding|Input dispatching timed out", re.IGNORECASE)
+FIRST_FRAME_RE = re.compile(r"\bfirst_frame_after_tap_ms=(\d+(?:\.\d+)?)\b")
 
 
 @dataclass
@@ -70,6 +73,8 @@ class Summary:
     oom_count: int = 0
     gc_pressure_lines: int = 0
     strict_disk_events: int = 0
+    fatal_count: int = 0
+    anr_count: int = 0
     runtime_health_lines: int = 0
     runtime_health_snapshots: int = 0
     vpn_connected_events: int = 0
@@ -79,6 +84,7 @@ class Summary:
     top_oom_roots: Counter[str] = field(default_factory=Counter)
     top_strict_roots: Counter[str] = field(default_factory=Counter)
     gc_samples: Counter[str] = field(default_factory=Counter)
+    first_frame_after_tap_ms: list[float] = field(default_factory=list)
     parse_errors: list[str] = field(default_factory=list)
 
     def note_memory(self, key: str, value: int) -> None:
@@ -110,6 +116,37 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=5,
         help="Number of stack roots to print for top lists.",
+    )
+    parser.add_argument(
+        "--fail-on-skipped-frames",
+        action="store_true",
+        help="Exit non-zero when any Choreographer skipped-frame event is found.",
+    )
+    parser.add_argument(
+        "--max-skipped-frames",
+        type=int,
+        default=0,
+        help="Maximum allowed skipped frames for --fail-on-skipped-frames.",
+    )
+    parser.add_argument(
+        "--fail-on-fatal",
+        action="store_true",
+        help="Exit non-zero when FATAL/AndroidRuntime/Fatal signal lines are found.",
+    )
+    parser.add_argument(
+        "--fail-on-anr",
+        action="store_true",
+        help="Exit non-zero when ANR lines are found.",
+    )
+    parser.add_argument(
+        "--fail-on-oom",
+        action="store_true",
+        help="Exit non-zero when OOM lines are found.",
+    )
+    parser.add_argument(
+        "--fail-on-strict-disk",
+        action="store_true",
+        help="Exit non-zero when StrictMode disk-read events are found.",
     )
     return parser.parse_args()
 
@@ -184,6 +221,16 @@ def parse_stream(lines: Iterable[str], summary: Summary) -> None:
         if GC_PRESSURE_RE.search(line):
             summary.gc_pressure_lines += 1
             summary.gc_samples[classify_gc_line(line)] += 1
+
+        if FATAL_RE.search(line):
+            summary.fatal_count += 1
+
+        if ANR_RE.search(line):
+            summary.anr_count += 1
+
+        first_frame = FIRST_FRAME_RE.search(line)
+        if first_frame:
+            summary.first_frame_after_tap_ms.append(float(first_frame.group(1)))
 
         if OOM_RE.search(line):
             summary.oom_count += 1
@@ -275,6 +322,8 @@ def report_text(summary: Summary, top: int) -> str:
         f"total skipped-frame events: {summary.skipped_frame_events}",
         f"total skipped frames: {summary.total_skipped_frames}",
         f"OOM count: {summary.oom_count}",
+        f"FATAL count: {summary.fatal_count}",
+        f"ANR count: {summary.anr_count}",
         f"max Java heap seen: {format_kb(summary.max_java_heap_kb)}",
         f"runtime-health snapshot count: {summary.runtime_health_snapshots}",
         f"runtime-health line count: {summary.runtime_health_lines}",
@@ -287,6 +336,18 @@ def report_text(summary: Summary, top: int) -> str:
         f"GC pressure lines: {summary.gc_pressure_lines}",
         f"StrictMode disk-read events: {summary.strict_disk_events}",
     ]
+    if summary.first_frame_after_tap_ms:
+        lines.extend(
+            [
+                (
+                    "first frame after tap: "
+                    f"count={len(summary.first_frame_after_tap_ms)} "
+                    f"p50={percentile(summary.first_frame_after_tap_ms, 0.50):.1f} ms "
+                    f"p95={percentile(summary.first_frame_after_tap_ms, 0.95):.1f} ms "
+                    f"max={max(summary.first_frame_after_tap_ms):.1f} ms"
+                ),
+            ],
+        )
 
     if summary.memory_maxima_kb:
         lines.append("memory maxima:")
@@ -321,6 +382,40 @@ def format_kb(value: int | None) -> str:
     return f"{value} KB ({mib:.1f} MiB)"
 
 
+def percentile(
+    values: list[float],
+    percentile_value: float,
+) -> float | None:
+    if not values:
+        return None
+    ordered = sorted(values)
+    if len(ordered) == 1:
+        return ordered[0]
+    position = (len(ordered) - 1) * percentile_value
+    lower = int(position)
+    upper = min(lower + 1, len(ordered) - 1)
+    fraction = position - lower
+    return ordered[lower] + (ordered[upper] - ordered[lower]) * fraction
+
+
+def fail_reasons(summary: Summary, args: argparse.Namespace) -> list[str]:
+    failures: list[str] = []
+    if args.fail_on_skipped_frames and summary.max_skipped_frames > args.max_skipped_frames:
+        failures.append(
+            "skipped frames exceeded "
+            f"{args.max_skipped_frames}: max={summary.max_skipped_frames}, events={summary.skipped_frame_events}",
+        )
+    if args.fail_on_fatal and summary.fatal_count > 0:
+        failures.append(f"fatal lines found: {summary.fatal_count}")
+    if args.fail_on_anr and summary.anr_count > 0:
+        failures.append(f"ANR lines found: {summary.anr_count}")
+    if args.fail_on_oom and summary.oom_count > 0:
+        failures.append(f"OOM lines found: {summary.oom_count}")
+    if args.fail_on_strict_disk and summary.strict_disk_events > 0:
+        failures.append(f"StrictMode disk-read events found: {summary.strict_disk_events}")
+    return failures
+
+
 def json_summary(summary: Summary) -> str:
     payload = {
         "input_files": summary.input_files,
@@ -329,6 +424,8 @@ def json_summary(summary: Summary) -> str:
         "total_skipped_frame_events": summary.skipped_frame_events,
         "total_skipped_frames": summary.total_skipped_frames,
         "oom_count": summary.oom_count,
+        "fatal_count": summary.fatal_count,
+        "anr_count": summary.anr_count,
         "max_java_heap_kb": summary.max_java_heap_kb,
         "runtime_health_snapshot_count": summary.runtime_health_snapshots,
         "runtime_health_line_count": summary.runtime_health_lines,
@@ -336,6 +433,10 @@ def json_summary(summary: Summary) -> str:
         "vpn_disconnected_events": summary.vpn_disconnected_events,
         "gc_pressure_lines": summary.gc_pressure_lines,
         "strict_disk_read_events": summary.strict_disk_events,
+        "first_frame_after_tap_ms_count": len(summary.first_frame_after_tap_ms),
+        "first_frame_after_tap_ms_p50": percentile(summary.first_frame_after_tap_ms, 0.50),
+        "first_frame_after_tap_ms_p95": percentile(summary.first_frame_after_tap_ms, 0.95),
+        "first_frame_after_tap_ms_max": max(summary.first_frame_after_tap_ms) if summary.first_frame_after_tap_ms else None,
         "memory_maxima_kb": summary.memory_maxima_kb,
         "top_oom_stack_roots": dict(summary.top_oom_roots.most_common()),
         "top_strictmode_stack_roots": dict(summary.top_strict_roots.most_common()),
@@ -361,6 +462,12 @@ def main() -> int:
             summary.parse_errors.append(f"{path}: {error}")
 
     print(json_summary(summary) if args.json else report_text(summary, args.top))
+    failures = fail_reasons(summary, args)
+    if failures:
+        print("Android perf log gate failed:", file=sys.stderr)
+        for failure in failures:
+            print(f"  {failure}", file=sys.stderr)
+        return 1
     return 0
 
 

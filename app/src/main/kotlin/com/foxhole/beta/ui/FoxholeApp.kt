@@ -128,6 +128,7 @@ private object AppRoute {
     const val PROFILE_VIEW_CONFIG = "profiles/{$PROFILE_ID}/view-config"
     const val PROFILE_EDIT_CONFIG = "profiles/{$PROFILE_ID}/edit-config"
     const val SETTINGS = "settings"
+    const val TRAFFIC_MAP_DETAIL = "traffic-map"
     const val TRAFFIC = "settings/traffic"
     const val DNS = "settings/dns"
     const val DNS_APPS_PICKER = "settings/dns/apps-picker"
@@ -416,6 +417,14 @@ fun FoxholeApp(
                         onLocalProxyLanAccessChanged = viewModel::onLocalProxyLanAccessChanged,
                         onRenewTorIp = viewModel::onRenewTorIp,
                         onDashboardCardOrderChanged = viewModel::onDashboardCardOrderChanged,
+                        onOpenTrafficMapDetails = { navController.navigate(AppRoute.TRAFFIC_MAP_DETAIL) },
+                    )
+                }
+                composable(AppRoute.TRAFFIC_MAP_DETAIL) {
+                    TrafficMapDetailScreen(
+                        stateFlow = viewModel.trafficMapUiState,
+                        snackbarHostState = snackbarHostState,
+                        onNavigateUp = navController::navigateUp,
                     )
                 }
                 composable(AppRoute.PROFILES) {

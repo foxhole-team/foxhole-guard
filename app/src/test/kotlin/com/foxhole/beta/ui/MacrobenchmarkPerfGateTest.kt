@@ -19,15 +19,21 @@ class MacrobenchmarkPerfGateTest {
             "fun homeScroll()",
             "fun bottomNavigationRoundTrip()",
             "fun dashboardTrafficMapOpen()",
+            "fun permissionFlow()",
             "fun settingsSmartStartTransition()",
             "fun settingsRoutingAppsPickerSearch()",
             "TraceSectionMetric(",
             "\"HomeScreen first composition\"",
             "\"TrafficMap/loadShapes\"",
+            "\"TrafficMap/renderHighlightBitmap\"",
             "\"AppPicker/filter\"",
             "\"AppIcon/load\"",
             "\"Settings/navigation\"",
             "toggleFirstUnlockedAppInPicker()",
+            "openImportFilePickerAndReturn()",
+            "clickConnectAndReturnFromVpnPermission()",
+            "openTrafficMapDetailsAndReturn()",
+            "traffic_map_detail_screen",
         ).forEach { marker ->
             assertTrue(benchmarkSource.contains(marker))
         }
@@ -49,6 +55,13 @@ class MacrobenchmarkPerfGateTest {
             "\"homeScroll\"",
             "\"settingsSmartStartTransition\"",
             "\"settingsRoutingAppsPickerSearch\"",
+            "\"permissionFlow\"",
+            "STRICT_FRAME_P95_MAX_MS = 16.6",
+            "STRICT_FRAME_MAXIMUM_MAX_MS = 700.0",
+            "FIRST_FRAME_P50_MAX_MS = 80.0",
+            "FIRST_FRAME_P95_MAX_MS = 140.0",
+            "FIRST_FRAME_MAXIMUM_MAX_MS = 220.0",
+            "verify_navigation_first_frames",
             "TRANSITION_FRAME_CPU_P95_MAX_MS",
             "TRANSITION_FRAME_OVERRUN_P95_MAX_MS",
             "REQUIRED_TRACE_METRIC_LABELS",
@@ -72,6 +85,13 @@ class MacrobenchmarkPerfGateTest {
         ).readText()
 
         assertTrue(script.contains("run_baseline_profile_generation"))
+        assertTrue(script.contains("run_macrobenchmark_with_log_gate"))
+        assertTrue(script.contains("analyze-android-perf-logs.py"))
+        assertTrue(script.contains("--fail-on-skipped-frames"))
+        assertTrue(script.contains("--fail-on-fatal"))
+        assertTrue(script.contains("--fail-on-anr"))
+        assertTrue(script.contains("--fail-on-strict-disk"))
+        assertTrue(script.contains("--navigation-log \"${'$'}PERF_LOG_ROOT/full-suite.logcat\""))
         assertTrue(script.contains("BASELINE_TARGET_PACKAGE"))
         assertTrue(script.contains("baseline_output_dir=\"app/src/release/generated/baselineProfile\""))
         assertTrue(script.contains("androidx.benchmark.enabledRules=BaselineProfile"))

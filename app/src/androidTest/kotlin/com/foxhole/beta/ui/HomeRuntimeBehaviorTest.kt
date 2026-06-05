@@ -385,6 +385,27 @@ class HomeRuntimeBehaviorTest {
     }
 
     @Test
+    fun trafficMapDetailsRoundTripKeepsDashboardVisible() {
+        scrollToTrafficMapCard()
+        waitUntilTagExists("home_traffic_map_details_action", timeoutMs = INITIAL_TRAFFIC_MAP_READY_TIMEOUT_MS)
+
+        composeRule.onNodeWithTag("home_traffic_map_details_action", useUnmergedTree = true).performClick()
+        waitUntilTagExists("traffic_map_detail_screen", timeoutMs = NAVIGATION_RESPONSIVENESS_TIMEOUT_MS)
+        composeRule.waitUntil(timeoutMillis = INITIAL_TRAFFIC_MAP_READY_TIMEOUT_MS) {
+            composeRule.onAllNodesWithTag("traffic_map_detail_world_map", useUnmergedTree = true)
+                .fetchSemanticsNodes()
+                .isNotEmpty() ||
+                composeRule.onAllNodesWithTag("traffic_map_detail_world_map_loading", useUnmergedTree = true)
+                    .fetchSemanticsNodes()
+                    .isNotEmpty()
+        }
+
+        composeRule.activityRule.scenario.onActivity { activity -> activity.onBackPressedDispatcher.onBackPressed() }
+        waitUntilTagExists("home_dashboard_list", timeoutMs = NAVIGATION_RESPONSIVENESS_TIMEOUT_MS)
+        waitUntilTagExists("home_traffic_map_card", timeoutMs = NAVIGATION_RESPONSIVENESS_TIMEOUT_MS)
+    }
+
+    @Test
     fun rootNavigationComposesOnlyActiveSection() {
         waitUntilOnlyRootSectionVisible(activeTag = "home_dashboard_list", inactiveTag = "settings_screen")
         composeRule.onAllNodesWithTag("settings_screen", useUnmergedTree = true).assertCountEquals(0)
