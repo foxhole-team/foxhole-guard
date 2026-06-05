@@ -83,6 +83,124 @@ class DnsFilterUpdateClientTest {
         }
 
     @Test
+    fun `rejects manifest host that resolves to private address before fetching`() =
+        runBlocking {
+            val keyPair = testKeyPair()
+            val ruleSetBytes = testRuleSetBytes()
+            val manifest = testManifest(size = ruleSetBytes.size.toLong(), sha256 = ruleSetBytes.sha256Hex())
+            val manifestBytes = json.encodeToString(manifest).toByteArray(Charsets.UTF_8)
+            val store = RecordingRuleSetStore()
+            val client =
+                DnsFilterUpdateClient(
+                    httpClient = testHttpClient(manifestBytes, keyPair.sign(manifestBytes), ruleSetBytes),
+                    json = json,
+                    publicKeyPem = keyPair.publicKeyPem(),
+                    resolver = { listOf(InetAddress.getByName("127.0.0.1")) },
+                )
+
+            val result = client.update(MANIFEST_URL, store)
+
+            assertEquals(DnsFilterUpdateStatus.FAILED, result.status)
+            assertEquals(false, result.retryable)
+            assertEquals(true, result.reason.orEmpty().contains("private or loopback"))
+            assertNull(store.ruleSetBytes)
+        }
+
+    @Test
+    fun `rejects oversized manifest before signature or artifact install`() =
+        runBlocking {
+            val keyPair = testKeyPair()
+            val ruleSetBytes = testRuleSetBytes()
+            val oversizedManifestBytes = ByteArray(64 * 1024 + 1) { index -> index.toByte() }
+            val store = RecordingRuleSetStore()
+            val client =
+                DnsFilterUpdateClient(
+                    httpClient = testHttpClient(oversizedManifestBytes, keyPair.sign(byteArrayOf()), ruleSetBytes),
+                    json = json,
+                    publicKeyPem = keyPair.publicKeyPem(),
+                    resolver = { listOf(InetAddress.getByName("8.8.8.8")) },
+                )
+
+            val result = client.update(MANIFEST_URL, store)
+
+            assertEquals(DnsFilterUpdateStatus.FAILED, result.status)
+            assertEquals(false, result.retryable)
+            assertEquals(true, result.reason.orEmpty().contains("too large"))
+            assertNull(store.ruleSetBytes)
+        }
+
+    @Test
+    fun `rejects signed manifest generated too far in the future`() =
+        runBlocking {
+            val result =
+                updateWithSignedManifest(
+                    manifestTransform = {
+                        copy(generatedAt = Instant.now().plusSeconds(25 * 60 * 60).toString())
+                    },
+                )
+
+            assertEquals(DnsFilterUpdateStatus.FAILED, result.status)
+            assertEquals(false, result.retryable)
+            assertEquals(true, result.reason.orEmpty().contains("generated_at"))
+        }
+
+    @Test
+    fun `rejects signed manifest identity and source tampering`() =
+        runBlocking {
+            val variants =
+                listOf(
+                    "schema" to { manifest: DnsFilterManifest -> manifest.copy(schema = 2) },
+                    "name" to { manifest: DnsFilterManifest -> manifest.copy(name = "adguard") },
+                    "source repository" to { manifest: DnsFilterManifest ->
+                        manifest.copy(source = manifest.source.copy(repo = "https://updates.example.org/other.git"))
+                    },
+                    "source license" to { manifest: DnsFilterManifest ->
+                        manifest.copy(source = manifest.source.copy(license = "UNKNOWN"))
+                    },
+                    "source input path" to { manifest: DnsFilterManifest ->
+                        manifest.copy(source = manifest.source.copy(inputPath = "../filter.txt"))
+                    },
+                    "artifact file" to { manifest: DnsFilterManifest ->
+                        manifest.copy(artifact = manifest.artifact.copy(file = "other.srs"))
+                    },
+                )
+
+            variants.forEach { (_, transform) ->
+                val result = updateWithSignedManifest(manifestTransform = transform)
+
+                assertEquals(DnsFilterUpdateStatus.FAILED, result.status)
+                assertEquals(false, result.retryable)
+            }
+        }
+
+    @Test
+    fun `rejects artifact sha mismatch after signed manifest verification`() =
+        runBlocking {
+            val result =
+                updateWithSignedManifest(
+                    manifestTransform = {
+                        copy(artifact = artifact.copy(sha256 = "0".repeat(64)))
+                    },
+                )
+
+            assertEquals(DnsFilterUpdateStatus.FAILED, result.status)
+            assertEquals(false, result.retryable)
+            assertEquals(true, result.reason.orEmpty().contains("sha256 mismatch"))
+        }
+
+    @Test
+    fun `marks retryable and non retryable http failures explicitly`() =
+        runBlocking {
+            val retryableResult = updateWithSignedManifest(responseCodes = mapOf(RULE_SET_PATH to 503))
+            val nonRetryableResult = updateWithSignedManifest(responseCodes = mapOf(RULE_SET_PATH to 404))
+
+            assertEquals(DnsFilterUpdateStatus.FAILED, retryableResult.status)
+            assertEquals(true, retryableResult.retryable)
+            assertEquals(DnsFilterUpdateStatus.FAILED, nonRetryableResult.status)
+            assertEquals(false, nonRetryableResult.retryable)
+        }
+
+    @Test
     fun `accepts rule set generated by older compatible sing box patch release`() {
         assertEquals(true, supportsSingBoxRuleSetVersion("1.13.12", "1.13.11"))
         assertEquals(true, supportsSingBoxRuleSetVersion("1.13.12", "1.13.12"))
@@ -113,23 +231,26 @@ class DnsFilterUpdateClientTest {
         manifestBytes: ByteArray,
         signatureBytes: ByteArray,
         ruleSetBytes: ByteArray,
+        responseCodes: Map<String, Int> = emptyMap(),
     ): OkHttpClient =
         OkHttpClient
             .Builder()
             .addInterceptor(
                 Interceptor { chain ->
+                    val path = chain.request().url.encodedPath
                     val body =
-                        when (chain.request().url.encodedPath) {
-                            "/foxhole/manifest.json" -> manifestBytes
-                            "/foxhole/manifest.json.sig" -> signatureBytes
-                            "/foxhole/adguard-dns-filter.srs" -> ruleSetBytes
+                        when (path) {
+                            MANIFEST_PATH -> manifestBytes
+                            SIGNATURE_PATH -> signatureBytes
+                            RULE_SET_PATH -> ruleSetBytes
                             else -> error("unexpected request: ${chain.request().url}")
                         }.toResponseBody("application/octet-stream".toMediaType())
+                    val code = responseCodes[path] ?: 200
                     Response.Builder()
                         .request(chain.request())
                         .protocol(Protocol.HTTP_1_1)
-                        .code(200)
-                        .message("OK")
+                        .code(code)
+                        .message(if (code == 200) "OK" else "HTTP $code")
                         .body(body)
                         .build()
                 },
@@ -138,12 +259,13 @@ class DnsFilterUpdateClientTest {
     private fun testManifest(
         size: Long,
         sha256: String,
+        generatedAt: String = Instant.now().toString(),
     ): DnsFilterManifest =
         DnsFilterManifest(
             schema = 1,
             name = "foxhole-adguard-dns-filter",
             format = "sing-box-srs",
-            generatedAt = Instant.now().toString(),
+            generatedAt = generatedAt,
             source = DnsFilterManifestSource(
                 name = "AdGuardSDNSFilter",
                 repo = "https://github.com/AdguardTeam/AdGuardSDNSFilter.git",
@@ -162,6 +284,34 @@ class DnsFilterUpdateClientTest {
                 minAppVersion = "0.0.1",
             ),
         )
+
+    private suspend fun updateWithSignedManifest(
+        manifestTransform: DnsFilterManifest.() -> DnsFilterManifest = { this },
+        responseCodes: Map<String, Int> = emptyMap(),
+    ): DnsFilterUpdateResult {
+        val keyPair = testKeyPair()
+        val ruleSetBytes = testRuleSetBytes()
+        val manifest =
+            testManifest(
+                size = ruleSetBytes.size.toLong(),
+                sha256 = ruleSetBytes.sha256Hex(),
+            ).manifestTransform()
+        val manifestBytes = json.encodeToString(manifest).toByteArray(Charsets.UTF_8)
+        val store = RecordingRuleSetStore()
+        val client =
+            DnsFilterUpdateClient(
+                httpClient = testHttpClient(
+                    manifestBytes = manifestBytes,
+                    signatureBytes = keyPair.sign(manifestBytes),
+                    ruleSetBytes = ruleSetBytes,
+                    responseCodes = responseCodes,
+                ),
+                json = json,
+                publicKeyPem = keyPair.publicKeyPem(),
+                resolver = { listOf(InetAddress.getByName("8.8.8.8")) },
+            )
+        return client.update(MANIFEST_URL, store)
+    }
 
     private fun testRuleSetBytes(): ByteArray =
         byteArrayOf('S'.code.toByte(), 'R'.code.toByte(), 'S'.code.toByte(), 2) +
@@ -187,5 +337,8 @@ class DnsFilterUpdateClientTest {
 
     private companion object {
         const val MANIFEST_URL = "https://updates.example.org/foxhole/manifest.json"
+        const val MANIFEST_PATH = "/foxhole/manifest.json"
+        const val SIGNATURE_PATH = "/foxhole/manifest.json.sig"
+        const val RULE_SET_PATH = "/foxhole/adguard-dns-filter.srs"
     }
 }
