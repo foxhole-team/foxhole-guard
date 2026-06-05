@@ -529,6 +529,7 @@ data class Settings(
     val profileTrafficTotals: List<ProfileTrafficTotal> = emptyList(),
     val installedAppInventoryAudit: InstalledAppInventoryAudit = InstalledAppInventoryAudit(),
     val appTrafficStatsEnabled: Boolean = false,
+    val appTrafficUsageAccessConsent: Boolean = false,
     val usageTrackingStartedAt: Long = System.currentTimeMillis(),
 )
 

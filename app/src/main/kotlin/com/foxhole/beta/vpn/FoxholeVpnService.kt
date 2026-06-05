@@ -2440,6 +2440,7 @@ private fun FoxholeVpnService.appTrafficStatsRuntimeEnabled(settings: Settings):
     settings.statistics.enabled &&
         settings.statistics.appTrafficEnabled &&
         settings.appTrafficStatsEnabled &&
+        settings.appTrafficUsageAccessConsent &&
         appTrafficStatsRecorder.hasUsageAccess()
 
 private fun destinationCountryTrackingRuntimeEnabled(settings: Settings): Boolean =

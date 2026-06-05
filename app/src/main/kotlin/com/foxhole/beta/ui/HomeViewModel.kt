@@ -1853,6 +1853,9 @@ class HomeViewModel(
 
     fun onAppTrafficStatsEnabledChanged(value: Boolean) = onAppTrafficStatsEnabledChangedInternal(value)
 
+    fun onAppTrafficUsageAccessConsentChanged(value: Boolean) =
+        onAppTrafficUsageAccessConsentChangedInternal(value)
+
     internal fun enqueueVpnPermissionRequest(request: PendingConnectRequest): Boolean {
         val active = pendingConnectRequest
         if (active != null) {

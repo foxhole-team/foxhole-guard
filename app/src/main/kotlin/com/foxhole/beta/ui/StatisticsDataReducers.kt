@@ -231,6 +231,7 @@ internal fun statisticsUiState(
         state.settings.statistics.enabled &&
             state.settings.statistics.appTrafficEnabled &&
             state.settings.appTrafficStatsEnabled &&
+            state.settings.appTrafficUsageAccessConsent &&
             usageAccessGranted,
         profileTraffic = profileTraffic,
         total = total,

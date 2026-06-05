@@ -41,6 +41,7 @@ fun StatisticsScreen(
     onStatisticsRetentionSelected: (StatisticsRetention) -> Unit,
     onStatisticsMetricEnabledChanged: (StatisticsMetric, Boolean) -> Unit,
     onAppTrafficStatsEnabledChanged: (Boolean) -> Unit,
+    onAppTrafficUsageAccessConsentChanged: (Boolean) -> Unit,
     onNetworkActivityLoggingChanged: (Boolean) -> Unit,
     onOpenNetworkActivityLogSettings: () -> Unit,
     onFirewallEnabledChanged: (Boolean) -> Unit,
@@ -56,6 +57,7 @@ fun StatisticsScreen(
     var selectedProfileId by rememberSaveable { mutableStateOf<Long?>(null) }
     var clearConfirmVisible by rememberSaveable { mutableStateOf(false) }
     var appStatsEnablePendingUsageAccess by rememberSaveable { mutableStateOf(false) }
+    var usageAccessConsentVisible by rememberSaveable { mutableStateOf(false) }
     var allAppRowsSnapshot by remember { mutableStateOf<List<AppTrafficRow>>(emptyList()) }
     var appTrafficRange by rememberSaveable { mutableStateOf(StatisticsDisplayRange.HOURS_24) }
     var dnsRange by rememberSaveable { mutableStateOf(StatisticsDisplayRange.HOURS_24) }
@@ -108,6 +110,7 @@ fun StatisticsScreen(
         statisticsSettings.enabled &&
             statisticsSettings.appTrafficEnabled &&
             appStatsSwitchChecked &&
+            state.settings.appTrafficUsageAccessConsent &&
             usageAccessGranted
     val selectedAppRow = selectedApp?.let { packageName -> appRows.firstOrNull { row -> row.packageName == packageName } }
     val selectedProfile =
@@ -240,7 +243,7 @@ fun StatisticsScreen(
                 onAppTrafficStatsEnabledChanged = onAppTrafficStatsEnabledChanged,
                 onUsageAccessRequired = {
                     appStatsEnablePendingUsageAccess = true
-                    openUsageAccessSettings(context)
+                    usageAccessConsentVisible = true
                 },
                 onUsageAccessCleared = { appStatsEnablePendingUsageAccess = false },
                 onDismiss = { settingsVisible = false },
@@ -370,6 +373,20 @@ fun StatisticsScreen(
             onConfirm = {
                 clearConfirmVisible = false
                 onClearUsage()
+            },
+        )
+    }
+
+    if (usageAccessConsentVisible) {
+        UsageAccessConsentDialog(
+            onDismiss = {
+                usageAccessConsentVisible = false
+                appStatsEnablePendingUsageAccess = false
+            },
+            onConfirm = {
+                usageAccessConsentVisible = false
+                onAppTrafficUsageAccessConsentChanged(true)
+                openUsageAccessSettings(context)
             },
         )
     }

@@ -90,6 +90,9 @@ internal fun HomeViewModel.onStatisticsMetricEnabledChangedInternal(
 internal fun HomeViewModel.onAppTrafficStatsEnabledChangedInternal(value: Boolean) {
     viewModelScope.launch {
         container.settingsRepository.updateAppTrafficStatsEnabled(value)
+        if (!value) {
+            container.anomalyRepository.clearAppTrafficPrivacyData()
+        }
         container.connectionController.syncLocalGuard()
         val runtimeAllowed =
             appTrafficStatsRuntimeAllowed(
@@ -98,6 +101,16 @@ internal fun HomeViewModel.onAppTrafficStatsEnabledChangedInternal(value: Boolea
         syncAppTrafficStatsSampler(runtimeAllowed)
         if (value && runtimeAllowed) {
             loadInstalledApps()
+        }
+    }
+}
+
+internal fun HomeViewModel.onAppTrafficUsageAccessConsentChangedInternal(value: Boolean) {
+    viewModelScope.launch {
+        container.settingsRepository.updateAppTrafficUsageAccessConsent(value)
+        if (!value) {
+            container.anomalyRepository.clearAppTrafficPrivacyData()
+            syncAppTrafficStatsSampler(false)
         }
     }
 }
@@ -162,4 +175,5 @@ internal fun appTrafficStatsRuntimeAllowed(
     settings.statistics.enabled &&
         settings.statistics.appTrafficEnabled &&
         settings.appTrafficStatsEnabled &&
+        settings.appTrafficUsageAccessConsent &&
         usageAccessGranted

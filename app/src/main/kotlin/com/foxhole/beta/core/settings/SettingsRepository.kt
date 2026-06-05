@@ -564,7 +564,23 @@ class SettingsRepository(
 
     suspend fun updateAppTrafficStatsEnabled(value: Boolean) =
         update { current ->
-            current.copy(appTrafficStatsEnabled = value)
+            current.copy(
+                appTrafficStatsEnabled = value,
+                appTrafficUsageAccessConsent =
+                    if (value) {
+                        current.appTrafficUsageAccessConsent
+                    } else {
+                        false
+                    },
+            )
+        }
+
+    suspend fun updateAppTrafficUsageAccessConsent(value: Boolean) =
+        update { current ->
+            current.copy(
+                appTrafficUsageAccessConsent = value,
+                appTrafficStatsEnabled = current.appTrafficStatsEnabled && value,
+            )
         }
 
     suspend fun recordInstalledAppInventory(
@@ -1624,7 +1640,8 @@ class SettingsRepository(
                         .mapNotNull { items -> items.maxByOrNull(ProfileTrafficTotal::updatedAt) }
                         .sortedByDescending(ProfileTrafficTotal::updatedAt),
                 installedAppInventoryAudit = installedAppInventoryAudit.normalized(),
-                appTrafficStatsEnabled = appTrafficStatsEnabled,
+                appTrafficStatsEnabled = appTrafficStatsEnabled && appTrafficUsageAccessConsent,
+                appTrafficUsageAccessConsent = appTrafficUsageAccessConsent && appTrafficStatsEnabled,
                 usageTrackingStartedAt = usageTrackingStartedAt.takeIf { it > 0L } ?: System.currentTimeMillis(),
             )
         }

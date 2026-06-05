@@ -842,6 +842,7 @@ fun FoxholeApp(
                         onStatisticsRetentionSelected = viewModel::onStatisticsRetentionSelected,
                         onStatisticsMetricEnabledChanged = viewModel::onStatisticsMetricEnabledChanged,
                         onAppTrafficStatsEnabledChanged = viewModel::onAppTrafficStatsEnabledChanged,
+                        onAppTrafficUsageAccessConsentChanged = viewModel::onAppTrafficUsageAccessConsentChanged,
                         onNetworkActivityLoggingChanged = viewModel::onNetworkActivityLoggingChanged,
                         onOpenNetworkActivityLogSettings = { navigateToSettingsDetail(AppRoute.DIAGNOSTICS) },
                         onFirewallEnabledChanged = viewModel::onFirewallEnabledChanged,

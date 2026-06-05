@@ -37,6 +37,9 @@
     <string name="traffic_map_sessions_header">Sessions</string>
     <string name="traffic_map_total_header">Total</string>
     <string name="traffic_map_power_save_disabled">Map is disabled to reduce battery usage</string>
+    <string name="usage_access_consent_title">Allow per-app traffic statistics?</string>
+    <string name="usage_access_consent_body">FoxHole will ask Android for Usage Access so it can match local traffic counters to apps. App names, usage signals, and traffic totals stay on this device. You can turn this off and clear local statistics at any time.</string>
+    <string name="usage_access_consent_confirm">Open Usage Access</string>
     <string name="connect">Start</string>
     <string name="connect_selected_profile">Connect selected</string>
     <string name="disconnect">Stop</string>

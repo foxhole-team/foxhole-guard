@@ -31,6 +31,7 @@ import kotlinx.coroutines.flow.map
 import java.util.Locale
 
 @OptIn(ExperimentalCoroutinesApi::class)
+@Suppress("TooManyFunctions")
 class AnomalyRepository(
     daoProvider: () -> AnomalyDao,
     private val settingsRepository: SettingsRepository,
@@ -207,8 +208,16 @@ class AnomalyRepository(
     suspend fun clearTrafficStatistics() {
         dao.deleteTrafficWindowsBefore(Long.MAX_VALUE)
         dao.deleteAppTrafficWindowsBefore(Long.MAX_VALUE)
+        dao.deleteTrafficBaselines()
+        dao.deleteAppBaselines()
         dao.deleteNetworkActivityEventsBefore(Long.MAX_VALUE)
         dao.deleteAnomalyEventsBefore(Long.MAX_VALUE)
+    }
+
+    suspend fun clearAppTrafficPrivacyData() {
+        dao.deleteAppTrafficWindowsBefore(Long.MAX_VALUE)
+        dao.deleteAppBaselines()
+        dao.deleteAppAnomalyEvents()
     }
 
     private suspend fun persistAssessment(

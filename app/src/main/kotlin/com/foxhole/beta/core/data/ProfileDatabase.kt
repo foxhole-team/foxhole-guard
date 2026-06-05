@@ -1064,6 +1064,15 @@ interface AnomalyDao {
     @Query("delete from app_traffic_windows where startedAtMs < :cutoff")
     suspend fun deleteAppTrafficWindowsBefore(cutoff: Long)
 
+    @Query("delete from traffic_baselines")
+    suspend fun deleteTrafficBaselines()
+
+    @Query("delete from app_baselines")
+    suspend fun deleteAppBaselines()
+
+    @Query("delete from anomaly_events where packageName is not null")
+    suspend fun deleteAppAnomalyEvents()
+
     @Query("delete from network_activity_events where timestampMs < :cutoff")
     suspend fun deleteNetworkActivityEventsBefore(cutoff: Long)
 

@@ -16,6 +16,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.File
 
 class SettingsStatisticsScreenTest {
     @Test
@@ -212,10 +213,17 @@ class SettingsStatisticsScreenTest {
             Settings(
                 statistics = StatisticsSettings(enabled = true, appTrafficEnabled = true),
                 appTrafficStatsEnabled = true,
+                appTrafficUsageAccessConsent = true,
             )
 
         assertTrue(appTrafficStatsRuntimeAllowed(enabled, usageAccessGranted = true))
         assertFalse(appTrafficStatsRuntimeAllowed(enabled, usageAccessGranted = false))
+        assertFalse(
+            appTrafficStatsRuntimeAllowed(
+                enabled.copy(appTrafficUsageAccessConsent = false),
+                usageAccessGranted = true,
+            ),
+        )
         assertFalse(
             appTrafficStatsRuntimeAllowed(
                 enabled.copy(appTrafficStatsEnabled = false),
@@ -249,6 +257,7 @@ class SettingsStatisticsScreenTest {
                 settings = Settings(
                     statistics = StatisticsSettings(enabled = true, appTrafficEnabled = true),
                     appTrafficStatsEnabled = true,
+                    appTrafficUsageAccessConsent = true,
                 ),
             )
 
@@ -266,6 +275,72 @@ class SettingsStatisticsScreenTest {
                 usageAccessGranted = false,
             ).extendedMode,
         )
+        assertFalse(
+            statisticsUiState(
+                state = state.copy(settings = state.settings.copy(appTrafficUsageAccessConsent = false)),
+                retention = StatisticsRetention.FOREVER,
+                usageAccessGranted = true,
+            ).extendedMode,
+        )
+    }
+
+    @Test
+    fun `app traffic usage access stays behind explicit in app consent`() {
+        val settingsSource = testSourceFile("SettingsStatisticsScreen.kt").readText()
+        val usageAccessSource = testSourceFile("UsageAccessUi.kt").readText()
+        val reducerSource = testSourceFile("StatisticsDataReducers.kt").readText()
+        val runtimeSource = testSourceFile("HomeViewModelStatisticsRuntimeSupport.kt").readText()
+        val vpnSource =
+            listOf(
+                File("src/main/kotlin/com/foxhole/beta/vpn/FoxholeVpnService.kt"),
+                File("app/src/main/kotlin/com/foxhole/beta/vpn/FoxholeVpnService.kt"),
+                File("../app/src/main/kotlin/com/foxhole/beta/vpn/FoxholeVpnService.kt"),
+            ).first { file -> file.isFile }.readText()
+
+        val usageAccessRequiredBlock =
+            settingsSource.substringAfter("onUsageAccessRequired = {")
+                .substringBefore("onUsageAccessCleared")
+
+        assertTrue(settingsSource.contains("UsageAccessConsentDialog("))
+        assertTrue(settingsSource.contains("onAppTrafficUsageAccessConsentChanged(true)"))
+        assertTrue(usageAccessSource.contains("usage_access_consent_title"))
+        assertTrue(usageAccessSource.contains("usage_access_consent_body"))
+        assertTrue(usageAccessSource.contains("usage_access_consent_confirm"))
+        assertFalse(usageAccessRequiredBlock.contains("openUsageAccessSettings(context)"))
+        assertTrue(reducerSource.contains("state.settings.appTrafficUsageAccessConsent"))
+        assertTrue(runtimeSource.contains("settings.appTrafficUsageAccessConsent"))
+        assertTrue(vpnSource.contains("settings.appTrafficUsageAccessConsent"))
+    }
+
+    @Test
+    fun `clearing local usage data also removes baselines and app events`() {
+        val anomalyRepositorySource =
+            listOf(
+                File("src/main/kotlin/com/foxhole/beta/core/anomaly/AnomalyRepository.kt"),
+                File("app/src/main/kotlin/com/foxhole/beta/core/anomaly/AnomalyRepository.kt"),
+                File("../app/src/main/kotlin/com/foxhole/beta/core/anomaly/AnomalyRepository.kt"),
+            ).first { file -> file.isFile }.readText()
+        val databaseSource =
+            listOf(
+                File("src/main/kotlin/com/foxhole/beta/core/data/ProfileDatabase.kt"),
+                File("app/src/main/kotlin/com/foxhole/beta/core/data/ProfileDatabase.kt"),
+                File("../app/src/main/kotlin/com/foxhole/beta/core/data/ProfileDatabase.kt"),
+            ).first { file -> file.isFile }.readText()
+        val clearUsageBlock =
+            anomalyRepositorySource.substringAfter("suspend fun clearTrafficStatistics()")
+                .substringBefore("suspend fun clearAppTrafficPrivacyData()")
+        val clearAppTrafficBlock =
+            anomalyRepositorySource.substringAfter("suspend fun clearAppTrafficPrivacyData()")
+                .substringBefore("suspend fun recordAnomalies")
+
+        assertTrue(databaseSource.contains("delete from traffic_baselines"))
+        assertTrue(databaseSource.contains("delete from app_baselines"))
+        assertTrue(databaseSource.contains("delete from anomaly_events where packageName is not null"))
+        assertTrue(clearUsageBlock.contains("dao.deleteTrafficBaselines()"))
+        assertTrue(clearUsageBlock.contains("dao.deleteAppBaselines()"))
+        assertTrue(clearAppTrafficBlock.contains("dao.deleteAppTrafficWindowsBefore(Long.MAX_VALUE)"))
+        assertTrue(clearAppTrafficBlock.contains("dao.deleteAppBaselines()"))
+        assertTrue(clearAppTrafficBlock.contains("dao.deleteAppAnomalyEvents()"))
     }
 
     @Test
@@ -321,3 +396,10 @@ class SettingsStatisticsScreenTest {
         assertEquals(150L, profileTrafficItems(persistedAlreadyUpdated).single().totalBytes)
     }
 }
+
+private fun testSourceFile(name: String): File =
+    listOf(
+        File("src/main/kotlin/com/foxhole/beta/ui/$name"),
+        File("app/src/main/kotlin/com/foxhole/beta/ui/$name"),
+        File("../app/src/main/kotlin/com/foxhole/beta/ui/$name"),
+    ).first { file -> file.isFile }
