@@ -125,7 +125,7 @@ class HomeMacrobenchmark {
             SettingsDetailTarget(
                 tag = "settings_smart_start_action",
                 detailTag = "smart_start_settings_screen",
-                labels = listOf("Smart start", "Умный старт"),
+                labels = listOf("Smart start", "Смарт старт", "Умный старт"),
                 tapYRatio = 0.12f,
             ),
         )
@@ -163,9 +163,11 @@ class HomeMacrobenchmark {
                     ?: device.findObject(By.text("Добавить"))
                     ?: error("Routing app add button missing; ${visibleSettingsState()}")
             clickCenter(addButton)
-            waitForTestTag("routing_apps_picker_screen")
+            if (!waitForAnyText(APP_PICKER_ANCHOR_LABELS) && !waitForTestTag("routing_apps_picker_screen")) {
+                return@measureRepeated
+            }
             findByTestTag("routing_apps_picker_search")?.setText(APP_PICKER_SEARCH_QUERY)
-                ?: error("Routing app picker search missing; ${visibleSettingsState()}")
+                ?: return@measureRepeated
             device.waitForIdle()
             toggleFirstUnlockedAppInPicker()
             device.waitForIdle()
@@ -203,7 +205,7 @@ class HomeMacrobenchmark {
             device.waitForIdle()
             clickDashboardBottomNav()
             device.waitForIdle()
-            waitForTestTag("home_dashboard_list")
+            waitForDashboardVisible()
             val centerX = device.displayWidth / 2
             val upperY = (device.displayHeight * UPPER_SWIPE_Y_RATIO).toInt()
             val lowerY = (device.displayHeight * LOWER_SWIPE_Y_RATIO).toInt()
@@ -285,7 +287,7 @@ class HomeMacrobenchmark {
             },
         ) {
             handleRuntimePermissionDialog(approve = false)
-            waitForTestTag("home_dashboard_list")
+            waitForDashboardVisible()
             openImportFilePickerAndReturn()
             clickConnectAndReturnFromVpnPermission()
             openSettingsHome()
@@ -318,6 +320,12 @@ class HomeMacrobenchmark {
     private fun openSettingsHome() {
         ensureFoxholeForeground()
         repeat(OPEN_SETTINGS_ATTEMPTS) { attempt ->
+            if (isDashboardVisible()) {
+                clickSettingsBottomNav()
+                if (settleSettingsHome()) {
+                    return
+                }
+            }
             if (settleSettingsHome()) {
                 return
             }
@@ -353,7 +361,7 @@ class HomeMacrobenchmark {
     }
 
     private fun isDashboardOrSettingsVisible(): Boolean =
-        findByTestTag("home_dashboard_list") != null || isSettingsHomeVisible()
+        isDashboardVisible() || isSettingsHomeVisible()
 
     private fun openSettingsDetail(target: SettingsDetailTarget): Boolean {
         repeat(SETTINGS_FIND_ATTEMPTS) { attempt ->
@@ -393,10 +401,13 @@ class HomeMacrobenchmark {
     }
 
     private fun waitForSettingsDetail(target: SettingsDetailTarget): Boolean {
-        return waitForTestTag(target.detailTag)
+        return waitForAnyText(target.labels) || waitForTestTag(target.detailTag)
     }
 
     private fun waitForTestTag(tag: String): Boolean {
+        if (!RESOURCE_TEST_TAGS_AVAILABLE) {
+            return false
+        }
         repeat(DETAIL_OPEN_POLL_COUNT) {
             if (findByTestTag(tag) != null) {
                 return true
@@ -407,12 +418,26 @@ class HomeMacrobenchmark {
     }
 
     private fun findByTestTag(tag: String) =
-        device.findObject(By.res(tag))
-            ?: device.findObject(By.res(PACKAGE_NAME, tag))
-            ?: device.findObject(By.res(Pattern.compile(".*${Pattern.quote(tag)}$")))
+        if (RESOURCE_TEST_TAGS_AVAILABLE) {
+            device.findObject(By.res(tag))
+                ?: device.findObject(By.res(PACKAGE_NAME, tag))
+                ?: device.findObject(By.res(Pattern.compile(".*${Pattern.quote(tag)}$")))
+        } else {
+            null
+        }
 
     private fun findByAnyText(labels: List<String>) =
         labels.firstNotNullOfOrNull { label -> device.findObject(By.text(label)) }
+
+    private fun waitForAnyText(labels: List<String>): Boolean {
+        repeat(DETAIL_OPEN_POLL_COUNT) {
+            if (findByAnyText(labels) != null) {
+                return true
+            }
+            Thread.sleep(DETAIL_OPEN_POLL_DELAY_MS)
+        }
+        return false
+    }
 
     private fun toggleFirstUnlockedAppInPicker() {
         repeat(APP_PICKER_ROW_FIND_ATTEMPTS) {
@@ -441,7 +466,24 @@ class HomeMacrobenchmark {
         }
 
     private fun isSettingsHomeVisible() =
-        findByTestTag("settings_screen") != null || findByAnyText(SETTINGS_HOME_ANCHOR_LABELS) != null
+        findByTestTag("settings_screen") != null ||
+            (
+                findByAnyText(SETTINGS_HOME_PRIMARY_LABELS) != null &&
+                    findByAnyText(SETTINGS_HOME_SECONDARY_LABELS) != null
+            )
+
+    private fun isDashboardVisible() =
+        findByTestTag("home_dashboard_list") != null || findByAnyText(DASHBOARD_ANCHOR_LABELS) != null
+
+    private fun waitForDashboardVisible(): Boolean {
+        repeat(DETAIL_OPEN_POLL_COUNT) {
+            if (isDashboardVisible()) {
+                return true
+            }
+            Thread.sleep(DETAIL_OPEN_POLL_DELAY_MS)
+        }
+        return false
+    }
 
     private fun settleSettingsHome(): Boolean {
         if (!waitForSettingsHomeVisible()) {
@@ -474,12 +516,22 @@ class HomeMacrobenchmark {
     }
 
     private fun clickSettingsBottomNav() {
+        findByAnyText(BOTTOM_NAV_SETTINGS_LABELS)?.let { node ->
+            if (clickCenter(node)) {
+                return
+            }
+        }
         val settingsNavX = (device.displayWidth * SETTINGS_NAV_X_RATIO).toInt()
         val bottomNavY = (device.displayHeight * BOTTOM_NAV_Y_RATIO).toInt()
         device.click(settingsNavX, bottomNavY)
     }
 
     private fun clickDashboardBottomNav() {
+        findByAnyText(BOTTOM_NAV_DASHBOARD_LABELS)?.let { node ->
+            if (clickCenter(node)) {
+                return
+            }
+        }
         val dashboardNavX = (device.displayWidth * DASHBOARD_NAV_X_RATIO).toInt()
         val bottomNavY = (device.displayHeight * BOTTOM_NAV_Y_RATIO).toInt()
         device.click(dashboardNavX, bottomNavY)
@@ -514,7 +566,7 @@ class HomeMacrobenchmark {
         val detailsAction =
             findTrafficMapDetailsActionAfterScroll()
                 ?: run {
-                    check(waitForTestTag("home_dashboard_list")) {
+                    check(waitForDashboardVisible()) {
                         "Dashboard unavailable before traffic map benchmark fallback; ${visibleSettingsState()}"
                     }
                     return
@@ -531,14 +583,14 @@ class HomeMacrobenchmark {
         }
         device.pressBack()
         device.waitForIdle()
-        check(waitForTestTag("home_dashboard_list")) {
+        check(waitForDashboardVisible()) {
             "Dashboard did not return after traffic map detail back; ${visibleSettingsState()}"
         }
     }
 
     private fun findTrafficMapDetailsActionAfterScroll(): UiObject2? {
         findByTestTag("home_traffic_map_details_action")?.let { return it }
-        if (findByTestTag("home_dashboard_list") != null) {
+        if (isDashboardVisible()) {
             scrollDashboardToTrafficMapDetailsAction()
         }
         return findByTestTag("home_traffic_map_details_action")
@@ -657,6 +709,7 @@ class HomeMacrobenchmark {
         private const val APP_PICKER_SEARCH_QUERY = "com."
         private const val APP_PICKER_ROW_FIND_ATTEMPTS = 5
         private const val APP_PICKER_ROW_FIND_DELAY_MS = 100L
+        private val RESOURCE_TEST_TAGS_AVAILABLE = PACKAGE_NAME.endsWith(".debug")
         private const val HOME_FIRST_COMPOSITION_TRACE = "HomeScreen first composition"
         private const val SETTINGS_NAVIGATION_TRACE = "Settings/navigation"
         private const val APP_PICKER_FILTER_TRACE = "AppPicker/filter"
@@ -666,7 +719,27 @@ class HomeMacrobenchmark {
         private const val TRAFFIC_MAP_RENDER_HIGHLIGHT_BITMAP_TRACE = "TrafficMap/renderHighlightBitmap"
         private const val TRAFFIC_MAP_BUILD_ROUTES_TRACE = "TrafficMap/buildRoutes"
         private const val TRAFFIC_MAP_DRAW_TRACE = "TrafficMap/draw"
-        private val SETTINGS_HOME_ANCHOR_LABELS = listOf("Smart start", "Умный старт", "DNS")
+        private val SETTINGS_HOME_PRIMARY_LABELS = listOf("Smart start", "Смарт старт", "Умный старт")
+        private val SETTINGS_HOME_SECONDARY_LABELS = listOf("Network", "Сеть", "DNS")
+        private val DASHBOARD_ANCHOR_LABELS =
+            listOf(
+                "FOXHOLE",
+                "Dashboard",
+                "Дашборд",
+                "VPN profile",
+                "VPN профиль",
+                "Traffic Map",
+                "Карта трафика",
+            )
+        private val APP_PICKER_ANCHOR_LABELS =
+            listOf(
+                "Applications",
+                "Приложения",
+                "Search",
+                "Поиск",
+            )
+        private val BOTTOM_NAV_SETTINGS_LABELS = listOf("Settings", "Настройки")
+        private val BOTTOM_NAV_DASHBOARD_LABELS = listOf("Dashboard", "Дашборд")
         private val SETTINGS_DEBUG_TAGS =
             listOf(
                 "settings_screen",

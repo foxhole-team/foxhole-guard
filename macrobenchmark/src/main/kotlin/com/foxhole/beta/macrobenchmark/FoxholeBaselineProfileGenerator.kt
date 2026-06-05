@@ -6,7 +6,9 @@ import androidx.benchmark.macro.junit4.BaselineProfileRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.By
+import androidx.test.uiautomator.StaleObjectException
 import androidx.test.uiautomator.UiDevice
+import androidx.test.uiautomator.UiObject2
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -34,47 +36,69 @@ class FoxholeBaselineProfileGenerator {
             device.waitForIdle()
             scrollDashboard()
             openSettingsAndReturn()
-            openSettingsDetail("settings_dns_action", "dns_settings_screen")
-            openSettingsDetail("settings_smart_start_action", "smart_start_settings_screen")
-            openSettingsDetail("settings_statistics_action", "statistics_settings_screen")
+            openSettingsDetail(
+                rowTag = "settings_dns_action",
+                detailTag = "dns_settings_screen",
+                labels = listOf("DNS"),
+            )
+            openSettingsDetail(
+                rowTag = "settings_smart_start_action",
+                detailTag = "smart_start_settings_screen",
+                labels = listOf("Smart start", "Смарт старт"),
+            )
+            openSettingsDetail(
+                rowTag = "settings_statistics_action",
+                detailTag = "statistics_settings_screen",
+                labels = listOf("Statistics", "Статистика"),
+            )
             openRoutingAppsPickerSearch()
         }
     }
 
     private fun MacrobenchmarkScope.openSettingsAndReturn() {
         clickSettingsBottomNav()
-        waitForTestTag("settings_screen")
+        waitForSettingsHome()
         clickDashboardBottomNav()
-        waitForTestTag("home_dashboard_list")
+        waitForDashboard()
     }
 
     private fun MacrobenchmarkScope.openSettingsDetail(
         rowTag: String,
         detailTag: String,
+        labels: List<String>,
     ) {
         openSettingsHome()
-        if (!clickTestTag(rowTag)) {
+        val row = findByTestTag(rowTag) ?: findByAnyText(labels) ?: return
+        if (!clickCenter(row)) {
             return
         }
-        waitForTestTag(detailTag)
+        waitForAnyText(labels) || waitForTestTag(detailTag)
         device.pressBack()
         device.waitForIdle()
+        waitForSettingsHome()
     }
 
     private fun MacrobenchmarkScope.openRoutingAppsPickerSearch() {
         openSettingsHome()
-        if (!clickTestTag("settings_routing_apps_action")) {
+        val routingApps =
+            findByTestTag("settings_routing_apps_action")
+                ?: findByAnyText(listOf("Apps", "Приложения", "Фильтр приложений"))
+                ?: return
+        if (!clickCenter(routingApps)) {
             return
         }
-        if (!waitForTestTag("routing_apps_screen")) {
+        if (!waitForAnyText(listOf("Applications", "Приложения")) && !waitForTestTag("routing_apps_screen")) {
             return
         }
-        if (!clickTestTag("routing_apps_add_exception_action")) {
+        val addAction =
+            findByTestTag("routing_apps_add_exception_action")
+                ?: findByAnyText(listOf("Add", "Добавить"))
+        if (addAction == null || !clickCenter(addAction)) {
             device.pressBack()
             device.waitForIdle()
             return
         }
-        if (waitForTestTag("routing_apps_picker_screen")) {
+        if (waitForAnyText(listOf("Applications", "Приложения", "Search", "Поиск")) || waitForTestTag("routing_apps_picker_screen")) {
             findByTestTag("routing_apps_picker_search")?.setText(APP_PICKER_SEARCH_QUERY)
             device.waitForIdle()
             device.pressBack()
@@ -86,15 +110,21 @@ class FoxholeBaselineProfileGenerator {
 
     private fun MacrobenchmarkScope.openSettingsHome() {
         repeat(OPEN_SETTINGS_ATTEMPTS) { attempt ->
-            if (waitForTestTag("settings_screen")) {
+            if (isDashboardVisible()) {
+                clickSettingsBottomNav()
+                if (waitForSettingsHome()) {
+                    return
+                }
+            }
+            if (waitForSettingsHome()) {
                 return
             }
             clickSettingsBottomNav()
-            if (waitForTestTag("settings_screen")) {
+            if (waitForSettingsHome()) {
                 return
             }
             swipeDashboardToSettings()
-            if (waitForTestTag("settings_screen")) {
+            if (waitForSettingsHome()) {
                 return
             }
             if (attempt == 0) {
@@ -115,12 +145,22 @@ class FoxholeBaselineProfileGenerator {
     }
 
     private fun clickSettingsBottomNav() {
+        findByAnyText(BOTTOM_NAV_SETTINGS_LABELS)?.let { node ->
+            if (clickCenter(node)) {
+                return
+            }
+        }
         val settingsNavX = (device.displayWidth * SETTINGS_NAV_X_RATIO).toInt()
         val bottomNavY = (device.displayHeight * BOTTOM_NAV_Y_RATIO).toInt()
         device.click(settingsNavX, bottomNavY)
     }
 
     private fun clickDashboardBottomNav() {
+        findByAnyText(BOTTOM_NAV_DASHBOARD_LABELS)?.let { node ->
+            if (clickCenter(node)) {
+                return
+            }
+        }
         val dashboardNavX = (device.displayWidth * DASHBOARD_NAV_X_RATIO).toInt()
         val bottomNavY = (device.displayHeight * BOTTOM_NAV_Y_RATIO).toInt()
         device.click(dashboardNavX, bottomNavY)
@@ -133,15 +173,10 @@ class FoxholeBaselineProfileGenerator {
         device.swipe(startX, centerY, endX, centerY, SWIPE_STEPS)
     }
 
-    private fun clickTestTag(tag: String): Boolean {
-        val node = findByTestTag(tag) ?: return false
-        val center = node.visibleCenter
-        device.click(center.x, center.y)
-        device.waitForIdle()
-        return true
-    }
-
     private fun waitForTestTag(tag: String): Boolean {
+        if (!RESOURCE_TEST_TAGS_AVAILABLE) {
+            return false
+        }
         repeat(OPEN_POLL_COUNT) {
             if (findByTestTag(tag) != null) {
                 return true
@@ -151,10 +186,58 @@ class FoxholeBaselineProfileGenerator {
         return false
     }
 
+    private fun waitForSettingsHome(): Boolean =
+        waitUntil {
+            findByTestTag("settings_screen") != null ||
+                (
+                    findByAnyText(SETTINGS_HOME_PRIMARY_LABELS) != null &&
+                        findByAnyText(SETTINGS_HOME_SECONDARY_LABELS) != null
+                )
+        }
+
+    private fun waitForDashboard(): Boolean =
+        waitUntil {
+            isDashboardVisible()
+        }
+
+    private fun isDashboardVisible(): Boolean =
+        findByTestTag("home_dashboard_list") != null ||
+            findByAnyText(DASHBOARD_ANCHOR_LABELS) != null
+
+    private fun waitForAnyText(labels: List<String>): Boolean =
+        waitUntil { findByAnyText(labels) != null }
+
+    private fun waitUntil(predicate: () -> Boolean): Boolean {
+        repeat(OPEN_POLL_COUNT) {
+            if (predicate()) {
+                return true
+            }
+            Thread.sleep(OPEN_POLL_DELAY_MS)
+        }
+        return false
+    }
+
     private fun findByTestTag(tag: String) =
-        device.findObject(By.res(tag))
-            ?: device.findObject(By.res(PACKAGE_NAME, tag))
-            ?: device.findObject(By.res(Pattern.compile(".*${Pattern.quote(tag)}$")))
+        if (RESOURCE_TEST_TAGS_AVAILABLE) {
+            device.findObject(By.res(tag))
+                ?: device.findObject(By.res(PACKAGE_NAME, tag))
+                ?: device.findObject(By.res(Pattern.compile(".*${Pattern.quote(tag)}$")))
+        } else {
+            null
+        }
+
+    private fun findByAnyText(labels: List<String>) =
+        labels.firstNotNullOfOrNull { label -> device.findObject(By.text(label)) }
+
+    private fun clickCenter(node: UiObject2): Boolean =
+        try {
+            val center = node.visibleCenter
+            device.click(center.x, center.y)
+            device.waitForIdle()
+            true
+        } catch (_: StaleObjectException) {
+            false
+        }
 
     private fun foxholeLauncherIntent() =
         Intent(Intent.ACTION_MAIN).apply {
@@ -182,5 +265,30 @@ class FoxholeBaselineProfileGenerator {
         private const val OPEN_SETTINGS_ATTEMPTS = 3
         private const val OPEN_POLL_COUNT = 80
         private const val OPEN_POLL_DELAY_MS = 50L
+        private val RESOURCE_TEST_TAGS_AVAILABLE = PACKAGE_NAME.endsWith(".debug")
+        private val SETTINGS_HOME_PRIMARY_LABELS =
+            listOf(
+                "Smart start",
+                "Смарт старт",
+                "Умный старт",
+            )
+        private val SETTINGS_HOME_SECONDARY_LABELS =
+            listOf(
+                "Network",
+                "Сеть",
+                "DNS",
+            )
+        private val DASHBOARD_ANCHOR_LABELS =
+            listOf(
+                "FOXHOLE",
+                "Dashboard",
+                "Дашборд",
+                "VPN profile",
+                "VPN профиль",
+                "Traffic Map",
+                "Карта трафика",
+            )
+        private val BOTTOM_NAV_SETTINGS_LABELS = listOf("Settings", "Настройки")
+        private val BOTTOM_NAV_DASHBOARD_LABELS = listOf("Dashboard", "Дашборд")
     }
 }

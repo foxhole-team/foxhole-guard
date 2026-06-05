@@ -89,6 +89,8 @@ class MacrobenchmarkPerfGateTest {
         ).readText()
 
         assertTrue(script.contains("run_baseline_profile_generation"))
+        assertTrue(script.contains("run_baseline_profile_generation_when_supported"))
+        assertTrue(script.contains("verify_macrobenchmark_tracing_available"))
         assertTrue(script.contains("run_macrobenchmark_with_log_gate"))
         assertTrue(script.contains("analyze-android-perf-logs.py"))
         assertTrue(script.contains("FOXHOLE_MACROBENCHMARK_MAX_SKIPPED_FRAMES"))
@@ -99,6 +101,9 @@ class MacrobenchmarkPerfGateTest {
         assertTrue(script.contains("--fail-on-strict-disk"))
         assertTrue(script.contains("--navigation-log \"${'$'}PERF_LOG_ROOT/full-suite.logcat\""))
         assertTrue(script.contains("BASELINE_TARGET_PACKAGE"))
+        assertTrue(script.contains("class=com.foxhole.beta.macrobenchmark.HomeMacrobenchmark"))
+        assertTrue(script.contains("/sys/kernel/tracing has no readable entries"))
+        assertTrue(script.contains("Skipping baseline profile generation for external target="))
         assertTrue(script.contains("baseline_output_dir=\"app/src/release/generated/baselineProfile\""))
         assertTrue(script.contains("androidx.benchmark.enabledRules=BaselineProfile"))
         assertTrue(script.contains("FoxholeBaselineProfileGenerator"))

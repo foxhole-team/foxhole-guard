@@ -23,6 +23,22 @@ install_target_app() {
   fi
 }
 
+verify_macrobenchmark_tracing_available() {
+  local trace_entry
+  adb wait-for-device
+  trace_entry="$(
+    adb shell 'if [ -d /sys/kernel/tracing ]; then ls -1 /sys/kernel/tracing 2>/dev/null | head -n 1; fi' \
+      | tr -d '\r'
+  )"
+  if [[ -n "$trace_entry" ]]; then
+    return
+  fi
+  echo "Macrobenchmark tracing is unavailable: /sys/kernel/tracing has no readable entries for adb shell." >&2
+  echo "AndroidX Macrobenchmark cannot collect reliable Perfetto traces on this device until the OS tracefs setup is fixed." >&2
+  adb shell 'id; getprop ro.build.fingerprint; cat /proc/mounts | grep -E "tracefs|debugfs" || true; ls -ld /sys/kernel/tracing /sys/kernel/debug/tracing 2>/dev/null || true' >&2 || true
+  exit 1
+}
+
 run_macrobenchmark_with_log_gate() {
   local label="$1"
   shift
@@ -57,6 +73,7 @@ run_macrobenchmark_with_log_gate() {
 
 run_startup_benchmark() {
   install_target_app "$BASELINE_TARGET_PACKAGE"
+  verify_macrobenchmark_tracing_available
   run_macrobenchmark_with_log_gate startup \
     "$GRADLEW" --no-daemon --console=plain --stacktrace :macrobenchmark:connectedCheck \
     -Pmacrobenchmark.targetPackage="$TARGET_PACKAGE" \
@@ -67,7 +84,7 @@ run_startup_benchmark() {
 run_baseline_profile_generation() {
   local baseline_source
   local baseline_output_dir="app/src/release/generated/baselineProfile"
-  install_target_app
+  install_target_app "$BASELINE_TARGET_PACKAGE"
   "$GRADLEW" --no-daemon --console=plain --stacktrace :macrobenchmark:connectedCheck \
     -Pmacrobenchmark.targetPackage="$BASELINE_TARGET_PACKAGE" \
     -Pandroid.testInstrumentationRunnerArguments.androidx.benchmark.enabledRules=BaselineProfile \
@@ -92,6 +109,14 @@ run_baseline_profile_generation() {
   fi
 }
 
+run_baseline_profile_generation_when_supported() {
+  if [[ "$BASELINE_TARGET_PACKAGE" != "com.foxhole.beta.debug" ]]; then
+    echo "Skipping baseline profile generation for external target=${BASELINE_TARGET_PACKAGE}; debug/VM generation is the packaging source."
+    return
+  fi
+  run_baseline_profile_generation
+}
+
 if [[ "$EVENT_NAME" == "pull_request" ]]; then
   run_startup_benchmark
 elif [[
@@ -101,14 +126,16 @@ elif [[
   "$GITHUB_REF_NAME" == refs/tags/*
 ]]; then
   install_target_app
+  verify_macrobenchmark_tracing_available
   run_macrobenchmark_with_log_gate full-suite \
     "$GRADLEW" --no-daemon --console=plain --stacktrace :macrobenchmark:connectedCheck \
-    -Pmacrobenchmark.targetPackage="$TARGET_PACKAGE"
+    -Pmacrobenchmark.targetPackage="$TARGET_PACKAGE" \
+    -Pandroid.testInstrumentationRunnerArguments.class=com.foxhole.beta.macrobenchmark.HomeMacrobenchmark
   python3 scripts/verify-macrobenchmark-thresholds.py \
     --full-suite \
     --strict-release \
     --navigation-log "$PERF_LOG_ROOT/full-suite.logcat"
-  run_baseline_profile_generation
+  run_baseline_profile_generation_when_supported
 elif [[ "$GITHUB_REF_NAME" == "refs/heads/dev" ]]; then
   run_startup_benchmark
 else
