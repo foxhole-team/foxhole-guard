@@ -2169,7 +2169,6 @@ SPLandroidx/compose/foundation/layout/BoxChildDataNode;->modifyParentData(Landro
 SPLandroidx/compose/foundation/layout/BoxChildDataNode;->modifyParentData(Landroidx/compose/ui/unit/Density;Ljava/lang/Object;)Ljava/lang/Object;
 Landroidx/compose/foundation/layout/BoxKt;
 SPLandroidx/compose/foundation/layout/BoxKt;-><clinit>()V
-SPLandroidx/compose/foundation/layout/BoxKt;->Box$lambda$1(Landroidx/compose/ui/Modifier;ILandroidx/compose/runtime/Composer;I)Lkotlin/Unit;
 HSPLandroidx/compose/foundation/layout/BoxKt;->Box(Landroidx/compose/ui/Modifier;Landroidx/compose/runtime/Composer;I)V
 SPLandroidx/compose/foundation/layout/BoxKt;->access$getMatchesParentSize(Landroidx/compose/ui/layout/Measurable;)Z
 SPLandroidx/compose/foundation/layout/BoxKt;->access$placeInBox(Landroidx/compose/ui/layout/Placeable$PlacementScope;Landroidx/compose/ui/layout/Placeable;Landroidx/compose/ui/layout/Measurable;Landroidx/compose/ui/unit/LayoutDirection;IILandroidx/compose/ui/Alignment;)V
@@ -2178,9 +2177,6 @@ SPLandroidx/compose/foundation/layout/BoxKt;->getBoxChildDataNode(Landroidx/comp
 SPLandroidx/compose/foundation/layout/BoxKt;->getMatchesParentSize(Landroidx/compose/ui/layout/Measurable;)Z
 SPLandroidx/compose/foundation/layout/BoxKt;->maybeCachedBoxMeasurePolicy(Landroidx/compose/ui/Alignment;Z)Landroidx/compose/ui/layout/MeasurePolicy;
 SPLandroidx/compose/foundation/layout/BoxKt;->placeInBox(Landroidx/compose/ui/layout/Placeable$PlacementScope;Landroidx/compose/ui/layout/Placeable;Landroidx/compose/ui/layout/Measurable;Landroidx/compose/ui/unit/LayoutDirection;IILandroidx/compose/ui/Alignment;)V
-Landroidx/compose/foundation/layout/BoxKt$$ExternalSyntheticLambda0;
-SPLandroidx/compose/foundation/layout/BoxKt$$ExternalSyntheticLambda0;-><init>(Landroidx/compose/ui/Modifier;I)V
-SPLandroidx/compose/foundation/layout/BoxKt$$ExternalSyntheticLambda0;->invoke(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;
 Landroidx/compose/foundation/layout/BoxKt$EmptyBoxMeasurePolicy$1;
 SPLandroidx/compose/foundation/layout/BoxKt$EmptyBoxMeasurePolicy$1;-><clinit>()V
 SPLandroidx/compose/foundation/layout/BoxKt$EmptyBoxMeasurePolicy$1;-><init>()V
@@ -3906,6 +3902,7 @@ PLandroidx/compose/foundation/text/UndoManager;->makeSnapshot(Landroidx/compose/
 PLandroidx/compose/foundation/text/UndoManager;->snapshotIfNeeded$default(Landroidx/compose/foundation/text/UndoManager;Landroidx/compose/ui/text/input/TextFieldValue;JILjava/lang/Object;)V
 PLandroidx/compose/foundation/text/UndoManager;->snapshotIfNeeded(Landroidx/compose/ui/text/input/TextFieldValue;J)V
 PLandroidx/compose/foundation/text/UndoManager$Entry;-><init>(Landroidx/compose/foundation/text/UndoManager$Entry;Landroidx/compose/ui/text/input/TextFieldValue;)V
+PLandroidx/compose/foundation/text/UndoManager$Entry;->getValue()Landroidx/compose/ui/text/input/TextFieldValue;
 PLandroidx/compose/foundation/text/UndoManagerKt;-><clinit>()V
 PLandroidx/compose/foundation/text/UndoManagerKt;->getSNAPSHOTS_INTERVAL_MILLIS()I
 PLandroidx/compose/foundation/text/UndoManager_jvmAndAndroidKt;->timeNowMillis()J
@@ -4857,6 +4854,7 @@ HSPLandroidx/compose/material3/IconKt;->Icon-ww6aTOc(Landroidx/compose/ui/graphi
 HSPLandroidx/compose/material3/IconKt;->Icon-ww6aTOc(Landroidx/compose/ui/graphics/vector/ImageVector;Ljava/lang/String;Landroidx/compose/ui/Modifier;JLandroidx/compose/runtime/Composer;II)V
 SPLandroidx/compose/material3/IconKt;->Icon_ww6aTOc$lambda$0(Landroidx/compose/ui/graphics/vector/ImageVector;Ljava/lang/String;Landroidx/compose/ui/Modifier;JIILandroidx/compose/runtime/Composer;I)Lkotlin/Unit;
 SPLandroidx/compose/material3/IconKt;->Icon_ww6aTOc$lambda$5$lambda$4(Ljava/lang/String;Landroidx/compose/ui/semantics/SemanticsPropertyReceiver;)Lkotlin/Unit;
+SPLandroidx/compose/material3/IconKt;->Icon_ww6aTOc$lambda$6(Landroidx/compose/ui/graphics/painter/Painter;Ljava/lang/String;Landroidx/compose/ui/Modifier;JIILandroidx/compose/runtime/Composer;I)Lkotlin/Unit;
 SPLandroidx/compose/material3/IconKt;->defaultSizeFor(Landroidx/compose/ui/Modifier;Landroidx/compose/ui/graphics/painter/Painter;)Landroidx/compose/ui/Modifier;
 SPLandroidx/compose/material3/IconKt;->isInfinite-uvyYCjk(J)Z
 Landroidx/compose/material3/IconKt$$ExternalSyntheticLambda0;
@@ -4867,6 +4865,7 @@ SPLandroidx/compose/material3/IconKt$$ExternalSyntheticLambda6;-><init>(Ljava/la
 SPLandroidx/compose/material3/IconKt$$ExternalSyntheticLambda6;->invoke(Ljava/lang/Object;)Ljava/lang/Object;
 Landroidx/compose/material3/IconKt$$ExternalSyntheticLambda7;
 SPLandroidx/compose/material3/IconKt$$ExternalSyntheticLambda7;-><init>(Landroidx/compose/ui/graphics/painter/Painter;Ljava/lang/String;Landroidx/compose/ui/Modifier;JII)V
+SPLandroidx/compose/material3/IconKt$$ExternalSyntheticLambda7;->invoke(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;
 Landroidx/compose/material3/InteractiveComponentSizeKt;
 SPLandroidx/compose/material3/InteractiveComponentSizeKt;-><clinit>()V
 SPLandroidx/compose/material3/InteractiveComponentSizeKt;->LocalMinimumInteractiveComponentSize$lambda$1()Landroidx/compose/ui/unit/Dp;
@@ -6206,7 +6205,7 @@ HSPLandroidx/compose/runtime/GapComposer;->shouldExecute(ZI)Z
 SPLandroidx/compose/runtime/GapComposer;->skipCurrentGroup()V
 SPLandroidx/compose/runtime/GapComposer;->skipGroup()V
 SPLandroidx/compose/runtime/GapComposer;->skipReaderToGroupEnd()V
-HSPLandroidx/compose/runtime/GapComposer;->skipToGroupEnd()V
+SPLandroidx/compose/runtime/GapComposer;->skipToGroupEnd()V
 HSPLandroidx/compose/runtime/GapComposer;->sourceInformation(Ljava/lang/String;)V
 HSPLandroidx/compose/runtime/GapComposer;->sourceInformationMarkerEnd()V
 HSPLandroidx/compose/runtime/GapComposer;->sourceInformationMarkerStart(ILjava/lang/String;)V
@@ -6225,7 +6224,7 @@ SPLandroidx/compose/runtime/GapComposer;->startReusableGroup(ILjava/lang/Object;
 HSPLandroidx/compose/runtime/GapComposer;->startReusableNode()V
 SPLandroidx/compose/runtime/GapComposer;->startReuseFromRoot$runtime()V
 HSPLandroidx/compose/runtime/GapComposer;->startRoot()V
-HSPLandroidx/compose/runtime/GapComposer;->tryImminentInvalidation$runtime(Landroidx/compose/runtime/RecomposeScopeImpl;Ljava/lang/Object;)Z
+SPLandroidx/compose/runtime/GapComposer;->tryImminentInvalidation$runtime(Landroidx/compose/runtime/RecomposeScopeImpl;Ljava/lang/Object;)Z
 HSPLandroidx/compose/runtime/GapComposer;->updateCachedValue(Ljava/lang/Object;)V
 SPLandroidx/compose/runtime/GapComposer;->updateComposerInvalidations-RY85e9Y$runtime(Landroidx/collection/MutableScatterMap;)V
 SPLandroidx/compose/runtime/GapComposer;->updateNodeCount(II)V
@@ -6620,7 +6619,7 @@ SPLandroidx/compose/runtime/Recomposer;->awaitWorkAvailable(Lkotlin/coroutines/C
 SPLandroidx/compose/runtime/Recomposer;->broadcastFrameClock$lambda$0(Landroidx/compose/runtime/Recomposer;)Lkotlin/Unit;
 SPLandroidx/compose/runtime/Recomposer;->composeInitial$runtime(Landroidx/compose/runtime/ControlledComposition;Lkotlin/jvm/functions/Function2;)V
 SPLandroidx/compose/runtime/Recomposer;->composeInitialPaused$runtime(Landroidx/compose/runtime/ControlledComposition;Landroidx/compose/runtime/ShouldPauseCallback;Lkotlin/jvm/functions/Function2;)Landroidx/collection/ScatterSet;
-HSPLandroidx/compose/runtime/Recomposer;->deriveStateLocked()Lkotlinx/coroutines/CancellableContinuation;
+SPLandroidx/compose/runtime/Recomposer;->deriveStateLocked()Lkotlinx/coroutines/CancellableContinuation;
 SPLandroidx/compose/runtime/Recomposer;->discardUnusedMovableContentState()V
 SPLandroidx/compose/runtime/Recomposer;->getChangeCount()J
 SPLandroidx/compose/runtime/Recomposer;->getCollectingCallByInformation$runtime()Z
@@ -7487,7 +7486,7 @@ HSPLandroidx/compose/runtime/composer/gapbuffer/changelist/Operation$UpdateNode;
 Landroidx/compose/runtime/composer/gapbuffer/changelist/Operation$UpdateValue;
 SPLandroidx/compose/runtime/composer/gapbuffer/changelist/Operation$UpdateValue;-><clinit>()V
 SPLandroidx/compose/runtime/composer/gapbuffer/changelist/Operation$UpdateValue;-><init>()V
-HSPLandroidx/compose/runtime/composer/gapbuffer/changelist/Operation$UpdateValue;->execute(Landroidx/compose/runtime/composer/gapbuffer/changelist/OperationArgContainer;Landroidx/compose/runtime/Applier;Landroidx/compose/runtime/composer/gapbuffer/SlotWriter;Landroidx/compose/runtime/composer/RememberManager;Landroidx/compose/runtime/composer/gapbuffer/changelist/OperationErrorContext;)V
+SPLandroidx/compose/runtime/composer/gapbuffer/changelist/Operation$UpdateValue;->execute(Landroidx/compose/runtime/composer/gapbuffer/changelist/OperationArgContainer;Landroidx/compose/runtime/Applier;Landroidx/compose/runtime/composer/gapbuffer/SlotWriter;Landroidx/compose/runtime/composer/RememberManager;Landroidx/compose/runtime/composer/gapbuffer/changelist/OperationErrorContext;)V
 Landroidx/compose/runtime/composer/gapbuffer/changelist/Operation$Ups;
 SPLandroidx/compose/runtime/composer/gapbuffer/changelist/Operation$Ups;-><clinit>()V
 SPLandroidx/compose/runtime/composer/gapbuffer/changelist/Operation$Ups;-><init>()V
@@ -7641,7 +7640,7 @@ SPLandroidx/compose/runtime/external/kotlinx/collections/immutable/implementatio
 SPLandroidx/compose/runtime/external/kotlinx/collections/immutable/implementations/immutableMap/TrieNode;->makeNode(ILjava/lang/Object;Ljava/lang/Object;ILjava/lang/Object;Ljava/lang/Object;ILandroidx/compose/runtime/external/kotlinx/collections/immutable/internal/MutabilityOwnership;)Landroidx/compose/runtime/external/kotlinx/collections/immutable/implementations/immutableMap/TrieNode;
 SPLandroidx/compose/runtime/external/kotlinx/collections/immutable/implementations/immutableMap/TrieNode;->moveEntryToNode(IIILjava/lang/Object;Ljava/lang/Object;I)Landroidx/compose/runtime/external/kotlinx/collections/immutable/implementations/immutableMap/TrieNode;
 SPLandroidx/compose/runtime/external/kotlinx/collections/immutable/implementations/immutableMap/TrieNode;->mutableInsertEntryAt(ILjava/lang/Object;Ljava/lang/Object;Landroidx/compose/runtime/external/kotlinx/collections/immutable/internal/MutabilityOwnership;)Landroidx/compose/runtime/external/kotlinx/collections/immutable/implementations/immutableMap/TrieNode;
-SPLandroidx/compose/runtime/external/kotlinx/collections/immutable/implementations/immutableMap/TrieNode;->mutableMoveEntryToNode(IIILjava/lang/Object;Ljava/lang/Object;ILandroidx/compose/runtime/external/kotlinx/collections/immutable/internal/MutabilityOwnership;)Landroidx/compose/runtime/external/kotlinx/collections/immutable/implementations/immutableMap/TrieNode;
+PLandroidx/compose/runtime/external/kotlinx/collections/immutable/implementations/immutableMap/TrieNode;->mutableMoveEntryToNode(IIILjava/lang/Object;Ljava/lang/Object;ILandroidx/compose/runtime/external/kotlinx/collections/immutable/internal/MutabilityOwnership;)Landroidx/compose/runtime/external/kotlinx/collections/immutable/implementations/immutableMap/TrieNode;
 HSPLandroidx/compose/runtime/external/kotlinx/collections/immutable/implementations/immutableMap/TrieNode;->mutablePut(ILjava/lang/Object;Ljava/lang/Object;ILandroidx/compose/runtime/external/kotlinx/collections/immutable/implementations/immutableMap/PersistentHashMapBuilder;)Landroidx/compose/runtime/external/kotlinx/collections/immutable/implementations/immutableMap/TrieNode;
 HSPLandroidx/compose/runtime/external/kotlinx/collections/immutable/implementations/immutableMap/TrieNode;->mutablePutAll(Landroidx/compose/runtime/external/kotlinx/collections/immutable/implementations/immutableMap/TrieNode;ILandroidx/compose/runtime/external/kotlinx/collections/immutable/internal/DeltaCounter;Landroidx/compose/runtime/external/kotlinx/collections/immutable/implementations/immutableMap/PersistentHashMapBuilder;)Landroidx/compose/runtime/external/kotlinx/collections/immutable/implementations/immutableMap/TrieNode;
 HSPLandroidx/compose/runtime/external/kotlinx/collections/immutable/implementations/immutableMap/TrieNode;->mutablePutAllFromOtherNodeCell(Landroidx/compose/runtime/external/kotlinx/collections/immutable/implementations/immutableMap/TrieNode;IILandroidx/compose/runtime/external/kotlinx/collections/immutable/internal/DeltaCounter;Landroidx/compose/runtime/external/kotlinx/collections/immutable/implementations/immutableMap/PersistentHashMapBuilder;)Landroidx/compose/runtime/external/kotlinx/collections/immutable/implementations/immutableMap/TrieNode;
@@ -7665,12 +7664,10 @@ SPLandroidx/compose/runtime/external/kotlinx/collections/immutable/implementatio
 Landroidx/compose/runtime/external/kotlinx/collections/immutable/implementations/immutableMap/TrieNodeBaseIterator;
 SPLandroidx/compose/runtime/external/kotlinx/collections/immutable/implementations/immutableMap/TrieNodeBaseIterator;-><clinit>()V
 SPLandroidx/compose/runtime/external/kotlinx/collections/immutable/implementations/immutableMap/TrieNodeBaseIterator;-><init>()V
-PLandroidx/compose/runtime/external/kotlinx/collections/immutable/implementations/immutableMap/TrieNodeBaseIterator;->currentNode()Landroidx/compose/runtime/external/kotlinx/collections/immutable/implementations/immutableMap/TrieNode;
 SPLandroidx/compose/runtime/external/kotlinx/collections/immutable/implementations/immutableMap/TrieNodeBaseIterator;->getBuffer()[Ljava/lang/Object;
 SPLandroidx/compose/runtime/external/kotlinx/collections/immutable/implementations/immutableMap/TrieNodeBaseIterator;->getIndex()I
 SPLandroidx/compose/runtime/external/kotlinx/collections/immutable/implementations/immutableMap/TrieNodeBaseIterator;->hasNextKey()Z
 SPLandroidx/compose/runtime/external/kotlinx/collections/immutable/implementations/immutableMap/TrieNodeBaseIterator;->hasNextNode()Z
-PLandroidx/compose/runtime/external/kotlinx/collections/immutable/implementations/immutableMap/TrieNodeBaseIterator;->moveToNextNode()V
 SPLandroidx/compose/runtime/external/kotlinx/collections/immutable/implementations/immutableMap/TrieNodeBaseIterator;->reset([Ljava/lang/Object;I)V
 SPLandroidx/compose/runtime/external/kotlinx/collections/immutable/implementations/immutableMap/TrieNodeBaseIterator;->reset([Ljava/lang/Object;II)V
 SPLandroidx/compose/runtime/external/kotlinx/collections/immutable/implementations/immutableMap/TrieNodeBaseIterator;->setIndex(I)V
@@ -8159,7 +8156,7 @@ Landroidx/compose/runtime/snapshots/SnapshotId_jvmKt;
 SPLandroidx/compose/runtime/snapshots/SnapshotId_jvmKt;->binarySearch([JJ)I
 SPLandroidx/compose/runtime/snapshots/SnapshotId_jvmKt;->snapshotIdArrayWithCapacity(I)[J
 SPLandroidx/compose/runtime/snapshots/SnapshotId_jvmKt;->toSnapshotId(I)J
-PLandroidx/compose/runtime/snapshots/SnapshotId_jvmKt;->withIdInsertedAt([JIJ)[J
+SPLandroidx/compose/runtime/snapshots/SnapshotId_jvmKt;->withIdInsertedAt([JIJ)[J
 SPLandroidx/compose/runtime/snapshots/SnapshotId_jvmKt;->withIdRemovedAt([JI)[J
 Landroidx/compose/runtime/snapshots/SnapshotKt;
 SPLandroidx/compose/runtime/snapshots/SnapshotKt;-><clinit>()V
@@ -8344,7 +8341,7 @@ HSPLandroidx/compose/runtime/snapshots/StateObjectImpl;->recordReadIn-h_f27i8$ru
 Landroidx/compose/runtime/snapshots/StateRecord;
 SPLandroidx/compose/runtime/snapshots/StateRecord;-><clinit>()V
 SPLandroidx/compose/runtime/snapshots/StateRecord;-><init>(J)V
-HSPLandroidx/compose/runtime/snapshots/StateRecord;->getNext$runtime()Landroidx/compose/runtime/snapshots/StateRecord;
+SPLandroidx/compose/runtime/snapshots/StateRecord;->getNext$runtime()Landroidx/compose/runtime/snapshots/StateRecord;
 HSPLandroidx/compose/runtime/snapshots/StateRecord;->getSnapshotId$runtime()J
 SPLandroidx/compose/runtime/snapshots/StateRecord;->setNext$runtime(Landroidx/compose/runtime/snapshots/StateRecord;)V
 SPLandroidx/compose/runtime/snapshots/StateRecord;->setSnapshotId$runtime(J)V
@@ -8953,7 +8950,7 @@ SPLandroidx/compose/ui/geometry/Offset;->access$getInfinite$cp()J
 SPLandroidx/compose/ui/geometry/Offset;->access$getUnspecified$cp()J
 SPLandroidx/compose/ui/geometry/Offset;->access$getZero$cp()J
 SPLandroidx/compose/ui/geometry/Offset;->box-impl(J)Landroidx/compose/ui/geometry/Offset;
-HSPLandroidx/compose/ui/geometry/Offset;->constructor-impl(J)J
+SPLandroidx/compose/ui/geometry/Offset;->constructor-impl(J)J
 SPLandroidx/compose/ui/geometry/Offset;->copy-dBAh8RU$default(JFFILjava/lang/Object;)J
 SPLandroidx/compose/ui/geometry/Offset;->copy-dBAh8RU(JFF)J
 SPLandroidx/compose/ui/geometry/Offset;->equals-impl0(JJ)Z
@@ -12025,7 +12022,7 @@ SPLandroidx/compose/ui/node/LookaheadCapablePlaceable;->isLookingAhead()Z
 SPLandroidx/compose/ui/node/LookaheadCapablePlaceable;->isPlacedUnderMotionFrameOfReference()Z
 SPLandroidx/compose/ui/node/LookaheadCapablePlaceable;->isPlacingForAlignment$ui()Z
 SPLandroidx/compose/ui/node/LookaheadCapablePlaceable;->isShallowPlacing$ui()Z
-HSPLandroidx/compose/ui/node/LookaheadCapablePlaceable;->layout(IILjava/util/Map;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;)Landroidx/compose/ui/layout/MeasureResult;
+SPLandroidx/compose/ui/node/LookaheadCapablePlaceable;->layout(IILjava/util/Map;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;)Landroidx/compose/ui/layout/MeasureResult;
 SPLandroidx/compose/ui/node/LookaheadCapablePlaceable;->provideRulerValue(Landroidx/compose/ui/layout/Ruler;F)V
 SPLandroidx/compose/ui/node/LookaheadCapablePlaceable;->setPlacedUnderMotionFrameOfReference(Z)V
 SPLandroidx/compose/ui/node/LookaheadCapablePlaceable;->setPlacingForAlignment$ui(Z)V
@@ -15653,7 +15650,7 @@ SPLandroidx/compose/ui/unit/Density;->toDp-u2uoSUM(F)F
 SPLandroidx/compose/ui/unit/Density;->toDp-u2uoSUM(I)F
 SPLandroidx/compose/ui/unit/Density;->toDpSize-k-rfVVM(J)J
 HSPLandroidx/compose/ui/unit/Density;->toPx--R2X_6o(J)F
-HSPLandroidx/compose/ui/unit/Density;->toPx-0680j_4(F)F
+SPLandroidx/compose/ui/unit/Density;->toPx-0680j_4(F)F
 HSPLandroidx/compose/ui/unit/Density;->toSize-XkaWNTQ(J)J
 Landroidx/compose/ui/unit/DensityImpl;
 SPLandroidx/compose/ui/unit/DensityImpl;-><init>(FF)V
@@ -15723,7 +15720,7 @@ SPLandroidx/compose/ui/unit/IntOffset;->equals-impl0(JJ)Z
 HSPLandroidx/compose/ui/unit/IntOffset;->getX-impl(J)I
 HSPLandroidx/compose/ui/unit/IntOffset;->getY-impl(J)I
 SPLandroidx/compose/ui/unit/IntOffset;->hashCode-impl(J)I
-SPLandroidx/compose/ui/unit/IntOffset;->plus-qkQi6aY(JJ)J
+HSPLandroidx/compose/ui/unit/IntOffset;->plus-qkQi6aY(JJ)J
 SPLandroidx/compose/ui/unit/IntOffset;->unbox-impl()J
 Landroidx/compose/ui/unit/IntOffset$Companion;
 SPLandroidx/compose/ui/unit/IntOffset$Companion;-><init>()V
@@ -17344,6 +17341,7 @@ SPLcom/foxhole/beta/core/model/NetworkRulesSettings$Companion;-><init>(Lkotlin/j
 Lcom/foxhole/beta/core/model/OverallStatisticsUiItem;
 SPLcom/foxhole/beta/core/model/OverallStatisticsUiItem;-><clinit>()V
 SPLcom/foxhole/beta/core/model/OverallStatisticsUiItem;-><init>(JIIILjava/lang/Long;Ljava/lang/Long;)V
+PLcom/foxhole/beta/core/model/OverallStatisticsUiItem;->equals(Ljava/lang/Object;)Z
 Lcom/foxhole/beta/core/model/PerAppRoutingMode;
 SPLcom/foxhole/beta/core/model/PerAppRoutingMode;->$values()[Lcom/foxhole/beta/core/model/PerAppRoutingMode;
 SPLcom/foxhole/beta/core/model/PerAppRoutingMode;-><clinit>()V
@@ -17569,6 +17567,7 @@ SPLcom/foxhole/beta/core/model/StatisticsSettings$Companion;-><init>(Lkotlin/jvm
 Lcom/foxhole/beta/core/model/StatisticsUiState;
 SPLcom/foxhole/beta/core/model/StatisticsUiState;-><clinit>()V
 SPLcom/foxhole/beta/core/model/StatisticsUiState;-><init>(Lcom/foxhole/beta/core/model/StatisticsRange;ZLjava/util/List;Lcom/foxhole/beta/core/model/OverallStatisticsUiItem;Ljava/util/List;Ljava/util/List;Ljava/util/List;)V
+PLcom/foxhole/beta/core/model/StatisticsUiState;->equals(Ljava/lang/Object;)Z
 Lcom/foxhole/beta/core/model/SubscriptionRefreshInterval;
 SPLcom/foxhole/beta/core/model/SubscriptionRefreshInterval;->$values()[Lcom/foxhole/beta/core/model/SubscriptionRefreshInterval;
 SPLcom/foxhole/beta/core/model/SubscriptionRefreshInterval;-><clinit>()V
@@ -17745,8 +17744,6 @@ SPLcom/foxhole/beta/core/network/IpInfoRepository;->access$enrichWithAsnProvider
 SPLcom/foxhole/beta/core/network/IpInfoRepository;->access$fetchCandidatesInParallel(Lcom/foxhole/beta/core/network/IpInfoRepository;Lcom/foxhole/beta/core/network/IpInfoRepository$EndpointFetchStrategy;Lcom/foxhole/beta/core/network/IpInfoFetchMode;Landroid/net/Network;Lcom/foxhole/beta/core/network/HttpProxyAccess;Landroid/net/Network;Ljava/util/Map;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 SPLcom/foxhole/beta/core/network/IpInfoRepository;->access$fetchSingle(Lcom/foxhole/beta/core/network/IpInfoRepository;Ljava/lang/String;Ljava/lang/Long;Landroid/net/Network;Lcom/foxhole/beta/core/network/IpInfoRepository$AddressFamilyPreference;Lcom/foxhole/beta/core/network/HttpProxyAccess;Landroid/net/Network;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 SPLcom/foxhole/beta/core/network/IpInfoRepository;->access$getHTTP_CLIENT_CACHE_TTL_NANOS$cp()J
-SPLcom/foxhole/beta/core/network/IpInfoRepository;->access$parseCymruAsName(Lcom/foxhole/beta/core/network/IpInfoRepository;Ljava/lang/String;)Ljava/lang/String;
-SPLcom/foxhole/beta/core/network/IpInfoRepository;->access$parseCymruOriginAsn(Lcom/foxhole/beta/core/network/IpInfoRepository;Ljava/lang/String;)Ljava/lang/String;
 SPLcom/foxhole/beta/core/network/IpInfoRepository;->access$withBoundedCallTimeout(Lcom/foxhole/beta/core/network/IpInfoRepository;Ljava/lang/Long;Lkotlin/jvm/functions/Function1;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 SPLcom/foxhole/beta/core/network/IpInfoRepository;->applyProxyOrNetwork(Lokhttp3/OkHttpClient$Builder;Lcom/foxhole/beta/core/network/HttpProxyAccess;Landroid/net/Network;)V
 SPLcom/foxhole/beta/core/network/IpInfoRepository;->enrichWithAsnProviderIfNeeded(Lcom/foxhole/beta/core/model/IpInfo;Ljava/util/Map;Lcom/foxhole/beta/core/network/IpInfoFetchMode;)Lcom/foxhole/beta/core/model/IpInfo;
@@ -17757,10 +17754,6 @@ SPLcom/foxhole/beta/core/network/IpInfoRepository;->fetch(Ljava/lang/String;Ljav
 SPLcom/foxhole/beta/core/network/IpInfoRepository;->fetchCandidatesInParallel(Lcom/foxhole/beta/core/network/IpInfoRepository$EndpointFetchStrategy;Lcom/foxhole/beta/core/network/IpInfoFetchMode;Landroid/net/Network;Lcom/foxhole/beta/core/network/HttpProxyAccess;Landroid/net/Network;Ljava/util/Map;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 SPLcom/foxhole/beta/core/network/IpInfoRepository;->fetchSingle(Ljava/lang/String;Ljava/lang/Long;Landroid/net/Network;Lcom/foxhole/beta/core/network/IpInfoRepository$AddressFamilyPreference;Lcom/foxhole/beta/core/network/HttpProxyAccess;Landroid/net/Network;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 SPLcom/foxhole/beta/core/network/IpInfoRepository;->geoEnrichmentEndpoints(Ljava/lang/String;)Ljava/util/List;
-SPLcom/foxhole/beta/core/network/IpInfoRepository;->lookupAsnProvider(Ljava/lang/String;)Ljava/lang/String;
-SPLcom/foxhole/beta/core/network/IpInfoRepository;->lookupOriginAsn(Ljava/lang/String;)Ljava/lang/String;
-SPLcom/foxhole/beta/core/network/IpInfoRepository;->parseCymruAsName(Ljava/lang/String;)Ljava/lang/String;
-SPLcom/foxhole/beta/core/network/IpInfoRepository;->parseCymruOriginAsn(Ljava/lang/String;)Ljava/lang/String;
 SPLcom/foxhole/beta/core/network/IpInfoRepository;->primaryEndpoint(Ljava/lang/String;)Ljava/lang/String;
 SPLcom/foxhole/beta/core/network/IpInfoRepository;->prioritize(Ljava/util/List;Lcom/foxhole/beta/core/network/IpInfoRepository$AddressFamilyPreference;)Ljava/util/List;
 SPLcom/foxhole/beta/core/network/IpInfoRepository;->pruneExpiredHttpClients(J)V
@@ -17831,14 +17824,6 @@ SPLcom/foxhole/beta/core/network/IpInfoRepository$fetchCandidatesInParallel$2$re
 Lcom/foxhole/beta/core/network/IpInfoRepository$fetchSingle$1;
 SPLcom/foxhole/beta/core/network/IpInfoRepository$fetchSingle$1;-><init>(Lcom/foxhole/beta/core/network/IpInfoRepository;Lkotlin/coroutines/Continuation;)V
 SPLcom/foxhole/beta/core/network/IpInfoRepository$fetchSingle$1;->invokeSuspend(Ljava/lang/Object;)Ljava/lang/Object;
-Lcom/foxhole/beta/core/network/IpInfoRepository$lookupAsnProvider$asName$1$1;
-SPLcom/foxhole/beta/core/network/IpInfoRepository$lookupAsnProvider$asName$1$1;-><init>(Ljava/lang/Object;)V
-SPLcom/foxhole/beta/core/network/IpInfoRepository$lookupAsnProvider$asName$1$1;->invoke(Ljava/lang/Object;)Ljava/lang/Object;
-SPLcom/foxhole/beta/core/network/IpInfoRepository$lookupAsnProvider$asName$1$1;->invoke(Ljava/lang/String;)Ljava/lang/String;
-Lcom/foxhole/beta/core/network/IpInfoRepository$lookupOriginAsn$1;
-SPLcom/foxhole/beta/core/network/IpInfoRepository$lookupOriginAsn$1;-><init>(Ljava/lang/Object;)V
-SPLcom/foxhole/beta/core/network/IpInfoRepository$lookupOriginAsn$1;->invoke(Ljava/lang/Object;)Ljava/lang/Object;
-SPLcom/foxhole/beta/core/network/IpInfoRepository$lookupOriginAsn$1;->invoke(Ljava/lang/String;)Ljava/lang/String;
 Lcom/foxhole/beta/core/network/IpInfoRepository$withBoundedCallTimeout$1;
 SPLcom/foxhole/beta/core/network/IpInfoRepository$withBoundedCallTimeout$1;-><init>(Lcom/foxhole/beta/core/network/IpInfoRepository;Lkotlin/coroutines/Continuation;)V
 SPLcom/foxhole/beta/core/network/IpInfoRepository$withBoundedCallTimeout$1;->invokeSuspend(Ljava/lang/Object;)Ljava/lang/Object;
@@ -17852,14 +17837,12 @@ Lcom/foxhole/beta/core/network/IpInfoRepositoryKt;
 SPLcom/foxhole/beta/core/network/IpInfoRepositoryKt;->access$awaitResponse(Lokhttp3/Call;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 SPLcom/foxhole/beta/core/network/IpInfoRepositoryKt;->access$diagnosticLog(Ljava/lang/String;)V
 SPLcom/foxhole/beta/core/network/IpInfoRepositoryKt;->access$ipInfoHostLabel(Ljava/lang/String;)Ljava/lang/String;
-SPLcom/foxhole/beta/core/network/IpInfoRepositoryKt;->access$isIpv4Address(Ljava/lang/String;)Z
 SPLcom/foxhole/beta/core/network/IpInfoRepositoryKt;->awaitResponse(Lokhttp3/Call;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 SPLcom/foxhole/beta/core/network/IpInfoRepositoryKt;->boolean(Ljava/util/Map;Ljava/lang/String;)Ljava/lang/Boolean;
 SPLcom/foxhole/beta/core/network/IpInfoRepositoryKt;->countryDisplayName(Ljava/lang/String;)Ljava/lang/String;
 SPLcom/foxhole/beta/core/network/IpInfoRepositoryKt;->diagnosticLog(Ljava/lang/String;)V
 SPLcom/foxhole/beta/core/network/IpInfoRepositoryKt;->firstNonBlank$lambda$37(Ljava/lang/String;)Ljava/lang/String;
 SPLcom/foxhole/beta/core/network/IpInfoRepositoryKt;->firstNonBlank([Ljava/lang/String;)Ljava/lang/String;
-SPLcom/foxhole/beta/core/network/IpInfoRepositoryKt;->fullIpInfoQualityScore(Lcom/foxhole/beta/core/model/IpInfo;)I
 SPLcom/foxhole/beta/core/network/IpInfoRepositoryKt;->hasEntryQuickIpInfoDetails(Lcom/foxhole/beta/core/model/IpInfo;)Z
 SPLcom/foxhole/beta/core/network/IpInfoRepositoryKt;->hasFullIpInfoDetails(Lcom/foxhole/beta/core/model/IpInfo;)Z
 SPLcom/foxhole/beta/core/network/IpInfoRepositoryKt;->ipInfoHostLabel(Ljava/lang/String;)Ljava/lang/String;
@@ -17944,16 +17927,12 @@ Lcom/foxhole/beta/core/network/PublicDnsFallback;
 Lcom/foxhole/beta/core/network/PublicDohDnsFallback;
 SPLcom/foxhole/beta/core/network/PublicDohDnsFallback;-><clinit>()V
 SPLcom/foxhole/beta/core/network/PublicDohDnsFallback;-><init>()V
-SPLcom/foxhole/beta/core/network/PublicDohDnsFallback;->decodeDnsTxtRecord(Ljava/lang/String;)Ljava/lang/String;
 SPLcom/foxhole/beta/core/network/PublicDohDnsFallback;->json$lambda$0(Lkotlinx/serialization/json/JsonBuilder;)Lkotlin/Unit;
 SPLcom/foxhole/beta/core/network/PublicDohDnsFallback;->lookup$lambda$1(Ljava/net/URL;)Ljavax/net/ssl/HttpsURLConnection;
 SPLcom/foxhole/beta/core/network/PublicDohDnsFallback;->lookup(Ljava/lang/String;)Ljava/util/List;
-SPLcom/foxhole/beta/core/network/PublicDohDnsFallback;->lookupTxt$app(Ljava/lang/String;)Ljava/util/List;
 SPLcom/foxhole/beta/core/network/PublicDohDnsFallback;->lookupWithConnectionFactory$app(Ljava/lang/String;Lkotlin/jvm/functions/Function1;)Ljava/util/List;
 SPLcom/foxhole/beta/core/network/PublicDohDnsFallback;->parseDohAddresses$app(Ljava/lang/String;I)Ljava/util/List;
-SPLcom/foxhole/beta/core/network/PublicDohDnsFallback;->parseDohTxtRecords$app(Ljava/lang/String;)Ljava/util/List;
 SPLcom/foxhole/beta/core/network/PublicDohDnsFallback;->query(Ljava/lang/String;Ljava/lang/String;ILkotlin/jvm/functions/Function1;)Ljava/util/List;
-SPLcom/foxhole/beta/core/network/PublicDohDnsFallback;->queryTxt(Ljava/lang/String;Ljava/lang/String;)Ljava/util/List;
 Lcom/foxhole/beta/core/network/PublicDohDnsFallback$$ExternalSyntheticLambda0;
 SPLcom/foxhole/beta/core/network/PublicDohDnsFallback$$ExternalSyntheticLambda0;-><init>()V
 SPLcom/foxhole/beta/core/network/PublicDohDnsFallback$$ExternalSyntheticLambda0;->invoke(Ljava/lang/Object;)Ljava/lang/Object;
@@ -18043,6 +18022,7 @@ SPLcom/foxhole/beta/core/settings/SettingsRepository;->access$normalized(Lcom/fo
 SPLcom/foxhole/beta/core/settings/SettingsRepository;->access$readEncryptedResult(Lcom/foxhole/beta/core/settings/SettingsRepository;)Lcom/foxhole/beta/core/settings/EncryptedSettingsLoadResult;
 SPLcom/foxhole/beta/core/settings/SettingsRepository;->access$readLegacySettingsOrNull(Lcom/foxhole/beta/core/settings/SettingsRepository;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 SPLcom/foxhole/beta/core/settings/SettingsRepository;->access$readSettingsPayload(Lcom/foxhole/beta/core/settings/SettingsRepository;Ljava/lang/String;)Lcom/foxhole/beta/core/model/Settings;
+SPLcom/foxhole/beta/core/settings/SettingsRepository;->access$update(Lcom/foxhole/beta/core/settings/SettingsRepository;Lkotlin/jvm/functions/Function1;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 SPLcom/foxhole/beta/core/settings/SettingsRepository;->access$writeEncrypted(Lcom/foxhole/beta/core/settings/SettingsRepository;Lcom/foxhole/beta/core/model/Settings;)V
 SPLcom/foxhole/beta/core/settings/SettingsRepository;->bootstrapInitialSettings()Lcom/foxhole/beta/core/model/Settings;
 SPLcom/foxhole/beta/core/settings/SettingsRepository;->current(Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
@@ -18140,6 +18120,7 @@ SPLcom/foxhole/beta/core/settings/SettingsRepository$readLegacySettingsOrNull$1;
 PLcom/foxhole/beta/core/settings/SettingsRepository$recordInstalledAppInventory$1;-><init>(Lcom/foxhole/beta/core/settings/SettingsRepository;Lkotlin/coroutines/Continuation;)V
 Lcom/foxhole/beta/core/settings/SettingsRepository$update$1;
 SPLcom/foxhole/beta/core/settings/SettingsRepository$update$1;-><init>(Lcom/foxhole/beta/core/settings/SettingsRepository;Lkotlin/coroutines/Continuation;)V
+SPLcom/foxhole/beta/core/settings/SettingsRepository$update$1;->invokeSuspend(Ljava/lang/Object;)Ljava/lang/Object;
 Lcom/foxhole/beta/core/settings/SettingsRepository$warmUp$1;
 SPLcom/foxhole/beta/core/settings/SettingsRepository$warmUp$1;-><init>(Lcom/foxhole/beta/core/settings/SettingsRepository;Lkotlin/coroutines/Continuation;)V
 Lcom/foxhole/beta/core/settings/SettingsRepositoryCacheSupportKt;
@@ -18204,6 +18185,7 @@ Lcom/foxhole/beta/core/statistics/DnsProtectionSummary;
 SPLcom/foxhole/beta/core/statistics/DnsProtectionSummary;-><clinit>()V
 SPLcom/foxhole/beta/core/statistics/DnsProtectionSummary;-><init>(IILjava/util/List;Ljava/util/List;Ljava/util/List;Lcom/foxhole/beta/core/statistics/ChartDataQuality;Lcom/foxhole/beta/core/statistics/ChartDataQuality;Lcom/foxhole/beta/core/statistics/ChartDataQuality;Lcom/foxhole/beta/core/statistics/ChartDataQuality;)V
 SPLcom/foxhole/beta/core/statistics/DnsProtectionSummary;-><init>(IILjava/util/List;Ljava/util/List;Ljava/util/List;Lcom/foxhole/beta/core/statistics/ChartDataQuality;Lcom/foxhole/beta/core/statistics/ChartDataQuality;Lcom/foxhole/beta/core/statistics/ChartDataQuality;Lcom/foxhole/beta/core/statistics/ChartDataQuality;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+PLcom/foxhole/beta/core/statistics/DnsProtectionSummary;->equals(Ljava/lang/Object;)Z
 PLcom/foxhole/beta/core/statistics/DnsStatisticsAggregatorKt;->dnsProtectionDomainRows(Ljava/util/List;)Ljava/util/List;
 PLcom/foxhole/beta/core/statistics/DnsStatisticsAggregatorKt;->dnsProtectionSummary(Ljava/util/List;Ljava/util/List;Lcom/foxhole/beta/core/model/DnsSettings;)Lcom/foxhole/beta/core/statistics/DnsProtectionSummary;
 PLcom/foxhole/beta/core/statistics/DnsStatisticsAggregatorKt;->enabledDnsProtectionCategories(Lcom/foxhole/beta/core/model/DnsSettings;)Ljava/util/List;
