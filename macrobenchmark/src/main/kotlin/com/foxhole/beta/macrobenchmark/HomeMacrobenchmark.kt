@@ -256,6 +256,41 @@ class HomeMacrobenchmark {
         }
 
     @Test
+    fun dashboardTrafficMapStartVpnStress() =
+        benchmarkRule.measureRepeated(
+            packageName = PACKAGE_NAME,
+            metrics =
+                frameMetricsWithTrace(
+                    TRAFFIC_MAP_LOAD_SHAPES_TRACE,
+                    TRAFFIC_MAP_RENDER_LAND_BITMAP_TRACE,
+                    TRAFFIC_MAP_RENDER_HIGHLIGHT_BITMAP_TRACE,
+                    TRAFFIC_MAP_BUILD_ROUTES_TRACE,
+                    TRAFFIC_MAP_DRAW_TRACE,
+                ),
+            compilationMode = BENCHMARK_COMPILATION_MODE,
+            iterations = SHORT_ITERATIONS,
+            startupMode = StartupMode.WARM,
+            setupBlock = {
+                setBatterySaver(enabled = false)
+                setNightMode("no")
+                pressHome()
+                startActivityAndWait(foxholeLauncherIntent(trafficMapStress = true))
+                device.waitForIdle()
+            },
+        ) {
+            try {
+                waitForDashboardVisible()
+                clickConnectAndReturnFromVpnPermission()
+                device.waitForIdle()
+                openTrafficMapDetailsAndReturn()
+            } finally {
+                setBatterySaver(enabled = false)
+                setNightMode("no")
+                device.waitForIdle()
+            }
+        }
+
+    @Test
     fun settingsSecurityTransition() =
         measureSettingsDetailTransition(
             SettingsDetailTarget(

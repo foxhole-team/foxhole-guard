@@ -18,6 +18,7 @@ FULL_SUITE_BENCHMARKS = {
     WARM_STARTUP_BENCHMARK,
     "bottomNavigationRoundTrip",
     "dashboardTrafficMapOpen",
+    "dashboardTrafficMapStartVpnStress",
     "dashboardTrafficMapStress",
     "homeScroll",
     "settingsTrafficTransition",
@@ -39,7 +40,7 @@ TRANSITION_FRAME_CPU_P95_MAX_MS = 220.0
 TRANSITION_FRAME_OVERRUN_P50_MAX_MS = 60.0
 TRANSITION_FRAME_OVERRUN_P90_MAX_MS = 180.0
 TRANSITION_FRAME_OVERRUN_P95_MAX_MS = 220.0
-STRICT_FRAME_P95_MAX_MS = 140.0
+STRICT_FRAME_P95_MAX_MS = 16.6
 STRICT_FRAME_MAXIMUM_MAX_MS = 700.0
 FIRST_FRAME_P50_MAX_MS = 80.0
 FIRST_FRAME_P95_MAX_MS = 140.0
@@ -65,6 +66,13 @@ REQUIRED_TRACE_METRIC_LABELS = {
         "TrafficMapDrawSumMs",
     },
     "dashboardTrafficMapStress": {
+        "TrafficMapLoadShapesSumMs",
+        "TrafficMapRenderLandBitmapSumMs",
+        "TrafficMapRenderHighlightBitmapSumMs",
+        "TrafficMapBuildRoutesSumMs",
+        "TrafficMapDrawSumMs",
+    },
+    "dashboardTrafficMapStartVpnStress": {
         "TrafficMapLoadShapesSumMs",
         "TrafficMapRenderLandBitmapSumMs",
         "TrafficMapRenderHighlightBitmapSumMs",

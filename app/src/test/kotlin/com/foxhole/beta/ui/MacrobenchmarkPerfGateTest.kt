@@ -20,6 +20,7 @@ class MacrobenchmarkPerfGateTest {
             "fun bottomNavigationRoundTrip()",
             "fun dashboardTrafficMapOpen()",
             "fun dashboardTrafficMapStress()",
+            "fun dashboardTrafficMapStartVpnStress()",
             "fun permissionFlow()",
             "fun settingsSmartStartTransition()",
             "fun settingsRoutingAppsPickerSearch()",
@@ -62,11 +63,12 @@ class MacrobenchmarkPerfGateTest {
             "\"warmStartup\"",
             "\"dashboardTrafficMapOpen\"",
             "\"dashboardTrafficMapStress\"",
+            "\"dashboardTrafficMapStartVpnStress\"",
             "\"homeScroll\"",
             "\"settingsSmartStartTransition\"",
             "\"settingsRoutingAppsPickerSearch\"",
             "\"permissionFlow\"",
-            "STRICT_FRAME_P95_MAX_MS = 140.0",
+            "STRICT_FRAME_P95_MAX_MS = 16.6",
             "STRICT_FRAME_MAXIMUM_MAX_MS = 700.0",
             "FIRST_FRAME_P50_MAX_MS = 80.0",
             "FIRST_FRAME_P95_MAX_MS = 140.0",
@@ -126,6 +128,7 @@ class MacrobenchmarkPerfGateTest {
         assertTrue(script.contains("run_macrobenchmark_with_log_gate"))
         assertTrue(script.contains("analyze-android-perf-logs.py"))
         assertTrue(script.contains("FOXHOLE_MACROBENCHMARK_MAX_SKIPPED_FRAMES"))
+        assertTrue(script.contains("MAX_SKIPPED_FRAMES=\"${'$'}{FOXHOLE_MACROBENCHMARK_MAX_SKIPPED_FRAMES:-0}\""))
         assertTrue(script.contains("--max-skipped-frames \"${'$'}MAX_SKIPPED_FRAMES\""))
         assertTrue(script.contains("--fail-on-skipped-frames"))
         assertTrue(script.contains("--fail-on-fatal"))
