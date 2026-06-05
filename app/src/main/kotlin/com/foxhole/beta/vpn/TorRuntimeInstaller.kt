@@ -52,7 +52,7 @@ class TorRuntimeInstaller(
             withContext(Dispatchers.IO) {
                 val assetAbi =
                     Build.SUPPORTED_ABIS
-                        .firstOrNull { abi -> torExecutableAssetName("tor/$abi") != null }
+                        .firstOrNull { abi -> torBundleAssetExists("tor/$abi") }
                         ?: run {
                             recordTorPreflight(
                                 "asset_abi=missing",
@@ -122,8 +122,10 @@ class TorRuntimeInstaller(
             }
         }
 
-    private fun torExecutableAssetName(assetRoot: String): String? =
-        TOR_EXECUTABLE_ASSET_NAMES.firstOrNull { name -> assetFileExists("$assetRoot/$name") }
+    private fun torBundleAssetExists(assetRoot: String): Boolean =
+        assetFileExists("$assetRoot/$TOR_BUNDLE_VERSION_FILE_NAME") ||
+            assetFileExists("$assetRoot/.version") ||
+            assetFileExists("$assetRoot/data/$TORRC_DEFAULTS_FILE_NAME")
 
     private fun nativeTorExecutable(): File? =
         File(appContext.applicationInfo.nativeLibraryDir, TOR_NATIVE_LIBRARY_NAME)

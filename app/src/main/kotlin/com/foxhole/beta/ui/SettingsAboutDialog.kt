@@ -228,25 +228,27 @@ private fun AboutDialogLicenseList() {
             .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Text(
-            text = stringResource(R.string.about_license_foxhole),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Text(
-            text = stringResource(R.string.about_license_sing_box),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Text(
-            text = stringResource(R.string.about_license_tor),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Text(
-            text = stringResource(R.string.about_license_adguard_dns),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        aboutLicenseStringResources.forEach { stringRes ->
+            Text(
+                text = stringResource(stringRes),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 }
+
+private val aboutLicenseStringResources =
+    listOf(
+        R.string.about_license_foxhole,
+        R.string.about_license_sing_box,
+        R.string.about_license_tor,
+        R.string.about_license_lyrebird,
+        R.string.about_license_conjure_client,
+        R.string.about_license_sqlcipher,
+        R.string.about_license_okhttp,
+        R.string.about_license_androidx_compose,
+        R.string.about_license_zxing,
+        R.string.about_license_blurview,
+        R.string.about_license_adguard_dns,
+    )

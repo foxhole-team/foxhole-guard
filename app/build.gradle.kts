@@ -3,6 +3,7 @@ import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.tasks.InputDirectory
 import org.gradle.api.tasks.Sync
 import org.gradle.api.tasks.TaskAction
+import org.gradle.api.tasks.bundling.Zip
 import org.gradle.testing.jacoco.tasks.JacocoCoverageVerification
 import org.gradle.testing.jacoco.tasks.JacocoReport
 import java.util.Properties
@@ -102,6 +103,9 @@ plugins {
 val enableAbiSplitApks = providers.gradleProperty("foxhole.splitApks").map(String::toBoolean).orElse(false).get()
 val enableReleaseProbe = providers.gradleProperty("foxhole.releaseProbe").map(String::toBoolean).orElse(false).get()
 val enableStrictMode = providers.gradleProperty("foxhole.strictMode").map(String::toBoolean).orElse(false).get()
+val publicApplicationId = "com.foxhole.beta"
+val lastUploadedPublicVersionCode =
+    providers.gradleProperty("foxhole.lastUploadedVersionCode").map(String::toInt).orElse(1).get()
 val releaseSigningPropertiesFile = rootProject.projectDir.parentFile.resolve("dev/signing/release-signing.properties")
 val releaseSigningProperties =
     Properties().apply {
@@ -140,6 +144,32 @@ val releaseSigningReady =
         !releaseSigningKeyAlias.isNullOrBlank() &&
         !releaseSigningKeyPassword.isNullOrBlank() &&
         file(releaseSigningStoreFilePath).isFile
+val publicReleaseBuildConfigFile =
+    layout.buildDirectory.file("generated/source/buildConfig/publicRelease/com/foxhole/beta/BuildConfig.java")
+val releaseBuildConfigFile =
+    layout.buildDirectory.file("generated/source/buildConfig/release/com/foxhole/beta/BuildConfig.java")
+val publicReleaseBundleDir = layout.buildDirectory.dir("outputs/bundle/publicRelease")
+val publicReleaseMappingFile = layout.buildDirectory.file("outputs/mapping/publicRelease/mapping.txt")
+val publicReleaseMergedNativeLibsDir =
+    layout.buildDirectory.dir("intermediates/merged_native_libs/publicRelease/mergePublicReleaseNativeLibs/out/lib")
+val publicReleaseNativeSymbolsArchive =
+    layout.buildDirectory.file("outputs/native-debug-symbols/publicRelease/publicRelease-native-symbols.zip")
+val publicReleaseLocaleConfigFile =
+    layout.buildDirectory.file("generated/res/localeConfig/publicRelease/xml/_generated_res_locale_config.xml")
+val filteredMainAssetsDir = layout.buildDirectory.dir("generated/filteredMainAssets")
+
+fun publicReleaseBundleFile(): File {
+    val bundles =
+        publicReleaseBundleDir.get().asFile
+            .listFiles { file -> file.isFile && file.extension == "aab" }
+            .orEmpty()
+            .sortedBy { file -> file.name }
+    require(bundles.size == 1) {
+        "Expected exactly one publicRelease AAB under ${publicReleaseBundleDir.get().asFile}, found " +
+            bundles.joinToString { file -> file.name }.ifBlank { "none" }
+    }
+    return bundles.single()
+}
 
 val prepareBundledLibbox by tasks.registering {
     val versionFile = rootProject.file("third_party/sing-box.version")
@@ -194,12 +224,23 @@ val prepareTorNativeLibs by tasks.registering(Sync::class) {
     into(layout.buildDirectory.dir("generated/torNativeLibs"))
 }
 
+val prepareFilteredMainAssets by tasks.registering(Sync::class) {
+    from("src/main/assets") {
+        exclude("tor/**/tor/libTor.so")
+        exclude("tor/**/tor/pluggable_transports/conjure-client")
+        exclude("tor/**/tor/pluggable_transports/lyrebird")
+    }
+    into(filteredMainAssetsDir)
+}
+
 tasks.matching { task ->
     task.name in
         setOf(
             "preBuild",
             "preDebugBuild",
             "preReleaseBuild",
+            "preInternalReleaseBuild",
+            "prePublicReleaseBuild",
             "preDebugAndroidTestBuild",
         )
 }.configureEach {
@@ -208,6 +249,14 @@ tasks.matching { task ->
 
 tasks.matching { task -> task.name.endsWith("JniLibFolders") }.configureEach {
     dependsOn(prepareTorNativeLibs)
+}
+
+tasks.matching { task -> task.name.startsWith("merge") && task.name.endsWith("Assets") }.configureEach {
+    dependsOn(prepareFilteredMainAssets)
+}
+
+tasks.matching { task -> "Lint" in task.name || "lint" in task.name }.configureEach {
+    dependsOn(prepareFilteredMainAssets)
 }
 
 val verifyReleaseContainsBundledLibbox by tasks.registering(VerifyBundledLibboxInReleaseApkTask::class) {
@@ -222,21 +271,202 @@ val verifyReleaseContainsBaselineProfile by tasks.registering(VerifyReleaseBasel
 
 val verifyReleaseBuildConfigDefaults by tasks.registering {
     dependsOn("generateReleaseBuildConfig")
-    val releaseBuildConfigFile =
-        layout.buildDirectory.file("generated/source/buildConfig/release/com/foxhole/beta/BuildConfig.java")
     inputs.file(releaseBuildConfigFile)
 
     doLast {
         val content = releaseBuildConfigFile.get().asFile.readText()
+        require(!enableReleaseProbe) {
+            "foxhole.releaseProbe is only supported by internalRelease; public release builds must keep probes off."
+        }
         require("public static final boolean ALLOW_INSECURE_TLS_BY_DEFAULT = false;" in content) {
             "release BuildConfig must set ALLOW_INSECURE_TLS_BY_DEFAULT=false"
         }
-        val expectedDiagnosticLogcat = if (enableReleaseProbe) "true" else "false"
-        require("public static final boolean ENABLE_DIAGNOSTIC_LOGCAT = $expectedDiagnosticLogcat;" in content) {
-            "release BuildConfig must set ENABLE_DIAGNOSTIC_LOGCAT=$expectedDiagnosticLogcat"
+        require("public static final boolean ENABLE_DIAGNOSTIC_LOGCAT = false;" in content) {
+            "release BuildConfig must set ENABLE_DIAGNOSTIC_LOGCAT=false"
         }
         require("public static final boolean ENABLE_STRICT_MODE = false;" in content) {
             "release BuildConfig must set ENABLE_STRICT_MODE=false"
+        }
+    }
+}
+
+val verifyPublicReleasePrivacy by tasks.registering {
+    group = "verification"
+    description = "Fail when publicRelease can expose diagnostics, insecure TLS, or strict-mode debug flags."
+
+    dependsOn("generatePublicReleaseBuildConfig")
+    inputs.file(publicReleaseBuildConfigFile)
+
+    doLast {
+        require(!enableReleaseProbe) {
+            "foxhole.releaseProbe may only be used with internalRelease, never with publicRelease."
+        }
+        val content = publicReleaseBuildConfigFile.get().asFile.readText()
+        require("public static final boolean ENABLE_DIAGNOSTIC_LOGCAT = false;" in content) {
+            "publicRelease BuildConfig must set ENABLE_DIAGNOSTIC_LOGCAT=false"
+        }
+        require("public static final boolean ALLOW_INSECURE_TLS_BY_DEFAULT = false;" in content) {
+            "publicRelease BuildConfig must set ALLOW_INSECURE_TLS_BY_DEFAULT=false"
+        }
+        require("public static final boolean ENABLE_STRICT_MODE = false;" in content) {
+            "publicRelease BuildConfig must set ENABLE_STRICT_MODE=false"
+        }
+    }
+}
+
+val verifyPublicReleaseNativeInventory by tasks.registering {
+    group = "verification"
+    description = "Fail when the public release bundle contains unknown native or executable assets."
+
+    dependsOn("bundlePublicRelease")
+    inputs.dir(publicReleaseBundleDir)
+
+    doLast {
+        val bundleFile = publicReleaseBundleFile()
+        require(bundleFile.isFile) { "publicRelease AAB is missing: ${bundleFile.absolutePath}" }
+        val entries = ZipFile(bundleFile).use { zip -> zip.entries().asSequence().map { it.name }.toList() }
+        val nativeEntries = entries.filter { entry -> entry.endsWith(".so") }
+        val nativeLibraries = nativeEntries.map { entry -> entry.substringAfterLast('/') }.toSet()
+        val allowedNativeLibraries =
+            setOf(
+                "libTor.so",
+                "libandroidx.graphics.path.so",
+                "libbox.so",
+                "libconjure_client.so",
+                "libdatastore_shared_counter.so",
+                "liblyrebird.so",
+                "libsqlcipher.so",
+            )
+        val requiredRuntimeLibraries =
+            setOf(
+                "libTor.so",
+                "libbox.so",
+                "libconjure_client.so",
+                "liblyrebird.so",
+            )
+        val unknownNativeLibraries = nativeLibraries - allowedNativeLibraries
+        require(unknownNativeLibraries.isEmpty()) {
+            "publicRelease AAB contains unknown native libraries: ${unknownNativeLibraries.joinToString()}"
+        }
+        val missingRuntimeLibraries = requiredRuntimeLibraries - nativeLibraries
+        require(missingRuntimeLibraries.isEmpty()) {
+            "publicRelease AAB is missing bundled runtime libraries: ${missingRuntimeLibraries.joinToString()}"
+        }
+        val executableAssets =
+            entries.filter { entry ->
+                entry.startsWith("base/assets/") &&
+                    (entry.endsWith(".so") || entry.endsWith(".dex") || entry.endsWith(".jar"))
+            }
+        require(executableAssets.isEmpty()) {
+            "publicRelease AAB must not ship executable assets outside native lib packaging: " +
+                executableAssets.joinToString()
+        }
+    }
+}
+
+val collectPublicReleaseNativeSymbols by tasks.registering(Zip::class) {
+    group = "build"
+    description = "Archive merged publicRelease native libraries before strip for release symbol retention."
+
+    dependsOn("mergePublicReleaseNativeLibs")
+    from(publicReleaseMergedNativeLibsDir)
+    archiveFileName.set("publicRelease-native-symbols.zip")
+    destinationDirectory.set(layout.buildDirectory.dir("outputs/native-debug-symbols/publicRelease"))
+}
+
+val verifyReleaseSbom by tasks.registering {
+    group = "verification"
+    description = "Fail when the release SBOM is missing or does not include release-critical components."
+
+    if (rootProject.tasks.names.contains("cyclonedxBom")) {
+        dependsOn(rootProject.tasks.named("cyclonedxBom"))
+    }
+    val sbomJson = rootProject.layout.buildDirectory.file("reports/cyclonedx/bom.json")
+    inputs.file(sbomJson).optional()
+
+    doLast {
+        require(rootProject.tasks.names.contains("cyclonedxBom")) {
+            "Release SBOM task is unavailable. Run public release preflight with -Pfoxhole.sbom=true."
+        }
+        val sbomFile = sbomJson.get().asFile
+        require(sbomFile.isFile) { "Release SBOM is missing: ${sbomFile.absolutePath}" }
+        val sbom = sbomFile.readText()
+        listOf(
+            "foxhole-android",
+            "sqlcipher-android",
+            "okhttp",
+            "zxing-android-embedded",
+            "BlurView",
+        ).forEach { component ->
+            require(component in sbom) { "Release SBOM does not include required component: $component" }
+        }
+    }
+}
+
+val publicReleasePreflight by tasks.registering {
+    group = "verification"
+    description = "Verify public release signing, privacy flags, bundle contents, mapping, symbols, locale config, and SBOM."
+
+    dependsOn(
+        "bundlePublicRelease",
+        collectPublicReleaseNativeSymbols,
+        verifyPublicReleasePrivacy,
+        verifyPublicReleaseNativeInventory,
+        verifyReleaseSbom,
+    )
+    inputs.dir(publicReleaseBundleDir)
+    inputs.file(publicReleaseBuildConfigFile)
+    inputs.file(publicReleaseMappingFile)
+    inputs.file(publicReleaseNativeSymbolsArchive)
+    inputs.file(publicReleaseLocaleConfigFile)
+
+    doLast {
+        require(releaseSigningReady) {
+            "publicRelease requires release signing. Configure ${releaseSigningPropertiesFile.absolutePath} or FOXHOLE_RELEASE_* env vars."
+        }
+        require(file(releaseSigningStoreFilePath!!).isFile) {
+            "publicRelease keystore is missing: $releaseSigningStoreFilePath"
+        }
+        val bundleFile = publicReleaseBundleFile()
+        require(bundleFile.isFile) { "publicRelease AAB is missing: ${bundleFile.absolutePath}" }
+        val bundleEntries = ZipFile(bundleFile).use { zip -> zip.entries().asSequence().map { it.name }.toList() }
+        val signatureEntries =
+            bundleEntries.filter { entry ->
+                entry.startsWith("META-INF/") &&
+                    (entry.endsWith(".RSA") || entry.endsWith(".DSA") || entry.endsWith(".EC"))
+            }
+        require(signatureEntries.isNotEmpty()) {
+            "publicRelease AAB is not signed with a JAR signature block."
+        }
+        require(publicApplicationId == "com.foxhole.beta") {
+            "publicRelease applicationId must be com.foxhole.beta, was $publicApplicationId"
+        }
+        val versionCode = requireNotNull(android.defaultConfig.versionCode) { "publicRelease versionCode is missing" }
+        require(versionCode > lastUploadedPublicVersionCode) {
+            "publicRelease versionCode $versionCode must be greater than uploaded $lastUploadedPublicVersionCode"
+        }
+        val versionName = requireNotNull(android.defaultConfig.versionName) { "publicRelease versionName is missing" }
+        require(!versionName.contains("debug", ignoreCase = true)) {
+            "publicRelease versionName must not contain Debug: $versionName"
+        }
+        require(!versionName.contains("internal", ignoreCase = true)) {
+            "publicRelease versionName must not contain internal: $versionName"
+        }
+        val buildConfig = publicReleaseBuildConfigFile.get().asFile.readText()
+        require("public static final boolean ENABLE_DIAGNOSTIC_LOGCAT = false;" in buildConfig) {
+            "publicRelease must keep diagnostic logcat disabled."
+        }
+        val mappingFile = publicReleaseMappingFile.get().asFile
+        require(mappingFile.isFile && mappingFile.length() > 0L) {
+            "publicRelease mapping file is missing or empty: ${mappingFile.absolutePath}"
+        }
+        val nativeSymbolsArchive = publicReleaseNativeSymbolsArchive.get().asFile
+        require(nativeSymbolsArchive.isFile && nativeSymbolsArchive.length() > 0L) {
+            "publicRelease native symbol archive is missing or empty: ${nativeSymbolsArchive.absolutePath}"
+        }
+        val localeConfig = publicReleaseLocaleConfigFile.get().asFile
+        require(localeConfig.isFile && "<locale-config" in localeConfig.readText() && "<locale " in localeConfig.readText()) {
+            "publicRelease generated locale config is missing or invalid: ${localeConfig.absolutePath}"
         }
     }
 }
@@ -258,9 +488,11 @@ tasks.matching { task ->
             "lintAnalyzeDebugUnitTest",
             "lintAnalyzeDebugAndroidTest",
             "lintAnalyzeRelease",
+            "lintAnalyzeInternalRelease",
+            "lintAnalyzePublicRelease",
         )
 }.configureEach {
-    dependsOn("kspDebugKotlin", "kspReleaseKotlin")
+    dependsOn("kspDebugKotlin", "kspReleaseKotlin", "kspInternalReleaseKotlin", "kspPublicReleaseKotlin")
 }
 
 android {
@@ -268,7 +500,7 @@ android {
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "com.foxhole.beta"
+        applicationId = publicApplicationId
         minSdk = 26
         targetSdk = 37
         versionCode = 2
@@ -320,7 +552,7 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             buildConfigField("boolean", "ALLOW_INSECURE_TLS_BY_DEFAULT", "false")
-            buildConfigField("boolean", "ENABLE_DIAGNOSTIC_LOGCAT", if (enableReleaseProbe) "true" else "false")
+            buildConfigField("boolean", "ENABLE_DIAGNOSTIC_LOGCAT", "false")
             buildConfigField("boolean", "ENABLE_STRICT_MODE", "false")
             if (releaseSigningReady) {
                 signingConfig = signingConfigs.getByName("release")
@@ -328,12 +560,29 @@ android {
             if (!enableAbiSplitApks) {
                 ndk {
                     abiFilters += listOf("arm64-v8a", "armeabi-v7a")
+                    debugSymbolLevel = "SYMBOL_TABLE"
                 }
             }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
+        }
+        create("internalRelease") {
+            initWith(getByName("release"))
+            matchingFallbacks += listOf("release")
+            applicationIdSuffix = ".internal"
+            versionNameSuffix = "-Internal"
+            buildConfigField("boolean", "ALLOW_INSECURE_TLS_BY_DEFAULT", "false")
+            buildConfigField("boolean", "ENABLE_DIAGNOSTIC_LOGCAT", if (enableReleaseProbe) "true" else "false")
+            buildConfigField("boolean", "ENABLE_STRICT_MODE", "false")
+        }
+        create("publicRelease") {
+            initWith(getByName("release"))
+            matchingFallbacks += listOf("release")
+            buildConfigField("boolean", "ALLOW_INSECURE_TLS_BY_DEFAULT", "false")
+            buildConfigField("boolean", "ENABLE_DIAGNOSTIC_LOGCAT", "false")
+            buildConfigField("boolean", "ENABLE_STRICT_MODE", "false")
         }
     }
 
@@ -355,6 +604,8 @@ android {
     sourceSets {
         getByName("main") {
             jniLibs.directories.add(layout.buildDirectory.dir("generated/torNativeLibs").get().asFile.path)
+            assets.directories.clear()
+            assets.directories.add(filteredMainAssetsDir.get().asFile.path)
         }
     }
 
