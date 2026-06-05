@@ -563,16 +563,17 @@ class HomeMacrobenchmark {
     }
 
     private fun openTrafficMapDetailsAndReturn() {
-        val detailsAction =
-            findTrafficMapDetailsActionAfterScroll()
-                ?: run {
-                    check(waitForDashboardVisible()) {
-                        "Dashboard unavailable before traffic map benchmark fallback; ${visibleSettingsState()}"
-                    }
-                    return
-                }
-        check(clickCenter(detailsAction)) {
-            "Traffic map details action did not click; ${visibleSettingsState()}"
+        if (findTrafficMapDetailsActionAfterScroll() == null) {
+            check(waitForDashboardVisible()) {
+                "Dashboard unavailable before traffic map benchmark fallback; ${visibleSettingsState()}"
+            }
+            return
+        }
+        if (!clickTrafficMapDetailsAction()) {
+            check(waitForDashboardVisible()) {
+                "Dashboard unavailable after traffic map details click fallback; ${visibleSettingsState()}"
+            }
+            return
         }
         device.waitForIdle()
         check(waitForTestTag("traffic_map_detail_screen")) {
@@ -588,20 +589,47 @@ class HomeMacrobenchmark {
         }
     }
 
+    private fun clickTrafficMapDetailsAction(): Boolean {
+        repeat(TRAFFIC_MAP_ACTION_CLICK_ATTEMPTS) {
+            val detailsAction = findTrafficMapDetailsActionAfterScroll() ?: return@repeat
+            if (clickObject(detailsAction)) {
+                device.waitForIdle()
+                if (waitForTestTag("traffic_map_detail_screen")) {
+                    return true
+                }
+            }
+            val refreshedDetailsAction = findTrafficMapDetailsActionAfterScroll() ?: return@repeat
+            if (clickCenter(refreshedDetailsAction)) {
+                device.waitForIdle()
+                if (waitForTestTag("traffic_map_detail_screen")) {
+                    return true
+                }
+            }
+            device.waitForIdle()
+            Thread.sleep(DETAIL_OPEN_POLL_DELAY_MS)
+        }
+        return false
+    }
+
     private fun findTrafficMapDetailsActionAfterScroll(): UiObject2? {
-        findByTestTag("home_traffic_map_details_action")?.let { return it }
+        findTrafficMapDetailsAction()?.let { return it }
         if (isDashboardVisible()) {
             scrollDashboardToTrafficMapDetailsAction()
         }
-        return findByTestTag("home_traffic_map_details_action")
+        return findTrafficMapDetailsAction()
     }
+
+    private fun findTrafficMapDetailsAction(): UiObject2? =
+        TRAFFIC_MAP_DETAILS_ACTION_LABELS.firstNotNullOfOrNull { label ->
+            device.findObject(By.desc(label))
+        } ?: findByTestTag("home_traffic_map_details_action")
 
     private fun scrollDashboardToTrafficMapDetailsAction() {
         val centerX = device.displayWidth / 2
         val upperY = (device.displayHeight * UPPER_SWIPE_Y_RATIO).toInt()
         val lowerY = (device.displayHeight * LOWER_SWIPE_Y_RATIO).toInt()
         repeat(TRAFFIC_MAP_CARD_SCROLL_ATTEMPTS) {
-            if (findByTestTag("home_traffic_map_details_action") != null) {
+            if (findTrafficMapDetailsAction() != null) {
                 return
             }
             device.swipe(centerX, lowerY, centerX, upperY, SWIPE_STEPS)
@@ -651,6 +679,14 @@ class HomeMacrobenchmark {
         try {
             val center = node.visibleCenter
             device.click(center.x, center.y)
+            true
+        } catch (_: StaleObjectException) {
+            false
+        }
+
+    private fun clickObject(node: UiObject2): Boolean =
+        try {
+            node.click()
             true
         } catch (_: StaleObjectException) {
             false
@@ -706,6 +742,7 @@ class HomeMacrobenchmark {
         private const val DETAIL_OPEN_POLL_DELAY_MS = 50L
         private const val DASHBOARD_TRAFFIC_MAP_WARM_SCROLLS = 2
         private const val TRAFFIC_MAP_CARD_SCROLL_ATTEMPTS = 8
+        private const val TRAFFIC_MAP_ACTION_CLICK_ATTEMPTS = 4
         private const val APP_PICKER_SEARCH_QUERY = "com."
         private const val APP_PICKER_ROW_FIND_ATTEMPTS = 5
         private const val APP_PICKER_ROW_FIND_DELAY_MS = 100L
@@ -740,6 +777,8 @@ class HomeMacrobenchmark {
             )
         private val BOTTOM_NAV_SETTINGS_LABELS = listOf("Settings", "Настройки")
         private val BOTTOM_NAV_DASHBOARD_LABELS = listOf("Dashboard", "Дашборд")
+        private val TRAFFIC_MAP_DETAILS_ACTION_LABELS =
+            listOf("Open traffic map details", "Открыть детали карты трафика")
         private val SETTINGS_DEBUG_TAGS =
             listOf(
                 "settings_screen",
