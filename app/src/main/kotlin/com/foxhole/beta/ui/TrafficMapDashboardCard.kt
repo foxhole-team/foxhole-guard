@@ -14,6 +14,7 @@ import android.os.SystemClock
 import android.os.Trace
 import android.util.DisplayMetrics
 import android.util.Log
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,6 +23,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -69,6 +71,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -754,6 +757,7 @@ private fun TrafficMapCanvas(
     val originLon = state.originLon
     val originCountryCode = state.originCountryCode
     var canvasSize by remember { mutableStateOf(IntSize.Zero) }
+    var selectedMarkerKey by rememberSaveable { mutableStateOf<String?>(null) }
     val countryBitmap =
         rememberTrafficMapLandLayerBitmap(
             shapes = mapCountryShapes,
@@ -769,6 +773,17 @@ private fun TrafficMapCanvas(
             colors = colors,
         )
     val mapContentDescription = remember(state) { trafficMapContentDescription(state) }
+    val markerHitTargets =
+        remember(canvasSize, state, drawableDestinations, drawableVpnRoute, drawableTorExit) {
+            trafficMapMarkerHitTargets(
+                state = state,
+                destinations = drawableDestinations,
+                vpnRoute = drawableVpnRoute,
+                torExit = drawableTorExit,
+                canvasSize = canvasSize,
+            )
+        }
+    val selectedMarker = markerHitTargets.firstOrNull { target -> target.key == selectedMarkerKey }
 
     Box(
         modifier = modifier
@@ -1023,7 +1038,101 @@ private fun TrafficMapCanvas(
                 }
             }
             .fillMaxSize(),
-    )
+    ) {
+        TrafficMapMarkerSemanticsLayer(
+            targets = markerHitTargets,
+            onMarkerSelected = { target -> selectedMarkerKey = target.key },
+        )
+        selectedMarker?.let { target ->
+            TrafficMapMarkerCallout(
+                target = target,
+                canvasSize = canvasSize,
+            )
+        }
+    }
+}
+
+@Composable
+private fun TrafficMapMarkerSemanticsLayer(
+    targets: List<TrafficMapMarkerHitTarget>,
+    onMarkerSelected: (TrafficMapMarkerHitTarget) -> Unit,
+) {
+    val density = LocalDensity.current
+    val touchTargetSize = 44.dp
+    val touchTargetSizePx = with(density) { touchTargetSize.toPx() }
+    targets.forEach { target ->
+        Box(
+            modifier =
+                Modifier
+                    .offset {
+                        IntOffset(
+                            x = (target.offset.x - (touchTargetSizePx / 2f)).roundToInt(),
+                            y = (target.offset.y - (touchTargetSizePx / 2f)).roundToInt(),
+                        )
+                    }
+                    .size(touchTargetSize)
+                    .clip(CircleShape)
+                    .clickable { onMarkerSelected(target) }
+                    .semantics { contentDescription = target.contentDescription }
+                    .testTag("traffic_map_marker_${target.key.normalizedTrafficMapTestTag()}"),
+        )
+    }
+}
+
+@Composable
+private fun TrafficMapMarkerCallout(
+    target: TrafficMapMarkerHitTarget,
+    canvasSize: IntSize,
+) {
+    val density = LocalDensity.current
+    val calloutWidth = 132.dp
+    val calloutOffset =
+        remember(target.offset, canvasSize, density) {
+            val widthPx = with(density) { calloutWidth.toPx() }
+            val horizontalGap = with(density) { 8.dp.toPx() }
+            val verticalLift = with(density) { 40.dp.toPx() }
+            IntOffset(
+                x = (target.offset.x + horizontalGap)
+                    .coerceIn(0f, (canvasSize.width - widthPx).coerceAtLeast(0f))
+                    .roundToInt(),
+                y = (target.offset.y - verticalLift)
+                    .coerceIn(0f, canvasSize.height.toFloat().coerceAtLeast(0f))
+                    .roundToInt(),
+            )
+        }
+    Surface(
+        modifier =
+            Modifier
+                .offset { calloutOffset }
+                .widthIn(min = 96.dp, max = calloutWidth)
+                .semantics { contentDescription = target.contentDescription }
+                .testTag("traffic_map_marker_callout"),
+        shape = MaterialTheme.shapes.small,
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
+        tonalElevation = 2.dp,
+        shadowElevation = 2.dp,
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            Text(
+                text = target.label,
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = target.detail,
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, lineHeight = 12.sp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
 }
 
 @Composable
@@ -1206,6 +1315,14 @@ internal data class TrafficMapMarkerPlacement(
     val offset: Offset,
 )
 
+private data class TrafficMapMarkerHitTarget(
+    val key: String,
+    val label: String,
+    val detail: String,
+    val contentDescription: String,
+    val offset: Offset,
+)
+
 internal data class DrawableTrafficMapEdge(
     val fromLat: Double,
     val fromLon: Double,
@@ -1245,6 +1362,96 @@ private fun List<TrafficMapEdge>.toDrawableTrafficMapEdges(): List<DrawableTraff
             role = edge.role,
         )
     }
+
+private fun trafficMapMarkerHitTargets(
+    state: TrafficMapUiState,
+    destinations: List<DrawableTrafficMapDestination>,
+    vpnRoute: DrawableTrafficMapDestination?,
+    torExit: DrawableTrafficMapDestination?,
+    canvasSize: IntSize,
+): List<TrafficMapMarkerHitTarget> {
+    if (canvasSize.width <= 0 || canvasSize.height <= 0) {
+        return emptyList()
+    }
+    val viewport = trafficMapViewport(Size(width = canvasSize.width.toFloat(), height = canvasSize.height.toFloat()))
+    val origin = project(state.originLat, state.originLon, viewport)
+    val markerLayout =
+        resolveTrafficMapMarkerPlacements(
+            markers =
+                trafficMapMarkerProjections(
+                    originCountryCode = state.originCountryCode,
+                    origin = origin,
+                    destinations = destinations,
+                    vpnRoute = vpnRoute,
+                    torExit = torExit,
+                    viewport = viewport,
+                ),
+            viewportTopLeft = viewport.topLeft,
+            viewportSize = viewport.size,
+        )
+    return buildList {
+        state.originCountryCode?.let {
+            val label = state.originCountryName ?: state.originCountryCode ?: "Device"
+            val detail = state.originCity?.takeIf(String::isNotBlank) ?: "Device"
+            add(
+                TrafficMapMarkerHitTarget(
+                    key = TRAFFIC_MAP_ORIGIN_MARKER_KEY,
+                    label = label,
+                    detail = detail,
+                    contentDescription = "Device $label $detail",
+                    offset = markerLayout.offsetForMarker(TRAFFIC_MAP_ORIGIN_MARKER_KEY, origin),
+                ),
+            )
+        }
+        state.destinations
+            .take(MAX_TRAFFIC_MAP_DRAW_DESTINATIONS)
+            .forEachIndexed { index, point ->
+                val key = trafficMapDestinationMarkerKey(index, point.countryCode.uppercase(Locale.US))
+                val bytes = formatTrafficMapLegendBytes(point.bytes)
+                add(
+                    TrafficMapMarkerHitTarget(
+                        key = key,
+                        label = point.label,
+                        detail = bytes,
+                        contentDescription = "Destination ${point.label}, $bytes, ${point.connections} connections",
+                        offset = markerLayout.offsetForMarker(key, project(point.lat, point.lon, viewport)),
+                    ),
+                )
+            }
+        state.vpnRoute?.let { point ->
+            val bytes = formatTrafficMapLegendBytes(point.bytes)
+            add(
+                TrafficMapMarkerHitTarget(
+                    key = TRAFFIC_MAP_VPN_ROUTE_MARKER_KEY,
+                    label = "VPN ${point.label}",
+                    detail = bytes,
+                    contentDescription = "VPN route ${point.label}, $bytes",
+                    offset =
+                        markerLayout.offsetForMarker(
+                            TRAFFIC_MAP_VPN_ROUTE_MARKER_KEY,
+                            project(point.lat, point.lon, viewport),
+                        ),
+                ),
+            )
+        }
+        state.torExit?.let { point ->
+            val bytes = formatTrafficMapLegendBytes(point.bytes)
+            add(
+                TrafficMapMarkerHitTarget(
+                    key = TRAFFIC_MAP_TOR_EXIT_MARKER_KEY,
+                    label = "TOR ${point.label}",
+                    detail = bytes,
+                    contentDescription = "TOR exit ${point.label}, $bytes",
+                    offset =
+                        markerLayout.offsetForMarker(
+                            TRAFFIC_MAP_TOR_EXIT_MARKER_KEY,
+                            project(point.lat, point.lon, viewport),
+                        ),
+                ),
+            )
+        }
+    }
+}
 
 private fun trafficMapMarkerProjections(
     originCountryCode: String?,
@@ -1496,7 +1703,16 @@ private fun DrawableTrafficMapEdge.toEndpointPreferredMarkerRoles(
     }
 
 private fun DrawableTrafficMapDestination.destinationMarkerKey(index: Int): String =
+    trafficMapDestinationMarkerKey(index = index, countryCode = countryCode)
+
+private fun trafficMapDestinationMarkerKey(
+    index: Int,
+    countryCode: String,
+): String =
     "destination:$index:$countryCode"
+
+private fun String.normalizedTrafficMapTestTag(): String =
+    lowercase(Locale.US).replace(Regex("[^a-z0-9_]+"), "_").trim('_')
 
 private val TrafficMapMarkerRole.markerPriority: Int
     get() =
