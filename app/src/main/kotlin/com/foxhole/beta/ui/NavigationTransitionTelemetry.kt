@@ -181,4 +181,4 @@ private data class PendingNavigationTransition(
 private fun String?.orUnknownRoute(): String = this ?: "unknown"
 
 private const val NAVIGATION_TELEMETRY_TAG = "FoxholeNavigation"
-private const val NAVIGATION_DETAIL_TRANSITION_MS = 150L
+private const val NAVIGATION_DETAIL_TRANSITION_MS = 280L

@@ -15,17 +15,12 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
-import androidx.compose.animation.core.FastOutLinearInEasing
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -45,6 +40,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material3.Icon
@@ -82,6 +78,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTagsAsResourceId
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.LayoutDirection
@@ -1161,7 +1158,6 @@ private fun RowScope.FoxholeBottomBarItem(
     selected: Boolean,
     onClick: () -> Unit,
 ) {
-    val interactionSource = remember(section) { MutableInteractionSource() }
     val contentColor =
         if (selected) {
             MaterialTheme.colorScheme.onSurface
@@ -1179,9 +1175,9 @@ private fun RowScope.FoxholeBottomBarItem(
                 .weight(1f)
                 .fillMaxHeight()
                 .clip(MaterialTheme.shapes.medium)
-                .clickable(
-                    interactionSource = interactionSource,
-                    indication = null,
+                .selectable(
+                    selected = selected,
+                    role = Role.Tab,
                     onClick = onClick,
                 )
                 .testTag(section.testTag),
@@ -1339,7 +1335,7 @@ private fun detailForwardEnter(): EnterTransition =
         animationSpec =
             tween(
                 durationMillis = DETAIL_FADE_IN_MS,
-                easing = LinearOutSlowInEasing,
+                easing = FoxholeMotionTokens.NavigationEnterEasing,
             ),
     ) +
         slideInHorizontally(
@@ -1347,7 +1343,7 @@ private fun detailForwardEnter(): EnterTransition =
             animationSpec =
                 tween(
                     durationMillis = DETAIL_TRANSITION_MS,
-                    easing = FastOutSlowInEasing,
+                    easing = FoxholeMotionTokens.NavigationEnterEasing,
                 ),
         )
 
@@ -1356,7 +1352,7 @@ private fun detailForwardExit(): ExitTransition =
         animationSpec =
             tween(
                 durationMillis = DETAIL_FADE_OUT_MS,
-                easing = FastOutLinearInEasing,
+                easing = FoxholeMotionTokens.NavigationExitEasing,
             ),
     ) +
         slideOutHorizontally(
@@ -1364,7 +1360,7 @@ private fun detailForwardExit(): ExitTransition =
             animationSpec =
                 tween(
                     durationMillis = DETAIL_TRANSITION_MS,
-                    easing = FastOutSlowInEasing,
+                    easing = FoxholeMotionTokens.NavigationExitEasing,
                 ),
         )
 
@@ -1373,7 +1369,7 @@ private fun detailBackEnter(): EnterTransition =
         animationSpec =
             tween(
                 durationMillis = DETAIL_FADE_IN_MS,
-                easing = LinearOutSlowInEasing,
+                easing = FoxholeMotionTokens.NavigationEnterEasing,
             ),
     ) +
         slideInHorizontally(
@@ -1381,7 +1377,7 @@ private fun detailBackEnter(): EnterTransition =
             animationSpec =
                 tween(
                     durationMillis = DETAIL_TRANSITION_MS,
-                    easing = FastOutSlowInEasing,
+                    easing = FoxholeMotionTokens.NavigationEnterEasing,
                 ),
         )
 
@@ -1390,7 +1386,7 @@ private fun detailBackExit(): ExitTransition =
         animationSpec =
             tween(
                 durationMillis = DETAIL_FADE_OUT_MS,
-                easing = FastOutLinearInEasing,
+                easing = FoxholeMotionTokens.NavigationExitEasing,
             ),
     ) +
         slideOutHorizontally(
@@ -1398,7 +1394,7 @@ private fun detailBackExit(): ExitTransition =
             animationSpec =
                 tween(
                     durationMillis = DETAIL_TRANSITION_MS,
-                    easing = FastOutSlowInEasing,
+                    easing = FoxholeMotionTokens.NavigationExitEasing,
                 ),
         )
 
@@ -1541,7 +1537,7 @@ private fun requestQuickSettingsTile(
 private const val SECTION_SWIPE_THRESHOLD_FRACTION = 0.22f
 private const val DETAIL_BACK_SWIPE_THRESHOLD_FRACTION = 0.18f
 private val DETAIL_BACK_SWIPE_EDGE_WIDTH = 32.dp
-private const val DETAIL_FADE_IN_MS = 80
-private const val DETAIL_FADE_OUT_MS = 60
-private const val DETAIL_TRANSITION_MS = 150
-private const val DETAIL_TRANSITION_OFFSET_FRACTION = 0.14f
+private const val DETAIL_FADE_IN_MS = FoxholeMotionTokens.NavigationFadeDurationMs
+private const val DETAIL_FADE_OUT_MS = FoxholeMotionTokens.FastDurationMs
+private const val DETAIL_TRANSITION_MS = FoxholeMotionTokens.NavigationEnterDurationMs
+private const val DETAIL_TRANSITION_OFFSET_FRACTION = FoxholeMotionTokens.NavigationSlideFraction

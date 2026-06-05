@@ -8,8 +8,27 @@ import org.junit.Test
 class FoxholeNavigationPresentationTest {
     @Test
     fun `detail transition uses subtle material-style offset instead of full page slide`() {
-        assertEquals(151, detailTransitionOffsetPx(1080))
+        assertEquals(108, detailTransitionOffsetPx(1080))
         assertEquals(1, detailTransitionOffsetPx(1))
+    }
+
+    @Test
+    fun `detail transition uses shared motion tokens`() {
+        val source =
+            listOf(
+                java.io.File("src/main/kotlin/com/foxhole/beta/ui/FoxholeApp.kt"),
+                java.io.File("app/src/main/kotlin/com/foxhole/beta/ui/FoxholeApp.kt"),
+                java.io.File("../app/src/main/kotlin/com/foxhole/beta/ui/FoxholeApp.kt"),
+            ).first { file -> file.isFile }.readText()
+
+        assertTrue(source.contains("DETAIL_FADE_IN_MS = FoxholeMotionTokens.NavigationFadeDurationMs"))
+        assertTrue(source.contains("DETAIL_FADE_OUT_MS = FoxholeMotionTokens.FastDurationMs"))
+        assertTrue(source.contains("DETAIL_TRANSITION_MS = FoxholeMotionTokens.NavigationEnterDurationMs"))
+        assertTrue(source.contains("DETAIL_TRANSITION_OFFSET_FRACTION = FoxholeMotionTokens.NavigationSlideFraction"))
+        assertTrue(source.contains("easing = FoxholeMotionTokens.NavigationEnterEasing"))
+        assertTrue(source.contains("easing = FoxholeMotionTokens.NavigationExitEasing"))
+        assertFalse(source.contains("DETAIL_TRANSITION_MS = 150"))
+        assertFalse(source.contains("DETAIL_TRANSITION_OFFSET_FRACTION = 0.14f"))
     }
 
     @Test
@@ -187,5 +206,25 @@ class FoxholeNavigationPresentationTest {
         assertTrue(themeSource.contains("bottomBarContainerColor = FoxholeDarkSurface,"))
         assertTrue(themeSource.contains("bottomBarContainerColor = colorScheme.surface,"))
         assertTrue(themeSource.contains("bottomBarContainerColor = colorScheme.surfaceContainerHigh,"))
+    }
+
+    @Test
+    fun `bottom dock items expose tab semantics and clipped material ripple`() {
+        val source =
+            listOf(
+                java.io.File("src/main/kotlin/com/foxhole/beta/ui/FoxholeApp.kt"),
+                java.io.File("app/src/main/kotlin/com/foxhole/beta/ui/FoxholeApp.kt"),
+                java.io.File("../app/src/main/kotlin/com/foxhole/beta/ui/FoxholeApp.kt"),
+            ).first { file -> file.isFile }.readText()
+        val itemBlock =
+            source.substringAfter("private fun RowScope.FoxholeBottomBarItem(")
+                .substringBefore("private fun Modifier.sectionSwipeNavigation(")
+
+        assertTrue(itemBlock.contains(".clip(MaterialTheme.shapes.medium)"))
+        assertTrue(itemBlock.contains(".selectable("))
+        assertTrue(itemBlock.contains("selected = selected"))
+        assertTrue(itemBlock.contains("role = Role.Tab"))
+        assertFalse(itemBlock.contains("indication = null"))
+        assertFalse(itemBlock.contains(".clickable("))
     }
 }
