@@ -67,6 +67,29 @@ class ReleaseEngineeringContractTest {
         }
     }
 
+    @Test
+    fun `connected test runner emits mandatory public QA matrix`() {
+        val runner = projectFile("../scripts/run-connected-android-tests.sh").readText()
+
+        assertTrue(runner.contains("readonly QA_MATRIX_FILE="))
+        assertTrue(runner.contains("verify_qa_matrix"))
+        assertTrue(runner.contains("Connected QA matrix is missing required passed dimensions"))
+        assertTrue(runner.contains("com.foxhole.beta.vpn.BootReceiverRestoreAndroidTest"))
+        listOf(
+            "app_inventory",
+            "boot_restore",
+            "diagnostics_logs",
+            "foreground_service",
+            "package_replace_restore",
+            "profile_import",
+            "proxy_runtime",
+            "routing_apps",
+            "routing_sites",
+        ).forEach { dimension ->
+            assertTrue("Missing QA dimension $dimension", runner.contains("\"$dimension\""))
+        }
+    }
+
     private fun projectFile(path: String): File =
         listOf(File(path), File("app/$path"), File("../app/$path"))
             .first { file -> file.exists() }

@@ -6,6 +6,7 @@ readonly TEST_METHOD_TIMEOUT_SECONDS="${FOXHOLE_ANDROID_TEST_METHOD_TIMEOUT_SECO
 readonly TARGET_PACKAGE="${FOXHOLE_ANDROID_TEST_TARGET_PACKAGE:-com.foxhole.beta.debug}"
 readonly SPEC_ARTIFACT_ROOT="${FOXHOLE_CONNECTED_TEST_ARTIFACT_ROOT:-build/connected-test-specs}"
 readonly SUMMARY_FILE="$SPEC_ARTIFACT_ROOT/summary.tsv"
+readonly QA_MATRIX_FILE="$SPEC_ARTIFACT_ROOT/qa-matrix.tsv"
 readonly DEFAULT_REQUIRED_TEST_SPECS=(
   "com.foxhole.beta.ProfileRuntimeSessionAndroidTest#freshExactImportPreservesUserServerPort"
   "com.foxhole.beta.ProfileRuntimeSessionAndroidTest#freshDirectShareImportsPreserveProvidedRuntimeFields"
@@ -32,6 +33,7 @@ readonly DEFAULT_REQUIRED_TEST_SPECS=(
   "com.foxhole.beta.ui.HomeScreenTest#routingSitesScreenOpensAddExceptionDialog"
   "com.foxhole.beta.ui.LiveLogsDialogTest"
   "com.foxhole.beta.vpn.ProxyRuntimeSmokeTest"
+  "com.foxhole.beta.vpn.BootReceiverRestoreAndroidTest"
 )
 readonly OPTIONAL_TEST_SPECS=(
   "com.foxhole.beta.ProfileRuntimeSessionAndroidTest#logsCurrentActiveProfileRuntimeSummary"
@@ -77,6 +79,189 @@ dump_diagnostics() {
 
 safe_spec_name() {
   printf '%s' "$1" | sed -E 's/[^A-Za-z0-9._#-]+/_/g; s/#/__/g'
+}
+
+matrix_dimensions_for_spec() {
+  local test_spec="$1"
+  case "$test_spec" in
+    com.foxhole.beta.ProfileRuntimeSessionAndroidTest#freshExactImportPreservesUserServerPort)
+      printf '%s\n' "profile_import" "runtime_config_integrity"
+      ;;
+    com.foxhole.beta.ProfileRuntimeSessionAndroidTest#freshDirectShareImportsPreserveProvidedRuntimeFields)
+      printf '%s\n' "profile_import" "direct_share_import"
+      ;;
+    com.foxhole.beta.ProfileRuntimeSessionAndroidTest#manualSmartSubscriptionRuntimeStressCycles)
+      printf '%s\n' "runtime_stress" "smart_subscription" "vpn_runtime"
+      ;;
+    com.foxhole.beta.ProfileRuntimeSessionAndroidTest#logsCurrentActiveProfileRuntimeSummary)
+      printf '%s\n' "diagnostics_logs" "runtime_config_integrity"
+      ;;
+    com.foxhole.beta.ProfileRuntimeSessionAndroidTest#manualFreshImportConnectsWhenRequested)
+      printf '%s\n' "profile_import" "vpn_runtime"
+      ;;
+    com.foxhole.beta.ProfileRuntimeSessionAndroidTest#manualDirectShareLinksLogTerminalStateAndDiagnostics)
+      printf '%s\n' "direct_share_import" "diagnostics_logs"
+      ;;
+    com.foxhole.beta.ProfileRuntimeSessionAndroidTest#manualSmartSubscriptionLogsImportAndTargetProtocolRuntime)
+      printf '%s\n' "smart_subscription" "diagnostics_logs" "vpn_runtime"
+      ;;
+    com.foxhole.beta.ProfileRuntimeSessionAndroidTest#restoreBaselineRuntimeSettingsWhenRequested)
+      printf '%s\n' "settings_restore" "runtime_config_integrity"
+      ;;
+    com.foxhole.beta.ProfileRuntimeSessionAndroidTest#liveOptionProbeMatrixLogsVpnBoundIpResults)
+      printf '%s\n' "vpn_validation" "diagnostics_logs"
+      ;;
+    com.foxhole.beta.ui.HomeRuntimeBehaviorTest)
+      printf '%s\n' "dashboard_ui" "runtime_ui"
+      ;;
+    com.foxhole.beta.ui.HomeScreenTest#opensSettingsFromBottomNavigation)
+      printf '%s\n' "navigation" "settings"
+      ;;
+    com.foxhole.beta.ui.HomeScreenTest#legacySwipeZonesAreRemoved)
+      printf '%s\n' "navigation" "gesture_policy"
+      ;;
+    com.foxhole.beta.ui.HomeScreenTest#horizontalSwipesSwitchDashboardAndSettingsSections)
+      printf '%s\n' "navigation" "gesture_policy"
+      ;;
+    com.foxhole.beta.ui.HomeScreenTest#systemBackFromRoutingAppsReturnsSettingsHome)
+      printf '%s\n' "navigation" "back_stack" "routing_apps"
+      ;;
+    com.foxhole.beta.ui.HomeScreenTest#settingsDetailHidesBottomBarAndBackReturnsSettingsRoot)
+      printf '%s\n' "navigation" "back_stack" "settings"
+      ;;
+    com.foxhole.beta.ui.HomeScreenTest#rapidBottomNavigationTapsKeepUiResponsive)
+      printf '%s\n' "navigation" "responsiveness"
+      ;;
+    com.foxhole.beta.ui.HomeScreenTest#opensProfilesFromHomeAction)
+      printf '%s\n' "navigation" "profile_management"
+      ;;
+    com.foxhole.beta.ui.HomeScreenTest#profilesExportActionSelectsInlineTargetsAndOpensDestinationDialog)
+      printf '%s\n' "profile_management" "profile_export"
+      ;;
+    com.foxhole.beta.ui.HomeScreenTest#profilesRowTapSelectsProfileWithoutOpeningDetailAndDeleteDialogShowsName)
+      printf '%s\n' "profile_management" "secret_deletion_path"
+      ;;
+    com.foxhole.beta.ui.HomeScreenTest#singleProfileEditOpensConfigFormWithoutStuckLoading)
+      printf '%s\n' "profile_management" "runtime_config_integrity"
+      ;;
+    com.foxhole.beta.ui.HomeScreenTest#opensUniversalImportMenuFromHomeAction)
+      printf '%s\n' "profile_import" "navigation"
+      ;;
+    com.foxhole.beta.ui.HomeScreenTest#settingsHomeShowsApplicationsAndSitesShortcuts)
+      printf '%s\n' "settings" "routing_apps" "routing_sites"
+      ;;
+    com.foxhole.beta.ui.HomeScreenTest#settingsFooterShowsGithubRepositoryAction)
+      printf '%s\n' "settings" "policy_links"
+      ;;
+    com.foxhole.beta.ui.HomeScreenTest#hiddenExpertSettingsAreNotRestoredFromVersionCard|\
+    com.foxhole.beta.ui.HomeScreenTest#versionCardDoesNothingWhenExpertSettingsAreAlreadyVisible)
+      printf '%s\n' "settings" "expert_settings_guard"
+      ;;
+    com.foxhole.beta.ui.HomeScreenTest#screenshotToggleUpdatesWindowSecureFlag|\
+    com.foxhole.beta.ui.HomeScreenTest#appSettingsExposeScreenshotToggleAndUpdateWindowSecureFlag)
+      printf '%s\n' "privacy_controls" "screenshot_policy"
+      ;;
+    com.foxhole.beta.ui.HomeScreenTest#routingAppsScreenOpensPickerFromAddExceptionButton|\
+    com.foxhole.beta.ui.HomeScreenTest#routingAppsPickerFiltersInstalledPackages)
+      printf '%s\n' "routing_apps" "app_inventory"
+      ;;
+    com.foxhole.beta.ui.HomeScreenTest#routingSitesScreenOpensAddExceptionDialog)
+      printf '%s\n' "routing_sites"
+      ;;
+    com.foxhole.beta.ui.LiveLogsDialogTest)
+      printf '%s\n' "diagnostics_logs" "privacy_controls"
+      ;;
+    com.foxhole.beta.vpn.ProxyRuntimeSmokeTest)
+      printf '%s\n' "proxy_runtime" "foreground_service"
+      ;;
+    com.foxhole.beta.vpn.VpnRuntimeSmokeTest)
+      printf '%s\n' "vpn_runtime" "foreground_service" "vpn_validation"
+      ;;
+    com.foxhole.beta.vpn.BootReceiverRestoreAndroidTest)
+      printf '%s\n' "boot_restore" "package_replace_restore" "foreground_service"
+      ;;
+    *)
+      printf '%s\n' "unclassified"
+      ;;
+  esac
+}
+
+record_matrix_rows() {
+  local test_spec="$1"
+  local requirement="$2"
+  local result="$3"
+  local tests="$4"
+  local artifact_dir="$5"
+  local dimension
+
+  while IFS= read -r dimension; do
+    if [[ -n "$dimension" ]]; then
+      printf '%s\t%s\t%s\t%s\t%s\t%s\n' \
+        "$dimension" "$test_spec" "$requirement" "$result" "$tests" "$artifact_dir" >> "$QA_MATRIX_FILE"
+    fi
+  done < <(matrix_dimensions_for_spec "$test_spec")
+}
+
+required_matrix_dimensions() {
+  printf '%s\n' \
+    "app_inventory" \
+    "back_stack" \
+    "boot_restore" \
+    "dashboard_ui" \
+    "diagnostics_logs" \
+    "direct_share_import" \
+    "foreground_service" \
+    "gesture_policy" \
+    "navigation" \
+    "package_replace_restore" \
+    "privacy_controls" \
+    "profile_export" \
+    "profile_import" \
+    "profile_management" \
+    "proxy_runtime" \
+    "responsiveness" \
+    "routing_apps" \
+    "routing_sites" \
+    "runtime_config_integrity" \
+    "runtime_ui" \
+    "screenshot_policy" \
+    "secret_deletion_path" \
+    "settings"
+  if [[ "${FOXHOLE_REQUIRE_RUNTIME_STRESS:-0}" == "1" ]]; then
+    printf '%s\n' "runtime_stress" "smart_subscription" "vpn_runtime"
+  fi
+}
+
+verify_qa_matrix() {
+  local require_full_matrix="${FOXHOLE_REQUIRE_CONNECTED_QA_MATRIX:-}"
+  if [[ -z "$require_full_matrix" ]]; then
+    if [[ -n "${FOXHOLE_REQUIRED_CONNECTED_TEST_SPECS:-}" ]]; then
+      require_full_matrix="0"
+    else
+      require_full_matrix="1"
+    fi
+  fi
+  if [[ "$require_full_matrix" != "1" ]]; then
+    echo "Connected QA matrix dimension gate skipped for an explicit reduced required spec set."
+    return
+  fi
+
+  local missing=()
+  local dimension
+  while IFS= read -r dimension; do
+    if ! awk -F '\t' -v dimension="$dimension" \
+      'NR > 1 && $1 == dimension && $3 == "required" && $4 == "passed" && ($5 + 0) > 0 { found = 1 } END { exit(found ? 0 : 1) }' \
+      "$QA_MATRIX_FILE"; then
+      missing+=("$dimension")
+    fi
+  done < <(required_matrix_dimensions)
+
+  if [[ "${#missing[@]}" -gt 0 ]]; then
+    echo "Connected QA matrix is missing required passed dimensions: ${missing[*]}" >&2
+    echo "Matrix:" >&2
+    cat "$QA_MATRIX_FILE" >&2
+    exit 1
+  fi
 }
 
 clear_gradle_connected_outputs() {
@@ -241,6 +426,11 @@ run_test_spec() {
   spec_dir="$(copy_spec_artifacts "$test_spec")"
   local tests failures errors skipped
   IFS=$'\t' read -r tests failures errors skipped < <(parse_spec_xml "$spec_dir")
+  local matrix_result="passed"
+  if [[ "$status" -ne 0 ]]; then
+    matrix_result="failed"
+  fi
+  record_matrix_rows "$test_spec" "$required_label" "$matrix_result" "$tests" "$spec_dir"
   printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
     "$test_spec" "$required_label" "$status" "$tests" "$failures" "$errors" "$skipped" "$spec_dir" >> "$SUMMARY_FILE"
 
@@ -267,6 +457,7 @@ adb wait-for-device
 rm -rf "$SPEC_ARTIFACT_ROOT"
 mkdir -p "$SPEC_ARTIFACT_ROOT"
 printf 'spec\trequirement\tgradle_status\ttests\tfailures\terrors\tskipped\tartifact_dir\n' > "$SUMMARY_FILE"
+printf 'dimension\tspec\trequirement\tresult\ttests\tartifact_dir\n' > "$QA_MATRIX_FILE"
 
 REQUIRED_TEST_SPECS=()
 while IFS= read -r test_spec; do
@@ -293,10 +484,17 @@ else
     if is_required_test_spec "$test_spec"; then
       continue
     fi
+    record_matrix_rows "$test_spec" "optional-not-run" "not-run" "0" ""
     printf '%s\toptional-not-run\t0\t0\t0\t0\t0\t\n' "$test_spec" >> "$SUMMARY_FILE"
   done
 fi
 
+verify_qa_matrix
+
 echo "::group::connected test summary"
 cat "$SUMMARY_FILE"
+echo "::endgroup::"
+
+echo "::group::connected QA matrix"
+cat "$QA_MATRIX_FILE"
 echo "::endgroup::"
