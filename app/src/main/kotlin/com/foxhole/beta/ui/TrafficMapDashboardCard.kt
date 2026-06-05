@@ -11,6 +11,7 @@ import android.os.Process
 import android.os.SystemClock
 import android.os.Trace
 import android.util.DisplayMetrics
+import android.util.LruCache
 import android.util.Log
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -532,30 +533,52 @@ private fun TrafficMapCanvas(
                     ).coerceAtLeast(1L)
                 val routeDrawModels =
                     traceTrafficMapFrameSection("TrafficMap/buildRoutes") {
-                        val routeLanes = trafficRouteLanes(origin, drawableEdges, viewport)
-                        if (drawableEdges.isNotEmpty()) {
-                            drawableEdges
-                                .take(MAX_TRAFFIC_MAP_DRAW_EDGES)
-                                .map { edge ->
-                                    val from = project(edge.fromLat, edge.fromLon, viewport)
-                                    val to = project(edge.toLat, edge.toLon, viewport)
-                                    val weight = sqrt(edge.bytes.toDouble() / maxBytes.toDouble()).toFloat()
-                                    TrafficMapRouteDrawModel(
-                                        path =
-                                            curvedTrafficRoutePath(
-                                                from = from,
-                                                to = to,
-                                                lane = routeLanes[trafficMapEdgeLaneKey(edge)] ?: 1,
-                                            ),
-                                        strokeWidth = minLineStroke + ((maxLineStroke - minLineStroke) * weight),
-                                        alpha =
-                                            TRAFFIC_MAP_ROUTE_MIN_ALPHA +
-                                                (TRAFFIC_MAP_ROUTE_ALPHA_RANGE * weight),
-                                        role = edge.role,
-                                    )
-                                }
-                        } else {
-                            emptyList()
+                        TrafficMapRouteModelCache.getOrBuild(
+                            key =
+                                TrafficMapRouteDrawCacheKey(
+                                    edges = drawableEdges,
+                                    originX = origin.x.roundToInt(),
+                                    originY = origin.y.roundToInt(),
+                                    viewportTopLeft =
+                                        IntOffset(
+                                            viewport.topLeft.x.roundToInt(),
+                                            viewport.topLeft.y.roundToInt(),
+                                        ),
+                                    viewportSize =
+                                        IntSize(
+                                            viewport.size.width.roundToInt().coerceAtLeast(1),
+                                            viewport.size.height.roundToInt().coerceAtLeast(1),
+                                        ),
+                                    maxBytes = maxBytes,
+                                    minLineStrokeKey = (minLineStroke * TRAFFIC_MAP_ROUTE_STROKE_CACHE_SCALE).roundToInt(),
+                                    maxLineStrokeKey = (maxLineStroke * TRAFFIC_MAP_ROUTE_STROKE_CACHE_SCALE).roundToInt(),
+                                ),
+                        ) {
+                            val routeLanes = trafficRouteLanes(origin, drawableEdges, viewport)
+                            if (drawableEdges.isNotEmpty()) {
+                                drawableEdges
+                                    .take(MAX_TRAFFIC_MAP_DRAW_EDGES)
+                                    .map { edge ->
+                                        val from = project(edge.fromLat, edge.fromLon, viewport)
+                                        val to = project(edge.toLat, edge.toLon, viewport)
+                                        val weight = sqrt(edge.bytes.toDouble() / maxBytes.toDouble()).toFloat()
+                                        TrafficMapRouteDrawModel(
+                                            path =
+                                                curvedTrafficRoutePath(
+                                                    from = from,
+                                                    to = to,
+                                                    lane = routeLanes[trafficMapEdgeLaneKey(edge)] ?: 1,
+                                                ),
+                                            strokeWidth = minLineStroke + ((maxLineStroke - minLineStroke) * weight),
+                                            alpha =
+                                                TRAFFIC_MAP_ROUTE_MIN_ALPHA +
+                                                    (TRAFFIC_MAP_ROUTE_ALPHA_RANGE * weight),
+                                            role = edge.role,
+                                        )
+                                    }
+                            } else {
+                                emptyList()
+                            }
                         }
                     }
                 val destinationOffsets =
@@ -774,6 +797,30 @@ private data class TrafficMapRouteDrawModel(
     val alpha: Float,
     val role: TrafficMapEdgeRole,
 )
+
+private data class TrafficMapRouteDrawCacheKey(
+    val edges: List<DrawableTrafficMapEdge>,
+    val originX: Int,
+    val originY: Int,
+    val viewportTopLeft: IntOffset,
+    val viewportSize: IntSize,
+    val maxBytes: Long,
+    val minLineStrokeKey: Int,
+    val maxLineStrokeKey: Int,
+)
+
+private object TrafficMapRouteModelCache {
+    private val cache = LruCache<TrafficMapRouteDrawCacheKey, List<TrafficMapRouteDrawModel>>(TRAFFIC_MAP_ROUTE_MODEL_CACHE_SIZE)
+
+    @Synchronized
+    fun getOrBuild(
+        key: TrafficMapRouteDrawCacheKey,
+        builder: () -> List<TrafficMapRouteDrawModel>,
+    ): List<TrafficMapRouteDrawModel> {
+        cache.get(key)?.let { return it }
+        return builder().also { models -> cache.put(key, models) }
+    }
+}
 
 private fun List<TrafficMapPoint>.toDrawableTrafficMapDestinations(): List<DrawableTrafficMapDestination> =
     map(TrafficMapPoint::toDrawableTrafficMapDestination)
@@ -1505,6 +1552,8 @@ private val TRAFFIC_MAP_CARD_TOTAL_HEIGHT = 184.dp
 private val TRAFFIC_MAP_DEFAULT_COUNTRY_FILL = Color(0xFF3E3F41)
 private const val TRAFFIC_MAP_ROUTE_MIN_STROKE_DP = 0.35f
 private const val TRAFFIC_MAP_ROUTE_MAX_STROKE_DP = 0.72f
+private const val TRAFFIC_MAP_ROUTE_MODEL_CACHE_SIZE = 64
+private const val TRAFFIC_MAP_ROUTE_STROKE_CACHE_SCALE = 1_000f
 private const val TRAFFIC_MAP_ROUTE_MIN_ALPHA = 0.32f
 private const val TRAFFIC_MAP_ROUTE_ALPHA_RANGE = 0.18f
 private const val TRAFFIC_MAP_ROUTE_HALO_STROKE_EXTRA_DP = 0.2f

@@ -274,6 +274,12 @@ class TrafficMapStylingTest {
         }
         assertTrue(source.contains("Trace.beginSection(name)"))
         assertTrue(source.contains("Trace.endSection()"))
+        assertTrue(source.contains("private object TrafficMapRouteModelCache"))
+        assertTrue(source.contains("TrafficMapRouteDrawCacheKey("))
+        assertTrue(source.contains("val edges: List<DrawableTrafficMapEdge>"))
+        assertTrue(source.contains("val viewportSize: IntSize"))
+        assertTrue(source.contains("getOrBuild("))
+        assertTrue(source.contains("TRAFFIC_MAP_ROUTE_MODEL_CACHE_SIZE = 64"))
     }
 
     @Test
