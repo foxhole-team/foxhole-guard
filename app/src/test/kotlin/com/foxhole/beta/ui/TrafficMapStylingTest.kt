@@ -263,6 +263,12 @@ class TrafficMapStylingTest {
                 java.io.File("app/src/main/kotlin/com/foxhole/beta/ui/TrafficMapDashboardCard.kt"),
                 java.io.File("../app/src/main/kotlin/com/foxhole/beta/ui/TrafficMapDashboardCard.kt"),
             ).first { file -> file.isFile }.readText()
+        val routeCacheSource =
+            listOf(
+                java.io.File("src/main/kotlin/com/foxhole/beta/ui/TrafficMapRouteModelCache.kt"),
+                java.io.File("app/src/main/kotlin/com/foxhole/beta/ui/TrafficMapRouteModelCache.kt"),
+                java.io.File("../app/src/main/kotlin/com/foxhole/beta/ui/TrafficMapRouteModelCache.kt"),
+            ).first { file -> file.isFile }.readText()
 
         listOf(
             "TrafficMap/loadShapes",
@@ -274,12 +280,12 @@ class TrafficMapStylingTest {
         }
         assertTrue(source.contains("Trace.beginSection(name)"))
         assertTrue(source.contains("Trace.endSection()"))
-        assertTrue(source.contains("private object TrafficMapRouteModelCache"))
-        assertTrue(source.contains("TrafficMapRouteDrawCacheKey("))
-        assertTrue(source.contains("val edges: List<DrawableTrafficMapEdge>"))
-        assertTrue(source.contains("val viewportSize: IntSize"))
-        assertTrue(source.contains("getOrBuild("))
-        assertTrue(source.contains("TRAFFIC_MAP_ROUTE_MODEL_CACHE_SIZE = 64"))
+        assertTrue(routeCacheSource.contains("internal object TrafficMapRouteModelCache"))
+        assertTrue(routeCacheSource.contains("TrafficMapRouteDrawCacheKey("))
+        assertTrue(routeCacheSource.contains("val edges: List<DrawableTrafficMapEdge>"))
+        assertTrue(routeCacheSource.contains("val viewportSize: IntSize"))
+        assertTrue(routeCacheSource.contains("getOrBuild("))
+        assertTrue(routeCacheSource.contains("TRAFFIC_MAP_ROUTE_MODEL_CACHE_SIZE = 64"))
     }
 
     @Test

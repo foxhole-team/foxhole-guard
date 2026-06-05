@@ -578,13 +578,7 @@ fun AppPickerScreen(
     val filteredApps = remember(appSearchIndex, query, appFilter) {
         traceAppPickerSection("AppPicker/filter") {
             filterIndexedApps(appSearchIndex, query)
-                .filter { app ->
-                    when (appFilter) {
-                        InstalledAppFilter.ALL -> true
-                        InstalledAppFilter.USER -> !app.isSystemApp
-                        InstalledAppFilter.SYSTEM -> app.isSystemApp
-                    }
-                }
+                .filter { app -> app.matchesFilter(appFilter) }
         }
     }
     LaunchedEffect(draftSelection, selectedPackages) {
@@ -599,9 +593,11 @@ fun AppPickerScreen(
         title = title,
         snackbarHostState = snackbarHostState,
         onNavigateUp = {
-            if (draftSelection != selectedPackages) {
-                latestOnSelectionChanged(draftSelection)
-            }
+            flushAppPickerSelection(
+                draftSelection = draftSelection,
+                selectedPackages = selectedPackages,
+                onSelectionChanged = latestOnSelectionChanged,
+            )
             latestOnNavigateUp()
         },
         tag = "routing_apps_picker_screen",
@@ -672,22 +668,45 @@ fun AppPickerScreen(
                 modifier = Modifier.testTag("routing_apps_picker_row_${app.packageName}"),
                 onToggle = { value ->
                     if (!locked) {
-                        val nextSelection =
-                            draftSelectionSet
-                                .toMutableSet()
-                                .apply {
-                                    if (value) {
-                                        add(app.packageName)
-                                    } else {
-                                        remove(app.packageName)
-                                    }
-                                }.toList()
-                        draftSelection = nextSelection
+                        draftSelection =
+                            draftSelectionSet.withToggledPackage(
+                                packageName = app.packageName,
+                                selected = value,
+                            )
                     }
-                    Unit
                 },
             )
         }
+    }
+}
+
+private fun InstalledAppOption.matchesFilter(filter: InstalledAppFilter): Boolean =
+    when (filter) {
+        InstalledAppFilter.ALL -> true
+        InstalledAppFilter.USER -> !isSystemApp
+        InstalledAppFilter.SYSTEM -> isSystemApp
+    }
+
+private fun Set<String>.withToggledPackage(
+    packageName: String,
+    selected: Boolean,
+): List<String> =
+    toMutableSet()
+        .apply {
+            if (selected) {
+                add(packageName)
+            } else {
+                remove(packageName)
+            }
+        }.toList()
+
+private fun flushAppPickerSelection(
+    draftSelection: List<String>,
+    selectedPackages: List<String>,
+    onSelectionChanged: (List<String>) -> Unit,
+) {
+    if (draftSelection != selectedPackages) {
+        onSelectionChanged(draftSelection)
     }
 }
 

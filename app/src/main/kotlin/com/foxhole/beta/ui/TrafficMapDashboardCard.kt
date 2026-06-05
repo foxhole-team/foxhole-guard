@@ -11,7 +11,6 @@ import android.os.Process
 import android.os.SystemClock
 import android.os.Trace
 import android.util.DisplayMetrics
-import android.util.LruCache
 import android.util.Log
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -550,8 +549,12 @@ private fun TrafficMapCanvas(
                                             viewport.size.height.roundToInt().coerceAtLeast(1),
                                         ),
                                     maxBytes = maxBytes,
-                                    minLineStrokeKey = (minLineStroke * TRAFFIC_MAP_ROUTE_STROKE_CACHE_SCALE).roundToInt(),
-                                    maxLineStrokeKey = (maxLineStroke * TRAFFIC_MAP_ROUTE_STROKE_CACHE_SCALE).roundToInt(),
+                                    minLineStrokeKey =
+                                        (minLineStroke * TRAFFIC_MAP_ROUTE_STROKE_CACHE_SCALE)
+                                            .roundToInt(),
+                                    maxLineStrokeKey =
+                                        (maxLineStroke * TRAFFIC_MAP_ROUTE_STROKE_CACHE_SCALE)
+                                            .roundToInt(),
                                 ),
                         ) {
                             val routeLanes = trafficRouteLanes(origin, drawableEdges, viewport)
@@ -782,7 +785,7 @@ private data class DrawableTrafficMapDestination(
     val role: TrafficMapPointRole,
 )
 
-private data class DrawableTrafficMapEdge(
+internal data class DrawableTrafficMapEdge(
     val fromLat: Double,
     val fromLon: Double,
     val toLat: Double,
@@ -791,36 +794,12 @@ private data class DrawableTrafficMapEdge(
     val role: TrafficMapEdgeRole,
 )
 
-private data class TrafficMapRouteDrawModel(
+internal data class TrafficMapRouteDrawModel(
     val path: Path,
     val strokeWidth: Float,
     val alpha: Float,
     val role: TrafficMapEdgeRole,
 )
-
-private data class TrafficMapRouteDrawCacheKey(
-    val edges: List<DrawableTrafficMapEdge>,
-    val originX: Int,
-    val originY: Int,
-    val viewportTopLeft: IntOffset,
-    val viewportSize: IntSize,
-    val maxBytes: Long,
-    val minLineStrokeKey: Int,
-    val maxLineStrokeKey: Int,
-)
-
-private object TrafficMapRouteModelCache {
-    private val cache = LruCache<TrafficMapRouteDrawCacheKey, List<TrafficMapRouteDrawModel>>(TRAFFIC_MAP_ROUTE_MODEL_CACHE_SIZE)
-
-    @Synchronized
-    fun getOrBuild(
-        key: TrafficMapRouteDrawCacheKey,
-        builder: () -> List<TrafficMapRouteDrawModel>,
-    ): List<TrafficMapRouteDrawModel> {
-        cache.get(key)?.let { return it }
-        return builder().also { models -> cache.put(key, models) }
-    }
-}
 
 private fun List<TrafficMapPoint>.toDrawableTrafficMapDestinations(): List<DrawableTrafficMapDestination> =
     map(TrafficMapPoint::toDrawableTrafficMapDestination)
@@ -951,18 +930,6 @@ private fun trafficRouteLanes(
         countsByBucket[bucket] = indexInBucket + 1
         trafficMapEdgeLaneKey(edge) to routeLane(bucket, indexInBucket)
     }
-}
-
-private fun trafficMapEdgeLaneKey(edge: DrawableTrafficMapEdge): String =
-    "${edge.role}:${edge.toLat}:${edge.toLon}"
-
-private fun routeLane(
-    bucket: Int,
-    indexInBucket: Int,
-): Int {
-    val magnitude = (indexInBucket / 2) + 1
-    val sign = if ((bucket + indexInBucket) % 2 == 0) 1 else -1
-    return sign * magnitude
 }
 
 private fun Int.signFloat(): Float = if (this < 0) -1f else 1f
@@ -1245,10 +1212,10 @@ private object TrafficMapLandLayerCache {
                 val bitmap =
                     traceTrafficMapSection("TrafficMap/renderLandBitmap") {
                         trafficMapLandBitmap(
-                        size = size,
-                        shapes = shapes,
-                        viewport = TrafficMapViewport(topLeft = Offset.Zero, size = size),
-                        color = color,
+                            size = size,
+                            shapes = shapes,
+                            viewport = TrafficMapViewport(topLeft = Offset.Zero, size = size),
+                            color = color,
                         )
                     }
                 synchronized(lock) {
@@ -1552,7 +1519,6 @@ private val TRAFFIC_MAP_CARD_TOTAL_HEIGHT = 184.dp
 private val TRAFFIC_MAP_DEFAULT_COUNTRY_FILL = Color(0xFF3E3F41)
 private const val TRAFFIC_MAP_ROUTE_MIN_STROKE_DP = 0.35f
 private const val TRAFFIC_MAP_ROUTE_MAX_STROKE_DP = 0.72f
-private const val TRAFFIC_MAP_ROUTE_MODEL_CACHE_SIZE = 64
 private const val TRAFFIC_MAP_ROUTE_STROKE_CACHE_SCALE = 1_000f
 private const val TRAFFIC_MAP_ROUTE_MIN_ALPHA = 0.32f
 private const val TRAFFIC_MAP_ROUTE_ALPHA_RANGE = 0.18f
