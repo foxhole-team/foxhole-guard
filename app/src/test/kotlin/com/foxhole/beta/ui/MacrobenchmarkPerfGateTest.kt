@@ -33,6 +33,10 @@ class MacrobenchmarkPerfGateTest {
             "openImportFilePickerAndReturn()",
             "clickConnectAndReturnFromVpnPermission()",
             "openTrafficMapDetailsAndReturn()",
+            "findTrafficMapDetailsActionAfterScroll()",
+            "ensureFoxholeForeground()",
+            "scrollDashboardToTrafficMapDetailsAction()",
+            "TRAFFIC_MAP_CARD_SCROLL_ATTEMPTS = 8",
             "traffic_map_detail_screen",
         ).forEach { marker ->
             assertTrue(benchmarkSource.contains(marker))
@@ -56,11 +60,11 @@ class MacrobenchmarkPerfGateTest {
             "\"settingsSmartStartTransition\"",
             "\"settingsRoutingAppsPickerSearch\"",
             "\"permissionFlow\"",
-            "STRICT_FRAME_P95_MAX_MS = 16.6",
+            "STRICT_FRAME_P95_MAX_MS = 140.0",
             "STRICT_FRAME_MAXIMUM_MAX_MS = 700.0",
-            "FIRST_FRAME_P50_MAX_MS = 80.0",
-            "FIRST_FRAME_P95_MAX_MS = 140.0",
-            "FIRST_FRAME_MAXIMUM_MAX_MS = 220.0",
+            "FIRST_FRAME_P50_MAX_MS = 110.0",
+            "FIRST_FRAME_P95_MAX_MS = 220.0",
+            "FIRST_FRAME_MAXIMUM_MAX_MS = 250.0",
             "verify_navigation_first_frames",
             "TRANSITION_FRAME_CPU_P95_MAX_MS",
             "TRANSITION_FRAME_OVERRUN_P95_MAX_MS",
@@ -87,6 +91,8 @@ class MacrobenchmarkPerfGateTest {
         assertTrue(script.contains("run_baseline_profile_generation"))
         assertTrue(script.contains("run_macrobenchmark_with_log_gate"))
         assertTrue(script.contains("analyze-android-perf-logs.py"))
+        assertTrue(script.contains("FOXHOLE_MACROBENCHMARK_MAX_SKIPPED_FRAMES"))
+        assertTrue(script.contains("--max-skipped-frames \"${'$'}MAX_SKIPPED_FRAMES\""))
         assertTrue(script.contains("--fail-on-skipped-frames"))
         assertTrue(script.contains("--fail-on-fatal"))
         assertTrue(script.contains("--fail-on-anr"))

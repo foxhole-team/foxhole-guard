@@ -58,7 +58,7 @@ VPN_CONTEXT_RE = re.compile(
 )
 VPN_CONNECTED_RE = re.compile(r"\bCONNECTED\b|\bstate[ =:]+connected\b", re.IGNORECASE)
 VPN_DISCONNECTED_RE = re.compile(r"\bDISCONNECTED\b|\bstate[ =:]+disconnected\b", re.IGNORECASE)
-FATAL_RE = re.compile(r"\bFATAL EXCEPTION\b|AndroidRuntime|Fatal signal", re.IGNORECASE)
+FATAL_RE = re.compile(r"\bFATAL EXCEPTION\b|(?:\sE\s+AndroidRuntime\s*:)|\bFatal signal\b", re.IGNORECASE)
 ANR_RE = re.compile(r"\bANR\b|Application Not Responding|Input dispatching timed out", re.IGNORECASE)
 FIRST_FRAME_RE = re.compile(r"\bfirst_frame_after_tap_ms=(\d+(?:\.\d+)?)\b")
 

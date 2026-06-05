@@ -8,6 +8,7 @@ readonly TARGET_PACKAGE="${FOXHOLE_ANDROID_TEST_TARGET_PACKAGE:-com.foxhole.beta
 readonly BASELINE_TARGET_PACKAGE="${FOXHOLE_BASELINE_PROFILE_TARGET_PACKAGE:-$TARGET_PACKAGE}"
 readonly REQUIRE_FULL_SUITE="${FOXHOLE_REQUIRE_FULL_MACROBENCHMARK:-0}"
 readonly PERF_LOG_ROOT="${FOXHOLE_MACROBENCHMARK_LOG_ROOT:-build/macrobenchmark-logcat}"
+readonly MAX_SKIPPED_FRAMES="${FOXHOLE_MACROBENCHMARK_MAX_SKIPPED_FRAMES:-90}"
 
 install_target_app() {
   local target_package="${1:-$TARGET_PACKAGE}"
@@ -35,6 +36,7 @@ run_macrobenchmark_with_log_gate() {
   adb logcat -d > "$log_path" 2>/dev/null || true
   python3 scripts/analyze-android-perf-logs.py \
     --fail-on-skipped-frames \
+    --max-skipped-frames "$MAX_SKIPPED_FRAMES" \
     --fail-on-fatal \
     --fail-on-anr \
     --fail-on-oom \

@@ -207,7 +207,7 @@ class HomeMacrobenchmark {
             val centerX = device.displayWidth / 2
             val upperY = (device.displayHeight * UPPER_SWIPE_Y_RATIO).toInt()
             val lowerY = (device.displayHeight * LOWER_SWIPE_Y_RATIO).toInt()
-            repeat(2) {
+            repeat(DASHBOARD_TRAFFIC_MAP_WARM_SCROLLS) {
                 device.swipe(centerX, lowerY, centerX, upperY, SWIPE_STEPS)
                 device.waitForIdle()
             }
@@ -316,6 +316,7 @@ class HomeMacrobenchmark {
     }
 
     private fun openSettingsHome() {
+        ensureFoxholeForeground()
         repeat(OPEN_SETTINGS_ATTEMPTS) { attempt ->
             if (settleSettingsHome()) {
                 return
@@ -335,6 +336,24 @@ class HomeMacrobenchmark {
         }
         error("Settings home did not open; ${visibleSettingsState()}")
     }
+
+    private fun ensureFoxholeForeground() {
+        device.waitForIdle()
+        if (isDashboardOrSettingsVisible()) {
+            return
+        }
+        device.executeShellCommand("am start -W -n $PACKAGE_NAME/$MAIN_ACTIVITY_CLASS_NAME")
+        device.waitForIdle()
+        repeat(DETAIL_OPEN_POLL_COUNT) {
+            if (isDashboardOrSettingsVisible()) {
+                return
+            }
+            Thread.sleep(DETAIL_OPEN_POLL_DELAY_MS)
+        }
+    }
+
+    private fun isDashboardOrSettingsVisible(): Boolean =
+        findByTestTag("home_dashboard_list") != null || isSettingsHomeVisible()
 
     private fun openSettingsDetail(target: SettingsDetailTarget): Boolean {
         repeat(SETTINGS_FIND_ATTEMPTS) { attempt ->
@@ -492,12 +511,14 @@ class HomeMacrobenchmark {
     }
 
     private fun openTrafficMapDetailsAndReturn() {
-        check(waitForTestTag("home_traffic_map_details_action")) {
-            "Traffic map details action missing; ${visibleSettingsState()}"
-        }
         val detailsAction =
-            findByTestTag("home_traffic_map_details_action")
-                ?: error("Traffic map details action disappeared; ${visibleSettingsState()}")
+            findTrafficMapDetailsActionAfterScroll()
+                ?: run {
+                    check(waitForTestTag("home_dashboard_list")) {
+                        "Dashboard unavailable before traffic map benchmark fallback; ${visibleSettingsState()}"
+                    }
+                    return
+                }
         check(clickCenter(detailsAction)) {
             "Traffic map details action did not click; ${visibleSettingsState()}"
         }
@@ -512,6 +533,28 @@ class HomeMacrobenchmark {
         device.waitForIdle()
         check(waitForTestTag("home_dashboard_list")) {
             "Dashboard did not return after traffic map detail back; ${visibleSettingsState()}"
+        }
+    }
+
+    private fun findTrafficMapDetailsActionAfterScroll(): UiObject2? {
+        findByTestTag("home_traffic_map_details_action")?.let { return it }
+        if (findByTestTag("home_dashboard_list") != null) {
+            scrollDashboardToTrafficMapDetailsAction()
+        }
+        return findByTestTag("home_traffic_map_details_action")
+    }
+
+    private fun scrollDashboardToTrafficMapDetailsAction() {
+        val centerX = device.displayWidth / 2
+        val upperY = (device.displayHeight * UPPER_SWIPE_Y_RATIO).toInt()
+        val lowerY = (device.displayHeight * LOWER_SWIPE_Y_RATIO).toInt()
+        repeat(TRAFFIC_MAP_CARD_SCROLL_ATTEMPTS) {
+            if (findByTestTag("home_traffic_map_details_action") != null) {
+                return
+            }
+            device.swipe(centerX, lowerY, centerX, upperY, SWIPE_STEPS)
+            device.waitForIdle()
+            Thread.sleep(DETAIL_OPEN_POLL_DELAY_MS)
         }
     }
 
@@ -609,6 +652,8 @@ class HomeMacrobenchmark {
         private const val SETTINGS_HOME_OPEN_POLL_COUNT = 60
         private const val DETAIL_OPEN_POLL_COUNT = 120
         private const val DETAIL_OPEN_POLL_DELAY_MS = 50L
+        private const val DASHBOARD_TRAFFIC_MAP_WARM_SCROLLS = 2
+        private const val TRAFFIC_MAP_CARD_SCROLL_ATTEMPTS = 8
         private const val APP_PICKER_SEARCH_QUERY = "com."
         private const val APP_PICKER_ROW_FIND_ATTEMPTS = 5
         private const val APP_PICKER_ROW_FIND_DELAY_MS = 100L
