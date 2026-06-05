@@ -11,9 +11,10 @@ from typing import Any
 
 
 STARTUP_BENCHMARK = "startup"
+WARM_STARTUP_BENCHMARK = "warmStartup"
 FULL_SUITE_BENCHMARKS = {
     STARTUP_BENCHMARK,
-    "warmStartup",
+    WARM_STARTUP_BENCHMARK,
     "bottomNavigationRoundTrip",
     "dashboardTrafficMapOpen",
     "homeScroll",
@@ -37,20 +38,20 @@ TRANSITION_FRAME_OVERRUN_P90_MAX_MS = 180.0
 TRANSITION_FRAME_OVERRUN_P95_MAX_MS = 220.0
 MIN_REPEAT_ITERATIONS = 3
 REQUIRED_TRACE_METRIC_LABELS = {
-    STARTUP_BENCHMARK: {"HomeScreenFirstCompositionMs"},
-    "warmStartup": {"HomeScreenFirstCompositionMs"},
-    "homeScroll": {"HomeScreenFirstCompositionMs"},
-    "bottomNavigationRoundTrip": {"SettingsNavigationMs"},
+    STARTUP_BENCHMARK: {"HomeScreenFirstCompositionSumMs"},
+    "warmStartup": {"HomeScreenFirstCompositionSumMs"},
+    "homeScroll": {"HomeScreenFirstCompositionSumMs"},
+    "bottomNavigationRoundTrip": {"SettingsNavigationSumMs"},
     "dashboardTrafficMapOpen": {
-        "TrafficMapLoadShapesMs",
-        "TrafficMapRenderLandBitmapMs",
-        "TrafficMapBuildRoutesMs",
-        "TrafficMapDrawMs",
+        "TrafficMapLoadShapesSumMs",
+        "TrafficMapRenderLandBitmapSumMs",
+        "TrafficMapBuildRoutesSumMs",
+        "TrafficMapDrawSumMs",
     },
     "settingsRoutingAppsPickerSearch": {
-        "AppPickerFilterMs",
-        "AppIconLoadMs",
-        "SettingsNavigationMs",
+        "AppPickerFilterSumMs",
+        "AppIconLoadSumMs",
+        "SettingsNavigationSumMs",
     },
 }
 
@@ -119,17 +120,18 @@ def require_trace_metrics(benchmark: dict[str, Any]) -> list[str]:
     return [f"{name} trace={label}" for label in sorted(required_labels)]
 
 
-def verify_startup(benchmark: dict[str, Any]) -> list[str]:
+def verify_launch(benchmark: dict[str, Any]) -> list[str]:
+    name = str(benchmark.get("name"))
     repeat_iterations = int(benchmark.get("repeatIterations", 0))
     if repeat_iterations < MIN_REPEAT_ITERATIONS:
-        raise AssertionError(f"startup repeatIterations is {repeat_iterations}; minimum is {MIN_REPEAT_ITERATIONS}")
+        raise AssertionError(f"{name} repeatIterations is {repeat_iterations}; minimum is {MIN_REPEAT_ITERATIONS}")
     median = metric_value(benchmark, "timeToInitialDisplayMs", "median")
     maximum = metric_value(benchmark, "timeToInitialDisplayMs", "maximum")
-    require_threshold("startup timeToInitialDisplayMs median", median, STARTUP_MEDIAN_MAX_MS)
-    require_threshold("startup timeToInitialDisplayMs maximum", maximum, STARTUP_MAXIMUM_MAX_MS)
+    require_threshold(f"{name} timeToInitialDisplayMs median", median, STARTUP_MEDIAN_MAX_MS)
+    require_threshold(f"{name} timeToInitialDisplayMs maximum", maximum, STARTUP_MAXIMUM_MAX_MS)
     return [
-        f"startup median={median:.1f} ms",
-        f"startup max={maximum:.1f} ms",
+        f"{name} median={median:.1f} ms",
+        f"{name} max={maximum:.1f} ms",
     ] + require_trace_metrics(benchmark)
 
 
@@ -175,9 +177,10 @@ def main() -> int:
     if missing:
         raise AssertionError(f"Required macrobenchmarks did not run: {', '.join(missing)}")
 
-    summaries = verify_startup(benchmarks[STARTUP_BENCHMARK])
+    summaries = verify_launch(benchmarks[STARTUP_BENCHMARK])
     if args.full_suite:
-        for name in sorted(FULL_SUITE_BENCHMARKS - {STARTUP_BENCHMARK}):
+        summaries.extend(verify_launch(benchmarks[WARM_STARTUP_BENCHMARK]))
+        for name in sorted(FULL_SUITE_BENCHMARKS - {STARTUP_BENCHMARK, WARM_STARTUP_BENCHMARK}):
             summaries.extend(verify_transition(benchmarks[name]))
 
     print("Macrobenchmark thresholds passed:")

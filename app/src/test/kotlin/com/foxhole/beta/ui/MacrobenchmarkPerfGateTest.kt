@@ -52,7 +52,7 @@ class MacrobenchmarkPerfGateTest {
             "TRANSITION_FRAME_CPU_P95_MAX_MS",
             "TRANSITION_FRAME_OVERRUN_P95_MAX_MS",
             "REQUIRED_TRACE_METRIC_LABELS",
-            "HomeScreenFirstCompositionMs",
+            "HomeScreenFirstCompositionSumMs",
             "cpuP95",
             "overrunP95",
         ).forEach { marker ->

@@ -37,9 +37,14 @@ run_baseline_profile_generation() {
     -Pmacrobenchmark.targetPackage="$BASELINE_TARGET_PACKAGE" \
     -Pandroid.testInstrumentationRunnerArguments.androidx.benchmark.enabledRules=BaselineProfile \
     -Pandroid.testInstrumentationRunnerArguments.class=com.foxhole.beta.macrobenchmark.FoxholeBaselineProfileGenerator
-  baseline_source="$(find macrobenchmark/build/outputs -type f -name '*baseline-prof*.txt' | sort | tail -n 1)"
+  baseline_source="$(
+    find macrobenchmark/build/outputs -type f \
+      \( -name '*baseline-prof*.txt' -o -name '*startup-prof*.txt' \) |
+      sort |
+      tail -n 1
+  )"
   if [[ -z "$baseline_source" ]]; then
-    echo "Baseline profile generation finished without a baseline-prof text artifact." >&2
+    echo "Baseline profile generation finished without a profile text artifact." >&2
     find macrobenchmark/build/outputs -type f >&2 || true
     exit 1
   fi

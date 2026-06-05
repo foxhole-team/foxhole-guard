@@ -370,14 +370,30 @@ class HomeMacrobenchmark {
         labels.firstNotNullOfOrNull { label -> device.findObject(By.text(label)) }
 
     private fun toggleFirstUnlockedAppInPicker() {
-        val firstRow =
-            device.findObjects(By.res(Pattern.compile(".*routing_apps_picker_row_.*")))
-                .firstOrNull()
-                ?: device.findObjects(By.clazz("android.view.View"))
-                    .firstOrNull { node -> node.text?.contains(APP_PICKER_SEARCH_QUERY, ignoreCase = true) == true }
-                ?: return
-        clickCenter(firstRow)
+        repeat(APP_PICKER_ROW_FIND_ATTEMPTS) {
+            val firstRow = findFirstAppPickerRow()
+            if (firstRow != null && clickCenter(firstRow)) {
+                return
+            }
+            device.waitForIdle()
+            Thread.sleep(APP_PICKER_ROW_FIND_DELAY_MS)
+        }
     }
+
+    private fun findFirstAppPickerRow(): UiObject2? =
+        device.findObjects(By.res(Pattern.compile(".*routing_apps_picker_row_.*")))
+            .firstOrNull()
+            ?: device.findObjects(By.clazz("android.view.View"))
+                .firstOrNull { node ->
+                    node.safeText()?.contains(APP_PICKER_SEARCH_QUERY, ignoreCase = true) == true
+                }
+
+    private fun UiObject2.safeText(): String? =
+        try {
+            text
+        } catch (_: StaleObjectException) {
+            null
+        }
 
     private fun isSettingsHomeVisible() =
         findByTestTag("settings_screen") != null || findByAnyText(SETTINGS_HOME_ANCHOR_LABELS) != null
@@ -496,6 +512,8 @@ class HomeMacrobenchmark {
         private const val DETAIL_OPEN_POLL_COUNT = 120
         private const val DETAIL_OPEN_POLL_DELAY_MS = 50L
         private const val APP_PICKER_SEARCH_QUERY = "com."
+        private const val APP_PICKER_ROW_FIND_ATTEMPTS = 5
+        private const val APP_PICKER_ROW_FIND_DELAY_MS = 100L
         private const val HOME_FIRST_COMPOSITION_TRACE = "HomeScreen first composition"
         private const val SETTINGS_NAVIGATION_TRACE = "Settings/navigation"
         private const val APP_PICKER_FILTER_TRACE = "AppPicker/filter"
