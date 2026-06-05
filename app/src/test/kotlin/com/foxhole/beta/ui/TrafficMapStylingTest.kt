@@ -42,6 +42,8 @@ class TrafficMapStylingTest {
         assertNotEquals(Color.Gray, darkColors.countryFill)
         assertNotEquals(Color.Gray, lightColors.countryFill)
         assertNotEquals(darkColors.countryFill, lightColors.countryFill)
+        assertNotEquals(darkColors.countryFill, darkColors.countryBoundary)
+        assertEquals(accent, lightColors.countryDestinationHighlight)
         assertEquals(success, lightColors.vpnRoute)
         assertEquals(Color(0xFFFF8A3D), darkColors.torExit)
         assertNotEquals(success, darkColors.destination)
@@ -53,7 +55,7 @@ class TrafficMapStylingTest {
     }
 
     @Test
-    fun `traffic map route lines use thin translucent stroke constants and semantic tokens`() {
+    fun `traffic map route lines use readable stroke constants and semantic tokens`() {
         val source =
             listOf(
                 java.io.File("src/main/kotlin/com/foxhole/beta/ui/TrafficMapDashboardCard.kt"),
@@ -61,12 +63,12 @@ class TrafficMapStylingTest {
                 java.io.File("../app/src/main/kotlin/com/foxhole/beta/ui/TrafficMapDashboardCard.kt"),
             ).first { file -> file.isFile }.readText()
 
-        assertTrue(source.contains("TRAFFIC_MAP_ROUTE_MIN_STROKE_DP = 0.35f"))
-        assertTrue(source.contains("TRAFFIC_MAP_ROUTE_MAX_STROKE_DP = 0.72f"))
-        assertTrue(source.contains("TRAFFIC_MAP_ROUTE_MIN_ALPHA = 0.32f"))
-        assertTrue(source.contains("TRAFFIC_MAP_ROUTE_ALPHA_RANGE = 0.18f"))
-        assertTrue(source.contains("TRAFFIC_MAP_ROUTE_HALO_STROKE_EXTRA_DP = 0.2f"))
-        assertTrue(source.contains("TRAFFIC_MAP_ROUTE_HALO_ALPHA_MULTIPLIER = 0.08f"))
+        assertTrue(source.contains("TRAFFIC_MAP_ROUTE_MIN_STROKE_DP = 0.9f"))
+        assertTrue(source.contains("TRAFFIC_MAP_ROUTE_MAX_STROKE_DP = 2.2f"))
+        assertTrue(source.contains("TRAFFIC_MAP_ROUTE_MIN_ALPHA = 0.42f"))
+        assertTrue(source.contains("TRAFFIC_MAP_ROUTE_ALPHA_RANGE = 0.36f"))
+        assertTrue(source.contains("TRAFFIC_MAP_ROUTE_HALO_STROKE_EXTRA_DP = 1.4f"))
+        assertTrue(source.contains("TRAFFIC_MAP_ROUTE_HALO_ALPHA_MULTIPLIER = 0.22f"))
         assertTrue(source.contains("val routeNodeRadius = 2.75.dp.toPx()"))
         assertTrue(source.contains("val torNodeRadius = 2.65.dp.toPx()"))
         assertTrue(source.contains("colors.routeHalo.copy("))
@@ -80,7 +82,9 @@ class TrafficMapStylingTest {
         assertTrue(source.contains("colors.legendText"))
         assertTrue(source.contains("TRAFFIC_MAP_WEIGHT = 0.62f"))
         assertTrue(source.contains("TRAFFIC_MAP_LEGEND_WEIGHT = 0.38f"))
-        assertTrue(source.contains("modifier = Modifier.width(24.dp)"))
+        assertTrue(source.contains("text = point.label"))
+        assertTrue(source.contains("TRAFFIC_MAP_DASHBOARD_TOP_COUNTRIES = 3"))
+        assertTrue(source.contains("TrafficMapLegendSummaryRow"))
         assertTrue(source.contains(".widthIn(min = 136.dp, max = 184.dp)"))
         assertTrue(source.contains("Icons.Outlined.PhoneAndroid"))
         assertTrue(source.contains("fontSize = 10.sp"))
@@ -97,7 +101,7 @@ class TrafficMapStylingTest {
     }
 
     @Test
-    fun `traffic map draws only filled land before routes`() {
+    fun `traffic map draws land boundaries and highlighted countries before routes`() {
         val source =
             listOf(
                 java.io.File("src/main/kotlin/com/foxhole/beta/ui/TrafficMapDashboardCard.kt"),
@@ -106,14 +110,20 @@ class TrafficMapStylingTest {
             ).first { file -> file.isFile }.readText()
         val landBitmapBlock =
             source.substringAfter("private fun trafficMapLandBitmap(")
-                .substringBefore("private object TrafficMapLandLayerCache")
+                .substringBefore("private fun trafficMapCountryHighlightBitmap")
+        val highlightBitmapBlock =
+            source.substringAfter("private fun trafficMapCountryHighlightBitmap(")
+                .substringBefore("private object TrafficMapCountryHighlightLayerCache")
         val canvasBeforeRoutes =
             source.substringAfter("onDrawBehind {")
                 .substringBefore("routeDrawModels.forEach")
 
         assertTrue(landBitmapBlock.contains("AndroidPaint.Style.FILL"))
-        assertFalse(landBitmapBlock.contains("AndroidPaint.Style.STROKE"))
+        assertTrue(landBitmapBlock.contains("AndroidPaint.Style.STROKE"))
+        assertTrue(highlightBitmapBlock.contains("dominantTrafficMapCountryVisuals"))
+        assertTrue(highlightBitmapBlock.contains("visual.trafficMapHighlightColor(colors)"))
         assertTrue(canvasBeforeRoutes.contains("countryBitmap?.let"))
+        assertTrue(canvasBeforeRoutes.contains("countryHighlightBitmap?.let"))
         assertFalse(canvasBeforeRoutes.contains("drawRect"))
         assertFalse(canvasBeforeRoutes.contains("drawRoundRect"))
         assertFalse(canvasBeforeRoutes.contains("drawLine"))
@@ -273,11 +283,14 @@ class TrafficMapStylingTest {
         listOf(
             "TrafficMap/loadShapes",
             "TrafficMap/renderLandBitmap",
+            "TrafficMap/renderHighlightBitmap",
             "TrafficMap/buildRoutes",
             "TrafficMap/draw",
         ).forEach { section ->
             assertTrue(source.contains(section))
         }
+        assertTrue(source.contains(".semantics { contentDescription = mapContentDescription }"))
+        assertTrue(source.contains("trafficMapContentDescription(state)"))
         assertTrue(source.contains("Trace.beginSection(name)"))
         assertTrue(source.contains("Trace.endSection()"))
         assertTrue(routeCacheSource.contains("internal object TrafficMapRouteModelCache"))
@@ -305,8 +318,13 @@ class TrafficMapStylingTest {
 
         assertTrue(englishStrings.contains("<string name=\"traffic_map_live_requires_firewall\">No active connections</string>"))
         assertTrue(englishStrings.contains("<string name=\"traffic_map_waiting_connections\">No active connections</string>"))
+        assertTrue(englishStrings.contains("Start VPN or enable local guard"))
+        assertTrue(englishStrings.contains("<string name=\"traffic_map_route_header\">Route</string>"))
+        assertTrue(englishStrings.contains("<string name=\"traffic_map_top_countries_header\">Top countries</string>"))
         assertTrue(russianStrings.contains("<string name=\"traffic_map_live_requires_firewall\">Нет активных подключений</string>"))
         assertTrue(russianStrings.contains("<string name=\"traffic_map_waiting_connections\">Нет активных подключений</string>"))
+        assertTrue(russianStrings.contains("<string name=\"traffic_map_route_header\">Маршрут</string>"))
+        assertTrue(russianStrings.contains("<string name=\"traffic_map_top_countries_header\">Топ стран</string>"))
         assertFalse(englishStrings.contains("Waiting for active firewall"))
         assertFalse(russianStrings.contains("Ожидание активного фаервола"))
     }

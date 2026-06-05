@@ -24,6 +24,12 @@
     <string name="traffic_map_device_location_icon">Местоположение устройства на основе ip адреса</string>
     <string name="traffic_map_live_requires_firewall">Нет активных подключений</string>
     <string name="traffic_map_waiting_connections">Нет активных подключений</string>
+    <string name="traffic_map_waiting_connections_helper">Запустите VPN или включите локальный guard, чтобы увидеть страны назначения.</string>
+    <string name="traffic_map_route_header">Маршрут</string>
+    <string name="traffic_map_top_countries_header">Топ стран</string>
+    <string name="traffic_map_unknown_country">Неизвестно</string>
+    <string name="traffic_map_more_countries">+ еще %1$d</string>
+    <string name="traffic_map_total_summary">%1$d стран · %2$s</string>
     <string name="traffic_map_support_prompt_title">Включить данные для карты?</string>
     <string name="traffic_map_support_prompt_body">Карта в дашборде берет живые подключения из VPN. Для локального фаервола, статистики стран и деталей подключений включите статистику стран и журнал сетевой активности.</string>
     <string name="traffic_map_support_prompt_confirm">Включить сейчас</string>

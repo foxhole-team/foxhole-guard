@@ -1,6 +1,8 @@
 package com.foxhole.beta.core.traffic
 
+import com.foxhole.beta.core.model.CountryTrafficRole
 import com.foxhole.beta.core.model.IpInfo
+import com.foxhole.beta.core.model.TrafficMapCountryVisual
 import com.foxhole.beta.core.model.TrafficMapEdge
 import com.foxhole.beta.core.model.TrafficMapEdgeRole
 import com.foxhole.beta.core.model.TrafficMapPoint
@@ -22,14 +24,19 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.runningFold
 import kotlinx.coroutines.flow.stateIn
 import java.util.Locale
+import kotlin.math.sqrt
 
 class TrafficMapRepository(
     private val connectionSource: TrafficMapConnectionSource = EmptyTrafficMapConnectionSource,
+    private val countryRegistryProvider: () -> TrafficMapCountryRegistry = { TrafficMapCountryRegistry.legacyFallback() },
 ) {
     private val retainedConnectionAccumulatorState = MutableStateFlow(TrafficMapConnectionAccumulator())
 
     @Volatile
     private var retainedDestinationCountryBytes: Map<String, Long> = emptyMap()
+
+    @Volatile
+    private var cachedCountryRegistry: TrafficMapCountryRegistry? = null
 
     fun trafficMapState(
         scope: CoroutineScope,
@@ -57,13 +64,15 @@ class TrafficMapRepository(
         connectionAccumulatorFlow(runtimeAvailable)
             .map { accumulator ->
                 val aggregates = accumulator.countryAggregates()
+                val countryRegistry = countryRegistry()
                 RetainedTrafficMapSnapshot(
                     accumulator = accumulator,
                     countryBytes =
-                    trafficMapCountryBytesFromAggregates(
-                        aggregates = aggregates,
-                        limit = MaxTrafficMapDestinations,
-                    ),
+                        trafficMapCountryBytesFromAggregates(
+                            aggregates = aggregates,
+                            limit = MaxTrafficMapDestinations,
+                            countryRegistry = countryRegistry,
+                        ),
                 )
             }
             .distinctUntilChanged()
@@ -106,13 +115,11 @@ class TrafficMapRepository(
             retainedConnectionAccumulatorState
                 .map { accumulator ->
                     val aggregates = accumulator.countryAggregates()
-                    TrafficMapDestinationSnapshot(
-                        points =
-                            trafficMapPointsFromAggregates(
-                                aggregates = aggregates,
-                                limit = MaxTrafficMapDestinations,
-                            ),
-                        routeAggregate = trafficMapRouteAggregate(aggregates),
+                    trafficMapDestinationSnapshotFromAggregates(
+                        aggregates = aggregates,
+                        limit = MaxTrafficMapDestinations,
+                        countryRegistry = countryRegistry(),
+                        lastSampleAtMs = accumulator.lastSampleAtMs,
                     )
                 }
                 .distinctUntilChanged(),
@@ -124,6 +131,13 @@ class TrafficMapRepository(
                 runtimeAvailable = available,
                 destinations = destinationSnapshot.points,
                 routeAggregate = destinationSnapshot.routeAggregate,
+                unknownCountryBytes = destinationSnapshot.unknownCountryBytes,
+                unknownCountryConnections = destinationSnapshot.unknownCountryConnections,
+                hiddenCountryCount = destinationSnapshot.hiddenCountryCount,
+                totalBytes = destinationSnapshot.totalBytes,
+                totalConnections = destinationSnapshot.totalConnections,
+                countryCount = destinationSnapshot.countryCount,
+                lastSampleAtMs = destinationSnapshot.lastSampleAtMs,
             )
         }
             .distinctUntilChanged()
@@ -143,6 +157,13 @@ class TrafficMapRepository(
             runtimeAvailable = runtimeAvailable,
             destinations = destinations,
             routeAggregate = trafficMapRouteAggregate(destinations),
+            unknownCountryBytes = 0L,
+            unknownCountryConnections = 0,
+            hiddenCountryCount = 0,
+            totalBytes = destinations.sumOf(TrafficMapPoint::bytes),
+            totalConnections = destinations.sumOf(TrafficMapPoint::connections),
+            countryCount = destinations.size,
+            lastSampleAtMs = null,
         )
 
     private fun buildTrafficMapUiState(
@@ -152,6 +173,13 @@ class TrafficMapRepository(
         runtimeAvailable: Boolean,
         destinations: List<TrafficMapPoint>,
         routeAggregate: TrafficMapRouteAggregate,
+        unknownCountryBytes: Long,
+        unknownCountryConnections: Int,
+        hiddenCountryCount: Int,
+        totalBytes: Long,
+        totalConnections: Int,
+        countryCount: Int,
+        lastSampleAtMs: Long?,
     ): TrafficMapUiState {
         val mapAnchorInfo = originInfo ?: routeInfo ?: torInfo
         val origin = mapAnchorInfo?.countryCode?.let(::trafficMapOrigin)
@@ -215,6 +243,26 @@ class TrafficMapRepository(
                     destinations = visibleDestinations,
                 ),
             highlightedCountries = highlightedCountries,
+            countryVisuals =
+                buildTrafficMapCountryVisuals(
+                    originInfo = originInfo,
+                    destinations = visibleDestinations,
+                    vpnRoute = vpnRoute,
+                    torExit = torExit,
+                ),
+            sampleWindowLabel =
+                trafficMapSampleWindowLabel(
+                    runtimeAvailable = runtimeAvailable,
+                    lastSampleAtMs = lastSampleAtMs,
+                    totalConnections = totalConnections,
+                ),
+            lastSampleAtMs = lastSampleAtMs,
+            unknownCountryBytes = unknownCountryBytes,
+            unknownCountryConnections = unknownCountryConnections,
+            hiddenCountryCount = hiddenCountryCount,
+            totalBytes = totalBytes,
+            totalConnections = totalConnections,
+            countryCount = countryCount,
         )
     }
 
@@ -295,6 +343,45 @@ class TrafficMapRepository(
         return edges
     }
 
+    private fun buildTrafficMapCountryVisuals(
+        originInfo: TrafficMapOriginInfo?,
+        destinations: List<TrafficMapPoint>,
+        vpnRoute: TrafficMapPoint?,
+        torExit: TrafficMapPoint?,
+    ): List<TrafficMapCountryVisual> {
+        val maxBytes =
+            maxOf(
+                destinations.maxOfOrNull(TrafficMapPoint::bytes) ?: 0L,
+                vpnRoute?.bytes ?: 0L,
+                torExit?.bytes ?: 0L,
+                1L,
+            )
+        return buildList {
+            originInfo?.countryCode?.let { countryCode ->
+                add(
+                    TrafficMapCountryVisual(
+                        countryCode = countryCode,
+                        bytes = 0L,
+                        connections = 0,
+                        role = CountryTrafficRole.ORIGIN,
+                        intensity = TRAFFIC_MAP_ROUTE_COUNTRY_MIN_INTENSITY,
+                        isNewCountry = false,
+                        isRouteNode = true,
+                    ),
+                )
+            }
+            vpnRoute?.let { point ->
+                add(point.toTrafficMapCountryVisual(CountryTrafficRole.VPN_ROUTE, maxBytes, isRouteNode = true))
+            }
+            torExit?.let { point ->
+                add(point.toTrafficMapCountryVisual(CountryTrafficRole.TOR_EXIT, maxBytes, isRouteNode = true))
+            }
+            destinations.forEach { point ->
+                add(point.toTrafficMapCountryVisual(CountryTrafficRole.DESTINATION, maxBytes, isRouteNode = false))
+            }
+        }
+    }
+
     private fun connectionAccumulatorFlow(runtimeAvailable: Flow<Boolean>): Flow<TrafficMapConnectionAccumulator> {
         val runtime = runtimeAvailable.distinctUntilChanged()
         return connectionSource
@@ -308,7 +395,7 @@ class TrafficMapRepository(
     }
 
     private fun trafficMapOrigin(countryCode: String): TrafficMapCountryCoordinate? =
-        TrafficMapCountryCoordinates[countryCode]
+        countryRegistry().coordinate(countryCode)
 
     private fun normalizeCountryCode(countryCode: String?): String? =
         countryCode
@@ -319,11 +406,11 @@ class TrafficMapRepository(
     private fun trafficMapOriginInfo(ipInfo: IpInfo?): TrafficMapOriginInfo? {
         val countryCode = normalizeCountryCode(ipInfo?.countryCode)
         return countryCode
-            ?.takeIf(TrafficMapCountryCoordinates::containsKey)
+            ?.takeIf { code -> countryRegistry().contains(code) }
             ?.let { code ->
                 TrafficMapOriginInfo(
                     countryCode = code,
-                    countryName = ipInfo?.countryName?.takeIf(String::isNotBlank),
+                    countryName = ipInfo?.countryName?.takeIf(String::isNotBlank) ?: countryRegistry().meta(code)?.label,
                     city = ipInfo?.city?.takeIf(String::isNotBlank),
                 )
             }
@@ -333,12 +420,6 @@ class TrafficMapRepository(
         TrafficMapRouteAggregate(
             bytes = destinations.sumOf(TrafficMapPoint::bytes),
             connections = destinations.sumOf(TrafficMapPoint::connections),
-        )
-
-    private fun trafficMapRouteAggregate(aggregates: Map<String, TrafficMapAggregate>): TrafficMapRouteAggregate =
-        TrafficMapRouteAggregate(
-            bytes = aggregates.values.sumOf(TrafficMapAggregate::bytes),
-            connections = aggregates.values.sumOf(TrafficMapAggregate::connections),
         )
 
     private fun trafficMapRoutePoint(
@@ -373,15 +454,15 @@ class TrafficMapRepository(
         )
     }
 
-    private data class TrafficMapRouteAggregate(
-        val bytes: Long,
-        val connections: Int,
-    )
-
-    private data class TrafficMapDestinationSnapshot(
-        val points: List<TrafficMapPoint>,
-        val routeAggregate: TrafficMapRouteAggregate,
-    )
+    private fun countryRegistry(): TrafficMapCountryRegistry {
+        cachedCountryRegistry?.let { registry -> return registry }
+        return synchronized(this) {
+            cachedCountryRegistry?.let { registry -> return@synchronized registry }
+            runCatching(countryRegistryProvider)
+                .getOrElse { TrafficMapCountryRegistry.legacyFallback() }
+                .also { registry -> cachedCountryRegistry = registry }
+        }
+    }
 
     internal companion object {
         const val MaxTrafficMapDestinations = 30
@@ -406,40 +487,7 @@ class TrafficMapRepository(
                 lon = 2.3522,
             )
 
-        val TrafficMapCountryCoordinates =
-            listOf(
-                TrafficMapCountryCoordinate("AU", "Australia", -25.0, 133.0),
-                TrafficMapCountryCoordinate("BR", "Brazil", -10.0, -55.0),
-                TrafficMapCountryCoordinate("CA", "Canada", 56.0, -106.0),
-                TrafficMapCountryCoordinate("CH", "Switzerland", 46.8, 8.2),
-                TrafficMapCountryCoordinate("CN", "China", 35.0, 103.0),
-                TrafficMapCountryCoordinate("DE", "Germany", 51.0, 10.0),
-                TrafficMapCountryCoordinate("ES", "Spain", 40.0, -4.0),
-                TrafficMapCountryCoordinate("FI", "Finland", 64.0, 26.0),
-                TrafficMapCountryCoordinate("FR", "France", 46.0, 2.0),
-                TrafficMapCountryCoordinate("GB", "United Kingdom", 54.0, -2.0),
-                TrafficMapCountryCoordinate("HK", "Hong Kong", 22.3193, 114.1694),
-                TrafficMapCountryCoordinate("ID", "Indonesia", -2.0, 118.0),
-                TrafficMapCountryCoordinate("IE", "Ireland", 53.0, -8.0),
-                TrafficMapCountryCoordinate("IN", "India", 22.0, 79.0),
-                TrafficMapCountryCoordinate("IT", "Italy", 42.5, 12.5),
-                TrafficMapCountryCoordinate("JP", "Japan", 37.0, 138.0),
-                TrafficMapCountryCoordinate("KR", "South Korea", 36.0, 128.0),
-                TrafficMapCountryCoordinate("MX", "Mexico", 23.0, -102.0),
-                TrafficMapCountryCoordinate("NL", "Netherlands", 52.1, 5.3),
-                TrafficMapCountryCoordinate("NO", "Norway", 61.0, 8.0),
-                TrafficMapCountryCoordinate("PL", "Poland", 52.0, 19.0),
-                TrafficMapCountryCoordinate("RO", "Romania", 45.8, 25.0),
-                TrafficMapCountryCoordinate("RU", "Russia", 61.0, 105.0),
-                TrafficMapCountryCoordinate("SE", "Sweden", 62.0, 15.0),
-                TrafficMapCountryCoordinate("SG", "Singapore", 1.3521, 103.8198),
-                TrafficMapCountryCoordinate("TR", "Turkey", 39.0, 35.0),
-                TrafficMapCountryCoordinate("TW", "Taiwan", 23.7, 121.0),
-                TrafficMapCountryCoordinate("UA", "Ukraine", 49.0, 32.0),
-                TrafficMapCountryCoordinate("US", "United States", 39.8, -98.6),
-                TrafficMapCountryCoordinate("ZA", "South Africa", -30.0, 24.0),
-                TrafficMapCountryCoordinate("EU", "Europe", 50.0, 10.0),
-            ).associateBy(TrafficMapCountryCoordinate::countryCode)
+        val TrafficMapCountryCoordinates = TrafficMapCountryRegistry.LegacyCoordinates
     }
 }
 
@@ -449,7 +497,24 @@ internal data class TrafficMapAggregate(
     val connections: Int,
 )
 
-internal data class TrafficMapCountryCoordinate(
+internal data class TrafficMapRouteAggregate(
+    val bytes: Long,
+    val connections: Int,
+)
+
+internal data class TrafficMapDestinationSnapshot(
+    val points: List<TrafficMapPoint>,
+    val routeAggregate: TrafficMapRouteAggregate,
+    val unknownCountryBytes: Long,
+    val unknownCountryConnections: Int,
+    val hiddenCountryCount: Int,
+    val totalBytes: Long,
+    val totalConnections: Int,
+    val countryCount: Int,
+    val lastSampleAtMs: Long?,
+)
+
+data class TrafficMapCountryCoordinate(
     val countryCode: String,
     val label: String,
     val lat: Double,
@@ -503,6 +568,7 @@ internal data class TrafficMapSampleBatch(
 
 internal data class TrafficMapConnectionAccumulator(
     val samplesById: LinkedHashMap<String, TrafficMapConnectionSample> = linkedMapOf(),
+    val lastSampleAtMs: Long? = null,
 ) {
     fun updatedForBatch(batch: TrafficMapSampleBatch): TrafficMapConnectionAccumulator {
         if (!batch.runtimeAvailable) {
@@ -529,7 +595,10 @@ internal data class TrafficMapConnectionAccumulator(
             val oldestKey = next.keys.firstOrNull() ?: break
             next.remove(oldestKey)
         }
-        return TrafficMapConnectionAccumulator(samplesById = next)
+        return TrafficMapConnectionAccumulator(
+            samplesById = next,
+            lastSampleAtMs = System.currentTimeMillis(),
+        )
     }
 
     fun countryAggregates(): Map<String, TrafficMapAggregate> =
@@ -556,30 +625,126 @@ internal fun aggregateTrafficMapSamples(
 internal fun trafficMapPointsFromAggregates(
     aggregates: Map<String, TrafficMapAggregate>,
     limit: Int,
+    countryRegistry: TrafficMapCountryRegistry = TrafficMapCountryRegistry.legacyFallback(),
 ): List<TrafficMapPoint> =
-    aggregates.values
-        .sortedWith(
-            compareByDescending<TrafficMapAggregate> { aggregate -> aggregate.bytes }
-                .thenByDescending { aggregate -> aggregate.connections }
-                .thenBy { aggregate -> aggregate.countryCode },
-        )
-        .mapNotNull { aggregate ->
-            TrafficMapRepository.TrafficMapCountryCoordinates[aggregate.countryCode]?.let { coordinate ->
-                TrafficMapPoint(
-                    countryCode = aggregate.countryCode,
-                    label = coordinate.label,
-                    lat = coordinate.lat,
-                    lon = coordinate.lon,
-                    bytes = aggregate.bytes,
-                    connections = aggregate.connections,
-                )
-            }
-        }
-        .take(limit.coerceAtLeast(0))
+    trafficMapDestinationSnapshotFromAggregates(
+        aggregates = aggregates,
+        limit = limit,
+        countryRegistry = countryRegistry,
+        lastSampleAtMs = null,
+    ).points
 
 internal fun trafficMapCountryBytesFromAggregates(
     aggregates: Map<String, TrafficMapAggregate>,
     limit: Int,
+    countryRegistry: TrafficMapCountryRegistry = TrafficMapCountryRegistry.legacyFallback(),
 ): Map<String, Long> =
-    trafficMapPointsFromAggregates(aggregates, limit)
+    trafficMapPointsFromAggregates(
+        aggregates = aggregates,
+        limit = limit,
+        countryRegistry = countryRegistry,
+    )
         .associate { point -> point.countryCode to point.bytes }
+
+internal fun trafficMapDestinationSnapshotFromAggregates(
+    aggregates: Map<String, TrafficMapAggregate>,
+    limit: Int,
+    countryRegistry: TrafficMapCountryRegistry = TrafficMapCountryRegistry.legacyFallback(),
+    lastSampleAtMs: Long? = null,
+): TrafficMapDestinationSnapshot {
+    val visibleLimit = limit.coerceAtLeast(0)
+    var supportedCountryCount = 0
+    var unknownCountryBytes = 0L
+    var unknownCountryConnections = 0
+    val points = mutableListOf<TrafficMapPoint>()
+    val sortedAggregates = aggregates.values.sortedWith(TrafficMapAggregateComparator)
+    sortedAggregates.forEach { aggregate ->
+        val coordinate =
+            normalizeTrafficMapAggregateCountryCode(aggregate.countryCode)
+                ?.let(countryRegistry::coordinate)
+        if (coordinate == null) {
+            unknownCountryBytes += aggregate.bytes.coerceAtLeast(0L)
+            unknownCountryConnections += aggregate.connections.coerceAtLeast(0)
+        } else {
+            supportedCountryCount += 1
+            if (points.size < visibleLimit) {
+                points +=
+                    TrafficMapPoint(
+                        countryCode = coordinate.countryCode,
+                        label = coordinate.label,
+                        lat = coordinate.lat,
+                        lon = coordinate.lon,
+                        bytes = aggregate.bytes,
+                        connections = aggregate.connections,
+                    )
+            }
+        }
+    }
+    val totalBytes = sortedAggregates.sumOf { aggregate -> aggregate.bytes.coerceAtLeast(0L) }
+    val totalConnections = sortedAggregates.sumOf { aggregate -> aggregate.connections.coerceAtLeast(0) }
+    val unknownBucketCount = if (unknownCountryBytes > 0L || unknownCountryConnections > 0) 1 else 0
+    return TrafficMapDestinationSnapshot(
+        points = points,
+        routeAggregate = TrafficMapRouteAggregate(
+            bytes = totalBytes,
+            connections = totalConnections,
+        ),
+        unknownCountryBytes = unknownCountryBytes,
+        unknownCountryConnections = unknownCountryConnections,
+        hiddenCountryCount = (supportedCountryCount - points.size).coerceAtLeast(0),
+        totalBytes = totalBytes,
+        totalConnections = totalConnections,
+        countryCount = supportedCountryCount + unknownBucketCount,
+        lastSampleAtMs = lastSampleAtMs,
+    )
+}
+
+private fun normalizeTrafficMapAggregateCountryCode(countryCode: String?): String? =
+    countryCode
+        ?.trim()
+        ?.uppercase(Locale.US)
+        ?.takeIf { value ->
+            value.length == TrafficMapRepository.IsoCountryCodeLength &&
+                value.all { character -> character in 'A'..'Z' }
+        }
+
+private fun trafficMapSampleWindowLabel(
+    runtimeAvailable: Boolean,
+    lastSampleAtMs: Long?,
+    totalConnections: Int,
+): String =
+    when {
+        !runtimeAvailable || totalConnections <= 0 -> "No active connections"
+        lastSampleAtMs == null -> "Live"
+        System.currentTimeMillis() - lastSampleAtMs > STALE_TRAFFIC_MAP_SAMPLE_MS -> "Stale"
+        else -> "Live, last 3s"
+    }
+
+private fun TrafficMapPoint.toTrafficMapCountryVisual(
+    role: CountryTrafficRole,
+    maxBytes: Long,
+    isRouteNode: Boolean,
+): TrafficMapCountryVisual {
+    val intensity =
+        sqrt(bytes.coerceAtLeast(0L).toDouble() / maxBytes.coerceAtLeast(1L).toDouble())
+            .toFloat()
+            .coerceIn(TRAFFIC_MAP_COUNTRY_MIN_INTENSITY, 1f)
+    return TrafficMapCountryVisual(
+        countryCode = countryCode,
+        bytes = bytes,
+        connections = connections,
+        role = role,
+        intensity = intensity,
+        isNewCountry = false,
+        isRouteNode = isRouteNode,
+    )
+}
+
+private val TrafficMapAggregateComparator =
+    compareByDescending<TrafficMapAggregate> { aggregate -> aggregate.bytes }
+        .thenByDescending { aggregate -> aggregate.connections }
+        .thenBy { aggregate -> aggregate.countryCode }
+
+private const val STALE_TRAFFIC_MAP_SAMPLE_MS = 10_000L
+private const val TRAFFIC_MAP_COUNTRY_MIN_INTENSITY = 0.18f
+private const val TRAFFIC_MAP_ROUTE_COUNTRY_MIN_INTENSITY = 0.32f

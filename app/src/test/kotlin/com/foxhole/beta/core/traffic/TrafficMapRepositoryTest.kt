@@ -1,5 +1,6 @@
 package com.foxhole.beta.core.traffic
 
+import com.foxhole.beta.core.model.CountryTrafficRole
 import com.foxhole.beta.core.model.IpInfo
 import com.foxhole.beta.core.model.TrafficMapPoint
 import com.foxhole.beta.core.model.TrafficMapPointRole
@@ -17,6 +18,8 @@ import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.File
+import java.util.Locale
 
 class TrafficMapRepositoryTest {
     @Test
@@ -48,6 +51,53 @@ class TrafficMapRepositoryTest {
         assertEquals(30L, points[0].bytes)
         assertEquals(3, points[0].connections)
         assertEquals("DE", points[1].countryCode)
+    }
+
+    @Test
+    fun `traffic map uses shape asset registry for destination countries beyond legacy table`() {
+        val requestedCountries = listOf("AE", "PT", "BE", "AT", "TH", "MY", "VN", "IL", "AR", "CL")
+        val aggregates =
+            requestedCountries
+                .mapIndexed { index, countryCode ->
+                    countryCode to
+                        TrafficMapAggregate(
+                            countryCode = countryCode,
+                            bytes = (requestedCountries.size - index) * 1_024L,
+                            connections = index + 1,
+                        )
+                }
+                .toMap()
+
+        val points =
+            trafficMapPointsFromAggregates(
+                aggregates = aggregates,
+                limit = 20,
+                countryRegistry = trafficMapAssetRegistry(),
+            )
+
+        assertEquals(requestedCountries, points.map(TrafficMapPoint::countryCode))
+        assertTrue(points.all { point -> point.label != point.countryCode })
+    }
+
+    @Test
+    fun `unsupported destination countries are retained in unknown bucket instead of fake map points`() {
+        val snapshot =
+            trafficMapDestinationSnapshotFromAggregates(
+                aggregates =
+                    mapOf(
+                        "DE" to TrafficMapAggregate(countryCode = "DE", bytes = 2_048L, connections = 2),
+                        "ZZ" to TrafficMapAggregate(countryCode = "ZZ", bytes = 4_096L, connections = 4),
+                    ),
+                limit = 20,
+                countryRegistry = trafficMapAssetRegistry(),
+            )
+
+        assertEquals(listOf("DE"), snapshot.points.map(TrafficMapPoint::countryCode))
+        assertEquals(4_096L, snapshot.unknownCountryBytes)
+        assertEquals(4, snapshot.unknownCountryConnections)
+        assertEquals(6_144L, snapshot.totalBytes)
+        assertEquals(6, snapshot.totalConnections)
+        assertEquals(2, snapshot.countryCount)
     }
 
     @Test
@@ -400,6 +450,53 @@ class TrafficMapRepositoryTest {
     }
 
     @Test
+    fun `traffic map state exposes role based country visuals for map highlights`() {
+        val state =
+            TrafficMapRepository().trafficMapStateSnapshot(
+                originIpInfo =
+                    IpInfo(
+                        ip = "198.51.100.20",
+                        ipv4 = "198.51.100.20",
+                        countryCode = "US",
+                        countryName = "United States",
+                        city = "New York",
+                        isp = "Device ISP",
+                        fetchedAt = 1_000L,
+                    ),
+                routeIpInfo =
+                    IpInfo(
+                        ip = "203.0.113.20",
+                        ipv4 = "203.0.113.20",
+                        countryCode = "NL",
+                        countryName = "Netherlands",
+                        city = "Amsterdam",
+                        isp = "Tunnel ISP",
+                        fetchedAt = 2_000L,
+                    ),
+                torIpInfo =
+                    IpInfo(
+                        ip = "203.0.113.44",
+                        ipv4 = "203.0.113.44",
+                        countryCode = "DE",
+                        countryName = "Germany",
+                        city = "Frankfurt",
+                        isp = "Tor Exit",
+                        fetchedAt = 2_500L,
+                    ),
+                runtimeAvailable = true,
+                destinations = listOf(trafficMapPoint("FR").copy(bytes = 4_096L, connections = 2)),
+            )
+
+        val rolesByCountryCode = state.countryVisuals.associate { visual -> visual.countryCode to visual.role }
+
+        assertEquals(CountryTrafficRole.ORIGIN, rolesByCountryCode["US"])
+        assertEquals(CountryTrafficRole.VPN_ROUTE, rolesByCountryCode["NL"])
+        assertEquals(CountryTrafficRole.TOR_EXIT, rolesByCountryCode["DE"])
+        assertEquals(CountryTrafficRole.DESTINATION, rolesByCountryCode["FR"])
+        assertTrue(state.countryVisuals.all { visual -> visual.intensity in 0.18f..1f })
+    }
+
+    @Test
     fun `traffic map route rows summarize live destination sessions and traffic`() {
         val state =
             TrafficMapRepository().trafficMapStateSnapshot(
@@ -583,4 +680,14 @@ private fun trafficMapPoint(countryCode: String): TrafficMapPoint {
         bytes = 1_024L,
         connections = 1,
     )
+}
+
+private fun trafficMapAssetRegistry(): TrafficMapCountryRegistry {
+    val asset =
+        listOf(
+            File("src/main/assets/$TRAFFIC_MAP_COUNTRY_SHAPES_ASSET"),
+            File("app/src/main/assets/$TRAFFIC_MAP_COUNTRY_SHAPES_ASSET"),
+        ).first(File::isFile)
+    val shapes = TrafficMapCountryShapeAssetParser().parse(asset.readText())
+    return TrafficMapCountryRegistry.fromShapes(shapes = shapes, locale = Locale.US)
 }

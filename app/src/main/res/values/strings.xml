@@ -23,6 +23,12 @@
     <string name="traffic_map_device_location_icon">Device location based on IP address</string>
     <string name="traffic_map_live_requires_firewall">No active connections</string>
     <string name="traffic_map_waiting_connections">No active connections</string>
+    <string name="traffic_map_waiting_connections_helper">Start VPN or enable local guard to see live destination countries.</string>
+    <string name="traffic_map_route_header">Route</string>
+    <string name="traffic_map_top_countries_header">Top countries</string>
+    <string name="traffic_map_unknown_country">Unknown</string>
+    <string name="traffic_map_more_countries">+ %1$d more</string>
+    <string name="traffic_map_total_summary">%1$d countries · %2$s</string>
     <string name="traffic_map_support_prompt_title">Enable traffic map helpers?</string>
     <string name="traffic_map_support_prompt_body">The dashboard map uses live VPN connections. For local Firewall mode, country totals, and connection details, also enable country statistics and the network activity journal.</string>
     <string name="traffic_map_support_prompt_confirm">Enable now</string>

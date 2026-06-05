@@ -13,6 +13,7 @@ import com.foxhole.beta.core.network.IpInfoRepository
 import com.foxhole.beta.core.network.NetworkFingerprintProvider
 import com.foxhole.beta.core.network.PublicRemoteDns
 import com.foxhole.beta.core.settings.SettingsRepository
+import com.foxhole.beta.core.traffic.AndroidTrafficMapCountryRegistryProvider
 import com.foxhole.beta.core.traffic.LibboxTrafficMapConnectionSource
 import com.foxhole.beta.core.traffic.TrafficMapRepository
 import com.foxhole.beta.vpn.AndroidLanProxyAddressProvider
@@ -47,8 +48,15 @@ internal class FoxholeCoreGraphModule(
 
     val settingsRepository: SettingsRepository by lazy { SettingsRepository(appContext) }
 
+    private val trafficMapCountryRegistryProvider: AndroidTrafficMapCountryRegistryProvider by lazy {
+        AndroidTrafficMapCountryRegistryProvider(appContext)
+    }
+
     val trafficMapRepository: TrafficMapRepository by lazy {
-        TrafficMapRepository(LibboxTrafficMapConnectionSource(appContext))
+        TrafficMapRepository(
+            connectionSource = LibboxTrafficMapConnectionSource(appContext),
+            countryRegistryProvider = trafficMapCountryRegistryProvider::registry,
+        )
     }
 
     val anomalyNotifier: AnomalyNotifier by lazy { AnomalyNotifier(appContext) }

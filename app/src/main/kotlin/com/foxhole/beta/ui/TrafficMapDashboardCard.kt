@@ -1,3 +1,5 @@
+@file:Suppress("TooManyFunctions")
+
 package com.foxhole.beta.ui
 
 import android.content.BroadcastReceiver
@@ -24,9 +26,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Map
 import androidx.compose.material.icons.outlined.PhoneAndroid
@@ -66,6 +66,8 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -78,11 +80,14 @@ import androidx.core.content.getSystemService
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.foxhole.beta.BuildConfig
 import com.foxhole.beta.R
+import com.foxhole.beta.core.model.CountryTrafficRole
+import com.foxhole.beta.core.model.TrafficMapCountryVisual
 import com.foxhole.beta.core.model.TrafficMapEdge
 import com.foxhole.beta.core.model.TrafficMapEdgeRole
 import com.foxhole.beta.core.model.TrafficMapPoint
 import com.foxhole.beta.core.model.TrafficMapPointRole
 import com.foxhole.beta.core.model.TrafficMapUiState
+import com.foxhole.beta.core.traffic.TRAFFIC_MAP_COUNTRY_SHAPES_ASSET
 import com.foxhole.beta.core.traffic.TrafficMapCountryShape
 import com.foxhole.beta.core.traffic.TrafficMapCountryShapeAssetParser
 import com.foxhole.beta.ui.theme.LocalFoxholeDarkTheme
@@ -504,11 +509,21 @@ private fun TrafficMapCanvas(
             shapes = mapCountryShapes,
             canvasSize = canvasSize,
             color = colors.countryFill,
+            boundaryColor = colors.countryBoundary,
         )
+    val countryHighlightBitmap =
+        rememberTrafficMapCountryHighlightLayerBitmap(
+            shapes = mapCountryShapes,
+            canvasSize = canvasSize,
+            visuals = state.countryVisuals,
+            colors = colors,
+        )
+    val mapContentDescription = remember(state) { trafficMapContentDescription(state) }
 
     Box(
         modifier = modifier
             .onSizeChanged { size -> canvasSize = size }
+            .semantics { contentDescription = mapContentDescription }
             .drawWithCache {
                 val viewport = trafficMapViewport(size)
                 val maxLineStroke = TRAFFIC_MAP_ROUTE_MAX_STROKE_DP.dp.toPx()
@@ -609,6 +624,21 @@ private fun TrafficMapCanvas(
                                 ),
                         )
                     }
+                    countryHighlightBitmap?.let { bitmap ->
+                        drawImage(
+                            image = bitmap,
+                            dstOffset =
+                                IntOffset(
+                                    x = viewport.topLeft.x.roundToInt(),
+                                    y = viewport.topLeft.y.roundToInt(),
+                                ),
+                            dstSize =
+                                IntSize(
+                                    width = viewport.size.width.roundToInt().coerceAtLeast(1),
+                                    height = viewport.size.height.roundToInt().coerceAtLeast(1),
+                                ),
+                        )
+                    }
 
                     routeDrawModels.forEach { route ->
                         drawPath(
@@ -692,20 +722,23 @@ private fun rememberTrafficMapLandLayerBitmap(
     shapes: List<TrafficMapCountryShape>,
     canvasSize: IntSize,
     color: Color,
+    boundaryColor: Color,
 ): ImageBitmap? {
     val cachedBitmap =
-        remember(shapes, canvasSize, color) {
+        remember(shapes, canvasSize, color, boundaryColor) {
             TrafficMapLandLayerCache.currentBitmap(
                 shapes = shapes,
                 canvasSize = canvasSize,
                 color = color,
+                boundaryColor = boundaryColor,
             )
         }
     val bitmap by produceState(
         initialValue = cachedBitmap,
-        key1 = shapes,
-        key2 = canvasSize,
-        key3 = color,
+        shapes,
+        canvasSize,
+        color,
+        boundaryColor,
     ) {
         if (cachedBitmap != null) {
             value = cachedBitmap
@@ -718,10 +751,67 @@ private fun rememberTrafficMapLandLayerBitmap(
                 shapes = shapes,
                 canvasSize = canvasSize,
                 color = color,
+                boundaryColor = boundaryColor,
             )
     }
     return bitmap
 }
+
+@Composable
+private fun rememberTrafficMapCountryHighlightLayerBitmap(
+    shapes: List<TrafficMapCountryShape>,
+    canvasSize: IntSize,
+    visuals: List<TrafficMapCountryVisual>,
+    colors: TrafficMapColors,
+): ImageBitmap? {
+    val cachedBitmap =
+        remember(shapes, canvasSize, visuals, colors) {
+            TrafficMapCountryHighlightLayerCache.currentBitmap(
+                shapes = shapes,
+                canvasSize = canvasSize,
+                visuals = visuals,
+                colors = colors,
+            )
+        }
+    val bitmap by produceState(
+        initialValue = cachedBitmap,
+        shapes,
+        canvasSize,
+        visuals,
+        colors,
+    ) {
+        if (cachedBitmap != null) {
+            value = cachedBitmap
+        }
+        if (
+            trafficMapHighlightInputsEmpty(
+                shapes = shapes,
+                visuals = visuals,
+                canvasSize = canvasSize,
+            )
+        ) {
+            return@produceState
+        }
+        value =
+            TrafficMapCountryHighlightLayerCache.bitmap(
+                shapes = shapes,
+                canvasSize = canvasSize,
+                visuals = visuals,
+                colors = colors,
+            )
+    }
+    return bitmap
+}
+
+private fun trafficMapHighlightInputsEmpty(
+    shapes: List<TrafficMapCountryShape>,
+    visuals: List<TrafficMapCountryVisual>,
+    canvasSize: IntSize,
+): Boolean =
+    shapes.isEmpty() ||
+        visuals.isEmpty() ||
+        canvasSize.width <= 0 ||
+        canvasSize.height <= 0
 
 @Composable
 private fun rememberTrafficMapCountryShapes(): List<TrafficMapCountryShape> {
@@ -831,64 +921,146 @@ private fun TrafficMapLegend(
     modifier: Modifier = Modifier,
 ) {
     val colors = trafficMapColors()
-    val destinations = remember(state.destinations) { state.destinations }
+    val destinations = remember(state.destinations) { state.destinations.take(TRAFFIC_MAP_DASHBOARD_TOP_COUNTRIES) }
     val routePoints = remember(state.vpnRoute, state.torExit) { listOfNotNull(state.vpnRoute, state.torExit) }
-    val scrollState = rememberScrollState()
     Column(
         modifier = modifier.fillMaxHeight(),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         if (destinations.isEmpty() && routePoints.isEmpty()) {
-            Text(
+            TrafficMapEmptySummary(
+                state = state,
+                colors = colors,
                 modifier = Modifier.weight(1f),
-                text =
-                    stringResource(
-                        if (state.isAvailable) {
-                            R.string.traffic_map_waiting_connections
-                        } else {
-                            R.string.traffic_map_live_requires_firewall
-                        },
-                    ),
-                style = MaterialTheme.typography.labelSmall.copy(
-                    fontSize = 10.sp,
-                    lineHeight = 12.sp,
-                ),
-                color = colors.inactiveText,
-                maxLines = 6,
-                overflow = TextOverflow.Ellipsis,
             )
         } else {
             Column(
                 modifier =
                     Modifier
-                        .weight(1f)
-                        .verticalScroll(scrollState),
-                verticalArrangement = Arrangement.spacedBy(3.dp),
+                        .weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                state.vpnRoute?.let { point ->
-                    TrafficMapLegendDestinationRow(
-                        point = point,
-                        markerColor = colors.vpnRoute,
-                        textColor = colors.legendText,
+                TrafficMapLegendLabel(
+                    text = stringResource(R.string.traffic_map_route_header),
+                    color = colors.inactiveText,
+                )
+                Text(
+                    text = state.trafficMapRouteChain(),
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontSize = 9.sp,
+                        lineHeight = 11.sp,
+                    ),
+                    fontWeight = FontWeight.SemiBold,
+                    color = colors.legendText,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (destinations.isNotEmpty()) {
+                    TrafficMapLegendLabel(
+                        text = stringResource(R.string.traffic_map_top_countries_header),
+                        color = colors.inactiveText,
+                    )
+                    destinations.forEach { point ->
+                        TrafficMapLegendDestinationRow(
+                            point = point,
+                            markerColor = colors.destination,
+                            textColor = colors.legendText,
+                        )
+                    }
+                }
+                if (state.unknownCountryBytes > 0L) {
+                    TrafficMapLegendSummaryRow(
+                        label = stringResource(R.string.traffic_map_unknown_country),
+                        value = formatTrafficMapLegendBytes(state.unknownCountryBytes),
+                        color = colors.inactiveText,
                     )
                 }
-                state.torExit?.let { point ->
-                    TrafficMapLegendDestinationRow(
-                        point = point,
-                        markerColor = colors.torExit,
-                        textColor = colors.legendText,
+                if (state.hiddenCountryCount > 0) {
+                    Text(
+                        text = stringResource(R.string.traffic_map_more_countries, state.hiddenCountryCount),
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontSize = 9.sp,
+                            lineHeight = 10.sp,
+                        ),
+                        color = colors.inactiveText,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
-                destinations.forEach { point ->
-                    TrafficMapLegendDestinationRow(
-                        point = point,
-                        markerColor = colors.destination,
-                        textColor = colors.legendText,
+                if (state.totalBytes > 0L) {
+                    TrafficMapLegendSummaryRow(
+                        label = stringResource(R.string.traffic_map_total_header),
+                        value =
+                            stringResource(
+                                R.string.traffic_map_total_summary,
+                                state.countryCount,
+                                formatTrafficMapLegendBytes(state.totalBytes),
+                            ),
+                        color = colors.legendText,
                     )
                 }
             }
         }
     }
+}
+
+@Composable
+private fun TrafficMapEmptySummary(
+    state: TrafficMapUiState,
+    colors: TrafficMapColors,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Text(
+            text =
+                stringResource(
+                    if (state.isAvailable) {
+                        R.string.traffic_map_waiting_connections
+                    } else {
+                        R.string.traffic_map_live_requires_firewall
+                    },
+                ),
+            style = MaterialTheme.typography.labelSmall.copy(
+                fontSize = 10.sp,
+                lineHeight = 12.sp,
+            ),
+            fontWeight = FontWeight.SemiBold,
+            color = colors.inactiveText,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text(
+            text = stringResource(R.string.traffic_map_waiting_connections_helper),
+            style = MaterialTheme.typography.labelSmall.copy(
+                fontSize = 9.sp,
+                lineHeight = 11.sp,
+            ),
+            color = colors.inactiveText,
+            maxLines = 4,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+@Composable
+private fun TrafficMapLegendLabel(
+    text: String,
+    color: Color,
+) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelSmall.copy(
+            fontSize = 8.sp,
+            lineHeight = 9.sp,
+        ),
+        fontWeight = FontWeight.SemiBold,
+        color = color,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+    )
 }
 
 private fun curvedTrafficRoutePath(
@@ -939,16 +1111,51 @@ private fun TrafficMapUiState.originLocationLabel(): String =
         originCountryName?.let { countryName -> "${countryEmoji(originCountryCode)} $countryName" }
             ?: originCountryCode?.let(::countryEmoji),
         originCity?.takeIf(String::isNotBlank),
-    )
+        )
         .joinToString(separator = "\n")
         .ifBlank { "IP" }
+
+private fun TrafficMapUiState.trafficMapRouteChain(): String {
+    val origin =
+        listOfNotNull(
+            originCountryCode?.let(::countryEmoji),
+            originCountryName ?: originCountryCode,
+        )
+            .joinToString(separator = " ")
+            .ifBlank { "Device" }
+    val routeNodes =
+        listOfNotNull(
+            vpnRoute?.let { point -> "${countryEmoji(point.countryCode)} VPN" },
+            torExit?.let { point -> "${countryEmoji(point.countryCode)} TOR" },
+        )
+    return (listOf(origin) + routeNodes).joinToString(separator = " -> ")
+}
+
+private fun trafficMapContentDescription(state: TrafficMapUiState): String {
+    val routeParts =
+        buildList {
+            add("Device ${state.originCountryName ?: state.originCountryCode ?: "unknown"}")
+            state.vpnRoute?.let { point -> add("VPN ${point.label}") }
+            state.torExit?.let { point -> add("TOR ${point.label}") }
+        }.joinToString(separator = ". ")
+    val topDestination =
+        state.destinations.firstOrNull()?.let { point ->
+            "Top destination ${point.label} ${formatTrafficMapLegendBytes(point.bytes)}."
+        }.orEmpty()
+    val countrySummary =
+        if (state.countryCount > 0) {
+            "${state.countryCount} countries total."
+        } else {
+            "No active destinations."
+        }
+    return "Traffic map. $routeParts. $topDestination $countrySummary"
+}
 
 @Composable
 private fun TrafficMapLegendDestinationRow(
     point: TrafficMapPoint,
     markerColor: Color,
     textColor: Color,
-    showMetrics: Boolean = true,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -956,7 +1163,7 @@ private fun TrafficMapLegendDestinationRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Row(
-            modifier = Modifier.weight(if (showMetrics) 0.94f else 1f),
+            modifier = Modifier.weight(1f),
             horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -982,32 +1189,62 @@ private fun TrafficMapLegendDestinationRow(
                 maxLines = 1,
             )
             Text(
-                text = point.countryCode.uppercase(Locale.US),
-                modifier = Modifier.width(24.dp),
+                text = point.label,
+                modifier = Modifier.weight(1f),
                 style = MaterialTheme.typography.labelSmall.copy(
-                    fontSize = 10.sp,
-                    lineHeight = 12.sp,
+                    fontSize = 9.sp,
+                    lineHeight = 11.sp,
                 ),
                 fontWeight = FontWeight.SemiBold,
                 color = textColor,
                 textAlign = TextAlign.Start,
                 maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
         }
-        if (showMetrics) {
-            TrafficMapLegendCell(
-                text = point.connections.toString(),
-                modifier = Modifier.weight(0.48f),
-                textAlign = TextAlign.End,
-                color = textColor,
-            )
-            TrafficMapLegendCell(
-                text = formatTrafficMapLegendBytes(point.bytes),
-                modifier = Modifier.weight(0.68f),
-                textAlign = TextAlign.End,
-                color = textColor,
-            )
-        }
+        TrafficMapLegendCell(
+            text = formatTrafficMapLegendBytes(point.bytes),
+            modifier = Modifier.widthIn(min = 42.dp, max = 64.dp),
+            textAlign = TextAlign.End,
+            color = textColor,
+        )
+    }
+}
+
+@Composable
+private fun TrafficMapLegendSummaryRow(
+    label: String,
+    value: String,
+    color: Color,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = label,
+            modifier = Modifier.weight(1f),
+            style = MaterialTheme.typography.labelSmall.copy(
+                fontSize = 9.sp,
+                lineHeight = 10.sp,
+            ),
+            color = color,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.labelSmall.copy(
+                fontSize = 9.sp,
+                lineHeight = 10.sp,
+            ),
+            fontWeight = FontWeight.SemiBold,
+            color = color,
+            textAlign = TextAlign.End,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 
@@ -1128,17 +1365,25 @@ private fun androidTrafficMapLandPath(
 ): AndroidPath =
     AndroidPath().apply {
         shapes.forEach { shape ->
-            shape.rings.forEach { ring ->
-                ring.forEachIndexed { index, point ->
-                    val offset = project(lat = point.lat, lon = point.lon, viewport = viewport)
-                    if (index == 0) {
-                        moveTo(offset.x, offset.y)
-                    } else {
-                        lineTo(offset.x, offset.y)
-                    }
+            addPath(androidTrafficMapCountryPath(shape = shape, viewport = viewport))
+        }
+    }
+
+private fun androidTrafficMapCountryPath(
+    shape: TrafficMapCountryShape,
+    viewport: TrafficMapViewport,
+): AndroidPath =
+    AndroidPath().apply {
+        shape.rings.forEach { ring ->
+            ring.forEachIndexed { index, point ->
+                val offset = project(lat = point.lat, lon = point.lon, viewport = viewport)
+                if (index == 0) {
+                    moveTo(offset.x, offset.y)
+                } else {
+                    lineTo(offset.x, offset.y)
                 }
-                close()
             }
+            close()
         }
     }
 
@@ -1147,18 +1392,156 @@ private fun trafficMapLandBitmap(
     shapes: List<TrafficMapCountryShape>,
     viewport: TrafficMapViewport,
     color: Color,
+    boundaryColor: Color,
 ): ImageBitmap {
     val width = size.width.toInt().coerceAtLeast(1)
     val height = size.height.toInt().coerceAtLeast(1)
     val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-    AndroidCanvas(bitmap).drawPath(
-        androidTrafficMapLandPath(shapes, viewport),
+    val landPath = androidTrafficMapLandPath(shapes, viewport)
+    val canvas = AndroidCanvas(bitmap)
+    canvas.drawPath(
+        landPath,
         AndroidPaint(AndroidPaint.ANTI_ALIAS_FLAG).apply {
             style = AndroidPaint.Style.FILL
             this.color = color.toArgb()
         },
     )
+    canvas.drawPath(
+        landPath,
+        AndroidPaint(AndroidPaint.ANTI_ALIAS_FLAG).apply {
+            style = AndroidPaint.Style.STROKE
+            strokeWidth = 0.65f
+            this.color = boundaryColor.toArgb()
+        },
+    )
     return bitmap.asImageBitmap()
+}
+
+private fun trafficMapCountryHighlightBitmap(
+    size: Size,
+    shapes: List<TrafficMapCountryShape>,
+    viewport: TrafficMapViewport,
+    visuals: List<TrafficMapCountryVisual>,
+    colors: TrafficMapColors,
+): ImageBitmap {
+    val width = size.width.toInt().coerceAtLeast(1)
+    val height = size.height.toInt().coerceAtLeast(1)
+    val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+    val canvas = AndroidCanvas(bitmap)
+    val shapesByCountryCode = shapes.associateBy { shape -> shape.countryCode.uppercase(Locale.US) }
+    visuals.dominantTrafficMapCountryVisuals().forEach { visual ->
+        val shape = shapesByCountryCode[visual.countryCode.uppercase(Locale.US)] ?: return@forEach
+        val countryPath = androidTrafficMapCountryPath(shape = shape, viewport = viewport)
+        canvas.drawPath(
+            countryPath,
+            AndroidPaint(AndroidPaint.ANTI_ALIAS_FLAG).apply {
+                style = AndroidPaint.Style.FILL
+                color = visual.trafficMapHighlightColor(colors).toArgb()
+            },
+        )
+        if (visual.isNewCountry || visual.isRouteNode) {
+            canvas.drawPath(
+                countryPath,
+                AndroidPaint(AndroidPaint.ANTI_ALIAS_FLAG).apply {
+                    style = AndroidPaint.Style.STROKE
+                    strokeWidth = if (visual.isRouteNode) 1.35f else 1.05f
+                    color = visual.trafficMapHighlightStrokeColor(colors).toArgb()
+                },
+            )
+        }
+    }
+    return bitmap.asImageBitmap()
+}
+
+private object TrafficMapCountryHighlightLayerCache {
+    private const val MAX_ENTRIES = 8
+    private const val SIZE_BUCKET_PX = 32
+    private val lock = Any()
+    private val bitmaps =
+        LinkedHashMap<TrafficMapCountryHighlightLayerKey, ImageBitmap>(
+            MAX_ENTRIES,
+            0.75f,
+            true,
+        )
+
+    fun currentBitmap(
+        shapes: List<TrafficMapCountryShape>,
+        canvasSize: IntSize,
+        visuals: List<TrafficMapCountryVisual>,
+        colors: TrafficMapColors,
+    ): ImageBitmap? {
+        val key =
+            highlightLayerKey(
+                shapes = shapes,
+                canvasSize = canvasSize,
+                visuals = visuals,
+                colors = colors,
+            )
+        synchronized(lock) {
+            return bitmaps[key]
+        }
+    }
+
+    suspend fun bitmap(
+        shapes: List<TrafficMapCountryShape>,
+        canvasSize: IntSize,
+        visuals: List<TrafficMapCountryVisual>,
+        colors: TrafficMapColors,
+    ): ImageBitmap =
+        withContext(TrafficMapRenderDispatcher.dispatcher) {
+            val key =
+                highlightLayerKey(
+                    shapes = shapes,
+                    canvasSize = canvasSize,
+                    visuals = visuals,
+                    colors = colors,
+                )
+            synchronized(lock) {
+                bitmaps[key]?.let { bitmap -> return@withContext bitmap }
+            }
+            val size = Size(key.width.toFloat(), key.height.toFloat())
+            val bitmap =
+                traceTrafficMapSection("TrafficMap/renderHighlightBitmap") {
+                    trafficMapCountryHighlightBitmap(
+                        size = size,
+                        shapes = shapes,
+                        viewport = TrafficMapViewport(topLeft = Offset.Zero, size = size),
+                        visuals = visuals,
+                        colors = colors,
+                    )
+                }
+            synchronized(lock) {
+                bitmaps[key] = bitmap
+                while (bitmaps.size > MAX_ENTRIES) {
+                    val eldest = bitmaps.entries.firstOrNull()?.key ?: break
+                    bitmaps.remove(eldest)
+                }
+            }
+            bitmap
+        }
+
+    private fun highlightLayerKey(
+        shapes: List<TrafficMapCountryShape>,
+        canvasSize: IntSize,
+        visuals: List<TrafficMapCountryVisual>,
+        colors: TrafficMapColors,
+    ): TrafficMapCountryHighlightLayerKey {
+        val bitmapSize = trafficMapLandLayerBitmapSize(canvasSize)
+        return TrafficMapCountryHighlightLayerKey(
+            width = bucketDimension(bitmapSize.width),
+            height = bucketDimension(bitmapSize.height),
+            shapesIdentity = System.identityHashCode(shapes),
+            shapeCount = shapes.size,
+            visualsHash = visuals.dominantTrafficMapCountryVisuals().hashCode(),
+            destinationColor = colors.countryDestinationHighlight.toArgb(),
+            originColor = colors.countryOriginHighlight.toArgb(),
+            vpnColor = colors.vpnRoute.toArgb(),
+            torColor = colors.torExit.toArgb(),
+        )
+    }
+
+    private fun bucketDimension(value: Int): Int =
+        (((value.coerceAtLeast(1) + SIZE_BUCKET_PX - 1) / SIZE_BUCKET_PX) * SIZE_BUCKET_PX)
 }
 
 private object TrafficMapLandLayerCache {
@@ -1178,8 +1561,15 @@ private object TrafficMapLandLayerCache {
         shapes: List<TrafficMapCountryShape>,
         canvasSize: IntSize,
         color: Color,
+        boundaryColor: Color,
     ): ImageBitmap? {
-        val key = landLayerKey(shapes = shapes, canvasSize = canvasSize, color = color)
+        val key =
+            landLayerKey(
+                shapes = shapes,
+                canvasSize = canvasSize,
+                color = color,
+                boundaryColor = boundaryColor,
+            )
         synchronized(lock) {
             return bitmaps[key]
         }
@@ -1189,10 +1579,17 @@ private object TrafficMapLandLayerCache {
         shapes: List<TrafficMapCountryShape>,
         canvasSize: IntSize,
         color: Color,
+        boundaryColor: Color,
     ): ImageBitmap =
         withContext(TrafficMapRenderDispatcher.dispatcher) {
             val startedAtMs = SystemClock.elapsedRealtime()
-            val key = landLayerKey(shapes = shapes, canvasSize = canvasSize, color = color)
+            val key =
+                landLayerKey(
+                    shapes = shapes,
+                    canvasSize = canvasSize,
+                    color = color,
+                    boundaryColor = boundaryColor,
+                )
             val owner = kotlinx.coroutines.CompletableDeferred<ImageBitmap>()
             var shouldRender = false
             val deferred =
@@ -1216,6 +1613,7 @@ private object TrafficMapLandLayerCache {
                             shapes = shapes,
                             viewport = TrafficMapViewport(topLeft = Offset.Zero, size = size),
                             color = color,
+                            boundaryColor = boundaryColor,
                         )
                     }
                 synchronized(lock) {
@@ -1266,12 +1664,14 @@ private object TrafficMapLandLayerCache {
         shapes: List<TrafficMapCountryShape>,
         canvasSize: IntSize,
         color: Color,
+        boundaryColor: Color,
     ): TrafficMapLandLayerKey {
         val bitmapSize = trafficMapLandLayerBitmapSize(canvasSize)
         return TrafficMapLandLayerKey(
             width = bucketDimension(bitmapSize.width),
             height = bucketDimension(bitmapSize.height),
             color = color.toArgb(),
+            boundaryColor = boundaryColor.toArgb(),
             shapesIdentity = System.identityHashCode(shapes),
             shapeCount = shapes.size,
         )
@@ -1291,6 +1691,7 @@ private object TrafficMapLandLayerCache {
                 shapes = shapes,
                 canvasSize = canvasSize,
                 color = TRAFFIC_MAP_DEFAULT_COUNTRY_FILL,
+                boundaryColor = TRAFFIC_MAP_DEFAULT_COUNTRY_BOUNDARY,
             )
         val owner = kotlinx.coroutines.CompletableDeferred<ImageBitmap>()
         synchronized(lock) {
@@ -1308,6 +1709,7 @@ private object TrafficMapLandLayerCache {
                     shapes = shapes,
                     viewport = TrafficMapViewport(topLeft = Offset.Zero, size = size),
                     color = TRAFFIC_MAP_DEFAULT_COUNTRY_FILL,
+                    boundaryColor = TRAFFIC_MAP_DEFAULT_COUNTRY_BOUNDARY,
                 )
             synchronized(lock) {
                 storeBitmapLocked(key = key, bitmap = bitmap)
@@ -1384,9 +1786,69 @@ private data class TrafficMapLandLayerKey(
     val width: Int,
     val height: Int,
     val color: Int,
+    val boundaryColor: Int,
     val shapesIdentity: Int,
     val shapeCount: Int,
 )
+
+private data class TrafficMapCountryHighlightLayerKey(
+    val width: Int,
+    val height: Int,
+    val shapesIdentity: Int,
+    val shapeCount: Int,
+    val visualsHash: Int,
+    val destinationColor: Int,
+    val originColor: Int,
+    val vpnColor: Int,
+    val torColor: Int,
+)
+
+private fun List<TrafficMapCountryVisual>.dominantTrafficMapCountryVisuals(): List<TrafficMapCountryVisual> =
+    groupBy { visual -> visual.countryCode.uppercase(Locale.US) }
+        .map { (_, visuals) ->
+            visuals.maxWith(
+                compareBy<TrafficMapCountryVisual> { visual -> visual.role.trafficMapRolePriority() }
+                    .thenBy { visual -> visual.intensity }
+                    .thenBy { visual -> visual.bytes },
+            )
+        }
+        .sortedWith(
+            compareByDescending<TrafficMapCountryVisual> { visual -> visual.role.trafficMapRolePriority() }
+                .thenByDescending { visual -> visual.intensity }
+                .thenBy { visual -> visual.countryCode },
+        )
+
+private fun CountryTrafficRole.trafficMapRolePriority(): Int =
+    when (this) {
+        CountryTrafficRole.TOR_EXIT -> 4
+        CountryTrafficRole.VPN_ROUTE -> 3
+        CountryTrafficRole.DESTINATION -> 2
+        CountryTrafficRole.ORIGIN -> 1
+    }
+
+private fun TrafficMapCountryVisual.trafficMapHighlightColor(colors: TrafficMapColors): Color {
+    val alpha =
+        when (role) {
+            CountryTrafficRole.ORIGIN -> 0.18f + (0.16f * intensity)
+            CountryTrafficRole.DESTINATION -> 0.18f + (0.30f * intensity)
+            CountryTrafficRole.VPN_ROUTE -> 0.32f + (0.23f * intensity)
+            CountryTrafficRole.TOR_EXIT -> 0.32f + (0.23f * intensity)
+        }.coerceIn(0.12f, 0.56f)
+    return when (role) {
+        CountryTrafficRole.ORIGIN -> colors.countryOriginHighlight
+        CountryTrafficRole.DESTINATION -> colors.countryDestinationHighlight
+        CountryTrafficRole.VPN_ROUTE -> colors.vpnRoute
+        CountryTrafficRole.TOR_EXIT -> colors.torExit
+    }.copy(alpha = alpha)
+}
+
+private fun TrafficMapCountryVisual.trafficMapHighlightStrokeColor(colors: TrafficMapColors): Color =
+    when (role) {
+        CountryTrafficRole.ORIGIN -> colors.origin
+        CountryTrafficRole.DESTINATION -> colors.countryDestinationHighlight
+        CountryTrafficRole.VPN_ROUTE -> colors.vpnRoute
+        CountryTrafficRole.TOR_EXIT -> colors.torExit
+    }.copy(alpha = if (isNewCountry) 0.78f else 0.62f)
 
 private fun DrawScope.drawPhoneMarker(
     center: Offset,
@@ -1421,6 +1883,9 @@ private fun DrawScope.drawPhoneMarker(
 @Immutable
 internal data class TrafficMapColors(
     val countryFill: Color,
+    val countryBoundary: Color,
+    val countryDestinationHighlight: Color,
+    val countryOriginHighlight: Color,
     val routeLine: Color,
     val routeHalo: Color,
     val destination: Color,
@@ -1467,6 +1932,9 @@ internal fun trafficMapColors(
     val legendText = onSurfaceVariantColor.copy(alpha = if (darkTheme) 0.88f else 0.92f)
     return TrafficMapColors(
         countryFill = countryFill,
+        countryBoundary = onSurfaceVariantColor.copy(alpha = if (darkTheme) 0.18f else 0.24f),
+        countryDestinationHighlight = accentColor,
+        countryOriginHighlight = accentColor.copy(alpha = if (darkTheme) 0.36f else 0.30f),
         routeLine =
             if (darkTheme) {
                 Color.White.copy(alpha = 0.88f)
@@ -1515,15 +1983,16 @@ private data class TrafficMapPowerState(
         get() = powerSaveMode || (batteryPercent != null && batteryPercent < TRAFFIC_MAP_LOW_BATTERY_PERCENT)
 }
 
-private val TRAFFIC_MAP_CARD_TOTAL_HEIGHT = 184.dp
+private val TRAFFIC_MAP_CARD_TOTAL_HEIGHT = 216.dp
 private val TRAFFIC_MAP_DEFAULT_COUNTRY_FILL = Color(0xFF3E3F41)
-private const val TRAFFIC_MAP_ROUTE_MIN_STROKE_DP = 0.35f
-private const val TRAFFIC_MAP_ROUTE_MAX_STROKE_DP = 0.72f
+private val TRAFFIC_MAP_DEFAULT_COUNTRY_BOUNDARY = Color(0xFF5B5D61)
+private const val TRAFFIC_MAP_ROUTE_MIN_STROKE_DP = 0.9f
+private const val TRAFFIC_MAP_ROUTE_MAX_STROKE_DP = 2.2f
 private const val TRAFFIC_MAP_ROUTE_STROKE_CACHE_SCALE = 1_000f
-private const val TRAFFIC_MAP_ROUTE_MIN_ALPHA = 0.32f
-private const val TRAFFIC_MAP_ROUTE_ALPHA_RANGE = 0.18f
-private const val TRAFFIC_MAP_ROUTE_HALO_STROKE_EXTRA_DP = 0.2f
-private const val TRAFFIC_MAP_ROUTE_HALO_ALPHA_MULTIPLIER = 0.08f
+private const val TRAFFIC_MAP_ROUTE_MIN_ALPHA = 0.42f
+private const val TRAFFIC_MAP_ROUTE_ALPHA_RANGE = 0.36f
+private const val TRAFFIC_MAP_ROUTE_HALO_STROKE_EXTRA_DP = 1.4f
+private const val TRAFFIC_MAP_ROUTE_HALO_ALPHA_MULTIPLIER = 0.22f
 private const val TRAFFIC_MAP_HEAVY_CONTENT_SETTLE_DELAY_MS = 0L
 private const val TRAFFIC_MAP_POWER_STATE_STARTUP_DELAY_MS = 0L
 private const val TRAFFIC_MAP_WEIGHT = 0.62f
@@ -1534,13 +2003,13 @@ private const val TRAFFIC_MAP_MAX_LAT = 85.0
 private const val TRAFFIC_MAP_LAT_RANGE = TRAFFIC_MAP_MAX_LAT - TRAFFIC_MAP_MIN_LAT
 private const val MAX_TRAFFIC_MAP_DRAW_EDGES = 30
 private const val MAX_TRAFFIC_MAP_DRAW_DESTINATIONS = 30
+private const val TRAFFIC_MAP_DASHBOARD_TOP_COUNTRIES = 3
 private const val TRAFFIC_MAP_LOW_BATTERY_PERCENT = 10
 private const val TRAFFIC_MAP_PREWARM_COMPACT_WIDTH_FRACTION = 0.58f
 private const val TRAFFIC_MAP_PREWARM_PRIMARY_WIDTH_FRACTION = 0.65f
 private const val TRAFFIC_MAP_PREWARM_WIDE_WIDTH_FRACTION = 0.74f
 private const val TRAFFIC_ROUTE_PI = 3.141592653589793
 private const val TRAFFIC_ROUTE_ANGLE_BUCKET_RADIANS = 0.17453292519943295
-private const val TRAFFIC_MAP_COUNTRY_SHAPES_ASSET = "maps/ne_110m_admin_0_countries_preprocessed.json"
 private const val TRAFFIC_MAP_LOG_TAG = "FoxholeDiag"
 private val TRAFFIC_MAP_EUROPE_COUNTRY_CODES =
     setOf(

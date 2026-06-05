@@ -1,5 +1,8 @@
 package com.foxhole.beta.core.traffic
 
+import android.content.Context
+import android.os.Trace
+import androidx.compose.runtime.Immutable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -15,6 +18,16 @@ import kotlin.math.ceil
 import kotlin.math.max
 import kotlin.math.pow
 
+internal const val TRAFFIC_MAP_COUNTRY_SHAPES_ASSET = "maps/ne_110m_admin_0_countries_preprocessed.json"
+
+@Immutable
+data class GeoBounds(
+    val minLat: Double,
+    val maxLat: Double,
+    val minLon: Double,
+    val maxLon: Double,
+)
+
 data class TrafficMapGeoPoint(
     val lat: Double,
     val lon: Double,
@@ -24,6 +37,145 @@ data class TrafficMapCountryShape(
     val countryCode: String,
     val rings: List<List<TrafficMapGeoPoint>>,
 )
+
+@Immutable
+data class TrafficMapCountryMeta(
+    val countryCode: String,
+    val label: String,
+    val centroidLat: Double,
+    val centroidLon: Double,
+    val bounds: GeoBounds,
+    val rings: List<List<TrafficMapGeoPoint>>,
+)
+
+class TrafficMapCountryRegistry private constructor(
+    private val metasByCountryCode: Map<String, TrafficMapCountryMeta>,
+) {
+    val coordinates: Map<String, TrafficMapCountryCoordinate> =
+        metasByCountryCode.mapValues { (_, meta) ->
+            TrafficMapCountryCoordinate(
+                countryCode = meta.countryCode,
+                label = meta.label,
+                lat = meta.centroidLat,
+                lon = meta.centroidLon,
+            )
+        }
+
+    fun meta(countryCode: String): TrafficMapCountryMeta? =
+        metasByCountryCode[normalizeTrafficMapCountryCode(countryCode)]
+
+    fun coordinate(countryCode: String): TrafficMapCountryCoordinate? =
+        coordinates[normalizeTrafficMapCountryCode(countryCode)]
+
+    fun contains(countryCode: String): Boolean =
+        normalizeTrafficMapCountryCode(countryCode) in metasByCountryCode
+
+    companion object {
+        val LegacyCoordinates: Map<String, TrafficMapCountryCoordinate> =
+            listOf(
+                TrafficMapCountryCoordinate("AU", "Australia", -25.0, 133.0),
+                TrafficMapCountryCoordinate("BR", "Brazil", -10.0, -55.0),
+                TrafficMapCountryCoordinate("CA", "Canada", 56.0, -106.0),
+                TrafficMapCountryCoordinate("CH", "Switzerland", 46.8, 8.2),
+                TrafficMapCountryCoordinate("CN", "China", 35.0, 103.0),
+                TrafficMapCountryCoordinate("DE", "Germany", 51.0, 10.0),
+                TrafficMapCountryCoordinate("ES", "Spain", 40.0, -4.0),
+                TrafficMapCountryCoordinate("FI", "Finland", 64.0, 26.0),
+                TrafficMapCountryCoordinate("FR", "France", 46.0, 2.0),
+                TrafficMapCountryCoordinate("GB", "United Kingdom", 54.0, -2.0),
+                TrafficMapCountryCoordinate("HK", "Hong Kong", 22.3193, 114.1694),
+                TrafficMapCountryCoordinate("ID", "Indonesia", -2.0, 118.0),
+                TrafficMapCountryCoordinate("IE", "Ireland", 53.0, -8.0),
+                TrafficMapCountryCoordinate("IN", "India", 22.0, 79.0),
+                TrafficMapCountryCoordinate("IT", "Italy", 42.5, 12.5),
+                TrafficMapCountryCoordinate("JP", "Japan", 37.0, 138.0),
+                TrafficMapCountryCoordinate("KR", "South Korea", 36.0, 128.0),
+                TrafficMapCountryCoordinate("MX", "Mexico", 23.0, -102.0),
+                TrafficMapCountryCoordinate("NL", "Netherlands", 52.1, 5.3),
+                TrafficMapCountryCoordinate("NO", "Norway", 61.0, 8.0),
+                TrafficMapCountryCoordinate("PL", "Poland", 52.0, 19.0),
+                TrafficMapCountryCoordinate("RO", "Romania", 45.8, 25.0),
+                TrafficMapCountryCoordinate("RU", "Russia", 61.0, 105.0),
+                TrafficMapCountryCoordinate("SE", "Sweden", 62.0, 15.0),
+                TrafficMapCountryCoordinate("SG", "Singapore", 1.3521, 103.8198),
+                TrafficMapCountryCoordinate("TR", "Turkey", 39.0, 35.0),
+                TrafficMapCountryCoordinate("TW", "Taiwan", 23.7, 121.0),
+                TrafficMapCountryCoordinate("UA", "Ukraine", 49.0, 32.0),
+                TrafficMapCountryCoordinate("US", "United States", 39.8, -98.6),
+                TrafficMapCountryCoordinate("ZA", "South Africa", -30.0, 24.0),
+                TrafficMapCountryCoordinate("EU", "Europe", 50.0, 10.0),
+            ).associateBy(TrafficMapCountryCoordinate::countryCode)
+
+        fun fromShapes(
+            shapes: List<TrafficMapCountryShape>,
+            locale: Locale = Locale.getDefault(),
+        ): TrafficMapCountryRegistry =
+            traceTrafficMapCountryRegistrySection("TrafficMap/buildCountryRegistry") {
+                TrafficMapCountryRegistry(
+                    shapes
+                        .asSequence()
+                        .mapNotNull { shape ->
+                            val countryCode = normalizeTrafficMapCountryCode(shape.countryCode) ?: return@mapNotNull null
+                            val anchor = TrafficMapCountryAnchorOverrides[countryCode] ?: shape.visualCentroid()
+                            TrafficMapCountryMeta(
+                                countryCode = countryCode,
+                                label = localizedTrafficMapCountryName(countryCode = countryCode, locale = locale),
+                                centroidLat = anchor.lat,
+                                centroidLon = anchor.lon,
+                                bounds = shape.bounds(),
+                                rings = shape.rings,
+                            )
+                        }
+                        .distinctBy(TrafficMapCountryMeta::countryCode)
+                        .associateBy(TrafficMapCountryMeta::countryCode),
+                )
+            }
+
+        fun legacyFallback(): TrafficMapCountryRegistry =
+            TrafficMapCountryRegistry(
+                LegacyCoordinates.mapValues { (_, coordinate) ->
+                    TrafficMapCountryMeta(
+                        countryCode = coordinate.countryCode,
+                        label = coordinate.label,
+                        centroidLat = coordinate.lat,
+                        centroidLon = coordinate.lon,
+                        bounds = GeoBounds(
+                            minLat = coordinate.lat,
+                            maxLat = coordinate.lat,
+                            minLon = coordinate.lon,
+                            maxLon = coordinate.lon,
+                        ),
+                        rings = emptyList(),
+                    )
+                },
+            )
+    }
+}
+
+internal class AndroidTrafficMapCountryRegistryProvider(
+    context: Context,
+) {
+    private val appContext = context.applicationContext
+
+    @Volatile
+    private var cachedRegistry: TrafficMapCountryRegistry? = null
+
+    fun registry(): TrafficMapCountryRegistry {
+        cachedRegistry?.let { registry -> return registry }
+        return synchronized(this) {
+            cachedRegistry?.let { registry -> return@synchronized registry }
+            runCatching {
+                appContext.assets.open(TRAFFIC_MAP_COUNTRY_SHAPES_ASSET).use { inputStream ->
+                    TrafficMapCountryRegistry.fromShapes(
+                        TrafficMapCountryShapeAssetParser().parse(inputStream),
+                    )
+                }
+            }
+                .getOrElse { TrafficMapCountryRegistry.legacyFallback() }
+                .also { registry -> cachedRegistry = registry }
+        }
+    }
+}
 
 class TrafficMapCountryGeoJsonParser(
     private val json: Json =
@@ -424,6 +576,30 @@ private fun Char.fastDigitOrMinusOne(): Int {
     return if (digit in 0..9) digit else -1
 }
 
+fun TrafficMapCountryShape.bounds(): GeoBounds {
+    val points = rings.flatten()
+    if (points.isEmpty()) {
+        return GeoBounds(minLat = 0.0, maxLat = 0.0, minLon = 0.0, maxLon = 0.0)
+    }
+    return GeoBounds(
+        minLat = points.minOf(TrafficMapGeoPoint::lat),
+        maxLat = points.maxOf(TrafficMapGeoPoint::lat),
+        minLon = points.minOf { point -> normalizeTrafficMapLongitude(point.lon) },
+        maxLon = points.maxOf { point -> normalizeTrafficMapLongitude(point.lon) },
+    )
+}
+
+fun TrafficMapCountryShape.visualCentroid(): TrafficMapGeoPoint {
+    val largestRing =
+        rings
+            .asSequence()
+            .map(::normalizeTrafficMapRingLongitudes)
+            .filter { ring -> ring.size >= TrafficMapVisualMinRingPoints }
+            .maxByOrNull(::trafficMapRingArea)
+            ?: return TrafficMapGeoPoint(lat = 0.0, lon = 0.0)
+    return trafficMapPolygonCentroid(largestRing)
+}
+
 internal fun TrafficMapCountryShape.toTrafficMapVisualShape(
     minRelativeRingArea: Double = TrafficMapVisualMinRelativeRingArea,
     minAbsoluteRingArea: Double = TrafficMapVisualMinAbsoluteRingArea,
@@ -533,9 +709,90 @@ private fun normalizeTrafficMapLongitude(lon: Double): Double {
     return normalized
 }
 
+@Suppress("ReturnCount")
+private fun trafficMapPolygonCentroid(ring: List<TrafficMapGeoPoint>): TrafficMapGeoPoint {
+    if (ring.size < TrafficMapVisualMinRingPoints) {
+        return ring.firstOrNull() ?: TrafficMapGeoPoint(lat = 0.0, lon = 0.0)
+    }
+    var signedArea = 0.0
+    var centroidLon = 0.0
+    var centroidLat = 0.0
+    ring.indices.forEach { index ->
+        val current = ring[index]
+        val next = ring[(index + 1) % ring.size]
+        val cross = current.lon * next.lat - next.lon * current.lat
+        signedArea += cross
+        centroidLon += (current.lon + next.lon) * cross
+        centroidLat += (current.lat + next.lat) * cross
+    }
+    if (abs(signedArea) < TRAFFIC_MAP_CENTROID_AREA_EPSILON) {
+        return TrafficMapGeoPoint(
+            lat = ring.map(TrafficMapGeoPoint::lat).average(),
+            lon = normalizeTrafficMapLongitude(ring.map(TrafficMapGeoPoint::lon).average()),
+        )
+    }
+    val area = signedArea * 0.5
+    return TrafficMapGeoPoint(
+        lat = centroidLat / (6.0 * area),
+        lon = normalizeTrafficMapLongitude(centroidLon / (6.0 * area)),
+    )
+}
+
+private fun localizedTrafficMapCountryName(
+    countryCode: String,
+    locale: Locale,
+): String {
+    val fallback = TrafficMapCountryRegistry.LegacyCoordinates[countryCode]?.label ?: countryCode
+    return runCatching {
+        Locale.Builder()
+            .setRegion(countryCode)
+            .build()
+            .getDisplayCountry(locale)
+            .takeIf { label -> label.isNotBlank() && label != countryCode }
+    }.getOrNull() ?: fallback
+}
+
+private fun normalizeTrafficMapCountryCode(countryCode: String?): String? =
+    countryCode
+        ?.trim()
+        ?.uppercase(Locale.US)
+        ?.takeIf { value ->
+            value.length == TrafficMapCountryShapeAssetParser.IsoCountryCodeLength &&
+                value.all { character -> character in 'A'..'Z' }
+        }
+
+private inline fun <T> traceTrafficMapCountryRegistrySection(
+    sectionName: String,
+    block: () -> T,
+): T {
+    val traceStarted =
+        runCatching {
+            Trace.beginSection(sectionName.take(MAX_TRACE_SECTION_NAME_LENGTH))
+            true
+        }.getOrDefault(false)
+    return try {
+        block()
+    } finally {
+        if (traceStarted) {
+            runCatching { Trace.endSection() }
+        }
+    }
+}
+
+private val TrafficMapCountryAnchorOverrides =
+    mapOf(
+        "CA" to TrafficMapGeoPoint(lat = 56.0, lon = -106.0),
+        "HK" to TrafficMapGeoPoint(lat = 22.3193, lon = 114.1694),
+        "RU" to TrafficMapGeoPoint(lat = 58.5, lon = 82.0),
+        "SG" to TrafficMapGeoPoint(lat = 1.3521, lon = 103.8198),
+        "US" to TrafficMapGeoPoint(lat = 39.8, lon = -98.6),
+    )
+
 private const val TrafficMapVisualMinRingPoints = 3
 private const val TrafficMapVisualMinRelativeRingArea = 0.02
 private const val TrafficMapVisualMinAbsoluteRingArea = 0.5
+private const val TRAFFIC_MAP_CENTROID_AREA_EPSILON = 0.000001
+private const val MAX_TRACE_SECTION_NAME_LENGTH = 127
 
 @Suppress("TopLevelPropertyNaming")
 private const val TrafficMapVisualMinShapeArea = 1.0
