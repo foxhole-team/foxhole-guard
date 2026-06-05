@@ -63,6 +63,34 @@ abstract class VerifyBundledLibboxInReleaseApkTask : DefaultTask() {
     }
 }
 
+abstract class VerifyReleaseBaselineProfileInApkTask : DefaultTask() {
+    @get:InputDirectory
+    abstract val apkDirectory: DirectoryProperty
+
+    @TaskAction
+    fun verify() {
+        val apks =
+            apkDirectory
+                .asFileTree
+                .matching { include("*.apk") }
+                .files
+                .sortedBy { it.name }
+        require(apks.isNotEmpty()) { "release APK is missing from ${apkDirectory.get().asFile}" }
+        apks.forEach { apk ->
+            val entries = ZipFile(apk).use { zip -> zip.entries().asSequence().map { it.name }.toSet() }
+            require("assets/dexopt/baseline.prof" in entries) {
+                "release APK ${apk.name} is missing assets/dexopt/baseline.prof"
+            }
+            require("assets/dexopt/baseline.profm" in entries) {
+                "release APK ${apk.name} is missing assets/dexopt/baseline.profm"
+            }
+            require(entries.any { it.startsWith("META-INF/androidx.profileinstaller_") }) {
+                "release APK ${apk.name} is missing ProfileInstaller metadata"
+            }
+        }
+    }
+}
+
 plugins {
     id("com.android.application")
     id("com.google.devtools.ksp") version "2.3.7"
@@ -187,6 +215,11 @@ val verifyReleaseContainsBundledLibbox by tasks.registering(VerifyBundledLibboxI
     apkDirectory.set(layout.buildDirectory.dir("outputs/apk/release"))
 }
 
+val verifyReleaseContainsBaselineProfile by tasks.registering(VerifyReleaseBaselineProfileInApkTask::class) {
+    dependsOn("assembleRelease")
+    apkDirectory.set(layout.buildDirectory.dir("outputs/apk/release"))
+}
+
 val verifyReleaseBuildConfigDefaults by tasks.registering {
     dependsOn("generateReleaseBuildConfig")
     val releaseBuildConfigFile =
@@ -210,6 +243,7 @@ val verifyReleaseBuildConfigDefaults by tasks.registering {
 
 tasks.matching { task -> task.name == "assembleRelease" }.configureEach {
     finalizedBy(verifyReleaseContainsBundledLibbox)
+    finalizedBy(verifyReleaseContainsBaselineProfile)
     finalizedBy(verifyReleaseBuildConfigDefaults)
 }
 
@@ -373,8 +407,53 @@ android {
     }
 }
 
+val composeCompilerMetricsDir = layout.buildDirectory.dir("reports/compose/metrics")
+val composeCompilerReportsDir = layout.buildDirectory.dir("reports/compose/reports")
+
 composeCompiler {
     includeComposeMappingFile.set(false)
+    includeTraceMarkers.set(true)
+    metricsDestination.set(composeCompilerMetricsDir)
+    reportsDestination.set(composeCompilerReportsDir)
+}
+
+val verifyComposeCompilerReports by tasks.registering {
+    group = "verification"
+    description = "Fail when Compose compiler metrics/reports are not produced for debug UI builds."
+
+    dependsOn("compileDebugKotlin")
+    inputs.dir(composeCompilerMetricsDir).optional()
+    inputs.dir(composeCompilerReportsDir).optional()
+
+    doLast {
+        val metricFiles =
+            composeCompilerMetricsDir.get().asFile
+                .walkTopDown()
+                .filter { file -> file.isFile && file.extension == "json" }
+                .toList()
+        val reportFiles =
+            composeCompilerReportsDir.get().asFile
+                .walkTopDown()
+                .filter { file -> file.isFile && file.extension in setOf("txt", "csv", "json") }
+                .toList()
+        require(metricFiles.any { file -> file.name == "module.json" || file.name.endsWith("-module.json") }) {
+            "Compose compiler metrics did not include a module.json file in ${composeCompilerMetricsDir.get().asFile}"
+        }
+        require(reportFiles.isNotEmpty()) {
+            "Compose compiler reports were not produced in ${composeCompilerReportsDir.get().asFile}"
+        }
+    }
+}
+
+tasks.matching { task -> task.name == "compileDebugKotlin" }.configureEach {
+    outputs.upToDateWhen {
+        composeCompilerMetricsDir.get().asFile.isDirectory &&
+            composeCompilerReportsDir.get().asFile.isDirectory
+    }
+}
+
+tasks.named("check") {
+    dependsOn(verifyComposeCompilerReports)
 }
 
 jacoco {

@@ -59,9 +59,13 @@ class MacrobenchmarkPerfGateTest {
         ).readText()
 
         assertTrue(script.contains("run_baseline_profile_generation"))
+        assertTrue(script.contains("BASELINE_TARGET_PACKAGE"))
+        assertTrue(script.contains("baseline_output_dir=\"app/src/release/generated/baselineProfile\""))
         assertTrue(script.contains("androidx.benchmark.enabledRules=BaselineProfile"))
         assertTrue(script.contains("FoxholeBaselineProfileGenerator"))
-        assertTrue(script.contains("*baseline-prof*.txt"))
+        assertTrue(script.contains("macrobenchmark/build/outputs"))
+        assertTrue(script.contains("baseline-prof.txt"))
+        assertTrue(script.contains("Lcom/foxhole/beta/"))
         assertTrue(generator.contains("BaselineProfileRule"))
         assertTrue(generator.contains("includeInStartupProfile = true"))
         assertTrue(generator.contains("openRoutingAppsPickerSearch"))
@@ -81,6 +85,11 @@ class MacrobenchmarkPerfGateTest {
         ).readText()
 
         assertTrue(appBuild.contains("implementation(libs.androidx.profileinstaller)"))
+        assertTrue(appBuild.contains("verifyReleaseContainsBaselineProfile"))
+        assertTrue(appBuild.contains("assets/dexopt/baseline.prof"))
+        assertTrue(appBuild.contains("metricsDestination.set(composeCompilerMetricsDir)"))
+        assertTrue(appBuild.contains("reportsDestination.set(composeCompilerReportsDir)"))
+        assertTrue(appBuild.contains("verifyComposeCompilerReports"))
         assertTrue(versions.contains("androidx-profileinstaller"))
         assertTrue(versions.contains("androidx.profileinstaller:profileinstaller"))
     }

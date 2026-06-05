@@ -5,22 +5,24 @@ readonly EVENT_NAME="${1:?GitHub event name is required}"
 readonly GITHUB_REF_NAME="${2:?GitHub ref is required}"
 readonly GRADLEW="${GRADLEW:-./gradlew}"
 readonly TARGET_PACKAGE="${FOXHOLE_ANDROID_TEST_TARGET_PACKAGE:-com.foxhole.beta.debug}"
+readonly BASELINE_TARGET_PACKAGE="${FOXHOLE_BASELINE_PROFILE_TARGET_PACKAGE:-$TARGET_PACKAGE}"
 readonly REQUIRE_FULL_SUITE="${FOXHOLE_REQUIRE_FULL_MACROBENCHMARK:-0}"
 
 install_target_app() {
+  local target_package="${1:-$TARGET_PACKAGE}"
   adb wait-for-device
-  if [[ "$TARGET_PACKAGE" == "com.foxhole.beta.debug" ]]; then
+  if [[ "$target_package" == "com.foxhole.beta.debug" ]]; then
     "$GRADLEW" --no-daemon --console=plain --stacktrace :app:installDebug
   fi
-  if ! adb shell pm path "$TARGET_PACKAGE" >/dev/null; then
-    echo "Macrobenchmark target package is not installed: ${TARGET_PACKAGE}" >&2
+  if ! adb shell pm path "$target_package" >/dev/null; then
+    echo "Macrobenchmark target package is not installed: ${target_package}" >&2
     adb shell pm list packages 'com.foxhole.beta' >&2 || true
     exit 1
   fi
 }
 
 run_startup_benchmark() {
-  install_target_app
+  install_target_app "$BASELINE_TARGET_PACKAGE"
   "$GRADLEW" --no-daemon --console=plain --stacktrace :macrobenchmark:connectedCheck \
     -Pmacrobenchmark.targetPackage="$TARGET_PACKAGE" \
     -Pandroid.testInstrumentationRunnerArguments.class=com.foxhole.beta.macrobenchmark.HomeMacrobenchmark#startup
@@ -28,14 +30,24 @@ run_startup_benchmark() {
 }
 
 run_baseline_profile_generation() {
+  local baseline_source
+  local baseline_output_dir="app/src/release/generated/baselineProfile"
   install_target_app
   "$GRADLEW" --no-daemon --console=plain --stacktrace :macrobenchmark:connectedCheck \
-    -Pmacrobenchmark.targetPackage="$TARGET_PACKAGE" \
+    -Pmacrobenchmark.targetPackage="$BASELINE_TARGET_PACKAGE" \
     -Pandroid.testInstrumentationRunnerArguments.androidx.benchmark.enabledRules=BaselineProfile \
     -Pandroid.testInstrumentationRunnerArguments.class=com.foxhole.beta.macrobenchmark.FoxholeBaselineProfileGenerator
-  if ! find macrobenchmark/build/outputs -type f -name '*baseline-prof*.txt' | grep -q .; then
+  baseline_source="$(find macrobenchmark/build/outputs -type f -name '*baseline-prof*.txt' | sort | tail -n 1)"
+  if [[ -z "$baseline_source" ]]; then
     echo "Baseline profile generation finished without a baseline-prof text artifact." >&2
     find macrobenchmark/build/outputs -type f >&2 || true
+    exit 1
+  fi
+  mkdir -p "$baseline_output_dir"
+  cp "$baseline_source" "$baseline_output_dir/baseline-prof.txt"
+  if ! grep -q 'Lcom/foxhole/beta/' "$baseline_output_dir/baseline-prof.txt"; then
+    echo "Generated baseline profile does not contain FoxHole app rules: ${baseline_output_dir}/baseline-prof.txt" >&2
+    find app/src/release/generated -type f >&2 || true
     exit 1
   fi
 }
