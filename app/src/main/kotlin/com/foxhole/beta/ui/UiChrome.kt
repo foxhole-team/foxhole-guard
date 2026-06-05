@@ -212,6 +212,14 @@ internal val LocalFoxholeTopChromeController =
         null
     }
 
+enum class ChromeMode {
+    Material,
+    GlassStatic,
+    GlassBlur,
+}
+
+internal val FoxholeDefaultChromeMode = ChromeMode.GlassStatic
+
 internal object FoxholeMotionTokens {
     const val FastDurationMs = 120
     const val StandardDurationMs = 180

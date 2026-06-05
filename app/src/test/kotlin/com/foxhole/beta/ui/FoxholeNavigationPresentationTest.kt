@@ -268,4 +268,31 @@ class FoxholeNavigationPresentationTest {
         assertFalse(itemBlock.contains("indication = null"))
         assertFalse(itemBlock.contains(".clickable("))
     }
+
+    @Test
+    fun `chrome defaults to static glass and gates blur overlays behind explicit mode`() {
+        val appSource =
+            listOf(
+                java.io.File("src/main/kotlin/com/foxhole/beta/ui/FoxholeApp.kt"),
+                java.io.File("app/src/main/kotlin/com/foxhole/beta/ui/FoxholeApp.kt"),
+                java.io.File("../app/src/main/kotlin/com/foxhole/beta/ui/FoxholeApp.kt"),
+            ).first { file -> file.isFile }.readText()
+        val chromeSource =
+            listOf(
+                java.io.File("src/main/kotlin/com/foxhole/beta/ui/UiChrome.kt"),
+                java.io.File("app/src/main/kotlin/com/foxhole/beta/ui/UiChrome.kt"),
+                java.io.File("../app/src/main/kotlin/com/foxhole/beta/ui/UiChrome.kt"),
+            ).first { file -> file.isFile }.readText()
+
+        assertTrue(chromeSource.contains("enum class ChromeMode"))
+        assertTrue(chromeSource.contains("Material"))
+        assertTrue(chromeSource.contains("GlassStatic"))
+        assertTrue(chromeSource.contains("GlassBlur"))
+        assertTrue(chromeSource.contains("FoxholeDefaultChromeMode = ChromeMode.GlassStatic"))
+        assertTrue(appSource.contains("chromeMode: ChromeMode = FoxholeDefaultChromeMode"))
+        assertTrue(appSource.contains("chromeMode == ChromeMode.GlassBlur"))
+        assertTrue(appSource.contains("ChromeMode.Material ->"))
+        assertTrue(appSource.contains("NavigationBar("))
+        assertTrue(appSource.contains("NavigationBarItem("))
+    }
 }

@@ -48,6 +48,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
@@ -180,6 +182,7 @@ fun FoxholeApp(
     navController: NavHostController = rememberNavController(),
     bottomDockOverlayHost: ViewGroup? = null,
     bottomDockBlurTarget: BlurTarget? = null,
+    chromeMode: ChromeMode = FoxholeDefaultChromeMode,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -237,8 +240,12 @@ fun FoxholeApp(
         }
     }
     val backdropBlurHost =
-        remember(bottomDockOverlayHost, bottomDockBlurTarget) {
-            if (bottomDockOverlayHost != null && bottomDockBlurTarget != null) {
+        remember(bottomDockOverlayHost, bottomDockBlurTarget, chromeMode) {
+            if (
+                chromeMode == ChromeMode.GlassBlur &&
+                bottomDockOverlayHost != null &&
+                bottomDockBlurTarget != null
+            ) {
                 FoxholeBackdropBlurHost(
                     overlayHost = bottomDockOverlayHost,
                     blurTarget = bottomDockBlurTarget,
@@ -847,12 +854,22 @@ fun FoxholeApp(
     }
 
     if (showBottomBar) {
-        FoxholeBottomBar(
-            currentSection = currentSection,
-            onSectionSelected = selectRootSection,
-            overlayHost = bottomDockOverlayHost,
-            blurTarget = bottomDockBlurTarget,
-        )
+        when (chromeMode) {
+            ChromeMode.Material ->
+                FoxholeMaterialBottomBar(
+                    currentSection = currentSection,
+                    onSectionSelected = selectRootSection,
+                )
+            ChromeMode.GlassStatic,
+            ChromeMode.GlassBlur,
+            ->
+                FoxholeBottomBar(
+                    currentSection = currentSection,
+                    onSectionSelected = selectRootSection,
+                    overlayHost = bottomDockOverlayHost.takeIf { chromeMode == ChromeMode.GlassBlur },
+                    blurTarget = bottomDockBlurTarget.takeIf { chromeMode == ChromeMode.GlassBlur },
+                )
+        }
     }
     backdropBlurHost?.let { host ->
         FoxholeRootTopChromeOverlay(
@@ -907,6 +924,46 @@ fun FoxholeApp(
         )
     }
 
+}
+
+@Composable
+private fun FoxholeMaterialBottomBar(
+    currentSection: AppSection?,
+    onSectionSelected: (AppSection) -> Unit,
+) {
+    val selectedSection = currentSection ?: AppSection.DASHBOARD
+    Box(
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .navigationBarsPadding(),
+        contentAlignment = Alignment.BottomCenter,
+    ) {
+        NavigationBar(
+            containerColor = MaterialTheme.colorScheme.surface,
+            tonalElevation = foxholeBottomDockElevation(),
+        ) {
+            AppSection.entries.forEach { section ->
+                NavigationBarItem(
+                    selected = section == selectedSection,
+                    onClick = { onSectionSelected(section) },
+                    icon = {
+                        Icon(
+                            imageVector = section.icon,
+                            contentDescription = null,
+                        )
+                    },
+                    label = {
+                        Text(
+                            text = stringResource(section.titleRes),
+                            maxLines = 1,
+                        )
+                    },
+                    modifier = Modifier.testTag(section.testTag),
+                )
+            }
+        }
+    }
 }
 
 @Composable
