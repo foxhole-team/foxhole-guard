@@ -18,7 +18,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -438,21 +440,63 @@ private fun TrafficMapDetailCountryTable(
     colors: TrafficMapColors,
     modifier: Modifier = Modifier,
 ) {
+    var sort by rememberSaveable { mutableStateOf(TrafficMapDetailSort.TOTAL) }
+    var range by rememberSaveable { mutableStateOf(TrafficMapDetailRange.TOP_30) }
+    var filter by rememberSaveable { mutableStateOf(TrafficMapDetailFilter.ALL) }
+    val filteredDestinations =
+        remember(state.destinations, sort, filter) {
+            trafficMapDetailDestinations(
+                destinations = state.destinations,
+                sort = sort,
+                filter = filter,
+                range = TrafficMapDetailRange.ALL,
+            )
+        }
     val destinations =
-        remember(state.destinations) {
-            state.destinations.take(MAX_TRAFFIC_MAP_DRAW_DESTINATIONS)
+        remember(filteredDestinations, range) {
+            trafficMapDetailDestinations(
+                destinations = filteredDestinations,
+                sort = TrafficMapDetailSort.COUNTRY,
+                filter = TrafficMapDetailFilter.ALL,
+                range = range,
+                alreadySorted = true,
+            )
         }
     val hiddenCountries =
-        remember(state.destinations, state.hiddenCountryCount) {
-            ((state.destinations.size - destinations.size).coerceAtLeast(0) + state.hiddenCountryCount)
-                .coerceAtLeast(0)
+        remember(filteredDestinations, destinations, state.hiddenCountryCount, filter) {
+            val hiddenByRange = (filteredDestinations.size - destinations.size).coerceAtLeast(0)
+            val hiddenByRepository =
+                if (filter == TrafficMapDetailFilter.ALL) {
+                    state.hiddenCountryCount
+                } else {
+                    0
+                }
+            (hiddenByRange + hiddenByRepository).coerceAtLeast(0)
+        }
+    val showUnknownCountry =
+        remember(state.unknownCountryBytes, state.unknownCountryConnections, filter) {
+            trafficMapDetailShowUnknownCountry(
+                unknownCountryBytes = state.unknownCountryBytes,
+                unknownCountryConnections = state.unknownCountryConnections,
+                filter = filter,
+            )
         }
     Column(
         modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(0.dp),
     ) {
+        TrafficMapDetailControls(
+            sort = sort,
+            onSortChange = { next -> sort = next },
+            range = range,
+            onRangeChange = { next -> range = next },
+            filter = filter,
+            onFilterChange = { next -> filter = next },
+            colors = colors,
+            modifier = Modifier.padding(bottom = 10.dp),
+        )
         TrafficMapDetailHeaderRow(colors = colors)
-        if (destinations.isEmpty() && state.unknownCountryBytes <= 0L) {
+        if (destinations.isEmpty() && !showUnknownCountry) {
             TrafficMapEmptySummary(
                 state = state,
                 colors = colors,
@@ -467,7 +511,7 @@ private fun TrafficMapDetailCountryTable(
                     colors = colors,
                 )
             }
-            if (state.unknownCountryBytes > 0L) {
+            if (showUnknownCountry) {
                 TrafficMapDetailDestinationRow(
                     country = stringResource(R.string.traffic_map_unknown_country),
                     sessions = state.unknownCountryConnections,
@@ -499,6 +543,141 @@ private fun TrafficMapDetailCountryTable(
                 strong = true,
             )
         }
+    }
+}
+
+@Composable
+private fun TrafficMapDetailControls(
+    sort: TrafficMapDetailSort,
+    onSortChange: (TrafficMapDetailSort) -> Unit,
+    range: TrafficMapDetailRange,
+    onRangeChange: (TrafficMapDetailRange) -> Unit,
+    filter: TrafficMapDetailFilter,
+    onFilterChange: (TrafficMapDetailFilter) -> Unit,
+    colors: TrafficMapColors,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        TrafficMapDetailControlRow(label = stringResource(R.string.traffic_map_sort_label), colors = colors) {
+            TrafficMapDetailModeButton(
+                text = stringResource(R.string.traffic_map_sort_total),
+                selected = sort == TrafficMapDetailSort.TOTAL,
+                onClick = { onSortChange(TrafficMapDetailSort.TOTAL) },
+            )
+            TrafficMapDetailModeButton(
+                text = stringResource(R.string.traffic_map_sort_sessions),
+                selected = sort == TrafficMapDetailSort.SESSIONS,
+                onClick = { onSortChange(TrafficMapDetailSort.SESSIONS) },
+            )
+            TrafficMapDetailModeButton(
+                text = stringResource(R.string.traffic_map_sort_country),
+                selected = sort == TrafficMapDetailSort.COUNTRY,
+                onClick = { onSortChange(TrafficMapDetailSort.COUNTRY) },
+            )
+        }
+        TrafficMapDetailControlRow(label = stringResource(R.string.traffic_map_range_label), colors = colors) {
+            TrafficMapDetailModeButton(
+                text = stringResource(R.string.traffic_map_range_top_10),
+                selected = range == TrafficMapDetailRange.TOP_10,
+                onClick = { onRangeChange(TrafficMapDetailRange.TOP_10) },
+            )
+            TrafficMapDetailModeButton(
+                text = stringResource(R.string.traffic_map_range_top_30),
+                selected = range == TrafficMapDetailRange.TOP_30,
+                onClick = { onRangeChange(TrafficMapDetailRange.TOP_30) },
+            )
+            TrafficMapDetailModeButton(
+                text = stringResource(R.string.traffic_map_range_all),
+                selected = range == TrafficMapDetailRange.ALL,
+                onClick = { onRangeChange(TrafficMapDetailRange.ALL) },
+            )
+        }
+        TrafficMapDetailControlRow(label = stringResource(R.string.traffic_map_filter_label), colors = colors) {
+            TrafficMapDetailModeButton(
+                text = stringResource(R.string.traffic_map_filter_all),
+                selected = filter == TrafficMapDetailFilter.ALL,
+                onClick = { onFilterChange(TrafficMapDetailFilter.ALL) },
+            )
+            TrafficMapDetailModeButton(
+                text = stringResource(R.string.traffic_map_filter_active),
+                selected = filter == TrafficMapDetailFilter.ACTIVE,
+                onClick = { onFilterChange(TrafficMapDetailFilter.ACTIVE) },
+            )
+            TrafficMapDetailModeButton(
+                text = stringResource(R.string.traffic_map_filter_heavy),
+                selected = filter == TrafficMapDetailFilter.HEAVY,
+                onClick = { onFilterChange(TrafficMapDetailFilter.HEAVY) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun TrafficMapDetailControlRow(
+    label: String,
+    colors: TrafficMapColors,
+    content: @Composable RowScope.() -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = label,
+            modifier = Modifier.width(42.dp),
+            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, lineHeight = 12.sp),
+            fontWeight = FontWeight.SemiBold,
+            color = colors.inactiveText,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Row(
+            modifier = Modifier.weight(1f),
+            horizontalArrangement = Arrangement.spacedBy(5.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            content()
+        }
+    }
+}
+
+@Composable
+private fun RowScope.TrafficMapDetailModeButton(
+    text: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    OutlinedButton(
+        onClick = onClick,
+        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+        colors =
+            ButtonDefaults.outlinedButtonColors(
+                containerColor =
+                    if (selected) {
+                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.82f)
+                    } else {
+                        Color.Transparent
+                    },
+                contentColor =
+                    if (selected) {
+                        MaterialTheme.colorScheme.onPrimaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+            ),
+        modifier = Modifier.weight(1f).height(30.dp),
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, lineHeight = 12.sp),
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 
@@ -1322,6 +1501,77 @@ private data class TrafficMapMarkerHitTarget(
     val contentDescription: String,
     val offset: Offset,
 )
+
+internal enum class TrafficMapDetailSort {
+    TOTAL,
+    SESSIONS,
+    COUNTRY,
+}
+
+internal enum class TrafficMapDetailRange(val limit: Int?) {
+    TOP_10(10),
+    TOP_30(30),
+    ALL(null),
+}
+
+internal enum class TrafficMapDetailFilter {
+    ALL,
+    ACTIVE,
+    HEAVY,
+}
+
+internal fun trafficMapDetailDestinations(
+    destinations: List<TrafficMapPoint>,
+    sort: TrafficMapDetailSort,
+    filter: TrafficMapDetailFilter,
+    range: TrafficMapDetailRange,
+    alreadySorted: Boolean = false,
+): List<TrafficMapPoint> {
+    val filtered =
+        destinations.filter { point ->
+            when (filter) {
+                TrafficMapDetailFilter.ALL -> true
+                TrafficMapDetailFilter.ACTIVE -> point.connections > 0
+                TrafficMapDetailFilter.HEAVY -> point.bytes >= TRAFFIC_MAP_HEAVY_DESTINATION_BYTES
+            }
+        }
+    val sorted =
+        if (alreadySorted) {
+            filtered
+        } else {
+            when (sort) {
+                TrafficMapDetailSort.TOTAL ->
+                    filtered.sortedWith(
+                        compareByDescending<TrafficMapPoint> { point -> point.bytes }
+                            .thenByDescending { point -> point.connections }
+                            .thenBy { point -> point.label },
+                    )
+                TrafficMapDetailSort.SESSIONS ->
+                    filtered.sortedWith(
+                        compareByDescending<TrafficMapPoint> { point -> point.connections }
+                            .thenByDescending { point -> point.bytes }
+                            .thenBy { point -> point.label },
+                    )
+                TrafficMapDetailSort.COUNTRY ->
+                    filtered.sortedWith(
+                        compareBy<TrafficMapPoint> { point -> point.label }
+                            .thenByDescending { point -> point.bytes },
+                    )
+            }
+        }
+    return range.limit?.let(sorted::take) ?: sorted
+}
+
+internal fun trafficMapDetailShowUnknownCountry(
+    unknownCountryBytes: Long,
+    unknownCountryConnections: Int,
+    filter: TrafficMapDetailFilter,
+): Boolean =
+    when (filter) {
+        TrafficMapDetailFilter.ALL -> unknownCountryBytes > 0L || unknownCountryConnections > 0
+        TrafficMapDetailFilter.ACTIVE -> unknownCountryConnections > 0
+        TrafficMapDetailFilter.HEAVY -> unknownCountryBytes >= TRAFFIC_MAP_HEAVY_DESTINATION_BYTES
+    }
 
 internal data class DrawableTrafficMapEdge(
     val fromLat: Double,
@@ -2821,6 +3071,7 @@ private const val TRAFFIC_MAP_MARKER_RAW_MATCH_TOLERANCE_PX = 0.5f
 private const val TRAFFIC_MAP_ORIGIN_MARKER_KEY = "origin"
 private const val TRAFFIC_MAP_VPN_ROUTE_MARKER_KEY = "route:vpn"
 private const val TRAFFIC_MAP_TOR_EXIT_MARKER_KEY = "route:tor"
+private const val TRAFFIC_MAP_HEAVY_DESTINATION_BYTES = 1_048_576L
 private const val TRAFFIC_MAP_HEAVY_CONTENT_SETTLE_DELAY_MS = 0L
 private const val TRAFFIC_MAP_POWER_STATE_STARTUP_DELAY_MS = 0L
 private const val TRAFFIC_MAP_WEIGHT = 0.62f
