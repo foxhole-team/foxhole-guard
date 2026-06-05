@@ -42,6 +42,12 @@ enum class CountryTrafficRole {
     TOR_EXIT,
 }
 
+enum class TrafficMapPeriod {
+    FIVE_MINUTES,
+    SESSION,
+    DAY_24,
+}
+
 @Immutable
 data class TrafficMapCountryVisual(
     val countryCode: String,
@@ -52,6 +58,38 @@ data class TrafficMapCountryVisual(
     val isNewCountry: Boolean,
     val isRouteNode: Boolean,
 )
+
+@Immutable
+data class TrafficMapPeriodSnapshot(
+    val period: TrafficMapPeriod,
+    val destinations: List<TrafficMapPoint> = emptyList(),
+    val unknownCountryBytes: Long = 0L,
+    val unknownCountryConnections: Int = 0,
+    val hiddenCountryCount: Int = 0,
+    val totalBytes: Long = 0L,
+    val totalConnections: Int = 0,
+    val countryCount: Int = 0,
+    val sampleWindowLabel: String = "No active connections",
+    val lastSampleAtMs: Long? = null,
+    val newCountryCodes: Set<String> = emptySet(),
+) {
+    val hasTraffic: Boolean
+        get() = totalBytes > 0L || totalConnections > 0
+}
+
+@Immutable
+data class TrafficMapPeriodSnapshots(
+    val fiveMinutes: TrafficMapPeriodSnapshot = TrafficMapPeriodSnapshot(TrafficMapPeriod.FIVE_MINUTES),
+    val session: TrafficMapPeriodSnapshot = TrafficMapPeriodSnapshot(TrafficMapPeriod.SESSION),
+    val day24: TrafficMapPeriodSnapshot = TrafficMapPeriodSnapshot(TrafficMapPeriod.DAY_24),
+) {
+    fun snapshot(period: TrafficMapPeriod): TrafficMapPeriodSnapshot =
+        when (period) {
+            TrafficMapPeriod.FIVE_MINUTES -> fiveMinutes
+            TrafficMapPeriod.SESSION -> session
+            TrafficMapPeriod.DAY_24 -> day24
+        }
+}
 
 @Immutable
 data class TrafficMapUiState(
@@ -68,6 +106,7 @@ data class TrafficMapUiState(
     val highlightedCountries: Set<String> = emptySet(),
     val countryVisuals: List<TrafficMapCountryVisual> = emptyList(),
     val sampleWindowLabel: String = "No active connections",
+    val periodSnapshots: TrafficMapPeriodSnapshots = TrafficMapPeriodSnapshots(),
     val lastSampleAtMs: Long? = null,
     val unknownCountryBytes: Long = 0L,
     val unknownCountryConnections: Int = 0,

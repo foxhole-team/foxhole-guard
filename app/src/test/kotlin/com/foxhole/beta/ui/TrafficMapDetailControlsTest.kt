@@ -23,7 +23,7 @@ class TrafficMapDetailControlsTest {
                 destinations = points,
                 sort = TrafficMapDetailSort.TOTAL,
                 filter = TrafficMapDetailFilter.ALL,
-                range = TrafficMapDetailRange.ALL,
+                visibleLimit = null,
             ).map(TrafficMapPoint::countryCode),
         )
         assertEquals(
@@ -32,7 +32,7 @@ class TrafficMapDetailControlsTest {
                 destinations = points,
                 sort = TrafficMapDetailSort.SESSIONS,
                 filter = TrafficMapDetailFilter.ALL,
-                range = TrafficMapDetailRange.ALL,
+                visibleLimit = null,
             ).map(TrafficMapPoint::countryCode),
         )
         assertEquals(
@@ -41,7 +41,7 @@ class TrafficMapDetailControlsTest {
                 destinations = points,
                 sort = TrafficMapDetailSort.COUNTRY,
                 filter = TrafficMapDetailFilter.ALL,
-                range = TrafficMapDetailRange.ALL,
+                visibleLimit = null,
             ).map(TrafficMapPoint::countryCode),
         )
     }
@@ -79,7 +79,7 @@ class TrafficMapDetailControlsTest {
                 destinations = points,
                 sort = TrafficMapDetailSort.TOTAL,
                 filter = TrafficMapDetailFilter.DIRECT,
-                range = TrafficMapDetailRange.TOP_10,
+                visibleLimit = 10,
             )
 
         assertEquals(10, directTopTen.size)
@@ -91,7 +91,7 @@ class TrafficMapDetailControlsTest {
                 destinations = points,
                 sort = TrafficMapDetailSort.TOTAL,
                 filter = TrafficMapDetailFilter.VPN,
-                range = TrafficMapDetailRange.ALL,
+                visibleLimit = null,
             ).map(TrafficMapPoint::countryCode),
         )
         assertEquals(
@@ -100,7 +100,7 @@ class TrafficMapDetailControlsTest {
                 destinations = points,
                 sort = TrafficMapDetailSort.TOTAL,
                 filter = TrafficMapDetailFilter.TOR,
-                range = TrafficMapDetailRange.ALL,
+                visibleLimit = null,
             ).map(TrafficMapPoint::countryCode),
         )
         assertEquals(
@@ -109,7 +109,7 @@ class TrafficMapDetailControlsTest {
                 destinations = points,
                 sort = TrafficMapDetailSort.TOTAL,
                 filter = TrafficMapDetailFilter.NEW,
-                range = TrafficMapDetailRange.ALL,
+                visibleLimit = null,
                 newCountryCodes = setOf("C5"),
             ).map(TrafficMapPoint::countryCode),
         )

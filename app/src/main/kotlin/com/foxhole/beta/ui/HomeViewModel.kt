@@ -654,6 +654,7 @@ class HomeViewModel(
             routeIpInfo = trafficMapRouteIpInfo,
             torIpInfo = trafficMapTorIpInfo,
             runtimeAvailable = trafficMapRuntimeAvailable,
+            recentTrafficWindows = container.anomalyRepository.recentTrafficWindows,
         )
 
     private fun RuntimeUiState.hasConnectedPendingDashboardIpRefresh(): Boolean {

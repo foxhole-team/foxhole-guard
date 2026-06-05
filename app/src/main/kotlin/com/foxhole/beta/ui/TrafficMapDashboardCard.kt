@@ -98,6 +98,8 @@ import com.foxhole.beta.core.model.CountryTrafficRole
 import com.foxhole.beta.core.model.TrafficMapCountryVisual
 import com.foxhole.beta.core.model.TrafficMapEdge
 import com.foxhole.beta.core.model.TrafficMapEdgeRole
+import com.foxhole.beta.core.model.TrafficMapPeriod
+import com.foxhole.beta.core.model.TrafficMapPeriodSnapshot
 import com.foxhole.beta.core.model.TrafficMapPoint
 import com.foxhole.beta.core.model.TrafficMapPointRole
 import com.foxhole.beta.core.model.TrafficMapUiState
@@ -483,56 +485,66 @@ private fun TrafficMapDetailCountryTable(
     modifier: Modifier = Modifier,
 ) {
     var sort by rememberSaveable { mutableStateOf(TrafficMapDetailSort.TOTAL) }
-    var range by rememberSaveable { mutableStateOf(TrafficMapDetailRange.TOP_30) }
+    var period by rememberSaveable { mutableStateOf(TrafficMapPeriod.FIVE_MINUTES) }
     var filter by rememberSaveable { mutableStateOf(TrafficMapDetailFilter.ALL) }
     var selectedCountryDetail by remember { mutableStateOf<TrafficMapCountryDetailSelection?>(null) }
+    val periodSnapshot =
+        remember(state.periodSnapshots, period) {
+            state.periodSnapshots.snapshot(period)
+        }
+    val periodVpnRoute =
+        remember(state.vpnRoute, periodSnapshot) {
+            state.vpnRoute.trafficMapPeriodRoutePoint(periodSnapshot)
+        }
+    val periodTorExit =
+        remember(state.torExit, periodSnapshot) {
+            state.torExit.trafficMapPeriodRoutePoint(periodSnapshot)
+        }
     val detailPoints =
-        remember(state.destinations, state.vpnRoute, state.torExit) {
+        remember(periodSnapshot.destinations, periodVpnRoute, periodTorExit) {
             trafficMapDetailPoints(
-                destinations = state.destinations,
-                vpnRoute = state.vpnRoute,
-                torExit = state.torExit,
+                destinations = periodSnapshot.destinations,
+                vpnRoute = periodVpnRoute,
+                torExit = periodTorExit,
             )
         }
     val newCountryCodes =
-        remember(state.countryVisuals) {
-            trafficMapNewCountryCodes(state.countryVisuals)
-        }
+        periodSnapshot.newCountryCodes
     val filteredDestinations =
         remember(detailPoints, sort, filter, newCountryCodes) {
             trafficMapDetailDestinations(
                 destinations = detailPoints,
                 sort = sort,
                 filter = filter,
-                range = TrafficMapDetailRange.ALL,
+                visibleLimit = null,
                 newCountryCodes = newCountryCodes,
             )
         }
     val destinations =
-        remember(filteredDestinations, range, newCountryCodes) {
+        remember(filteredDestinations, newCountryCodes) {
             trafficMapDetailDestinations(
                 destinations = filteredDestinations,
                 sort = TrafficMapDetailSort.COUNTRY,
                 filter = TrafficMapDetailFilter.ALL,
-                range = range,
+                visibleLimit = TRAFFIC_MAP_DETAIL_VISIBLE_ROWS,
                 alreadySorted = true,
                 newCountryCodes = newCountryCodes,
             )
         }
     val hiddenCountries =
-        remember(filteredDestinations, destinations, state.hiddenCountryCount, filter) {
+        remember(filteredDestinations, destinations, periodSnapshot.hiddenCountryCount, filter) {
             trafficMapDetailHiddenCountries(
                 filteredCount = filteredDestinations.size,
                 visibleCount = destinations.size,
-                repositoryHiddenCount = state.hiddenCountryCount,
+                repositoryHiddenCount = periodSnapshot.hiddenCountryCount,
                 filter = filter,
             )
         }
     val showUnknownCountry =
-        remember(state.unknownCountryBytes, state.unknownCountryConnections, filter) {
+        remember(periodSnapshot.unknownCountryBytes, periodSnapshot.unknownCountryConnections, filter) {
             trafficMapDetailShowUnknownCountry(
-                unknownCountryBytes = state.unknownCountryBytes,
-                unknownCountryConnections = state.unknownCountryConnections,
+                unknownCountryBytes = periodSnapshot.unknownCountryBytes,
+                unknownCountryConnections = periodSnapshot.unknownCountryConnections,
                 filter = filter,
             )
         }
@@ -543,8 +555,8 @@ private fun TrafficMapDetailCountryTable(
         TrafficMapDetailControls(
             sort = sort,
             onSortChange = { next -> sort = next },
-            range = range,
-            onRangeChange = { next -> range = next },
+            period = period,
+            onPeriodChange = { next -> period = next },
             filter = filter,
             onFilterChange = { next -> filter = next },
             colors = colors,
@@ -559,7 +571,9 @@ private fun TrafficMapDetailCountryTable(
                     newCountryCodes = newCountryCodes,
                     hiddenCountries = hiddenCountries,
                     showUnknownCountry = showUnknownCountry,
+                    snapshot = periodSnapshot,
                 ),
+            period = period,
             colors = colors,
             onSelectCountry = { selection -> selectedCountryDetail = selection },
         )
@@ -577,14 +591,17 @@ private fun TrafficMapDetailCountryTable(
 private fun TrafficMapDetailRows(
     state: TrafficMapUiState,
     rows: TrafficMapDetailRowsState,
+    period: TrafficMapPeriod,
     colors: TrafficMapColors,
     onSelectCountry: (TrafficMapCountryDetailSelection) -> Unit,
 ) {
-    val sampleWindowLabel = trafficMapSampleWindowLabel(state.sampleWindowLabel)
+    val sampleWindowLabel = trafficMapSampleWindowLabel(rows.snapshot.sampleWindowLabel)
     if (rows.destinations.isEmpty() && !rows.showUnknownCountry) {
         TrafficMapEmptySummary(
             state = state,
             colors = colors,
+            title = trafficMapPeriodEmptyTitle(period),
+            helper = trafficMapPeriodEmptyHelper(period, state.isAvailable),
             modifier = Modifier.padding(top = 8.dp),
         )
     } else {
@@ -599,7 +616,7 @@ private fun TrafficMapDetailRows(
                 onClick = {
                     onSelectCountry(
                         point.trafficMapCountryDetailSelection(
-                            totalBytes = state.totalBytes,
+                            totalBytes = rows.snapshot.totalBytes,
                             isNewCountry = isNewCountry,
                             sampleWindowLabel = sampleWindowLabel,
                         ),
@@ -608,7 +625,7 @@ private fun TrafficMapDetailRows(
             )
         }
         TrafficMapUnknownCountryDetailRow(
-            state = state,
+            snapshot = rows.snapshot,
             showUnknownCountry = rows.showUnknownCountry,
             sampleWindowLabel = sampleWindowLabel,
             colors = colors,
@@ -616,12 +633,12 @@ private fun TrafficMapDetailRows(
         )
         TrafficMapHiddenCountryCount(rows.hiddenCountries, colors)
     }
-    TrafficMapTotalCountryDetailRow(state = state, colors = colors)
+    TrafficMapTotalCountryDetailRow(snapshot = rows.snapshot, colors = colors)
 }
 
 @Composable
 private fun TrafficMapUnknownCountryDetailRow(
-    state: TrafficMapUiState,
+    snapshot: TrafficMapPeriodSnapshot,
     showUnknownCountry: Boolean,
     sampleWindowLabel: String,
     colors: TrafficMapColors,
@@ -631,8 +648,8 @@ private fun TrafficMapUnknownCountryDetailRow(
     val unknownLabel = stringResource(R.string.traffic_map_unknown_country)
     TrafficMapDetailDestinationRow(
         country = unknownLabel,
-        sessions = state.unknownCountryConnections,
-        total = formatTrafficMapLegendBytes(state.unknownCountryBytes),
+        sessions = snapshot.unknownCountryConnections,
+        total = formatTrafficMapLegendBytes(snapshot.unknownCountryBytes),
         colors = colors,
         testTag = "traffic_map_detail_country_row_unknown",
         onClick = {
@@ -641,9 +658,9 @@ private fun TrafficMapUnknownCountryDetailRow(
                     countryCode = null,
                     label = unknownLabel,
                     role = null,
-                    sessions = state.unknownCountryConnections,
-                    bytes = state.unknownCountryBytes,
-                    totalBytes = state.totalBytes,
+                    sessions = snapshot.unknownCountryConnections,
+                    bytes = snapshot.unknownCountryBytes,
+                    totalBytes = snapshot.totalBytes,
                     isNewCountry = false,
                     sampleWindowLabel = sampleWindowLabel,
                 ),
@@ -670,18 +687,18 @@ private fun TrafficMapHiddenCountryCount(
 
 @Composable
 private fun TrafficMapTotalCountryDetailRow(
-    state: TrafficMapUiState,
+    snapshot: TrafficMapPeriodSnapshot,
     colors: TrafficMapColors,
 ) {
-    if (state.totalBytes <= 0L && state.totalConnections <= 0) return
+    if (snapshot.totalBytes <= 0L && snapshot.totalConnections <= 0) return
     HorizontalDivider(
         modifier = Modifier.padding(top = 8.dp, bottom = 6.dp),
         color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.42f),
     )
     TrafficMapDetailDestinationRow(
         country = stringResource(R.string.traffic_map_total_header),
-        sessions = state.totalConnections,
-        total = formatTrafficMapLegendBytes(state.totalBytes),
+        sessions = snapshot.totalConnections,
+        total = formatTrafficMapLegendBytes(snapshot.totalBytes),
         colors = colors,
         strong = true,
     )
@@ -691,8 +708,8 @@ private fun TrafficMapTotalCountryDetailRow(
 private fun TrafficMapDetailControls(
     sort: TrafficMapDetailSort,
     onSortChange: (TrafficMapDetailSort) -> Unit,
-    range: TrafficMapDetailRange,
-    onRangeChange: (TrafficMapDetailRange) -> Unit,
+    period: TrafficMapPeriod,
+    onPeriodChange: (TrafficMapPeriod) -> Unit,
     filter: TrafficMapDetailFilter,
     onFilterChange: (TrafficMapDetailFilter) -> Unit,
     colors: TrafficMapColors,
@@ -719,21 +736,21 @@ private fun TrafficMapDetailControls(
                 onClick = { onSortChange(TrafficMapDetailSort.COUNTRY) },
             )
         }
-        TrafficMapDetailControlRow(label = stringResource(R.string.traffic_map_range_label), colors = colors) {
+        TrafficMapDetailControlRow(label = stringResource(R.string.traffic_map_period_label), colors = colors) {
             TrafficMapDetailModeButton(
-                text = stringResource(R.string.traffic_map_range_top_10),
-                selected = range == TrafficMapDetailRange.TOP_10,
-                onClick = { onRangeChange(TrafficMapDetailRange.TOP_10) },
+                text = stringResource(R.string.traffic_map_period_five_min),
+                selected = period == TrafficMapPeriod.FIVE_MINUTES,
+                onClick = { onPeriodChange(TrafficMapPeriod.FIVE_MINUTES) },
             )
             TrafficMapDetailModeButton(
-                text = stringResource(R.string.traffic_map_range_top_30),
-                selected = range == TrafficMapDetailRange.TOP_30,
-                onClick = { onRangeChange(TrafficMapDetailRange.TOP_30) },
+                text = stringResource(R.string.traffic_map_period_session),
+                selected = period == TrafficMapPeriod.SESSION,
+                onClick = { onPeriodChange(TrafficMapPeriod.SESSION) },
             )
             TrafficMapDetailModeButton(
-                text = stringResource(R.string.traffic_map_range_all),
-                selected = range == TrafficMapDetailRange.ALL,
-                onClick = { onRangeChange(TrafficMapDetailRange.ALL) },
+                text = stringResource(R.string.traffic_map_period_day_24),
+                selected = period == TrafficMapPeriod.DAY_24,
+                onClick = { onPeriodChange(TrafficMapPeriod.DAY_24) },
             )
         }
         TrafficMapDetailControlRow(label = stringResource(R.string.traffic_map_filter_label), colors = colors) {
@@ -1880,18 +1897,13 @@ private data class TrafficMapDetailRowsState(
     val newCountryCodes: Set<String>,
     val hiddenCountries: Int,
     val showUnknownCountry: Boolean,
+    val snapshot: TrafficMapPeriodSnapshot,
 )
 
 internal enum class TrafficMapDetailSort {
     TOTAL,
     SESSIONS,
     COUNTRY,
-}
-
-internal enum class TrafficMapDetailRange(val limit: Int?) {
-    TOP_10(10),
-    TOP_30(30),
-    ALL(null),
 }
 
 internal enum class TrafficMapDetailFilter {
@@ -1953,7 +1965,7 @@ internal fun trafficMapDetailDestinations(
     destinations: List<TrafficMapPoint>,
     sort: TrafficMapDetailSort,
     filter: TrafficMapDetailFilter,
-    range: TrafficMapDetailRange,
+    visibleLimit: Int? = TRAFFIC_MAP_DETAIL_VISIBLE_ROWS,
     alreadySorted: Boolean = false,
     newCountryCodes: Set<String> = emptySet(),
 ): List<TrafficMapPoint> {
@@ -1991,7 +2003,7 @@ internal fun trafficMapDetailDestinations(
                     )
             }
         }
-    return range.limit?.let(sorted::take) ?: sorted
+    return visibleLimit?.let(sorted::take) ?: sorted
 }
 
 internal fun trafficMapDetailShowUnknownCountry(
@@ -2575,6 +2587,8 @@ private fun TrafficMapEmptySummary(
     state: TrafficMapUiState,
     colors: TrafficMapColors,
     modifier: Modifier = Modifier,
+    title: String? = null,
+    helper: String? = null,
 ) {
     Column(
         modifier = modifier,
@@ -2582,13 +2596,14 @@ private fun TrafficMapEmptySummary(
     ) {
         Text(
             text =
-                stringResource(
-                    if (state.isAvailable) {
-                        R.string.traffic_map_waiting_connections
-                    } else {
-                        R.string.traffic_map_live_requires_firewall
-                    },
-                ),
+                title
+                    ?: stringResource(
+                        if (state.isAvailable) {
+                            R.string.traffic_map_waiting_connections
+                        } else {
+                            R.string.traffic_map_live_requires_firewall
+                        },
+                    ),
             style = MaterialTheme.typography.labelSmall.copy(
                 fontSize = 10.sp,
                 lineHeight = 12.sp,
@@ -2599,7 +2614,7 @@ private fun TrafficMapEmptySummary(
             overflow = TextOverflow.Ellipsis,
         )
         Text(
-            text = stringResource(R.string.traffic_map_waiting_connections_helper),
+            text = helper ?: stringResource(R.string.traffic_map_waiting_connections_helper),
             style = MaterialTheme.typography.labelSmall.copy(
                 fontSize = 9.sp,
                 lineHeight = 11.sp,
@@ -2688,8 +2703,46 @@ private fun trafficMapSampleWindowLabel(rawLabel: String): String =
         "Live, last 3s" -> stringResource(R.string.traffic_map_status_live_recent)
         "Stale" -> stringResource(R.string.traffic_map_status_stale)
         "No active connections" -> stringResource(R.string.traffic_map_waiting_connections)
+        "Last 5 min" -> stringResource(R.string.traffic_map_period_five_min_window)
+        "Session" -> stringResource(R.string.traffic_map_period_session_window)
+        "Last 24h" -> stringResource(R.string.traffic_map_period_day_24_window)
         else -> rawLabel.takeIf(String::isNotBlank) ?: stringResource(R.string.traffic_map_waiting_connections)
     }
+
+@Composable
+private fun trafficMapPeriodEmptyTitle(period: TrafficMapPeriod): String =
+    when (period) {
+        TrafficMapPeriod.FIVE_MINUTES -> stringResource(R.string.traffic_map_period_empty_five_min)
+        TrafficMapPeriod.SESSION -> stringResource(R.string.traffic_map_period_empty_session)
+        TrafficMapPeriod.DAY_24 -> stringResource(R.string.traffic_map_period_empty_day_24)
+    }
+
+@Composable
+private fun trafficMapPeriodEmptyHelper(
+    period: TrafficMapPeriod,
+    runtimeAvailable: Boolean,
+): String =
+    when (period) {
+        TrafficMapPeriod.DAY_24 -> stringResource(R.string.traffic_map_period_empty_day_24_helper)
+        TrafficMapPeriod.FIVE_MINUTES,
+        TrafficMapPeriod.SESSION,
+        ->
+            if (runtimeAvailable) {
+                stringResource(R.string.traffic_map_waiting_connections_helper)
+            } else {
+                stringResource(R.string.traffic_map_period_empty_live_helper)
+            }
+    }
+
+private fun TrafficMapPoint?.trafficMapPeriodRoutePoint(
+    snapshot: TrafficMapPeriodSnapshot,
+): TrafficMapPoint? =
+    this
+        ?.takeIf { snapshot.hasTraffic }
+        ?.copy(
+            bytes = snapshot.totalBytes,
+            connections = snapshot.totalConnections,
+        )
 
 private fun TrafficMapUiState.trafficMapRouteChain(): String {
     val origin =
@@ -3587,6 +3640,7 @@ private const val TRAFFIC_MAP_LAT_RANGE = TRAFFIC_MAP_MAX_LAT - TRAFFIC_MAP_MIN_
 private const val MAX_TRAFFIC_MAP_DRAW_EDGES = 30
 private const val MAX_TRAFFIC_MAP_DRAW_DESTINATIONS = 30
 private const val TRAFFIC_MAP_DASHBOARD_TOP_COUNTRIES = 3
+internal const val TRAFFIC_MAP_DETAIL_VISIBLE_ROWS = 30
 private const val TRAFFIC_MAP_LOW_BATTERY_PERCENT = 10
 private const val TRAFFIC_MAP_PREWARM_COMPACT_WIDTH_FRACTION = 0.58f
 private const val TRAFFIC_MAP_PREWARM_PRIMARY_WIDTH_FRACTION = 0.65f
