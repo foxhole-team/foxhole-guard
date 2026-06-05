@@ -15,7 +15,9 @@ import android.os.Trace
 import android.provider.Settings
 import android.util.DisplayMetrics
 import android.util.Log
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -81,7 +83,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.CollectionInfo
+import androidx.compose.ui.semantics.CollectionItemInfo
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.collectionInfo
+import androidx.compose.ui.semantics.collectionItemInfo
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -257,6 +263,7 @@ internal fun TrafficMapDashboardCard(
                             state = state,
                             countryShapes = countryShapes,
                             routePresentation = TrafficMapRoutePresentation.Compact,
+                            onOpenDetails = onOpenDetails,
                             modifier = Modifier
                                 .fillMaxSize()
                                 .testTag("home_traffic_world_map"),
@@ -590,6 +597,12 @@ private fun TrafficMapDetailCountryTable(
                 filter = filter,
             )
         }
+    val collectionRowCount =
+        trafficMapDetailCollectionRowCount(
+            visibleDestinationCount = destinations.size,
+            showUnknownCountry = showUnknownCountry,
+            snapshot = periodSnapshot,
+        )
     Column(
         modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(0.dp),
@@ -618,6 +631,15 @@ private fun TrafficMapDetailCountryTable(
             period = period,
             colors = colors,
             onSelectCountry = { selection -> selectedCountryDetail = selection },
+            collectionRowCount = collectionRowCount,
+            modifier =
+                Modifier.semantics {
+                    collectionInfo =
+                        CollectionInfo(
+                            rowCount = collectionRowCount,
+                            columnCount = TRAFFIC_MAP_DETAIL_TABLE_COLUMNS,
+                        )
+                },
         )
     }
     selectedCountryDetail?.let { selection ->
@@ -636,47 +658,60 @@ private fun TrafficMapDetailRows(
     period: TrafficMapPeriod,
     colors: TrafficMapColors,
     onSelectCountry: (TrafficMapCountryDetailSelection) -> Unit,
+    collectionRowCount: Int,
+    modifier: Modifier = Modifier,
 ) {
     val sampleWindowLabel = trafficMapSampleWindowLabel(rows.snapshot.sampleWindowLabel)
-    if (rows.destinations.isEmpty() && !rows.showUnknownCountry) {
-        TrafficMapEmptySummary(
-            state = state,
-            colors = colors,
-            title = trafficMapPeriodEmptyTitle(period),
-            helper = trafficMapPeriodEmptyHelper(period, state.isAvailable),
-            modifier = Modifier.padding(top = 8.dp),
-        )
-    } else {
-        rows.destinations.forEach { point ->
-            val isNewCountry = point.countryCode in rows.newCountryCodes
-            TrafficMapDetailDestinationRow(
-                country = trafficMapDetailCountryLabel(point),
-                sessions = point.connections,
-                total = formatTrafficMapLegendBytes(point.bytes),
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(0.dp),
+    ) {
+        if (rows.destinations.isEmpty() && !rows.showUnknownCountry) {
+            TrafficMapEmptySummary(
+                state = state,
                 colors = colors,
-                testTag = point.trafficMapDetailRowTestTag(),
-                onClick = {
-                    onSelectCountry(
-                        point.trafficMapCountryDetailSelection(
-                            totalBytes = rows.snapshot.totalBytes,
-                            isNewCountry = isNewCountry,
-                            sampleWindowLabel = sampleWindowLabel,
-                            detail = state.countryDetailsByCode[point.countryCode],
-                        ),
-                    )
-                },
+                title = trafficMapPeriodEmptyTitle(period),
+                helper = trafficMapPeriodEmptyHelper(period, state.isAvailable),
+                modifier = Modifier.padding(top = 8.dp),
             )
+        } else {
+            rows.destinations.forEachIndexed { index, point ->
+                val isNewCountry = point.countryCode in rows.newCountryCodes
+                TrafficMapDetailDestinationRow(
+                    country = trafficMapDetailCountryLabel(point),
+                    sessions = point.connections,
+                    total = formatTrafficMapLegendBytes(point.bytes),
+                    colors = colors,
+                    testTag = point.trafficMapDetailRowTestTag(),
+                    collectionRowIndex = index,
+                    onClick = {
+                        onSelectCountry(
+                            point.trafficMapCountryDetailSelection(
+                                totalBytes = rows.snapshot.totalBytes,
+                                isNewCountry = isNewCountry,
+                                sampleWindowLabel = sampleWindowLabel,
+                                detail = state.countryDetailsByCode[point.countryCode],
+                            ),
+                        )
+                    },
+                )
+            }
+            TrafficMapUnknownCountryDetailRow(
+                snapshot = rows.snapshot,
+                showUnknownCountry = rows.showUnknownCountry,
+                sampleWindowLabel = sampleWindowLabel,
+                colors = colors,
+                collectionRowIndex = rows.destinations.size,
+                onSelectCountry = onSelectCountry,
+            )
+            TrafficMapHiddenCountryCount(rows.hiddenCountries, colors)
         }
-        TrafficMapUnknownCountryDetailRow(
+        TrafficMapTotalCountryDetailRow(
             snapshot = rows.snapshot,
-            showUnknownCountry = rows.showUnknownCountry,
-            sampleWindowLabel = sampleWindowLabel,
             colors = colors,
-            onSelectCountry = onSelectCountry,
+            collectionRowIndex = (collectionRowCount - 1).coerceAtLeast(0),
         )
-        TrafficMapHiddenCountryCount(rows.hiddenCountries, colors)
     }
-    TrafficMapTotalCountryDetailRow(snapshot = rows.snapshot, colors = colors)
 }
 
 @Composable
@@ -685,6 +720,7 @@ private fun TrafficMapUnknownCountryDetailRow(
     showUnknownCountry: Boolean,
     sampleWindowLabel: String,
     colors: TrafficMapColors,
+    collectionRowIndex: Int,
     onSelectCountry: (TrafficMapCountryDetailSelection) -> Unit,
 ) {
     if (!showUnknownCountry) return
@@ -695,6 +731,7 @@ private fun TrafficMapUnknownCountryDetailRow(
         total = formatTrafficMapLegendBytes(snapshot.unknownCountryBytes),
         colors = colors,
         testTag = "traffic_map_detail_country_row_unknown",
+        collectionRowIndex = collectionRowIndex,
         onClick = {
             onSelectCountry(
                 TrafficMapCountryDetailSelection(
@@ -733,6 +770,7 @@ private fun TrafficMapHiddenCountryCount(
 private fun TrafficMapTotalCountryDetailRow(
     snapshot: TrafficMapPeriodSnapshot,
     colors: TrafficMapColors,
+    collectionRowIndex: Int,
 ) {
     if (snapshot.totalBytes <= 0L && snapshot.totalConnections <= 0) return
     HorizontalDivider(
@@ -745,6 +783,7 @@ private fun TrafficMapTotalCountryDetailRow(
         total = formatTrafficMapLegendBytes(snapshot.totalBytes),
         colors = colors,
         strong = true,
+        collectionRowIndex = collectionRowIndex,
     )
 }
 
@@ -946,6 +985,7 @@ private fun TrafficMapDetailDestinationRow(
     colors: TrafficMapColors,
     strong: Boolean = false,
     testTag: String? = null,
+    collectionRowIndex: Int? = null,
     onClick: (() -> Unit)? = null,
 ) {
     val rowModifier =
@@ -958,6 +998,19 @@ private fun TrafficMapDetailDestinationRow(
                 } else {
                     Modifier
                 },
+            )
+            .then(
+                collectionRowIndex?.let { rowIndex ->
+                    Modifier.semantics {
+                        collectionItemInfo =
+                            CollectionItemInfo(
+                                rowIndex = rowIndex,
+                                rowSpan = 1,
+                                columnIndex = 0,
+                                columnSpan = TRAFFIC_MAP_DETAIL_TABLE_COLUMNS,
+                            )
+                    }
+                } ?: Modifier,
             )
             .then(testTag?.let { tag -> Modifier.testTag(tag) } ?: Modifier)
             .padding(vertical = 4.dp)
@@ -1487,6 +1540,7 @@ private fun TrafficMapCanvas(
     state: TrafficMapUiState,
     countryShapes: List<TrafficMapCountryShape>,
     routePresentation: TrafficMapRoutePresentation,
+    onOpenDetails: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val colors = trafficMapColors()
@@ -1536,6 +1590,14 @@ private fun TrafficMapCanvas(
         modifier = modifier
             .onSizeChanged { size -> canvasSize = size }
             .semantics { contentDescription = mapContentDescription }
+            .then(
+                onOpenDetails?.let { openDetails ->
+                    Modifier.clickable(
+                        role = Role.Button,
+                        onClick = openDetails,
+                    )
+                } ?: Modifier,
+            )
             .drawWithCache {
                 val viewport = trafficMapViewport(size)
                 val maxLineStroke = routePresentation.maxRouteStrokeDp.dp.toPx()
@@ -2016,6 +2078,7 @@ private fun TrafficMapMarkerClusterBadges(targets: List<TrafficMapMarkerHitTarge
         }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun TrafficMapMarkerSemanticsLayer(
     targets: List<TrafficMapMarkerHitTarget>,
@@ -2036,7 +2099,11 @@ private fun TrafficMapMarkerSemanticsLayer(
                     }
                     .size(touchTargetSize)
                     .clip(CircleShape)
-                    .clickable { onMarkerSelected(target) }
+                    .combinedClickable(
+                        role = Role.Button,
+                        onClick = { onMarkerSelected(target) },
+                        onLongClick = { onMarkerSelected(target) },
+                    )
                     .semantics { contentDescription = target.contentDescription }
                     .testTag("traffic_map_marker_${target.key.normalizedTrafficMapTestTag()}"),
         )
@@ -2348,6 +2415,23 @@ private data class TrafficMapDetailRowsState(
     val showUnknownCountry: Boolean,
     val snapshot: TrafficMapPeriodSnapshot,
 )
+
+private fun trafficMapDetailCollectionRowCount(
+    visibleDestinationCount: Int,
+    showUnknownCountry: Boolean,
+    snapshot: TrafficMapPeriodSnapshot,
+): Int =
+    visibleDestinationCount +
+        if (showUnknownCountry) {
+            1
+        } else {
+            0
+        } +
+        if (snapshot.totalBytes > 0L || snapshot.totalConnections > 0) {
+            1
+        } else {
+            0
+        }
 
 internal enum class TrafficMapDetailSort {
     TOTAL,
@@ -4322,6 +4406,7 @@ private const val MAX_TRAFFIC_MAP_DRAW_EDGES = 30
 private const val MAX_TRAFFIC_MAP_DRAW_DESTINATIONS = 30
 private const val TRAFFIC_MAP_DASHBOARD_TOP_COUNTRIES = 3
 internal const val TRAFFIC_MAP_DETAIL_VISIBLE_ROWS = 30
+private const val TRAFFIC_MAP_DETAIL_TABLE_COLUMNS = 3
 private const val TRAFFIC_MAP_LOW_BATTERY_PERCENT = 10
 private const val TRAFFIC_MAP_PREWARM_COMPACT_WIDTH_FRACTION = 0.58f
 private const val TRAFFIC_MAP_PREWARM_PRIMARY_WIDTH_FRACTION = 0.65f
