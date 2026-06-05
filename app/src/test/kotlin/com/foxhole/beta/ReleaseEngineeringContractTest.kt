@@ -93,6 +93,51 @@ class ReleaseEngineeringContractTest {
     }
 
     @Test
+    fun `fgs boot compat runner captures platform proof artifacts`() {
+        val runner = projectFile("../scripts/run-fgs-boot-compat-matrix.sh").readText()
+
+        listOf(
+            "ANDROID_SERIAL must be set",
+            "build/fgs-boot-compat-matrix",
+            "DEFAULT_COMPAT_FLAGS=(\"FGS_BOOT_COMPLETED_RESTRICTIONS\")",
+            "am compat enable",
+            "am compat disable",
+            "android.intent.action.BOOT_COMPLETED",
+            "android.intent.action.MY_PACKAGE_REPLACED",
+            "com.foxhole.beta.vpn.BootReceiverRestoreAndroidTest",
+            "com.foxhole.beta.vpn.ProxyRuntimeSmokeTest",
+            "scripts/run-connected-android-tests.sh",
+            "scripts/collect-foxhole-debug-state.sh",
+            "scripts/analyze-android-perf-logs.py",
+            ":app:installDebug",
+        ).forEach { marker ->
+            assertTrue("Missing FGS/boot compat runner marker: $marker", runner.contains(marker))
+        }
+    }
+
+    @Test
+    fun `api compatibility matrix runner requires release API coverage`() {
+        val runner = projectFile("../scripts/run-api-compatibility-matrix.sh").readText()
+
+        listOf(
+            "FOXHOLE_API_MATRIX_SERIALS",
+            "DEFAULT_API_LEVELS=(26 29 30 33 34 35 36 37)",
+            "build/api-compat-matrix",
+            "com.foxhole.beta.vpn.BootReceiverRestoreAndroidTest",
+            "com.foxhole.beta.vpn.ProxyRuntimeSmokeTest",
+            "com.foxhole.beta.ui.HomeRuntimeBehaviorTest",
+            "FOXHOLE_REQUIRE_CONNECTED_QA_MATRIX=0",
+            "scripts/run-connected-android-tests.sh",
+            "scripts/run-fgs-boot-compat-matrix.sh",
+            "FOXHOLE_API_MATRIX_RUN_FGS_COMPAT",
+            ":app:installDebug",
+            "API compatibility matrix missing required APIs",
+        ).forEach { marker ->
+            assertTrue("Missing API compatibility matrix marker: $marker", runner.contains(marker))
+        }
+    }
+
+    @Test
     fun `android workflow keeps release probe on internal release only`() {
         val workflow = projectFile("../.github/workflows/android.yml").readText()
         val releaseStep =
