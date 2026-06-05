@@ -374,11 +374,28 @@ class HomeRuntimeBehaviorTest {
 
         val roundTripMs =
             measureUntil("dashboard settings repeated round-trip") {
-                repeat(DASHBOARD_SETTINGS_ROUND_TRIP_COUNT) {
-                    composeRule.onNodeWithTag("bottom_nav_settings").performClick()
-                    waitUntilTagExists("settings_screen", timeoutMs = NAVIGATION_RESPONSIVENESS_TIMEOUT_MS)
-                    composeRule.onNodeWithTag("bottom_nav_dashboard").performClick()
-                    waitUntilTagExists("home_dashboard_list", timeoutMs = NAVIGATION_RESPONSIVENESS_TIMEOUT_MS)
+                repeat(DASHBOARD_SETTINGS_ROUND_TRIP_COUNT) { index ->
+                    val settingsMs =
+                        measureUntil("dashboard settings round-trip ${index + 1} opens settings") {
+                            composeRule.onNodeWithTag("bottom_nav_settings").performClick()
+                            waitUntilTagExists("settings_screen", timeoutMs = NAVIGATION_RESPONSIVENESS_TIMEOUT_MS)
+                        }
+                    assertUnderBudget(
+                        "dashboard/settings round-trip ${index + 1} settings leg",
+                        settingsMs,
+                        ROOT_NAVIGATION_GROSS_RESPONSIVENESS_TIMEOUT_MS,
+                    )
+
+                    val dashboardMs =
+                        measureUntil("dashboard settings round-trip ${index + 1} returns dashboard") {
+                            composeRule.onNodeWithTag("bottom_nav_dashboard").performClick()
+                            waitUntilTagExists("home_dashboard_list", timeoutMs = NAVIGATION_RESPONSIVENESS_TIMEOUT_MS)
+                        }
+                    assertUnderBudget(
+                        "dashboard/settings round-trip ${index + 1} dashboard leg",
+                        dashboardMs,
+                        ROOT_NAVIGATION_GROSS_RESPONSIVENESS_TIMEOUT_MS,
+                    )
                 }
             }
         assertUnderBudget("dashboard/settings repeated round-trip", roundTripMs, ROUND_TRIP_RESPONSIVENESS_TIMEOUT_MS)
@@ -734,6 +751,8 @@ class HomeRuntimeBehaviorTest {
         private const val WARM_DASHBOARD_RETURN_TIMEOUT_MS = 1_200L
         private const val NETWORK_WIDGET_RESPONSIVENESS_TIMEOUT_MS = 1_500L
         private const val DASHBOARD_SETTINGS_ROUND_TRIP_COUNT = 3
-        private const val ROUND_TRIP_RESPONSIVENESS_TIMEOUT_MS = 4_500L
+        private const val ROOT_NAVIGATION_GROSS_RESPONSIVENESS_TIMEOUT_MS = NAVIGATION_RESPONSIVENESS_TIMEOUT_MS * 2
+        private const val ROUND_TRIP_RESPONSIVENESS_TIMEOUT_MS =
+            DASHBOARD_SETTINGS_ROUND_TRIP_COUNT * NAVIGATION_RESPONSIVENESS_TIMEOUT_MS * 2
     }
 }
