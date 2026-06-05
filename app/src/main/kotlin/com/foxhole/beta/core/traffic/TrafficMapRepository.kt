@@ -1181,7 +1181,8 @@ private fun trafficMapSampleWindowLabel(
     totalConnections: Int,
 ): String =
     when {
-        !runtimeAvailable || totalConnections <= 0 -> "No active connections"
+        !runtimeAvailable -> TRAFFIC_MAP_STATUS_UNAVAILABLE_LABEL
+        totalConnections <= 0 -> TRAFFIC_MAP_STATUS_WAITING_LABEL
         lastSampleAtMs == null -> "Live"
         System.currentTimeMillis() - lastSampleAtMs > STALE_TRAFFIC_MAP_SAMPLE_MS -> "Stale"
         else -> "Live, last 3s"
@@ -1231,5 +1232,7 @@ private const val TRAFFIC_MAP_DAY_24_MS = 24 * 60 * 60 * 1000L
 private const val TRAFFIC_MAP_PERIOD_FIVE_MINUTES_LABEL = "Last 5 min"
 private const val TRAFFIC_MAP_PERIOD_SESSION_LABEL = "Session"
 private const val TRAFFIC_MAP_PERIOD_DAY_24_LABEL = "Last 24h"
+private const val TRAFFIC_MAP_STATUS_WAITING_LABEL = "Waiting"
+private const val TRAFFIC_MAP_STATUS_UNAVAILABLE_LABEL = "Unavailable"
 private const val TRAFFIC_MAP_COUNTRY_MIN_INTENSITY = 0.18f
 private const val TRAFFIC_MAP_ROUTE_COUNTRY_MIN_INTENSITY = 0.32f

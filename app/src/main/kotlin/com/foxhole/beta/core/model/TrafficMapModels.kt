@@ -69,7 +69,7 @@ data class TrafficMapPeriodSnapshot(
     val totalBytes: Long = 0L,
     val totalConnections: Int = 0,
     val countryCount: Int = 0,
-    val sampleWindowLabel: String = "No active connections",
+    val sampleWindowLabel: String = "Waiting",
     val lastSampleAtMs: Long? = null,
     val newCountryCodes: Set<String> = emptySet(),
 ) {
@@ -138,7 +138,7 @@ data class TrafficMapUiState(
     val edges: List<TrafficMapEdge> = emptyList(),
     val highlightedCountries: Set<String> = emptySet(),
     val countryVisuals: List<TrafficMapCountryVisual> = emptyList(),
-    val sampleWindowLabel: String = "No active connections",
+    val sampleWindowLabel: String = "Waiting",
     val periodSnapshots: TrafficMapPeriodSnapshots = TrafficMapPeriodSnapshots(),
     val countryDetailsByCode: Map<String, TrafficMapCountryDetail> = emptyMap(),
     val lastSampleAtMs: Long? = null,

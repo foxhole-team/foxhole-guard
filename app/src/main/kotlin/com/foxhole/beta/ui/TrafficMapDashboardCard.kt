@@ -123,6 +123,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import java.io.IOException
 import java.text.DateFormat
 import java.util.Date
 import java.util.Locale
@@ -192,13 +193,18 @@ internal fun TrafficMapDashboardCard(
     var forceMapEnabled by rememberSaveable { mutableStateOf(false) }
     val mapDisabledForPower = powerState.mapDisabled && !forceMapEnabled
     val heavyContentReady = rememberTrafficMapHeavyContentReady(contentReady && !mapDisabledForPower)
-    val countryShapes =
+    val shapeLoadState =
         if (heavyContentReady) {
             rememberTrafficMapCountryShapes()
         } else {
-            remember { emptyList() }
+            remember { TrafficMapShapeLoadState.Ready(emptyList()) }
         }
-    val countryShapesLoading = heavyContentReady && countryShapes.isEmpty()
+    val countryShapes =
+        (shapeLoadState as? TrafficMapShapeLoadState.Ready)
+            ?.shapes
+            .orEmpty()
+    val countryShapesLoading = heavyContentReady && shapeLoadState is TrafficMapShapeLoadState.Loading
+    val countryShapesError = heavyContentReady && shapeLoadState is TrafficMapShapeLoadState.Error
     FoxholeCard(
         modifier = modifier
             .fillMaxWidth()
@@ -232,6 +238,13 @@ internal fun TrafficMapDashboardCard(
                         TrafficMapPowerSaveBlock(
                             onEnable = { forceMapEnabled = true },
                             modifier = Modifier.fillMaxSize(),
+                        )
+                    } else if (countryShapesError) {
+                        TrafficMapShapeErrorBlock(
+                            modifier =
+                                Modifier
+                                    .fillMaxSize()
+                                    .testTag("home_traffic_world_map_error"),
                         )
                     } else if (!heavyContentReady || countryShapesLoading) {
                         TrafficMapCanvasLoadingBlock(
@@ -436,7 +449,11 @@ internal fun TrafficMapDetailScreen(
     onNavigateUp: () -> Unit,
 ) {
     val state by stateFlow.collectAsStateWithLifecycle()
-    val countryShapes = rememberTrafficMapCountryShapes()
+    val shapeLoadState = rememberTrafficMapCountryShapes()
+    val countryShapes =
+        (shapeLoadState as? TrafficMapShapeLoadState.Ready)
+            ?.shapes
+            .orEmpty()
     val colors = trafficMapColors()
     FoxholeLazyScaffold(
         title = stringResource(R.string.traffic_map_title),
@@ -454,7 +471,14 @@ internal fun TrafficMapDetailScreen(
                 shape = MaterialTheme.shapes.large,
                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.34f),
             ) {
-                if (countryShapes.isEmpty()) {
+                if (shapeLoadState is TrafficMapShapeLoadState.Error) {
+                    TrafficMapShapeErrorBlock(
+                        modifier =
+                            Modifier
+                                .fillMaxSize()
+                                .testTag("traffic_map_detail_world_map_error"),
+                    )
+                } else if (shapeLoadState is TrafficMapShapeLoadState.Loading) {
                     TrafficMapCanvasLoadingBlock(
                         modifier =
                             Modifier
@@ -1274,8 +1298,12 @@ private fun rememberTrafficMapHeavyContentReady(enabled: Boolean): Boolean {
 @Composable
 private fun TrafficMapCanvasLoadingBlock(modifier: Modifier = Modifier) {
     val shimmerProgress = rememberFoxholeSkeletonProgress()
+    val loadingDescription = stringResource(R.string.traffic_map_loading)
     Column(
-        modifier = modifier.padding(top = 12.dp),
+        modifier =
+            modifier
+                .padding(top = 12.dp)
+                .semantics { contentDescription = loadingDescription },
         verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterVertically),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
@@ -1297,6 +1325,39 @@ private fun TrafficMapCanvasLoadingBlock(modifier: Modifier = Modifier) {
                 shimmerProgress = shimmerProgress,
             )
         }
+    }
+}
+
+@Composable
+private fun TrafficMapShapeErrorBlock(modifier: Modifier = Modifier) {
+    val colors = trafficMapColors()
+    val title = stringResource(R.string.traffic_map_shape_error)
+    val helper = stringResource(R.string.traffic_map_shape_error_helper)
+    Column(
+        modifier =
+            modifier
+                .padding(horizontal = 8.dp, vertical = 10.dp)
+                .semantics { contentDescription = "$title. $helper" },
+        verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterVertically),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, lineHeight = 12.sp),
+            fontWeight = FontWeight.SemiBold,
+            color = colors.inactiveText,
+            textAlign = TextAlign.Center,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text(
+            text = helper,
+            style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, lineHeight = 11.sp),
+            color = colors.inactiveText,
+            textAlign = TextAlign.Center,
+            maxLines = 4,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 
@@ -2096,15 +2157,41 @@ private fun trafficMapHighlightInputsEmpty(
         canvasSize.height <= 0
 
 @Composable
-private fun rememberTrafficMapCountryShapes(): List<TrafficMapCountryShape> {
+private fun rememberTrafficMapCountryShapes(): TrafficMapShapeLoadState {
     val appContext = LocalContext.current.applicationContext
-    val shapes by produceState(
-        initialValue = TrafficMapCountryShapeCache.current(),
+    val shapeLoadState by produceState(
+        initialValue = trafficMapInitialShapeLoadState(),
         key1 = appContext,
     ) {
-        value = TrafficMapCountryShapeCache.load(appContext)
+        value =
+            try {
+                TrafficMapCountryShapeCache.load(appContext).toTrafficMapShapeLoadState()
+            } catch (error: IOException) {
+                Log.w(TRAFFIC_MAP_LOG_TAG, "[traffic-map] shape asset load failed", error)
+                TrafficMapShapeLoadState.Error
+            }
     }
-    return shapes
+    return shapeLoadState
+}
+
+private fun trafficMapInitialShapeLoadState(): TrafficMapShapeLoadState =
+    TrafficMapCountryShapeCache.current().toTrafficMapShapeLoadState(loadingWhenEmpty = true)
+
+private fun List<TrafficMapCountryShape>.toTrafficMapShapeLoadState(
+    loadingWhenEmpty: Boolean = false,
+): TrafficMapShapeLoadState =
+    when {
+        isNotEmpty() -> TrafficMapShapeLoadState.Ready(this)
+        loadingWhenEmpty -> TrafficMapShapeLoadState.Loading
+        else -> TrafficMapShapeLoadState.Error
+    }
+
+private sealed interface TrafficMapShapeLoadState {
+    data object Loading : TrafficMapShapeLoadState
+
+    data class Ready(val shapes: List<TrafficMapCountryShape>) : TrafficMapShapeLoadState
+
+    data object Error : TrafficMapShapeLoadState
 }
 
 internal suspend fun prewarmTrafficMapCountryShapes(context: Context): Int {
@@ -2997,7 +3084,15 @@ private fun TrafficMapEmptySummary(
             overflow = TextOverflow.Ellipsis,
         )
         Text(
-            text = helper ?: stringResource(R.string.traffic_map_waiting_connections_helper),
+            text =
+                helper
+                    ?: stringResource(
+                        if (state.isAvailable) {
+                            R.string.traffic_map_waiting_connections_helper
+                        } else {
+                            R.string.traffic_map_live_requires_firewall_helper
+                        },
+                    ),
             style = MaterialTheme.typography.labelSmall.copy(
                 fontSize = 9.sp,
                 lineHeight = 11.sp,
@@ -3159,11 +3254,12 @@ private fun trafficMapSampleWindowLabel(rawLabel: String): String =
         "Live" -> stringResource(R.string.traffic_map_status_live)
         "Live, last 3s" -> stringResource(R.string.traffic_map_status_live_recent)
         "Stale" -> stringResource(R.string.traffic_map_status_stale)
-        "No active connections" -> stringResource(R.string.traffic_map_waiting_connections)
+        "Waiting", "No active connections" -> stringResource(R.string.traffic_map_status_waiting)
+        "Unavailable" -> stringResource(R.string.traffic_map_status_unavailable)
         "Last 5 min" -> stringResource(R.string.traffic_map_period_five_min_window)
         "Session" -> stringResource(R.string.traffic_map_period_session_window)
         "Last 24h" -> stringResource(R.string.traffic_map_period_day_24_window)
-        else -> rawLabel.takeIf(String::isNotBlank) ?: stringResource(R.string.traffic_map_waiting_connections)
+        else -> rawLabel.takeIf(String::isNotBlank) ?: stringResource(R.string.traffic_map_status_waiting)
     }
 
 @Composable

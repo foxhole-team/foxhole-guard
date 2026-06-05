@@ -181,10 +181,13 @@ class TrafficMapStylingTest {
                 java.io.File("../app/src/main/kotlin/com/foxhole/beta/ui/TrafficMapDashboardCard.kt"),
             ).first { file -> file.isFile }.readText()
         val shapeLoadBlock =
-            source.substringAfter("private fun rememberTrafficMapCountryShapes()")
+            source.substringAfter("private fun rememberTrafficMapCountryShapes(): TrafficMapShapeLoadState")
                 .substringBefore("internal suspend fun prewarmTrafficMapCountryShapes")
 
         assertFalse(shapeLoadBlock.contains("delay("))
+        assertTrue(shapeLoadBlock.contains("TrafficMapShapeLoadState.Loading"))
+        assertTrue(shapeLoadBlock.contains("TrafficMapShapeLoadState.Error"))
+        assertTrue(shapeLoadBlock.contains("catch (error: IOException)"))
         assertFalse(source.contains("TRAFFIC_MAP_COUNTRY_SHAPES_CARD_LOAD_DELAY_MS"))
     }
 
@@ -298,9 +301,20 @@ class TrafficMapStylingTest {
         assertFalse(cardBlock.contains("remember { TrafficMapUiState() }"))
         assertTrue(cardBlock.contains("rememberTrafficMapHeavyContentReady(contentReady && !mapDisabledForPower)"))
         assertTrue(cardBlock.contains("if (heavyContentReady)"))
-        assertTrue(cardBlock.contains("val countryShapesLoading = heavyContentReady && countryShapes.isEmpty()"))
+        assertTrue(
+            cardBlock.contains(
+                "val countryShapesLoading = heavyContentReady && shapeLoadState is TrafficMapShapeLoadState.Loading",
+            ),
+        )
+        assertTrue(
+            cardBlock.contains(
+                "val countryShapesError = heavyContentReady && shapeLoadState is TrafficMapShapeLoadState.Error",
+            ),
+        )
+        assertTrue(cardBlock.contains("} else if (countryShapesError)"))
         assertTrue(cardBlock.contains("} else if (!heavyContentReady || countryShapesLoading)"))
         assertTrue(cardBlock.contains("TrafficMapCanvasLoadingBlock"))
+        assertTrue(cardBlock.contains("home_traffic_world_map_error"))
         assertTrue(source.contains("mutableStateOf(enabled && TrafficMapCountryShapeCache.current().isNotEmpty())"))
         assertTrue(source.contains("if (TrafficMapCountryShapeCache.current().isNotEmpty())"))
         assertTrue(source.contains("TRAFFIC_MAP_HEAVY_CONTENT_SETTLE_DELAY_MS = 0L"))
@@ -345,7 +359,7 @@ class TrafficMapStylingTest {
     }
 
     @Test
-    fun `traffic map empty state copy reports no active connections`() {
+    fun `traffic map empty state copy separates unavailable waiting and loading`() {
         val englishStrings =
             listOf(
                 java.io.File("src/main/res/values/strings.xml"),
@@ -358,10 +372,38 @@ class TrafficMapStylingTest {
                 java.io.File("app/src/main/res/values-ru/strings.xml"),
                 java.io.File("../app/src/main/res/values-ru/strings.xml"),
             ).first { file -> file.isFile }.readText()
+        val mapSource =
+            listOf(
+                java.io.File("src/main/kotlin/com/foxhole/beta/ui/TrafficMapDashboardCard.kt"),
+                java.io.File("app/src/main/kotlin/com/foxhole/beta/ui/TrafficMapDashboardCard.kt"),
+                java.io.File("../app/src/main/kotlin/com/foxhole/beta/ui/TrafficMapDashboardCard.kt"),
+            ).first { file -> file.isFile }.readText()
+        val modelSource =
+            listOf(
+                java.io.File("src/main/kotlin/com/foxhole/beta/core/model/TrafficMapModels.kt"),
+                java.io.File("app/src/main/kotlin/com/foxhole/beta/core/model/TrafficMapModels.kt"),
+                java.io.File("../app/src/main/kotlin/com/foxhole/beta/core/model/TrafficMapModels.kt"),
+            ).first { file -> file.isFile }.readText()
+        val repositorySource =
+            listOf(
+                java.io.File("src/main/kotlin/com/foxhole/beta/core/traffic/TrafficMapRepository.kt"),
+                java.io.File("app/src/main/kotlin/com/foxhole/beta/core/traffic/TrafficMapRepository.kt"),
+                java.io.File("../app/src/main/kotlin/com/foxhole/beta/core/traffic/TrafficMapRepository.kt"),
+            ).first { file -> file.isFile }.readText()
 
-        assertTrue(englishStrings.contains("<string name=\"traffic_map_live_requires_firewall\">No active connections</string>"))
+        assertTrue(
+            englishStrings.contains(
+                "<string name=\"traffic_map_live_requires_firewall\">Traffic map unavailable</string>",
+            ),
+        )
+        assertTrue(englishStrings.contains("traffic_map_live_requires_firewall_helper"))
         assertTrue(englishStrings.contains("<string name=\"traffic_map_waiting_connections\">No active connections</string>"))
         assertTrue(englishStrings.contains("Start VPN or enable local guard"))
+        assertTrue(englishStrings.contains("<string name=\"traffic_map_loading\">Loading traffic map</string>"))
+        assertTrue(englishStrings.contains("<string name=\"traffic_map_shape_error\">Map data unavailable</string>"))
+        assertTrue(englishStrings.contains("traffic_map_shape_error_helper"))
+        assertTrue(englishStrings.contains("<string name=\"traffic_map_status_waiting\">Waiting</string>"))
+        assertTrue(englishStrings.contains("<string name=\"traffic_map_status_unavailable\">Unavailable</string>"))
         assertTrue(englishStrings.contains("<string name=\"traffic_map_route_header\">Route</string>"))
         assertTrue(englishStrings.contains("<string name=\"traffic_map_top_countries_header\">Top countries</string>"))
         assertTrue(
@@ -369,8 +411,18 @@ class TrafficMapStylingTest {
                 "<string name=\"traffic_map_open_details\">Open traffic map details</string>",
             ),
         )
-        assertTrue(russianStrings.contains("<string name=\"traffic_map_live_requires_firewall\">Нет активных подключений</string>"))
+        assertTrue(
+            russianStrings.contains(
+                "<string name=\"traffic_map_live_requires_firewall\">Карта трафика недоступна</string>",
+            ),
+        )
+        assertTrue(russianStrings.contains("traffic_map_live_requires_firewall_helper"))
         assertTrue(russianStrings.contains("<string name=\"traffic_map_waiting_connections\">Нет активных подключений</string>"))
+        assertTrue(russianStrings.contains("<string name=\"traffic_map_loading\">Загрузка карты трафика</string>"))
+        assertTrue(russianStrings.contains("<string name=\"traffic_map_shape_error\">Данные карты недоступны</string>"))
+        assertTrue(russianStrings.contains("traffic_map_shape_error_helper"))
+        assertTrue(russianStrings.contains("<string name=\"traffic_map_status_waiting\">Ожидание</string>"))
+        assertTrue(russianStrings.contains("<string name=\"traffic_map_status_unavailable\">Недоступно</string>"))
         assertTrue(russianStrings.contains("<string name=\"traffic_map_route_header\">Маршрут</string>"))
         assertTrue(russianStrings.contains("<string name=\"traffic_map_top_countries_header\">Топ стран</string>"))
         assertTrue(
@@ -380,6 +432,16 @@ class TrafficMapStylingTest {
         )
         assertFalse(englishStrings.contains("Waiting for active firewall"))
         assertFalse(russianStrings.contains("Ожидание активного фаервола"))
+        assertTrue(mapSource.contains("R.string.traffic_map_live_requires_firewall_helper"))
+        assertTrue(mapSource.contains("R.string.traffic_map_status_waiting"))
+        assertTrue(mapSource.contains("R.string.traffic_map_status_unavailable"))
+        assertTrue(mapSource.contains("contentDescription = loadingDescription"))
+        assertTrue(mapSource.contains("TrafficMapShapeErrorBlock"))
+        assertTrue(mapSource.contains("R.string.traffic_map_shape_error"))
+        assertTrue(mapSource.contains("R.string.traffic_map_shape_error_helper"))
+        assertTrue(modelSource.contains("val sampleWindowLabel: String = \"Waiting\""))
+        assertTrue(repositorySource.contains("TRAFFIC_MAP_STATUS_WAITING_LABEL"))
+        assertTrue(repositorySource.contains("TRAFFIC_MAP_STATUS_UNAVAILABLE_LABEL"))
     }
 
     @Test
