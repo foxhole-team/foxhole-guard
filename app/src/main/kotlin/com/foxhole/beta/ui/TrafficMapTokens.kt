@@ -6,4 +6,7 @@ internal object TrafficMapTokens {
     const val MarkerCollisionMaxAttempts = 18
     const val TorRouteDashDp = 7f
     const val TorRouteGapDp = 4f
+    const val SmallCountryCalloutMaxAreaPx = 46f
+    const val SmallCountryCalloutRadiusDp = 4.5f
+    const val SmallCountryCalloutStrokeDp = 1.2f
 }

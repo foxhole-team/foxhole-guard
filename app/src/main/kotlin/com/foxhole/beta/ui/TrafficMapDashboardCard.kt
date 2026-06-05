@@ -100,6 +100,8 @@ import com.foxhole.beta.core.model.TrafficMapUiState
 import com.foxhole.beta.core.traffic.TRAFFIC_MAP_COUNTRY_SHAPES_ASSET
 import com.foxhole.beta.core.traffic.TrafficMapCountryShape
 import com.foxhole.beta.core.traffic.TrafficMapCountryShapeAssetParser
+import com.foxhole.beta.core.traffic.projectedCalloutAnchor
+import com.foxhole.beta.core.traffic.requiresProjectedCallout
 import com.foxhole.beta.ui.theme.LocalFoxholeDarkTheme
 import com.foxhole.beta.ui.theme.LocalFoxholeSemanticColors
 import kotlinx.coroutines.CoroutineDispatcher
@@ -984,7 +986,15 @@ private fun TrafficMapCanvas(
                 val phoneHomeRadius = 0.65.dp.toPx()
                 val torRouteDash = TrafficMapTokens.TorRouteDashDp.dp.toPx()
                 val torRouteGap = TrafficMapTokens.TorRouteGapDp.dp.toPx()
+                val smallCountryCalloutRadius = TrafficMapTokens.SmallCountryCalloutRadiusDp.dp.toPx()
+                val smallCountryCalloutStroke = TrafficMapTokens.SmallCountryCalloutStrokeDp.dp.toPx()
                 val origin = project(originLat, originLon, viewport)
+                val smallCountryCallouts =
+                    trafficMapSmallCountryCallouts(
+                        shapes = mapCountryShapes,
+                        highlightedCountries = state.highlightedCountries,
+                        viewport = viewport,
+                    )
                 val markerLayout =
                     resolveTrafficMapMarkerPlacements(
                         markers =
@@ -1134,6 +1144,19 @@ private fun TrafficMapCanvas(
                                     width = viewport.size.width.roundToInt().coerceAtLeast(1),
                                     height = viewport.size.height.roundToInt().coerceAtLeast(1),
                                 ),
+                        )
+                    }
+                    smallCountryCallouts.forEach { callout ->
+                        drawCircle(
+                            color = colors.routeHalo.copy(alpha = 0.78f),
+                            radius = smallCountryCalloutRadius + smallCountryCalloutStroke,
+                            center = callout.offset,
+                        )
+                        drawCircle(
+                            color = colors.countryDestinationHighlight.copy(alpha = 0.92f),
+                            radius = smallCountryCalloutRadius,
+                            center = callout.offset,
+                            style = Stroke(width = smallCountryCalloutStroke),
                         )
                     }
 
@@ -1502,6 +1525,11 @@ private data class TrafficMapMarkerHitTarget(
     val offset: Offset,
 )
 
+private data class TrafficMapSmallCountryCallout(
+    val countryCode: String,
+    val offset: Offset,
+)
+
 internal enum class TrafficMapDetailSort {
     TOTAL,
     SESSIONS,
@@ -1701,6 +1729,42 @@ private fun trafficMapMarkerHitTargets(
             )
         }
     }
+}
+
+private fun trafficMapSmallCountryCallouts(
+    shapes: List<TrafficMapCountryShape>,
+    highlightedCountries: Set<String>,
+    viewport: TrafficMapViewport,
+): List<TrafficMapSmallCountryCallout> {
+    if (highlightedCountries.isEmpty()) {
+        return emptyList()
+    }
+    val normalizedHighlightedCountries =
+        highlightedCountries
+            .map { countryCode -> countryCode.uppercase(Locale.US) }
+            .toSet()
+    return shapes
+        .asSequence()
+        .mapNotNull { shape ->
+            val countryCode = shape.countryCode.uppercase(Locale.US)
+            if (
+                countryCode !in normalizedHighlightedCountries ||
+                !shape.requiresProjectedCallout(
+                    widthPx = viewport.size.width.toDouble(),
+                    heightPx = viewport.size.height.toDouble(),
+                    maxProjectedAreaPx = TrafficMapTokens.SmallCountryCalloutMaxAreaPx.toDouble(),
+                )
+            ) {
+                null
+            } else {
+                val anchor = shape.projectedCalloutAnchor()
+                TrafficMapSmallCountryCallout(
+                    countryCode = countryCode,
+                    offset = project(lat = anchor.lat, lon = anchor.lon, viewport = viewport),
+                )
+            }
+        }
+        .toList()
 }
 
 private fun trafficMapMarkerProjections(

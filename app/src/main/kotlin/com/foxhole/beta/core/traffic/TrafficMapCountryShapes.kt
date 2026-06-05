@@ -600,6 +600,43 @@ fun TrafficMapCountryShape.visualCentroid(): TrafficMapGeoPoint {
     return trafficMapPolygonCentroid(largestRing)
 }
 
+internal fun TrafficMapCountryShape.projectedCalloutAnchor(): TrafficMapGeoPoint =
+    TrafficMapCountryAnchorOverrides[countryCode.uppercase(Locale.US)] ?: visualCentroid()
+
+internal fun TrafficMapCountryShape.projectedAreaPixels(
+    widthPx: Double,
+    heightPx: Double,
+    minLat: Double = TRAFFIC_MAP_PROJECTED_MIN_LAT,
+    maxLat: Double = TRAFFIC_MAP_PROJECTED_MAX_LAT,
+): Double {
+    val latRange = maxLat - minLat
+    if (widthPx <= 0.0 || heightPx <= 0.0 || latRange <= 0.0) {
+        return 0.0
+    }
+    return rings
+        .asSequence()
+        .map(::normalizeTrafficMapRingLongitudes)
+        .filter { ring -> ring.size >= TrafficMapVisualMinRingPoints }
+        .sumOf { ring ->
+            trafficMapProjectedRingArea(
+                ring = ring,
+                widthPx = widthPx,
+                heightPx = heightPx,
+                maxLat = maxLat,
+                latRange = latRange,
+            )
+        }
+}
+
+internal fun TrafficMapCountryShape.requiresProjectedCallout(
+    widthPx: Double,
+    heightPx: Double,
+    maxProjectedAreaPx: Double,
+): Boolean {
+    val area = projectedAreaPixels(widthPx = widthPx, heightPx = heightPx)
+    return area > 0.0 && area < maxProjectedAreaPx
+}
+
 internal fun TrafficMapCountryShape.toTrafficMapVisualShape(
     minRelativeRingArea: Double = TrafficMapVisualMinRelativeRingArea,
     minAbsoluteRingArea: Double = TrafficMapVisualMinAbsoluteRingArea,
@@ -665,6 +702,38 @@ internal fun trafficMapRingArea(ring: List<TrafficMapGeoPoint>): Double {
     }
     return abs(area) / 2.0
 }
+
+private fun trafficMapProjectedRingArea(
+    ring: List<TrafficMapGeoPoint>,
+    widthPx: Double,
+    heightPx: Double,
+    maxLat: Double,
+    latRange: Double,
+): Double {
+    var area = 0.0
+    ring.indices.forEach { index ->
+        val current = ring[index].projectedTrafficMapPoint(widthPx, heightPx, maxLat, latRange)
+        val next = ring[(index + 1) % ring.size].projectedTrafficMapPoint(widthPx, heightPx, maxLat, latRange)
+        area += current.x * next.y - next.x * current.y
+    }
+    return abs(area) / 2.0
+}
+
+private data class TrafficMapProjectedPoint(
+    val x: Double,
+    val y: Double,
+)
+
+private fun TrafficMapGeoPoint.projectedTrafficMapPoint(
+    widthPx: Double,
+    heightPx: Double,
+    maxLat: Double,
+    latRange: Double,
+): TrafficMapProjectedPoint =
+    TrafficMapProjectedPoint(
+        x = ((lon + HalfLongitudeDegrees) / FullLongitudeDegrees) * widthPx,
+        y = ((maxLat - lat) / latRange) * heightPx,
+    )
 
 internal fun simplifyTrafficMapRing(
     ring: List<TrafficMapGeoPoint>,
@@ -793,6 +862,8 @@ private const val TrafficMapVisualMinRelativeRingArea = 0.02
 private const val TrafficMapVisualMinAbsoluteRingArea = 0.5
 private const val TRAFFIC_MAP_CENTROID_AREA_EPSILON = 0.000001
 private const val MAX_TRACE_SECTION_NAME_LENGTH = 127
+private const val TRAFFIC_MAP_PROJECTED_MIN_LAT = -55.0
+private const val TRAFFIC_MAP_PROJECTED_MAX_LAT = 85.0
 
 @Suppress("TopLevelPropertyNaming")
 private const val TrafficMapVisualMinShapeArea = 1.0

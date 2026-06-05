@@ -94,6 +94,53 @@ class TrafficMapCountryGeoJsonParserTest {
     }
 
     @Test
+    fun `small country eligibility uses projected screen area`() {
+        val tinyShape =
+            TrafficMapCountryShape(
+                countryCode = "SG",
+                rings =
+                    listOf(
+                        listOf(
+                            TrafficMapGeoPoint(lat = 1.30, lon = 103.80),
+                            TrafficMapGeoPoint(lat = 1.30, lon = 103.82),
+                            TrafficMapGeoPoint(lat = 1.32, lon = 103.82),
+                            TrafficMapGeoPoint(lat = 1.30, lon = 103.80),
+                        ),
+                    ),
+            )
+        val largeShape =
+            TrafficMapCountryShape(
+                countryCode = "DE",
+                rings =
+                    listOf(
+                        listOf(
+                            TrafficMapGeoPoint(lat = 47.0, lon = 5.0),
+                            TrafficMapGeoPoint(lat = 47.0, lon = 15.0),
+                            TrafficMapGeoPoint(lat = 55.0, lon = 15.0),
+                            TrafficMapGeoPoint(lat = 47.0, lon = 5.0),
+                        ),
+                    ),
+            )
+
+        assertTrue(tinyShape.projectedAreaPixels(widthPx = 600.0, heightPx = 300.0) < 46.0)
+        assertTrue(
+            tinyShape.requiresProjectedCallout(
+                widthPx = 600.0,
+                heightPx = 300.0,
+                maxProjectedAreaPx = 46.0,
+            ),
+        )
+        assertFalse(
+            largeShape.requiresProjectedCallout(
+                widthPx = 600.0,
+                heightPx = 300.0,
+                maxProjectedAreaPx = 46.0,
+            ),
+        )
+        assertEquals(TrafficMapGeoPoint(lat = 1.3521, lon = 103.8198), tinyShape.projectedCalloutAnchor())
+    }
+
+    @Test
     fun `parses preprocessed country shape asset with typed dto path`() {
         val raw =
             """
