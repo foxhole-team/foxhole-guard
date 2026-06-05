@@ -1,6 +1,7 @@
 package com.foxhole.beta.ui
 
 import com.foxhole.beta.core.model.TrafficMapPoint
+import com.foxhole.beta.core.model.TrafficMapPointRole
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -46,7 +47,7 @@ class TrafficMapDetailControlsTest {
     }
 
     @Test
-    fun `detail destinations apply heavy filter and range after sorting`() {
+    fun `detail destinations apply role filters and range after sorting`() {
         val points =
             (1..12).map { index ->
                 trafficMapPoint(
@@ -55,23 +56,97 @@ class TrafficMapDetailControlsTest {
                     bytes = index * 512_000L,
                     connections = index,
                 )
-            }
+            } +
+                listOf(
+                    trafficMapPoint(
+                        "NL",
+                        "Netherlands",
+                        bytes = 256_000L,
+                        connections = 1,
+                        role = TrafficMapPointRole.VPN_ROUTE,
+                    ),
+                    trafficMapPoint(
+                        "DE",
+                        "Germany",
+                        bytes = 128_000L,
+                        connections = 1,
+                        role = TrafficMapPointRole.TOR_EXIT,
+                    ),
+                )
 
-        val heavyTopTen =
+        val directTopTen =
             trafficMapDetailDestinations(
                 destinations = points,
                 sort = TrafficMapDetailSort.TOTAL,
-                filter = TrafficMapDetailFilter.HEAVY,
+                filter = TrafficMapDetailFilter.DIRECT,
                 range = TrafficMapDetailRange.TOP_10,
             )
 
-        assertEquals(10, heavyTopTen.size)
-        assertEquals("C12", heavyTopTen.first().countryCode)
-        assertTrue(heavyTopTen.all { point -> point.bytes >= 1_048_576L })
+        assertEquals(10, directTopTen.size)
+        assertEquals("C12", directTopTen.first().countryCode)
+        assertTrue(directTopTen.all { point -> point.role == TrafficMapPointRole.DESTINATION })
+        assertEquals(
+            listOf("NL"),
+            trafficMapDetailDestinations(
+                destinations = points,
+                sort = TrafficMapDetailSort.TOTAL,
+                filter = TrafficMapDetailFilter.VPN,
+                range = TrafficMapDetailRange.ALL,
+            ).map(TrafficMapPoint::countryCode),
+        )
+        assertEquals(
+            listOf("DE"),
+            trafficMapDetailDestinations(
+                destinations = points,
+                sort = TrafficMapDetailSort.TOTAL,
+                filter = TrafficMapDetailFilter.TOR,
+                range = TrafficMapDetailRange.ALL,
+            ).map(TrafficMapPoint::countryCode),
+        )
+        assertEquals(
+            listOf("C5"),
+            trafficMapDetailDestinations(
+                destinations = points,
+                sort = TrafficMapDetailSort.TOTAL,
+                filter = TrafficMapDetailFilter.NEW,
+                range = TrafficMapDetailRange.ALL,
+                newCountryCodes = setOf("C5"),
+            ).map(TrafficMapPoint::countryCode),
+        )
     }
 
     @Test
-    fun `unknown country row follows active and heavy filters`() {
+    fun `detail points add vpn and tor route rows to expanded table`() {
+        val destination = trafficMapPoint("FR", "France", bytes = 4_000L, connections = 4)
+        val vpn =
+            trafficMapPoint(
+                "NL",
+                "Netherlands",
+                bytes = 2_000L,
+                connections = 1,
+                role = TrafficMapPointRole.VPN_ROUTE,
+            )
+        val tor =
+            trafficMapPoint(
+                "DE",
+                "Germany",
+                bytes = 1_000L,
+                connections = 1,
+                role = TrafficMapPointRole.TOR_EXIT,
+            )
+
+        assertEquals(
+            listOf(TrafficMapPointRole.DESTINATION, TrafficMapPointRole.VPN_ROUTE, TrafficMapPointRole.TOR_EXIT),
+            trafficMapDetailPoints(
+                destinations = listOf(destination),
+                vpnRoute = vpn,
+                torExit = tor,
+            ).map(TrafficMapPoint::role),
+        )
+    }
+
+    @Test
+    fun `unknown country row follows all and direct filters only`() {
         assertTrue(
             trafficMapDetailShowUnknownCountry(
                 unknownCountryBytes = 256L,
@@ -83,14 +158,14 @@ class TrafficMapDetailControlsTest {
             trafficMapDetailShowUnknownCountry(
                 unknownCountryBytes = 256L,
                 unknownCountryConnections = 0,
-                filter = TrafficMapDetailFilter.ACTIVE,
+                filter = TrafficMapDetailFilter.VPN,
             ),
         )
         assertTrue(
             trafficMapDetailShowUnknownCountry(
-                unknownCountryBytes = 2_048_000L,
+                unknownCountryBytes = 256L,
                 unknownCountryConnections = 0,
-                filter = TrafficMapDetailFilter.HEAVY,
+                filter = TrafficMapDetailFilter.DIRECT,
             ),
         )
     }
@@ -101,6 +176,7 @@ private fun trafficMapPoint(
     label: String,
     bytes: Long,
     connections: Int,
+    role: TrafficMapPointRole = TrafficMapPointRole.DESTINATION,
 ): TrafficMapPoint =
     TrafficMapPoint(
         countryCode = countryCode,
@@ -109,4 +185,5 @@ private fun trafficMapPoint(
         lon = 0.0,
         bytes = bytes,
         connections = connections,
+        role = role,
     )

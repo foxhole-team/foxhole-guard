@@ -48,8 +48,10 @@
     <string name="traffic_map_range_all">Все</string>
     <string name="traffic_map_filter_label">Фильтр</string>
     <string name="traffic_map_filter_all">Все</string>
-    <string name="traffic_map_filter_active">Активные</string>
-    <string name="traffic_map_filter_heavy">Тяжелые</string>
+    <string name="traffic_map_filter_vpn">VPN</string>
+    <string name="traffic_map_filter_tor">TOR</string>
+    <string name="traffic_map_filter_direct">Напр.</string>
+    <string name="traffic_map_filter_new">Новые</string>
     <string name="traffic_map_power_save_disabled">Карта отключена для уменьшения энергопотребления</string>
     <string name="usage_access_consent_title">Разрешить статистику по приложениям?</string>
     <string name="usage_access_consent_body">FoxHole будет локально читать статистику сетевого трафика по приложениям, чтобы показывать per-app traffic, аномалии и помогать настраивать маршрутизацию. Данные хранятся на этом устройстве в зашифрованной локальной базе и не отправляются на серверы FoxHole. Это можно отключить и удалить в настройках.</string>

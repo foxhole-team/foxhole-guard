@@ -445,35 +445,47 @@ private fun TrafficMapDetailCountryTable(
     var sort by rememberSaveable { mutableStateOf(TrafficMapDetailSort.TOTAL) }
     var range by rememberSaveable { mutableStateOf(TrafficMapDetailRange.TOP_30) }
     var filter by rememberSaveable { mutableStateOf(TrafficMapDetailFilter.ALL) }
-    val filteredDestinations =
-        remember(state.destinations, sort, filter) {
-            trafficMapDetailDestinations(
+    val detailPoints =
+        remember(state.destinations, state.vpnRoute, state.torExit) {
+            trafficMapDetailPoints(
                 destinations = state.destinations,
+                vpnRoute = state.vpnRoute,
+                torExit = state.torExit,
+            )
+        }
+    val newCountryCodes =
+        remember(state.countryVisuals) {
+            trafficMapNewCountryCodes(state.countryVisuals)
+        }
+    val filteredDestinations =
+        remember(detailPoints, sort, filter, newCountryCodes) {
+            trafficMapDetailDestinations(
+                destinations = detailPoints,
                 sort = sort,
                 filter = filter,
                 range = TrafficMapDetailRange.ALL,
+                newCountryCodes = newCountryCodes,
             )
         }
     val destinations =
-        remember(filteredDestinations, range) {
+        remember(filteredDestinations, range, newCountryCodes) {
             trafficMapDetailDestinations(
                 destinations = filteredDestinations,
                 sort = TrafficMapDetailSort.COUNTRY,
                 filter = TrafficMapDetailFilter.ALL,
                 range = range,
                 alreadySorted = true,
+                newCountryCodes = newCountryCodes,
             )
         }
     val hiddenCountries =
         remember(filteredDestinations, destinations, state.hiddenCountryCount, filter) {
-            val hiddenByRange = (filteredDestinations.size - destinations.size).coerceAtLeast(0)
-            val hiddenByRepository =
-                if (filter == TrafficMapDetailFilter.ALL) {
-                    state.hiddenCountryCount
-                } else {
-                    0
-                }
-            (hiddenByRange + hiddenByRepository).coerceAtLeast(0)
+            trafficMapDetailHiddenCountries(
+                filteredCount = filteredDestinations.size,
+                visibleCount = destinations.size,
+                repositoryHiddenCount = state.hiddenCountryCount,
+                filter = filter,
+            )
         }
     val showUnknownCountry =
         remember(state.unknownCountryBytes, state.unknownCountryConnections, filter) {
@@ -507,7 +519,7 @@ private fun TrafficMapDetailCountryTable(
         } else {
             destinations.forEach { point ->
                 TrafficMapDetailDestinationRow(
-                    country = "${countryEmoji(point.countryCode)} ${point.label}",
+                    country = trafficMapDetailCountryLabel(point),
                     sessions = point.connections,
                     total = formatTrafficMapLegendBytes(point.bytes),
                     colors = colors,
@@ -604,14 +616,24 @@ private fun TrafficMapDetailControls(
                 onClick = { onFilterChange(TrafficMapDetailFilter.ALL) },
             )
             TrafficMapDetailModeButton(
-                text = stringResource(R.string.traffic_map_filter_active),
-                selected = filter == TrafficMapDetailFilter.ACTIVE,
-                onClick = { onFilterChange(TrafficMapDetailFilter.ACTIVE) },
+                text = stringResource(R.string.traffic_map_filter_vpn),
+                selected = filter == TrafficMapDetailFilter.VPN,
+                onClick = { onFilterChange(TrafficMapDetailFilter.VPN) },
             )
             TrafficMapDetailModeButton(
-                text = stringResource(R.string.traffic_map_filter_heavy),
-                selected = filter == TrafficMapDetailFilter.HEAVY,
-                onClick = { onFilterChange(TrafficMapDetailFilter.HEAVY) },
+                text = stringResource(R.string.traffic_map_filter_tor),
+                selected = filter == TrafficMapDetailFilter.TOR,
+                onClick = { onFilterChange(TrafficMapDetailFilter.TOR) },
+            )
+            TrafficMapDetailModeButton(
+                text = stringResource(R.string.traffic_map_filter_direct),
+                selected = filter == TrafficMapDetailFilter.DIRECT,
+                onClick = { onFilterChange(TrafficMapDetailFilter.DIRECT) },
+            )
+            TrafficMapDetailModeButton(
+                text = stringResource(R.string.traffic_map_filter_new),
+                selected = filter == TrafficMapDetailFilter.NEW,
+                onClick = { onFilterChange(TrafficMapDetailFilter.NEW) },
             )
         }
     }
@@ -681,6 +703,18 @@ private fun RowScope.TrafficMapDetailModeButton(
             overflow = TextOverflow.Ellipsis,
         )
     }
+}
+
+@Composable
+private fun trafficMapDetailCountryLabel(point: TrafficMapPoint): String {
+    val baseLabel = "${countryEmoji(point.countryCode)} ${point.label}"
+    val roleLabel =
+        when (point.role) {
+            TrafficMapPointRole.DESTINATION -> null
+            TrafficMapPointRole.VPN_ROUTE -> stringResource(R.string.traffic_map_filter_vpn)
+            TrafficMapPointRole.TOR_EXIT -> stringResource(R.string.traffic_map_filter_tor)
+        }
+    return roleLabel?.let { label -> "$baseLabel · $label" } ?: baseLabel
 }
 
 @Composable
@@ -1571,8 +1605,40 @@ internal enum class TrafficMapDetailRange(val limit: Int?) {
 
 internal enum class TrafficMapDetailFilter {
     ALL,
-    ACTIVE,
-    HEAVY,
+    VPN,
+    TOR,
+    DIRECT,
+    NEW,
+}
+
+internal fun trafficMapDetailPoints(
+    destinations: List<TrafficMapPoint>,
+    vpnRoute: TrafficMapPoint?,
+    torExit: TrafficMapPoint?,
+): List<TrafficMapPoint> {
+    val routePoints = listOfNotNull(vpnRoute, torExit)
+    return destinations + routePoints
+}
+
+internal fun trafficMapNewCountryCodes(countryVisuals: List<TrafficMapCountryVisual>): Set<String> =
+    countryVisuals
+        .filter(TrafficMapCountryVisual::isNewCountry)
+        .mapTo(mutableSetOf(), TrafficMapCountryVisual::countryCode)
+
+internal fun trafficMapDetailHiddenCountries(
+    filteredCount: Int,
+    visibleCount: Int,
+    repositoryHiddenCount: Int,
+    filter: TrafficMapDetailFilter,
+): Int {
+    val hiddenByRange = (filteredCount - visibleCount).coerceAtLeast(0)
+    val hiddenByRepository =
+        if (filter == TrafficMapDetailFilter.ALL) {
+            repositoryHiddenCount
+        } else {
+            0
+        }
+    return (hiddenByRange + hiddenByRepository).coerceAtLeast(0)
 }
 
 internal fun trafficMapDetailDestinations(
@@ -1581,13 +1647,16 @@ internal fun trafficMapDetailDestinations(
     filter: TrafficMapDetailFilter,
     range: TrafficMapDetailRange,
     alreadySorted: Boolean = false,
+    newCountryCodes: Set<String> = emptySet(),
 ): List<TrafficMapPoint> {
     val filtered =
         destinations.filter { point ->
             when (filter) {
                 TrafficMapDetailFilter.ALL -> true
-                TrafficMapDetailFilter.ACTIVE -> point.connections > 0
-                TrafficMapDetailFilter.HEAVY -> point.bytes >= TRAFFIC_MAP_HEAVY_DESTINATION_BYTES
+                TrafficMapDetailFilter.VPN -> point.role == TrafficMapPointRole.VPN_ROUTE
+                TrafficMapDetailFilter.TOR -> point.role == TrafficMapPointRole.TOR_EXIT
+                TrafficMapDetailFilter.DIRECT -> point.role == TrafficMapPointRole.DESTINATION
+                TrafficMapDetailFilter.NEW -> point.countryCode in newCountryCodes
             }
         }
     val sorted =
@@ -1624,8 +1693,11 @@ internal fun trafficMapDetailShowUnknownCountry(
 ): Boolean =
     when (filter) {
         TrafficMapDetailFilter.ALL -> unknownCountryBytes > 0L || unknownCountryConnections > 0
-        TrafficMapDetailFilter.ACTIVE -> unknownCountryConnections > 0
-        TrafficMapDetailFilter.HEAVY -> unknownCountryBytes >= TRAFFIC_MAP_HEAVY_DESTINATION_BYTES
+        TrafficMapDetailFilter.DIRECT -> unknownCountryBytes > 0L || unknownCountryConnections > 0
+        TrafficMapDetailFilter.NEW,
+        TrafficMapDetailFilter.TOR,
+        TrafficMapDetailFilter.VPN,
+        -> false
     }
 
 internal data class DrawableTrafficMapEdge(
@@ -3162,7 +3234,6 @@ private const val TRAFFIC_MAP_MARKER_RAW_MATCH_TOLERANCE_PX = 0.5f
 private const val TRAFFIC_MAP_ORIGIN_MARKER_KEY = "origin"
 private const val TRAFFIC_MAP_VPN_ROUTE_MARKER_KEY = "route:vpn"
 private const val TRAFFIC_MAP_TOR_EXIT_MARKER_KEY = "route:tor"
-private const val TRAFFIC_MAP_HEAVY_DESTINATION_BYTES = 1_048_576L
 private const val TRAFFIC_MAP_TOR_ROUTE_DASH_FRAME_DIVISOR_NANOS = 16_666_667L
 private const val TRAFFIC_MAP_TOR_ROUTE_DASH_PHASE_STEPS = 11L
 private const val TRAFFIC_MAP_HEAVY_CONTENT_SETTLE_DELAY_MS = 0L
