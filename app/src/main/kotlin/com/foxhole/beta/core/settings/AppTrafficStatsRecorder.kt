@@ -17,6 +17,9 @@ class AppTrafficStatsRecorder(
     private var cachedWindows: List<AppTrafficWindow> = emptyList()
 
     suspend fun recordSnapshot(minDurationMs: Long = AppTrafficSampler.DEFAULT_SAMPLE_WINDOW_MS) {
+        if (!hasUsageAccess()) {
+            return
+        }
         anomalyRepository.recordAppTrafficWindows(sampleWindows(minDurationMs))
     }
 

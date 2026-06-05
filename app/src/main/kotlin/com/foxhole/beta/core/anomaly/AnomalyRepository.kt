@@ -60,7 +60,7 @@ class AnomalyRepository(
             emitAll(
                 settingsRepository.settings
                     .flatMapLatest { settings ->
-                        if (!settings.appTrafficStatsRuntimeEnabled()) {
+                        if (!appTrafficLocalStorageAllowed(settings)) {
                             flowOf(emptyList())
                         } else {
                             dao.observeRecentAppTrafficWindows(
@@ -121,12 +121,16 @@ class AnomalyRepository(
                 hourBucket = hourBucket,
                 limit = HISTORY_LIMIT,
             ).map(TrafficWindowEntity::toDomain)
+        val retainedAppWindows =
+            appWindows
+                .takeIf { appTrafficLocalStorageAllowed(settings) }
+                .orEmpty()
         val appHistories =
-            batchedAppHistories(appWindows)
+            batchedAppHistories(retainedAppWindows)
         val assessment =
             engine.evaluate(
                 current = window,
-                appWindows = appWindows,
+                appWindows = retainedAppWindows,
                 history = AnomalyHistory(
                     trafficWindows = history,
                     appWindowsByPackage = appHistories,
@@ -139,11 +143,11 @@ class AnomalyRepository(
             settings = settings.anomaly,
         )
         dao.insertTrafficWindow(TrafficWindowEntity.from(window))
-        if (appWindows.isNotEmpty()) {
-            dao.insertAppTrafficWindows(appWindows.map(AppTrafficWindowEntity::from))
+        if (retainedAppWindows.isNotEmpty()) {
+            dao.insertAppTrafficWindows(retainedAppWindows.map(AppTrafficWindowEntity::from))
         }
         baselineStore.updateTrafficBaseline(window, historyBeforeCurrent = history)
-        appWindows.forEach { appWindow ->
+        retainedAppWindows.forEach { appWindow ->
             baselineStore.updateAppBaseline(
                 window = appWindow,
                 profileId = window.profileId,
@@ -183,6 +187,9 @@ class AnomalyRepository(
 
     suspend fun recordAppTrafficWindows(windows: List<AppTrafficWindow>) {
         if (windows.isEmpty()) {
+            return
+        }
+        if (!appTrafficLocalStorageAllowed(settingsRepository.current())) {
             return
         }
         dao.insertAppTrafficWindows(windows.map(AppTrafficWindowEntity::from))
@@ -331,10 +338,11 @@ internal fun statisticsRetentionCutoff(
         StatisticsRetention.FOREVER -> 0L
     }
 
-private fun Settings.appTrafficStatsRuntimeEnabled(): Boolean =
-    statistics.enabled &&
-        statistics.appTrafficEnabled &&
-        appTrafficStatsEnabled
+internal fun appTrafficLocalStorageAllowed(settings: Settings): Boolean =
+    settings.statistics.enabled &&
+        settings.statistics.appTrafficEnabled &&
+        settings.appTrafficStatsEnabled &&
+        settings.appTrafficUsageAccessConsent
 
 private fun Settings.trafficWindowStatsRuntimeEnabled(): Boolean =
     statistics.enabled &&

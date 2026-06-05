@@ -69,6 +69,9 @@ class AppTrafficSampler(
 
     suspend fun sampleWindows(minDurationMs: Long = DEFAULT_SAMPLE_WINDOW_MS): List<AppTrafficWindow> =
         withContext(Dispatchers.IO) {
+            if (!hasUsageAccess()) {
+                return@withContext emptyList()
+            }
             val now = nowProvider()
             val startAt =
                 synchronized(SampleWatermarkLock) {
@@ -78,9 +81,6 @@ class AppTrafficSampler(
                     reservedStartAt
                 }
             val durationMs = (now - startAt).coerceAtLeast(1L)
-            if (!hasUsageAccess()) {
-                return@withContext emptyList()
-            }
             val manager = networkStatsManager
             val usageSummaryByUid =
                 manager
