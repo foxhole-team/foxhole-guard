@@ -2314,13 +2314,13 @@ internal fun dashboardProfileTitle(title: String): String = title
 @Suppress("CyclomaticComplexMethod", "LongMethod")
 @Composable
 internal fun HomeConnectionActions(
-    state: HomeRouteUiState,
+    state: DashboardActionsCardUiState,
     onToggleConnection: () -> Unit,
     onAutoConnect: () -> Unit,
     smartStartControlsEnabled: Boolean = true,
 ) {
     val activeProfile = state.activeProfile
-    val torOnlyStartAvailable = homeTorOnlyStartAvailable(state)
+    val torOnlyStartAvailable = state.torOnlyStartAvailable()
     val torOnlyRuntimeActive = state.hasTorOnlyRuntime()
     val showAutoConnectAction = smartStartControlsEnabled && shouldShowAutoConnectAction(activeProfile)
     val autoConnectRunning = state.autoConnect.running
@@ -2338,11 +2338,7 @@ internal fun HomeConnectionActions(
             smartStartAccent.copy(alpha = 0.46f)
         }
     val primaryAction =
-        if (autoConnectRunning || protocolRefreshRunning || state.reconnectInProgress) {
-            HomePrimaryAction.STOP
-        } else {
-            homePrimaryAction(state)
-        }
+        state.primaryAction()
     val primaryButtonColor =
         smartStartAccent
     val primaryButtonColors =
@@ -2412,7 +2408,7 @@ internal fun HomeConnectionActions(
                 } else if (torOnlyStartAvailable && !state.hasPrimaryConnectionRuntime()) {
                     stringResource(R.string.connect_tor)
                 } else {
-                    homeConnectionLabel(state)
+                    homeConnectionLabel(state.connection.state, state.reconnectRequired)
                 },
             )
         }
@@ -2448,7 +2444,7 @@ internal fun HomeConnectionActions(
                 } else if (torOnlyStartAvailable && !state.hasPrimaryConnectionRuntime()) {
                     stringResource(R.string.connect_tor)
                 } else {
-                    homeConnectionLabel(state)
+                    homeConnectionLabel(state.connection.state, state.reconnectRequired)
                 },
             )
         }

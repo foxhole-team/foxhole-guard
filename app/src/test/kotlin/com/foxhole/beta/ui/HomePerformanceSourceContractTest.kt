@@ -76,6 +76,104 @@ class HomePerformanceSourceContractTest {
     }
 
     @Test
+    fun `dashboard root collects scoped card state flows instead of full home route state`() {
+        val appSource = testSourceFile("FoxholeApp.kt").readText()
+        val homeRouteBlock =
+            appSource.substringAfter("composable(AppRoute.HOME)")
+                .substringBefore("composable(AppRoute.TRAFFIC_MAP_DETAIL)")
+
+        assertFalse(homeRouteBlock.contains("homeRouteState.collectAsStateWithLifecycle"))
+        listOf(
+            "dashboardLayoutState",
+            "dashboardHeaderState",
+            "dashboardProfileCardState",
+            "dashboardActionsCardState",
+            "dashboardNetworkCardState",
+            "dashboardTrafficCardState",
+            "dashboardMapCardState",
+            "dashboardDialogState",
+        ).forEach { flowName ->
+            assertTrue(homeRouteBlock.contains("viewModel.$flowName"))
+        }
+        assertTrue(homeRouteBlock.contains("viewModel::onActiveProfileAutoConnectExcludedOptionsChanged"))
+        assertFalse(homeRouteBlock.contains("state.activeProfile?.id"))
+    }
+
+    @Test
+    fun `dashboard screen accepts scoped flows and cards collect their own state`() {
+        val homeSource = testSourceFile("HomeScreen.kt").readText()
+        val homeSignature =
+            homeSource.substringAfter("internal fun HomeScreen(")
+                .substringBefore("snackbarHostState:")
+
+        assertFalse(homeSignature.contains("state: HomeRouteUiState"))
+        assertFalse(homeSignature.contains("trafficStateFlow"))
+        listOf(
+            "layoutStateFlow: StateFlow<DashboardLayoutUiState>",
+            "headerStateFlow: StateFlow<DashboardHeaderUiState>",
+            "profileCardStateFlow: StateFlow<DashboardProfileCardUiState>",
+            "actionsCardStateFlow: StateFlow<DashboardActionsCardUiState>",
+            "networkCardStateFlow: StateFlow<DashboardNetworkCardUiState>",
+            "trafficCardStateFlow: StateFlow<DashboardTrafficCardUiState>",
+            "mapCardStateFlow: StateFlow<DashboardMapCardUiState>",
+            "dialogStateFlow: StateFlow<DashboardDialogUiState>",
+        ).forEach { parameter ->
+            assertTrue(homeSignature.contains(parameter))
+        }
+        listOf(
+            "HomeDashboardHeaderItem(" to "val state by stateFlow.collectAsStateWithLifecycle()",
+            "HomeDashboardProfileCardItem(" to "val state by stateFlow.collectAsStateWithLifecycle()",
+            "HomeDashboardActionsCardItem(" to "val state by stateFlow.collectAsStateWithLifecycle()",
+            "HomeDashboardNetworkCardItem(" to "val state by stateFlow.collectAsStateWithLifecycle()",
+            "HomeDashboardTrafficCardItem(" to "val state by stateFlow.collectAsStateWithLifecycle()",
+        ).forEach { (functionName, collectionLine) ->
+            val block = homeSource.substringAfter(functionName)
+            assertTrue(block.contains(collectionLine))
+        }
+    }
+
+    @Test
+    fun `dashboard view model exposes scoped state flows for hot cards`() {
+        val viewModelSource = testSourceFile("HomeViewModel.kt").readText()
+        val dashboardFlowBlock =
+            viewModelSource.substringAfter("internal val dashboardLayoutState:")
+                .substringBefore("private val trafficMapRuntimeAvailable")
+
+        listOf(
+            "toDashboardLayoutUiState",
+            "toDashboardHeaderUiState",
+            "toDashboardProfileCardUiState",
+            "toDashboardActionsCardUiState",
+            "toDashboardNetworkCardUiState",
+            "toDashboardTrafficCardUiState",
+            "toDashboardMapCardUiState",
+            "DashboardDialogUiState",
+        ).forEach { builderName ->
+            assertTrue(dashboardFlowBlock.contains(builderName))
+        }
+        assertTrue(dashboardFlowBlock.contains("combine(\n            homeRouteState,\n            dashboardTraffic,"))
+        assertTrue(viewModelSource.contains("fun onActiveProfileAutoConnectExcludedOptionsChanged"))
+    }
+
+    @Test
+    fun `dashboard scoped state models are immutable`() {
+        val dashboardStateSource = testSourceFile("HomeDashboardUiState.kt").readText()
+
+        listOf(
+            "DashboardLayoutUiState",
+            "DashboardHeaderUiState",
+            "DashboardProfileCardUiState",
+            "DashboardActionsCardUiState",
+            "DashboardNetworkCardUiState",
+            "DashboardTrafficCardUiState",
+            "DashboardMapCardUiState",
+            "DashboardDialogUiState",
+        ).forEach { modelName ->
+            assertTrue(dashboardStateSource.contains("@Immutable\ninternal data class $modelName("))
+        }
+    }
+
+    @Test
     fun `network card model is not keyed by full route state`() {
         val homeSource = testSourceFile("HomeScreen.kt").readText()
         val networkModelBlock =
@@ -85,7 +183,7 @@ class HomePerformanceSourceContractTest {
         assertFalse(networkModelBlock.contains("remember(state,"))
         assertTrue(networkModelBlock.contains("state.connection"))
         assertTrue(networkModelBlock.contains("state.ipInfoLoading"))
-        assertTrue(networkModelBlock.contains("state.autoConnect.running"))
+        assertTrue(networkModelBlock.contains("state.autoConnectRunning"))
     }
 
     @Test

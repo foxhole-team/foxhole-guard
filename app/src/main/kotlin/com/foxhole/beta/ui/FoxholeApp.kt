@@ -386,10 +386,15 @@ fun FoxholeApp(
                     ) {
                         composable(AppRoute.HOME) {
                     NavigationTransitionTelemetryEffect(AppRoute.HOME, navigationTransitionTelemetry)
-                    val state by viewModel.homeRouteState.collectAsStateWithLifecycle()
                     HomeScreen(
-                        state = state,
-                        trafficStateFlow = viewModel.dashboardTraffic,
+                        layoutStateFlow = viewModel.dashboardLayoutState,
+                        headerStateFlow = viewModel.dashboardHeaderState,
+                        profileCardStateFlow = viewModel.dashboardProfileCardState,
+                        actionsCardStateFlow = viewModel.dashboardActionsCardState,
+                        networkCardStateFlow = viewModel.dashboardNetworkCardState,
+                        trafficCardStateFlow = viewModel.dashboardTrafficCardState,
+                        mapCardStateFlow = viewModel.dashboardMapCardState,
+                        dialogStateFlow = viewModel.dashboardDialogState,
                         trafficMapStateFlow = viewModel.trafficMapUiState,
                         snackbarHostState = snackbarHostState,
                         onImportFromClipboard = viewModel::onPasteFromClipboard,
@@ -417,14 +422,7 @@ fun FoxholeApp(
                         onOpenPrivacyRoute = { navigateToSettingsDetail(AppRoute.PRIVACY_ROUTE) },
                         onEnableDirectTorQuickStart = viewModel::onEnableDirectTorQuickStart,
                         onSelectActiveProtocolOptionRequested = viewModel::onSelectActiveProtocolOptionRequested,
-                        onUpdateAutoConnectExcludedOptions = { excludedIds ->
-                            state.activeProfile?.id?.let { profileId ->
-                                viewModel.onSmartProfileAutoConnectExcludedOptionsChanged(
-                                    profileId = profileId,
-                                    excludedOptionIds = excludedIds,
-                                )
-                            }
-                        },
+                        onUpdateAutoConnectExcludedOptions = viewModel::onActiveProfileAutoConnectExcludedOptionsChanged,
                         onRefreshSmartProfileMetrics = viewModel::refreshSmartProfileMetrics,
                         onCancelSmartProfileMetricsRefresh = viewModel::cancelSmartProfileMetricsRefresh,
                         onConfirmDisableTorForUdpProtocol = viewModel::confirmDisableTorForUdpProtocol,

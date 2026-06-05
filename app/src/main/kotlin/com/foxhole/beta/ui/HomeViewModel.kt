@@ -564,6 +564,104 @@ class HomeViewModel(
                 HomeRouteUiState(settings = initialSettings),
             )
 
+    internal val dashboardLayoutState: StateFlow<DashboardLayoutUiState> =
+        homeRouteState
+            .map(HomeRouteUiState::toDashboardLayoutUiState)
+            .distinctUntilChanged()
+            .flowOn(Dispatchers.Default)
+            .stateIn(
+                viewModelScope,
+                SharingStarted.WhileSubscribed(5_000),
+                HomeRouteUiState(settings = initialSettings).toDashboardLayoutUiState(),
+            )
+
+    internal val dashboardHeaderState: StateFlow<DashboardHeaderUiState> =
+        homeRouteState
+            .map(HomeRouteUiState::toDashboardHeaderUiState)
+            .distinctUntilChanged()
+            .flowOn(Dispatchers.Default)
+            .stateIn(
+                viewModelScope,
+                SharingStarted.WhileSubscribed(5_000),
+                HomeRouteUiState(settings = initialSettings).toDashboardHeaderUiState(),
+            )
+
+    internal val dashboardProfileCardState: StateFlow<DashboardProfileCardUiState> =
+        homeRouteState
+            .map(HomeRouteUiState::toDashboardProfileCardUiState)
+            .distinctUntilChanged()
+            .flowOn(Dispatchers.Default)
+            .stateIn(
+                viewModelScope,
+                SharingStarted.WhileSubscribed(5_000),
+                HomeRouteUiState(settings = initialSettings).toDashboardProfileCardUiState(),
+            )
+
+    internal val dashboardActionsCardState: StateFlow<DashboardActionsCardUiState> =
+        homeRouteState
+            .map(HomeRouteUiState::toDashboardActionsCardUiState)
+            .distinctUntilChanged()
+            .flowOn(Dispatchers.Default)
+            .stateIn(
+                viewModelScope,
+                SharingStarted.WhileSubscribed(5_000),
+                HomeRouteUiState(settings = initialSettings).toDashboardActionsCardUiState(),
+            )
+
+    internal val dashboardNetworkCardState: StateFlow<DashboardNetworkCardUiState> =
+        homeRouteState
+            .map(HomeRouteUiState::toDashboardNetworkCardUiState)
+            .distinctUntilChanged()
+            .flowOn(Dispatchers.Default)
+            .stateIn(
+                viewModelScope,
+                SharingStarted.WhileSubscribed(5_000),
+                HomeRouteUiState(settings = initialSettings).toDashboardNetworkCardUiState(),
+            )
+
+    internal val dashboardTrafficCardState: StateFlow<DashboardTrafficCardUiState> =
+        combine(
+            homeRouteState,
+            dashboardTraffic,
+        ) { state, traffic ->
+            state.toDashboardTrafficCardUiState(
+                traffic = traffic,
+                now = System.currentTimeMillis(),
+            )
+        }
+            .distinctUntilChanged()
+            .flowOn(Dispatchers.Default)
+            .stateIn(
+                viewModelScope,
+                SharingStarted.WhileSubscribed(5_000),
+                HomeRouteUiState(settings = initialSettings).toDashboardTrafficCardUiState(
+                    traffic = dashboardTraffic.value,
+                    now = System.currentTimeMillis(),
+                ),
+            )
+
+    internal val dashboardMapCardState: StateFlow<DashboardMapCardUiState> =
+        homeRouteState
+            .map(HomeRouteUiState::toDashboardMapCardUiState)
+            .distinctUntilChanged()
+            .flowOn(Dispatchers.Default)
+            .stateIn(
+                viewModelScope,
+                SharingStarted.WhileSubscribed(5_000),
+                HomeRouteUiState(settings = initialSettings).toDashboardMapCardUiState(),
+            )
+
+    internal val dashboardDialogState: StateFlow<DashboardDialogUiState> =
+        homeRouteState
+            .map { state -> DashboardDialogUiState(routeState = state) }
+            .distinctUntilChanged()
+            .flowOn(Dispatchers.Default)
+            .stateIn(
+                viewModelScope,
+                SharingStarted.WhileSubscribed(5_000),
+                DashboardDialogUiState(routeState = HomeRouteUiState(settings = initialSettings)),
+            )
+
     private val trafficMapRuntimeAvailable =
         combine(
             container.connectionController.snapshot,
@@ -1209,6 +1307,14 @@ class HomeViewModel(
                 emitError(it.message ?: getApplication<Application>().getString(R.string.profile_update_failed))
             }
         }
+    }
+
+    fun onActiveProfileAutoConnectExcludedOptionsChanged(excludedOptionIds: Set<String>) {
+        val profileId = homeRouteState.value.activeProfile?.id ?: return
+        onSmartProfileAutoConnectExcludedOptionsChanged(
+            profileId = profileId,
+            excludedOptionIds = excludedOptionIds,
+        )
     }
 
     fun onAutoConnectActiveProfile() = onAutoConnectActiveProfileInternal()

@@ -108,18 +108,14 @@ import com.foxhole.beta.R
 import com.foxhole.beta.core.model.ConnectionState
 import com.foxhole.beta.core.model.DashboardCard
 import com.foxhole.beta.core.model.IpInfo
-import com.foxhole.beta.core.model.LocalSurfaceSettings
 import com.foxhole.beta.core.model.PerAppRoutingMode
 import com.foxhole.beta.core.model.PrivacyRouteMode
 import com.foxhole.beta.core.model.PrivacyRouteScope
 import com.foxhole.beta.core.model.Profile
 import com.foxhole.beta.core.model.ProfileSourceType
 import com.foxhole.beta.core.model.ProtocolHint
-import com.foxhole.beta.core.model.ProxyInboundSettings
-import com.foxhole.beta.core.model.TrafficSnapshot
 import com.foxhole.beta.core.model.TrafficMapUiState
 import com.foxhole.beta.core.model.TrafficMode
-import com.foxhole.beta.core.model.UiSettings
 import com.foxhole.beta.ui.theme.LocalFoxholeUiPalette
 import com.foxhole.beta.ui.BottomDockOverlayPadding
 import com.foxhole.beta.ui.FoxholeCard
@@ -132,9 +128,15 @@ import kotlinx.coroutines.flow.StateFlow
 
 @Composable
 @Suppress("CyclomaticComplexMethod", "LongMethod", "LongParameterList")
-fun HomeScreen(
-    state: HomeRouteUiState,
-    trafficStateFlow: StateFlow<TrafficSnapshot>,
+internal fun HomeScreen(
+    layoutStateFlow: StateFlow<DashboardLayoutUiState>,
+    headerStateFlow: StateFlow<DashboardHeaderUiState>,
+    profileCardStateFlow: StateFlow<DashboardProfileCardUiState>,
+    actionsCardStateFlow: StateFlow<DashboardActionsCardUiState>,
+    networkCardStateFlow: StateFlow<DashboardNetworkCardUiState>,
+    trafficCardStateFlow: StateFlow<DashboardTrafficCardUiState>,
+    mapCardStateFlow: StateFlow<DashboardMapCardUiState>,
+    dialogStateFlow: StateFlow<DashboardDialogUiState>,
     trafficMapStateFlow: StateFlow<TrafficMapUiState>,
     snackbarHostState: SnackbarHostState,
     onImportFromClipboard: () -> Unit,
@@ -178,148 +180,21 @@ fun HomeScreen(
         Trace.endSection()
         onDispose {}
     }
-    val context = LocalContext.current
-    var importMenuExpanded by rememberSaveable { mutableStateOf(false) }
-    var pendingRefreshProfileAction by rememberSaveable {
-        mutableStateOf<HomeDashboardProfileActionKind?>(null)
-    }
+    val layoutState by layoutStateFlow.collectAsStateWithLifecycle()
     var smartRefreshConfirmationProfileId by rememberSaveable { mutableStateOf<Long?>(null) }
     var smartStartFirstAnalysisProfileId by rememberSaveable { mutableStateOf<Long?>(null) }
     var acceptedSmartStartFirstAnalysisProfileId by rememberSaveable { mutableStateOf<Long?>(null) }
     var firstAnalysisProtocolMenuProfileId by rememberSaveable { mutableStateOf<Long?>(null) }
     var firstAnalysisProtocolMenuStarted by rememberSaveable { mutableStateOf(false) }
     var selectedConnectionFeature by rememberSaveable { mutableStateOf<HomeConnectionFeature?>(null) }
-    val shouldObserveWifiLanAddress =
-        state.settings.expert.localSurfaces.allowLanAccess &&
-            (
-                selectedConnectionFeature == HomeConnectionFeature.LAN_PROXY ||
-                    state.settings.traffic.mode == TrafficMode.PROXY
-                )
-    val wifiLanAddress by rememberWifiLanAddress(enabled = shouldObserveWifiLanAddress)
-    val proxyModel =
-        remember(
-            state.settings.traffic.mode,
-            state.settings.expert.localSurfaces,
-            state.settings.expert.perAppRoutingMode,
-            state.settings.expert.selectedPackages,
-            wifiLanAddress,
-        ) {
-            resolveHomeDashboardProxyModel(
-                state = state,
-                wifiLanAddress = wifiLanAddress,
-            )
-        }
-    val modeOption = proxyModel.modeOption
-    val connectionFeatureIndicators =
-        remember(
-            state.settings.ui.showFirewallStatus,
-            state.settings.expert.firewallEnabled,
-            state.settings.expert.localSurfaces.allowLanAccess,
-            state.settings.privacyRoute,
-            state.settings.traffic.mode,
-            state.activeProfile,
-            state.connection.state,
-            state.connection.profileId,
-            state.connection.protocolHint,
-        ) {
-            homeConnectionFeatureIndicators(state)
-        }
-    val homeModeOptions =
-        remember(
-            state.settings.traffic.mode,
-            state.settings.expert.perAppRoutingMode,
-            state.settings.expert.selectedPackages,
-        ) {
-            buildList {
-                add(HomeModeOption.TUNNEL)
-                if (state.settings.homeSplitTunnelConfigured()) {
-                    add(HomeModeOption.SPLIT)
-                }
-                add(HomeModeOption.PROXY)
-            }
-        }
-    val darkTheme = MaterialTheme.colorScheme.background.luminance() < 0.3f
-    val autoTone = foxholeSystemAwareAccentColor(fallback = MaterialTheme.colorScheme.primary)
-    val torOperationTone = Color(0xFFE89B3C)
-    val topStatusState = homeTopStatusState(state)
-    val topStatusLoading = shouldShowHomeTopStatusLoading(state)
-    val statusTone =
-        if (state.torOperation.active) {
-            torOperationTone
-        } else if (state.autoConnect.running || state.protocolMetricsRefreshing || state.reconnectInProgress) {
-            autoTone
-        } else {
-            homeStatusTone(state.connection.state)
-        }
-    val dashboardSecondaryActionBorderColor =
-        autoTone.copy(alpha = if (darkTheme) 0.30f else 0.24f)
-    val dashboardSecondaryActionColors =
-        ButtonDefaults.outlinedButtonColors(
-            contentColor = autoTone,
-            containerColor = autoTone.copy(alpha = if (darkTheme) 0.07f else 0.05f),
-            disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.48f),
-            disabledContainerColor = Color.Transparent,
-        )
-    val dashboardSecondaryActionIconSize = 21.dp
-    val dashboardProtocolModel =
-        remember(
-            state.activeProfile,
-            state.connection,
-            state.autoConnect,
-            state.smartStartRememberedLatenciesByOptionId,
-            state.protocolLatenciesByOptionId,
-            state.protocolDownOptionIds,
-            state.protocolLatencyUnavailableOptionIds,
-            state.protocolServerPingsByOptionId,
-            state.protocolServerPingUnavailableOptionIds,
-            state.protocolTunnelPingsByOptionId,
-            state.protocolTunnelPingUnavailableOptionIds,
-            state.protocolMetricsRefreshing,
-            state.protocolMetricsRefreshingOptionId,
-            state.dashboardConnectionMetricsLoading,
-            state.reconnectInProgress,
-            state.reconnectRequired,
-        ) {
-            resolveHomeDashboardProtocolModel(state)
-        }
-    val dashboardProtocolLatencies = dashboardProtocolModel.latenciesByOptionId
-    val dashboardDownProtocolIds = dashboardProtocolModel.downOptionIds
-    val dashboardUnavailableProtocolIds = dashboardProtocolModel.latencyUnavailableOptionIds
-    val dashboardShowSmartStartLatency = dashboardProtocolModel.showSmartStartLatency
-    val dashboardLatencyPresentation = dashboardProtocolModel.latencyPresentation
-    val dashboardSelectedLatencyMs = dashboardLatencyPresentation.latencyMs
-    val dashboardSelectedLatencyDown = dashboardLatencyPresentation.isDown
-    val dashboardSelectedLatencyUnavailable = dashboardLatencyPresentation.isUnavailable
-    val dashboardConnectionDetailsReady = dashboardProtocolModel.connectionDetailsReady
-    val dashboardConnectionMetricsLoading = dashboardProtocolModel.connectionMetricsLoading
-    val dashboardLatencySkeletonVisible =
-        state.activeProfile != null &&
-            (
-                dashboardConnectionMetricsLoading ||
-                    (
-                        state.connection.state in setOf(ConnectionState.CONNECTING, ConnectionState.RECONNECTING) &&
-                            dashboardSelectedLatencyMs == null &&
-                            !dashboardSelectedLatencyDown &&
-                            !dashboardSelectedLatencyUnavailable
-                        )
-                )
-    val dashboardProtocolPresentation = dashboardProtocolModel.presentation
-    val protocolMetricsAnalysisState =
-        remember(
-            state.protocolMetricsRefreshingOptionId,
-            dashboardProtocolPresentation,
-        ) {
-            homeProtocolMetricsAnalysisState(state, dashboardProtocolPresentation)
-        }
-    val smartStartDashboardControlsEnabled = isDashboardSmartStartControlsEnabled(state.settings)
     var activeReorderCard by rememberSaveable { mutableStateOf<DashboardCard?>(null) }
     var dashboardCardOrder by remember {
-        mutableStateOf(normalizedDashboardCardOrder(state.settings.ui.dashboardCardOrder))
+        mutableStateOf(layoutState.cardOrder)
     }
     var pendingCommittedDashboardCardOrder by remember { mutableStateOf<List<DashboardCard>?>(null) }
 
-    LaunchedEffect(state.settings.ui.dashboardCardOrder, activeReorderCard, pendingCommittedDashboardCardOrder) {
-        val settingsOrder = normalizedDashboardCardOrder(state.settings.ui.dashboardCardOrder)
+    LaunchedEffect(layoutState.cardOrder, activeReorderCard, pendingCommittedDashboardCardOrder) {
+        val settingsOrder = layoutState.cardOrder
         if (pendingCommittedDashboardCardOrder == settingsOrder) {
             pendingCommittedDashboardCardOrder = null
         }
@@ -330,7 +205,7 @@ fun HomeScreen(
 
     fun updateActiveReorderCard(card: DashboardCard?) {
         if (card == null && activeReorderCard != null) {
-            val settingsOrder = normalizedDashboardCardOrder(state.settings.ui.dashboardCardOrder)
+            val settingsOrder = layoutState.cardOrder
             if (dashboardCardOrder != settingsOrder) {
                 pendingCommittedDashboardCardOrder = dashboardCardOrder
                 onDashboardCardOrderChanged(dashboardCardOrder)
@@ -346,149 +221,14 @@ fun HomeScreen(
         val nextOrder =
             reorderedDashboardCards(
                 order = dashboardCardOrder,
-                visibleOrder = visibleDashboardCardOrder(dashboardCardOrder, state.settings.ui),
+                visibleOrder = layoutState.visibleCardOrder(dashboardCardOrder),
                 card = card,
                 steps = steps,
-        )
+            )
         if (nextOrder != null) {
             dashboardCardOrder = nextOrder
         }
         return nextOrder != null
-    }
-    var pinnedIpInfo by remember { mutableStateOf(state.ipInfo) }
-    var keepPinnedNetworkInfo by remember { mutableStateOf(false) }
-    val pinnedConnectionStates =
-        remember {
-            setOf(
-                ConnectionState.CONNECTING,
-                ConnectionState.RECONNECTING,
-            )
-        }
-    val networkInfoPinnedForProtocolSearch = state.autoConnect.running || state.protocolMetricsRefreshing
-    LaunchedEffect(networkInfoPinnedForProtocolSearch, state.ipInfo, state.connection.state) {
-        when {
-            networkInfoPinnedForProtocolSearch -> {
-                if (!keepPinnedNetworkInfo) {
-                    keepPinnedNetworkInfo = true
-                }
-            }
-            state.connection.state in pinnedConnectionStates && state.ipInfo == null && pinnedIpInfo != null -> {
-                keepPinnedNetworkInfo = true
-            }
-            state.ipInfo != null -> {
-                pinnedIpInfo = state.ipInfo
-                keepPinnedNetworkInfo = false
-            }
-            keepPinnedNetworkInfo && pinnedIpInfo == null -> {
-                keepPinnedNetworkInfo = false
-            }
-        }
-    }
-    val selectedVisibleNetworkIpInfo = if (keepPinnedNetworkInfo) pinnedIpInfo else state.ipInfo
-    val routeTransitionMayNeedInternetProbe =
-        state.reconnectInProgress ||
-            state.connection.state in setOf(ConnectionState.CONNECTING, ConnectionState.RECONNECTING) ||
-            state.autoConnect.running ||
-            state.protocolMetricsRefreshing
-    val shouldObserveDeviceInternet =
-        selectedVisibleNetworkIpInfo == null ||
-            state.ipInfoLoading ||
-            routeTransitionMayNeedInternetProbe
-    val deviceInternetAvailable by rememberDefaultInternetAvailability(enabled = shouldObserveDeviceInternet)
-    val networkModel =
-        remember(
-            selectedVisibleNetworkIpInfo,
-            state.deviceIpInfo,
-            deviceInternetAvailable,
-            state.connection,
-            state.torIpInfo,
-            state.ipInfoLoading,
-            state.ipInfoRefreshReason,
-            state.dashboardConnectionMetricsLoading,
-            state.profilesLoaded,
-            state.reconnectInProgress,
-            state.autoConnect.running,
-            state.protocolMetricsRefreshing,
-            state.activeProfile,
-            state.settings.expert.firewallEnabled,
-            state.settings.privacyRoute.enabled,
-        ) {
-            resolveHomeDashboardNetworkModel(
-                state = state,
-                visibleIpInfo = selectedVisibleNetworkIpInfo,
-                deviceInternetAvailable = deviceInternetAvailable,
-            )
-        }
-    val visibleNetworkIpInfo = networkModel.visibleIpInfo
-    val showEmptyStartupNetworkSkeleton =
-        rememberHomeNetworkEmptyStartupSkeleton(
-            networkIpInfo = visibleNetworkIpInfo,
-            explicitLoading = state.ipInfoLoading,
-            connectionState = state.connection.state,
-        )
-    val showNetworkIpInfoLoading = networkModel.showIpInfoLoading || showEmptyStartupNetworkSkeleton
-    val showNetworkConnectionDetailsLoading = networkModel.showConnectionDetailsLoading
-    val showNetworkConnectionStatus = networkModel.showConnectionStatus
-    val showNetworkRouteDetails =
-        showNetworkConnectionStatus &&
-            (
-                showNetworkConnectionDetailsLoading ||
-                    dashboardConnectionDetailsReady ||
-                    state.connection.state == ConnectionState.CONNECTED
-                )
-    val networkInfoTitleRes = networkModel.titleRes
-    val profileModel =
-        remember(
-            state.activeProfile,
-            state.connection.state,
-            state.connection.profileId,
-        ) {
-            resolveHomeDashboardProfileModel(state = state)
-        }
-    val isSmartDashboardProfile = profileModel.isSmartDashboardProfile
-    val selectedProfileId = profileModel.selectedProfileId
-    val localGuardProfileRuntimeActive = profileModel.localGuardActive
-    val profileActionPresentation =
-        remember(
-            state.activeProfile,
-            state.connection.state,
-            state.connection.profileId,
-        ) {
-            resolveHomeDashboardProfileActionPresentation(
-                activeProfile = state.activeProfile,
-                connection = state.connection,
-            )
-        }
-    val activeProfileId = selectedProfileId
-    val firstAnalysisProtocolMenuActive = firstAnalysisProtocolMenuProfileId == activeProfileId
-    val firstAnalysisProtocolMenuBusy = state.autoConnect.running || state.protocolMetricsRefreshing
-    val firstAnalysisProtocolMenuForceExpanded =
-        firstAnalysisProtocolMenuActive &&
-            (!firstAnalysisProtocolMenuStarted || firstAnalysisProtocolMenuBusy)
-
-    LaunchedEffect(
-        activeProfileId,
-        state.autoConnect.running,
-        state.protocolMetricsRefreshing,
-        firstAnalysisProtocolMenuProfileId,
-        firstAnalysisProtocolMenuStarted,
-    ) {
-        if (firstAnalysisProtocolMenuProfileId != null && activeProfileId != firstAnalysisProtocolMenuProfileId) {
-            firstAnalysisProtocolMenuProfileId = null
-            firstAnalysisProtocolMenuStarted = false
-            return@LaunchedEffect
-        }
-        if (firstAnalysisProtocolMenuActive && firstAnalysisProtocolMenuBusy) {
-            firstAnalysisProtocolMenuStarted = true
-        }
-        val firstAnalysisProtocolMenuFinished =
-            firstAnalysisProtocolMenuActive &&
-                firstAnalysisProtocolMenuStarted &&
-                !firstAnalysisProtocolMenuBusy
-        if (firstAnalysisProtocolMenuFinished) {
-            firstAnalysisProtocolMenuProfileId = null
-            firstAnalysisProtocolMenuStarted = false
-        }
     }
     fun requestSmartProfileMetricsRefresh(profileId: Long) {
         smartRefreshConfirmationProfileId = profileId
@@ -498,32 +238,19 @@ fun HomeScreen(
         onAutoConnect()
     }
 
-    fun requestAutoConnect() {
-        val profileId = activeProfileId
-        if (
-            profileId != null &&
-            acceptedSmartStartFirstAnalysisProfileId != profileId &&
-            shouldShowSmartStartFirstAnalysisInfo(state)
-        ) {
-            smartStartFirstAnalysisProfileId = profileId
-            return
-        }
-        startAutoConnectAfterLocalDialogs()
-    }
-
     val dashboardListState = rememberLazyListState()
     val topChromeScrimProgress = rememberFoxholeTopChromeScrimProgress(dashboardListState)
     val connectionHeaderScrolled by remember { derivedStateOf { topChromeScrimProgress() > 0.01f } }
     val dashboardStartupStage = rememberDashboardStartupStage()
     val trafficCardRuntimeVisible =
-        state.settings.ui.trafficCardEnabled &&
+        layoutState.trafficCardEnabled &&
             shouldComposeDashboardCardNow(
                 card = DashboardCard.TRAFFIC,
                 startupStage = dashboardStartupStage,
                 activeReorderCard = activeReorderCard,
             )
     val trafficMapHeavyContentReady =
-        state.settings.ui.trafficMapEnabled &&
+        layoutState.trafficMapEnabled &&
             shouldComposeTrafficMapHeavyContent(
                 startupStage = dashboardStartupStage,
                 activeReorderCard = activeReorderCard,
@@ -570,26 +297,12 @@ fun HomeScreen(
             verticalArrangement = Arrangement.spacedBy(ScreenSectionSpacing),
         ) {
             item(key = "connection_header", contentType = "dashboard_header") {
-                HomeConnectionHeader(
-                    state = state,
-                    topStatusState = topStatusState,
-                    topStatusLoading = topStatusLoading,
-                    statusTone = statusTone,
-                    protocolMetricsAnalysisState = protocolMetricsAnalysisState,
-                    modeOption = modeOption,
-                    homeModeOptions = homeModeOptions,
-                    connectionFeatureIndicators = connectionFeatureIndicators,
+                HomeDashboardHeaderItem(
+                    stateFlow = headerStateFlow,
+                    selectedConnectionFeature = selectedConnectionFeature,
                     scrolled = connectionHeaderScrolled,
-                    darkTheme = darkTheme,
-                    onModeSelected = { selectedMode ->
-                        applyHomeModeSelection(
-                            mode = selectedMode,
-                            onTrafficModeSelected = onTrafficModeSelected,
-                            onPerAppRoutingModeSelected = onPerAppRoutingModeSelected,
-                            selectedPackages = state.settings.expert.selectedPackages,
-                            currentPerAppRoutingMode = state.settings.expert.perAppRoutingMode,
-                        )
-                    },
+                    onTrafficModeSelected = onTrafficModeSelected,
+                    onPerAppRoutingModeSelected = onPerAppRoutingModeSelected,
                     onConnectionFeatureClick = { feature -> selectedConnectionFeature = feature },
                 )
             }
@@ -599,7 +312,7 @@ fun HomeScreen(
                 }
                 when (card) {
                     DashboardCard.TRAFFIC_MAP -> {
-                        if (state.settings.ui.trafficMapEnabled) {
+                        if (layoutState.trafficMapEnabled) {
                             item(key = DashboardCard.TRAFFIC_MAP, contentType = "dashboard_card_traffic_map") {
                                 DashboardCardDragContainer(
                                     modifier =
@@ -622,14 +335,10 @@ fun HomeScreen(
                                     onActiveCardChange = ::updateActiveReorderCard,
                                     onMove = ::moveDashboardCard,
                                 ) {
-                                    TrafficMapDashboardCard(
-                                        stateFlow = trafficMapStateFlow,
+                                    HomeDashboardTrafficMapCardItem(
+                                        stateFlow = mapCardStateFlow,
+                                        trafficMapStateFlow = trafficMapStateFlow,
                                         contentReady = trafficMapHeavyContentReady,
-                                        legendLoading =
-                                            shouldShowTrafficMapLegendLoading(
-                                                connectionState = state.connection.state,
-                                                appLoaded = state.profilesLoaded,
-                                            ),
                                         onOpenDetails = onOpenTrafficMapDetails,
                                     )
                                 }
@@ -660,168 +369,29 @@ fun HomeScreen(
                                 onActiveCardChange = ::updateActiveReorderCard,
                                 onMove = ::moveDashboardCard,
                             ) {
-                                FoxholeCard(
-                    onClick = onOpenProfiles,
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .testTag("home_profiles_action"),
-                ) {
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        HomeCardHeader(
-                            icon = FoxholeIcons.Profile,
-                            title =
-                                stringResource(
-                                    if (localGuardProfileRuntimeActive) {
-                                        R.string.selected_profile
-                                    } else {
-                                        R.string.vpn_profile
+                                HomeDashboardProfileCardItem(
+                                    stateFlow = profileCardStateFlow,
+                                    firstAnalysisProtocolMenuProfileId = firstAnalysisProtocolMenuProfileId,
+                                    firstAnalysisProtocolMenuStarted = firstAnalysisProtocolMenuStarted,
+                                    onFirstAnalysisProtocolMenuCleared = {
+                                        firstAnalysisProtocolMenuProfileId = null
+                                        firstAnalysisProtocolMenuStarted = false
                                     },
-                                ),
-                            trailing = {
-                                HomeHeaderActionButton(
-                                    icon = Icons.AutoMirrored.Outlined.ArrowForward,
-                                    contentDescription = null,
-                                    onClick = onOpenProfiles,
-                                    tint = autoTone,
-                                )
-                            },
-                        )
-                        Column(
-                            modifier =
-                                Modifier
-                                    .fillMaxWidth()
-                                    .height(HomeDashboardProfileContentHeight),
-                            verticalArrangement = Arrangement.spacedBy(3.dp),
-                        ) {
-                            if (state.activeProfile == null && !state.profilesLoaded) {
-                                HomeProfileLoadingBlock()
-                            } else if (state.activeProfile == null) {
-                                Text(
-                                    text = stringResource(R.string.no_profiles),
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.SemiBold,
-                                )
-                                Text(
-                                    text = stringResource(R.string.no_profiles_import_hint),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            } else {
-                                InlineSmartProfileTitle(
-                                    title = dashboardProfileTitle(state.activeProfile.name),
-                                    isSmartProfile = isSmartDashboardProfile,
-                                    showSmartBadge = false,
-                                    showV2RayTunBadge =
-                                        state.activeProfile.sourceType == ProfileSourceType.SUBSCRIPTION_URL &&
-                                            !isSmartDashboardProfile,
-                                    trailing = {
-                                        when {
-                                            dashboardLatencySkeletonVisible ->
-                                                ProtocolLatencyLoadingPill(
-                                                    compact = true,
-                                                    showLabel = true,
-                                                )
-                                            dashboardSelectedLatencyMs != null ->
-                                                ProtocolLatencyPill(
-                                                    latencyMs = dashboardSelectedLatencyMs,
-                                                    compact = true,
-                                                    showLabel = true,
-                                                )
-                                            dashboardSelectedLatencyDown ->
-                                                ProtocolLatencyPill(
-                                                    compact = true,
-                                                    isDown = true,
-                                                    showLabel = true,
-                                                )
-                                            dashboardSelectedLatencyUnavailable ->
-                                                ProtocolLatencyPill(
-                                                    compact = true,
-                                                    isUnavailable = true,
-                                                    showLabel = true,
-                                                )
-                                            else -> Unit
-                                        }
+                                    onFirstAnalysisProtocolMenuStarted = {
+                                        firstAnalysisProtocolMenuStarted = true
                                     },
+                                    onOpenProfiles = onOpenProfiles,
+                                    onSelectActiveProtocolOptionRequested = onSelectActiveProtocolOptionRequested,
+                                    onUpdateAutoConnectExcludedOptions = onUpdateAutoConnectExcludedOptions,
+                                    onRefreshSmartProfileMetrics = ::requestSmartProfileMetricsRefresh,
+                                    onCancelSmartProfileMetricsRefresh = onCancelSmartProfileMetricsRefresh,
                                 )
-                                ProtocolMetadataRow(
-                                    protocol = dashboardProtocolPresentation.protocolHint,
-                                    subscriptionExpiresAt = state.activeProfile.subscriptionExpiresAt,
-                                    protocolOptions = dashboardProtocolPresentation.protocolOptions,
-                                    selectedProtocolOptionId = dashboardProtocolPresentation.selectedProtocolOptionId,
-                                    onProtocolOptionSelected = onSelectActiveProtocolOptionRequested,
-                                    compact = true,
-                                    animateSelection = true,
-                                    latencyByOptionId = dashboardProtocolLatencies,
-                                    downProtocolOptionIds = dashboardDownProtocolIds,
-                                    latencyUnavailableOptionIds = dashboardUnavailableProtocolIds,
-                                    recommendedProtocolOptionId = state.recommendedProtocolOptionId,
-                                    recommendedProtocolOptionIds = state.recommendedProtocolOptionIds,
-                                    favoriteProtocolOptionId = state.favoriteProtocolOptionId,
-                                    selectorBorderColor = autoTone.copy(alpha = if (darkTheme) 0.30f else 0.24f),
-                                    highlightSelectedOption = false,
-                                    showInsecureTlsBadge = false,
-                                    leadingContent =
-                                        if (isSmartDashboardProfile && smartStartDashboardControlsEnabled) {
-                                            {
-                                                SmartProfileAutoConnectMenu(
-                                                    profile = state.activeProfile,
-                                                    excludedOptionIds = state.activeProfileExcludedOptionIds,
-                                                    onUpdateExcludedOptionIds = onUpdateAutoConnectExcludedOptions,
-                                                    latencyByOptionId = dashboardProtocolLatencies,
-                                                    unavailableOptionIds = dashboardDownProtocolIds,
-                                                    latencyUnavailableOptionIds = dashboardUnavailableProtocolIds,
-                                                    serverPingByOptionId = state.protocolServerPingsByOptionId,
-                                                    serverPingUnavailableOptionIds = state.protocolServerPingUnavailableOptionIds,
-                                                    metricsUpdatedAtByOptionId = state.protocolMetricsUpdatedAtByOptionId,
-                                                    metricsRefreshing = state.protocolMetricsRefreshing || state.autoConnect.running,
-                                                    refreshingOptionId =
-                                                        state.protocolMetricsRefreshingOptionId
-                                                            ?: state.autoConnect.currentOptionId
-                                                                .takeIf { state.protocolMetricsRefreshing || state.autoConnect.running },
-                                                    recommendedOptionId = state.recommendedProtocolOptionId,
-                                                    recommendedOptionIds = state.recommendedProtocolOptionIds,
-                                                    favoriteOptionId = state.favoriteProtocolOptionId,
-                                                    activeOptionId = dashboardProtocolPresentation.selectedProtocolOptionId,
-                                                    onSelectOption = onSelectActiveProtocolOptionRequested,
-                                                    onRefreshMetrics = { requestSmartProfileMetricsRefresh(state.activeProfile.id) },
-                                                    onCancelRefreshMetrics = onCancelSmartProfileMetricsRefresh,
-                                                    showLatency = dashboardShowSmartStartLatency,
-                                                    compact = true,
-                                                    actionIconSize = 18.dp,
-                                                    showMetricsTable = false,
-                                                    showStatusHeader = true,
-                                                    latencyProbeMethod = state.settings.connection.latencyProbeMethod,
-                                                    serverPingLabelRes = R.string.smart_profile_menu_server_ping_column,
-                                                    forceExpanded = firstAnalysisProtocolMenuForceExpanded,
-                                                )
-                                            }
-                                        } else {
-                                            null
-                                        },
-                                )
-                            }
-                        }
-                    }
-                                }
                             }
                         }
                     }
 
                     DashboardCard.ACTIONS -> {
                         item(key = DashboardCard.ACTIONS, contentType = "dashboard_card_actions") {
-                            val importFromClipboardTitle = stringResource(R.string.import_from_clipboard)
-                            val importFromFileTitle = stringResource(R.string.import_from_file)
-                            val importFromQrTitle = stringResource(R.string.scan_qr_code)
-                            val importDropdownMenuWidth =
-                                rememberImportDropdownMenuWidth(
-                                    titles =
-                                        listOf(
-                                            importFromClipboardTitle,
-                                            importFromFileTitle,
-                                            importFromQrTitle,
-                                        ),
-                                )
                             DashboardCardDragContainer(
                                     modifier =
                                         Modifier
@@ -843,141 +413,27 @@ fun HomeScreen(
                                 onActiveCardChange = ::updateActiveReorderCard,
                                 onMove = ::moveDashboardCard,
                             ) {
-                                FoxholeCard {
-                    HomeConnectionActions(
-                        state = state,
-                        onToggleConnection = onToggleConnection,
-                        onAutoConnect = ::requestAutoConnect,
-                        smartStartControlsEnabled = smartStartDashboardControlsEnabled,
-                    )
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        verticalAlignment = Alignment.Top,
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            OutlinedButton(
-                                onClick = { importMenuExpanded = true },
-                                modifier =
-                                    Modifier
-                                        .fillMaxWidth()
-                                        .height(HomePrimaryActionHeight)
-                                        .testTag("home_import_action"),
-                                border = BorderStroke(1.dp, dashboardSecondaryActionBorderColor),
-                                colors = dashboardSecondaryActionColors,
-                            ) {
-                                Icon(
-                                    Icons.Outlined.FileUpload,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(dashboardSecondaryActionIconSize),
-                                    tint = autoTone,
+                                HomeDashboardActionsCardItem(
+                                    stateFlow = actionsCardStateFlow,
+                                    acceptedSmartStartFirstAnalysisProfileId = acceptedSmartStartFirstAnalysisProfileId,
+                                    onRequestFirstAnalysisDialog = { profileId ->
+                                        smartStartFirstAnalysisProfileId = profileId
+                                    },
+                                    onStartAutoConnect = ::startAutoConnectAfterLocalDialogs,
+                                    onToggleConnection = onToggleConnection,
+                                    onImportFromClipboard = onImportFromClipboard,
+                                    onImportFromFile = onImportFromFile,
+                                    onImportFromQr = onImportFromQr,
+                                    onRestartProfile = onRestartProfile,
+                                    onRefreshProfile = onRefreshProfile,
+                                    onRefreshAndRestartProfile = onRefreshAndRestartProfile,
                                 )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = stringResource(R.string.import_label),
-                                    color = autoTone,
-                                )
-                            }
-                            FoxholeDropdownMenu(
-                                expanded = importMenuExpanded,
-                                onDismissRequest = { importMenuExpanded = false },
-                                popupGap = 0.dp,
-                                modifier = Modifier.width(importDropdownMenuWidth),
-                            ) {
-                                FoxholeDropdownItem(
-                                    modifier = Modifier.testTag("home_import_from_clipboard_action"),
-                                    leadingContent = {
-                                        Icon(
-                                            Icons.Outlined.ContentPaste,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.primary,
-                                        )
-                                    },
-                                    onClick = {
-                                        importMenuExpanded = false
-                                        onImportFromClipboard()
-                                    },
-                                ) {
-                                    ImportDropdownItemText(
-                                        title = importFromClipboardTitle,
-                                        summary = stringResource(R.string.import_from_clipboard_summary),
-                                    )
-                                }
-                                FoxholeDropdownItem(
-                                    modifier = Modifier.testTag("home_import_from_file_action"),
-                                    leadingContent = {
-                                        Icon(
-                                            Icons.Outlined.FileUpload,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.primary,
-                                        )
-                                    },
-                                    onClick = {
-                                        importMenuExpanded = false
-                                        onImportFromFile()
-                                    },
-                                ) {
-                                    ImportDropdownItemText(
-                                        title = importFromFileTitle,
-                                        summary = stringResource(R.string.import_from_file_summary),
-                                    )
-                                }
-                                FoxholeDropdownItem(
-                                    modifier = Modifier.testTag("home_import_from_qr_action"),
-                                    leadingContent = {
-                                        Icon(
-                                            Icons.Outlined.QrCodeScanner,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.primary,
-                                        )
-                                    },
-                                    onClick = {
-                                        importMenuExpanded = false
-                                        onImportFromQr()
-                                    },
-                                ) {
-                                    ImportDropdownItemText(
-                                        title = importFromQrTitle,
-                                        summary = stringResource(R.string.scan_qr_code_summary),
-                                    )
-                                }
-                            }
-                        }
-                        OutlinedButton(
-                            onClick = {
-                                when (profileActionPresentation.kind) {
-                                    HomeDashboardProfileActionKind.REFRESH_SUBSCRIPTION ->
-                                        pendingRefreshProfileAction = profileActionPresentation.kind
-                                    HomeDashboardProfileActionKind.REFRESH_AND_RESTART_SUBSCRIPTION ->
-                                        pendingRefreshProfileAction = profileActionPresentation.kind
-                                    HomeDashboardProfileActionKind.RESTART -> onRestartProfile()
-                                }
-                            },
-                            enabled = profileActionPresentation.enabled,
-                            modifier =
-                                Modifier
-                                    .weight(1f)
-                                    .height(HomePrimaryActionHeight)
-                                    .testTag("home_refresh_action"),
-                            border = BorderStroke(1.dp, dashboardSecondaryActionBorderColor),
-                            colors = dashboardSecondaryActionColors,
-                        ) {
-                            Icon(
-                                Icons.Outlined.Refresh,
-                                contentDescription = null,
-                                modifier = Modifier.size(dashboardSecondaryActionIconSize),
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(stringResource(profileActionPresentation.labelRes))
-                        }
-                    }
-                                }
                             }
                         }
                     }
 
                     DashboardCard.NETWORK -> {
-                        if (state.settings.ui.networkCardEnabled) {
+                        if (layoutState.networkCardEnabled) {
                             item(key = DashboardCard.NETWORK, contentType = "dashboard_card_network") {
                                 DebugRecompositionCounter("HomeNetworkCard")
                                 DashboardCardDragContainer(
@@ -1001,238 +457,17 @@ fun HomeScreen(
                                     onActiveCardChange = ::updateActiveReorderCard,
                                     onMove = ::moveDashboardCard,
                                 ) {
-                                    FoxholeCard(modifier = Modifier.testTag("home_network_card")) {
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        HomeCardHeader(
-                            icon = FoxholeIcons.Network,
-                            title = stringResource(R.string.home_network_title),
-                            trailing = {
-                                HomeHeaderActionButton(
-                                    icon = FoxholeIcons.Refresh,
-                                    contentDescription = stringResource(R.string.refresh_ip_info),
-                                    onClick = onRefreshIpInfo,
-                                    enabled = !state.autoConnect.running,
-                                    modifier = Modifier.size(32.dp).testTag("home_refresh_ip_icon"),
-                                    tint = autoTone,
-                                )
-                            },
-                        )
-                        Box(
-                            modifier = Modifier.fillMaxWidth().height(HomeNetworkContentHeight),
-                            contentAlignment = Alignment.TopStart,
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                verticalAlignment = Alignment.Top,
-                            ) {
-                                val networkIpInfo = visibleNetworkIpInfo
-                                if (
-                                    shouldShowHomeNetworkFullLoading(
-                                        visibleIpInfo = networkIpInfo,
-                                        showIpInfoLoading = showNetworkIpInfoLoading,
+                                    HomeDashboardNetworkCardItem(
+                                        stateFlow = networkCardStateFlow,
+                                        onRefreshIpInfo = onRefreshIpInfo,
                                     )
-                                ) {
-                                    HomeNetworkLoadingBlock(
-                                        title = stringResource(networkInfoTitleRes),
-                                        labels =
-                                            listOf(
-                                                stringResource(R.string.home_network_country_label),
-                                                stringResource(R.string.home_network_city_label),
-                                                stringResource(R.string.home_network_ip_label),
-                                                stringResource(R.string.home_network_provider_label),
-                                            ),
-                                        icons =
-                                            listOf(
-                                                Icons.Outlined.Language,
-                                                Icons.Outlined.LocationCity,
-                                                FoxholeIcons.Network,
-                                                Icons.Outlined.Business,
-                                            ),
-                                        modifier =
-                                            Modifier
-                                                .weight(if (showNetworkRouteDetails) 1f else 2f)
-                                                .testTag("home_network_loading"),
-                                    )
-                                } else {
-                                    val rowValueLoading =
-                                        networkModel.showRefreshProgress ||
-                                            showNetworkIpInfoLoading
-                                    val geoRowsLoading =
-                                        rememberHomeNetworkGeoRowsLoading(
-                                            networkIpInfo = networkIpInfo,
-                                            refreshLoading = rowValueLoading,
-                                        ) || networkModel.showGeoRowsLoading
-                                    val detailLoadingPolicy =
-                                        homeNetworkDetailLoadingPolicy(
-                                            refreshLoading = rowValueLoading,
-                                            geoRowsLoading = geoRowsLoading,
-                                        )
-                                    val countryLine =
-                                        networkIpInfo?.let { info ->
-                                            dashboardCountryLineForGeoState(
-                                                ipInfo = info,
-                                                geoRowsLoading = geoRowsLoading,
-                                            )
-                                        }
-                                    val cityLine = networkIpInfo?.let(::buildCityLineOrNull)
-                                    val countryValue =
-                                        homeNetworkGeoRowDetailValue(
-                                            value = countryLine,
-                                            refreshLoading = rowValueLoading,
-                                            geoRowsLoading = geoRowsLoading,
-                                        )
-                                    val cityValue =
-                                        homeNetworkGeoRowDetailValue(
-                                            value = cityLine,
-                                            refreshLoading = rowValueLoading,
-                                            geoRowsLoading = geoRowsLoading,
-                                        )
-                                    val ipValue =
-                                        homeNetworkDetailValue(
-                                            value = networkIpInfo?.let(::primaryVisibleIpOrNull),
-                                            loading = detailLoadingPolicy.ip,
-                                        )
-                                    val providerValue =
-                                        homeNetworkDetailValue(
-                                            value = networkIpInfo?.let(::providerLineOrNull),
-                                            loading = detailLoadingPolicy.provider,
-                                        )
-                                    Column(
-                                        modifier = Modifier.weight(1f),
-                                        verticalArrangement = Arrangement.spacedBy(2.dp),
-                                    ) {
-                                        HomeNetworkColumnTitle(stringResource(networkInfoTitleRes))
-                                        HomeNetworkDetailLine(
-                                            icon = Icons.Outlined.Language,
-                                            label = stringResource(R.string.home_network_country_label),
-                                            value = countryValue.text,
-                                            valueLoading = countryValue.loading,
-                                            modifier = Modifier.testTag("home_network_country"),
-                                        )
-                                        HomeNetworkSubtleDivider()
-                                        HomeNetworkDetailLine(
-                                            icon = Icons.Outlined.LocationCity,
-                                            label = stringResource(R.string.home_network_city_label),
-                                            value = cityValue.text,
-                                            valueLoading = cityValue.loading,
-                                            modifier = Modifier.testTag("home_network_city"),
-                                        )
-                                        HomeNetworkSubtleDivider()
-                                        HomeNetworkDetailLine(
-                                            icon = FoxholeIcons.Network,
-                                            label = stringResource(R.string.home_network_ip_label),
-                                            value = ipValue.text,
-                                            valueLoading = ipValue.loading,
-                                            modifier = Modifier.testTag("home_network_primary_ip"),
-                                            valueMonospace = ipValue.text != "-",
-                                        )
-                                        HomeNetworkSubtleDivider()
-                                        HomeNetworkDetailLine(
-                                            icon = Icons.Outlined.Business,
-                                            label = stringResource(R.string.home_network_provider_label),
-                                            value = providerValue.text,
-                                            valueLoading = providerValue.loading,
-                                            modifier = Modifier.testTag("home_network_provider"),
-                                        )
-                                    }
-                                }
-                                if (showNetworkRouteDetails) {
-                                    HomeNetworkVerticalDivider()
-                                    if (showNetworkConnectionDetailsLoading) {
-                                        HomeConnectionStatusLoadingBlock(
-                                            modifier =
-                                                Modifier
-                                                    .weight(1f)
-                                                    .testTag("home_connection_status_loading"),
-                                        )
-                                    } else {
-                                        Column(
-                                            modifier = Modifier.weight(1f),
-                                            verticalArrangement = Arrangement.spacedBy(2.dp),
-                                        ) {
-                                            val connectionDurationText = rememberConnectionDurationText(state.connection)
-                                            val connectionMetricsAvailable = state.connection.state == ConnectionState.CONNECTED
-                                            val serverPingValue =
-                                                homeNetworkServerPingDetailValue(
-                                                    connectionMetricsAvailable = connectionMetricsAvailable,
-                                                    selectedServerPingText =
-                                                        dashboardProtocolModel.selectedServerPingMs
-                                                            ?.let { latencyMs ->
-                                                                stringResource(
-                                                                    R.string.latency_pill_value,
-                                                                    latencyMs.coerceAtLeast(1L),
-                                                                )
-                                                            },
-                                                    selectedServerPingUnavailable =
-                                                        dashboardProtocolModel.selectedServerPingUnavailable,
-                                                    noDataText =
-                                                        stringResource(R.string.smart_start_protocol_status_no_data),
-                                                    unavailableText = stringResource(R.string.latency_pill_unavailable),
-                                                )
-                                            val remoteDnsServer =
-                                                networkIpInfo?.remoteDnsServers?.firstOrNull { server -> server.isNotBlank() }
-                                            val localDnsServer =
-                                                networkIpInfo?.localDnsServers?.firstOrNull { server -> server.isNotBlank() }
-                                            val dnsStatusText =
-                                                when {
-                                                    !connectionMetricsAvailable ->
-                                                        stringResource(R.string.smart_start_protocol_status_no_data)
-                                                    remoteDnsServer != null || localDnsServer != null || networkIpInfo != null ->
-                                                        dashboardDnsModeLine(
-                                                            ipInfo = networkIpInfo,
-                                                            secureMode = state.settings.dns.secureMode,
-                                                        )
-                                                    else ->
-                                                        dashboardDnsModeLine(
-                                                            ipInfo = null,
-                                                            secureMode = state.settings.dns.secureMode,
-                                                        )
-                                                }
-                                            val transportTypeText = dashboardTransportTypeLabel(dashboardProtocolPresentation.protocolHint)
-                                            HomeNetworkColumnTitle(stringResource(R.string.home_network_profile_info_title))
-                                            HomeNetworkDetailLine(
-                                                icon = FoxholeIcons.Latency,
-                                                label = stringResource(R.string.home_network_server_ping_label),
-                                                value = serverPingValue.text,
-                                                valueLoading = serverPingValue.loading,
-                                                valueMonospace = connectionMetricsAvailable && dashboardProtocolModel.selectedServerPingMs != null,
-                                            )
-                                            HomeNetworkSubtleDivider()
-                                            HomeNetworkDetailLine(
-                                                icon = FoxholeIcons.Dns,
-                                                label = stringResource(R.string.home_network_dns_label),
-                                                value = dnsStatusText,
-                                            )
-                                            HomeNetworkSubtleDivider()
-                                            HomeNetworkDetailLine(
-                                                icon = FoxholeIcons.Traffic,
-                                                label = stringResource(R.string.home_network_transport_type_label),
-                                                value = transportTypeText,
-                                                valueMonospace = transportTypeText != "-",
-                                            )
-                                            HomeNetworkSubtleDivider()
-                                            HomeNetworkDetailLine(
-                                                icon = Icons.Outlined.AccessTime,
-                                                label = stringResource(R.string.home_network_connect_time_label),
-                                                value = connectionDurationText ?: "-",
-                                                valueMonospace = connectionDurationText != null,
-                                                modifier = Modifier.testTag("home_connection_duration"),
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                                    }
                                 }
                             }
                         }
                     }
 
                     DashboardCard.TRAFFIC -> {
-                        if (state.settings.ui.trafficCardEnabled) {
+                        if (layoutState.trafficCardEnabled) {
                             item(key = DashboardCard.TRAFFIC, contentType = "dashboard_card_traffic") {
                                 DashboardCardDragContainer(
                                     modifier =
@@ -1255,174 +490,10 @@ fun HomeScreen(
                                     onActiveCardChange = ::updateActiveReorderCard,
                                     onMove = ::moveDashboardCard,
                                 ) {
-                                    val traffic by trafficStateFlow.collectAsStateWithLifecycle()
-                                    val trafficModel =
-                                        resolveHomeDashboardTrafficModel(
-                                            state = state,
-                                            traffic = traffic,
-                                            now = System.currentTimeMillis(),
-                                        )
-                                    val trafficLoading = false
-                                    val totalTrafficText =
-                                        buildAnnotatedString {
-                                            val periodBytes = trafficModel.selectedProtocolTotalBytes ?: trafficModel.totalBytes
-                                            append(stringResource(R.string.home_total_traffic_title))
-                                            append(" ")
-                                            withStyle(SpanStyle(color = MaterialTheme.colorScheme.onSurfaceVariant)) {
-                                                append(
-                                                    stringResource(
-                                                        R.string.home_total_traffic_days,
-                                                        trafficModel.totalDays,
-                                                    ),
-                                                )
-                                            }
-                                            append(" ")
-                                            append(formatBytes(context, periodBytes))
-                                        }
-                                    FoxholeCard {
-                                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                            HomeCardHeader(
-                                                icon = FoxholeIcons.Traffic,
-                                                title = stringResource(R.string.home_traffic_title),
-                                                titleContent = {
-                                                    Text(
-                                                        text = stringResource(R.string.home_traffic_title),
-                                                        style = MaterialTheme.typography.titleMedium,
-                                                        fontWeight = FontWeight.SemiBold,
-                                                        maxLines = 1,
-                                                    )
-                                                    Text(
-                                                        text = totalTrafficText,
-                                                        modifier = Modifier.weight(1f),
-                                                        style = MaterialTheme.typography.labelSmall,
-                                                        fontWeight = FontWeight.SemiBold,
-                                                        textAlign = TextAlign.End,
-                                                        maxLines = 1,
-                                                        overflow = TextOverflow.Ellipsis,
-                                                    )
-                                                },
-                                                trailing = {
-                                                    HomeHeaderActionButton(
-                                                        icon = Icons.Outlined.DeleteSweep,
-                                                        contentDescription =
-                                                            stringResource(R.string.reset_usage_tracking),
-                                                        onClick = onResetUsageTracking,
-                                                        modifier = Modifier.testTag("home_reset_usage_button"),
-                                                        tint = autoTone,
-                                                    )
-                                                },
-                                            )
-                                            HorizontalDivider(
-                                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),
-                                            )
-                                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                                Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                                                    val trafficLabelTint = MaterialTheme.colorScheme.primary
-                                                    val inactiveTrafficIconTint = MaterialTheme.colorScheme.onSurfaceVariant
-                                                    val incomingTrafficTint =
-                                                        if (trafficModel.hasIncomingTraffic) {
-                                                            FoxholePositiveAccent
-                                                        } else {
-                                                            inactiveTrafficIconTint
-                                                        }
-                                                    val outgoingTrafficTint =
-                                                        if (trafficModel.hasOutgoingTraffic) {
-                                                            Color(0xFF2F80ED)
-                                                        } else {
-                                                            inactiveTrafficIconTint
-                                                        }
-                                                    Row(
-                                                        modifier = Modifier.fillMaxWidth(),
-                                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                                        verticalAlignment = Alignment.CenterVertically,
-                                                    ) {
-                                                        Text(
-                                                            text = stringResource(R.string.home_session_traffic_title),
-                                                            modifier = Modifier.weight(1f),
-                                                            style = MaterialTheme.typography.labelMedium,
-                                                            fontWeight = FontWeight.SemiBold,
-                                                        )
-                                                    }
-                                                    Row(
-                                                        modifier = Modifier.fillMaxWidth(),
-                                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                                    ) {
-                                                        TrafficStatBlock(
-                                                            modifier = Modifier.weight(1f),
-                                                            icon = Icons.Outlined.ArrowDownward,
-                                                            iconTint = incomingTrafficTint,
-                                                            labelColor = trafficLabelTint,
-                                                            label = stringResource(R.string.home_received_label),
-                                                            value =
-                                                                formatBytes(
-                                                                    context,
-                                                                    traffic.rxTotalBytes,
-                                                                ),
-                                                            secondary =
-                                                                formatRate(
-                                                                    context,
-                                                                    traffic.rxBytesPerSec,
-                                                                ),
-                                                            valueTag = "home_traffic_rx_value",
-                                                            secondaryTag = "home_traffic_rx_rate",
-                                                            horizontalAlignment = Alignment.CenterHorizontally,
-                                                            loading = trafficLoading,
-                                                        )
-                                                        TrafficStatBlock(
-                                                            modifier = Modifier.weight(1f),
-                                                            icon = Icons.Outlined.ArrowUpward,
-                                                            iconTint = outgoingTrafficTint,
-                                                            labelColor = trafficLabelTint,
-                                                            label = stringResource(R.string.home_sent_label),
-                                                            value =
-                                                                formatBytes(
-                                                                    context,
-                                                                    traffic.txTotalBytes,
-                                                                ),
-                                                            secondary =
-                                                                formatRate(
-                                                                    context,
-                                                                    traffic.txBytesPerSec,
-                                                                ),
-                                                            valueTag = "home_traffic_tx_value",
-                                                            secondaryTag = "home_traffic_tx_rate",
-                                                            horizontalAlignment = Alignment.CenterHorizontally,
-                                                            loading = trafficLoading,
-                                                        )
-                                                        TrafficStatBlock(
-                                                            modifier = Modifier.weight(1f),
-                                                            headerSpacing = 1.dp,
-                                                            leadingContent = {
-                                                                Text(
-                                                                    text =
-                                                                        buildAnnotatedString {
-                                                                            withStyle(SpanStyle(color = incomingTrafficTint)) { append("↓") }
-                                                                            withStyle(SpanStyle(color = outgoingTrafficTint)) { append("↑") }
-                                                                        },
-                                                                    style = MaterialTheme.typography.labelSmall,
-                                                                    fontWeight = FontWeight.SemiBold,
-                                                                    maxLines = 1,
-                                                                )
-                                                            },
-                                                            leadingContentSpacing = 0.dp,
-                                                            labelColor = trafficLabelTint,
-                                                            label = stringResource(R.string.home_total_label),
-                                                            value = formatBytes(context, traffic.rxTotalBytes + traffic.txTotalBytes),
-                                                            secondary =
-                                                                formatRate(
-                                                                    context,
-                                                                    traffic.rxBytesPerSec + traffic.txBytesPerSec,
-                                                                ),
-                                                            valueTag = "home_traffic_total_value",
-                                                            secondaryTag = "home_traffic_total_rate",
-                                                            horizontalAlignment = Alignment.CenterHorizontally,
-                                                            loading = trafficLoading,
-                                                        )
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
+                                    HomeDashboardTrafficCardItem(
+                                        stateFlow = trafficCardStateFlow,
+                                        onResetUsageTracking = onResetUsageTracking,
+                                    )
                                 }
                             }
                         }
@@ -1430,20 +501,6 @@ fun HomeScreen(
                 }
             }
         }
-    }
-
-    pendingRefreshProfileAction?.let { pendingAction ->
-        ProfileRefreshConfirmDialog(
-            onDismiss = { pendingRefreshProfileAction = null },
-            onConfirm = {
-                pendingRefreshProfileAction = null
-                when (pendingAction) {
-                    HomeDashboardProfileActionKind.REFRESH_AND_RESTART_SUBSCRIPTION -> onRefreshAndRestartProfile()
-                    HomeDashboardProfileActionKind.REFRESH_SUBSCRIPTION -> onRefreshProfile()
-                    HomeDashboardProfileActionKind.RESTART -> onRestartProfile()
-                }
-            },
-        )
     }
 
     smartRefreshConfirmationProfileId?.let { profileId ->
@@ -1479,12 +536,1073 @@ fun HomeScreen(
         )
     }
 
+    HomeDashboardDialogHost(
+        stateFlow = dialogStateFlow,
+        selectedConnectionFeature = selectedConnectionFeature,
+        onConnectionFeatureDismiss = { selectedConnectionFeature = null },
+        onKillSwitchChanged = onKillSwitchChanged,
+        onFirewallEnabledChanged = onFirewallEnabledChanged,
+        onPrivacyRouteModeSelected = onPrivacyRouteModeSelected,
+        onOpenPrivacyRoute = onOpenPrivacyRoute,
+        onEnableDirectTorQuickStart = onEnableDirectTorQuickStart,
+        onLocalProxyLanAccessChanged = onLocalProxyLanAccessChanged,
+        onRenewTorIp = onRenewTorIp,
+        onRestart = onToggleConnection,
+        onDismissTorTransitionPrompt = onDismissTorTransitionPrompt,
+        onConfirmDisableTorForUdpProtocol = onConfirmDisableTorForUdpProtocol,
+        onConfirmMoveTorIntoVpn = onConfirmMoveTorIntoVpn,
+        onConfirmKeepTorOnDeviceAndStartVpn = onConfirmKeepTorOnDeviceAndStartVpn,
+    )
+}
+
+@Composable
+private fun HomeDashboardHeaderItem(
+    stateFlow: StateFlow<DashboardHeaderUiState>,
+    selectedConnectionFeature: HomeConnectionFeature?,
+    scrolled: Boolean,
+    onTrafficModeSelected: (TrafficMode) -> Unit,
+    onPerAppRoutingModeSelected: (PerAppRoutingMode) -> Unit,
+    onConnectionFeatureClick: (HomeConnectionFeature) -> Unit,
+) {
+    val state by stateFlow.collectAsStateWithLifecycle()
+    val routeState = state.toRouteStateForHeader()
+    val shouldObserveWifiLanAddress =
+        state.settings.expert.localSurfaces.allowLanAccess &&
+            (
+                selectedConnectionFeature == HomeConnectionFeature.LAN_PROXY ||
+                    state.settings.traffic.mode == TrafficMode.PROXY
+                )
+    val wifiLanAddress by rememberWifiLanAddress(enabled = shouldObserveWifiLanAddress)
+    val proxyModel =
+        remember(
+            state.settings.traffic.mode,
+            state.settings.expert.localSurfaces,
+            state.settings.expert.perAppRoutingMode,
+            state.settings.expert.selectedPackages,
+            wifiLanAddress,
+        ) {
+            resolveHomeDashboardProxyModel(
+                state = routeState,
+                wifiLanAddress = wifiLanAddress,
+            )
+        }
+    val homeModeOptions =
+        remember(
+            state.settings.traffic.mode,
+            state.settings.expert.perAppRoutingMode,
+            state.settings.expert.selectedPackages,
+        ) {
+            buildList {
+                add(HomeModeOption.TUNNEL)
+                if (state.settings.homeSplitTunnelConfigured()) {
+                    add(HomeModeOption.SPLIT)
+                }
+                add(HomeModeOption.PROXY)
+            }
+        }
+    val darkTheme = MaterialTheme.colorScheme.background.luminance() < 0.3f
+    val autoTone = foxholeSystemAwareAccentColor(fallback = MaterialTheme.colorScheme.primary)
+    val torOperationTone = Color(0xFFE89B3C)
+    val statusTone =
+        if (state.torOperation.active) {
+            torOperationTone
+        } else if (state.autoConnect.running || state.protocolMetricsRefreshing || state.reconnectInProgress) {
+            autoTone
+        } else {
+            homeStatusTone(state.connection.state)
+        }
+    HomeConnectionHeader(
+        state = routeState,
+        topStatusState = state.topStatusState,
+        topStatusLoading = state.topStatusLoading,
+        statusTone = statusTone,
+        protocolMetricsAnalysisState = state.protocolMetricsAnalysisState,
+        modeOption = proxyModel.modeOption,
+        homeModeOptions = homeModeOptions,
+        connectionFeatureIndicators = state.connectionFeatureIndicators,
+        scrolled = scrolled,
+        darkTheme = darkTheme,
+        onModeSelected = { selectedMode ->
+            applyHomeModeSelection(
+                mode = selectedMode,
+                onTrafficModeSelected = onTrafficModeSelected,
+                onPerAppRoutingModeSelected = onPerAppRoutingModeSelected,
+                selectedPackages = state.settings.expert.selectedPackages,
+                currentPerAppRoutingMode = state.settings.expert.perAppRoutingMode,
+            )
+        },
+        onConnectionFeatureClick = onConnectionFeatureClick,
+    )
+}
+
+@Composable
+private fun HomeDashboardTrafficMapCardItem(
+    stateFlow: StateFlow<DashboardMapCardUiState>,
+    trafficMapStateFlow: StateFlow<TrafficMapUiState>,
+    contentReady: Boolean,
+    onOpenDetails: () -> Unit,
+) {
+    val state by stateFlow.collectAsStateWithLifecycle()
+    TrafficMapDashboardCard(
+        stateFlow = trafficMapStateFlow,
+        contentReady = contentReady,
+        legendLoading =
+            shouldShowTrafficMapLegendLoading(
+                connectionState = state.connectionState,
+                appLoaded = state.profilesLoaded,
+            ),
+        onOpenDetails = onOpenDetails,
+    )
+}
+
+@Composable
+@Suppress("CyclomaticComplexMethod", "LongMethod", "LongParameterList")
+private fun HomeDashboardProfileCardItem(
+    stateFlow: StateFlow<DashboardProfileCardUiState>,
+    firstAnalysisProtocolMenuProfileId: Long?,
+    firstAnalysisProtocolMenuStarted: Boolean,
+    onFirstAnalysisProtocolMenuCleared: () -> Unit,
+    onFirstAnalysisProtocolMenuStarted: () -> Unit,
+    onOpenProfiles: () -> Unit,
+    onSelectActiveProtocolOptionRequested: (String) -> Unit,
+    onUpdateAutoConnectExcludedOptions: (Set<String>) -> Unit,
+    onRefreshSmartProfileMetrics: (Long) -> Unit,
+    onCancelSmartProfileMetricsRefresh: () -> Unit,
+) {
+    val state by stateFlow.collectAsStateWithLifecycle()
+    val autoTone = foxholeSystemAwareAccentColor(fallback = MaterialTheme.colorScheme.primary)
+    val darkTheme = MaterialTheme.colorScheme.background.luminance() < 0.3f
+    val protocolModel = state.protocolModel
+    val dashboardProtocolLatencies = protocolModel.latenciesByOptionId
+    val dashboardDownProtocolIds = protocolModel.downOptionIds
+    val dashboardUnavailableProtocolIds = protocolModel.latencyUnavailableOptionIds
+    val dashboardShowSmartStartLatency = protocolModel.showSmartStartLatency
+    val dashboardLatencyPresentation = protocolModel.latencyPresentation
+    val dashboardSelectedLatencyMs = dashboardLatencyPresentation.latencyMs
+    val dashboardSelectedLatencyDown = dashboardLatencyPresentation.isDown
+    val dashboardSelectedLatencyUnavailable = dashboardLatencyPresentation.isUnavailable
+    val dashboardLatencySkeletonVisible =
+        state.activeProfile != null &&
+            (
+                protocolModel.connectionMetricsLoading ||
+                    (
+                        state.connection.state in setOf(ConnectionState.CONNECTING, ConnectionState.RECONNECTING) &&
+                            dashboardSelectedLatencyMs == null &&
+                            !dashboardSelectedLatencyDown &&
+                            !dashboardSelectedLatencyUnavailable
+                        )
+                )
+    val dashboardProtocolPresentation = protocolModel.presentation
+    val profileModel = state.profileModel
+    val isSmartDashboardProfile = profileModel.isSmartDashboardProfile
+    val activeProfileId = profileModel.selectedProfileId
+    val firstAnalysisProtocolMenuActive = firstAnalysisProtocolMenuProfileId == activeProfileId
+    val firstAnalysisProtocolMenuBusy = state.autoConnect.running || state.protocolMetricsRefreshing
+    val firstAnalysisProtocolMenuForceExpanded =
+        firstAnalysisProtocolMenuActive &&
+            (!firstAnalysisProtocolMenuStarted || firstAnalysisProtocolMenuBusy)
+
+    LaunchedEffect(
+        activeProfileId,
+        state.autoConnect.running,
+        state.protocolMetricsRefreshing,
+        firstAnalysisProtocolMenuProfileId,
+        firstAnalysisProtocolMenuStarted,
+    ) {
+        if (firstAnalysisProtocolMenuProfileId != null && activeProfileId != firstAnalysisProtocolMenuProfileId) {
+            onFirstAnalysisProtocolMenuCleared()
+            return@LaunchedEffect
+        }
+        if (firstAnalysisProtocolMenuActive && firstAnalysisProtocolMenuBusy) {
+            onFirstAnalysisProtocolMenuStarted()
+        }
+        val firstAnalysisProtocolMenuFinished =
+            firstAnalysisProtocolMenuActive &&
+                firstAnalysisProtocolMenuStarted &&
+                !firstAnalysisProtocolMenuBusy
+        if (firstAnalysisProtocolMenuFinished) {
+            onFirstAnalysisProtocolMenuCleared()
+        }
+    }
+
+    FoxholeCard(
+        onClick = onOpenProfiles,
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .testTag("home_profiles_action"),
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            HomeCardHeader(
+                icon = FoxholeIcons.Profile,
+                title =
+                    stringResource(
+                        if (profileModel.localGuardActive) {
+                            R.string.selected_profile
+                        } else {
+                            R.string.vpn_profile
+                        },
+                    ),
+                trailing = {
+                    HomeHeaderActionButton(
+                        icon = Icons.AutoMirrored.Outlined.ArrowForward,
+                        contentDescription = null,
+                        onClick = onOpenProfiles,
+                        tint = autoTone,
+                    )
+                },
+            )
+            Column(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .height(HomeDashboardProfileContentHeight),
+                verticalArrangement = Arrangement.spacedBy(3.dp),
+            ) {
+                val activeProfile = state.activeProfile
+                if (activeProfile == null && !state.profilesLoaded) {
+                    HomeProfileLoadingBlock()
+                } else if (activeProfile == null) {
+                    Text(
+                        text = stringResource(R.string.no_profiles),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Text(
+                        text = stringResource(R.string.no_profiles_import_hint),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                } else {
+                    InlineSmartProfileTitle(
+                        title = dashboardProfileTitle(activeProfile.name),
+                        isSmartProfile = isSmartDashboardProfile,
+                        showSmartBadge = false,
+                        showV2RayTunBadge =
+                            activeProfile.sourceType == ProfileSourceType.SUBSCRIPTION_URL &&
+                                !isSmartDashboardProfile,
+                        trailing = {
+                            when {
+                                dashboardLatencySkeletonVisible ->
+                                    ProtocolLatencyLoadingPill(
+                                        compact = true,
+                                        showLabel = true,
+                                    )
+                                dashboardSelectedLatencyMs != null ->
+                                    ProtocolLatencyPill(
+                                        latencyMs = dashboardSelectedLatencyMs,
+                                        compact = true,
+                                        showLabel = true,
+                                    )
+                                dashboardSelectedLatencyDown ->
+                                    ProtocolLatencyPill(
+                                        compact = true,
+                                        isDown = true,
+                                        showLabel = true,
+                                    )
+                                dashboardSelectedLatencyUnavailable ->
+                                    ProtocolLatencyPill(
+                                        compact = true,
+                                        isUnavailable = true,
+                                        showLabel = true,
+                                    )
+                                else -> Unit
+                            }
+                        },
+                    )
+                    ProtocolMetadataRow(
+                        protocol = dashboardProtocolPresentation.protocolHint,
+                        subscriptionExpiresAt = activeProfile.subscriptionExpiresAt,
+                        protocolOptions = dashboardProtocolPresentation.protocolOptions,
+                        selectedProtocolOptionId = dashboardProtocolPresentation.selectedProtocolOptionId,
+                        onProtocolOptionSelected = onSelectActiveProtocolOptionRequested,
+                        compact = true,
+                        animateSelection = true,
+                        latencyByOptionId = dashboardProtocolLatencies,
+                        downProtocolOptionIds = dashboardDownProtocolIds,
+                        latencyUnavailableOptionIds = dashboardUnavailableProtocolIds,
+                        recommendedProtocolOptionId = state.recommendedProtocolOptionId,
+                        recommendedProtocolOptionIds = state.recommendedProtocolOptionIds,
+                        favoriteProtocolOptionId = state.favoriteProtocolOptionId,
+                        selectorBorderColor = autoTone.copy(alpha = if (darkTheme) 0.30f else 0.24f),
+                        highlightSelectedOption = false,
+                        showInsecureTlsBadge = false,
+                        leadingContent =
+                            if (isSmartDashboardProfile && state.smartStartControlsEnabled) {
+                                {
+                                    SmartProfileAutoConnectMenu(
+                                        profile = activeProfile,
+                                        excludedOptionIds = state.activeProfileExcludedOptionIds,
+                                        onUpdateExcludedOptionIds = onUpdateAutoConnectExcludedOptions,
+                                        latencyByOptionId = dashboardProtocolLatencies,
+                                        unavailableOptionIds = dashboardDownProtocolIds,
+                                        latencyUnavailableOptionIds = dashboardUnavailableProtocolIds,
+                                        serverPingByOptionId = state.protocolServerPingsByOptionId,
+                                        serverPingUnavailableOptionIds = state.protocolServerPingUnavailableOptionIds,
+                                        metricsUpdatedAtByOptionId = state.protocolMetricsUpdatedAtByOptionId,
+                                        metricsRefreshing = state.protocolMetricsRefreshing || state.autoConnect.running,
+                                        refreshingOptionId =
+                                            state.protocolMetricsRefreshingOptionId
+                                                ?: state.autoConnect.currentOptionId
+                                                    .takeIf { state.protocolMetricsRefreshing || state.autoConnect.running },
+                                        recommendedOptionId = state.recommendedProtocolOptionId,
+                                        recommendedOptionIds = state.recommendedProtocolOptionIds,
+                                        favoriteOptionId = state.favoriteProtocolOptionId,
+                                        activeOptionId = dashboardProtocolPresentation.selectedProtocolOptionId,
+                                        onSelectOption = onSelectActiveProtocolOptionRequested,
+                                        onRefreshMetrics = { onRefreshSmartProfileMetrics(activeProfile.id) },
+                                        onCancelRefreshMetrics = onCancelSmartProfileMetricsRefresh,
+                                        showLatency = dashboardShowSmartStartLatency,
+                                        compact = true,
+                                        actionIconSize = 18.dp,
+                                        showMetricsTable = false,
+                                        showStatusHeader = true,
+                                        latencyProbeMethod = state.latencyProbeMethod,
+                                        serverPingLabelRes = R.string.smart_profile_menu_server_ping_column,
+                                        forceExpanded = firstAnalysisProtocolMenuForceExpanded,
+                                    )
+                                }
+                            } else {
+                                null
+                            },
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+@Suppress("LongMethod", "LongParameterList")
+private fun HomeDashboardActionsCardItem(
+    stateFlow: StateFlow<DashboardActionsCardUiState>,
+    acceptedSmartStartFirstAnalysisProfileId: Long?,
+    onRequestFirstAnalysisDialog: (Long) -> Unit,
+    onStartAutoConnect: () -> Unit,
+    onToggleConnection: () -> Unit,
+    onImportFromClipboard: () -> Unit,
+    onImportFromFile: () -> Unit,
+    onImportFromQr: () -> Unit,
+    onRestartProfile: () -> Unit,
+    onRefreshProfile: () -> Unit,
+    onRefreshAndRestartProfile: () -> Unit,
+) {
+    val state by stateFlow.collectAsStateWithLifecycle()
+    var importMenuExpanded by rememberSaveable { mutableStateOf(false) }
+    var pendingRefreshProfileAction by rememberSaveable {
+        mutableStateOf<HomeDashboardProfileActionKind?>(null)
+    }
+    val darkTheme = MaterialTheme.colorScheme.background.luminance() < 0.3f
+    val autoTone = foxholeSystemAwareAccentColor(fallback = MaterialTheme.colorScheme.primary)
+    val dashboardSecondaryActionBorderColor =
+        autoTone.copy(alpha = if (darkTheme) 0.30f else 0.24f)
+    val dashboardSecondaryActionColors =
+        ButtonDefaults.outlinedButtonColors(
+            contentColor = autoTone,
+            containerColor = autoTone.copy(alpha = if (darkTheme) 0.07f else 0.05f),
+            disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.48f),
+            disabledContainerColor = Color.Transparent,
+        )
+    val dashboardSecondaryActionIconSize = 21.dp
+    val importFromClipboardTitle = stringResource(R.string.import_from_clipboard)
+    val importFromFileTitle = stringResource(R.string.import_from_file)
+    val importFromQrTitle = stringResource(R.string.scan_qr_code)
+    val importDropdownMenuWidth =
+        rememberImportDropdownMenuWidth(
+            titles =
+                listOf(
+                    importFromClipboardTitle,
+                    importFromFileTitle,
+                    importFromQrTitle,
+                ),
+        )
+    fun requestAutoConnect() {
+        val profileId = state.activeProfileId
+        if (
+            profileId != null &&
+            acceptedSmartStartFirstAnalysisProfileId != profileId &&
+            state.showFirstAnalysisInfo
+        ) {
+            onRequestFirstAnalysisDialog(profileId)
+            return
+        }
+        onStartAutoConnect()
+    }
+
+    FoxholeCard {
+        HomeConnectionActions(
+            state = state,
+            onToggleConnection = onToggleConnection,
+            onAutoConnect = ::requestAutoConnect,
+            smartStartControlsEnabled = state.smartStartControlsEnabled,
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.Top,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                OutlinedButton(
+                    onClick = { importMenuExpanded = true },
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .height(HomePrimaryActionHeight)
+                            .testTag("home_import_action"),
+                    border = BorderStroke(1.dp, dashboardSecondaryActionBorderColor),
+                    colors = dashboardSecondaryActionColors,
+                ) {
+                    Icon(
+                        Icons.Outlined.FileUpload,
+                        contentDescription = null,
+                        modifier = Modifier.size(dashboardSecondaryActionIconSize),
+                        tint = autoTone,
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = stringResource(R.string.import_label),
+                        color = autoTone,
+                    )
+                }
+                FoxholeDropdownMenu(
+                    expanded = importMenuExpanded,
+                    onDismissRequest = { importMenuExpanded = false },
+                    popupGap = 0.dp,
+                    modifier = Modifier.width(importDropdownMenuWidth),
+                ) {
+                    FoxholeDropdownItem(
+                        modifier = Modifier.testTag("home_import_from_clipboard_action"),
+                        leadingContent = {
+                            Icon(
+                                Icons.Outlined.ContentPaste,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                            )
+                        },
+                        onClick = {
+                            importMenuExpanded = false
+                            onImportFromClipboard()
+                        },
+                    ) {
+                        ImportDropdownItemText(
+                            title = importFromClipboardTitle,
+                            summary = stringResource(R.string.import_from_clipboard_summary),
+                        )
+                    }
+                    FoxholeDropdownItem(
+                        modifier = Modifier.testTag("home_import_from_file_action"),
+                        leadingContent = {
+                            Icon(
+                                Icons.Outlined.FileUpload,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                            )
+                        },
+                        onClick = {
+                            importMenuExpanded = false
+                            onImportFromFile()
+                        },
+                    ) {
+                        ImportDropdownItemText(
+                            title = importFromFileTitle,
+                            summary = stringResource(R.string.import_from_file_summary),
+                        )
+                    }
+                    FoxholeDropdownItem(
+                        modifier = Modifier.testTag("home_import_from_qr_action"),
+                        leadingContent = {
+                            Icon(
+                                Icons.Outlined.QrCodeScanner,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                            )
+                        },
+                        onClick = {
+                            importMenuExpanded = false
+                            onImportFromQr()
+                        },
+                    ) {
+                        ImportDropdownItemText(
+                            title = importFromQrTitle,
+                            summary = stringResource(R.string.scan_qr_code_summary),
+                        )
+                    }
+                }
+            }
+            OutlinedButton(
+                onClick = {
+                    when (state.profileActionPresentation.kind) {
+                        HomeDashboardProfileActionKind.REFRESH_SUBSCRIPTION ->
+                            pendingRefreshProfileAction = state.profileActionPresentation.kind
+                        HomeDashboardProfileActionKind.REFRESH_AND_RESTART_SUBSCRIPTION ->
+                            pendingRefreshProfileAction = state.profileActionPresentation.kind
+                        HomeDashboardProfileActionKind.RESTART -> onRestartProfile()
+                    }
+                },
+                enabled = state.profileActionPresentation.enabled,
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .height(HomePrimaryActionHeight)
+                        .testTag("home_refresh_action"),
+                border = BorderStroke(1.dp, dashboardSecondaryActionBorderColor),
+                colors = dashboardSecondaryActionColors,
+            ) {
+                Icon(
+                    Icons.Outlined.Refresh,
+                    contentDescription = null,
+                    modifier = Modifier.size(dashboardSecondaryActionIconSize),
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(stringResource(state.profileActionPresentation.labelRes))
+            }
+        }
+    }
+
+    pendingRefreshProfileAction?.let { pendingAction ->
+        ProfileRefreshConfirmDialog(
+            onDismiss = { pendingRefreshProfileAction = null },
+            onConfirm = {
+                pendingRefreshProfileAction = null
+                when (pendingAction) {
+                    HomeDashboardProfileActionKind.REFRESH_AND_RESTART_SUBSCRIPTION -> onRefreshAndRestartProfile()
+                    HomeDashboardProfileActionKind.REFRESH_SUBSCRIPTION -> onRefreshProfile()
+                    HomeDashboardProfileActionKind.RESTART -> onRestartProfile()
+                }
+            },
+        )
+    }
+}
+
+@Composable
+@Suppress("CyclomaticComplexMethod", "LongMethod")
+private fun HomeDashboardNetworkCardItem(
+    stateFlow: StateFlow<DashboardNetworkCardUiState>,
+    onRefreshIpInfo: () -> Unit,
+) {
+    val state by stateFlow.collectAsStateWithLifecycle()
+    val routeState = state.toRouteStateForNetworkCard()
+    val autoTone = foxholeSystemAwareAccentColor(fallback = MaterialTheme.colorScheme.primary)
+    var pinnedIpInfo by remember { mutableStateOf(state.ipInfo) }
+    var keepPinnedNetworkInfo by remember { mutableStateOf(false) }
+    val pinnedConnectionStates =
+        remember {
+            setOf(
+                ConnectionState.CONNECTING,
+                ConnectionState.RECONNECTING,
+            )
+        }
+    val networkInfoPinnedForProtocolSearch = state.autoConnectRunning || state.protocolMetricsRefreshing
+    LaunchedEffect(networkInfoPinnedForProtocolSearch, state.ipInfo, state.connection.state) {
+        when {
+            networkInfoPinnedForProtocolSearch -> {
+                if (!keepPinnedNetworkInfo) {
+                    keepPinnedNetworkInfo = true
+                }
+            }
+            state.connection.state in pinnedConnectionStates && state.ipInfo == null && pinnedIpInfo != null -> {
+                keepPinnedNetworkInfo = true
+            }
+            state.ipInfo != null -> {
+                pinnedIpInfo = state.ipInfo
+                keepPinnedNetworkInfo = false
+            }
+            keepPinnedNetworkInfo && pinnedIpInfo == null -> {
+                keepPinnedNetworkInfo = false
+            }
+        }
+    }
+    val selectedVisibleNetworkIpInfo = if (keepPinnedNetworkInfo) pinnedIpInfo else state.ipInfo
+    val routeTransitionMayNeedInternetProbe =
+        state.reconnectInProgress ||
+            state.connection.state in setOf(ConnectionState.CONNECTING, ConnectionState.RECONNECTING) ||
+            state.autoConnectRunning ||
+            state.protocolMetricsRefreshing
+    val shouldObserveDeviceInternet =
+        selectedVisibleNetworkIpInfo == null ||
+            state.ipInfoLoading ||
+            routeTransitionMayNeedInternetProbe
+    val deviceInternetAvailable by rememberDefaultInternetAvailability(enabled = shouldObserveDeviceInternet)
+    val networkModel =
+        remember(
+            selectedVisibleNetworkIpInfo,
+            state.deviceIpInfo,
+            deviceInternetAvailable,
+            state.connection,
+            state.torIpInfo,
+            state.ipInfoLoading,
+            state.ipInfoRefreshReason,
+            state.dashboardConnectionMetricsLoading,
+            state.profilesLoaded,
+            state.reconnectInProgress,
+            state.autoConnectRunning,
+            state.protocolMetricsRefreshing,
+            state.activeProfile,
+            state.settings.expert.firewallEnabled,
+            state.settings.privacyRoute.enabled,
+        ) {
+            resolveHomeDashboardNetworkModel(
+                state = routeState,
+                visibleIpInfo = selectedVisibleNetworkIpInfo,
+                deviceInternetAvailable = deviceInternetAvailable,
+            )
+        }
+    val visibleNetworkIpInfo = networkModel.visibleIpInfo
+    val showEmptyStartupNetworkSkeleton =
+        rememberHomeNetworkEmptyStartupSkeleton(
+            networkIpInfo = visibleNetworkIpInfo,
+            explicitLoading = state.ipInfoLoading,
+            connectionState = state.connection.state,
+        )
+    val showNetworkIpInfoLoading = networkModel.showIpInfoLoading || showEmptyStartupNetworkSkeleton
+    val showNetworkConnectionDetailsLoading = networkModel.showConnectionDetailsLoading
+    val showNetworkConnectionStatus = networkModel.showConnectionStatus
+    val protocolModel = state.protocolModel
+    val showNetworkRouteDetails =
+        showNetworkConnectionStatus &&
+            (
+                showNetworkConnectionDetailsLoading ||
+                    protocolModel.connectionDetailsReady ||
+                    state.connection.state == ConnectionState.CONNECTED
+                )
+    val networkInfoTitleRes = networkModel.titleRes
+    FoxholeCard(modifier = Modifier.testTag("home_network_card")) {
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            HomeCardHeader(
+                icon = FoxholeIcons.Network,
+                title = stringResource(R.string.home_network_title),
+                trailing = {
+                    HomeHeaderActionButton(
+                        icon = FoxholeIcons.Refresh,
+                        contentDescription = stringResource(R.string.refresh_ip_info),
+                        onClick = onRefreshIpInfo,
+                        enabled = !state.autoConnectRunning,
+                        modifier = Modifier.size(32.dp).testTag("home_refresh_ip_icon"),
+                        tint = autoTone,
+                    )
+                },
+            )
+            Box(
+                modifier = Modifier.fillMaxWidth().height(HomeNetworkContentHeight),
+                contentAlignment = Alignment.TopStart,
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.Top,
+                ) {
+                    val networkIpInfo = visibleNetworkIpInfo
+                    if (
+                        shouldShowHomeNetworkFullLoading(
+                            visibleIpInfo = networkIpInfo,
+                            showIpInfoLoading = showNetworkIpInfoLoading,
+                        )
+                    ) {
+                        HomeNetworkLoadingBlock(
+                            title = stringResource(networkInfoTitleRes),
+                            labels =
+                                listOf(
+                                    stringResource(R.string.home_network_country_label),
+                                    stringResource(R.string.home_network_city_label),
+                                    stringResource(R.string.home_network_ip_label),
+                                    stringResource(R.string.home_network_provider_label),
+                                ),
+                            icons =
+                                listOf(
+                                    Icons.Outlined.Language,
+                                    Icons.Outlined.LocationCity,
+                                    FoxholeIcons.Network,
+                                    Icons.Outlined.Business,
+                                ),
+                            modifier =
+                                Modifier
+                                    .weight(if (showNetworkRouteDetails) 1f else 2f)
+                                    .testTag("home_network_loading"),
+                        )
+                    } else {
+                        val rowValueLoading =
+                            networkModel.showRefreshProgress ||
+                                showNetworkIpInfoLoading
+                        val geoRowsLoading =
+                            rememberHomeNetworkGeoRowsLoading(
+                                networkIpInfo = networkIpInfo,
+                                refreshLoading = rowValueLoading,
+                            ) || networkModel.showGeoRowsLoading
+                        val detailLoadingPolicy =
+                            homeNetworkDetailLoadingPolicy(
+                                refreshLoading = rowValueLoading,
+                                geoRowsLoading = geoRowsLoading,
+                            )
+                        val countryLine =
+                            networkIpInfo?.let { info ->
+                                dashboardCountryLineForGeoState(
+                                    ipInfo = info,
+                                    geoRowsLoading = geoRowsLoading,
+                                )
+                            }
+                        val cityLine = networkIpInfo?.let(::buildCityLineOrNull)
+                        val countryValue =
+                            homeNetworkGeoRowDetailValue(
+                                value = countryLine,
+                                refreshLoading = rowValueLoading,
+                                geoRowsLoading = geoRowsLoading,
+                            )
+                        val cityValue =
+                            homeNetworkGeoRowDetailValue(
+                                value = cityLine,
+                                refreshLoading = rowValueLoading,
+                                geoRowsLoading = geoRowsLoading,
+                            )
+                        val ipValue =
+                            homeNetworkDetailValue(
+                                value = networkIpInfo?.let(::primaryVisibleIpOrNull),
+                                loading = detailLoadingPolicy.ip,
+                            )
+                        val providerValue =
+                            homeNetworkDetailValue(
+                                value = networkIpInfo?.let(::providerLineOrNull),
+                                loading = detailLoadingPolicy.provider,
+                            )
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(2.dp),
+                        ) {
+                            HomeNetworkColumnTitle(stringResource(networkInfoTitleRes))
+                            HomeNetworkDetailLine(
+                                icon = Icons.Outlined.Language,
+                                label = stringResource(R.string.home_network_country_label),
+                                value = countryValue.text,
+                                valueLoading = countryValue.loading,
+                                modifier = Modifier.testTag("home_network_country"),
+                            )
+                            HomeNetworkSubtleDivider()
+                            HomeNetworkDetailLine(
+                                icon = Icons.Outlined.LocationCity,
+                                label = stringResource(R.string.home_network_city_label),
+                                value = cityValue.text,
+                                valueLoading = cityValue.loading,
+                                modifier = Modifier.testTag("home_network_city"),
+                            )
+                            HomeNetworkSubtleDivider()
+                            HomeNetworkDetailLine(
+                                icon = FoxholeIcons.Network,
+                                label = stringResource(R.string.home_network_ip_label),
+                                value = ipValue.text,
+                                valueLoading = ipValue.loading,
+                                modifier = Modifier.testTag("home_network_primary_ip"),
+                                valueMonospace = ipValue.text != "-",
+                            )
+                            HomeNetworkSubtleDivider()
+                            HomeNetworkDetailLine(
+                                icon = Icons.Outlined.Business,
+                                label = stringResource(R.string.home_network_provider_label),
+                                value = providerValue.text,
+                                valueLoading = providerValue.loading,
+                                modifier = Modifier.testTag("home_network_provider"),
+                            )
+                        }
+                    }
+                    if (showNetworkRouteDetails) {
+                        HomeNetworkVerticalDivider()
+                        if (showNetworkConnectionDetailsLoading) {
+                            HomeConnectionStatusLoadingBlock(
+                                modifier =
+                                    Modifier
+                                        .weight(1f)
+                                        .testTag("home_connection_status_loading"),
+                            )
+                        } else {
+                            Column(
+                                modifier = Modifier.weight(1f),
+                                verticalArrangement = Arrangement.spacedBy(2.dp),
+                            ) {
+                                val connectionDurationText = rememberConnectionDurationText(state.connection)
+                                val connectionMetricsAvailable = state.connection.state == ConnectionState.CONNECTED
+                                val serverPingValue =
+                                    homeNetworkServerPingDetailValue(
+                                        connectionMetricsAvailable = connectionMetricsAvailable,
+                                        selectedServerPingText =
+                                            protocolModel.selectedServerPingMs
+                                                ?.let { latencyMs ->
+                                                    stringResource(
+                                                        R.string.latency_pill_value,
+                                                        latencyMs.coerceAtLeast(1L),
+                                                    )
+                                                },
+                                        selectedServerPingUnavailable =
+                                            protocolModel.selectedServerPingUnavailable,
+                                        noDataText =
+                                            stringResource(R.string.smart_start_protocol_status_no_data),
+                                        unavailableText = stringResource(R.string.latency_pill_unavailable),
+                                    )
+                                val remoteDnsServer =
+                                    networkIpInfo?.remoteDnsServers?.firstOrNull { server -> server.isNotBlank() }
+                                val localDnsServer =
+                                    networkIpInfo?.localDnsServers?.firstOrNull { server -> server.isNotBlank() }
+                                val dnsStatusText =
+                                    when {
+                                        !connectionMetricsAvailable ->
+                                            stringResource(R.string.smart_start_protocol_status_no_data)
+                                        remoteDnsServer != null || localDnsServer != null || networkIpInfo != null ->
+                                            dashboardDnsModeLine(
+                                                ipInfo = networkIpInfo,
+                                                secureMode = state.settings.dns.secureMode,
+                                            )
+                                        else ->
+                                            dashboardDnsModeLine(
+                                                ipInfo = null,
+                                                secureMode = state.settings.dns.secureMode,
+                                            )
+                                    }
+                                val transportTypeText =
+                                    dashboardTransportTypeLabel(protocolModel.presentation.protocolHint)
+                                HomeNetworkColumnTitle(stringResource(R.string.home_network_profile_info_title))
+                                HomeNetworkDetailLine(
+                                    icon = FoxholeIcons.Latency,
+                                    label = stringResource(R.string.home_network_server_ping_label),
+                                    value = serverPingValue.text,
+                                    valueLoading = serverPingValue.loading,
+                                    valueMonospace =
+                                        connectionMetricsAvailable && protocolModel.selectedServerPingMs != null,
+                                )
+                                HomeNetworkSubtleDivider()
+                                HomeNetworkDetailLine(
+                                    icon = FoxholeIcons.Dns,
+                                    label = stringResource(R.string.home_network_dns_label),
+                                    value = dnsStatusText,
+                                )
+                                HomeNetworkSubtleDivider()
+                                HomeNetworkDetailLine(
+                                    icon = FoxholeIcons.Traffic,
+                                    label = stringResource(R.string.home_network_transport_type_label),
+                                    value = transportTypeText,
+                                    valueMonospace = transportTypeText != "-",
+                                )
+                                HomeNetworkSubtleDivider()
+                                HomeNetworkDetailLine(
+                                    icon = Icons.Outlined.AccessTime,
+                                    label = stringResource(R.string.home_network_connect_time_label),
+                                    value = connectionDurationText ?: "-",
+                                    valueMonospace = connectionDurationText != null,
+                                    modifier = Modifier.testTag("home_connection_duration"),
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+@Suppress("LongMethod")
+private fun HomeDashboardTrafficCardItem(
+    stateFlow: StateFlow<DashboardTrafficCardUiState>,
+    onResetUsageTracking: () -> Unit,
+) {
+    val context = LocalContext.current
+    val state by stateFlow.collectAsStateWithLifecycle()
+    val autoTone = foxholeSystemAwareAccentColor(fallback = MaterialTheme.colorScheme.primary)
+    val traffic = state.traffic
+    val trafficModel = state.trafficModel
+    val trafficLoading = false
+    val totalTrafficText =
+        buildAnnotatedString {
+            val periodBytes = trafficModel.selectedProtocolTotalBytes ?: trafficModel.totalBytes
+            append(stringResource(R.string.home_total_traffic_title))
+            append(" ")
+            withStyle(SpanStyle(color = MaterialTheme.colorScheme.onSurfaceVariant)) {
+                append(
+                    stringResource(
+                        R.string.home_total_traffic_days,
+                        trafficModel.totalDays,
+                    ),
+                )
+            }
+            append(" ")
+            append(formatBytes(context, periodBytes))
+        }
+    FoxholeCard {
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            HomeCardHeader(
+                icon = FoxholeIcons.Traffic,
+                title = stringResource(R.string.home_traffic_title),
+                titleContent = {
+                    Text(
+                        text = stringResource(R.string.home_traffic_title),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                    )
+                    Text(
+                        text = totalTrafficText,
+                        modifier = Modifier.weight(1f),
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        textAlign = TextAlign.End,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                },
+                trailing = {
+                    HomeHeaderActionButton(
+                        icon = Icons.Outlined.DeleteSweep,
+                        contentDescription =
+                            stringResource(R.string.reset_usage_tracking),
+                        onClick = onResetUsageTracking,
+                        modifier = Modifier.testTag("home_reset_usage_button"),
+                        tint = autoTone,
+                    )
+                },
+            )
+            HorizontalDivider(
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),
+            )
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    val trafficLabelTint = MaterialTheme.colorScheme.primary
+                    val inactiveTrafficIconTint = MaterialTheme.colorScheme.onSurfaceVariant
+                    val incomingTrafficTint =
+                        if (trafficModel.hasIncomingTraffic) {
+                            FoxholePositiveAccent
+                        } else {
+                            inactiveTrafficIconTint
+                        }
+                    val outgoingTrafficTint =
+                        if (trafficModel.hasOutgoingTraffic) {
+                            Color(0xFF2F80ED)
+                        } else {
+                            inactiveTrafficIconTint
+                        }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = stringResource(R.string.home_session_traffic_title),
+                            modifier = Modifier.weight(1f),
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        TrafficStatBlock(
+                            modifier = Modifier.weight(1f),
+                            icon = Icons.Outlined.ArrowDownward,
+                            iconTint = incomingTrafficTint,
+                            labelColor = trafficLabelTint,
+                            label = stringResource(R.string.home_received_label),
+                            value =
+                                formatBytes(
+                                    context,
+                                    traffic.rxTotalBytes,
+                                ),
+                            secondary =
+                                formatRate(
+                                    context,
+                                    traffic.rxBytesPerSec,
+                                ),
+                            valueTag = "home_traffic_rx_value",
+                            secondaryTag = "home_traffic_rx_rate",
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            loading = trafficLoading,
+                        )
+                        TrafficStatBlock(
+                            modifier = Modifier.weight(1f),
+                            icon = Icons.Outlined.ArrowUpward,
+                            iconTint = outgoingTrafficTint,
+                            labelColor = trafficLabelTint,
+                            label = stringResource(R.string.home_sent_label),
+                            value =
+                                formatBytes(
+                                    context,
+                                    traffic.txTotalBytes,
+                                ),
+                            secondary =
+                                formatRate(
+                                    context,
+                                    traffic.txBytesPerSec,
+                                ),
+                            valueTag = "home_traffic_tx_value",
+                            secondaryTag = "home_traffic_tx_rate",
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            loading = trafficLoading,
+                        )
+                        TrafficStatBlock(
+                            modifier = Modifier.weight(1f),
+                            headerSpacing = 1.dp,
+                            leadingContent = {
+                                Text(
+                                    text =
+                                        buildAnnotatedString {
+                                            withStyle(SpanStyle(color = incomingTrafficTint)) { append("↓") }
+                                            withStyle(SpanStyle(color = outgoingTrafficTint)) { append("↑") }
+                                        },
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1,
+                                )
+                            },
+                            leadingContentSpacing = 0.dp,
+                            labelColor = trafficLabelTint,
+                            label = stringResource(R.string.home_total_label),
+                            value = formatBytes(context, traffic.rxTotalBytes + traffic.txTotalBytes),
+                            secondary =
+                                formatRate(
+                                    context,
+                                    traffic.rxBytesPerSec + traffic.txBytesPerSec,
+                                ),
+                            valueTag = "home_traffic_total_value",
+                            secondaryTag = "home_traffic_total_rate",
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            loading = trafficLoading,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+@Suppress("LongParameterList")
+private fun HomeDashboardDialogHost(
+    stateFlow: StateFlow<DashboardDialogUiState>,
+    selectedConnectionFeature: HomeConnectionFeature?,
+    onConnectionFeatureDismiss: () -> Unit,
+    onKillSwitchChanged: (Boolean) -> Unit,
+    onFirewallEnabledChanged: (Boolean) -> Unit,
+    onPrivacyRouteModeSelected: (PrivacyRouteMode) -> Unit,
+    onOpenPrivacyRoute: () -> Unit,
+    onEnableDirectTorQuickStart: () -> Unit,
+    onLocalProxyLanAccessChanged: (Boolean) -> Unit,
+    onRenewTorIp: () -> Unit,
+    onRestart: () -> Unit,
+    onDismissTorTransitionPrompt: () -> Unit,
+    onConfirmDisableTorForUdpProtocol: (TorTransitionPrompt.DisableTorForUdpProtocol) -> Unit,
+    onConfirmMoveTorIntoVpn: (TorTransitionPrompt.StartTcpVpnWhileTorOnlyActive) -> Unit,
+    onConfirmKeepTorOnDeviceAndStartVpn: (TorTransitionPrompt.StartTcpVpnWhileTorOnlyActive) -> Unit,
+) {
+    val dialogState by stateFlow.collectAsStateWithLifecycle()
+    val state = dialogState.routeState
     selectedConnectionFeature?.let { feature ->
+        val shouldObserveWifiLanAddress =
+            state.settings.expert.localSurfaces.allowLanAccess &&
+                (
+                    feature == HomeConnectionFeature.LAN_PROXY ||
+                        state.settings.traffic.mode == TrafficMode.PROXY
+                    )
+        val wifiLanAddress by rememberWifiLanAddress(enabled = shouldObserveWifiLanAddress)
         HomeConnectionFeatureDialog(
             feature = feature,
             state = state,
             wifiLanAddress = wifiLanAddress,
-            onDismiss = { selectedConnectionFeature = null },
+            onDismiss = onConnectionFeatureDismiss,
             onKillSwitchChanged = onKillSwitchChanged,
             onFirewallEnabledChanged = onFirewallEnabledChanged,
             onPrivacyRouteModeSelected = onPrivacyRouteModeSelected,
@@ -1492,7 +1610,7 @@ fun HomeScreen(
             onEnableDirectTorQuickStart = onEnableDirectTorQuickStart,
             onLocalProxyLanAccessChanged = onLocalProxyLanAccessChanged,
             onRenewTorIp = onRenewTorIp,
-            onRestart = onToggleConnection,
+            onRestart = onRestart,
         )
     }
 
@@ -1842,7 +1960,7 @@ private fun ImportDropdownItemText(
     }
 }
 
-private fun normalizedDashboardCardOrder(order: List<DashboardCard>): List<DashboardCard> =
+internal fun normalizedDashboardCardOrder(order: List<DashboardCard>): List<DashboardCard> =
     (order + DashboardCard.entries)
         .distinct()
         .filter { card -> card in DashboardCard.entries }
@@ -1867,20 +1985,6 @@ private fun reorderedDashboardCards(
             }
     }
 }
-
-private fun visibleDashboardCardOrder(
-    order: List<DashboardCard>,
-    uiSettings: UiSettings,
-): List<DashboardCard> =
-    order.filter { card ->
-        when (card) {
-            DashboardCard.TRAFFIC_MAP -> uiSettings.trafficMapEnabled
-            DashboardCard.PROFILES -> true
-            DashboardCard.ACTIONS -> true
-            DashboardCard.NETWORK -> uiSettings.networkCardEnabled
-            DashboardCard.TRAFFIC -> uiSettings.trafficCardEnabled
-        }
-    }
 
 private fun Modifier.dashboardCardZIndex(
     activeCard: DashboardCard?,
