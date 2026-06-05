@@ -8,6 +8,7 @@ readonly BENCHMARK_CLASS="${FOXHOLE_BASELINE_PROFILE_BENCHMARK_CLASS:-com.foxhol
 readonly TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
 readonly ARTIFACT_ROOT="${FOXHOLE_BASELINE_PROFILE_DIFF_ARTIFACT_ROOT:-$ROOT_DIR/build/reports/macrobenchmark-baseline-before-after/$TIMESTAMP}"
 readonly BENCHMARK_OUTPUT_ROOT="$ROOT_DIR/macrobenchmark/build/outputs/connected_android_test_additional_output"
+readonly TARGET_APK_PROOF_DIR="$ARTIFACT_ROOT/target-apk-proof"
 
 usage() {
   cat <<'EOF'
@@ -47,6 +48,48 @@ if ! "${adb_cmd[@]}" shell pm path "$TARGET_PACKAGE" >/dev/null; then
   "${adb_cmd[@]}" shell pm list packages 'com.foxhole.beta' >&2 || true
   exit 1
 fi
+
+verify_target_apk_has_packaged_baseline_profile() {
+  local apk_paths_file="$TARGET_APK_PROOF_DIR/target-apk-paths.txt"
+  mkdir -p "$TARGET_APK_PROOF_DIR"
+  "${adb_cmd[@]}" shell pm path "$TARGET_PACKAGE" | tr -d '\r' | sed 's/^package://' > "$apk_paths_file"
+
+  local pulled_count=0
+  local has_baseline_prof=0
+  local has_baseline_profm=0
+  local has_profileinstaller_metadata=0
+  while IFS= read -r device_apk_path; do
+    [[ -n "$device_apk_path" ]] || continue
+    pulled_count=$((pulled_count + 1))
+    local host_apk="$TARGET_APK_PROOF_DIR/target-$pulled_count.apk"
+    local listing="$host_apk.listing.txt"
+    "${adb_cmd[@]}" pull "$device_apk_path" "$host_apk" >/dev/null
+    unzip -l "$host_apk" > "$listing"
+    grep -q 'assets/dexopt/baseline.prof' "$listing" && has_baseline_prof=1
+    grep -q 'assets/dexopt/baseline.profm' "$listing" && has_baseline_profm=1
+    grep -q 'META-INF/androidx.profileinstaller_' "$listing" && has_profileinstaller_metadata=1
+  done < "$apk_paths_file"
+
+  if [[ "$pulled_count" -eq 0 ]]; then
+    echo "No installed APK paths found for baseline profile target package: $TARGET_PACKAGE" >&2
+    exit 1
+  fi
+
+  if [[ "$has_baseline_prof" -ne 1 || "$has_baseline_profm" -ne 1 || "$has_profileinstaller_metadata" -ne 1 ]]; then
+    {
+      echo "BaselineProfileMode.Require needs a target APK with a bundled baseline profile."
+      echo "Target package does not include bundled baseline profile assets: $TARGET_PACKAGE"
+      echo "Expected entries: assets/dexopt/baseline.prof, assets/dexopt/baseline.profm, META-INF/androidx.profileinstaller_*"
+      echo "Pulled APK proof: $TARGET_APK_PROOF_DIR"
+      if [[ "$TARGET_PACKAGE" == *.debug ]]; then
+        echo "The debug target usually does not package release baseline profiles; install and target the release package com.foxhole.beta instead."
+      fi
+    } >&2
+    exit 1
+  fi
+}
+
+verify_target_apk_has_packaged_baseline_profile
 
 {
   printf 'captured_at=%s\n' "$(date -Is)"
