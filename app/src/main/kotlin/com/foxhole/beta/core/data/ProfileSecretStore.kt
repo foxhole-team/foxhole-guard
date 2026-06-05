@@ -17,6 +17,8 @@ interface ProfileSecretStore {
     suspend fun delete(secretRef: String): Boolean
 
     suspend fun deleteOrphans(activeSecretRefs: Set<String>): Int = 0
+
+    suspend fun deleteAll(): Int = 0
 }
 
 class EncryptedProfileSecretStore(
@@ -60,6 +62,11 @@ class EncryptedProfileSecretStore(
             deleteOrphanProfileSecretFiles(baseDir, activeSecretRefs)
         }
 
+    override suspend fun deleteAll(): Int =
+        withContext(Dispatchers.IO) {
+            deleteProfileSecretFiles(baseDir)
+        }
+
     private fun fileFor(secretRef: String): File = profileSecretFileFor(baseDir, secretRef)
 }
 
@@ -84,6 +91,14 @@ internal fun deleteOrphanProfileSecretFiles(
         val secretRef = file.name.removeSuffix(PROFILE_SECRET_FILE_SUFFIX)
         secretRef !in activeRefs && file.delete()
     }
+}
+
+internal fun deleteProfileSecretFiles(baseDir: File): Int {
+    val files =
+        baseDir.listFiles { file ->
+            file.isFile && file.name.endsWith(PROFILE_SECRET_FILE_SUFFIX)
+        }.orEmpty()
+    return files.count(File::delete)
 }
 
 internal fun isValidProfileSecretRef(secretRef: String): Boolean =

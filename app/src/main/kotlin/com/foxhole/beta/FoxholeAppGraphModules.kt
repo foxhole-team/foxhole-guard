@@ -4,6 +4,7 @@ import android.content.Context
 import com.foxhole.beta.core.anomaly.AnomalyNotifier
 import com.foxhole.beta.core.anomaly.AnomalyRepository
 import com.foxhole.beta.core.data.EncryptedProfileSecretStore
+import com.foxhole.beta.core.data.LocalDataRepository
 import com.foxhole.beta.core.data.ProfileDatabase
 import com.foxhole.beta.core.data.ProfileRepository
 import com.foxhole.beta.core.data.RoutingRepository
@@ -122,6 +123,17 @@ internal class FoxholeDataGraphModule(
             settingsRepository = core.settingsRepository,
             diagnosticsLogger = core.diagnosticsLogger,
             notifier = core.anomalyNotifier,
+        )
+    }
+
+    val localDataRepository: LocalDataRepository by lazy {
+        LocalDataRepository(
+            context = appContext,
+            databaseProvider = { profileDatabase },
+            settingsRepository = core.settingsRepository,
+            diagnosticsLogger = core.diagnosticsLogger,
+            profileSecretStore = secretStore,
+            dnsFilterAssetInstaller = dnsFilterAssetInstaller,
         )
     }
 }

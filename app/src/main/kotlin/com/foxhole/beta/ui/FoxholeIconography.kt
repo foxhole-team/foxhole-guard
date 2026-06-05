@@ -18,6 +18,7 @@ import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.NoPhotography
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.PowerSettingsNew
+import androidx.compose.material.icons.outlined.PrivacyTip
 import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.QueryStats
 import androidx.compose.material.icons.outlined.Refresh
@@ -64,6 +65,7 @@ internal object FoxholeIcons {
     val Statistics: ImageVector = Icons.Outlined.QueryStats
     val Expert: ImageVector = Icons.Outlined.Tune
     val Diagnostics: ImageVector = Icons.Outlined.Troubleshoot
+    val PrivacyLocalData: ImageVector = Icons.Outlined.PrivacyTip
     val DiagnosticsReport: ImageVector = Icons.AutoMirrored.Outlined.Article
     val BugReport: ImageVector = Icons.Outlined.BugReport
     val About: ImageVector = Icons.Outlined.Info

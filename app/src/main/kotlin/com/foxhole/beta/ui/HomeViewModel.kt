@@ -1559,6 +1559,16 @@ class HomeViewModel(
 
     fun resetUsageTracking() = resetUsageTrackingInternal()
 
+    fun clearDiagnosticsLocalData() = clearDiagnosticsLocalDataInternal()
+
+    fun clearNetworkActivityLocalData() = clearNetworkActivityLocalDataInternal()
+
+    fun clearAppTrafficLocalData() = clearAppTrafficLocalDataInternal()
+
+    fun clearProfilesAndSecretsLocalData() = clearProfilesAndSecretsLocalDataInternal()
+
+    fun factoryResetLocalData() = factoryResetLocalDataInternal()
+
     fun createPreset(name: String) = createPresetInternal(name)
 
     fun updatePreset(

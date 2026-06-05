@@ -1094,6 +1094,77 @@ internal fun HomeViewModel.resetUsageTrackingInternal() {
     }
 }
 
+internal fun HomeViewModel.clearDiagnosticsLocalDataInternal() {
+    viewModelScope.launch {
+        runCatching {
+            container.localDataRepository.clearDiagnostics()
+        }.onSuccess {
+            emitSuccess(getApplication<Application>().getString(R.string.privacy_local_data_clear_diagnostics_success))
+        }.onFailure {
+            emitError(getApplication<Application>().getString(R.string.privacy_local_data_clear_failed))
+        }
+    }
+}
+
+internal fun HomeViewModel.clearNetworkActivityLocalDataInternal() {
+    viewModelScope.launch {
+        runCatching {
+            container.localDataRepository.clearNetworkActivity()
+        }.onSuccess {
+            emitSuccess(
+                getApplication<Application>().getString(
+                    R.string.privacy_local_data_clear_network_activity_success,
+                ),
+            )
+        }.onFailure {
+            emitError(getApplication<Application>().getString(R.string.privacy_local_data_clear_failed))
+        }
+    }
+}
+
+internal fun HomeViewModel.clearAppTrafficLocalDataInternal() {
+    viewModelScope.launch {
+        runCatching {
+            container.localDataRepository.clearAppTrafficStats()
+            syncAppTrafficStatsSampler(false)
+        }.onSuccess {
+            emitSuccess(getApplication<Application>().getString(R.string.privacy_local_data_clear_app_traffic_success))
+        }.onFailure {
+            emitError(getApplication<Application>().getString(R.string.privacy_local_data_clear_failed))
+        }
+    }
+}
+
+internal fun HomeViewModel.clearProfilesAndSecretsLocalDataInternal() {
+    viewModelScope.launch {
+        runCatching {
+            container.localDataRepository.clearProfilesAndSecrets()
+            startupActiveProfileMutable.value = null
+        }.onSuccess {
+            emitSuccess(getApplication<Application>().getString(R.string.privacy_local_data_clear_profiles_success))
+        }.onFailure {
+            emitError(getApplication<Application>().getString(R.string.privacy_local_data_clear_failed))
+        }
+    }
+}
+
+internal fun HomeViewModel.factoryResetLocalDataInternal() {
+    viewModelScope.launch {
+        runCatching {
+            cancelAutoConnect(clearUiOnly = true)
+            container.connectionController.disconnect(suppressLocalGuard = true, userInitiated = true)
+            container.localDataRepository.factoryReset()
+            syncAppTrafficStatsSampler(false)
+            startupActiveProfileMutable.value = null
+            applyAppLocale(container.settingsRepository.settings.value.ui.locale)
+        }.onSuccess {
+            emitSuccess(getApplication<Application>().getString(R.string.privacy_local_data_factory_reset_success))
+        }.onFailure {
+            emitError(getApplication<Application>().getString(R.string.privacy_local_data_clear_failed))
+        }
+    }
+}
+
 internal suspend fun HomeViewModel.openSystemVpnSettingsInternal() {
     val app = getApplication<Application>()
     val vpnSettingsIntent =

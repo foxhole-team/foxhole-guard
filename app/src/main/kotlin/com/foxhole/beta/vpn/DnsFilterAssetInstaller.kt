@@ -1,6 +1,7 @@
 package com.foxhole.beta.vpn
 
 import android.content.Context
+import com.foxhole.beta.core.data.deleteLocalDataTarget
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.decodeFromString
@@ -16,6 +17,7 @@ data class DnsFilterRuntimePaths(
     val adGuardVpnCompatibilityDomains: List<String> = emptyList(),
 )
 
+@Suppress("TooManyFunctions")
 class DnsFilterAssetInstaller(
     private val appContext: Context,
     private val json: Json,
@@ -66,6 +68,11 @@ class DnsFilterAssetInstaller(
             }.onFailure {
                 temp.delete()
             }.getOrThrow()
+        }
+
+    suspend fun clearLocalCache(): Int =
+        withContext(Dispatchers.IO) {
+            deleteDnsFilterCache(File(appContext.filesDir, TARGET_DIR_NAME))
         }
 
     private fun File.isValidVerifiedDnsFilter(manifestFile: File): Boolean =
@@ -212,3 +219,6 @@ class DnsFilterAssetInstaller(
         const val VERIFIED_DNS_FILTER_MANIFEST_NAME = "adguard-dns-filter.verified.manifest.json"
     }
 }
+
+internal fun deleteDnsFilterCache(targetDir: File): Int =
+    deleteLocalDataTarget(targetDir)

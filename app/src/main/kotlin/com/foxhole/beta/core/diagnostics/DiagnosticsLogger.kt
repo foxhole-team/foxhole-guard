@@ -7,6 +7,7 @@ import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import com.foxhole.beta.BuildConfig
+import com.foxhole.beta.core.data.deleteLocalDataTarget
 import com.foxhole.beta.core.model.ConnectionState
 import com.foxhole.beta.core.model.DiagnosticsRetention
 import com.foxhole.beta.core.model.Settings
@@ -264,6 +265,15 @@ class DiagnosticsLogger(
             runCatching { sessionStore.clear() }
                 .onFailure { error -> publishPersistenceFailure(error) }
         }
+    }
+
+    fun clearLocalFiles(): Int {
+        clear()
+        return listOf(
+            File(context.filesDir, JOURNAL_DIR_NAME),
+            File(context.cacheDir, EXPORT_DIR_NAME),
+            File(context.filesDir, LEGACY_SMART_START_REPLAY_DIR_NAME),
+        ).sumOf(::deleteLocalDataTarget)
     }
 
     fun cleanupExpiredExports() {

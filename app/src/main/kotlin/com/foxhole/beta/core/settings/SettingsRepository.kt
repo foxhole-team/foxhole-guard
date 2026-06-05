@@ -1302,6 +1302,18 @@ class SettingsRepository(
             )
         }
 
+    suspend fun clearProfileLocalData() =
+        update {
+            it.copy(
+                lastActiveProfile = null,
+                profileTrafficTotals = emptyList(),
+                smartProfilePreferences = emptyList(),
+            )
+        }
+
+    suspend fun resetAllLocalSettings() =
+        update { defaultSettings() }
+
     private suspend fun ensureInitialized(): Settings {
         initializationResult?.let { return it.getOrThrow() }
         return lock.withLock {

@@ -48,4 +48,21 @@ class ProfileSecretStoreTest {
         assertFalse(orphanFile.exists())
         assertFalse(invalidFile.exists())
     }
+
+    @Test
+    fun `delete all profile secrets removes stored secret files only`() {
+        val directory = Files.createTempDirectory("foxhole-profile-secret-delete-all").toFile()
+        val firstRef = "123e4567-e89b-12d3-a456-426614174000"
+        val secondRef = "223e4567-e89b-12d3-a456-426614174000"
+        val firstFile = directory.resolve("$firstRef.json").apply { writeText("first") }
+        val secondFile = directory.resolve("$secondRef.json").apply { writeText("second") }
+        val unrelatedFile = directory.resolve("notes.txt").apply { writeText("keep") }
+
+        val deleted = deleteProfileSecretFiles(directory)
+
+        assertEquals(2, deleted)
+        assertFalse(firstFile.exists())
+        assertFalse(secondFile.exists())
+        assertTrue(unrelatedFile.exists())
+    }
 }

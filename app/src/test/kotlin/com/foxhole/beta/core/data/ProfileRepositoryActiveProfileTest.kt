@@ -121,6 +121,10 @@ class ProfileRepositoryActiveProfileTest {
             error("unused")
         }
 
+        override suspend fun deleteAll() {
+            profiles.clear()
+        }
+
         override suspend fun count(): Int = profiles.size
 
         override suspend fun getMostRecentProfileId(): Long? = profiles.keys.maxOrNull()

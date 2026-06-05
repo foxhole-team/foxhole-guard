@@ -146,6 +146,7 @@ private object AppRoute {
     const val EXPERT = "settings/expert"
     const val DIAGNOSTICS = "settings/diagnostics"
     const val STATISTICS = "settings/statistics"
+    const val PRIVACY_LOCAL_DATA = "settings/privacy-local-data"
 
     fun profileDetail(profileId: Long): String = "profiles/$profileId"
 
@@ -545,6 +546,7 @@ fun FoxholeApp(
                         onOpenExpert = { navigateToSettingsDetail(AppRoute.EXPERT) },
                         onOpenDiagnostics = { navigateToSettingsDetail(AppRoute.DIAGNOSTICS) },
                         onOpenStatistics = { navigateToSettingsDetail(AppRoute.STATISTICS) },
+                        onOpenPrivacyLocalData = { navigateToSettingsDetail(AppRoute.PRIVACY_LOCAL_DATA) },
                         onOpenAbout = { navigateToSettingsDetail(AppRoute.ABOUT) },
                     )
                 }
@@ -847,6 +849,19 @@ fun FoxholeApp(
                         onOpenNetworkActivityLogSettings = { navigateToSettingsDetail(AppRoute.DIAGNOSTICS) },
                         onFirewallEnabledChanged = viewModel::onFirewallEnabledChanged,
                         onClearUsage = viewModel::resetUsageTracking,
+                    )
+                }
+                composable(AppRoute.PRIVACY_LOCAL_DATA) {
+                    val state by viewModel.settingsRouteState.collectAsStateWithLifecycle()
+                    PrivacyLocalDataSettingsScreen(
+                        state = state,
+                        snackbarHostState = snackbarHostState,
+                        onNavigateUp = navController::navigateUp,
+                        onClearDiagnostics = viewModel::clearDiagnosticsLocalData,
+                        onClearNetworkActivity = viewModel::clearNetworkActivityLocalData,
+                        onClearAppTrafficStats = viewModel::clearAppTrafficLocalData,
+                        onClearProfilesAndSecrets = viewModel::clearProfilesAndSecretsLocalData,
+                        onFactoryReset = viewModel::factoryResetLocalData,
                     )
                 }
                 }

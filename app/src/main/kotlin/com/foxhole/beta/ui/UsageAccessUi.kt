@@ -64,7 +64,10 @@ internal fun UsageAccessConsentDialog(
             )
         },
         dismissButton = {
-            FoxholeDialogDismissButton(onClick = onDismiss)
+            FoxholeDialogDismissButton(
+                onClick = onDismiss,
+                label = stringResource(R.string.usage_access_consent_dismiss),
+            )
         },
     )
 }

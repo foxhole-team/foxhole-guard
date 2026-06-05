@@ -672,6 +672,9 @@ interface ProfileDao {
     @Query("delete from profiles where id = :id")
     suspend fun delete(id: Long)
 
+    @Query("delete from profiles")
+    suspend fun deleteAll()
+
     @Query("select count(*) from profiles")
     suspend fun count(): Int
 
@@ -1075,6 +1078,9 @@ interface AnomalyDao {
 
     @Query("delete from network_activity_events where timestampMs < :cutoff")
     suspend fun deleteNetworkActivityEventsBefore(cutoff: Long)
+
+    @Query("delete from network_activity_events")
+    suspend fun deleteNetworkActivityEvents()
 
     @Query("delete from anomaly_events where createdAtMs < :cutoff")
     suspend fun deleteAnomalyEventsBefore(cutoff: Long)
