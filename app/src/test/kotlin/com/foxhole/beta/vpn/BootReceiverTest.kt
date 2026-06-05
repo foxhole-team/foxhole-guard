@@ -10,6 +10,65 @@ import org.junit.Test
 
 class BootReceiverTest {
     @Test
+    fun `boot restore starts profile when auto start is enabled`() {
+        val plan =
+            bootRestorePlan(
+                autoStartOnBoot = true,
+                trafficMode = TrafficMode.PROXY,
+                localGuardMode = null,
+            )
+
+        assertEquals(BootRestoreAction.RESTORE_PROFILE, plan.action)
+        assertEquals(TrafficMode.PROXY, plan.trafficMode)
+        assertEquals(null, plan.localGuardMode)
+        assertEquals("boot restore requested", plan.diagnosticMessage)
+    }
+
+    @Test
+    fun `boot restore auto start takes precedence over local guard`() {
+        val plan =
+            bootRestorePlan(
+                autoStartOnBoot = true,
+                trafficMode = TrafficMode.TUNNEL,
+                localGuardMode = LocalGuardMode.DNS,
+            )
+
+        assertEquals(BootRestoreAction.RESTORE_PROFILE, plan.action)
+        assertEquals(TrafficMode.TUNNEL, plan.trafficMode)
+        assertEquals(null, plan.localGuardMode)
+    }
+
+    @Test
+    fun `boot restore starts local guard when auto start is disabled`() {
+        val plan =
+            bootRestorePlan(
+                autoStartOnBoot = false,
+                trafficMode = TrafficMode.PROXY,
+                localGuardMode = LocalGuardMode.FIREWALL,
+            )
+
+        assertEquals(BootRestoreAction.START_LOCAL_GUARD, plan.action)
+        assertEquals(TrafficMode.TUNNEL, plan.trafficMode)
+        assertEquals(LocalGuardMode.FIREWALL, plan.localGuardMode)
+        assertEquals("boot local guard restore requested mode=firewall", plan.diagnosticMessage)
+    }
+
+    @Test
+    fun `boot restore skips when auto start and local guard are disabled`() {
+        val plan =
+            bootRestorePlan(
+                autoStartOnBoot = false,
+                trafficMode = TrafficMode.PROXY,
+                localGuardMode = null,
+            )
+
+        assertEquals(BootRestoreAction.SKIP, plan.action)
+        assertEquals(TrafficMode.PROXY, plan.trafficMode)
+        assertEquals(null, plan.localGuardMode)
+        assertEquals("boot restore skipped: auto start disabled", plan.diagnosticMessage)
+    }
+
+    @Test
     fun `package replace restores local guard from resume state after stale kill`() {
         val plan =
             packageReplaceRecoveryPlan(
