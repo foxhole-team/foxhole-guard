@@ -70,7 +70,12 @@
     <string name="traffic_map_country_detail_role_vpn">Страна VPN маршрута</string>
     <string name="traffic_map_country_detail_role_tor">Страна TOR exit</string>
     <string name="traffic_map_country_detail_role_unknown">Неподдерживаемые страны</string>
-    <string name="traffic_map_country_detail_app_stats_required">Детали приложений требуют статистику per-app.</string>
+    <string name="traffic_map_country_detail_first_seen">Впервые</string>
+    <string name="traffic_map_country_detail_apps">Приложения</string>
+    <string name="traffic_map_country_detail_hosts">Хосты</string>
+    <string name="traffic_map_country_detail_connections">Подключений: %1$d</string>
+    <string name="traffic_map_country_detail_apps_count">Приложений: %1$d</string>
+    <string name="traffic_map_country_detail_app_stats_required">Детали приложений и хостов требуют per-app статистику и журнал network activity.</string>
     <string name="traffic_map_power_save_disabled">Карта отключена для уменьшения энергопотребления</string>
     <string name="usage_access_consent_title">Разрешить статистику по приложениям?</string>
     <string name="usage_access_consent_body">FoxHole будет локально читать статистику сетевого трафика по приложениям, чтобы показывать per-app traffic, аномалии и помогать настраивать маршрутизацию. Данные хранятся на этом устройстве в зашифрованной локальной базе и не отправляются на серверы FoxHole. Это можно отключить и удалить в настройках.</string>

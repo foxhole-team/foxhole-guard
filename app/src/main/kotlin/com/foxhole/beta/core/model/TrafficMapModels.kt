@@ -92,6 +92,39 @@ data class TrafficMapPeriodSnapshots(
 }
 
 @Immutable
+data class TrafficMapCountryDetail(
+    val countryCode: String,
+    val appRows: List<TrafficMapCountryAppRow> = emptyList(),
+    val hostRows: List<TrafficMapCountryHostRow> = emptyList(),
+    val firstSeenAtMs: Long? = null,
+    val lastSeenAtMs: Long? = null,
+) {
+    val hasRows: Boolean
+        get() = appRows.isNotEmpty() || hostRows.isNotEmpty()
+}
+
+@Immutable
+data class TrafficMapCountryAppRow(
+    val packageName: String,
+    val bytes: Long,
+    val connections: Int,
+    val firstSeenAtMs: Long,
+    val lastSeenAtMs: Long,
+)
+
+@Immutable
+data class TrafficMapCountryHostRow(
+    val remoteHost: String,
+    val remotePort: Int?,
+    val protocol: String,
+    val bytes: Long,
+    val connections: Int,
+    val appCount: Int,
+    val firstSeenAtMs: Long,
+    val lastSeenAtMs: Long,
+)
+
+@Immutable
 data class TrafficMapUiState(
     val originLat: Double = 48.8566,
     val originLon: Double = 2.3522,
@@ -107,6 +140,7 @@ data class TrafficMapUiState(
     val countryVisuals: List<TrafficMapCountryVisual> = emptyList(),
     val sampleWindowLabel: String = "No active connections",
     val periodSnapshots: TrafficMapPeriodSnapshots = TrafficMapPeriodSnapshots(),
+    val countryDetailsByCode: Map<String, TrafficMapCountryDetail> = emptyMap(),
     val lastSampleAtMs: Long? = null,
     val unknownCountryBytes: Long = 0L,
     val unknownCountryConnections: Int = 0,

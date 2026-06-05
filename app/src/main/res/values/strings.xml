@@ -69,7 +69,12 @@
     <string name="traffic_map_country_detail_role_vpn">VPN route country</string>
     <string name="traffic_map_country_detail_role_tor">TOR exit country</string>
     <string name="traffic_map_country_detail_role_unknown">Unsupported country bucket</string>
-    <string name="traffic_map_country_detail_app_stats_required">App details require per-app statistics.</string>
+    <string name="traffic_map_country_detail_first_seen">First seen</string>
+    <string name="traffic_map_country_detail_apps">Apps</string>
+    <string name="traffic_map_country_detail_hosts">Hosts</string>
+    <string name="traffic_map_country_detail_connections">Connections: %1$d</string>
+    <string name="traffic_map_country_detail_apps_count">Apps: %1$d</string>
+    <string name="traffic_map_country_detail_app_stats_required">App and host details require per-app statistics and network activity logging.</string>
     <string name="traffic_map_power_save_disabled">Map is disabled to reduce battery usage</string>
     <string name="usage_access_consent_title">Allow per-app traffic statistics?</string>
     <string name="usage_access_consent_body">FoxHole will locally read app network traffic statistics to show per-app traffic, detect anomalies, and help configure routing. The data is stored on this device in the encrypted local database and is not sent to FoxHole servers. You can turn it off and delete the data in Settings.</string>

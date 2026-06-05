@@ -647,6 +647,11 @@ class HomeViewModel(
         }
             .distinctUntilChanged()
 
+    private val trafficMapShowPrivateNetworkDetails =
+        container.settingsRepository.settings
+            .map { settings -> !settings.expert.sanitizeNetworkActivityPrivateData }
+            .distinctUntilChanged()
+
     val trafficMapUiState =
         container.trafficMapRepository.trafficMapState(
             scope = viewModelScope,
@@ -655,6 +660,8 @@ class HomeViewModel(
             torIpInfo = trafficMapTorIpInfo,
             runtimeAvailable = trafficMapRuntimeAvailable,
             recentTrafficWindows = container.anomalyRepository.recentTrafficWindows,
+            recentNetworkActivityEvents = container.anomalyRepository.recentNetworkActivityEvents,
+            showPrivateNetworkDetails = trafficMapShowPrivateNetworkDetails,
         )
 
     private fun RuntimeUiState.hasConnectedPendingDashboardIpRefresh(): Boolean {
