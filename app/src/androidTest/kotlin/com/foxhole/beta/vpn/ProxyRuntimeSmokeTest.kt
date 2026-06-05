@@ -176,6 +176,8 @@ class ProxyRuntimeSmokeTest {
             listOf(
                 "https://cp.cloudflare.com/generate_204",
                 "https://www.gstatic.com/generate_204",
+                "https://1.1.1.1/cdn-cgi/trace",
+                "https://www.google.com/generate_204",
             )
 
         val DIRECT_PROXY_SMOKE_PROFILE =
