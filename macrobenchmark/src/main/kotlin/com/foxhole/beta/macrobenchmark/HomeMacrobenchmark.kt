@@ -3,9 +3,11 @@ package com.foxhole.beta.macrobenchmark
 import android.content.Intent
 import androidx.benchmark.macro.BaselineProfileMode
 import androidx.benchmark.macro.CompilationMode
+import androidx.benchmark.macro.ExperimentalMetricApi
 import androidx.benchmark.macro.FrameTimingMetric
 import androidx.benchmark.macro.StartupMode
 import androidx.benchmark.macro.StartupTimingMetric
+import androidx.benchmark.macro.TraceSectionMetric
 import androidx.benchmark.macro.junit4.MacrobenchmarkRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.uiautomator.By
@@ -18,18 +20,28 @@ import org.junit.runner.RunWith
 import java.util.regex.Pattern
 
 @RunWith(AndroidJUnit4::class)
+@OptIn(ExperimentalMetricApi::class)
 class HomeMacrobenchmark {
     @get:Rule
     val benchmarkRule = MacrobenchmarkRule()
 
     @Test
     fun startup() =
+        measureStartup(StartupMode.COLD)
+
+    @Test
+    fun warmStartup() =
+        measureStartup(StartupMode.WARM)
+
+    private fun measureStartup(startupMode: StartupMode) =
         benchmarkRule.measureRepeated(
             packageName = PACKAGE_NAME,
-            metrics = listOf(StartupTimingMetric()),
+            metrics =
+                listOf(StartupTimingMetric()) +
+                    traceMetrics(HOME_FIRST_COMPOSITION_TRACE),
             compilationMode = BENCHMARK_COMPILATION_MODE,
             iterations = SHORT_ITERATIONS,
-            startupMode = StartupMode.COLD,
+            startupMode = startupMode,
         ) {
             pressHome()
             startActivityAndWait()
@@ -39,7 +51,7 @@ class HomeMacrobenchmark {
     fun homeScroll() =
         benchmarkRule.measureRepeated(
             packageName = PACKAGE_NAME,
-            metrics = listOf(FrameTimingMetric()),
+            metrics = frameMetricsWithTrace(HOME_FIRST_COMPOSITION_TRACE),
             compilationMode = BENCHMARK_COMPILATION_MODE,
             iterations = SHORT_ITERATIONS,
             startupMode = StartupMode.WARM,
@@ -69,7 +81,7 @@ class HomeMacrobenchmark {
     fun bottomNavigationRoundTrip() =
         benchmarkRule.measureRepeated(
             packageName = PACKAGE_NAME,
-            metrics = listOf(FrameTimingMetric()),
+            metrics = frameMetricsWithTrace(SETTINGS_NAVIGATION_TRACE),
             compilationMode = BENCHMARK_COMPILATION_MODE,
             iterations = SHORT_ITERATIONS,
             startupMode = StartupMode.WARM,
@@ -122,7 +134,7 @@ class HomeMacrobenchmark {
     fun settingsRoutingAppsPickerSearch() {
         benchmarkRule.measureRepeated(
             packageName = PACKAGE_NAME,
-            metrics = listOf(FrameTimingMetric()),
+            metrics = frameMetricsWithTrace(APP_PICKER_FILTER_TRACE, APP_ICON_LOAD_TRACE, SETTINGS_NAVIGATION_TRACE),
             compilationMode = BENCHMARK_COMPILATION_MODE,
             iterations = SHORT_ITERATIONS,
             startupMode = StartupMode.WARM,
@@ -155,12 +167,50 @@ class HomeMacrobenchmark {
             findByTestTag("routing_apps_picker_search")?.setText(APP_PICKER_SEARCH_QUERY)
                 ?: error("Routing app picker search missing; ${visibleSettingsState()}")
             device.waitForIdle()
+            toggleFirstUnlockedAppInPicker()
+            device.waitForIdle()
+            toggleFirstUnlockedAppInPicker()
+            device.waitForIdle()
             device.pressBack()
             device.waitForIdle()
             device.pressBack()
             device.waitForIdle()
         }
     }
+
+    @Test
+    fun dashboardTrafficMapOpen() =
+        benchmarkRule.measureRepeated(
+            packageName = PACKAGE_NAME,
+            metrics =
+                frameMetricsWithTrace(
+                    TRAFFIC_MAP_LOAD_SHAPES_TRACE,
+                    TRAFFIC_MAP_RENDER_LAND_BITMAP_TRACE,
+                    TRAFFIC_MAP_BUILD_ROUTES_TRACE,
+                    TRAFFIC_MAP_DRAW_TRACE,
+                ),
+            compilationMode = BENCHMARK_COMPILATION_MODE,
+            iterations = SHORT_ITERATIONS,
+            startupMode = StartupMode.WARM,
+            setupBlock = {
+                pressHome()
+                startActivityAndWait(foxholeLauncherIntent())
+                device.waitForIdle()
+            },
+        ) {
+            clickSettingsBottomNav()
+            device.waitForIdle()
+            clickDashboardBottomNav()
+            device.waitForIdle()
+            waitForTestTag("home_dashboard_list")
+            val centerX = device.displayWidth / 2
+            val upperY = (device.displayHeight * UPPER_SWIPE_Y_RATIO).toInt()
+            val lowerY = (device.displayHeight * LOWER_SWIPE_Y_RATIO).toInt()
+            repeat(2) {
+                device.swipe(centerX, lowerY, centerX, upperY, SWIPE_STEPS)
+                device.waitForIdle()
+            }
+        }
 
     @Test
     fun settingsSecurityTransition() =
@@ -220,7 +270,7 @@ class HomeMacrobenchmark {
     private fun measureSettingsDetailTransition(target: SettingsDetailTarget) {
         benchmarkRule.measureRepeated(
             packageName = PACKAGE_NAME,
-            metrics = listOf(FrameTimingMetric()),
+            metrics = frameMetricsWithTrace(SETTINGS_NAVIGATION_TRACE),
             compilationMode = BENCHMARK_COMPILATION_MODE,
             iterations = SHORT_ITERATIONS,
             startupMode = StartupMode.WARM,
@@ -318,6 +368,16 @@ class HomeMacrobenchmark {
 
     private fun findByAnyText(labels: List<String>) =
         labels.firstNotNullOfOrNull { label -> device.findObject(By.text(label)) }
+
+    private fun toggleFirstUnlockedAppInPicker() {
+        val firstRow =
+            device.findObjects(By.res(Pattern.compile(".*routing_apps_picker_row_.*")))
+                .firstOrNull()
+                ?: device.findObjects(By.clazz("android.view.View"))
+                    .firstOrNull { node -> node.text?.contains(APP_PICKER_SEARCH_QUERY, ignoreCase = true) == true }
+                ?: return
+        clickCenter(firstRow)
+    }
 
     private fun isSettingsHomeVisible() =
         findByTestTag("settings_screen") != null || findByAnyText(SETTINGS_HOME_ANCHOR_LABELS) != null
@@ -436,6 +496,14 @@ class HomeMacrobenchmark {
         private const val DETAIL_OPEN_POLL_COUNT = 120
         private const val DETAIL_OPEN_POLL_DELAY_MS = 50L
         private const val APP_PICKER_SEARCH_QUERY = "com."
+        private const val HOME_FIRST_COMPOSITION_TRACE = "HomeScreen first composition"
+        private const val SETTINGS_NAVIGATION_TRACE = "Settings/navigation"
+        private const val APP_PICKER_FILTER_TRACE = "AppPicker/filter"
+        private const val APP_ICON_LOAD_TRACE = "AppIcon/load"
+        private const val TRAFFIC_MAP_LOAD_SHAPES_TRACE = "TrafficMap/loadShapes"
+        private const val TRAFFIC_MAP_RENDER_LAND_BITMAP_TRACE = "TrafficMap/renderLandBitmap"
+        private const val TRAFFIC_MAP_BUILD_ROUTES_TRACE = "TrafficMap/buildRoutes"
+        private const val TRAFFIC_MAP_DRAW_TRACE = "TrafficMap/draw"
         private val SETTINGS_HOME_ANCHOR_LABELS = listOf("Smart start", "Умный старт", "DNS")
         private val SETTINGS_DEBUG_TAGS =
             listOf(
@@ -466,3 +534,23 @@ class HomeMacrobenchmark {
             )
     }
 }
+
+@OptIn(ExperimentalMetricApi::class)
+private fun frameMetricsWithTrace(vararg traceSections: String) =
+    listOf(FrameTimingMetric()) + traceMetrics(*traceSections)
+
+@OptIn(ExperimentalMetricApi::class)
+private fun traceMetrics(vararg traceSections: String) =
+    traceSections.map { section ->
+        TraceSectionMetric(
+            sectionName = section,
+            mode = TraceSectionMetric.Mode.Sum,
+            label = section.traceMetricLabel(),
+        )
+    }
+
+private fun String.traceMetricLabel(): String =
+    replace("/", " ")
+        .split(" ")
+        .filter(String::isNotBlank)
+        .joinToString("") { part -> part.replaceFirstChar(Char::uppercaseChar) }

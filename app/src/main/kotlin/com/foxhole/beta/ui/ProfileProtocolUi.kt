@@ -1022,10 +1022,11 @@ internal fun SelectableInstalledAppRow(
     app: InstalledAppOption,
     checked: Boolean,
     enabled: Boolean = true,
+    modifier: Modifier = Modifier,
     onToggle: (Boolean) -> Unit,
 ) {
     FoxholeCard(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         onClick = if (enabled) ({ onToggle(!checked) }) else null,
     ) {
         Row(

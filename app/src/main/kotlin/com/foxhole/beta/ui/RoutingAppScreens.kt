@@ -654,6 +654,7 @@ fun AppPickerScreen(
                 app = app,
                 checked = checked,
                 enabled = !locked,
+                modifier = Modifier.testTag("routing_apps_picker_row_${app.packageName}"),
                 onToggle = { value ->
                     if (!locked) {
                         val nextSelection =

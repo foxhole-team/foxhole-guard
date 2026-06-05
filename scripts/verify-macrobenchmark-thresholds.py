@@ -13,7 +13,9 @@ from typing import Any
 STARTUP_BENCHMARK = "startup"
 FULL_SUITE_BENCHMARKS = {
     STARTUP_BENCHMARK,
+    "warmStartup",
     "bottomNavigationRoundTrip",
+    "dashboardTrafficMapOpen",
     "homeScroll",
     "settingsTrafficTransition",
     "settingsDnsTransition",
@@ -34,6 +36,23 @@ TRANSITION_FRAME_OVERRUN_P50_MAX_MS = 60.0
 TRANSITION_FRAME_OVERRUN_P90_MAX_MS = 180.0
 TRANSITION_FRAME_OVERRUN_P95_MAX_MS = 220.0
 MIN_REPEAT_ITERATIONS = 3
+REQUIRED_TRACE_METRIC_LABELS = {
+    STARTUP_BENCHMARK: {"HomeScreenFirstCompositionMs"},
+    "warmStartup": {"HomeScreenFirstCompositionMs"},
+    "homeScroll": {"HomeScreenFirstCompositionMs"},
+    "bottomNavigationRoundTrip": {"SettingsNavigationMs"},
+    "dashboardTrafficMapOpen": {
+        "TrafficMapLoadShapesMs",
+        "TrafficMapRenderLandBitmapMs",
+        "TrafficMapBuildRoutesMs",
+        "TrafficMapDrawMs",
+    },
+    "settingsRoutingAppsPickerSearch": {
+        "AppPickerFilterMs",
+        "AppIconLoadMs",
+        "SettingsNavigationMs",
+    },
+}
 
 
 def parse_args() -> argparse.Namespace:
@@ -86,6 +105,20 @@ def require_threshold(label: str, actual: float, maximum: float) -> None:
         raise AssertionError(f"{label} is {actual:.2f} ms; maximum is {maximum:.2f} ms")
 
 
+def require_trace_metrics(benchmark: dict[str, Any]) -> list[str]:
+    name = str(benchmark.get("name"))
+    required_labels = REQUIRED_TRACE_METRIC_LABELS.get(name, set())
+    metrics = benchmark.get("metrics", {})
+    missing = [
+        label
+        for label in sorted(required_labels)
+        if not any(metric_name.startswith(label) for metric_name in metrics)
+    ]
+    if missing:
+        raise AssertionError(f"{name} missing trace metric(s): {', '.join(missing)}")
+    return [f"{name} trace={label}" for label in sorted(required_labels)]
+
+
 def verify_startup(benchmark: dict[str, Any]) -> list[str]:
     repeat_iterations = int(benchmark.get("repeatIterations", 0))
     if repeat_iterations < MIN_REPEAT_ITERATIONS:
@@ -97,7 +130,7 @@ def verify_startup(benchmark: dict[str, Any]) -> list[str]:
     return [
         f"startup median={median:.1f} ms",
         f"startup max={maximum:.1f} ms",
-    ]
+    ] + require_trace_metrics(benchmark)
 
 
 def verify_transition(benchmark: dict[str, Any]) -> list[str]:
@@ -128,7 +161,7 @@ def verify_transition(benchmark: dict[str, Any]) -> list[str]:
         f"overrunP50={overrun_p50:.1f} ms",
         f"overrunP90={overrun_p90:.1f} ms",
         f"overrunP95={overrun_p95:.1f} ms",
-    ]
+    ] + require_trace_metrics(benchmark)
 
 
 def main() -> int:

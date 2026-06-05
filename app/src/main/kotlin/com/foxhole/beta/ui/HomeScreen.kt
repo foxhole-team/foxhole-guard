@@ -3,6 +3,7 @@
 package com.foxhole.beta.ui
 
 import android.text.format.Formatter
+import android.os.Trace
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
@@ -168,6 +169,14 @@ fun HomeScreen(
     onDashboardCardOrderChanged: (List<DashboardCard>) -> Unit,
 ) {
     DebugRecompositionCounter("HomeScreen")
+    remember {
+        Trace.beginSection("HomeScreen first composition")
+        true
+    }
+    DisposableEffect(Unit) {
+        Trace.endSection()
+        onDispose {}
+    }
     val context = LocalContext.current
     var importMenuExpanded by rememberSaveable { mutableStateOf(false) }
     var pendingRefreshProfileAction by rememberSaveable {

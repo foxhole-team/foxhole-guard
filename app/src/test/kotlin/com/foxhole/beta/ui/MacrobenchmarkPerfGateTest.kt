@@ -15,10 +15,19 @@ class MacrobenchmarkPerfGateTest {
 
         listOf(
             "fun startup()",
+            "fun warmStartup()",
             "fun homeScroll()",
             "fun bottomNavigationRoundTrip()",
+            "fun dashboardTrafficMapOpen()",
             "fun settingsSmartStartTransition()",
             "fun settingsRoutingAppsPickerSearch()",
+            "TraceSectionMetric(",
+            "\"HomeScreen first composition\"",
+            "\"TrafficMap/loadShapes\"",
+            "\"AppPicker/filter\"",
+            "\"AppIcon/load\"",
+            "\"Settings/navigation\"",
+            "toggleFirstUnlockedAppInPicker()",
         ).forEach { marker ->
             assertTrue(benchmarkSource.contains(marker))
         }
@@ -35,11 +44,15 @@ class MacrobenchmarkPerfGateTest {
 
         listOf(
             "\"bottomNavigationRoundTrip\"",
+            "\"warmStartup\"",
+            "\"dashboardTrafficMapOpen\"",
             "\"homeScroll\"",
             "\"settingsSmartStartTransition\"",
             "\"settingsRoutingAppsPickerSearch\"",
             "TRANSITION_FRAME_CPU_P95_MAX_MS",
             "TRANSITION_FRAME_OVERRUN_P95_MAX_MS",
+            "REQUIRED_TRACE_METRIC_LABELS",
+            "HomeScreenFirstCompositionMs",
             "cpuP95",
             "overrunP95",
         ).forEach { marker ->
