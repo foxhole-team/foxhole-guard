@@ -120,6 +120,10 @@ class MacrobenchmarkPerfGateTest {
             "scripts/run-ci-macrobenchmark.sh",
             "../scripts/run-ci-macrobenchmark.sh",
         ).readText()
+        val analyzer = projectFile(
+            "scripts/analyze-android-perf-logs.py",
+            "../scripts/analyze-android-perf-logs.py",
+        ).readText()
         val beforeAfterScript = projectFile(
             "scripts/run-baseline-profile-before-after.sh",
             "../scripts/run-baseline-profile-before-after.sh",
@@ -163,6 +167,7 @@ class MacrobenchmarkPerfGateTest {
         assertTrue(beforeAfterScript.contains("baseline-profile-before-after.md"))
         assertTrue(beforeAfterScript.contains("summary.json"))
         assertTrue(beforeAfterScript.contains("analyze-android-perf-logs.py"))
+        assertTrue(analyzer.contains("path.name == \"perf-log-summary.txt\""))
     }
 
     @Test

@@ -167,6 +167,8 @@ def discover_files(paths: Iterable[str]) -> Iterator[Path]:
 def should_read(path: Path) -> bool:
     if path.name.startswith("."):
         return False
+    if path.name == "perf-log-summary.txt":
+        return False
     if path.suffix == ".gz":
         return path.with_suffix("").suffix in LOG_SUFFIXES
     return path.suffix in LOG_SUFFIXES or path.name in {"meminfo", "logcat", "test-results.log"}
