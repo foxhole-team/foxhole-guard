@@ -505,6 +505,7 @@ fun SmartStartSettingsScreen(
         title = stringResource(R.string.smart_start_settings_title),
         snackbarHostState = snackbarHostState,
         onNavigateUp = onNavigateUp,
+        tag = "smart_start_settings_screen",
         actions = {
             SettingsHelpAction(
                 title = stringResource(R.string.auto_connect),

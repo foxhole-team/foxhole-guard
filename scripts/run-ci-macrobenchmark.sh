@@ -27,6 +27,19 @@ run_startup_benchmark() {
   python3 scripts/verify-macrobenchmark-thresholds.py
 }
 
+run_baseline_profile_generation() {
+  install_target_app
+  "$GRADLEW" --no-daemon --console=plain --stacktrace :macrobenchmark:connectedCheck \
+    -Pmacrobenchmark.targetPackage="$TARGET_PACKAGE" \
+    -Pandroid.testInstrumentationRunnerArguments.androidx.benchmark.enabledRules=BaselineProfile \
+    -Pandroid.testInstrumentationRunnerArguments.class=com.foxhole.beta.macrobenchmark.FoxholeBaselineProfileGenerator
+  if ! find macrobenchmark/build/outputs -type f -name '*baseline-prof*.txt' | grep -q .; then
+    echo "Baseline profile generation finished without a baseline-prof text artifact." >&2
+    find macrobenchmark/build/outputs -type f >&2 || true
+    exit 1
+  fi
+}
+
 if [[ "$EVENT_NAME" == "pull_request" ]]; then
   run_startup_benchmark
 elif [[
@@ -39,6 +52,7 @@ elif [[
   "$GRADLEW" --no-daemon --console=plain --stacktrace :macrobenchmark:connectedCheck \
     -Pmacrobenchmark.targetPackage="$TARGET_PACKAGE"
   python3 scripts/verify-macrobenchmark-thresholds.py --full-suite
+  run_baseline_profile_generation
 elif [[ "$GITHUB_REF_NAME" == "refs/heads/dev" ]]; then
   run_startup_benchmark
 else

@@ -1,7 +1,9 @@
 package com.foxhole.beta.ui
 
 import com.foxhole.beta.core.model.DashboardCard
+import com.foxhole.beta.core.model.InstalledAppOption
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -598,6 +600,57 @@ class HomeDashboardHotPathTest {
         assertTrue(appPickerSource.contains("val draftSelectionSet = remember(draftSelection)"))
         assertTrue(appPickerSource.contains("val checked = app.packageName in draftSelectionSet || locked"))
         assertFalse(appPickerSource.contains("draftSelection.contains(app.packageName)"))
+    }
+
+    @Test
+    fun `dashboard lazy list uses stable content types for hot cards`() {
+        val homeSource = testSourceFile("HomeScreen.kt").readText()
+
+        assertTrue(homeSource.contains("item(key = \"connection_header\", contentType = \"dashboard_header\")"))
+        listOf(
+            "dashboard_card_traffic_map",
+            "dashboard_card_profiles",
+            "dashboard_card_actions",
+            "dashboard_card_network",
+            "dashboard_card_traffic",
+        ).forEach { contentType ->
+            assertTrue(homeSource.contains("contentType = \"$contentType\""))
+        }
+    }
+
+    @Test
+    fun `routing app icon grid caps preview work and exposes overflow tile`() {
+        val appPickerSource = testSourceFile("RoutingAppScreens.kt").readText()
+
+        assertTrue(appPickerSource.contains("apps.take(APP_ICON_GRID_PREVIEW_LIMIT)"))
+        assertTrue(appPickerSource.contains("APP_ICON_GRID_PREVIEW_LIMIT = 12"))
+        assertTrue(appPickerSource.contains("AppGridMoreTile("))
+        assertTrue(appPickerSource.contains("testTag(\"app_grid_more_tile\")"))
+        assertTrue(appPickerSource.contains("contentType = \"app-grid-more\""))
+    }
+
+    @Test
+    fun `app picker builds one normalized search index per app list`() {
+        val appPickerSource = testSourceFile("RoutingAppScreens.kt").readText()
+
+        assertTrue(appPickerSource.contains("remember(state.installedApps) { buildInstalledAppSearchIndex(state.installedApps) }"))
+        assertTrue(appPickerSource.contains("filterIndexedApps(appSearchIndex, query)"))
+        assertFalse(appPickerSource.contains("filterApps(apps, query)"))
+    }
+
+    @Test
+    fun `app picker search index filters labels and package names consistently`() {
+        val apps =
+            listOf(
+                InstalledAppOption(packageName = "org.telegram.messenger", label = "Telegram", isSystemApp = false),
+                InstalledAppOption(packageName = "com.android.settings", label = "Settings", isSystemApp = true),
+                InstalledAppOption(packageName = "com.example.camera", label = "Camera", isSystemApp = false),
+            )
+        val index = buildInstalledAppSearchIndex(apps)
+
+        assertEquals(listOf(apps[0]), filterIndexedApps(index, " TELE "))
+        assertEquals(listOf(apps[1]), filterIndexedApps(index, "android.set"))
+        assertEquals(apps, filterIndexedApps(index, " "))
     }
 
     @Test

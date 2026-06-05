@@ -688,6 +688,12 @@
     <string name="routing_apps_mode_proxy_summary">Выбранные приложения используют VPN. Остальной трафик устройства направлен в обход VPN.</string>
     <string name="routing_apps_mode_direct_summary">Выбранные приложения не используют VPN. Остальной трафик устройства направлен в VPN.</string>
     <string name="selected_app_exceptions">Выбранные приложения</string>
+    <plurals name="app_grid_more_apps">
+        <item quantity="one">+%1$d приложение</item>
+        <item quantity="few">+%1$d приложения</item>
+        <item quantity="many">+%1$d приложений</item>
+        <item quantity="other">+%1$d приложения</item>
+    </plurals>
     <string name="blocked_app_exceptions">Заблокированные</string>
     <string name="blocked_apps_info_body">Выбранным приложениям запрещен доступ в интернет.</string>
     <string name="block_apps_always_title">Блокировать постоянно</string>

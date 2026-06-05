@@ -13,8 +13,12 @@ from typing import Any
 STARTUP_BENCHMARK = "startup"
 FULL_SUITE_BENCHMARKS = {
     STARTUP_BENCHMARK,
+    "bottomNavigationRoundTrip",
+    "homeScroll",
     "settingsTrafficTransition",
     "settingsDnsTransition",
+    "settingsSmartStartTransition",
+    "settingsRoutingAppsPickerSearch",
     "settingsSecurityTransition",
     "settingsApplicationTransition",
     "settingsDiagnosticsTransition",
@@ -25,8 +29,10 @@ STARTUP_MEDIAN_MAX_MS = 1_500.0
 STARTUP_MAXIMUM_MAX_MS = 2_500.0
 TRANSITION_FRAME_CPU_P50_MAX_MS = 60.0
 TRANSITION_FRAME_CPU_P90_MAX_MS = 180.0
+TRANSITION_FRAME_CPU_P95_MAX_MS = 220.0
 TRANSITION_FRAME_OVERRUN_P50_MAX_MS = 60.0
 TRANSITION_FRAME_OVERRUN_P90_MAX_MS = 180.0
+TRANSITION_FRAME_OVERRUN_P95_MAX_MS = 220.0
 MIN_REPEAT_ITERATIONS = 3
 
 
@@ -104,18 +110,24 @@ def verify_transition(benchmark: dict[str, Any]) -> list[str]:
         raise AssertionError(f"{name} has no frame samples")
     cpu_p50 = sampled_metric_value(benchmark, "frameDurationCpuMs", "P50")
     cpu_p90 = sampled_metric_value(benchmark, "frameDurationCpuMs", "P90")
+    cpu_p95 = sampled_metric_value(benchmark, "frameDurationCpuMs", "P95")
     overrun_p50 = sampled_metric_value(benchmark, "frameOverrunMs", "P50")
     overrun_p90 = sampled_metric_value(benchmark, "frameOverrunMs", "P90")
+    overrun_p95 = sampled_metric_value(benchmark, "frameOverrunMs", "P95")
     require_threshold(f"{name} frameDurationCpuMs P50", cpu_p50, TRANSITION_FRAME_CPU_P50_MAX_MS)
     require_threshold(f"{name} frameDurationCpuMs P90", cpu_p90, TRANSITION_FRAME_CPU_P90_MAX_MS)
+    require_threshold(f"{name} frameDurationCpuMs P95", cpu_p95, TRANSITION_FRAME_CPU_P95_MAX_MS)
     require_threshold(f"{name} frameOverrunMs P50", overrun_p50, TRANSITION_FRAME_OVERRUN_P50_MAX_MS)
     require_threshold(f"{name} frameOverrunMs P90", overrun_p90, TRANSITION_FRAME_OVERRUN_P90_MAX_MS)
+    require_threshold(f"{name} frameOverrunMs P95", overrun_p95, TRANSITION_FRAME_OVERRUN_P95_MAX_MS)
     return [
         f"{name} frames={frame_count:.0f}",
         f"cpuP50={cpu_p50:.1f} ms",
         f"cpuP90={cpu_p90:.1f} ms",
+        f"cpuP95={cpu_p95:.1f} ms",
         f"overrunP50={overrun_p50:.1f} ms",
         f"overrunP90={overrun_p90:.1f} ms",
+        f"overrunP95={overrun_p95:.1f} ms",
     ]
 
 

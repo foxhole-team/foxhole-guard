@@ -134,6 +134,7 @@ fun RoutingAppsScreen(
         title = stringResource(R.string.routing_apps_title),
         snackbarHostState = snackbarHostState,
         onNavigateUp = onNavigateUp,
+        tag = "routing_apps_screen",
         bannerPlacement = FoxholeBannerPlacement.BOTTOM,
     ) {
         item {
@@ -391,6 +392,9 @@ private fun AppIconGrid(
     onRemove: (InstalledAppOption) -> Unit,
 ) {
     BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+        val previewApps = remember(apps) { apps.take(APP_ICON_GRID_PREVIEW_LIMIT) }
+        val hiddenCount = apps.size - previewApps.size
+        val tileCount = previewApps.size + if (hiddenCount > 0) 1 else 0
         val columns =
             when {
                 maxWidth < 420.dp -> 3
@@ -398,7 +402,7 @@ private fun AppIconGrid(
                 maxWidth < 640.dp -> 5
                 else -> 6
             }
-        val rows = ((apps.size + columns - 1) / columns).coerceAtLeast(1)
+        val rows = ((tileCount + columns - 1) / columns).coerceAtLeast(1)
         val gridHeight = AppGridTileHeight * rows + AppGridGap * (rows - 1)
         LazyVerticalGrid(
             columns = GridCells.Fixed(columns),
@@ -411,7 +415,7 @@ private fun AppIconGrid(
             verticalArrangement = Arrangement.spacedBy(AppGridGap),
             userScrollEnabled = false,
         ) {
-            gridItems(apps, key = InstalledAppOption::packageName) { app ->
+            gridItems(previewApps, key = InstalledAppOption::packageName) { app ->
                 AppGridTile(
                     app = app,
                     onDropPackage = { packageName -> onDropPackage(packageName, app.packageName) },
@@ -419,6 +423,41 @@ private fun AppIconGrid(
                     modifier = Modifier.animateItem(),
                 )
             }
+            if (hiddenCount > 0) {
+                item(key = "app-grid-more", contentType = "app-grid-more") {
+                    AppGridMoreTile(hiddenCount = hiddenCount)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AppGridMoreTile(hiddenCount: Int) {
+    Surface(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .height(AppGridTileHeight)
+                .testTag("app_grid_more_tile"),
+        shape = MaterialTheme.shapes.medium,
+        tonalElevation = 1.dp,
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.58f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.42f)),
+    ) {
+        Box(
+            modifier = Modifier.padding(10.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = pluralStringResource(R.plurals.app_grid_more_apps, hiddenCount, hiddenCount),
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
     }
 }
@@ -523,8 +562,9 @@ fun AppPickerScreen(
         mutableStateOf(selectedPackages)
     }
     val draftSelectionSet = remember(draftSelection) { draftSelection.toSet() }
-    val filteredApps = remember(state.installedApps, query, appFilter) {
-        filterApps(state.installedApps, query)
+    val appSearchIndex = remember(state.installedApps) { buildInstalledAppSearchIndex(state.installedApps) }
+    val filteredApps = remember(appSearchIndex, query, appFilter) {
+        filterIndexedApps(appSearchIndex, query)
             .filter { app ->
                 when (appFilter) {
                     InstalledAppFilter.ALL -> true
@@ -968,6 +1008,7 @@ private const val FOXHOLE_APP_DRAG_PREFIX = "foxhole-app:"
 private const val FOXHOLE_APP_DRAG_LABEL = "Foxhole app"
 private val AppGridTileHeight = 120.dp
 private val AppGridGap = 8.dp
+private const val APP_ICON_GRID_PREVIEW_LIMIT = 12
 private const val MANAGED_SELECTED_SITE_RULE_PREFIX = "Foxhole selected site:"
 private const val MANAGED_BLOCKED_SITE_RULE_PREFIX = "Foxhole blocked site:"
 

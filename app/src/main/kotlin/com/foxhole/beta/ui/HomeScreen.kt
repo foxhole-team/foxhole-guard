@@ -559,7 +559,7 @@ fun HomeScreen(
                 ),
             verticalArrangement = Arrangement.spacedBy(ScreenSectionSpacing),
         ) {
-            item {
+            item(key = "connection_header", contentType = "dashboard_header") {
                 HomeConnectionHeader(
                     state = state,
                     topStatusState = topStatusState,
@@ -590,7 +590,7 @@ fun HomeScreen(
                 when (card) {
                     DashboardCard.TRAFFIC_MAP -> {
                         if (state.settings.ui.trafficMapEnabled) {
-                            item(key = DashboardCard.TRAFFIC_MAP) {
+                            item(key = DashboardCard.TRAFFIC_MAP, contentType = "dashboard_card_traffic_map") {
                                 DashboardCardDragContainer(
                                     modifier =
                                         Modifier
@@ -627,7 +627,7 @@ fun HomeScreen(
                     }
 
                     DashboardCard.PROFILES -> {
-                        item(key = DashboardCard.PROFILES) {
+                        item(key = DashboardCard.PROFILES, contentType = "dashboard_card_profiles") {
                             DashboardCardDragContainer(
                                     modifier =
                                         Modifier
@@ -798,7 +798,7 @@ fun HomeScreen(
                     }
 
                     DashboardCard.ACTIONS -> {
-                        item(key = DashboardCard.ACTIONS) {
+                        item(key = DashboardCard.ACTIONS, contentType = "dashboard_card_actions") {
                             val importFromClipboardTitle = stringResource(R.string.import_from_clipboard)
                             val importFromFileTitle = stringResource(R.string.import_from_file)
                             val importFromQrTitle = stringResource(R.string.scan_qr_code)
@@ -967,7 +967,7 @@ fun HomeScreen(
 
                     DashboardCard.NETWORK -> {
                         if (state.settings.ui.networkCardEnabled) {
-                            item(key = DashboardCard.NETWORK) {
+                            item(key = DashboardCard.NETWORK, contentType = "dashboard_card_network") {
                                 DebugRecompositionCounter("HomeNetworkCard")
                                 DashboardCardDragContainer(
                                     modifier =
@@ -1222,7 +1222,7 @@ fun HomeScreen(
 
                     DashboardCard.TRAFFIC -> {
                         if (state.settings.ui.trafficCardEnabled) {
-                            item(key = DashboardCard.TRAFFIC) {
+                            item(key = DashboardCard.TRAFFIC, contentType = "dashboard_card_traffic") {
                                 DashboardCardDragContainer(
                                     modifier =
                                         Modifier

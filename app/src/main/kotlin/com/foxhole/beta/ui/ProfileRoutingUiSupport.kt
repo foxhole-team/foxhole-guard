@@ -99,6 +99,7 @@ import com.foxhole.beta.core.profile.MultiProtocolProfileSupport
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.text.DateFormat
+import java.util.Locale
 
 @Composable
 internal fun ProfileRefreshConfirmDialog(
@@ -851,16 +852,40 @@ internal fun ProfileFieldDialog(
 
 internal val appIconCache = LruCache<String, ImageBitmap>(512)
 
+internal data class InstalledAppSearchIndexRow(
+    val app: InstalledAppOption,
+    val normalizedLabel: String,
+    val normalizedPackageName: String,
+)
+
+internal fun buildInstalledAppSearchIndex(apps: List<InstalledAppOption>): List<InstalledAppSearchIndexRow> =
+    apps.map { app ->
+        InstalledAppSearchIndexRow(
+            app = app,
+            normalizedLabel = app.label.lowercase(Locale.ROOT),
+            normalizedPackageName = app.packageName.lowercase(Locale.ROOT),
+        )
+    }
+
 internal fun filterApps(
     apps: List<InstalledAppOption>,
     query: String,
+): List<InstalledAppOption> = filterIndexedApps(buildInstalledAppSearchIndex(apps), query)
+
+internal fun filterIndexedApps(
+    apps: List<InstalledAppSearchIndexRow>,
+    query: String,
 ): List<InstalledAppOption> {
-    if (query.isBlank()) {
-        return apps
+    val normalizedQuery = query.trim().lowercase(Locale.ROOT)
+    if (normalizedQuery.isBlank()) {
+        return apps.map(InstalledAppSearchIndexRow::app)
     }
-    return apps.filter { app ->
-        app.label.contains(query, ignoreCase = true) || app.packageName.contains(query, ignoreCase = true)
-    }
+    return apps
+        .asSequence()
+        .filter { app ->
+            normalizedQuery in app.normalizedLabel || normalizedQuery in app.normalizedPackageName
+        }.map(InstalledAppSearchIndexRow::app)
+        .toList()
 }
 
 internal fun resolveSelectedApps(

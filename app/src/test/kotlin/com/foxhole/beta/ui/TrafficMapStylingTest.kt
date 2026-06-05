@@ -256,6 +256,27 @@ class TrafficMapStylingTest {
     }
 
     @Test
+    fun `traffic map exposes trace sections for route build draw and cache work`() {
+        val source =
+            listOf(
+                java.io.File("src/main/kotlin/com/foxhole/beta/ui/TrafficMapDashboardCard.kt"),
+                java.io.File("app/src/main/kotlin/com/foxhole/beta/ui/TrafficMapDashboardCard.kt"),
+                java.io.File("../app/src/main/kotlin/com/foxhole/beta/ui/TrafficMapDashboardCard.kt"),
+            ).first { file -> file.isFile }.readText()
+
+        listOf(
+            "TrafficMap/loadShapes",
+            "TrafficMap/renderLandBitmap",
+            "TrafficMap/buildRoutes",
+            "TrafficMap/draw",
+        ).forEach { section ->
+            assertTrue(source.contains(section))
+        }
+        assertTrue(source.contains("Trace.beginSection(name)"))
+        assertTrue(source.contains("Trace.endSection()"))
+    }
+
+    @Test
     fun `traffic map empty state copy reports no active connections`() {
         val englishStrings =
             listOf(

@@ -12,7 +12,6 @@ import androidx.test.uiautomator.By
 import androidx.test.uiautomator.StaleObjectException
 import androidx.test.uiautomator.UiDevice
 import androidx.test.uiautomator.UiObject2
-import org.junit.Ignore
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -37,7 +36,6 @@ class HomeMacrobenchmark {
         }
 
     @Test
-    @Ignore("FrameTimingMetric returns zero samples on debug emulator CI.")
     fun homeScroll() =
         benchmarkRule.measureRepeated(
             packageName = PACKAGE_NAME,
@@ -68,6 +66,26 @@ class HomeMacrobenchmark {
         }
 
     @Test
+    fun bottomNavigationRoundTrip() =
+        benchmarkRule.measureRepeated(
+            packageName = PACKAGE_NAME,
+            metrics = listOf(FrameTimingMetric()),
+            compilationMode = BENCHMARK_COMPILATION_MODE,
+            iterations = SHORT_ITERATIONS,
+            startupMode = StartupMode.WARM,
+            setupBlock = {
+                pressHome()
+                startActivityAndWait(foxholeLauncherIntent())
+                device.waitForIdle()
+            },
+        ) {
+            clickSettingsBottomNav()
+            device.waitForIdle()
+            clickDashboardBottomNav()
+            device.waitForIdle()
+        }
+
+    @Test
     fun settingsTrafficTransition() =
         measureSettingsDetailTransition(
             SettingsDetailTarget(
@@ -88,6 +106,61 @@ class HomeMacrobenchmark {
                 tapYRatio = 0.24f,
             ),
         )
+
+    @Test
+    fun settingsSmartStartTransition() =
+        measureSettingsDetailTransition(
+            SettingsDetailTarget(
+                tag = "settings_smart_start_action",
+                detailTag = "smart_start_settings_screen",
+                labels = listOf("Smart start", "Умный старт"),
+                tapYRatio = 0.12f,
+            ),
+        )
+
+    @Test
+    fun settingsRoutingAppsPickerSearch() {
+        benchmarkRule.measureRepeated(
+            packageName = PACKAGE_NAME,
+            metrics = listOf(FrameTimingMetric()),
+            compilationMode = BENCHMARK_COMPILATION_MODE,
+            iterations = SHORT_ITERATIONS,
+            startupMode = StartupMode.WARM,
+            setupBlock = {
+                pressHome()
+                startActivityAndWait(foxholeLauncherIntent())
+                device.waitForIdle()
+            },
+        ) {
+            openSettingsHome()
+            if (
+                !openSettingsDetail(
+                    SettingsDetailTarget(
+                        tag = "settings_routing_apps_action",
+                        detailTag = "routing_apps_screen",
+                        labels = listOf("Apps", "Приложения"),
+                        tapYRatio = 0.50f,
+                    ),
+                )
+            ) {
+                return@measureRepeated
+            }
+            val addButton =
+                findByTestTag("routing_apps_add_exception_action")
+                    ?: device.findObject(By.text("Add"))
+                    ?: device.findObject(By.text("Добавить"))
+                    ?: error("Routing app add button missing; ${visibleSettingsState()}")
+            clickCenter(addButton)
+            waitForTestTag("routing_apps_picker_screen")
+            findByTestTag("routing_apps_picker_search")?.setText(APP_PICKER_SEARCH_QUERY)
+                ?: error("Routing app picker search missing; ${visibleSettingsState()}")
+            device.waitForIdle()
+            device.pressBack()
+            device.waitForIdle()
+            device.pressBack()
+            device.waitForIdle()
+        }
+    }
 
     @Test
     fun settingsSecurityTransition() =
@@ -225,8 +298,12 @@ class HomeMacrobenchmark {
     }
 
     private fun waitForSettingsDetail(target: SettingsDetailTarget): Boolean {
+        return waitForTestTag(target.detailTag)
+    }
+
+    private fun waitForTestTag(tag: String): Boolean {
         repeat(DETAIL_OPEN_POLL_COUNT) {
-            if (findByTestTag(target.detailTag) != null) {
+            if (findByTestTag(tag) != null) {
                 return true
             }
             Thread.sleep(DETAIL_OPEN_POLL_DELAY_MS)
@@ -279,6 +356,12 @@ class HomeMacrobenchmark {
         val settingsNavX = (device.displayWidth * SETTINGS_NAV_X_RATIO).toInt()
         val bottomNavY = (device.displayHeight * BOTTOM_NAV_Y_RATIO).toInt()
         device.click(settingsNavX, bottomNavY)
+    }
+
+    private fun clickDashboardBottomNav() {
+        val dashboardNavX = (device.displayWidth * DASHBOARD_NAV_X_RATIO).toInt()
+        val bottomNavY = (device.displayHeight * BOTTOM_NAV_Y_RATIO).toInt()
+        device.click(dashboardNavX, bottomNavY)
     }
 
     private fun swipeDashboardToSettings() {
@@ -352,6 +435,7 @@ class HomeMacrobenchmark {
         private const val SETTINGS_HOME_OPEN_POLL_COUNT = 60
         private const val DETAIL_OPEN_POLL_COUNT = 120
         private const val DETAIL_OPEN_POLL_DELAY_MS = 50L
+        private const val APP_PICKER_SEARCH_QUERY = "com."
         private val SETTINGS_HOME_ANCHOR_LABELS = listOf("Smart start", "Умный старт", "DNS")
         private val SETTINGS_DEBUG_TAGS =
             listOf(

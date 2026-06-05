@@ -9,6 +9,7 @@ import android.os.BatteryManager
 import android.os.PowerManager
 import android.os.Process
 import android.os.SystemClock
+import android.os.Trace
 import android.util.DisplayMetrics
 import android.util.Log
 import androidx.compose.foundation.layout.Arrangement
@@ -529,31 +530,33 @@ private fun TrafficMapCanvas(
                             ?: drawableDestinations.maxOfOrNull { destination -> destination.bytes }
                             ?: 1L
                     ).coerceAtLeast(1L)
-                val routeLanes = trafficRouteLanes(origin, drawableEdges, viewport)
                 val routeDrawModels =
-                    if (drawableEdges.isNotEmpty()) {
-                        drawableEdges
-                            .take(MAX_TRAFFIC_MAP_DRAW_EDGES)
-                            .map { edge ->
-                                val from = project(edge.fromLat, edge.fromLon, viewport)
-                                val to = project(edge.toLat, edge.toLon, viewport)
-                                val weight = sqrt(edge.bytes.toDouble() / maxBytes.toDouble()).toFloat()
-                                TrafficMapRouteDrawModel(
-                                    path =
-                                        curvedTrafficRoutePath(
-                                            from = from,
-                                            to = to,
-                                            lane = routeLanes[trafficMapEdgeLaneKey(edge)] ?: 1,
-                                        ),
-                                    strokeWidth = minLineStroke + ((maxLineStroke - minLineStroke) * weight),
-                                    alpha =
-                                        TRAFFIC_MAP_ROUTE_MIN_ALPHA +
-                                            (TRAFFIC_MAP_ROUTE_ALPHA_RANGE * weight),
-                                    role = edge.role,
-                                )
-                            }
-                    } else {
-                        emptyList()
+                    traceTrafficMapFrameSection("TrafficMap/buildRoutes") {
+                        val routeLanes = trafficRouteLanes(origin, drawableEdges, viewport)
+                        if (drawableEdges.isNotEmpty()) {
+                            drawableEdges
+                                .take(MAX_TRAFFIC_MAP_DRAW_EDGES)
+                                .map { edge ->
+                                    val from = project(edge.fromLat, edge.fromLon, viewport)
+                                    val to = project(edge.toLat, edge.toLon, viewport)
+                                    val weight = sqrt(edge.bytes.toDouble() / maxBytes.toDouble()).toFloat()
+                                    TrafficMapRouteDrawModel(
+                                        path =
+                                            curvedTrafficRoutePath(
+                                                from = from,
+                                                to = to,
+                                                lane = routeLanes[trafficMapEdgeLaneKey(edge)] ?: 1,
+                                            ),
+                                        strokeWidth = minLineStroke + ((maxLineStroke - minLineStroke) * weight),
+                                        alpha =
+                                            TRAFFIC_MAP_ROUTE_MIN_ALPHA +
+                                                (TRAFFIC_MAP_ROUTE_ALPHA_RANGE * weight),
+                                        role = edge.role,
+                                    )
+                                }
+                        } else {
+                            emptyList()
+                        }
                     }
                 val destinationOffsets =
                     drawableDestinations
@@ -564,6 +567,7 @@ private fun TrafficMapCanvas(
                 val originMarker = origin.takeIf { originCountryCode != null }
 
                 onDrawBehind {
+                    traceTrafficMapFrameSection("TrafficMap/draw") {
                     countryBitmap?.let { bitmap ->
                         drawImage(
                             image = bitmap,
@@ -650,6 +654,7 @@ private fun TrafficMapCanvas(
                             homeRadius = phoneHomeRadius,
                         )
                     }
+                    }
                 }
             }
             .fillMaxSize(),
@@ -706,7 +711,9 @@ private fun rememberTrafficMapCountryShapes(): List<TrafficMapCountryShape> {
 
 internal suspend fun prewarmTrafficMapCountryShapes(context: Context): Int {
     val appContext = context.applicationContext
-    val shapes = TrafficMapCountryShapeCache.load(appContext)
+    val shapes = traceTrafficMapSection("TrafficMap/loadShapes") {
+        TrafficMapCountryShapeCache.load(appContext)
+    }
     TrafficMapLandLayerCache.prewarm(
         shapes = shapes,
         displayMetrics = appContext.resources.displayMetrics,
@@ -727,9 +734,11 @@ private object TrafficMapCountryShapeCache {
         return mutex.withLock {
             cachedShapes?.let { shapes -> return@withLock shapes }
             val startedAtMs = SystemClock.elapsedRealtime()
-            withContext(TrafficMapRenderDispatcher.dispatcher) {
-                context.assets.open(TRAFFIC_MAP_COUNTRY_SHAPES_ASSET).use { inputStream ->
-                    TrafficMapCountryShapeAssetParser().parse(inputStream)
+            traceTrafficMapSection("TrafficMap/loadShapes") {
+                withContext(TrafficMapRenderDispatcher.dispatcher) {
+                    context.assets.open(TRAFFIC_MAP_COUNTRY_SHAPES_ASSET).use { inputStream ->
+                        TrafficMapCountryShapeAssetParser().parse(inputStream)
+                    }
                 }
             }.also { shapes ->
                 cachedShapes = shapes
@@ -1187,12 +1196,14 @@ private object TrafficMapLandLayerCache {
             var completed = false
             try {
                 val bitmap =
-                    trafficMapLandBitmap(
+                    traceTrafficMapSection("TrafficMap/renderLandBitmap") {
+                        trafficMapLandBitmap(
                         size = size,
                         shapes = shapes,
                         viewport = TrafficMapViewport(topLeft = Offset.Zero, size = size),
                         color = color,
-                    )
+                        )
+                    }
                 synchronized(lock) {
                     storeBitmapLocked(key = key, bitmap = bitmap)
                     inFlight.remove(key)
@@ -1544,5 +1555,29 @@ private val TRAFFIC_MAP_PREWARM_WIDTH_FRACTIONS =
 private fun logTrafficMapDebug(message: String) {
     if (BuildConfig.DEBUG) {
         Log.d(TRAFFIC_MAP_LOG_TAG, "[traffic-map] $message")
+    }
+}
+
+private inline fun <T> traceTrafficMapFrameSection(
+    name: String,
+    block: () -> T,
+): T {
+    Trace.beginSection(name)
+    return try {
+        block()
+    } finally {
+        Trace.endSection()
+    }
+}
+
+private suspend fun <T> traceTrafficMapSection(
+    name: String,
+    block: suspend () -> T,
+): T {
+    Trace.beginSection(name)
+    return try {
+        block()
+    } finally {
+        Trace.endSection()
     }
 }
