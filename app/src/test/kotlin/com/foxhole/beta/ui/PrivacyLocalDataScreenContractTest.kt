@@ -7,28 +7,34 @@ import java.io.File
 
 class PrivacyLocalDataScreenContractTest {
     @Test
-    fun `settings exposes dedicated privacy and local data route`() {
+    fun `settings no longer exposes dedicated privacy and local data route`() {
         val appSource = sourceFile("FoxholeApp.kt").readText()
         val settingsSource = sourceFile("SettingsScreens.kt").readText()
+        val statisticsSource = sourceFile("SettingsStatisticsScreen.kt").readText()
 
-        assertTrue(appSource.contains("PRIVACY_LOCAL_DATA = \"settings/privacy-local-data\""))
-        assertTrue(appSource.contains("PrivacyLocalDataSettingsScreen("))
-        assertTrue(settingsSource.contains("settings_privacy_local_data_action"))
-        assertTrue(settingsSource.contains("privacy_local_data_title"))
+        assertFalse(appSource.contains("PRIVACY_LOCAL_DATA"))
+        assertFalse(appSource.contains("PrivacyLocalDataSettingsScreen("))
+        assertFalse(settingsSource.contains("settings_privacy_local_data_action"))
+        assertFalse(settingsSource.contains("onOpenPrivacyLocalData"))
+        assertTrue(statisticsSource.contains("statistics_info_content_description"))
+        assertTrue(statisticsSource.contains("statistics_clear_data_content_description"))
     }
 
     @Test
-    fun `privacy local data screen keeps all required deletion actions`() {
-        val source = sourceFile("SettingsPrivacyLocalDataScreen.kt").readText()
+    fun `statistics clear data action keeps all required deletion actions`() {
+        val source = sourceFile("SettingsStatisticsScreen.kt").readText()
 
-        assertTrue(source.contains("privacy_local_data_settings_screen"))
+        assertTrue(source.contains("StatisticsClearDataDialog("))
+        assertTrue(source.contains("StatisticsClearAction"))
+        assertTrue(source.contains("CLEAR_STATISTICS"))
         assertTrue(source.contains("CLEAR_DIAGNOSTICS"))
         assertTrue(source.contains("CLEAR_NETWORK_ACTIVITY"))
         assertTrue(source.contains("CLEAR_APP_TRAFFIC"))
         assertTrue(source.contains("CLEAR_PROFILES"))
         assertTrue(source.contains("FACTORY_RESET"))
+        assertTrue(source.contains("privacy_local_data_stored_title"))
         assertTrue(source.contains("privacy_local_data_usage_access_status_title"))
-        assertTrue(source.contains("privacy_local_data_factory_reset_action"))
+        assertTrue(source.contains("statistics_factory_reset_action"))
     }
 
     @Test

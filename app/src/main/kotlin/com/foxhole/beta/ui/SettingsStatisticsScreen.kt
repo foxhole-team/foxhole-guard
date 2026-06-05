@@ -1,11 +1,21 @@
 package com.foxhole.beta.ui
 
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.BarChart
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.DeleteSweep
+import androidx.compose.material.icons.outlined.FolderDelete
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.RestartAlt
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.Troubleshoot
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -21,7 +31,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.foxhole.beta.R
@@ -32,7 +44,7 @@ import com.foxhole.beta.core.model.StatisticsRetention
 import com.foxhole.beta.core.model.dnsRuleSetFilteringEnabled
 
 @Composable
-@Suppress("ComplexCondition", "CyclomaticComplexMethod", "LongMethod")
+@Suppress("ComplexCondition", "CyclomaticComplexMethod", "LongMethod", "LongParameterList")
 fun StatisticsScreen(
     state: StatisticsRouteUiState,
     snackbarHostState: SnackbarHostState,
@@ -46,16 +58,23 @@ fun StatisticsScreen(
     onOpenNetworkActivityLogSettings: () -> Unit,
     onFirewallEnabledChanged: (Boolean) -> Unit,
     onClearUsage: () -> Unit,
+    onClearDiagnostics: () -> Unit,
+    onClearNetworkActivity: () -> Unit,
+    onClearAppTrafficStats: () -> Unit,
+    onClearProfilesAndSecrets: () -> Unit,
+    onFactoryReset: () -> Unit,
 ) {
     DebugRecompositionCounter("StatisticsScreen")
+    var infoVisible by rememberSaveable { mutableStateOf(false) }
     var settingsVisible by rememberSaveable { mutableStateOf(false) }
+    var clearDataVisible by rememberSaveable { mutableStateOf(false) }
     var retentionMenuExpanded by rememberSaveable { mutableStateOf(false) }
     var allAppsVisible by rememberSaveable { mutableStateOf(false) }
     var allCountriesVisible by rememberSaveable { mutableStateOf(false) }
     var allAnomaliesVisible by rememberSaveable { mutableStateOf(false) }
     var selectedApp by rememberSaveable { mutableStateOf<String?>(null) }
     var selectedProfileId by rememberSaveable { mutableStateOf<Long?>(null) }
-    var clearConfirmVisible by rememberSaveable { mutableStateOf(false) }
+    var pendingClearAction by rememberSaveable { mutableStateOf<StatisticsClearAction?>(null) }
     var appStatsEnablePendingUsageAccess by rememberSaveable { mutableStateOf(false) }
     var usageAccessConsentVisible by rememberSaveable { mutableStateOf(false) }
     var allAppRowsSnapshot by remember { mutableStateOf<List<AppTrafficRow>>(emptyList()) }
@@ -64,7 +83,6 @@ fun StatisticsScreen(
     var anomalyRange by rememberSaveable { mutableStateOf(StatisticsDisplayRange.HOURS_24) }
     val statisticsSettings = state.settings.statistics
     val context = LocalContext.current
-    val retention = state.settings.statistics.retention
     val dashboard = state.statisticsDashboard
     val dashboardNowMs = dashboard.nowMs
     val statisticsNowMs = dashboardNowMs.toStatisticsUiNowBucket()
@@ -73,6 +91,8 @@ fun StatisticsScreen(
     val topApps = remember(appRows) { appRows.take(APP_TRAFFIC_CHART_LIMIT) }
     val visibleAllAppRows = allAppRowsSnapshot.takeIf(List<AppTrafficRow>::isNotEmpty) ?: appRows
     val countryRows = dashboard.countryRows
+    val appStatsSwitchChecked = state.settings.appTrafficStatsEnabled
+    val appStatsCardVisible = shouldShowAppTrafficStatisticsCard(statisticsSettings, appStatsSwitchChecked)
     val topCountryLimit =
         if (countryRows.size > STATISTICS_TOP_PREVIEW_LIMIT) {
             STATISTICS_TOP_PREVIEW_LIMIT + 1
@@ -96,7 +116,6 @@ fun StatisticsScreen(
     val appSamplesForRange = remember(state.appTrafficWindows, appTrafficRange, statisticsNowMs) {
         state.appTrafficWindows.filterForDisplayRange(appTrafficRange, statisticsNowMs, AppTrafficWindow::startedAtMs)
     }
-    val appStatsSwitchChecked = state.settings.appTrafficStatsEnabled
     val usageAccessGranted = rememberUsageAccessGranted()
     LaunchedEffect(usageAccessGranted, appStatsEnablePendingUsageAccess) {
         if (usageAccessGranted && appStatsEnablePendingUsageAccess) {
@@ -124,6 +143,20 @@ fun StatisticsScreen(
         onNavigateUp = onNavigateUp,
         tag = "statistics_settings_screen",
         actions = {
+            IconButton(onClick = { infoVisible = true }) {
+                Icon(
+                    imageVector = Icons.Outlined.Info,
+                    contentDescription = stringResource(R.string.statistics_info_content_description),
+                    tint = MaterialTheme.colorScheme.onBackground,
+                )
+            }
+            IconButton(onClick = { clearDataVisible = true }) {
+                Icon(
+                    imageVector = Icons.Outlined.Delete,
+                    contentDescription = stringResource(R.string.statistics_clear_data_content_description),
+                    tint = MaterialTheme.colorScheme.onBackground,
+                )
+            }
             IconButton(onClick = { settingsVisible = true }) {
                 Icon(
                     imageVector = Icons.Outlined.Settings,
@@ -145,7 +178,7 @@ fun StatisticsScreen(
                     firewallEnabled = firewallEnabled,
                 )
             }
-            if (statisticsSettings.appTrafficEnabled && appStatsSwitchChecked) {
+            if (appStatsCardVisible) {
                 item(key = "app-statistics", contentType = "statistics-card") {
                     AppTrafficStatisticsCard(
                         rows = topApps,
@@ -170,7 +203,6 @@ fun StatisticsScreen(
                     ProfileTrafficOverviewCard(
                         statistics = statistics,
                         state = state,
-                        onClear = { clearConfirmVisible = true },
                         onProfileClick = { profileId -> selectedProfileId = profileId },
                     )
                 }
@@ -248,6 +280,20 @@ fun StatisticsScreen(
                 onUsageAccessCleared = { appStatsEnablePendingUsageAccess = false },
                 onDismiss = { settingsVisible = false },
             ),
+        )
+    }
+
+    if (infoVisible) {
+        StatisticsInfoDialog(onDismiss = { infoVisible = false })
+    }
+
+    if (clearDataVisible) {
+        StatisticsClearDataDialog(
+            onDismiss = { clearDataVisible = false },
+            onActionSelected = { action ->
+                clearDataVisible = false
+                pendingClearAction = action
+            },
         )
     }
 
@@ -363,16 +409,23 @@ fun StatisticsScreen(
         )
     }
 
-    if (clearConfirmVisible) {
+    pendingClearAction?.let { action ->
         ConfirmDialog(
-            title = stringResource(R.string.clear_usage_confirm_title),
-            body = stringResource(R.string.clear_usage_confirm_body),
-            confirmLabel = stringResource(R.string.clear_usage_title),
-            icon = Icons.Outlined.DeleteSweep,
-            onDismiss = { clearConfirmVisible = false },
+            title = stringResource(action.confirmTitleRes),
+            body = stringResource(action.confirmBodyRes),
+            confirmLabel = stringResource(action.confirmLabelRes),
+            icon = action.icon,
+            onDismiss = { pendingClearAction = null },
             onConfirm = {
-                clearConfirmVisible = false
-                onClearUsage()
+                pendingClearAction = null
+                when (action) {
+                    StatisticsClearAction.CLEAR_STATISTICS -> onClearUsage()
+                    StatisticsClearAction.CLEAR_DIAGNOSTICS -> onClearDiagnostics()
+                    StatisticsClearAction.CLEAR_NETWORK_ACTIVITY -> onClearNetworkActivity()
+                    StatisticsClearAction.CLEAR_APP_TRAFFIC -> onClearAppTrafficStats()
+                    StatisticsClearAction.CLEAR_PROFILES -> onClearProfilesAndSecrets()
+                    StatisticsClearAction.FACTORY_RESET -> onFactoryReset()
+                }
             },
         )
     }
@@ -394,6 +447,177 @@ fun StatisticsScreen(
 
 internal fun shouldShowCountryTrafficCard(statisticsSettings: com.foxhole.beta.core.model.StatisticsSettings): Boolean =
     statisticsSettings.countryTrafficEnabled
+
+internal fun shouldShowAppTrafficStatisticsCard(
+    statisticsSettings: com.foxhole.beta.core.model.StatisticsSettings,
+    appStatsSwitchChecked: Boolean,
+): Boolean =
+    statisticsSettings.appTrafficEnabled || appStatsSwitchChecked
+
+@Composable
+private fun StatisticsInfoDialog(onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.statistics_info_title)) },
+        text = {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                StatisticsInfoText(
+                    title = stringResource(R.string.privacy_local_data_usage_access_status_title),
+                    body = stringResource(R.string.privacy_local_data_usage_access_status_summary),
+                )
+                StatisticsInfoText(
+                    title = stringResource(R.string.privacy_local_data_stored_title),
+                    body = stringResource(R.string.privacy_local_data_stored_body),
+                )
+                StatisticsInfoText(
+                    title = stringResource(R.string.privacy_local_data_used_title),
+                    body = stringResource(R.string.privacy_local_data_used_body),
+                )
+                StatisticsInfoText(
+                    title = stringResource(R.string.privacy_local_data_retention_title),
+                    body = stringResource(R.string.privacy_local_data_retention_body),
+                )
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            FoxholeDialogDismissButton(onClick = onDismiss)
+        },
+    )
+}
+
+@Composable
+private fun StatisticsInfoText(
+    title: String,
+    body: String,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Text(
+            text = body,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+private fun StatisticsClearDataDialog(
+    onDismiss: () -> Unit,
+    onActionSelected: (StatisticsClearAction) -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.statistics_clear_data_title)) },
+        text = {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                SettingsControlGroup {
+                    StatisticsClearAction.entries.forEachIndexed { index, action ->
+                        StatisticsClearActionRow(
+                            action = action,
+                            onClick = { onActionSelected(action) },
+                        )
+                        if (index != StatisticsClearAction.entries.lastIndex) {
+                            SettingsControlGroupDivider()
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            FoxholeDialogDismissButton(onClick = onDismiss)
+        },
+    )
+}
+
+@Composable
+private fun StatisticsClearActionRow(
+    action: StatisticsClearAction,
+    onClick: () -> Unit,
+) {
+    SettingsNavigationRow(
+        modifier = if (action == StatisticsClearAction.FACTORY_RESET) {
+            Modifier.testTag("statistics_factory_reset_action")
+        } else {
+            Modifier
+        },
+        icon = action.icon,
+        title = stringResource(action.titleRes),
+        summary = action.summaryRes?.let { stringResource(it) },
+        summaryMaxLines = Int.MAX_VALUE,
+        grouped = true,
+        onClick = onClick,
+    )
+}
+
+private enum class StatisticsClearAction(
+    val icon: ImageVector,
+    val titleRes: Int,
+    val summaryRes: Int?,
+    val confirmTitleRes: Int,
+    val confirmBodyRes: Int,
+    val confirmLabelRes: Int,
+) {
+    CLEAR_STATISTICS(
+        icon = Icons.Outlined.DeleteSweep,
+        titleRes = R.string.clear_usage_title,
+        summaryRes = R.string.statistics_clear_usage_summary,
+        confirmTitleRes = R.string.clear_usage_confirm_title,
+        confirmBodyRes = R.string.clear_usage_confirm_body,
+        confirmLabelRes = R.string.clear_usage_title,
+    ),
+    CLEAR_DIAGNOSTICS(
+        icon = Icons.Outlined.Troubleshoot,
+        titleRes = R.string.privacy_local_data_clear_diagnostics_title,
+        summaryRes = R.string.privacy_local_data_clear_diagnostics_summary,
+        confirmTitleRes = R.string.privacy_local_data_clear_diagnostics_confirm_title,
+        confirmBodyRes = R.string.privacy_local_data_clear_diagnostics_confirm_body,
+        confirmLabelRes = R.string.privacy_local_data_clear_diagnostics_title,
+    ),
+    CLEAR_NETWORK_ACTIVITY(
+        icon = Icons.Outlined.DeleteSweep,
+        titleRes = R.string.privacy_local_data_clear_network_activity_title,
+        summaryRes = R.string.privacy_local_data_clear_network_activity_summary,
+        confirmTitleRes = R.string.privacy_local_data_clear_network_activity_confirm_title,
+        confirmBodyRes = R.string.privacy_local_data_clear_network_activity_confirm_body,
+        confirmLabelRes = R.string.privacy_local_data_clear_network_activity_title,
+    ),
+    CLEAR_APP_TRAFFIC(
+        icon = Icons.Outlined.BarChart,
+        titleRes = R.string.privacy_local_data_clear_app_traffic_title,
+        summaryRes = R.string.privacy_local_data_clear_app_traffic_summary,
+        confirmTitleRes = R.string.privacy_local_data_clear_app_traffic_confirm_title,
+        confirmBodyRes = R.string.privacy_local_data_clear_app_traffic_confirm_body,
+        confirmLabelRes = R.string.privacy_local_data_clear_app_traffic_title,
+    ),
+    CLEAR_PROFILES(
+        icon = Icons.Outlined.FolderDelete,
+        titleRes = R.string.privacy_local_data_clear_profiles_title,
+        summaryRes = R.string.privacy_local_data_clear_profiles_summary,
+        confirmTitleRes = R.string.privacy_local_data_clear_profiles_confirm_title,
+        confirmBodyRes = R.string.privacy_local_data_clear_profiles_confirm_body,
+        confirmLabelRes = R.string.privacy_local_data_clear_profiles_title,
+    ),
+    FACTORY_RESET(
+        icon = Icons.Outlined.RestartAlt,
+        titleRes = R.string.privacy_local_data_factory_reset_title,
+        summaryRes = R.string.privacy_local_data_factory_reset_summary,
+        confirmTitleRes = R.string.privacy_local_data_factory_reset_confirm_title,
+        confirmBodyRes = R.string.privacy_local_data_factory_reset_confirm_body,
+        confirmLabelRes = R.string.privacy_local_data_factory_reset_title,
+    ),
+}
 
 private const val STATISTICS_UI_NOW_BUCKET_MS = 60_000L
 

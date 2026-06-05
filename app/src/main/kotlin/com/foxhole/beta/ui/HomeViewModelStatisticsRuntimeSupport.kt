@@ -89,6 +89,10 @@ internal fun HomeViewModel.onStatisticsMetricEnabledChangedInternal(
 
 internal fun HomeViewModel.onAppTrafficStatsEnabledChangedInternal(value: Boolean) {
     viewModelScope.launch {
+        if (value) {
+            container.settingsRepository.updateStatisticsEnabled(true)
+            container.settingsRepository.updateStatisticsMetricEnabled(StatisticsMetric.APP_TRAFFIC, true)
+        }
         container.settingsRepository.updateAppTrafficStatsEnabled(value)
         if (!value) {
             container.anomalyRepository.clearAppTrafficPrivacyData()

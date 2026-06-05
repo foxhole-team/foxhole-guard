@@ -132,7 +132,6 @@ fun SettingsHomeScreen(
     onOpenExpert: () -> Unit,
     onOpenDiagnostics: () -> Unit,
     onOpenStatistics: () -> Unit,
-    onOpenPrivacyLocalData: () -> Unit,
     onOpenAbout: () -> Unit,
 ) {
     DebugRecompositionCounter("SettingsHomeScreen")
@@ -157,7 +156,6 @@ fun SettingsHomeScreen(
             onOpenExpert = onOpenExpert,
             onOpenDiagnostics = onOpenDiagnostics,
             onOpenStatistics = onOpenStatistics,
-            onOpenPrivacyLocalData = onOpenPrivacyLocalData,
             startupStage = startupStage,
         )
     }
@@ -179,7 +177,6 @@ private fun LazyListScope.settingsHomeNavigationItems(
     onOpenExpert: () -> Unit,
     onOpenDiagnostics: () -> Unit,
     onOpenStatistics: () -> Unit,
-    onOpenPrivacyLocalData: () -> Unit,
     startupStage: Int,
 ) {
     item {
@@ -264,14 +261,6 @@ private fun LazyListScope.settingsHomeNavigationItems(
                     title = stringResource(R.string.statistics_title),
                     summary = stringResource(R.string.settings_home_statistics_summary),
                     onClick = onOpenStatistics,
-                )
-                SettingsGroupDivider()
-                SettingsGroupedNavigationRow(
-                    modifier = Modifier.testTag("settings_privacy_local_data_action"),
-                    icon = FoxholeIcons.PrivacyLocalData,
-                    title = stringResource(R.string.privacy_local_data_title),
-                    summary = stringResource(R.string.privacy_local_data_summary),
-                    onClick = onOpenPrivacyLocalData,
                 )
                 SettingsGroupDivider()
                 SettingsGroupedNavigationRow(

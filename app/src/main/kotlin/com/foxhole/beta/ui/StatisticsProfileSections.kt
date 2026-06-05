@@ -22,7 +22,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.BarChart
-import androidx.compose.material.icons.outlined.DeleteSweep
 import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.Route
 import androidx.compose.material.icons.outlined.SettingsEthernet
@@ -32,7 +31,6 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -88,28 +86,11 @@ import kotlin.math.max
 internal fun ProfileTrafficOverviewCard(
     statistics: StatisticsUiState,
     state: StatisticsRouteUiState,
-    onClear: () -> Unit,
     onProfileClick: (Long) -> Unit,
 ) {
     StatisticsDashboardCard(
         icon = Icons.Outlined.Storage,
         title = stringResource(R.string.statistics_profile_traffic_title),
-        trailing = {
-            Surface(
-                modifier = Modifier.size(36.dp),
-                shape = MaterialTheme.shapes.extraLarge,
-                color = statisticsVisualTokens().colors.rowContainer,
-                contentColor = statisticsVisualTokens().colors.mutedText,
-            ) {
-                IconButton(onClick = onClear) {
-                    Icon(
-                        imageVector = Icons.Outlined.DeleteSweep,
-                        contentDescription = stringResource(R.string.clear_statistics_history_content_description),
-                        modifier = Modifier.size(18.dp),
-                    )
-                }
-            }
-        },
     ) {
         ProfileTrafficList(
             items = statistics.profileTraffic,

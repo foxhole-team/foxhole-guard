@@ -631,9 +631,9 @@ private fun BoxScope.FoxholeTopChromeContent(
             FoxholeTopScrimLayer(
                 modifier =
                     Modifier
-                        .align(Alignment.BottomCenter)
+                        .align(Alignment.TopCenter)
                         .fillMaxWidth()
-                        .height(FoxholeTopChromeHeight),
+                        .height(contentTopPadding),
                 progress = scrimProgress,
             )
         }

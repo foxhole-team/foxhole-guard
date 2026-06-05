@@ -149,7 +149,6 @@ private object AppRoute {
     const val EXPERT = "settings/expert"
     const val DIAGNOSTICS = "settings/diagnostics"
     const val STATISTICS = "settings/statistics"
-    const val PRIVACY_LOCAL_DATA = "settings/privacy-local-data"
 
     fun profileDetail(profileId: Long): String = "profiles/$profileId"
 
@@ -585,7 +584,6 @@ fun FoxholeApp(
                         onOpenExpert = { navigateToSettingsDetail(AppRoute.EXPERT) },
                         onOpenDiagnostics = { navigateToSettingsDetail(AppRoute.DIAGNOSTICS) },
                         onOpenStatistics = { navigateToSettingsDetail(AppRoute.STATISTICS) },
-                        onOpenPrivacyLocalData = { navigateToSettingsDetail(AppRoute.PRIVACY_LOCAL_DATA) },
                         onOpenAbout = { navigateToSettingsDetail(AppRoute.ABOUT) },
                     )
                 }
@@ -912,22 +910,13 @@ fun FoxholeApp(
                         onOpenNetworkActivityLogSettings = { navigateToSettingsDetail(AppRoute.DIAGNOSTICS) },
                         onFirewallEnabledChanged = viewModel::onFirewallEnabledChanged,
                         onClearUsage = viewModel::resetUsageTracking,
-                    )
-                }
-                        composable(AppRoute.PRIVACY_LOCAL_DATA) {
-                    NavigationTransitionTelemetryEffect(AppRoute.PRIVACY_LOCAL_DATA, navigationTransitionTelemetry)
-                    val state by viewModel.settingsRouteState.collectAsStateWithLifecycle()
-                    PrivacyLocalDataSettingsScreen(
-                        state = state,
-                        snackbarHostState = snackbarHostState,
-                        onNavigateUp = navController::navigateUp,
                         onClearDiagnostics = viewModel::clearDiagnosticsLocalData,
                         onClearNetworkActivity = viewModel::clearNetworkActivityLocalData,
                         onClearAppTrafficStats = viewModel::clearAppTrafficLocalData,
                         onClearProfilesAndSecrets = viewModel::clearProfilesAndSecretsLocalData,
                         onFactoryReset = viewModel::factoryResetLocalData,
                     )
-                    }
+                }
                 }
             }
         }
@@ -1376,22 +1365,10 @@ private fun String?.isSettingsDetailRoute(): Boolean =
     this?.startsWith("${AppRoute.SETTINGS}/") == true
 
 private fun rootEnter(): EnterTransition =
-    fadeIn(
-        animationSpec =
-            tween(
-                durationMillis = ROOT_TRANSITION_MS,
-                easing = FoxholeMotionTokens.NavigationEnterEasing,
-            ),
-    )
+    EnterTransition.None
 
 private fun rootExit(): ExitTransition =
-    fadeOut(
-        animationSpec =
-            tween(
-                durationMillis = ROOT_TRANSITION_MS,
-                easing = FoxholeMotionTokens.NavigationExitEasing,
-            ),
-    )
+    ExitTransition.None
 
 private fun detailForwardEnter(): EnterTransition =
     fadeIn(
@@ -1617,10 +1594,9 @@ private fun requestQuickSettingsTile(
 private const val SECTION_SWIPE_THRESHOLD_FRACTION = 0.22f
 private val DETAIL_PREDICTIVE_BACK_PROGRESS_OFFSET = 24.dp
 private const val DETAIL_PREDICTIVE_BACK_ALPHA_RANGE = 0.08f
-private const val ROOT_TRANSITION_MS = FoxholeMotionTokens.EmphasisDurationMs
-private const val DETAIL_FADE_IN_MS = FoxholeMotionTokens.NavigationFadeDurationMs
-private const val DETAIL_FADE_OUT_MS = FoxholeMotionTokens.NavigationExitDurationMs
-private const val DETAIL_ENTER_TRANSITION_MS = FoxholeMotionTokens.NavigationEnterDurationMs
-private const val DETAIL_EXIT_TRANSITION_MS = FoxholeMotionTokens.NavigationExitDurationMs
-private const val DETAIL_TRANSITION_OFFSET_FRACTION = FoxholeMotionTokens.NavigationSlideFraction
-private const val DETAIL_SECONDARY_OFFSET_FRACTION = 0.03f
+private const val DETAIL_FADE_IN_MS = 90
+private const val DETAIL_FADE_OUT_MS = 90
+private const val DETAIL_ENTER_TRANSITION_MS = FoxholeMotionTokens.StandardDurationMs
+private const val DETAIL_EXIT_TRANSITION_MS = FoxholeMotionTokens.FastDurationMs
+private const val DETAIL_TRANSITION_OFFSET_FRACTION = 0.04f
+private const val DETAIL_SECONDARY_OFFSET_FRACTION = 0.015f

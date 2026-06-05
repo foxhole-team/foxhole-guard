@@ -481,6 +481,11 @@
     <string name="app_statistics_enabled_summary">Записывает трафик приложений через Android NetworkStats, если разрешён доступ к статистике использования.</string>
     <string name="statistics_settings_content_description">Настройки статистики</string>
     <string name="statistics_settings_title">Настройки статистики</string>
+    <string name="statistics_info_content_description">Информация о статистике</string>
+    <string name="statistics_info_title">Статистика и локальные данные</string>
+    <string name="statistics_clear_data_content_description">Очистить данные статистики</string>
+    <string name="statistics_clear_data_title">Очистить данные</string>
+    <string name="statistics_clear_usage_summary">Удалить сохраненные итоги трафика и историю.</string>
     <string name="statistics_enabled_title">Включить статистику</string>
     <string name="statistics_enabled_summary">Foxhole записывает статистику только после явного включения.</string>
     <string name="statistics_retention_title">Период хранения</string>

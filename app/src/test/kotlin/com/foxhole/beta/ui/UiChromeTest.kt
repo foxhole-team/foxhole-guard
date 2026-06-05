@@ -9,6 +9,7 @@ import kotlinx.coroutines.yield
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.File
 
 class UiChromeTest {
     @Test
@@ -17,6 +18,22 @@ class UiChromeTest {
         assertTrue(foxholeTopScrimAlpha(0.01f) in 0f..0.64f)
         assertEquals(0.64f, foxholeTopScrimAlpha(0.36f), 0.0001f)
         assertEquals(1f, foxholeTopScrimAlpha(1f), 0.0001f)
+    }
+
+    @Test
+    fun `top chrome scrim covers the status bar area while scrolled`() {
+        val source =
+            listOf(
+                File("src/main/kotlin/com/foxhole/beta/ui/UiChrome.kt"),
+                File("app/src/main/kotlin/com/foxhole/beta/ui/UiChrome.kt"),
+                File("../app/src/main/kotlin/com/foxhole/beta/ui/UiChrome.kt"),
+            ).first { file -> file.isFile }.readText()
+        val scrimCall =
+            source.substringAfter("FoxholeTopScrimLayer(")
+                .substringBefore("progress = scrimProgress")
+
+        assertTrue(scrimCall.contains(".align(Alignment.TopCenter)"))
+        assertTrue(scrimCall.contains(".height(contentTopPadding)"))
     }
 
     @Test

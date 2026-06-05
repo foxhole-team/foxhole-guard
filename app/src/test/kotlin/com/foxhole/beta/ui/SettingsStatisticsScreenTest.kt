@@ -251,6 +251,28 @@ class SettingsStatisticsScreenTest {
     }
 
     @Test
+    fun `app traffic card remains visible when either per app control is enabled`() {
+        assertTrue(
+            shouldShowAppTrafficStatisticsCard(
+                StatisticsSettings(appTrafficEnabled = true),
+                appStatsSwitchChecked = false,
+            ),
+        )
+        assertTrue(
+            shouldShowAppTrafficStatisticsCard(
+                StatisticsSettings(appTrafficEnabled = false),
+                appStatsSwitchChecked = true,
+            ),
+        )
+        assertFalse(
+            shouldShowAppTrafficStatisticsCard(
+                StatisticsSettings(appTrafficEnabled = false),
+                appStatsSwitchChecked = false,
+            ),
+        )
+    }
+
+    @Test
     fun `extended statistics mode follows usage access availability`() {
         val state =
             StatisticsRouteUiState(

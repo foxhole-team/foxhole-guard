@@ -476,6 +476,11 @@
     <string name="app_statistics_enabled_summary">Records per-app traffic with Android NetworkStats when Usage Access is granted.</string>
     <string name="statistics_settings_content_description">Statistics settings</string>
     <string name="statistics_settings_title">Statistics settings</string>
+    <string name="statistics_info_content_description">Statistics information</string>
+    <string name="statistics_info_title">Statistics and local data</string>
+    <string name="statistics_clear_data_content_description">Clear statistics data</string>
+    <string name="statistics_clear_data_title">Clear data</string>
+    <string name="statistics_clear_usage_summary">Delete saved traffic totals and history.</string>
     <string name="statistics_enabled_title">Enable statistics</string>
     <string name="statistics_enabled_summary">Foxhole records statistics locally on this device.</string>
     <string name="statistics_retention_title">Retention period</string>

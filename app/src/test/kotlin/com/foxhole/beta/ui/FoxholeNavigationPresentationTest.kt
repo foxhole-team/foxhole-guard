@@ -8,14 +8,14 @@ import org.junit.Test
 class FoxholeNavigationPresentationTest {
     @Test
     fun `detail transition uses subtle material-style offset instead of full page slide`() {
-        assertEquals(108, detailTransitionOffsetPx(1080))
+        assertEquals(43, detailTransitionOffsetPx(1080))
         assertEquals(1, detailTransitionOffsetPx(1))
-        assertEquals(32, detailSecondaryOffsetPx(1080))
+        assertEquals(16, detailSecondaryOffsetPx(1080))
         assertEquals(1, detailSecondaryOffsetPx(1))
     }
 
     @Test
-    fun `detail transition uses shared motion tokens`() {
+    fun `navigation transitions stay close to platform defaults`() {
         val source =
             listOf(
                 java.io.File("src/main/kotlin/com/foxhole/beta/ui/FoxholeApp.kt"),
@@ -23,19 +23,22 @@ class FoxholeNavigationPresentationTest {
                 java.io.File("../app/src/main/kotlin/com/foxhole/beta/ui/FoxholeApp.kt"),
             ).first { file -> file.isFile }.readText()
 
-        assertTrue(source.contains("DETAIL_FADE_IN_MS = FoxholeMotionTokens.NavigationFadeDurationMs"))
-        assertTrue(source.contains("ROOT_TRANSITION_MS = FoxholeMotionTokens.EmphasisDurationMs"))
-        assertTrue(source.contains("DETAIL_FADE_OUT_MS = FoxholeMotionTokens.NavigationExitDurationMs"))
-        assertTrue(source.contains("DETAIL_ENTER_TRANSITION_MS = FoxholeMotionTokens.NavigationEnterDurationMs"))
-        assertTrue(source.contains("DETAIL_EXIT_TRANSITION_MS = FoxholeMotionTokens.NavigationExitDurationMs"))
-        assertTrue(source.contains("DETAIL_TRANSITION_OFFSET_FRACTION = FoxholeMotionTokens.NavigationSlideFraction"))
-        assertTrue(source.contains("DETAIL_SECONDARY_OFFSET_FRACTION = 0.03f"))
+        assertTrue(source.contains("private fun rootEnter(): EnterTransition =\n    EnterTransition.None"))
+        assertTrue(source.contains("private fun rootExit(): ExitTransition =\n    ExitTransition.None"))
+        assertTrue(source.contains("DETAIL_FADE_IN_MS = 90"))
+        assertTrue(source.contains("DETAIL_FADE_OUT_MS = 90"))
+        assertTrue(source.contains("DETAIL_ENTER_TRANSITION_MS = FoxholeMotionTokens.StandardDurationMs"))
+        assertTrue(source.contains("DETAIL_EXIT_TRANSITION_MS = FoxholeMotionTokens.FastDurationMs"))
+        assertTrue(source.contains("DETAIL_TRANSITION_OFFSET_FRACTION = 0.04f"))
+        assertTrue(source.contains("DETAIL_SECONDARY_OFFSET_FRACTION = 0.015f"))
         assertTrue(source.contains("targetOffsetX = { fullWidth -> -detailSecondaryOffsetPx(fullWidth) }"))
         assertTrue(source.contains("initialOffsetX = { fullWidth -> -detailSecondaryOffsetPx(fullWidth) }"))
         assertTrue(source.contains("easing = FoxholeMotionTokens.NavigationEnterEasing"))
         assertTrue(source.contains("easing = FoxholeMotionTokens.NavigationExitEasing"))
+        assertFalse(source.contains("ROOT_TRANSITION_MS"))
         assertFalse(source.contains("DETAIL_TRANSITION_MS = 150"))
         assertFalse(source.contains("DETAIL_TRANSITION_OFFSET_FRACTION = 0.14f"))
+        assertFalse(source.contains("DETAIL_TRANSITION_OFFSET_FRACTION = FoxholeMotionTokens.NavigationSlideFraction"))
     }
 
     @Test
@@ -235,7 +238,6 @@ class FoxholeNavigationPresentationTest {
             "APPLICATION",
             "DIAGNOSTICS",
             "STATISTICS",
-            "PRIVACY_LOCAL_DATA",
         ).forEach { route ->
             assertTrue(
                 "Missing destination-local telemetry probe for AppRoute.$route",
