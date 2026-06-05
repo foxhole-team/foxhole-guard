@@ -282,6 +282,8 @@ class HomeMacrobenchmark {
             try {
                 waitForDashboardVisible()
                 clickConnectAndReturnFromVpnPermission()
+                ensureFoxholeForeground()
+                waitForDashboardVisible()
                 device.waitForIdle()
                 openTrafficMapDetailsAndReturn()
             } finally {
