@@ -12,6 +12,7 @@ import android.os.PowerManager
 import android.os.Process
 import android.os.SystemClock
 import android.os.Trace
+import android.provider.Settings
 import android.util.DisplayMetrics
 import android.util.Log
 import androidx.compose.foundation.clickable
@@ -242,6 +243,7 @@ internal fun TrafficMapDashboardCard(
                         TrafficMapCanvas(
                             state = state,
                             countryShapes = countryShapes,
+                            routePresentation = TrafficMapRoutePresentation.Compact,
                             modifier = Modifier
                                 .fillMaxSize()
                                 .testTag("home_traffic_world_map"),
@@ -463,6 +465,7 @@ internal fun TrafficMapDetailScreen(
                     TrafficMapCanvas(
                         state = state,
                         countryShapes = countryShapes,
+                        routePresentation = TrafficMapRoutePresentation.Expanded,
                         modifier =
                             Modifier
                                 .fillMaxSize()
@@ -1392,6 +1395,7 @@ private fun TrafficMapPowerSaveBlock(
 private fun TrafficMapCanvas(
     state: TrafficMapUiState,
     countryShapes: List<TrafficMapCountryShape>,
+    routePresentation: TrafficMapRoutePresentation,
     modifier: Modifier = Modifier,
 ) {
     val colors = trafficMapColors()
@@ -1400,9 +1404,10 @@ private fun TrafficMapCanvas(
     val drawableVpnRoute = remember(state.vpnRoute) { state.vpnRoute?.toDrawableTrafficMapDestination() }
     val drawableTorExit = remember(state.torExit) { state.torExit?.toDrawableTrafficMapDestination() }
     val drawableEdges = remember(state.edges) { state.edges.toDrawableTrafficMapEdges() }
-    val torRouteDashPhase =
+    val routeMotionEnabled = rememberTrafficMapRouteMotionEnabled()
+    val routeMotionPhase =
         rememberTrafficMapTorRouteDashPhase(
-            enabled = drawableEdges.any { edge -> edge.role == TrafficMapEdgeRole.TOR_ROUTE },
+            enabled = routeMotionEnabled && drawableEdges.isNotEmpty(),
         )
     val originLat = state.originLat
     val originLon = state.originLon
@@ -1442,9 +1447,12 @@ private fun TrafficMapCanvas(
             .semantics { contentDescription = mapContentDescription }
             .drawWithCache {
                 val viewport = trafficMapViewport(size)
-                val maxLineStroke = TRAFFIC_MAP_ROUTE_MAX_STROKE_DP.dp.toPx()
-                val minLineStroke = TRAFFIC_MAP_ROUTE_MIN_STROKE_DP.dp.toPx()
+                val maxLineStroke = routePresentation.maxRouteStrokeDp.dp.toPx()
+                val minLineStroke = routePresentation.minRouteStrokeDp.dp.toPx()
                 val routeHaloStrokeExtra = TRAFFIC_MAP_ROUTE_HALO_STROKE_EXTRA_DP.dp.toPx()
+                val routeDirectionArrowSize = routePresentation.directionArrowSizeDp.dp.toPx()
+                val routePulseRadius = TrafficMapTokens.RoutePulseRadiusDp.dp.toPx()
+                val routePulseStroke = TrafficMapTokens.RoutePulseStrokeDp.dp.toPx()
                 val defaultDestinationRadius = 3.15.dp.toPx()
                 val europeDestinationRadius = 2.35.dp.toPx()
                 val routeNodeRadius = 2.75.dp.toPx()
@@ -1535,8 +1543,8 @@ private fun TrafficMapCanvas(
                                             )
                                         val weight = sqrt(edge.bytes.toDouble() / maxBytes.toDouble()).toFloat()
                                         TrafficMapRouteDrawModel(
-                                            path =
-                                                curvedTrafficRoutePath(
+                                            geometry =
+                                                trafficRouteGeometry(
                                                     from = from,
                                                     to = to,
                                                     lane = routeLanes[trafficMapEdgeLaneKey(edge)] ?: 1,
@@ -1631,8 +1639,9 @@ private fun TrafficMapCanvas(
                     }
 
                     routeDrawModels.forEach { route ->
+                        val routeColor = trafficMapRouteColor(route.role, colors).copy(alpha = route.alpha)
                         drawPath(
-                            path = route.path,
+                            path = route.geometry.path,
                             color =
                                 colors.routeHalo.copy(
                                     alpha = (route.alpha * TRAFFIC_MAP_ROUTE_HALO_ALPHA_MULTIPLIER).coerceAtMost(1f),
@@ -1644,13 +1653,8 @@ private fun TrafficMapCanvas(
                                 ),
                         )
                         drawPath(
-                            path = route.path,
-                            color =
-                                when (route.role) {
-                                    TrafficMapEdgeRole.DIRECT -> colors.origin
-                                    TrafficMapEdgeRole.VPN_ROUTE -> colors.vpnRoute
-                                    TrafficMapEdgeRole.TOR_ROUTE -> colors.torExit
-                                }.copy(alpha = route.alpha),
+                            path = route.geometry.path,
+                            color = routeColor,
                             style =
                                 Stroke(
                                     width = route.strokeWidth,
@@ -1659,13 +1663,31 @@ private fun TrafficMapCanvas(
                                         if (route.role == TrafficMapEdgeRole.TOR_ROUTE) {
                                             PathEffect.dashPathEffect(
                                                 intervals = floatArrayOf(torRouteDash, torRouteGap),
-                                                phase = torRouteDashPhase,
+                                                phase = routeMotionPhase,
                                             )
                                         } else {
                                             null
                                         },
                                 ),
                         )
+                        route.geometry.directionCue?.let { cue ->
+                            drawTrafficMapRouteDirectionCue(
+                                cue = cue,
+                                color = routeColor.copy(alpha = (route.alpha + 0.16f).coerceAtMost(1f)),
+                                haloColor = colors.routeHalo,
+                                arrowSize = routeDirectionArrowSize,
+                            )
+                        }
+                        if (routeMotionEnabled) {
+                            drawTrafficMapRoutePulse(
+                                route = route,
+                                phase = routeMotionPhase,
+                                color = routeColor,
+                                haloColor = colors.routeHalo,
+                                radius = routePulseRadius,
+                                strokeWidth = routePulseStroke,
+                            )
+                        }
                     }
 
                     destinationOffsets.forEach { (point, offset) ->
@@ -1714,6 +1736,7 @@ private fun TrafficMapCanvas(
             }
             .fillMaxSize(),
     ) {
+        TrafficMapMarkerClusterBadges(targets = markerHitTargets)
         TrafficMapMarkerSemanticsLayer(
             targets = markerHitTargets,
             onMarkerSelected = { target -> selectedMarkerKey = target.key },
@@ -1745,6 +1768,152 @@ private fun rememberTrafficMapTorRouteDashPhase(enabled: Boolean): Float {
         }
     }
     return phase
+}
+
+@Composable
+private fun rememberTrafficMapRouteMotionEnabled(): Boolean {
+    val context = LocalContext.current
+    return remember(context) {
+        val appContext = context.applicationContext
+        val powerSaveMode = appContext.getSystemService<PowerManager>()?.isPowerSaveMode == true
+        val animatorDurationScale =
+            runCatching {
+                Settings.Global.getFloat(
+                    appContext.contentResolver,
+                    Settings.Global.ANIMATOR_DURATION_SCALE,
+                    1f,
+                )
+            }.getOrDefault(1f)
+        !powerSaveMode && animatorDurationScale > 0f
+    }
+}
+
+private fun DrawScope.drawTrafficMapRouteDirectionCue(
+    cue: TrafficMapRouteDirectionCue,
+    color: Color,
+    haloColor: Color,
+    arrowSize: Float,
+) {
+    val tip =
+        cue.center.offsetByAngle(
+            angleRadians = cue.angleRadians,
+            distance = arrowSize * 0.58f,
+        )
+    val tail =
+        cue.center.offsetByAngle(
+            angleRadians = cue.angleRadians,
+            distance = -arrowSize * 0.48f,
+        )
+    val normalAngle = cue.angleRadians + TRAFFIC_MAP_HALF_PI
+    val wing = arrowSize * 0.46f
+    val left = tail.offsetByAngle(normalAngle, wing)
+    val right = tail.offsetByAngle(normalAngle, -wing)
+    val haloStroke = arrowSize * 0.34f
+    val arrowStroke = arrowSize * 0.18f
+    drawLine(
+        color = haloColor.copy(alpha = 0.62f),
+        start = tip,
+        end = left,
+        strokeWidth = haloStroke,
+        cap = StrokeCap.Round,
+    )
+    drawLine(
+        color = haloColor.copy(alpha = 0.62f),
+        start = tip,
+        end = right,
+        strokeWidth = haloStroke,
+        cap = StrokeCap.Round,
+    )
+    drawLine(
+        color = color,
+        start = tip,
+        end = left,
+        strokeWidth = arrowStroke,
+        cap = StrokeCap.Round,
+    )
+    drawLine(
+        color = color,
+        start = tip,
+        end = right,
+        strokeWidth = arrowStroke,
+        cap = StrokeCap.Round,
+    )
+}
+
+private fun DrawScope.drawTrafficMapRoutePulse(
+    route: TrafficMapRouteDrawModel,
+    phase: Float,
+    color: Color,
+    haloColor: Color,
+    radius: Float,
+    strokeWidth: Float,
+) {
+    if (route.geometry.directionCue == null) {
+        return
+    }
+    val progress =
+        TRAFFIC_MAP_ROUTE_PULSE_START_T +
+            (
+                phase.coerceAtLeast(0f) /
+                    (TRAFFIC_MAP_TOR_ROUTE_DASH_PHASE_STEPS - 1L).coerceAtLeast(1L).toFloat()
+                ) *
+            (TRAFFIC_MAP_ROUTE_PULSE_END_T - TRAFFIC_MAP_ROUTE_PULSE_START_T)
+    val center = route.geometry.pointAt(progress.coerceIn(0f, 1f))
+    drawCircle(
+        color = haloColor.copy(alpha = 0.58f),
+        radius = radius + strokeWidth,
+        center = center,
+    )
+    drawCircle(
+        color = color.copy(alpha = (route.alpha * TrafficMapTokens.RoutePulseAlpha).coerceAtMost(1f)),
+        radius = radius,
+        center = center,
+    )
+}
+
+@Composable
+private fun TrafficMapMarkerClusterBadges(targets: List<TrafficMapMarkerHitTarget>) {
+    val density = LocalDensity.current
+    val badgeSize = TrafficMapTokens.MarkerClusterBadgeSizeDp.dp
+    val badgeSizePx = with(density) { badgeSize.toPx() }
+    val badgeLiftPx = with(density) { 14.dp.toPx() }
+    val badgeShiftPx = with(density) { 6.dp.toPx() }
+    targets
+        .filter { target -> target.clusterCount > 1 }
+        .forEach { target ->
+            Surface(
+                modifier =
+                    Modifier
+                        .offset {
+                            IntOffset(
+                                x = (target.offset.x + badgeShiftPx).roundToInt(),
+                                y = (target.offset.y - badgeLiftPx - (badgeSizePx / 2f)).roundToInt(),
+                            )
+                        }
+                        .size(badgeSize)
+                        .semantics {
+                            contentDescription = "Traffic map cluster ${target.clusterCount} markers"
+                        }
+                        .testTag("traffic_map_marker_cluster_${target.key.normalizedTrafficMapTestTag()}"),
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.primary,
+                tonalElevation = 1.dp,
+                shadowElevation = 1.dp,
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text(
+                        text = target.clusterCount.coerceAtMost(99).toString(),
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontSize = 8.sp,
+                            lineHeight = 8.sp,
+                        ),
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onPrimary,
+                        maxLines = 1,
+                    )
+                }
+            }
+        }
 }
 
 @Composable
@@ -2008,6 +2177,7 @@ internal data class TrafficMapMarkerPlacement(
     val role: TrafficMapMarkerRole,
     val rawOffset: Offset,
     val offset: Offset,
+    val clusterCount: Int = 1,
 )
 
 private data class TrafficMapMarkerHitTarget(
@@ -2016,6 +2186,8 @@ private data class TrafficMapMarkerHitTarget(
     val detail: String,
     val contentDescription: String,
     val offset: Offset,
+    val role: TrafficMapMarkerRole,
+    val clusterCount: Int = 1,
 )
 
 private data class TrafficMapSmallCountryCallout(
@@ -2205,11 +2377,41 @@ internal data class DrawableTrafficMapEdge(
 )
 
 internal data class TrafficMapRouteDrawModel(
-    val path: Path,
+    val geometry: TrafficMapRouteGeometry,
     val strokeWidth: Float,
     val alpha: Float,
     val role: TrafficMapEdgeRole,
 )
+
+internal data class TrafficMapRouteGeometry(
+    val path: Path,
+    val from: Offset,
+    val control: Offset,
+    val to: Offset,
+    val directionCue: TrafficMapRouteDirectionCue?,
+)
+
+internal data class TrafficMapRouteDirectionCue(
+    val center: Offset,
+    val angleRadians: Float,
+)
+
+private enum class TrafficMapRoutePresentation(
+    val minRouteStrokeDp: Float,
+    val maxRouteStrokeDp: Float,
+    val directionArrowSizeDp: Float,
+) {
+    Compact(
+        minRouteStrokeDp = TRAFFIC_MAP_ROUTE_MIN_STROKE_DP,
+        maxRouteStrokeDp = TRAFFIC_MAP_ROUTE_MAX_STROKE_DP,
+        directionArrowSizeDp = TrafficMapTokens.RouteDirectionArrowSizeDp,
+    ),
+    Expanded(
+        minRouteStrokeDp = TrafficMapTokens.ExpandedRouteMinStrokeDp,
+        maxRouteStrokeDp = TrafficMapTokens.ExpandedRouteMaxStrokeDp,
+        directionArrowSizeDp = TrafficMapTokens.DetailRouteDirectionArrowSizeDp,
+    ),
+}
 
 private fun List<TrafficMapPoint>.toDrawableTrafficMapDestinations(): List<DrawableTrafficMapDestination> =
     map(TrafficMapPoint::toDrawableTrafficMapDestination)
@@ -2272,6 +2474,8 @@ private fun trafficMapMarkerHitTargets(
                     detail = detail,
                     contentDescription = "Device $label $detail",
                     offset = markerLayout.offsetForMarker(TRAFFIC_MAP_ORIGIN_MARKER_KEY, origin),
+                    role = TrafficMapMarkerRole.ORIGIN,
+                    clusterCount = markerLayout.clusterCountForMarker(TRAFFIC_MAP_ORIGIN_MARKER_KEY),
                 ),
             )
         }
@@ -2287,6 +2491,8 @@ private fun trafficMapMarkerHitTargets(
                         detail = bytes,
                         contentDescription = "Destination ${point.label}, $bytes, ${point.connections} connections",
                         offset = markerLayout.offsetForMarker(key, project(point.lat, point.lon, viewport)),
+                        role = TrafficMapMarkerRole.DESTINATION,
+                        clusterCount = markerLayout.clusterCountForMarker(key),
                     ),
                 )
             }
@@ -2303,6 +2509,8 @@ private fun trafficMapMarkerHitTargets(
                             TRAFFIC_MAP_VPN_ROUTE_MARKER_KEY,
                             project(point.lat, point.lon, viewport),
                         ),
+                    role = TrafficMapMarkerRole.VPN_ROUTE,
+                    clusterCount = markerLayout.clusterCountForMarker(TRAFFIC_MAP_VPN_ROUTE_MARKER_KEY),
                 ),
             )
         }
@@ -2319,6 +2527,8 @@ private fun trafficMapMarkerHitTargets(
                             TRAFFIC_MAP_TOR_EXIT_MARKER_KEY,
                             project(point.lat, point.lon, viewport),
                         ),
+                    role = TrafficMapMarkerRole.TOR_EXIT,
+                    clusterCount = markerLayout.clusterCountForMarker(TRAFFIC_MAP_TOR_EXIT_MARKER_KEY),
                 ),
             )
         }
@@ -2428,11 +2638,13 @@ internal fun resolveTrafficMapMarkerPlacements(
                     viewportSize = viewportSize,
                     inset = minDistancePx,
                 ),
+                clusterCount = 1,
             )
         }
     }
     val resolved = mutableListOf<TrafficMapMarkerPlacement>()
     val placementsByOriginalIndex = arrayOfNulls<TrafficMapMarkerPlacement>(markers.size)
+    val clusterCounts = trafficMapMarkerRawClusterCounts(markers, minDistancePx)
     markers
         .withIndex()
         .sortedWith(
@@ -2450,11 +2662,22 @@ internal fun resolveTrafficMapMarkerPlacements(
                     viewportSize = viewportSize,
                 )
             val placement = marker.toTrafficMapMarkerPlacement(offset = resolvedOffset)
+                .copy(clusterCount = clusterCounts[indexed.index])
             resolved += placement
             placementsByOriginalIndex[indexed.index] = placement
         }
     return placementsByOriginalIndex.filterNotNull()
 }
+
+private fun trafficMapMarkerRawClusterCounts(
+    markers: List<TrafficMapMarkerProjection>,
+    minDistancePx: Float,
+): List<Int> =
+    markers.map { marker ->
+        markers.count { other ->
+            marker.rawOffset.distanceTo(other.rawOffset) <= minDistancePx
+        }.coerceAtLeast(1)
+    }
 
 private fun TrafficMapMarkerProjection.resolvedTrafficMapMarkerOffset(
     resolved: List<TrafficMapMarkerPlacement>,
@@ -2493,13 +2716,17 @@ private fun TrafficMapMarkerProjection.resolvedTrafficMapMarkerOffset(
     return collisionCandidate
 }
 
-private fun TrafficMapMarkerProjection.toTrafficMapMarkerPlacement(offset: Offset): TrafficMapMarkerPlacement =
+private fun TrafficMapMarkerProjection.toTrafficMapMarkerPlacement(
+    offset: Offset,
+    clusterCount: Int = 1,
+): TrafficMapMarkerPlacement =
     TrafficMapMarkerPlacement(
         key = key,
         countryCode = countryCode,
         role = role,
         rawOffset = rawOffset,
         offset = offset,
+        clusterCount = clusterCount,
     )
 
 private fun Offset.collidesWithAnyTrafficMapMarker(
@@ -2540,6 +2767,9 @@ private fun List<TrafficMapMarkerPlacement>.offsetForMarker(
     fallback: Offset,
 ): Offset =
     firstOrNull { placement -> placement.key == key }?.offset ?: fallback
+
+private fun List<TrafficMapMarkerPlacement>.clusterCountForMarker(key: String): Int =
+    firstOrNull { placement -> placement.key == key }?.clusterCount ?: 1
 
 private fun List<TrafficMapMarkerPlacement>.edgeEndpointOffset(
     edge: DrawableTrafficMapEdge,
@@ -2797,29 +3027,103 @@ private fun TrafficMapLegendLabel(
     )
 }
 
-private fun curvedTrafficRoutePath(
+internal fun trafficRouteGeometry(
     from: Offset,
     to: Offset,
     lane: Int,
-): Path {
+): TrafficMapRouteGeometry {
     val dx = to.x - from.x
     val dy = to.y - from.y
     val distance = sqrt((dx * dx) + (dy * dy))
-    return Path().apply {
+    val control = trafficMapRouteControlPoint(from = from, to = to, lane = lane, distance = distance)
+    val path = Path().apply {
         moveTo(from.x, from.y)
         if (distance < 1f) {
             lineTo(to.x, to.y)
             return@apply
         }
+        quadraticTo(control.x, control.y, to.x, to.y)
+    }
+    return TrafficMapRouteGeometry(
+        path = path,
+        from = from,
+        control = control,
+        to = to,
+        directionCue = trafficMapRouteDirectionCue(from = from, to = to, lane = lane),
+    )
+}
+
+internal fun trafficMapRouteDirectionCue(
+    from: Offset,
+    to: Offset,
+    lane: Int,
+): TrafficMapRouteDirectionCue? {
+    val dx = to.x - from.x
+    val dy = to.y - from.y
+    val distance = sqrt((dx * dx) + (dy * dy))
+    if (distance < TRAFFIC_MAP_ROUTE_DIRECTION_MIN_DISTANCE_PX) {
+        return null
+    }
+    val control = trafficMapRouteControlPoint(from = from, to = to, lane = lane, distance = distance)
+    val center = trafficMapQuadraticPoint(from, control, to, TRAFFIC_MAP_ROUTE_DIRECTION_CUE_T)
+    val tangent = trafficMapQuadraticTangent(from, control, to, TRAFFIC_MAP_ROUTE_DIRECTION_CUE_T)
+    return TrafficMapRouteDirectionCue(
+        center = center,
+        angleRadians = atan2(tangent.y, tangent.x),
+    )
+}
+
+private fun trafficMapRouteControlPoint(
+    from: Offset,
+    to: Offset,
+    lane: Int,
+    distance: Float,
+): Offset =
+    if (distance < 1f) {
+        Offset((from.x + to.x) / 2f, (from.y + to.y) / 2f)
+    } else {
+        val dx = to.x - from.x
+        val dy = to.y - from.y
         val bendLane = lane.takeIf { it != 0 } ?: 1
         val bend = min(distance * (0.15f + (0.035f * (kotlin.math.abs(bendLane) - 1).coerceAtMost(3))), 58f) *
             bendLane.signFloat()
         val midX = (from.x + to.x) / 2f
         val midY = (from.y + to.y) / 2f
-        val controlX = midX - (dy / distance * bend)
-        val controlY = midY + (dx / distance * bend)
-        quadraticTo(controlX, controlY, to.x, to.y)
+        Offset(
+            x = midX - (dy / distance * bend),
+            y = midY + (dx / distance * bend),
+        )
     }
+
+private fun TrafficMapRouteGeometry.pointAt(t: Float): Offset =
+    trafficMapQuadraticPoint(from, control, to, t)
+
+private fun trafficMapQuadraticPoint(
+    from: Offset,
+    control: Offset,
+    to: Offset,
+    t: Float,
+): Offset {
+    val safeT = t.coerceIn(0f, 1f)
+    val inverseT = 1f - safeT
+    return Offset(
+        x = (inverseT * inverseT * from.x) + (2f * inverseT * safeT * control.x) + (safeT * safeT * to.x),
+        y = (inverseT * inverseT * from.y) + (2f * inverseT * safeT * control.y) + (safeT * safeT * to.y),
+    )
+}
+
+private fun trafficMapQuadraticTangent(
+    from: Offset,
+    control: Offset,
+    to: Offset,
+    t: Float,
+): Offset {
+    val safeT = t.coerceIn(0f, 1f)
+    val inverseT = 1f - safeT
+    return Offset(
+        x = (2f * inverseT * (control.x - from.x)) + (2f * safeT * (to.x - control.x)),
+        y = (2f * inverseT * (control.y - from.y)) + (2f * safeT * (to.y - control.y)),
+    )
 }
 
 private fun trafficRouteLanes(
@@ -3734,6 +4038,25 @@ internal fun trafficMapColors(
     )
 }
 
+private fun trafficMapRouteColor(
+    role: TrafficMapEdgeRole,
+    colors: TrafficMapColors,
+): Color =
+    when (role) {
+        TrafficMapEdgeRole.DIRECT -> colors.origin
+        TrafficMapEdgeRole.VPN_ROUTE -> colors.vpnRoute
+        TrafficMapEdgeRole.TOR_ROUTE -> colors.torExit
+    }
+
+private fun Offset.offsetByAngle(
+    angleRadians: Float,
+    distance: Float,
+): Offset =
+    Offset(
+        x = x + (cos(angleRadians.toDouble()) * distance).toFloat(),
+        y = y + (sin(angleRadians.toDouble()) * distance).toFloat(),
+    )
+
 private fun trafficMapViewport(size: Size): TrafficMapViewport {
     val widthForHeight = size.height * TRAFFIC_MAP_WORLD_ASPECT_RATIO
     return if (widthForHeight <= size.width) {
@@ -3775,6 +4098,10 @@ private const val TRAFFIC_MAP_ROUTE_MIN_ALPHA = 0.42f
 private const val TRAFFIC_MAP_ROUTE_ALPHA_RANGE = 0.36f
 private const val TRAFFIC_MAP_ROUTE_HALO_STROKE_EXTRA_DP = 1.4f
 private const val TRAFFIC_MAP_ROUTE_HALO_ALPHA_MULTIPLIER = 0.22f
+private const val TRAFFIC_MAP_ROUTE_DIRECTION_MIN_DISTANCE_PX = 18f
+private const val TRAFFIC_MAP_ROUTE_DIRECTION_CUE_T = 0.66f
+private const val TRAFFIC_MAP_ROUTE_PULSE_START_T = 0.22f
+private const val TRAFFIC_MAP_ROUTE_PULSE_END_T = 0.84f
 private const val TRAFFIC_MAP_MARKER_COLLISION_RING_SIZE = 6f
 private const val TRAFFIC_MAP_MARKER_RAW_MATCH_TOLERANCE_PX = 0.5f
 private const val TRAFFIC_MAP_ORIGIN_MARKER_KEY = "origin"
@@ -3782,6 +4109,7 @@ private const val TRAFFIC_MAP_VPN_ROUTE_MARKER_KEY = "route:vpn"
 private const val TRAFFIC_MAP_TOR_EXIT_MARKER_KEY = "route:tor"
 private const val TRAFFIC_MAP_TOR_ROUTE_DASH_FRAME_DIVISOR_NANOS = 16_666_667L
 private const val TRAFFIC_MAP_TOR_ROUTE_DASH_PHASE_STEPS = 11L
+private const val TRAFFIC_MAP_HALF_PI = 1.5707964f
 private const val TRAFFIC_MAP_HEAVY_CONTENT_SETTLE_DELAY_MS = 0L
 private const val TRAFFIC_MAP_POWER_STATE_STARTUP_DELAY_MS = 0L
 private const val TRAFFIC_MAP_WEIGHT = 0.62f
