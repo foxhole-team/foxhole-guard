@@ -5,6 +5,8 @@ import android.app.NotificationManager
 import android.app.Service
 import android.content.Intent
 import com.foxhole.beta.FoxholeRuntimeDependencies
+import com.foxhole.beta.R
+import com.foxhole.beta.core.model.ConnectionSnapshot
 import com.foxhole.beta.core.model.ConnectionState
 import com.foxhole.beta.core.model.NotificationSnapshot
 import com.foxhole.beta.core.model.TrafficMode
@@ -38,12 +40,12 @@ internal fun Service.handleForegroundRuntimeCommand(
     },
     failClosedTeardown: suspend (commandStartId: Int, action: String?) -> Unit,
 ): Int {
-    ensureConnectionNotificationChannel(notificationManager)
-    startForeground(
-        FoxholeConnectionServiceContract.NOTIFICATION_ID,
-        buildNotification(currentNotificationSnapshot()),
-    )
     val action = intent?.action
+    ensureConnectionNotificationChannel(notificationManager)
+    val notification = buildNotification(currentNotificationSnapshot())
+    if (!startForegroundRuntimeSafely(action, startId, trafficMode, notification, container)) {
+        return Service.START_NOT_STICKY
+    }
     when {
         action == null -> {
             val snapshot = FoxholeVpnRuntimeBridge.snapshot.value
@@ -90,6 +92,50 @@ internal fun Service.handleForegroundRuntimeCommand(
         }
     }
     return Service.START_NOT_STICKY
+}
+
+private fun Service.startForegroundRuntimeSafely(
+    action: String?,
+    startId: Int,
+    trafficMode: TrafficMode,
+    notification: Notification,
+    container: FoxholeRuntimeDependencies,
+): Boolean =
+    runCatching {
+        startForeground(FoxholeConnectionServiceContract.NOTIFICATION_ID, notification)
+    }.fold(
+        onSuccess = { true },
+        onFailure = { error ->
+            val reason = foregroundServiceStartBlockReason(error) ?: throw error
+            container.diagnosticsLogger.record(
+                "connection",
+                foregroundStartBlockedDiagnosticMessage(
+                    action = action,
+                    mode = trafficMode,
+                    reason = reason,
+                    error = error,
+                ),
+            )
+            publishForegroundRuntimeStartBlockedSnapshot(
+                mode = trafficMode,
+                message = getString(R.string.runtime_restore_open_app_required),
+            )
+            stopSelf(startId)
+            false
+        },
+    )
+
+internal fun publishForegroundRuntimeStartBlockedSnapshot(
+    mode: TrafficMode,
+    message: String,
+) {
+    FoxholeVpnRuntimeBridge.update(
+        ConnectionSnapshot(
+            state = ConnectionState.ERROR,
+            trafficMode = mode,
+            message = message,
+        ),
+    )
 }
 
 private val NULL_INTENT_ACTIVE_STATES =

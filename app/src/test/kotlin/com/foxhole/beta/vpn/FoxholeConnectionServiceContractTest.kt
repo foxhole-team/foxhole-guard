@@ -118,4 +118,35 @@ class FoxholeConnectionServiceContractTest {
             shouldClearDetachedTunnelReconnect(reconnectingProxy, activeVpnNetworkAvailable = false),
         )
     }
+
+    @Test
+    fun `foreground service start failures are classified for safe restore`() {
+        assertEquals(
+            ForegroundServiceStartBlockReason.SECURITY,
+            foregroundServiceStartBlockReason(SecurityException("contains raw endpoint")),
+        )
+        assertEquals(
+            ForegroundServiceStartBlockReason.ILLEGAL_STATE,
+            foregroundServiceStartBlockReason(IllegalStateException("background launch blocked")),
+        )
+        assertNull(foregroundServiceStartBlockReason(RuntimeException("ordinary runtime failure")))
+    }
+
+    @Test
+    fun `foreground service start diagnostics do not include raw exception message`() {
+        val message =
+            foregroundStartBlockedDiagnosticMessage(
+                action = FoxholeConnectionServiceContract.ACTION_RESTORE,
+                mode = TrafficMode.TUNNEL,
+                reason = ForegroundServiceStartBlockReason.SECURITY,
+                error = SecurityException("https://secret.example/subscription"),
+            )
+
+        assertTrue(message.contains("reason=security"))
+        assertTrue(message.contains("action=${FoxholeConnectionServiceContract.ACTION_RESTORE}"))
+        assertTrue(message.contains("mode=tunnel"))
+        assertTrue(message.contains("error=SecurityException"))
+        assertFalse(message.contains("secret.example"))
+        assertFalse(message.contains("subscription"))
+    }
 }

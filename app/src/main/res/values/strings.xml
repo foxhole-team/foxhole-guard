@@ -79,6 +79,7 @@
     <string name="privacy_local_data_clear_app_traffic_success">App traffic stats cleared</string>
     <string name="privacy_local_data_clear_profiles_success">Profiles and secrets cleared</string>
     <string name="privacy_local_data_factory_reset_success">FoxHole local data reset</string>
+    <string name="runtime_restore_open_app_required">Open FoxHole to restore protection</string>
     <string name="connect">Start</string>
     <string name="connect_selected_profile">Connect selected</string>
     <string name="disconnect">Stop</string>

@@ -80,6 +80,7 @@
     <string name="privacy_local_data_clear_app_traffic_success">App traffic stats очищены</string>
     <string name="privacy_local_data_clear_profiles_success">Профили и секреты очищены</string>
     <string name="privacy_local_data_factory_reset_success">Локальные данные FoxHole сброшены</string>
+    <string name="runtime_restore_open_app_required">Откройте FoxHole, чтобы восстановить защиту</string>
     <string name="connect">Старт</string>
     <string name="connect_selected_profile">Подключить выбранный</string>
     <string name="disconnect">Стоп</string>

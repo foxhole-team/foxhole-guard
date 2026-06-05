@@ -4,9 +4,36 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import androidx.core.content.ContextCompat
+import com.foxhole.beta.FoxholeApplication
+import com.foxhole.beta.R
+import com.foxhole.beta.core.diagnostics.DiagnosticsLogger
 import com.foxhole.beta.core.model.ConnectionSnapshot
 import com.foxhole.beta.core.model.ConnectionState
 import com.foxhole.beta.core.model.TrafficMode
+import java.util.Locale
+
+internal sealed interface ForegroundRuntimeStartResult {
+    data class Started(val intent: Intent) : ForegroundRuntimeStartResult
+
+    data class Blocked(
+        val action: String,
+        val mode: TrafficMode,
+        val reason: ForegroundServiceStartBlockReason,
+    ) : ForegroundRuntimeStartResult
+}
+
+internal fun interface ForegroundRuntimeServiceStarter {
+    fun startForegroundService(
+        context: Context,
+        intent: Intent,
+    )
+}
+
+internal enum class ForegroundServiceStartBlockReason {
+    FOREGROUND_SERVICE_START_NOT_ALLOWED,
+    SECURITY,
+    ILLEGAL_STATE,
+}
 
 internal object FoxholeConnectionServiceContract {
     const val ACTION_CONNECT = "com.foxhole.beta.action.CONNECT"
@@ -139,7 +166,8 @@ internal object FoxholeConnectionServiceContract {
         localGuardMode: LocalGuardMode? = null,
         suppressLocalGuard: Boolean = false,
         preserveSmartStartAnalysis: Boolean = false,
-    ) {
+        starter: ForegroundRuntimeServiceStarter = DefaultForegroundRuntimeServiceStarter,
+    ): ForegroundRuntimeStartResult {
         val intent =
             serviceIntent(
                 context,
@@ -152,7 +180,13 @@ internal object FoxholeConnectionServiceContract {
                 suppressLocalGuard,
                 preserveSmartStartAnalysis,
             )
-        ContextCompat.startForegroundService(context, intent)
+        return startForegroundServiceSafely(
+            context = context,
+            mode = mode,
+            action = action,
+            intent = intent,
+            starter = starter,
+        )
     }
 
     fun stopInactiveServices(
@@ -168,13 +202,87 @@ internal object FoxholeConnectionServiceContract {
 
     fun stopAllServices(context: Context) {
         TrafficMode.entries.forEach { mode ->
-            ContextCompat.startForegroundService(
-                context,
-                Intent(context, serviceClass(mode)).setAction(ACTION_KILL),
-            )
+            startForegroundService(context, mode, ACTION_KILL)
         }
     }
 }
+
+internal object DefaultForegroundRuntimeServiceStarter : ForegroundRuntimeServiceStarter {
+    override fun startForegroundService(
+        context: Context,
+        intent: Intent,
+    ) {
+        ContextCompat.startForegroundService(context, intent)
+    }
+}
+
+internal fun startForegroundServiceSafely(
+    context: Context,
+    mode: TrafficMode,
+    action: String,
+    intent: Intent,
+    starter: ForegroundRuntimeServiceStarter = DefaultForegroundRuntimeServiceStarter,
+): ForegroundRuntimeStartResult =
+    runCatching {
+        starter.startForegroundService(context, intent)
+    }.fold(
+        onSuccess = { ForegroundRuntimeStartResult.Started(intent) },
+        onFailure = { error ->
+            val reason = foregroundServiceStartBlockReason(error) ?: throw error
+            context.foregroundRuntimeDiagnosticsLogger()?.record(
+                "connection",
+                foregroundStartBlockedDiagnosticMessage(
+                    action = action,
+                    mode = mode,
+                    reason = reason,
+                    error = error,
+                ),
+            )
+            publishForegroundRuntimeStartBlockedSnapshot(
+                mode = mode,
+                message = context.getString(R.string.runtime_restore_open_app_required),
+            )
+            ForegroundRuntimeStartResult.Blocked(
+                action = action,
+                mode = mode,
+                reason = reason,
+            )
+        },
+    )
+
+internal fun foregroundServiceStartBlockReason(error: Throwable): ForegroundServiceStartBlockReason? =
+    when {
+        error.javaClass.name == FOREGROUND_SERVICE_START_NOT_ALLOWED_EXCEPTION ->
+            ForegroundServiceStartBlockReason.FOREGROUND_SERVICE_START_NOT_ALLOWED
+        error is SecurityException -> ForegroundServiceStartBlockReason.SECURITY
+        error is IllegalStateException -> ForegroundServiceStartBlockReason.ILLEGAL_STATE
+        else -> null
+    }
+
+internal fun foregroundStartBlockedDiagnosticMessage(
+    action: String?,
+    mode: TrafficMode,
+    reason: ForegroundServiceStartBlockReason,
+    error: Throwable,
+): String =
+    "foreground service start blocked " +
+        "reason=${reason.logValue()} " +
+        "action=${action ?: "unknown"} " +
+        "mode=${mode.name.lowercase(Locale.ROOT)} " +
+        "error=${sanitizedRuntimeFailureType(error)}"
+
+internal fun ForegroundServiceStartBlockReason.logValue(): String = name.lowercase(Locale.ROOT)
+
+internal fun sanitizedRuntimeFailureType(error: Throwable): String =
+    error.javaClass.simpleName.takeIf { it.isNotBlank() } ?: "RuntimeException"
+
+private fun Context.foregroundRuntimeDiagnosticsLogger(): DiagnosticsLogger? =
+    runCatching {
+        (applicationContext as? FoxholeApplication)?.container?.diagnosticsLogger
+    }.getOrNull()
+
+private const val FOREGROUND_SERVICE_START_NOT_ALLOWED_EXCEPTION =
+    "android.app.ForegroundServiceStartNotAllowedException"
 
 internal fun Intent.previousVpnNetworkHandleOrNull(): Long? =
     if (hasExtra(FoxholeConnectionServiceContract.EXTRA_PREVIOUS_VPN_NETWORK_HANDLE)) {

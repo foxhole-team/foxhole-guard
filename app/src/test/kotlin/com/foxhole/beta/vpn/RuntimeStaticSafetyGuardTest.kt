@@ -78,6 +78,50 @@ class RuntimeStaticSafetyGuardTest {
         assertFalse(fallbackBlock.contains("InetAddress.getAllByName(LOCAL_GUARD_CONNECTIVITY_DNS_PROBE_HOST)"))
     }
 
+    @Test
+    fun `foreground service starts are fenced through safe launchers`() {
+        val contract =
+            projectFile("src/main/kotlin/com/foxhole/beta/vpn/FoxholeConnectionServiceContract.kt").readText()
+        val runtimeHandler =
+            projectFile("src/main/kotlin/com/foxhole/beta/vpn/RuntimeCommandHandler.kt").readText()
+        val publicStartBlock =
+            contract.between(
+                "fun startForegroundService(",
+                "fun stopInactiveServices(",
+            )
+
+        assertEquals(1, Regex("""ContextCompat\.startForegroundService""").findAll(contract).count())
+        assertFalse(publicStartBlock.contains("ContextCompat.startForegroundService"))
+        assertTrue(publicStartBlock.contains("startForegroundServiceSafely("))
+        assertTrue(contract.contains("FOREGROUND_SERVICE_START_NOT_ALLOWED_EXCEPTION"))
+        assertTrue(contract.contains("SecurityException -> ForegroundServiceStartBlockReason.SECURITY"))
+        assertTrue(contract.contains("IllegalStateException -> ForegroundServiceStartBlockReason.ILLEGAL_STATE"))
+        assertTrue(runtimeHandler.contains("startForegroundRuntimeSafely("))
+        assertTrue(runtimeHandler.contains("foregroundServiceStartBlockReason(error) ?: throw error"))
+        assertTrue(runtimeHandler.contains("publishForegroundRuntimeStartBlockedSnapshot("))
+        assertTrue(runtimeHandler.contains("Service.START_NOT_STICKY"))
+    }
+
+    @Test
+    fun `foreground service special use subtypes stay descriptive`() {
+        val manifest = projectFile("src/main/AndroidManifest.xml").readText()
+
+        assertTrue(
+            manifest.contains(
+                "Maintains a user-initiated VPN tunnel or local firewall guard so selected apps and DNS traffic " +
+                    "remain protected while Foxhole is not in the foreground.",
+            ),
+        )
+        assertTrue(
+            manifest.contains(
+                "Maintains a user-initiated local proxy runtime so the user's explicitly configured client apps " +
+                    "can route traffic through the selected profile while Foxhole is not in the foreground.",
+            ),
+        )
+        assertFalse(manifest.contains("android:value=\"vpn\""))
+        assertFalse(manifest.contains("android:value=\"proxy\""))
+    }
+
     private fun assertNoMatches(
         pattern: Regex,
         allowlistedPaths: Set<String> = emptySet(),

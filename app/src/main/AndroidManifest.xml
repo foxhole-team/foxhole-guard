@@ -59,7 +59,7 @@
 
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="vpn" />
+                android:value="Maintains a user-initiated VPN tunnel or local firewall guard so selected apps and DNS traffic remain protected while Foxhole is not in the foreground." />
         </service>
 
         <service
@@ -68,7 +68,7 @@
             android:foregroundServiceType="specialUse">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="proxy" />
+                android:value="Maintains a user-initiated local proxy runtime so the user's explicitly configured client apps can route traffic through the selected profile while Foxhole is not in the foreground." />
         </service>
 
         <service
