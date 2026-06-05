@@ -265,6 +265,10 @@ class HomeDashboardHotPathTest {
             appSource.substringAfter("composable(AppRoute.SETTINGS)")
                 .substringBefore("composable(AppRoute.SMART_START)")
 
+        assertTrue(appSource.contains("startDestination = RootGraph.Dashboard.route"))
+        assertTrue(appSource.contains("route = RootGraph.Dashboard.route"))
+        assertTrue(appSource.contains("route = RootGraph.Settings.route"))
+        assertTrue(appSource.contains("private fun NavDestination.belongsToRootSection(section: AppSection): Boolean"))
         assertTrue(homeRouteBlock.contains("HomeScreen("))
         assertFalse(homeRouteBlock.contains("SettingsHomeScreen("))
         assertTrue(settingsRouteBlock.contains("SettingsHomeScreen("))

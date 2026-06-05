@@ -121,6 +121,18 @@ class FoxholeNavigationPresentationTest {
             source.substringAfter("composable(AppRoute.SETTINGS) {")
                 .substringBefore("composable(AppRoute.SMART_START)")
 
+        assertTrue(source.contains("private sealed interface RootGraph"))
+        assertTrue(source.contains("data object Dashboard : RootGraph"))
+        assertTrue(source.contains("data object Settings : RootGraph"))
+        assertTrue(source.contains("startDestination = RootGraph.Dashboard.route"))
+        assertTrue(source.contains("route = RootGraph.Dashboard.route"))
+        assertTrue(source.contains("startDestination = AppRoute.HOME"))
+        assertTrue(source.contains("route = RootGraph.Settings.route"))
+        assertTrue(source.contains("startDestination = AppRoute.SETTINGS"))
+        assertTrue(source.contains("graphRoute = RootGraph.Dashboard.route"))
+        assertTrue(source.contains("graphRoute = RootGraph.Settings.route"))
+        assertTrue(source.contains("hierarchy.any { destination ->"))
+        assertTrue(source.contains("navigate(section.graphRoute)"))
         assertTrue(homeRootBlock.contains("HomeScreen("))
         assertFalse(homeRootBlock.contains("SettingsHomeScreen("))
         assertTrue(settingsRootBlock.contains("SettingsHomeScreen("))
@@ -144,7 +156,7 @@ class FoxholeNavigationPresentationTest {
             ).first { file -> file.isFile }.readText()
         val navHostBlock =
             source.substringAfter("NavHost(")
-                .substringBefore(") {\n                composable(AppRoute.HOME)")
+                .substringBefore(") {\n                    navigation(")
 
         assertTrue(navHostBlock.contains("initialState.destination.route.isSettingsDetailRoute() &&"))
         assertTrue(navHostBlock.contains("targetState.destination.route.isSettingsDetailRoute()"))

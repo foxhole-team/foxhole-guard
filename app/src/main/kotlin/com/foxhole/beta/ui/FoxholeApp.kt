@@ -90,6 +90,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavDestination
+import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -98,6 +99,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import androidx.navigation.navigation
 import com.foxhole.beta.BuildConfig
 import com.foxhole.beta.R
 import com.foxhole.beta.core.data.ProfileImportPayloadTooLargeException
@@ -156,19 +158,34 @@ private object AppRoute {
     fun profileEditConfig(profileId: Long): String = "profiles/$profileId/edit-config"
 }
 
+private sealed interface RootGraph {
+    val route: String
+
+    data object Dashboard : RootGraph {
+        override val route: String = "root/dashboard"
+    }
+
+    data object Settings : RootGraph {
+        override val route: String = "root/settings"
+    }
+}
+
 private enum class AppSection(
+    val graphRoute: String,
     val rootRoute: String,
     val icon: ImageVector,
     val titleRes: Int,
     val testTag: String,
 ) {
     DASHBOARD(
+        graphRoute = RootGraph.Dashboard.route,
         rootRoute = AppRoute.HOME,
         icon = FoxholeIcons.Dashboard,
         titleRes = R.string.dashboard,
         testTag = "bottom_nav_dashboard",
     ),
     SETTINGS(
+        graphRoute = RootGraph.Settings.route,
         rootRoute = AppRoute.SETTINGS,
         icon = FoxholeIcons.Settings,
         titleRes = R.string.settings,
@@ -320,7 +337,7 @@ fun FoxholeApp(
             ) {
                 NavHost(
                     navController = navController,
-                    startDestination = AppRoute.HOME,
+                    startDestination = RootGraph.Dashboard.route,
                     modifier =
                         Modifier
                             .fillMaxSize()
@@ -364,7 +381,11 @@ fun FoxholeApp(
                         }
                     },
                 ) {
-                composable(AppRoute.HOME) {
+                    navigation(
+                        route = RootGraph.Dashboard.route,
+                        startDestination = AppRoute.HOME,
+                    ) {
+                        composable(AppRoute.HOME) {
                     NavigationTransitionTelemetryEffect(AppRoute.HOME, navigationTransitionTelemetry)
                     val state by viewModel.homeRouteState.collectAsStateWithLifecycle()
                     HomeScreen(
@@ -421,7 +442,7 @@ fun FoxholeApp(
                         onOpenTrafficMapDetails = { navController.navigate(AppRoute.TRAFFIC_MAP_DETAIL) },
                     )
                 }
-                composable(AppRoute.TRAFFIC_MAP_DETAIL) {
+                        composable(AppRoute.TRAFFIC_MAP_DETAIL) {
                     NavigationTransitionTelemetryEffect(AppRoute.TRAFFIC_MAP_DETAIL, navigationTransitionTelemetry)
                     TrafficMapDetailScreen(
                         stateFlow = viewModel.trafficMapUiState,
@@ -429,7 +450,7 @@ fun FoxholeApp(
                         onNavigateUp = navController::navigateUp,
                     )
                 }
-                composable(AppRoute.PROFILES) {
+                        composable(AppRoute.PROFILES) {
                     NavigationTransitionTelemetryEffect(AppRoute.PROFILES, navigationTransitionTelemetry)
                     val state by viewModel.profilesRouteState.collectAsStateWithLifecycle()
                     ProfilesScreen(
@@ -458,7 +479,7 @@ fun FoxholeApp(
                         onCreateProfileExportShareIntent = viewModel::exportProfileShareIntent,
                     )
                 }
-                composable(
+                        composable(
                     route = AppRoute.PROFILE_DETAIL,
                     arguments = listOf(navArgument(AppRoute.PROFILE_ID) { type = NavType.LongType }),
                 ) { backStackEntry ->
@@ -496,7 +517,7 @@ fun FoxholeApp(
                         onEditConfig = { navController.navigate(AppRoute.profileEditConfig(profileId)) },
                     )
                 }
-                composable(
+                        composable(
                     route = AppRoute.PROFILE_VIEW_CONFIG,
                     arguments = listOf(navArgument(AppRoute.PROFILE_ID) { type = NavType.LongType }),
                 ) { backStackEntry ->
@@ -512,7 +533,7 @@ fun FoxholeApp(
                         onLoadConfig = { id -> viewModel.getResolvedConfig(id) },
                     )
                 }
-                composable(
+                        composable(
                     route = AppRoute.PROFILE_EDIT_CONFIG,
                     arguments = listOf(navArgument(AppRoute.PROFILE_ID) { type = NavType.LongType }),
                 ) { backStackEntry ->
@@ -540,7 +561,12 @@ fun FoxholeApp(
                         },
                     )
                 }
-                composable(AppRoute.SETTINGS) {
+                    }
+                    navigation(
+                        route = RootGraph.Settings.route,
+                        startDestination = AppRoute.SETTINGS,
+                    ) {
+                        composable(AppRoute.SETTINGS) {
                     NavigationTransitionTelemetryEffect(AppRoute.SETTINGS, navigationTransitionTelemetry)
                     val expertVisible by viewModel.settingsHomeExpertVisible.collectAsStateWithLifecycle()
                     SettingsHomeScreen(
@@ -563,7 +589,7 @@ fun FoxholeApp(
                         onOpenAbout = { navigateToSettingsDetail(AppRoute.ABOUT) },
                     )
                 }
-                composable(AppRoute.SMART_START) {
+                        composable(AppRoute.SMART_START) {
                     NavigationTransitionTelemetryEffect(AppRoute.SMART_START, navigationTransitionTelemetry)
                     val state by viewModel.settingsRouteState.collectAsStateWithLifecycle()
                     SmartStartSettingsScreen(
@@ -582,7 +608,7 @@ fun FoxholeApp(
                         onClearSmartStartData = viewModel::clearSmartStartData,
                     )
                 }
-                composable(AppRoute.TRAFFIC) {
+                        composable(AppRoute.TRAFFIC) {
                     NavigationTransitionTelemetryEffect(AppRoute.TRAFFIC, navigationTransitionTelemetry)
                     val state by viewModel.settingsRouteState.collectAsStateWithLifecycle()
                     TrafficSettingsScreen(
@@ -615,7 +641,7 @@ fun FoxholeApp(
                         onIpInfoEndpointChanged = viewModel::onIpInfoEndpointChanged,
                     )
                 }
-                composable(AppRoute.DNS) {
+                        composable(AppRoute.DNS) {
                     NavigationTransitionTelemetryEffect(AppRoute.DNS, navigationTransitionTelemetry)
                     val state by viewModel.settingsRouteState.collectAsStateWithLifecycle()
                     DnsSettingsScreen(
@@ -629,7 +655,7 @@ fun FoxholeApp(
                         onDnsFilterManualRefresh = viewModel::onDnsFilterManualRefresh,
                     )
                 }
-                composable(AppRoute.SECURITY) {
+                        composable(AppRoute.SECURITY) {
                     NavigationTransitionTelemetryEffect(AppRoute.SECURITY, navigationTransitionTelemetry)
                     val state by viewModel.settingsRouteState.collectAsStateWithLifecycle()
                     SecuritySettingsScreen(
@@ -648,7 +674,7 @@ fun FoxholeApp(
                         onAnomalyHistoryRetentionSelected = viewModel::onAnomalyHistoryRetentionSelected,
                     )
                 }
-                composable(AppRoute.SECURITY_APP_MONITOR) {
+                        composable(AppRoute.SECURITY_APP_MONITOR) {
                     NavigationTransitionTelemetryEffect(AppRoute.SECURITY_APP_MONITOR, navigationTransitionTelemetry)
                     val state by viewModel.settingsRouteState.collectAsStateWithLifecycle()
                     SecuritySettingsScreen(
@@ -667,7 +693,7 @@ fun FoxholeApp(
                         onAnomalyHistoryRetentionSelected = viewModel::onAnomalyHistoryRetentionSelected,
                     )
                 }
-                composable(AppRoute.NETWORK_RULES) {
+                        composable(AppRoute.NETWORK_RULES) {
                     NavigationTransitionTelemetryEffect(AppRoute.NETWORK_RULES, navigationTransitionTelemetry)
                     val state by viewModel.settingsRouteState.collectAsStateWithLifecycle()
                     NetworkRulesSettingsScreen(
@@ -677,7 +703,7 @@ fun FoxholeApp(
                         onNetworkRulesChanged = viewModel::onNetworkRulesChanged,
                     )
                 }
-                composable(AppRoute.PRIVACY_ROUTE) {
+                        composable(AppRoute.PRIVACY_ROUTE) {
                     NavigationTransitionTelemetryEffect(AppRoute.PRIVACY_ROUTE, navigationTransitionTelemetry)
                     val state by viewModel.settingsRouteState.collectAsStateWithLifecycle()
                     PrivacyRouteSettingsScreen(
@@ -691,7 +717,7 @@ fun FoxholeApp(
                         onPrivacyRouteSelectedPackagesChanged = viewModel::onPrivacyRouteSelectedPackagesConfigured,
                     )
                 }
-                composable(AppRoute.ROUTING_APPS) {
+                        composable(AppRoute.ROUTING_APPS) {
                     NavigationTransitionTelemetryEffect(AppRoute.ROUTING_APPS, navigationTransitionTelemetry)
                     val state by viewModel.routingRouteState.collectAsStateWithLifecycle()
                     RoutingAppsScreen(
@@ -707,7 +733,7 @@ fun FoxholeApp(
                         onFirewallEnabledChanged = viewModel::onFirewallEnabledChanged,
                     )
                 }
-                composable(AppRoute.ROUTING_APPS_PICKER) {
+                        composable(AppRoute.ROUTING_APPS_PICKER) {
                     NavigationTransitionTelemetryEffect(AppRoute.ROUTING_APPS_PICKER, navigationTransitionTelemetry)
                     LaunchedEffect(Unit) {
                         viewModel.ensureInstalledAppsLoaded()
@@ -724,7 +750,7 @@ fun FoxholeApp(
                         onSelectionChanged = viewModel::onSelectedPackagesChanged,
                     )
                 }
-                composable(AppRoute.ROUTING_BLOCKED_APPS_PICKER) {
+                        composable(AppRoute.ROUTING_BLOCKED_APPS_PICKER) {
                     NavigationTransitionTelemetryEffect(
                         AppRoute.ROUTING_BLOCKED_APPS_PICKER,
                         navigationTransitionTelemetry,
@@ -744,7 +770,7 @@ fun FoxholeApp(
                         onSelectionChanged = viewModel::onBlockedPackagesChanged,
                     )
                 }
-                composable(AppRoute.PRIVACY_ROUTE_APPS_PICKER) {
+                        composable(AppRoute.PRIVACY_ROUTE_APPS_PICKER) {
                     NavigationTransitionTelemetryEffect(
                         AppRoute.PRIVACY_ROUTE_APPS_PICKER,
                         navigationTransitionTelemetry,
@@ -764,7 +790,7 @@ fun FoxholeApp(
                         onSelectionChanged = viewModel::onPrivacyRouteSelectedPackagesConfigured,
                     )
                 }
-                composable(AppRoute.DNS_APPS_PICKER) {
+                        composable(AppRoute.DNS_APPS_PICKER) {
                     NavigationTransitionTelemetryEffect(AppRoute.DNS_APPS_PICKER, navigationTransitionTelemetry)
                     LaunchedEffect(Unit) {
                         viewModel.ensureInstalledAppsLoaded()
@@ -781,7 +807,7 @@ fun FoxholeApp(
                         onSelectionChanged = viewModel::onDnsBypassPackagesChanged,
                     )
                 }
-                composable(AppRoute.ROUTING_SITES) {
+                        composable(AppRoute.ROUTING_SITES) {
                     NavigationTransitionTelemetryEffect(AppRoute.ROUTING_SITES, navigationTransitionTelemetry)
                     val state by viewModel.routingRouteState.collectAsStateWithLifecycle()
                     RoutingSitesScreen(
@@ -793,7 +819,7 @@ fun FoxholeApp(
                         onSniffChanged = viewModel::onSniffChanged,
                     )
                 }
-                composable(AppRoute.APPLICATION) {
+                        composable(AppRoute.APPLICATION) {
                     NavigationTransitionTelemetryEffect(AppRoute.APPLICATION, navigationTransitionTelemetry)
                     val state by viewModel.settingsRouteState.collectAsStateWithLifecycle()
                     ApplicationSettingsScreen(
@@ -821,7 +847,7 @@ fun FoxholeApp(
                         },
                     )
                 }
-                composable(AppRoute.ABOUT) {
+                        composable(AppRoute.ABOUT) {
                     NavigationTransitionTelemetryEffect(AppRoute.ABOUT, navigationTransitionTelemetry)
                     val state by viewModel.settingsRouteState.collectAsStateWithLifecycle()
                     AboutSettingsScreen(
@@ -830,7 +856,7 @@ fun FoxholeApp(
                         onNavigateUp = navController::navigateUp,
                     )
                 }
-                composable(AppRoute.EXPERT) {
+                        composable(AppRoute.EXPERT) {
                     NavigationTransitionTelemetryEffect(AppRoute.EXPERT, navigationTransitionTelemetry)
                     val state by viewModel.settingsRouteState.collectAsStateWithLifecycle()
                     ExpertSettingsScreen(
@@ -847,7 +873,7 @@ fun FoxholeApp(
                         onResetToSafeDefaults = viewModel::resetExpertToSafeDefaults,
                     )
                 }
-                composable(AppRoute.DIAGNOSTICS) {
+                        composable(AppRoute.DIAGNOSTICS) {
                     NavigationTransitionTelemetryEffect(AppRoute.DIAGNOSTICS, navigationTransitionTelemetry)
                     val state by viewModel.diagnosticsRouteState.collectAsStateWithLifecycle()
                     DiagnosticsScreen(
@@ -863,7 +889,7 @@ fun FoxholeApp(
                         onOpenSecurityAppMonitorSettings = { navigateToSettingsDetail(AppRoute.SECURITY_APP_MONITOR) },
                     )
                 }
-                composable(AppRoute.STATISTICS) {
+                        composable(AppRoute.STATISTICS) {
                     NavigationTransitionTelemetryEffect(AppRoute.STATISTICS, navigationTransitionTelemetry)
                     LaunchedEffect(Unit) {
                         viewModel.ensureInstalledAppsLoaded()
@@ -888,7 +914,7 @@ fun FoxholeApp(
                         onClearUsage = viewModel::resetUsageTracking,
                     )
                 }
-                composable(AppRoute.PRIVACY_LOCAL_DATA) {
+                        composable(AppRoute.PRIVACY_LOCAL_DATA) {
                     NavigationTransitionTelemetryEffect(AppRoute.PRIVACY_LOCAL_DATA, navigationTransitionTelemetry)
                     val state by viewModel.settingsRouteState.collectAsStateWithLifecycle()
                     PrivacyLocalDataSettingsScreen(
@@ -901,10 +927,11 @@ fun FoxholeApp(
                         onClearProfilesAndSecrets = viewModel::clearProfilesAndSecretsLocalData,
                         onFactoryReset = viewModel::factoryResetLocalData,
                     )
-                }
+                    }
                 }
             }
         }
+    }
     }
 
     if (showBottomBar) {
@@ -1328,17 +1355,18 @@ private fun Modifier.sectionSwipeNavigation(
     }
 
 private fun NavDestination.rootAppSection(): AppSection? =
-    when {
-        route == AppRoute.HOME -> AppSection.DASHBOARD
-        route == AppRoute.SETTINGS -> AppSection.SETTINGS
-        else -> null
-    }
+    AppSection.entries.firstOrNull { section -> belongsToRootSection(section) }
 
 private fun NavDestination.rootSwipeSection(): AppSection? =
     when (route) {
         AppRoute.HOME -> AppSection.DASHBOARD
         AppRoute.SETTINGS -> AppSection.SETTINGS
         else -> null
+    }
+
+private fun NavDestination.belongsToRootSection(section: AppSection): Boolean =
+    hierarchy.any { destination ->
+        destination.route == section.graphRoute || destination.route == section.rootRoute
     }
 
 private fun String?.isRootRoute(): Boolean =
@@ -1507,14 +1535,15 @@ private fun NavHostController.navigateToSection(
     telemetry: NavigationTransitionTelemetry? = null,
 ) {
     val currentRoute = currentDestination?.route
+    val alreadyInSection = currentDestination?.belongsToRootSection(section) == true
     if (currentRoute == section.rootRoute) {
         return
     }
     telemetry?.recordTap(
         routeFrom = currentRoute,
-        routeTo = section.rootRoute,
+        routeTo = section.graphRoute,
     )
-    if (currentRoute?.startsWith(section.rootRoute) == true) {
+    if (alreadyInSection) {
         telemetry?.recordNavigateCall(section.rootRoute)
         if (!popBackStack(section.rootRoute, inclusive = false)) {
             telemetry?.recordCancelled(section.rootRoute)
@@ -1530,7 +1559,7 @@ private fun NavHostController.navigateToSection(
     } else {
         telemetry?.recordNavigateCall(section.rootRoute)
     }
-    navigate(section.rootRoute) {
+    navigate(section.graphRoute) {
         launchSingleTop = true
         restoreState = true
         popUpTo(graph.findStartDestination().id) {
