@@ -523,6 +523,27 @@ class HomeDashboardHotPathTest {
     }
 
     @Test
+    fun `route ui state models are marked immutable for compose stability reports`() {
+        val routeSource = testSourceFile("RouteUiState.kt").readText()
+
+        assertTrue(routeSource.contains("import androidx.compose.runtime.Immutable"))
+        listOf(
+            "AutoConnectProbeOptionUiState",
+            "AutoConnectUiState",
+            "HomeTorOperationUiState",
+            "HomeRouteUiState",
+            "ProfilesRouteUiState",
+            "SettingsRouteUiState",
+            "StatisticsRouteUiState",
+            "StatisticsDashboardUiState",
+            "RoutingRouteUiState",
+            "DiagnosticsRouteUiState",
+        ).forEach { modelName ->
+            assertTrue(routeSource.contains("@Immutable\ndata class $modelName("))
+        }
+    }
+
+    @Test
     fun `statistics route does not collect traffic map twice in compose`() {
         val appSource = testSourceFile("FoxholeApp.kt").readText()
         val statisticsRouteMarker = "composable(AppRoute.STATISTICS)"

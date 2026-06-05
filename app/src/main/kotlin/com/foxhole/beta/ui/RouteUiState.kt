@@ -1,5 +1,6 @@
 package com.foxhole.beta.ui
 
+import androidx.compose.runtime.Immutable
 import com.foxhole.beta.core.data.RoutingRepository
 import com.foxhole.beta.core.diagnostics.DiagnosticEntry
 import com.foxhole.beta.core.model.AnomalyEvent
@@ -29,6 +30,7 @@ enum class AutoConnectProbeStatus {
     WINNER,
 }
 
+@Immutable
 data class AutoConnectProbeOptionUiState(
     val optionId: String,
     val displayName: String,
@@ -38,6 +40,7 @@ data class AutoConnectProbeOptionUiState(
     val latencyUnavailable: Boolean = false,
 )
 
+@Immutable
 data class AutoConnectUiState(
     val running: Boolean = false,
     val currentOptionId: String? = null,
@@ -53,6 +56,7 @@ enum class HomeTorOperationKind {
     CHANGING_LOCATION,
 }
 
+@Immutable
 data class HomeTorOperationUiState(
     val kind: HomeTorOperationKind = HomeTorOperationKind.NONE,
     val startedAt: Long = 0L,
@@ -62,6 +66,7 @@ data class HomeTorOperationUiState(
         get() = kind != HomeTorOperationKind.NONE
 }
 
+@Immutable
 data class HomeRouteUiState(
     val profilesLoaded: Boolean = false,
     val activeProfile: Profile? = null,
@@ -101,6 +106,7 @@ data class HomeRouteUiState(
     val installedApps: List<InstalledAppOption> = emptyList(),
 )
 
+@Immutable
 data class ProfilesRouteUiState(
     val profiles: List<Profile> = emptyList(),
     val profilesLoaded: Boolean = false,
@@ -120,6 +126,7 @@ data class ProfilesRouteUiState(
     val favoriteProtocolOptionByProfileId: Map<Long, String> = emptyMap(),
 )
 
+@Immutable
 data class SettingsRouteUiState(
     val settings: Settings = Settings(),
     val appVersion: String = "",
@@ -140,6 +147,7 @@ data class SettingsRouteUiState(
     val statisticsDashboard: StatisticsDashboardUiState = StatisticsDashboardUiState(),
 )
 
+@Immutable
 data class StatisticsRouteUiState(
     val settings: Settings = Settings(),
     val profiles: List<Profile> = emptyList(),
@@ -154,6 +162,7 @@ data class StatisticsRouteUiState(
     val statisticsDashboard: StatisticsDashboardUiState = StatisticsDashboardUiState(),
 )
 
+@Immutable
 data class StatisticsDashboardUiState(
     val nowMs: Long = System.currentTimeMillis(),
     val statistics: StatisticsUiState = emptyStatisticsUiState(),
@@ -187,6 +196,7 @@ private fun emptyStatisticsUiState(): StatisticsUiState =
         transports = emptyList(),
     )
 
+@Immutable
 data class RoutingRouteUiState(
     val settings: Settings = Settings(),
     val presets: List<RoutingPreset> = emptyList(),
@@ -198,6 +208,7 @@ data class RoutingRouteUiState(
     val catalogPresetPreviews: Map<Long, List<RoutingRepository.RoutingCatalogPresetPreview>> = emptyMap(),
 )
 
+@Immutable
 data class DiagnosticsRouteUiState(
     val settings: Settings = Settings(),
     val activeProfile: Profile? = null,
