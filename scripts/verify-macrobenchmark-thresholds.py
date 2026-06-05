@@ -43,8 +43,15 @@ STRICT_FRAME_MAXIMUM_MAX_MS = 700.0
 FIRST_FRAME_P50_MAX_MS = 80.0
 FIRST_FRAME_P95_MAX_MS = 140.0
 FIRST_FRAME_MAXIMUM_MAX_MS = 220.0
+NAVIGATION_SKIPPED_FRAME_WINDOW_MS = 750.0
 MIN_REPEAT_ITERATIONS = 3
 FIRST_FRAME_RE = re.compile(r"\bfirst_frame_after_tap_ms=(\d+(?:\.\d+)?)\b")
+LOGCAT_LINE_RE = re.compile(
+    r"^(?P<month>\d{2})-(?P<day>\d{2})\s+"
+    r"(?P<hour>\d{2}):(?P<minute>\d{2}):(?P<second>\d{2})\.(?P<millis>\d{3})\s+"
+    r"(?P<pid>\d+)\s+(?P<tid>\d+)\s+\S\s+(?P<tag>\S+)\s*:\s+(?P<message>.*)$",
+)
+SKIPPED_FRAMES_RE = re.compile(r"\bSkipped\s+(\d+)\s+frames\b", re.IGNORECASE)
 REQUIRED_TRACE_METRIC_LABELS = {
     STARTUP_BENCHMARK: {"HomeScreenFirstCompositionSumMs"},
     "warmStartup": {"HomeScreenFirstCompositionSumMs"},
@@ -249,6 +256,57 @@ def verify_navigation_first_frames(path: str | None) -> list[str]:
     ]
 
 
+def logcat_time_ms(match: re.Match[str]) -> float:
+    day = int(match.group("day"))
+    hour = int(match.group("hour"))
+    minute = int(match.group("minute"))
+    second = int(match.group("second"))
+    millis = int(match.group("millis"))
+    return (((day * 24 + hour) * 60 + minute) * 60 + second) * 1000 + millis
+
+
+def verify_navigation_skipped_frames(path: str | None) -> list[str]:
+    if path is None:
+        raise AssertionError("strict release macrobenchmark gate requires --navigation-log")
+    log_path = Path(path)
+    if not log_path.is_file():
+        raise AssertionError(f"navigation log is missing: {log_path}")
+
+    navigation_events: list[tuple[int, float]] = []
+    skipped_events: list[tuple[int, float, str]] = []
+    for line in log_path.read_text(errors="replace").splitlines():
+        match = LOGCAT_LINE_RE.match(line)
+        if not match:
+            continue
+        tag = match.group("tag")
+        message = match.group("message")
+        pid = int(match.group("pid"))
+        event_time_ms = logcat_time_ms(match)
+        if tag == "FoxholeNavigation" and FIRST_FRAME_RE.search(message):
+            navigation_events.append((pid, event_time_ms))
+        elif tag == "Choreographer" and SKIPPED_FRAMES_RE.search(message):
+            skipped_events.append((pid, event_time_ms, line))
+
+    if not navigation_events:
+        raise AssertionError(f"navigation log contains no FoxholeNavigation transition telemetry: {log_path}")
+
+    offenders: list[str] = []
+    for skipped_pid, skipped_time_ms, line in skipped_events:
+        for nav_pid, nav_time_ms in navigation_events:
+            if skipped_pid == nav_pid and abs(skipped_time_ms - nav_time_ms) <= NAVIGATION_SKIPPED_FRAME_WINDOW_MS:
+                offenders.append(line)
+                break
+
+    if offenders:
+        raise AssertionError(
+            "navigation log contains Choreographer skipped-frame events in the "
+            f"{NAVIGATION_SKIPPED_FRAME_WINDOW_MS:.0f} ms transition window: "
+            f"{len(offenders)} event(s); first: {offenders[0]}",
+        )
+
+    return ["navigationSkippedFrameEvents=0"]
+
+
 def main() -> int:
     args = parse_args()
     paths = benchmark_files(Path(args.output_root))
@@ -268,6 +326,7 @@ def main() -> int:
             summaries.extend(verify_transition(benchmarks[name], strict_release=strict_release))
         if strict_release:
             summaries.extend(verify_navigation_first_frames(args.navigation_log))
+            summaries.extend(verify_navigation_skipped_frames(args.navigation_log))
 
     print("Macrobenchmark thresholds passed:")
     for summary in summaries:
