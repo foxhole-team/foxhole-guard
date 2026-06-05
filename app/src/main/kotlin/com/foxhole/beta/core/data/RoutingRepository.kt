@@ -10,20 +10,25 @@ import com.foxhole.beta.core.model.RoutingRuleAction
 import com.foxhole.beta.core.network.ensurePublicHttpsUrl
 import com.foxhole.beta.core.network.requirePublicHttpsUrl
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import okhttp3.Headers
+import okhttp3.HttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import java.security.MessageDigest
+import java.util.Locale
 
 class RoutingRepository(
     databaseProvider: () -> ProfileDatabase,
     private val httpClient: OkHttpClient,
     private val json: Json,
+    private val trustedCatalogSha256ByUrl: Map<String, String> = emptyMap(),
 ) {
     private val database: ProfileDatabase by lazy(LazyThreadSafetyMode.SYNCHRONIZED, databaseProvider)
     private val presetDao by lazy(LazyThreadSafetyMode.SYNCHRONIZED) { database.routingPresetDao() }
@@ -247,6 +252,7 @@ class RoutingRepository(
     suspend fun refreshCatalog(catalogId: Long): RoutingCatalog {
         val catalog = catalogDao.getById(catalogId) ?: error("catalog not found")
         val safeUrl = catalog.url.ensureHttpsUrl().requirePublicHttpsUrl(resolveHost = true)
+        requireSafeRoutingCatalogUrlPath(safeUrl)
         val response =
             executeBoundedPublicGet(
                 client = routingCatalogHttpClient,
@@ -264,12 +270,22 @@ class RoutingRepository(
                     }.build()
             }
         require(response.isSuccessful || response.code == 304) { "catalog refresh failed with http ${response.code}" }
+        requireSafeRoutingCatalogUrlPath(response.finalUrl)
         val now = System.currentTimeMillis()
         val cachedManifest =
             if (response.code == 304) {
                 catalog.cachedManifestJson
             } else {
-                val parsed = parseCatalogManifest(response.body.orEmpty())
+                val body = response.body.orEmpty()
+                requireRoutingCatalogJsonContent(response.headers)
+                requireTrustedRoutingCatalogPayload(
+                    catalogUrl = catalog.url,
+                    finalUrl = response.finalUrl.toString(),
+                    warningAcceptedAt = catalog.warningAcceptedAt,
+                    body = body,
+                    trustedCatalogSha256ByUrl = trustedCatalogSha256ByUrl,
+                )
+                val parsed = parseCatalogManifest(body)
                 json.encodeToString(RoutingCatalogManifest.serializer(), parsed)
             }
         catalogDao.update(
@@ -475,3 +491,75 @@ private fun normalizeTokens(value: List<String>): List<String> =
         .map(String::trim)
         .filter(String::isNotBlank)
         .distinct()
+
+internal fun requireTrustedRoutingCatalogPayload(
+    catalogUrl: String,
+    finalUrl: String,
+    warningAcceptedAt: Long?,
+    body: String,
+    trustedCatalogSha256ByUrl: Map<String, String>,
+) {
+    val expectedSha256 =
+        trustedCatalogSha256ByUrl[catalogUrl]
+            ?: trustedCatalogSha256ByUrl[finalUrl]
+    if (expectedSha256 != null) {
+        require(expectedSha256.isRoutingCatalogSha256Hex()) { "invalid routing catalog checksum" }
+        val actualSha256 = body.toByteArray(Charsets.UTF_8).routingCatalogSha256Hex()
+        require(actualSha256 == expectedSha256.lowercase(Locale.US)) {
+            "routing catalog sha256 mismatch"
+        }
+        return
+    }
+    require(warningAcceptedAt != null) {
+        "routing catalog requires trusted checksum or user warning"
+    }
+}
+
+internal fun requireRoutingCatalogJsonContent(headers: Headers) {
+    val contentType = headers["Content-Type"]?.substringBefore(';')?.trim()?.lowercase(Locale.US) ?: return
+    require(contentType in RoutingCatalogJsonContentTypes) {
+        "routing catalog response must be JSON"
+    }
+}
+
+internal fun requireSafeRoutingCatalogUrlPath(url: HttpUrl) {
+    val fileName = url.encodedPath.substringAfterLast('/').substringBefore('?').lowercase(Locale.US)
+    require(fileName.noneExecutableRoutingCatalogSuffix()) {
+        "routing catalog URL points to executable content"
+    }
+}
+
+internal fun ByteArray.routingCatalogSha256Hex(): String =
+    MessageDigest
+        .getInstance("SHA-256")
+        .digest(this)
+        .joinToString(separator = "") { byte -> "%02x".format(byte) }
+
+private fun String.isRoutingCatalogSha256Hex(): Boolean =
+    length == ROUTING_CATALOG_SHA256_HEX_LENGTH &&
+        all { character -> character in '0'..'9' || character.lowercaseChar() in 'a'..'f' }
+
+private fun String.noneExecutableRoutingCatalogSuffix(): Boolean =
+    RoutingCatalogExecutableSuffixes.none(::endsWith)
+
+private val RoutingCatalogJsonContentTypes =
+    setOf(
+        "application/json",
+        "application/vnd.foxhole.routing-catalog+json",
+        "text/json",
+        "text/plain",
+    )
+
+private val RoutingCatalogExecutableSuffixes =
+    setOf(
+        ".apk",
+        ".apks",
+        ".dex",
+        ".exe",
+        ".jar",
+        ".sh",
+        ".so",
+        ".zip",
+    )
+
+private const val ROUTING_CATALOG_SHA256_HEX_LENGTH = 64
