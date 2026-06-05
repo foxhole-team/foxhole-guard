@@ -176,7 +176,7 @@ class FoxholeNavigationPresentationTest {
     }
 
     @Test
-    fun `settings details use predictive back progress instead of custom edge swipe`() {
+    fun `settings details avoid custom predictive back and edge swipe overrides`() {
         val source =
             listOf(
                 java.io.File("src/main/kotlin/com/foxhole/beta/ui/FoxholeApp.kt"),
@@ -184,13 +184,16 @@ class FoxholeNavigationPresentationTest {
                 java.io.File("../app/src/main/kotlin/com/foxhole/beta/ui/FoxholeApp.kt"),
             ).first { file -> file.isFile }.readText()
 
-        assertTrue(source.contains("PredictiveBackHandler(enabled = settingsDetailBackEnabled)"))
-        assertTrue(source.contains("progress.collect { event ->"))
-        assertTrue(source.contains("settingsBackProgress.snapTo(event.progress.coerceIn(0f, 1f))"))
-        assertTrue(source.contains("settingsBackProgress.animateTo("))
-        assertTrue(source.contains("navController.navigateUp()"))
-        assertTrue(source.contains("translationX = predictiveBackDirection * predictiveBackOffsetPx * progress"))
-        assertTrue(source.contains("DETAIL_PREDICTIVE_BACK_PROGRESS_OFFSET = 24.dp"))
+        val rootSettingsBackHandler =
+            "BackHandler(enabled = currentRoute.isRootRoute() && currentSection == AppSection.SETTINGS)"
+        assertTrue(source.contains(rootSettingsBackHandler))
+        assertFalse(source.contains("PredictiveBackHandler("))
+        assertFalse(source.contains("settingsDetailBackEnabled"))
+        assertFalse(source.contains("settingsBackProgress"))
+        assertFalse(source.contains("progress.collect { event ->"))
+        assertFalse(source.contains("DETAIL_PREDICTIVE_BACK_PROGRESS_OFFSET"))
+        assertFalse(source.contains("DETAIL_PREDICTIVE_BACK_ALPHA_RANGE"))
+        assertFalse(source.contains("translationX = predictiveBackDirection"))
         assertFalse(source.contains("settingsBackSwipeNavigation"))
         assertFalse(source.contains("DETAIL_BACK_SWIPE_EDGE_WIDTH"))
     }

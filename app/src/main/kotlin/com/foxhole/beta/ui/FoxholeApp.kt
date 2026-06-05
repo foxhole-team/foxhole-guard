@@ -12,12 +12,10 @@ import android.view.ViewGroup
 import android.view.ViewOutlineProvider
 import android.widget.FrameLayout
 import androidx.activity.compose.BackHandler
-import androidx.activity.compose.PredictiveBackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
-import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -76,7 +74,6 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.platform.testTag
@@ -86,7 +83,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavDestination
@@ -112,7 +108,6 @@ import com.foxhole.beta.ui.theme.LocalFoxholeThemeMode
 import com.foxhole.beta.ui.theme.LocalFoxholeUiPalette
 import com.foxhole.beta.vpn.FoxholeTileService
 import eightbitlab.com.blurview.BlurTarget
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -209,16 +204,6 @@ fun FoxholeApp(
     val currentSection = navBackStackEntry?.destination?.rootAppSection()
     val showBottomBar = currentRoute.isRootRoute()
     val rootSwipeSection = navBackStackEntry?.destination?.rootSwipeSection()
-    val settingsDetailBackEnabled = currentRoute.isSettingsDetailRoute()
-    val settingsBackProgress = remember { Animatable(0f) }
-    val layoutDirection = LocalLayoutDirection.current
-    val density = LocalDensity.current
-    val predictiveBackOffsetPx = with(density) { DETAIL_PREDICTIVE_BACK_PROGRESS_OFFSET.toPx() }
-    val predictiveBackDirection =
-        when (layoutDirection) {
-            LayoutDirection.Ltr -> 1f
-            LayoutDirection.Rtl -> -1f
-        }
     val settingsDetailNavigationGate = remember { SettingsDetailNavigationGate() }
     val navigationTransitionTelemetry = remember { NavigationTransitionTelemetry() }
     NavigationTransitionTelemetryEffect(currentRoute, navigationTransitionTelemetry)
@@ -237,25 +222,6 @@ fun FoxholeApp(
     }
     BackHandler(enabled = currentRoute.isRootRoute() && currentSection == AppSection.SETTINGS) {
         selectRootSection(AppSection.DASHBOARD)
-    }
-    PredictiveBackHandler(enabled = settingsDetailBackEnabled) { progress ->
-        try {
-            progress.collect { event ->
-                settingsBackProgress.snapTo(event.progress.coerceIn(0f, 1f))
-            }
-            settingsBackProgress.snapTo(0f)
-            navController.navigateUp()
-        } catch (cancelled: CancellationException) {
-            settingsBackProgress.animateTo(
-                targetValue = 0f,
-                animationSpec =
-                    tween(
-                        durationMillis = FoxholeMotionTokens.StandardDurationMs,
-                        easing = FoxholeMotionTokens.NavigationExitEasing,
-                    ),
-            )
-            throw cancelled
-        }
     }
     val backdropBlurHost =
         remember(bottomDockOverlayHost, bottomDockBlurTarget, chromeMode) {
@@ -339,12 +305,7 @@ fun FoxholeApp(
                     startDestination = RootGraph.Dashboard.route,
                     modifier =
                         Modifier
-                            .fillMaxSize()
-                            .graphicsLayer {
-                                val progress = settingsBackProgress.value.coerceIn(0f, 1f)
-                                translationX = predictiveBackDirection * predictiveBackOffsetPx * progress
-                                alpha = 1f - (DETAIL_PREDICTIVE_BACK_ALPHA_RANGE * progress)
-                            },
+                            .fillMaxSize(),
                     enterTransition = {
                         if (targetState.destination.route.isSettingsDetailRoute()) {
                             detailForwardEnter()
@@ -1590,8 +1551,6 @@ private fun requestQuickSettingsTile(
 }
 
 private const val SECTION_SWIPE_THRESHOLD_FRACTION = 0.22f
-private val DETAIL_PREDICTIVE_BACK_PROGRESS_OFFSET = 24.dp
-private const val DETAIL_PREDICTIVE_BACK_ALPHA_RANGE = 0.08f
 private const val DETAIL_FADE_IN_MS = 90
 private const val DETAIL_FADE_OUT_MS = 90
 private const val DETAIL_ENTER_TRANSITION_MS = FoxholeMotionTokens.StandardDurationMs
