@@ -100,7 +100,7 @@ class FoxholeNavigationPresentationTest {
     }
 
     @Test
-    fun `dashboard settings root swap avoids animated double composition`() {
+    fun `dashboard and settings roots are distinct top level destinations`() {
         val source =
             listOf(
                 java.io.File("src/main/kotlin/com/foxhole/beta/ui/FoxholeApp.kt"),
@@ -110,12 +110,16 @@ class FoxholeNavigationPresentationTest {
         val homeRootBlock =
             source.substringAfter("composable(AppRoute.HOME) {")
                 .substringBefore("composable(AppRoute.PROFILES)")
+        val settingsRootBlock =
+            source.substringAfter("composable(AppRoute.SETTINGS) {")
+                .substringBefore("composable(AppRoute.SMART_START)")
 
-        assertTrue(homeRootBlock.contains("when (rootSection)"))
-        assertTrue(homeRootBlock.contains("AppSection.DASHBOARD ->"))
-        assertTrue(homeRootBlock.contains("AppSection.SETTINGS ->"))
+        assertTrue(homeRootBlock.contains("HomeScreen("))
+        assertFalse(homeRootBlock.contains("SettingsHomeScreen("))
+        assertTrue(settingsRootBlock.contains("SettingsHomeScreen("))
+        assertFalse(settingsRootBlock.contains("\n                    HomeScreen("))
+        assertFalse(source.contains("rootSection"))
         assertFalse(homeRootBlock.contains("AnimatedContent("))
-        assertFalse(homeRootBlock.contains("targetState = rootSection"))
         assertFalse(homeRootBlock.contains("label = \"root-section-transition\""))
         assertFalse(homeRootBlock.contains("targetState.ordinal > initialState.ordinal"))
         assertFalse(homeRootBlock.contains("detailForwardEnter() togetherWith detailForwardExit()"))

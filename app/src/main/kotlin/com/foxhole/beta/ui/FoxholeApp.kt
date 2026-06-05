@@ -184,20 +184,9 @@ fun FoxholeApp(
     val scope = rememberCoroutineScope()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
-    var rootSection by rememberSaveable { mutableStateOf(AppSection.DASHBOARD) }
-    val currentSection =
-        when (currentRoute) {
-            AppRoute.HOME -> rootSection
-            AppRoute.SETTINGS -> AppSection.SETTINGS
-            else -> navBackStackEntry?.destination?.rootAppSection()
-        }
+    val currentSection = navBackStackEntry?.destination?.rootAppSection()
     val showBottomBar = currentRoute.isRootRoute()
-    val rootSwipeSection =
-        when (currentRoute) {
-            AppRoute.HOME -> rootSection
-            AppRoute.SETTINGS -> AppSection.SETTINGS
-            else -> navBackStackEntry?.destination?.rootSwipeSection()
-        }
+    val rootSwipeSection = navBackStackEntry?.destination?.rootSwipeSection()
     val settingsDetailBackEnabled = currentRoute.isSettingsDetailRoute()
     val settingsBackProgress = remember { Animatable(0f) }
     val layoutDirection = LocalLayoutDirection.current
@@ -212,37 +201,10 @@ fun FoxholeApp(
     val navigationTransitionTelemetry = remember { NavigationTransitionTelemetry() }
     NavigationTransitionTelemetryEffect(currentRoute, navigationTransitionTelemetry)
     val selectRootSection: (AppSection) -> Unit = { section ->
-        if (currentRoute == AppRoute.HOME) {
-            if (rootSection != section) {
-                navigationTransitionTelemetry.recordTap(
-                    routeFrom = rootSection.rootRoute,
-                    routeTo = section.rootRoute,
-                )
-                navigationTransitionTelemetry.recordNavigateCall(section.rootRoute)
-                rootSection = section
-            }
-        } else if (currentRoute == AppRoute.SETTINGS) {
-            if (section != AppSection.SETTINGS) {
-                navigationTransitionTelemetry.recordTap(
-                    routeFrom = AppRoute.SETTINGS,
-                    routeTo = section.rootRoute,
-                )
-                navigationTransitionTelemetry.recordNavigateCall(section.rootRoute)
-                rootSection = section
-                navController.navigate(AppRoute.HOME) {
-                    launchSingleTop = true
-                    restoreState = true
-                    popUpTo(navController.graph.findStartDestination().id) {
-                        saveState = true
-                    }
-                }
-            }
-        } else {
-            navController.navigateToSection(
-                section = section,
-                telemetry = navigationTransitionTelemetry,
-            )
-        }
+        navController.navigateToSection(
+            section = section,
+            telemetry = navigationTransitionTelemetry,
+        )
     }
     val navigateToSettingsDetail: (String) -> Unit = { route ->
         navController.navigateToSettingsDetail(
@@ -393,84 +355,59 @@ fun FoxholeApp(
                     },
                 ) {
                 composable(AppRoute.HOME) {
-                    when (rootSection) {
-                        AppSection.DASHBOARD -> {
-                            val state by viewModel.homeRouteState.collectAsStateWithLifecycle()
-                            HomeScreen(
-                                state = state,
-                                trafficStateFlow = viewModel.dashboardTraffic,
-                                trafficMapStateFlow = viewModel.trafficMapUiState,
-                                snackbarHostState = snackbarHostState,
-                                onImportFromClipboard = viewModel::onPasteFromClipboard,
-                                onImportFromFile = {
-                                    importProfileLauncher.launch(
-                                        arrayOf(
-                                            "application/json",
-                                            "text/plain",
-                                            "text/*",
-                                            "application/octet-stream",
-                                        ),
-                                    )
-                                },
-                                onImportFromQr = { qrScannerVisible = true },
-                                onRefreshProfile = viewModel::onRefreshProfile,
-                                onRestartProfile = viewModel::onRestartActiveProfile,
-                                onRefreshAndRestartProfile = viewModel::onRefreshAndRestartActiveProfile,
-                                onToggleConnection = viewModel::onToggleConnection,
-                                onAutoConnect = viewModel::onAutoConnectActiveProfile,
-                                onTrafficModeSelected = viewModel::onTrafficModeSelected,
-                                onPerAppRoutingModeSelected = viewModel::onPerAppRoutingModeSelected,
-                                onKillSwitchChanged = viewModel::onKillSwitchChanged,
-                                onFirewallEnabledChanged = viewModel::onFirewallEnabledChanged,
-                                onPrivacyRouteModeSelected = viewModel::onPrivacyRouteModeSelected,
-                                onOpenPrivacyRoute = { navigateToSettingsDetail(AppRoute.PRIVACY_ROUTE) },
-                                onEnableDirectTorQuickStart = viewModel::onEnableDirectTorQuickStart,
-                                onSelectActiveProtocolOptionRequested = viewModel::onSelectActiveProtocolOptionRequested,
-                                onUpdateAutoConnectExcludedOptions = { excludedIds ->
-                                    state.activeProfile?.id?.let { profileId ->
-                                        viewModel.onSmartProfileAutoConnectExcludedOptionsChanged(
-                                            profileId = profileId,
-                                            excludedOptionIds = excludedIds,
-                                        )
-                                    }
-                                },
-                                onRefreshSmartProfileMetrics = viewModel::refreshSmartProfileMetrics,
-                                onCancelSmartProfileMetricsRefresh = viewModel::cancelSmartProfileMetricsRefresh,
-                                onConfirmDisableTorForUdpProtocol = viewModel::confirmDisableTorForUdpProtocol,
-                                onConfirmMoveTorIntoVpn = viewModel::confirmMoveTorIntoVpn,
-                                onConfirmKeepTorOnDeviceAndStartVpn = viewModel::confirmKeepTorOnDeviceAndStartVpn,
-                                onDismissTorTransitionPrompt = viewModel::dismissTorTransitionPrompt,
-                                onOpenProfiles = { navController.navigateToProfilesRoot() },
-                                onRefreshIpInfo = viewModel::refreshIpInfo,
-                                onResetUsageTracking = viewModel::resetUsageTracking,
-                                onTrafficUiVisibilityChanged = viewModel::onTrafficUiVisibilityChanged,
-                                onLocalProxyLanAccessChanged = viewModel::onLocalProxyLanAccessChanged,
-                                onRenewTorIp = viewModel::onRenewTorIp,
-                                onDashboardCardOrderChanged = viewModel::onDashboardCardOrderChanged,
+                    val state by viewModel.homeRouteState.collectAsStateWithLifecycle()
+                    HomeScreen(
+                        state = state,
+                        trafficStateFlow = viewModel.dashboardTraffic,
+                        trafficMapStateFlow = viewModel.trafficMapUiState,
+                        snackbarHostState = snackbarHostState,
+                        onImportFromClipboard = viewModel::onPasteFromClipboard,
+                        onImportFromFile = {
+                            importProfileLauncher.launch(
+                                arrayOf(
+                                    "application/json",
+                                    "text/plain",
+                                    "text/*",
+                                    "application/octet-stream",
+                                ),
                             )
-                        }
-                        AppSection.SETTINGS -> {
-                            val expertVisible by viewModel.settingsHomeExpertVisible.collectAsStateWithLifecycle()
-                            SettingsHomeScreen(
-                                expertVisible = expertVisible,
-                                snackbarHostState = snackbarHostState,
-                                onNavigateUp = null,
-                                onOpenTraffic = { navigateToSettingsDetail(AppRoute.TRAFFIC) },
-                                onOpenDns = { navigateToSettingsDetail(AppRoute.DNS) },
-                                onOpenNetworkRules = { navigateToSettingsDetail(AppRoute.NETWORK_RULES) },
-                                onOpenSecurity = { navigateToSettingsDetail(AppRoute.SECURITY) },
-                                onOpenPrivacyRoute = { navigateToSettingsDetail(AppRoute.PRIVACY_ROUTE) },
-                                onOpenRoutingApps = { navigateToSettingsDetail(AppRoute.ROUTING_APPS) },
-                                onOpenRoutingSites = { navigateToSettingsDetail(AppRoute.ROUTING_SITES) },
-                                onOpenSmartStart = { navigateToSettingsDetail(AppRoute.SMART_START) },
-                                onOpenApplication = { navigateToSettingsDetail(AppRoute.APPLICATION) },
-                                onOpenExpert = { navigateToSettingsDetail(AppRoute.EXPERT) },
-                                onOpenDiagnostics = { navigateToSettingsDetail(AppRoute.DIAGNOSTICS) },
-                                onOpenStatistics = { navigateToSettingsDetail(AppRoute.STATISTICS) },
-                                onOpenAbout = { navigateToSettingsDetail(AppRoute.ABOUT) },
-                            )
-                        }
-                    }
+                        },
+                        onImportFromQr = { qrScannerVisible = true },
+                        onRefreshProfile = viewModel::onRefreshProfile,
+                        onRestartProfile = viewModel::onRestartActiveProfile,
+                        onRefreshAndRestartProfile = viewModel::onRefreshAndRestartActiveProfile,
+                        onToggleConnection = viewModel::onToggleConnection,
+                        onAutoConnect = viewModel::onAutoConnectActiveProfile,
+                        onTrafficModeSelected = viewModel::onTrafficModeSelected,
+                        onPerAppRoutingModeSelected = viewModel::onPerAppRoutingModeSelected,
+                        onKillSwitchChanged = viewModel::onKillSwitchChanged,
+                        onFirewallEnabledChanged = viewModel::onFirewallEnabledChanged,
+                        onPrivacyRouteModeSelected = viewModel::onPrivacyRouteModeSelected,
+                        onOpenPrivacyRoute = { navigateToSettingsDetail(AppRoute.PRIVACY_ROUTE) },
+                        onEnableDirectTorQuickStart = viewModel::onEnableDirectTorQuickStart,
+                        onSelectActiveProtocolOptionRequested = viewModel::onSelectActiveProtocolOptionRequested,
+                        onUpdateAutoConnectExcludedOptions = { excludedIds ->
+                            state.activeProfile?.id?.let { profileId ->
+                                viewModel.onSmartProfileAutoConnectExcludedOptionsChanged(
+                                    profileId = profileId,
+                                    excludedOptionIds = excludedIds,
+                                )
+                            }
+                        },
+                        onRefreshSmartProfileMetrics = viewModel::refreshSmartProfileMetrics,
+                        onCancelSmartProfileMetricsRefresh = viewModel::cancelSmartProfileMetricsRefresh,
+                        onConfirmDisableTorForUdpProtocol = viewModel::confirmDisableTorForUdpProtocol,
+                        onConfirmMoveTorIntoVpn = viewModel::confirmMoveTorIntoVpn,
+                        onConfirmKeepTorOnDeviceAndStartVpn = viewModel::confirmKeepTorOnDeviceAndStartVpn,
+                        onDismissTorTransitionPrompt = viewModel::dismissTorTransitionPrompt,
+                        onOpenProfiles = { navController.navigateToProfilesRoot() },
+                        onRefreshIpInfo = viewModel::refreshIpInfo,
+                        onResetUsageTracking = viewModel::resetUsageTracking,
+                        onTrafficUiVisibilityChanged = viewModel::onTrafficUiVisibilityChanged,
+                        onLocalProxyLanAccessChanged = viewModel::onLocalProxyLanAccessChanged,
+                        onRenewTorIp = viewModel::onRenewTorIp,
+                        onDashboardCardOrderChanged = viewModel::onDashboardCardOrderChanged,
+                    )
                 }
                 composable(AppRoute.PROFILES) {
                     val state by viewModel.profilesRouteState.collectAsStateWithLifecycle()

@@ -259,17 +259,21 @@ class HomeDashboardHotPathTest {
     }
 
     @Test
-    fun `dashboard and settings root sections switch without animated double composition`() {
+    fun `dashboard and settings roots use separate routes without animated double composition`() {
         val appSource = testSourceFile("FoxholeApp.kt").readText()
         val homeRouteBlock =
             appSource.substringAfter("composable(AppRoute.HOME)")
                 .substringBefore("composable(AppRoute.PROFILES)")
+        val settingsRouteBlock =
+            appSource.substringAfter("composable(AppRoute.SETTINGS)")
+                .substringBefore("composable(AppRoute.SMART_START)")
 
-        assertTrue(homeRouteBlock.contains("when (rootSection)"))
-        assertTrue(homeRouteBlock.contains("AppSection.DASHBOARD ->"))
-        assertTrue(homeRouteBlock.contains("AppSection.SETTINGS ->"))
+        assertTrue(homeRouteBlock.contains("HomeScreen("))
+        assertFalse(homeRouteBlock.contains("SettingsHomeScreen("))
+        assertTrue(settingsRouteBlock.contains("SettingsHomeScreen("))
+        assertFalse(settingsRouteBlock.contains("\n                    HomeScreen("))
+        assertFalse(appSource.contains("rootSection"))
         assertFalse(homeRouteBlock.contains("AnimatedContent("))
-        assertFalse(homeRouteBlock.contains("targetState = rootSection"))
         assertFalse(homeRouteBlock.contains("label = \"root-section-transition\""))
         assertFalse(homeRouteBlock.contains("detailForwardEnter() togetherWith detailForwardExit()"))
         assertFalse(homeRouteBlock.contains("detailBackEnter() togetherWith detailBackExit()"))
