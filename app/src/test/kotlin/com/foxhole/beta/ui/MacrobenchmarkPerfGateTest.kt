@@ -41,6 +41,9 @@ class MacrobenchmarkPerfGateTest {
             "cmd uimode night",
             "findTrafficMapDetailsActionAfterScroll()",
             "ensureFoxholeForeground()",
+            "foxhole.baselineProfileMode",
+            "BaselineProfileMode.Require",
+            "BaselineProfileMode.UseIfAvailable",
             "scrollDashboardToTrafficMapDetailsAction()",
             "TRAFFIC_MAP_CARD_SCROLL_ATTEMPTS = 8",
             "traffic_map_detail_screen",
@@ -117,6 +120,10 @@ class MacrobenchmarkPerfGateTest {
             "scripts/run-ci-macrobenchmark.sh",
             "../scripts/run-ci-macrobenchmark.sh",
         ).readText()
+        val beforeAfterScript = projectFile(
+            "scripts/run-baseline-profile-before-after.sh",
+            "../scripts/run-baseline-profile-before-after.sh",
+        ).readText()
         val generator = projectFile(
             "macrobenchmark/src/main/kotlin/com/foxhole/beta/macrobenchmark/FoxholeBaselineProfileGenerator.kt",
             "../macrobenchmark/src/main/kotlin/com/foxhole/beta/macrobenchmark/FoxholeBaselineProfileGenerator.kt",
@@ -149,6 +156,13 @@ class MacrobenchmarkPerfGateTest {
         assertTrue(generator.contains("includeInStartupProfile = true"))
         assertTrue(generator.contains("openRoutingAppsPickerSearch"))
         assertTrue(generator.contains("routing_apps_picker_search"))
+        assertTrue(beforeAfterScript.contains("foxhole.baselineProfileMode"))
+        assertTrue(beforeAfterScript.contains("run_benchmark_mode before disable"))
+        assertTrue(beforeAfterScript.contains("run_benchmark_mode after require"))
+        assertTrue(beforeAfterScript.contains("benchmarkData.json"))
+        assertTrue(beforeAfterScript.contains("baseline-profile-before-after.md"))
+        assertTrue(beforeAfterScript.contains("summary.json"))
+        assertTrue(beforeAfterScript.contains("analyze-android-perf-logs.py"))
     }
 
     @Test

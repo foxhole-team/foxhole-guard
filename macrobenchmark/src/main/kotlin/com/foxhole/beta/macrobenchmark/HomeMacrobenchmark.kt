@@ -10,6 +10,7 @@ import androidx.benchmark.macro.StartupTimingMetric
 import androidx.benchmark.macro.TraceSectionMetric
 import androidx.benchmark.macro.junit4.MacrobenchmarkRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.By
 import androidx.test.uiautomator.StaleObjectException
 import androidx.test.uiautomator.UiDevice
@@ -800,7 +801,7 @@ class HomeMacrobenchmark {
     }
 
     private val device: UiDevice
-        get() = UiDevice.getInstance(androidx.test.platform.app.InstrumentationRegistry.getInstrumentation())
+        get() = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
 
     private data class SettingsDetailTarget(
         val tag: String,
@@ -845,6 +846,7 @@ class HomeMacrobenchmark {
         private const val TRAFFIC_MAP_RENDER_HIGHLIGHT_BITMAP_TRACE = "TrafficMap/renderHighlightBitmap"
         private const val TRAFFIC_MAP_BUILD_ROUTES_TRACE = "TrafficMap/buildRoutes"
         private const val TRAFFIC_MAP_DRAW_TRACE = "TrafficMap/draw"
+        private const val BASELINE_PROFILE_MODE_ARGUMENT = "foxhole.baselineProfileMode"
         private const val TRAFFIC_MAP_BENCHMARK_STRESS_EXTRA =
             "com.foxhole.beta.extra.TRAFFIC_MAP_BENCHMARK_STRESS"
         private const val TRAFFIC_MAP_BENCHMARK_STRESS_MAX_LOAD = "max_load"
@@ -895,9 +897,21 @@ class HomeMacrobenchmark {
             )
         private val BENCHMARK_COMPILATION_MODE =
             CompilationMode.Partial(
-                baselineProfileMode = BaselineProfileMode.Disable,
+                baselineProfileMode = benchmarkBaselineProfileMode(),
                 warmupIterations = 1,
             )
+
+        private fun benchmarkBaselineProfileMode(): BaselineProfileMode =
+            when (
+                InstrumentationRegistry
+                    .getArguments()
+                    .getString(BASELINE_PROFILE_MODE_ARGUMENT)
+                    ?.lowercase()
+            ) {
+                "require" -> BaselineProfileMode.Require
+                "use_if_available", "useifavailable" -> BaselineProfileMode.UseIfAvailable
+                else -> BaselineProfileMode.Disable
+            }
     }
 }
 
