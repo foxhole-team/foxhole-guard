@@ -1617,7 +1617,9 @@ class ProfileRuntimeSessionAndroidTest {
             owner = stopDetails["owner"],
             latestRuntimeEvent = stopDetails["event"],
             callbackCleanupEvent = callbackDetails["event"],
-            commandQueueDepth = stopDetails["command_queue_depth"]?.toIntOrNull(),
+            commandQueueDepth =
+                callbackDetails["command_queue_depth"]?.toIntOrNull()
+                    ?: stopDetails["command_queue_depth"]?.toIntOrNull(),
             networkCallbacks = callbackDetails["network_callbacks"]?.toIntOrNull(),
             hasNativeServer = stopDetails["native_server"]?.toBooleanStrictOrNull(),
             hasTunFileDescriptor = stopDetails["tun_fd"]?.toBooleanStrictOrNull(),
