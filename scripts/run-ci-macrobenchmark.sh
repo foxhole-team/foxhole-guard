@@ -12,6 +12,13 @@ readonly STRICT_RELEASE_GATE="${FOXHOLE_STRICT_RELEASE_MACROBENCHMARK:-0}"
 readonly FAIL_ON_SKIPPED_FRAMES="${FOXHOLE_MACROBENCHMARK_FAIL_ON_SKIPPED_FRAMES:-0}"
 readonly MAX_SKIPPED_FRAMES="${FOXHOLE_MACROBENCHMARK_MAX_SKIPPED_FRAMES:-0}"
 
+enable_animations_for_macrobenchmark() {
+  adb wait-for-device
+  adb shell settings put global window_animation_scale 1 || true
+  adb shell settings put global transition_animation_scale 1 || true
+  adb shell settings put global animator_duration_scale 1 || true
+}
+
 install_target_app() {
   local target_package="${1:-$TARGET_PACKAGE}"
   adb wait-for-device
@@ -80,6 +87,7 @@ run_macrobenchmark_with_log_gate() {
 run_startup_benchmark() {
   install_target_app "$BASELINE_TARGET_PACKAGE"
   verify_macrobenchmark_tracing_available
+  enable_animations_for_macrobenchmark
   run_macrobenchmark_with_log_gate startup \
     "$GRADLEW" --no-daemon --console=plain --stacktrace :macrobenchmark:connectedCheck \
     -Pmacrobenchmark.targetPackage="$TARGET_PACKAGE" \
@@ -152,15 +160,21 @@ elif [[
 ]]; then
   install_target_app
   verify_macrobenchmark_tracing_available
+  enable_animations_for_macrobenchmark
   if [[ "$STRICT_RELEASE_GATE" != "1" ]]; then
     echo "Running functional full macrobenchmark gate. Set FOXHOLE_STRICT_RELEASE_MACROBENCHMARK=1 for Pixel/release navigation P95 and skipped-frame acceptance."
+    run_macrobenchmark_with_log_gate full-suite \
+      "$GRADLEW" --no-daemon --console=plain --stacktrace :macrobenchmark:connectedCheck \
+      -Pmacrobenchmark.targetPackage="$TARGET_PACKAGE" \
+      -Pandroid.testInstrumentationRunnerArguments.class=com.foxhole.beta.macrobenchmark.HomeMacrobenchmark
   else
-    echo "Running strict release navigation gate. Whole-log skipped-frame failure remains opt-in via FOXHOLE_MACROBENCHMARK_FAIL_ON_SKIPPED_FRAMES=1."
+    echo "Running strict release navigation gate (RELEASE_ITERATIONS=10). Whole-log skipped-frame failure remains opt-in via FOXHOLE_MACROBENCHMARK_FAIL_ON_SKIPPED_FRAMES=1."
+    run_macrobenchmark_with_log_gate full-suite \
+      "$GRADLEW" --no-daemon --console=plain --stacktrace :macrobenchmark:connectedCheck \
+      -Pmacrobenchmark.targetPackage="$TARGET_PACKAGE" \
+      -Pandroid.testInstrumentationRunnerArguments.class=com.foxhole.beta.macrobenchmark.HomeMacrobenchmark \
+      "-Pandroid.testInstrumentationRunnerArguments.foxhole.benchmarkIterations=release"
   fi
-  run_macrobenchmark_with_log_gate full-suite \
-    "$GRADLEW" --no-daemon --console=plain --stacktrace :macrobenchmark:connectedCheck \
-    -Pmacrobenchmark.targetPackage="$TARGET_PACKAGE" \
-    -Pandroid.testInstrumentationRunnerArguments.class=com.foxhole.beta.macrobenchmark.HomeMacrobenchmark
   threshold_args=(--full-suite --navigation-log "$PERF_LOG_ROOT/full-suite.logcat")
   if [[ "$STRICT_RELEASE_GATE" == "1" ]]; then
     threshold_args+=(--strict-navigation --strict-release)

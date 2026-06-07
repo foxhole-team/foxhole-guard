@@ -178,6 +178,7 @@ jobs:
         uses: ReactiveCircus/android-emulator-runner@e89f39f1abbbd05b1113a29cf4db69e7540cae5a
         env:
           FOXHOLE_REQUIRED_CONNECTED_TEST_SPECS: ${{ github.event_name == 'pull_request' && 'com.foxhole.beta.ui.HomeScreenTest#opensSettingsFromBottomNavigation,com.foxhole.beta.ui.HomeScreenTest#opensProfilesFromHomeAction,com.foxhole.beta.ui.LiveLogsDialogTest' || '' }}
+          FOXHOLE_STRICT_RELEASE_MACROBENCHMARK: ${{ (github.event_name == 'schedule' || github.ref == 'refs/heads/main') && '1' || '0' }}
         with:
           api-level: 35
           arch: x86_64

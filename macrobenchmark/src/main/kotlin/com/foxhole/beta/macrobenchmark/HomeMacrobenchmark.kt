@@ -41,7 +41,7 @@ class HomeMacrobenchmark {
                 listOf(StartupTimingMetric()) +
                     traceMetrics(HOME_FIRST_COMPOSITION_TRACE),
             compilationMode = BENCHMARK_COMPILATION_MODE,
-            iterations = SHORT_ITERATIONS,
+            iterations = benchmarkIterations(),
             startupMode = startupMode,
         ) {
             pressHome()
@@ -54,7 +54,7 @@ class HomeMacrobenchmark {
             packageName = PACKAGE_NAME,
             metrics = frameMetricsWithTrace(HOME_FIRST_COMPOSITION_TRACE),
             compilationMode = BENCHMARK_COMPILATION_MODE,
-            iterations = SHORT_ITERATIONS,
+            iterations = benchmarkIterations(),
             startupMode = StartupMode.WARM,
             setupBlock = {
                 pressHome()
@@ -84,7 +84,7 @@ class HomeMacrobenchmark {
             packageName = PACKAGE_NAME,
             metrics = frameMetricsWithTrace(SETTINGS_NAVIGATION_TRACE),
             compilationMode = BENCHMARK_COMPILATION_MODE,
-            iterations = SHORT_ITERATIONS,
+            iterations = benchmarkIterations(),
             startupMode = StartupMode.WARM,
             setupBlock = {
                 pressHome()
@@ -137,7 +137,7 @@ class HomeMacrobenchmark {
             packageName = PACKAGE_NAME,
             metrics = frameMetricsWithTrace(APP_PICKER_FILTER_TRACE, APP_ICON_LOAD_TRACE, SETTINGS_NAVIGATION_TRACE),
             compilationMode = BENCHMARK_COMPILATION_MODE,
-            iterations = SHORT_ITERATIONS,
+            iterations = benchmarkIterations(),
             startupMode = StartupMode.WARM,
             setupBlock = {
                 pressHome()
@@ -194,7 +194,7 @@ class HomeMacrobenchmark {
                     TRAFFIC_MAP_DRAW_TRACE,
                 ),
             compilationMode = BENCHMARK_COMPILATION_MODE,
-            iterations = SHORT_ITERATIONS,
+            iterations = benchmarkIterations(),
             startupMode = StartupMode.WARM,
             setupBlock = {
                 pressHome()
@@ -230,7 +230,7 @@ class HomeMacrobenchmark {
                     TRAFFIC_MAP_DRAW_TRACE,
                 ),
             compilationMode = BENCHMARK_COMPILATION_MODE,
-            iterations = SHORT_ITERATIONS,
+            iterations = benchmarkIterations(),
             startupMode = StartupMode.WARM,
             setupBlock = {
                 setBatterySaver(enabled = false)
@@ -269,7 +269,7 @@ class HomeMacrobenchmark {
                     TRAFFIC_MAP_DRAW_TRACE,
                 ),
             compilationMode = BENCHMARK_COMPILATION_MODE,
-            iterations = SHORT_ITERATIONS,
+            iterations = benchmarkIterations(),
             startupMode = StartupMode.WARM,
             setupBlock = {
                 setBatterySaver(enabled = false)
@@ -354,7 +354,7 @@ class HomeMacrobenchmark {
             packageName = PACKAGE_NAME,
             metrics = frameMetricsWithTrace(SETTINGS_NAVIGATION_TRACE),
             compilationMode = BENCHMARK_COMPILATION_MODE,
-            iterations = SHORT_ITERATIONS,
+            iterations = benchmarkIterations(),
             startupMode = StartupMode.WARM,
             setupBlock = {
                 pressHome()
@@ -377,7 +377,7 @@ class HomeMacrobenchmark {
             packageName = PACKAGE_NAME,
             metrics = frameMetricsWithTrace(SETTINGS_NAVIGATION_TRACE),
             compilationMode = BENCHMARK_COMPILATION_MODE,
-            iterations = SHORT_ITERATIONS,
+            iterations = benchmarkIterations(),
             startupMode = StartupMode.WARM,
             setupBlock = {
                 pressHome()
@@ -817,6 +817,8 @@ class HomeMacrobenchmark {
         private const val PACKAGE_NAME = BuildConfig.TARGET_PACKAGE_NAME
         private const val MAIN_ACTIVITY_CLASS_NAME = "com.foxhole.beta.MainActivity"
         private const val SHORT_ITERATIONS = 3
+        private const val RELEASE_ITERATIONS = 10
+        private const val BENCHMARK_ITERATIONS_ARGUMENT = "foxhole.benchmarkIterations"
         private const val DASHBOARD_NAV_X_RATIO = 0.25f
         private const val SETTINGS_NAV_X_RATIO = 0.75f
         private const val BOTTOM_NAV_Y_RATIO = 0.93f
@@ -913,6 +915,17 @@ class HomeMacrobenchmark {
                 "require" -> BaselineProfileMode.Require
                 "use_if_available", "useifavailable" -> BaselineProfileMode.UseIfAvailable
                 else -> BaselineProfileMode.Disable
+            }
+
+        private fun benchmarkIterations(): Int =
+            when (
+                InstrumentationRegistry
+                    .getArguments()
+                    .getString(BENCHMARK_ITERATIONS_ARGUMENT)
+                    ?.lowercase()
+            ) {
+                "release" -> RELEASE_ITERATIONS
+                else -> SHORT_ITERATIONS
             }
     }
 }
