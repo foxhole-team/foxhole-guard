@@ -65,6 +65,7 @@ fun StatisticsScreen(
     onFactoryReset: () -> Unit,
 ) {
     DebugRecompositionCounter("StatisticsScreen")
+    var statisticsEnableConsentVisible by rememberSaveable { mutableStateOf(false) }
     var infoVisible by rememberSaveable { mutableStateOf(false) }
     var settingsVisible by rememberSaveable { mutableStateOf(false) }
     var clearDataVisible by rememberSaveable { mutableStateOf(false) }
@@ -168,7 +169,7 @@ fun StatisticsScreen(
     ) {
         if (!statisticsSettings.enabled) {
             item(key = "statistics-disabled") {
-                StatisticsDisabledState(onEnable = { onStatisticsEnabledChanged(true) })
+                StatisticsDisabledState(onEnable = { statisticsEnableConsentVisible = true })
             }
         } else {
             item(key = "statistics-overview", contentType = "statistics-card") {
@@ -280,6 +281,26 @@ fun StatisticsScreen(
                 onUsageAccessCleared = { appStatsEnablePendingUsageAccess = false },
                 onDismiss = { settingsVisible = false },
             ),
+        )
+    }
+
+    if (statisticsEnableConsentVisible) {
+        AlertDialog(
+            onDismissRequest = { statisticsEnableConsentVisible = false },
+            title = { Text(stringResource(R.string.statistics_enable_consent_title)) },
+            text = { Text(stringResource(R.string.statistics_enable_consent_body)) },
+            confirmButton = {
+                FoxholeDialogConfirmButton(
+                    label = stringResource(R.string.statistics_enable_consent_confirm),
+                    onClick = {
+                        statisticsEnableConsentVisible = false
+                        onStatisticsEnabledChanged(true)
+                    },
+                )
+            },
+            dismissButton = {
+                FoxholeDialogDismissButton(onClick = { statisticsEnableConsentVisible = false })
+            },
         )
     }
 

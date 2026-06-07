@@ -486,6 +486,9 @@
     <string name="statistics_clear_usage_summary">Удалить сохраненные итоги трафика и историю.</string>
     <string name="statistics_enabled_title">Включить статистику</string>
     <string name="statistics_enabled_summary">Foxhole записывает статистику только после явного включения.</string>
+    <string name="statistics_enable_consent_title">Включить локальную статистику?</string>
+    <string name="statistics_enable_consent_body">FoxHole будет записывать статистику соединений, использование протоколов и (по желанию) трафик по приложениям только на этом устройстве. Данные не отправляются на серверы FoxHole. Вы можете отключить сбор и удалить все данные через меню очистки данных.</string>
+    <string name="statistics_enable_consent_confirm">Включить</string>
     <string name="statistics_retention_title">Период хранения</string>
     <string name="statistics_retention_week">1 неделя</string>
     <string name="statistics_retention_month">1 месяц</string>
@@ -797,6 +800,8 @@
     <string name="block_apps_always_warning_title">Предупреждение</string>
     <string name="block_apps_always_summary">Запускает постоянный firewall-only VPN для фильтрации.</string>
     <string name="block_apps_always_warning_body">Для постоянной блокировки включите Firewall в настройках Foxhole.</string>
+    <string name="routing_apps_package_visibility_title">Видимость приложений</string>
+    <string name="routing_apps_package_visibility_body">FoxHole использует разрешение QUERY_ALL_PACKAGES для отображения установленных приложений при настройке маршрутизации, обхода DNS и правил брандмауэра. Список приложений не передаётся на серверы FoxHole и хранится только на этом устройстве.</string>
     <string name="app_picker_title">Список приложений</string>
     <string name="all_installed_apps_title">Установленные приложения</string>
     <plurals name="all_installed_apps_summary">

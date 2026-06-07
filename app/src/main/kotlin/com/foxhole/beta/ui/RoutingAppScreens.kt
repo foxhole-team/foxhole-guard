@@ -140,6 +140,12 @@ fun RoutingAppsScreen(
         bannerPlacement = FoxholeBannerPlacement.BOTTOM,
     ) {
         item {
+            WarningBlock(
+                title = stringResource(R.string.routing_apps_package_visibility_title),
+                body = stringResource(R.string.routing_apps_package_visibility_body),
+            )
+        }
+        item {
             SettingsControlGroup {
                 SettingSwitchRow(
                     title = stringResource(R.string.enable_split_tunnel),

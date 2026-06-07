@@ -481,6 +481,9 @@
     <string name="statistics_clear_usage_summary">Delete saved traffic totals and history.</string>
     <string name="statistics_enabled_title">Enable statistics</string>
     <string name="statistics_enabled_summary">Foxhole records statistics locally on this device.</string>
+    <string name="statistics_enable_consent_title">Enable local statistics?</string>
+    <string name="statistics_enable_consent_body">FoxHole will record connection statistics, protocol usage, and optional per-app traffic locally on this device. No statistics are sent to FoxHole servers. You can disable recording and delete all data at any time in the clear data menu.</string>
+    <string name="statistics_enable_consent_confirm">Enable</string>
     <string name="statistics_retention_title">Retention period</string>
     <string name="statistics_retention_week">1 week</string>
     <string name="statistics_retention_month">1 month</string>
@@ -770,6 +773,8 @@
     <string name="block_apps_always_warning_title">Warning</string>
     <string name="block_apps_always_summary">Starts a persistent firewall-only VPN for filtering.</string>
     <string name="block_apps_always_warning_body">To block permanently, enable Firewall in Foxhole settings.</string>
+    <string name="routing_apps_package_visibility_title">App visibility</string>
+    <string name="routing_apps_package_visibility_body">FoxHole uses the QUERY_ALL_PACKAGES permission to list installed apps so you can configure per-app routing, DNS bypass rules, and firewall exceptions. No app inventory is sent to FoxHole servers. All configuration stays on this device.</string>
     <string name="app_picker_title">App list</string>
     <string name="all_installed_apps_title">Installed apps</string>
     <plurals name="all_installed_apps_summary">
