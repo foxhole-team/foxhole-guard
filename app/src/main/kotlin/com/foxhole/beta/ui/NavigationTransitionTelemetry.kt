@@ -99,6 +99,18 @@ internal class NavigationTransitionTelemetry(
         }
     }
 
+    fun recordTransitionJank(
+        routeTo: String,
+        droppedFrames: Int,
+    ) {
+        if (BuildConfig.DEBUG) {
+            Log.d(
+                NAVIGATION_TELEMETRY_TAG,
+                "transition_jank route_to=$routeTo skipped_frames_during_transition=$droppedFrames",
+            )
+        }
+    }
+
     fun recordRejected(
         routeFrom: String?,
         routeTo: String,
@@ -156,9 +168,7 @@ internal class NavigationTransitionTelemetry(
                 append("navigate_call_time=$navigateCallTimeMs ")
                 append("first_frame_after_tap_ms=${firstFrameTimeMs - pending.tapTimeMs} ")
                 append("transition_start=$navigateCallTimeMs ")
-                append("transition_end_estimate=${navigateCallTimeMs + NAVIGATION_DETAIL_TRANSITION_MS} ")
-                append("skipped_frames_during_transition=unavailable ")
-                append("route_state_size_estimate=unavailable")
+                append("transition_end_estimate=${navigateCallTimeMs + NAVIGATION_DETAIL_TRANSITION_MS}")
             },
         )
     }
@@ -176,6 +186,20 @@ internal fun NavigationTransitionTelemetryEffect(
         val route = currentRoute ?: return@LaunchedEffect
         withFrameNanos { }
         telemetry.recordFirstFrame(route)
+        // Count real dropped frames across the full animation window by measuring vsync gaps.
+        // Each gap > 1 vsync at 60fps means frames were dropped by the compositor.
+        var lastFrameNanos = 0L
+        var droppedFrames = 0
+        repeat(TRANSITION_JANK_WINDOW_FRAMES) {
+            val frameNanos: Long = withFrameNanos { it }
+            if (lastFrameNanos != 0L) {
+                val gapNs = frameNanos - lastFrameNanos
+                val dropsInGap = ((gapNs.toFloat() / VSYNC_INTERVAL_NS) - 1f).toInt().coerceAtLeast(0)
+                droppedFrames += dropsInGap
+            }
+            lastFrameNanos = frameNanos
+        }
+        telemetry.recordTransitionJank(route, droppedFrames)
     }
 }
 
@@ -205,3 +229,7 @@ private fun scheduleNavigationFirstFrameCallback(callback: () -> Unit) {
 
 private const val NAVIGATION_TELEMETRY_TAG = "FoxholeNavigation"
 private const val NAVIGATION_DETAIL_TRANSITION_MS = 150L
+// 25 frames covers ~416ms at 60fps — enough to span the longest animation (320ms indicator).
+private const val TRANSITION_JANK_WINDOW_FRAMES = 25
+// Nanoseconds per vsync at 60fps; gaps larger than this indicate dropped frames.
+private const val VSYNC_INTERVAL_NS = 16_666_667L
