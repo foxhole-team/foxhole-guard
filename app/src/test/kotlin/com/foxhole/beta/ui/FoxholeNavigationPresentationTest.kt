@@ -8,46 +8,46 @@ import org.junit.Test
 class FoxholeNavigationPresentationTest {
     @Test
     fun `detail transitions use FoxholeMotionTokens fadeIn slide approach`() {
-        val source =
+        val motionSource =
             listOf(
-                java.io.File("src/main/kotlin/com/foxhole/beta/ui/FoxholeApp.kt"),
-                java.io.File("app/src/main/kotlin/com/foxhole/beta/ui/FoxholeApp.kt"),
-                java.io.File("../app/src/main/kotlin/com/foxhole/beta/ui/FoxholeApp.kt"),
+                java.io.File("src/main/kotlin/com/foxhole/beta/ui/FoxholeNavMotion.kt"),
+                java.io.File("app/src/main/kotlin/com/foxhole/beta/ui/FoxholeNavMotion.kt"),
+                java.io.File("../app/src/main/kotlin/com/foxhole/beta/ui/FoxholeNavMotion.kt"),
             ).first { file -> file.isFile }.readText()
 
         // Detail transitions use fadeIn+slide with FoxholeMotionTokens
-        assertTrue(source.contains("private fun detailForwardEnter()"))
-        assertTrue(source.contains("private fun detailBackExit()"))
-        assertTrue(source.contains("slideInHorizontally"))
-        assertTrue(source.contains("slideOutHorizontally"))
-        assertTrue(source.contains("fadeIn("))
-        assertTrue(source.contains("fadeOut("))
-        assertTrue(source.contains("detailTransitionOffsetPx"))
-        assertTrue(source.contains("detailSecondaryOffsetPx"))
+        assertTrue(motionSource.contains("internal fun detailForwardEnter()"))
+        assertTrue(motionSource.contains("internal fun detailBackExit()"))
+        assertTrue(motionSource.contains("slideInHorizontally"))
+        assertTrue(motionSource.contains("slideOutHorizontally"))
+        assertTrue(motionSource.contains("fadeIn("))
+        assertTrue(motionSource.contains("fadeOut("))
+        assertTrue(motionSource.contains("detailTransitionOffsetPx"))
+        assertTrue(motionSource.contains("detailSecondaryOffsetPx"))
         // No plain slide-only helpers or instant-None root transitions
-        assertFalse(source.contains("private fun detailSlideIn()"))
-        assertFalse(source.contains("private fun detailSlideOut()"))
-        assertFalse(source.contains("predictivePopTransitionSpec"))
+        assertFalse(motionSource.contains("internal fun detailSlideIn()"))
+        assertFalse(motionSource.contains("internal fun detailSlideOut()"))
+        assertFalse(motionSource.contains("predictivePopTransitionSpec"))
     }
 
     @Test
     fun `navigation transitions stay close to platform defaults`() {
-        val source =
+        val motionSource =
             listOf(
-                java.io.File("src/main/kotlin/com/foxhole/beta/ui/FoxholeApp.kt"),
-                java.io.File("app/src/main/kotlin/com/foxhole/beta/ui/FoxholeApp.kt"),
-                java.io.File("../app/src/main/kotlin/com/foxhole/beta/ui/FoxholeApp.kt"),
+                java.io.File("src/main/kotlin/com/foxhole/beta/ui/FoxholeNavMotion.kt"),
+                java.io.File("app/src/main/kotlin/com/foxhole/beta/ui/FoxholeNavMotion.kt"),
+                java.io.File("../app/src/main/kotlin/com/foxhole/beta/ui/FoxholeNavMotion.kt"),
             ).first { file -> file.isFile }.readText()
 
         // Detail transitions use FoxholeMotionTokens; no raw pixel constants
-        assertFalse(source.contains("NAV_SLIDE_MS"))
-        assertTrue(source.contains("private fun rootEnter()"))
-        assertTrue(source.contains("private fun rootExit()"))
-        assertTrue(source.contains("DETAIL_ENTER_TRANSITION_MS"))
-        assertTrue(source.contains("DETAIL_EXIT_TRANSITION_MS"))
-        assertTrue(source.contains("ROOT_TRANSITION_MS"))
-        assertFalse(source.contains("DETAIL_TRANSITION_OFFSET_FRACTION = 0.14f"))
-        assertTrue(source.contains("DETAIL_TRANSITION_OFFSET_FRACTION = FoxholeMotionTokens.NavigationSlideFraction"))
+        assertFalse(motionSource.contains("NAV_SLIDE_MS"))
+        assertTrue(motionSource.contains("internal fun rootEnter()"))
+        assertTrue(motionSource.contains("internal fun rootExit()"))
+        assertTrue(motionSource.contains("DETAIL_ENTER_TRANSITION_MS"))
+        assertTrue(motionSource.contains("DETAIL_EXIT_TRANSITION_MS"))
+        assertTrue(motionSource.contains("ROOT_TRANSITION_MS"))
+        assertFalse(motionSource.contains("DETAIL_TRANSITION_OFFSET_FRACTION = 0.14f"))
+        assertTrue(motionSource.contains("DETAIL_TRANSITION_OFFSET_FRACTION = FoxholeMotionTokens.NavigationSlideFraction"))
     }
 
     @Test
@@ -349,7 +349,7 @@ class FoxholeNavigationPresentationTest {
     }
 
     @Test
-    fun `chrome defaults to static glass and gates blur overlays behind explicit mode`() {
+    fun `chrome defaults to Material and gates blur overlays behind explicit mode`() {
         val appSource =
             listOf(
                 java.io.File("src/main/kotlin/com/foxhole/beta/ui/FoxholeApp.kt"),
@@ -367,7 +367,7 @@ class FoxholeNavigationPresentationTest {
         assertTrue(chromeSource.contains("Material"))
         assertTrue(chromeSource.contains("GlassStatic"))
         assertTrue(chromeSource.contains("GlassBlur"))
-        assertTrue(chromeSource.contains("FoxholeDefaultChromeMode = ChromeMode.GlassStatic"))
+        assertTrue(chromeSource.contains("FoxholeDefaultChromeMode = ChromeMode.Material"))
         assertTrue(appSource.contains("chromeMode: ChromeMode = FoxholeDefaultChromeMode"))
         assertTrue(appSource.contains("chromeMode == ChromeMode.GlassBlur"))
         assertTrue(appSource.contains("ChromeMode.Material ->"))

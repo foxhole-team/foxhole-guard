@@ -227,7 +227,7 @@ enum class ChromeMode {
     GlassBlur,
 }
 
-internal val FoxholeDefaultChromeMode = ChromeMode.GlassStatic
+internal val FoxholeDefaultChromeMode = ChromeMode.Material
 
 internal object FoxholeMotionTokens {
     const val FastDurationMs = 120

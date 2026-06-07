@@ -13,13 +13,6 @@ import android.view.ViewOutlineProvider
 import android.widget.FrameLayout
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.EnterTransition
-import androidx.compose.animation.ExitTransition
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -105,7 +98,6 @@ import com.foxhole.beta.ui.theme.LocalFoxholeThemeMode
 import com.foxhole.beta.ui.theme.LocalFoxholeUiPalette
 import com.foxhole.beta.vpn.FoxholeTileService
 import eightbitlab.com.blurview.BlurTarget
-import kotlin.math.roundToInt
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -1232,68 +1224,6 @@ private fun NavDestination.belongsToRootSection(section: AppSection): Boolean =
     hierarchy.any { destination ->
         destination.route == section.graphRoute || destination.route == section.rootRoute
     }
-
-private fun String?.isRootRoute(): Boolean =
-    this == AppRoute.HOME || this == AppRoute.SETTINGS
-
-private fun String?.isSettingsDetailRoute(): Boolean =
-    this?.startsWith("${AppRoute.SETTINGS}/") == true
-
-private fun rootEnter(): EnterTransition =
-    fadeIn(animationSpec = tween(durationMillis = ROOT_TRANSITION_MS, easing = FoxholeMotionTokens.NavigationEnterEasing))
-
-private fun rootExit(): ExitTransition =
-    fadeOut(animationSpec = tween(durationMillis = ROOT_TRANSITION_MS, easing = FoxholeMotionTokens.NavigationExitEasing))
-
-private fun detailForwardEnter(): EnterTransition =
-    fadeIn(
-        animationSpec = tween(durationMillis = DETAIL_FADE_IN_MS, easing = FoxholeMotionTokens.NavigationEnterEasing),
-    ) +
-        slideInHorizontally(
-            initialOffsetX = { fullWidth -> detailTransitionOffsetPx(fullWidth) },
-            animationSpec = tween(durationMillis = DETAIL_ENTER_TRANSITION_MS, easing = FoxholeMotionTokens.NavigationEnterEasing),
-        )
-
-private fun detailForwardExit(): ExitTransition =
-    fadeOut(
-        animationSpec = tween(durationMillis = DETAIL_FADE_OUT_MS, easing = FoxholeMotionTokens.NavigationExitEasing),
-    ) +
-        slideOutHorizontally(
-            targetOffsetX = { fullWidth -> -detailSecondaryOffsetPx(fullWidth) },
-            animationSpec = tween(durationMillis = DETAIL_EXIT_TRANSITION_MS, easing = FoxholeMotionTokens.NavigationExitEasing),
-        )
-
-private fun detailBackEnter(): EnterTransition =
-    fadeIn(
-        animationSpec = tween(durationMillis = DETAIL_FADE_IN_MS, easing = FoxholeMotionTokens.NavigationEnterEasing),
-    ) +
-        slideInHorizontally(
-            initialOffsetX = { fullWidth -> -detailSecondaryOffsetPx(fullWidth) },
-            animationSpec = tween(durationMillis = DETAIL_EXIT_TRANSITION_MS, easing = FoxholeMotionTokens.NavigationEnterEasing),
-        )
-
-private fun detailBackExit(): ExitTransition =
-    fadeOut(
-        animationSpec = tween(durationMillis = DETAIL_FADE_OUT_MS, easing = FoxholeMotionTokens.NavigationExitEasing),
-    ) +
-        slideOutHorizontally(
-            targetOffsetX = { fullWidth -> detailTransitionOffsetPx(fullWidth) },
-            animationSpec = tween(durationMillis = DETAIL_EXIT_TRANSITION_MS, easing = FoxholeMotionTokens.NavigationExitEasing),
-        )
-
-internal fun detailTransitionOffsetPx(fullWidthPx: Int): Int =
-    (fullWidthPx * DETAIL_TRANSITION_OFFSET_FRACTION).roundToInt().coerceAtLeast(1)
-
-internal fun detailSecondaryOffsetPx(fullWidthPx: Int): Int =
-    (fullWidthPx * DETAIL_SECONDARY_OFFSET_FRACTION).roundToInt().coerceAtLeast(1)
-
-private const val ROOT_TRANSITION_MS = FoxholeMotionTokens.EmphasisDurationMs
-private const val DETAIL_FADE_IN_MS = FoxholeMotionTokens.NavigationFadeDurationMs
-private const val DETAIL_FADE_OUT_MS = FoxholeMotionTokens.NavigationExitDurationMs
-private const val DETAIL_ENTER_TRANSITION_MS = FoxholeMotionTokens.NavigationEnterDurationMs
-private const val DETAIL_EXIT_TRANSITION_MS = FoxholeMotionTokens.NavigationExitDurationMs
-private const val DETAIL_TRANSITION_OFFSET_FRACTION = FoxholeMotionTokens.NavigationSlideFraction
-private const val DETAIL_SECONDARY_OFFSET_FRACTION = 0.03f
 
 private fun NavHostController.navigateToProfilesRoot() {
     val currentRoute = currentDestination?.route
