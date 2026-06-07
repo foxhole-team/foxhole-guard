@@ -82,7 +82,7 @@ fun SecuritySettingsScreen(
             )
         },
     ) {
-            item {
+        item {
             SecurityProtectionControlGroup(
                 state = state,
                 onFirewallEnabledChanged = { value ->

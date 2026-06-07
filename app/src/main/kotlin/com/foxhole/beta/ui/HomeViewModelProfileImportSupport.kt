@@ -5,10 +5,10 @@ import android.content.ClipData
 import androidx.lifecycle.viewModelScope
 import com.foxhole.beta.R
 import com.foxhole.beta.core.data.InsecureTlsImportWarning
-import com.foxhole.beta.core.diagnostics.DiagnosticSanitizer
 import com.foxhole.beta.core.data.InsecureTlsProfileConsentRequiredException
 import com.foxhole.beta.core.data.ProfileImportPayloadTooLargeException
 import com.foxhole.beta.core.data.requireLocalProfileImportWithinLimit
+import com.foxhole.beta.core.diagnostics.DiagnosticSanitizer
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -263,9 +263,10 @@ internal suspend fun HomeViewModel.handleProfileRefreshFailureInternal(
     throwable: Throwable,
 ) {
     val app = getApplication<Application>()
+    val sanitizedMessage = DiagnosticSanitizer.sanitize(throwable.message.orEmpty())
     container.diagnosticsLogger.record(
         "profile",
-        "profile refresh failed profileId=$profileId: ${throwable.javaClass.simpleName}: ${DiagnosticSanitizer.sanitize(throwable.message.orEmpty())}",
+        "profile refresh failed profileId=$profileId: ${throwable.javaClass.simpleName}: $sanitizedMessage",
     )
     emitError(app.getString(R.string.profile_refresh_failed))
 }

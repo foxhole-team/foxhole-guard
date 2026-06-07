@@ -47,7 +47,9 @@ class FoxholeNavigationPresentationTest {
         assertTrue(motionSource.contains("DETAIL_EXIT_TRANSITION_MS"))
         assertTrue(motionSource.contains("ROOT_TRANSITION_MS"))
         assertFalse(motionSource.contains("DETAIL_TRANSITION_OFFSET_FRACTION = 0.14f"))
-        assertTrue(motionSource.contains("DETAIL_TRANSITION_OFFSET_FRACTION = FoxholeMotionTokens.NavigationSlideFraction"))
+        assertTrue(
+            motionSource.contains("DETAIL_TRANSITION_OFFSET_FRACTION = FoxholeMotionTokens.NavigationSlideFraction"),
+        )
     }
 
     @Test
@@ -190,7 +192,11 @@ class FoxholeNavigationPresentationTest {
             ).first { file -> file.isFile }.readText()
 
         // No custom BackHandler — system predictive back handles root navigation
-        assertFalse(source.contains("BackHandler(enabled = currentRoute.isRootRoute() && currentSection == AppSection.SETTINGS)"))
+        assertFalse(
+            source.contains(
+                "BackHandler(enabled = currentRoute.isRootRoute() && currentSection == AppSection.SETTINGS)",
+            ),
+        )
         assertFalse(source.contains("PredictiveBackHandler("))
         assertFalse(source.contains("settingsDetailBackEnabled"))
         assertFalse(source.contains("settingsBackProgress"))

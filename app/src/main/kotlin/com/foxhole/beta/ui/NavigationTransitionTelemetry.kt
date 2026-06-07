@@ -229,7 +229,9 @@ private fun scheduleNavigationFirstFrameCallback(callback: () -> Unit) {
 
 private const val NAVIGATION_TELEMETRY_TAG = "FoxholeNavigation"
 private const val NAVIGATION_DETAIL_TRANSITION_MS = 150L
+
 // 25 frames covers ~416ms at 60fps — enough to span the longest animation (320ms indicator).
 private const val TRANSITION_JANK_WINDOW_FRAMES = 25
+
 // Nanoseconds per vsync at 60fps; gaps larger than this indicate dropped frames.
 private const val VSYNC_INTERVAL_NS = 16_666_667L

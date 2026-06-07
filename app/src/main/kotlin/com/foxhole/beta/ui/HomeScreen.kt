@@ -1100,7 +1100,12 @@ private fun HomeDashboardNetworkCardItem(
             state.ipInfoLoading ||
             state.ipInfoRefreshReason != null ||
             state.reconnectInProgress
-    LaunchedEffect(networkInfoPinnedForProtocolSearch, state.ipInfo, state.connection.state, networkIpTransitionInProgress) {
+    LaunchedEffect(
+        networkInfoPinnedForProtocolSearch,
+        state.ipInfo,
+        state.connection.state,
+        networkIpTransitionInProgress,
+    ) {
         when {
             networkInfoPinnedForProtocolSearch -> {
                 if (!keepPinnedNetworkInfo) {

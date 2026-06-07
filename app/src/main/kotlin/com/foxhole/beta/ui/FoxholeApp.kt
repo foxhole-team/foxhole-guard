@@ -1415,4 +1415,3 @@ private fun requestQuickSettingsTile(
         snackbarHostState.showSnackbar(context.getString(messageRes))
     }
 }
-

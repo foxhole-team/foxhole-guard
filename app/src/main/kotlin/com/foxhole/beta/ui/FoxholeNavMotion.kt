@@ -10,10 +10,14 @@ import androidx.compose.animation.slideOutHorizontally
 import kotlin.math.roundToInt
 
 internal fun rootEnter(): EnterTransition =
-    fadeIn(animationSpec = tween(durationMillis = ROOT_TRANSITION_MS, easing = FoxholeMotionTokens.NavigationEnterEasing))
+    fadeIn(
+        animationSpec = tween(durationMillis = ROOT_TRANSITION_MS, easing = FoxholeMotionTokens.NavigationEnterEasing),
+    )
 
 internal fun rootExit(): ExitTransition =
-    fadeOut(animationSpec = tween(durationMillis = ROOT_TRANSITION_MS, easing = FoxholeMotionTokens.NavigationExitEasing))
+    fadeOut(
+        animationSpec = tween(durationMillis = ROOT_TRANSITION_MS, easing = FoxholeMotionTokens.NavigationExitEasing),
+    )
 
 internal fun detailForwardEnter(): EnterTransition =
     fadeIn(
