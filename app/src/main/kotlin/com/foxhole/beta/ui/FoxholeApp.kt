@@ -11,15 +11,8 @@ import android.view.Gravity
 import android.view.ViewGroup
 import android.view.ViewOutlineProvider
 import android.widget.FrameLayout
-import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.EnterTransition
-import androidx.compose.animation.ExitTransition
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -68,7 +61,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -110,7 +102,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlin.math.abs
 import android.graphics.drawable.Icon as AndroidIcon
 import android.provider.Settings as AndroidSettings
 
@@ -128,7 +119,6 @@ private object AppRoute {
     const val DNS_APPS_PICKER = "settings/dns/apps-picker"
     const val NETWORK_RULES = "settings/network-rules"
     const val SECURITY = "settings/security"
-    const val SECURITY_APP_MONITOR = "settings/security/app-monitor"
     const val PRIVACY_ROUTE = "settings/privacy-route"
     const val ROUTING_APPS = "settings/routing/apps"
     const val ROUTING_APPS_PICKER = "settings/routing/apps/picker"
@@ -200,7 +190,6 @@ fun FoxholeApp(
     val currentRoute = navBackStackEntry?.destination?.route
     val currentSection = navBackStackEntry?.destination?.rootAppSection()
     val showBottomBar = currentRoute.isRootRoute()
-    val rootSwipeSection = navBackStackEntry?.destination?.rootSwipeSection()
     val settingsDetailNavigationGate = remember { SettingsDetailNavigationGate() }
     val navigationTransitionTelemetry = remember { NavigationTransitionTelemetry() }
     NavigationTransitionTelemetryEffect(currentRoute, navigationTransitionTelemetry)
@@ -216,9 +205,6 @@ fun FoxholeApp(
             gate = settingsDetailNavigationGate,
             telemetry = navigationTransitionTelemetry,
         )
-    }
-    BackHandler(enabled = currentRoute.isRootRoute() && currentSection == AppSection.SETTINGS) {
-        selectRootSection(AppSection.DASHBOARD)
     }
     val backdropBlurHost =
         remember(bottomDockOverlayHost, bottomDockBlurTarget, chromeMode) {
@@ -281,16 +267,6 @@ fun FoxholeApp(
                     )
                     .padding(top = innerPadding.calculateTopPadding())
                     .consumeWindowInsets(innerPadding)
-                    .then(
-                        when {
-                            rootSwipeSection != null ->
-                                Modifier.sectionSwipeNavigation(
-                                    currentSection = rootSwipeSection,
-                                    onSectionSelected = selectRootSection,
-                                )
-                            else -> Modifier
-                        },
-                    )
                     .testTag("app_section_swipe_surface"),
         ) {
             CompositionLocalProvider(
@@ -300,43 +276,7 @@ fun FoxholeApp(
                 NavHost(
                     navController = navController,
                     startDestination = RootGraph.Dashboard.route,
-                    modifier =
-                        Modifier
-                            .fillMaxSize(),
-                    enterTransition = {
-                        if (targetState.destination.route.isSettingsDetailRoute()) {
-                            detailForwardEnter()
-                        } else {
-                            rootEnter()
-                        }
-                    },
-                    exitTransition = {
-                        if (
-                            initialState.destination.route.isSettingsDetailRoute() &&
-                            targetState.destination.route.isSettingsDetailRoute()
-                        ) {
-                            detailForwardExit()
-                        } else {
-                            rootExit()
-                        }
-                    },
-                    popEnterTransition = {
-                        if (
-                            initialState.destination.route.isSettingsDetailRoute() &&
-                            targetState.destination.route.isSettingsDetailRoute()
-                        ) {
-                            detailBackEnter()
-                        } else {
-                            rootEnter()
-                        }
-                    },
-                    popExitTransition = {
-                        if (initialState.destination.route.isSettingsDetailRoute()) {
-                            detailBackExit()
-                        } else {
-                            rootExit()
-                        }
-                    },
+                    modifier = Modifier.fillMaxSize(),
                 ) {
                     navigation(
                         route = RootGraph.Dashboard.route,
@@ -628,25 +568,6 @@ fun FoxholeApp(
                         onAnomalyHistoryRetentionSelected = viewModel::onAnomalyHistoryRetentionSelected,
                     )
                 }
-                        composable(AppRoute.SECURITY_APP_MONITOR) {
-                    NavigationTransitionTelemetryEffect(AppRoute.SECURITY_APP_MONITOR, navigationTransitionTelemetry)
-                    val state by viewModel.settingsRouteState.collectAsStateWithLifecycle()
-                    SecuritySettingsScreen(
-                        state = state,
-                        snackbarHostState = snackbarHostState,
-                        onNavigateUp = navController::navigateUp,
-                        onFirewallEnabledChanged = viewModel::onFirewallEnabledChanged,
-                        onNewAppQuarantineChanged = viewModel::onNewAppQuarantineChanged,
-                        onInstalledAppMonitoringChanged = viewModel::onInstalledAppMonitoringChanged,
-                        onSystemDnsProtectionChanged = viewModel::onSystemDnsProtectionChanged,
-                        onAnomalyEnabledChanged = viewModel::onAnomalyEnabledChanged,
-                        onNotifyUnusualTrafficChanged = viewModel::onNotifyUnusualTrafficChanged,
-                        onAnomalySensitivitySelected = viewModel::onAnomalySensitivitySelected,
-                        onAnalyzeBackgroundTrafficChanged = viewModel::onAnalyzeBackgroundTrafficChanged,
-                        onAnalyzeDestinationCountriesChanged = viewModel::onAnalyzeDestinationCountriesChanged,
-                        onAnomalyHistoryRetentionSelected = viewModel::onAnomalyHistoryRetentionSelected,
-                    )
-                }
                         composable(AppRoute.NETWORK_RULES) {
                     NavigationTransitionTelemetryEffect(AppRoute.NETWORK_RULES, navigationTransitionTelemetry)
                     val state by viewModel.settingsRouteState.collectAsStateWithLifecycle()
@@ -840,7 +761,7 @@ fun FoxholeApp(
                         onDiagnosticsRetentionSelected = viewModel::onDiagnosticsRetentionSelected,
                         onSanitizeNetworkActivityPrivateDataChanged = viewModel::onSanitizeNetworkActivityPrivateDataChanged,
                         onRawLiveDiagnosticsChanged = viewModel::onRawLiveDiagnosticsChanged,
-                        onOpenSecurityAppMonitorSettings = { navigateToSettingsDetail(AppRoute.SECURITY_APP_MONITOR) },
+                        onOpenSecurityAppMonitorSettings = { navigateToSettingsDetail(AppRoute.SECURITY) },
                     )
                 }
                         composable(AppRoute.STATISTICS) {
@@ -1262,52 +1183,8 @@ private fun RowScope.FoxholeBottomBarItem(
     }
 }
 
-private fun Modifier.sectionSwipeNavigation(
-    currentSection: AppSection?,
-    onSectionSelected: (AppSection) -> Unit,
-): Modifier =
-    pointerInput(currentSection) {
-        var dragDistance = 0f
-        val switchThreshold = size.width * SECTION_SWIPE_THRESHOLD_FRACTION
-        detectHorizontalDragGestures(
-            onDragStart = {
-                dragDistance = 0f
-            },
-            onHorizontalDrag = { change, dragAmount ->
-                dragDistance += dragAmount
-                if (abs(dragDistance) < switchThreshold) {
-                    return@detectHorizontalDragGestures
-                }
-                val targetSection =
-                    if (dragDistance < 0f) {
-                        AppSection.SETTINGS
-                    } else {
-                        AppSection.DASHBOARD
-                    }
-                if (targetSection != currentSection) {
-                    change.consume()
-                    onSectionSelected(targetSection)
-                }
-                dragDistance = 0f
-            },
-            onDragEnd = {
-                dragDistance = 0f
-            },
-            onDragCancel = {
-                dragDistance = 0f
-            },
-        )
-    }
-
 private fun NavDestination.rootAppSection(): AppSection? =
     AppSection.entries.firstOrNull { section -> belongsToRootSection(section) }
-
-private fun NavDestination.rootSwipeSection(): AppSection? =
-    when (route) {
-        AppRoute.HOME -> AppSection.DASHBOARD
-        AppRoute.SETTINGS -> AppSection.SETTINGS
-        else -> null
-    }
 
 private fun NavDestination.belongsToRootSection(section: AppSection): Boolean =
     hierarchy.any { destination ->
@@ -1316,51 +1193,6 @@ private fun NavDestination.belongsToRootSection(section: AppSection): Boolean =
 
 private fun String?.isRootRoute(): Boolean =
     this == AppRoute.HOME || this == AppRoute.SETTINGS
-
-private fun String?.isSettingsDetailRoute(): Boolean =
-    this?.startsWith("${AppRoute.SETTINGS}/") == true
-
-private fun rootEnter(): EnterTransition =
-    EnterTransition.None
-
-private fun rootExit(): ExitTransition =
-    ExitTransition.None
-
-private fun detailForwardEnter(): EnterTransition =
-    fadeIn(
-        animationSpec =
-            tween(
-                durationMillis = DETAIL_ENTER_TRANSITION_MS,
-                easing = FoxholeMotionTokens.NavigationEnterEasing,
-            ),
-    )
-
-private fun detailForwardExit(): ExitTransition =
-    fadeOut(
-        animationSpec =
-            tween(
-                durationMillis = DETAIL_EXIT_TRANSITION_MS,
-                easing = FoxholeMotionTokens.NavigationExitEasing,
-            ),
-    )
-
-private fun detailBackEnter(): EnterTransition =
-    fadeIn(
-        animationSpec =
-            tween(
-                durationMillis = DETAIL_ENTER_TRANSITION_MS,
-                easing = FoxholeMotionTokens.NavigationEnterEasing,
-            ),
-    )
-
-private fun detailBackExit(): ExitTransition =
-    fadeOut(
-        animationSpec =
-            tween(
-                durationMillis = DETAIL_EXIT_TRANSITION_MS,
-                easing = FoxholeMotionTokens.NavigationExitEasing,
-            ),
-    )
 
 private fun NavHostController.navigateToProfilesRoot() {
     val currentRoute = currentDestination?.route
@@ -1505,6 +1337,3 @@ private fun requestQuickSettingsTile(
     }
 }
 
-private const val SECTION_SWIPE_THRESHOLD_FRACTION = 0.22f
-private const val DETAIL_ENTER_TRANSITION_MS = 150
-private const val DETAIL_EXIT_TRANSITION_MS = FoxholeMotionTokens.FastDurationMs

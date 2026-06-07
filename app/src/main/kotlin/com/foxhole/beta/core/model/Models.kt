@@ -444,7 +444,7 @@ data class ExpertSettings(
 @Serializable
 data class StatisticsSettings(
     val enabled: Boolean = false,
-    val retention: StatisticsRetention = StatisticsRetention.FOREVER,
+    val retention: StatisticsRetention = StatisticsRetention.WEEK,
     val refreshInterval: StatisticsRefreshInterval = StatisticsRefreshInterval.SECONDS_3,
     val profileTrafficEnabled: Boolean = false,
     val vpnProtocolsEnabled: Boolean = false,

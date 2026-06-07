@@ -15,10 +15,11 @@ class FoxholeNavigationPresentationTest {
                 java.io.File("../app/src/main/kotlin/com/foxhole/beta/ui/FoxholeApp.kt"),
             ).first { file -> file.isFile }.readText()
 
-        assertTrue(source.contains("private fun detailForwardEnter(): EnterTransition =\n    fadeIn("))
-        assertTrue(source.contains("private fun detailForwardExit(): ExitTransition =\n    fadeOut("))
-        assertTrue(source.contains("private fun detailBackEnter(): EnterTransition =\n    fadeIn("))
-        assertTrue(source.contains("private fun detailBackExit(): ExitTransition =\n    fadeOut("))
+        // NavHost uses platform default transitions — no custom transition helpers
+        assertFalse(source.contains("private fun detailForwardEnter()"))
+        assertFalse(source.contains("private fun detailForwardExit()"))
+        assertFalse(source.contains("private fun detailBackEnter()"))
+        assertFalse(source.contains("private fun detailBackExit()"))
         assertFalse(source.contains("slideInHorizontally"))
         assertFalse(source.contains("slideOutHorizontally"))
         assertFalse(source.contains("detailTransitionOffsetPx"))
@@ -34,12 +35,15 @@ class FoxholeNavigationPresentationTest {
                 java.io.File("../app/src/main/kotlin/com/foxhole/beta/ui/FoxholeApp.kt"),
             ).first { file -> file.isFile }.readText()
 
-        assertTrue(source.contains("private fun rootEnter(): EnterTransition =\n    EnterTransition.None"))
-        assertTrue(source.contains("private fun rootExit(): ExitTransition =\n    ExitTransition.None"))
-        assertTrue(source.contains("DETAIL_ENTER_TRANSITION_MS = 150"))
-        assertTrue(source.contains("DETAIL_EXIT_TRANSITION_MS = FoxholeMotionTokens.FastDurationMs"))
-        assertTrue(source.contains("easing = FoxholeMotionTokens.NavigationEnterEasing"))
-        assertTrue(source.contains("easing = FoxholeMotionTokens.NavigationExitEasing"))
+        // NavHost uses platform default transitions — no custom transition params or helpers
+        assertFalse(source.contains("private fun rootEnter()"))
+        assertFalse(source.contains("private fun rootExit()"))
+        assertFalse(source.contains("DETAIL_ENTER_TRANSITION_MS"))
+        assertFalse(source.contains("DETAIL_EXIT_TRANSITION_MS"))
+        assertFalse(source.contains("enterTransition = {"))
+        assertFalse(source.contains("exitTransition = {"))
+        assertFalse(source.contains("popEnterTransition = {"))
+        assertFalse(source.contains("popExitTransition = {"))
         assertFalse(source.contains("ROOT_TRANSITION_MS"))
         assertFalse(source.contains("DETAIL_TRANSITION_OFFSET_FRACTION = 0.14f"))
         assertFalse(source.contains("DETAIL_TRANSITION_OFFSET_FRACTION = FoxholeMotionTokens.NavigationSlideFraction"))
@@ -107,7 +111,7 @@ class FoxholeNavigationPresentationTest {
             ).first { file -> file.isFile }.readText()
         val navigateToSectionBlock =
             source.substringAfter("private fun NavHostController.navigateToSection(")
-                .substringBefore("private const val SECTION_SWIPE_THRESHOLD_FRACTION")
+                .substringBefore("private fun requestQuickSettingsTile(")
 
         assertTrue(navigateToSectionBlock.contains("section.rootRoute == AppRoute.HOME"))
         assertTrue(navigateToSectionBlock.contains("popBackStack(AppRoute.HOME, inclusive = false)"))
@@ -161,22 +165,15 @@ class FoxholeNavigationPresentationTest {
                 java.io.File("app/src/main/kotlin/com/foxhole/beta/ui/FoxholeApp.kt"),
                 java.io.File("../app/src/main/kotlin/com/foxhole/beta/ui/FoxholeApp.kt"),
             ).first { file -> file.isFile }.readText()
-        val navHostBlock =
-            source.substringAfter("NavHost(")
-                .substringBefore(") {\n                    navigation(")
 
-        assertTrue(navHostBlock.contains("initialState.destination.route.isSettingsDetailRoute() &&"))
-        assertTrue(navHostBlock.contains("targetState.destination.route.isSettingsDetailRoute()"))
-        assertFalse(
-            navHostBlock.contains(
-                "if (targetState.destination.route.isSettingsDetailRoute()) {\n                            detailForwardExit()",
-            ),
-        )
-        assertFalse(
-            navHostBlock.contains(
-                "if (initialState.destination.route.isSettingsDetailRoute()) {\n                            detailBackEnter()",
-            ),
-        )
+        // NavHost has no custom transition parameters — platform handles transitions
+        assertFalse(source.contains("enterTransition = {"))
+        assertFalse(source.contains("exitTransition = {"))
+        assertFalse(source.contains("popEnterTransition = {"))
+        assertFalse(source.contains("popExitTransition = {"))
+        assertFalse(source.contains("isSettingsDetailRoute()"))
+        assertFalse(source.contains("detailForwardExit()"))
+        assertFalse(source.contains("detailBackEnter()"))
     }
 
     @Test
@@ -188,9 +185,8 @@ class FoxholeNavigationPresentationTest {
                 java.io.File("../app/src/main/kotlin/com/foxhole/beta/ui/FoxholeApp.kt"),
             ).first { file -> file.isFile }.readText()
 
-        val rootSettingsBackHandler =
-            "BackHandler(enabled = currentRoute.isRootRoute() && currentSection == AppSection.SETTINGS)"
-        assertTrue(source.contains(rootSettingsBackHandler))
+        // No custom BackHandler — system predictive back handles root navigation
+        assertFalse(source.contains("BackHandler(enabled = currentRoute.isRootRoute() && currentSection == AppSection.SETTINGS)"))
         assertFalse(source.contains("PredictiveBackHandler("))
         assertFalse(source.contains("settingsDetailBackEnabled"))
         assertFalse(source.contains("settingsBackProgress"))
@@ -338,7 +334,7 @@ class FoxholeNavigationPresentationTest {
             ).first { file -> file.isFile }.readText()
         val itemBlock =
             source.substringAfter("private fun RowScope.FoxholeBottomBarItem(")
-                .substringBefore("private fun Modifier.sectionSwipeNavigation(")
+                .substringBefore("private fun NavDestination.rootAppSection(")
 
         assertTrue(itemBlock.contains(".clip(MaterialTheme.shapes.medium)"))
         assertTrue(itemBlock.contains(".selectable("))

@@ -20,7 +20,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import com.foxhole.beta.BuildConfig
 import com.foxhole.beta.R
 import com.foxhole.beta.core.model.AnomalyHistoryRetention
 import com.foxhole.beta.core.model.AnomalySensitivity
@@ -83,16 +82,7 @@ fun SecuritySettingsScreen(
             )
         },
     ) {
-        if (BuildConfig.DEBUG) {
             item {
-                InfoBlock(
-                    title = stringResource(R.string.security_development_warning_title),
-                    body = stringResource(R.string.security_development_warning_body),
-                    toneColor = MaterialTheme.colorScheme.primary,
-                )
-            }
-        }
-        item {
             SecurityProtectionControlGroup(
                 state = state,
                 onFirewallEnabledChanged = { value ->
@@ -189,7 +179,7 @@ fun SecuritySettingsScreen(
         }
     }
     pendingSecurityToggle?.let { target ->
-        SecurityEarlyDevelopmentWarningDialog(
+        SecurityConsentDialog(
             onConfirm = {
                 applySecurityToggle(target, true)
                 pendingSecurityToggle = null
@@ -211,7 +201,7 @@ private enum class SecurityToggleTarget {
 }
 
 @Composable
-private fun SecurityEarlyDevelopmentWarningDialog(
+private fun SecurityConsentDialog(
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
 ) {
