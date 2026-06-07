@@ -13,6 +13,10 @@ import android.view.ViewOutlineProvider
 import android.widget.FrameLayout
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -1131,7 +1135,14 @@ private fun FoxholeBottomBarDockContent(
             val sections = AppSection.entries
             val tabWidth = maxWidth / sections.size
             val selectedIndex = sections.indexOf(selectedSection).coerceAtLeast(0)
-            val indicatorOffset = tabWidth * selectedIndex
+            val indicatorOffset by animateDpAsState(
+                targetValue = tabWidth * selectedIndex,
+                animationSpec = tween(
+                    durationMillis = FoxholeMotionTokens.NavigationIndicatorDurationMs,
+                    easing = FoxholeMotionTokens.NavigationIndicatorEasing,
+                ),
+                label = "DockIndicatorOffset",
+            )
 
             Box(modifier = Modifier.fillMaxSize()) {
                 Surface(
@@ -1173,10 +1184,31 @@ private fun RowScope.FoxholeBottomBarItem(
         } else {
             MaterialTheme.colorScheme.onSurfaceVariant
         }
-    val contentAlpha = if (selected) 1f else 0.84f
+    val contentAlpha by animateFloatAsState(
+        targetValue = if (selected) 1f else 0.84f,
+        animationSpec = tween(
+            durationMillis = FoxholeMotionTokens.NavigationIndicatorDurationMs,
+            easing = FoxholeMotionTokens.NavigationIndicatorEasing,
+        ),
+        label = "DockItemAlpha",
+    )
     val iconBaseColor = foxholeSystemAwareAccentColor(fallback = contentColor, darkFallback = FoxholeInfoAccent)
-    val iconColor = if (selected) iconBaseColor else iconBaseColor.copy(alpha = 0.72f)
-    val iconScale = if (selected) 1f else 0.92f
+    val iconColor by animateColorAsState(
+        targetValue = if (selected) iconBaseColor else iconBaseColor.copy(alpha = 0.72f),
+        animationSpec = tween(
+            durationMillis = FoxholeMotionTokens.NavigationIndicatorDurationMs,
+            easing = FoxholeMotionTokens.NavigationIndicatorEasing,
+        ),
+        label = "DockIconColor",
+    )
+    val iconScale by animateFloatAsState(
+        targetValue = if (selected) 1f else 0.92f,
+        animationSpec = tween(
+            durationMillis = FoxholeMotionTokens.NavigationIndicatorDurationMs,
+            easing = FoxholeMotionTokens.NavigationIndicatorEasing,
+        ),
+        label = "DockIconScale",
+    )
 
     Box(
         modifier =
