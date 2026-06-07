@@ -724,8 +724,10 @@ internal fun FoxholeTopScrimLayer(
         modifier =
             modifier.drawWithCache {
                 onDrawBehind {
-                    drawRect(baseColor)
                     val rawProgress = progress().coerceIn(0f, 1f)
+                    if (rawProgress > 0f) {
+                        drawRect(baseColor, alpha = rawProgress)
+                    }
                     val scrimProgress = foxholeTopScrimAlpha(rawProgress)
                     if (scrimProgress > 0f) {
                         drawRect(topScrimColor, alpha = scrimProgress)

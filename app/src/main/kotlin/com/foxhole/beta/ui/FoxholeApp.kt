@@ -13,6 +13,13 @@ import android.view.ViewOutlineProvider
 import android.widget.FrameLayout
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -277,6 +284,40 @@ fun FoxholeApp(
                     navController = navController,
                     startDestination = RootGraph.Dashboard.route,
                     modifier = Modifier.fillMaxSize(),
+                    enterTransition = {
+                        if (targetState.destination.route.isSettingsDetailRoute()) {
+                            detailSlideIn()
+                        } else {
+                            EnterTransition.None
+                        }
+                    },
+                    exitTransition = {
+                        if (
+                            initialState.destination.route.isSettingsDetailRoute() &&
+                            targetState.destination.route.isSettingsDetailRoute()
+                        ) {
+                            detailSlideExitForward()
+                        } else {
+                            ExitTransition.None
+                        }
+                    },
+                    popEnterTransition = {
+                        if (
+                            initialState.destination.route.isSettingsDetailRoute() &&
+                            targetState.destination.route.isSettingsDetailRoute()
+                        ) {
+                            detailSlideEnterBack()
+                        } else {
+                            EnterTransition.None
+                        }
+                    },
+                    popExitTransition = {
+                        if (initialState.destination.route.isSettingsDetailRoute()) {
+                            detailSlideOut()
+                        } else {
+                            ExitTransition.None
+                        }
+                    },
                 ) {
                     navigation(
                         route = RootGraph.Dashboard.route,
@@ -1193,6 +1234,35 @@ private fun NavDestination.belongsToRootSection(section: AppSection): Boolean =
 
 private fun String?.isRootRoute(): Boolean =
     this == AppRoute.HOME || this == AppRoute.SETTINGS
+
+private fun String?.isSettingsDetailRoute(): Boolean =
+    this?.startsWith("${AppRoute.SETTINGS}/") == true
+
+private fun detailSlideIn(): EnterTransition =
+    slideInHorizontally(
+        initialOffsetX = { it },
+        animationSpec = tween(durationMillis = NAV_SLIDE_MS, easing = FastOutSlowInEasing),
+    )
+
+private fun detailSlideExitForward(): ExitTransition =
+    slideOutHorizontally(
+        targetOffsetX = { -it / 3 },
+        animationSpec = tween(durationMillis = NAV_SLIDE_MS, easing = FastOutSlowInEasing),
+    )
+
+private fun detailSlideEnterBack(): EnterTransition =
+    slideInHorizontally(
+        initialOffsetX = { -it / 3 },
+        animationSpec = tween(durationMillis = NAV_SLIDE_MS, easing = LinearOutSlowInEasing),
+    )
+
+private fun detailSlideOut(): ExitTransition =
+    slideOutHorizontally(
+        targetOffsetX = { it },
+        animationSpec = tween(durationMillis = NAV_SLIDE_MS, easing = LinearOutSlowInEasing),
+    )
+
+private const val NAV_SLIDE_MS = 180
 
 private fun NavHostController.navigateToProfilesRoot() {
     val currentRoute = currentDestination?.route

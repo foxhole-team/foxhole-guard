@@ -51,6 +51,9 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
@@ -1573,6 +1576,11 @@ private fun TrafficMapCanvas(
             visuals = state.countryVisuals,
             colors = colors,
         )
+    val highlightBitmapAlpha by animateFloatAsState(
+        targetValue = if (countryHighlightBitmap != null) 1f else 0f,
+        animationSpec = tween(durationMillis = 350, easing = FastOutSlowInEasing),
+        label = "map_highlight_alpha",
+    )
     val mapContentDescription = remember(state) { trafficMapContentDescription(state) }
     val markerHitTargets =
         remember(canvasSize, state, drawableDestinations, drawableVpnRoute, drawableTorExit) {
@@ -1767,19 +1775,22 @@ private fun TrafficMapCanvas(
                         )
                     }
                     countryHighlightBitmap?.let { bitmap ->
-                        drawImage(
-                            image = bitmap,
-                            dstOffset =
-                                IntOffset(
-                                    x = viewport.topLeft.x.roundToInt(),
-                                    y = viewport.topLeft.y.roundToInt(),
-                                ),
-                            dstSize =
-                                IntSize(
-                                    width = viewport.size.width.roundToInt().coerceAtLeast(1),
-                                    height = viewport.size.height.roundToInt().coerceAtLeast(1),
-                                ),
-                        )
+                        if (highlightBitmapAlpha > 0f) {
+                            drawImage(
+                                image = bitmap,
+                                dstOffset =
+                                    IntOffset(
+                                        x = viewport.topLeft.x.roundToInt(),
+                                        y = viewport.topLeft.y.roundToInt(),
+                                    ),
+                                dstSize =
+                                    IntSize(
+                                        width = viewport.size.width.roundToInt().coerceAtLeast(1),
+                                        height = viewport.size.height.roundToInt().coerceAtLeast(1),
+                                    ),
+                                alpha = highlightBitmapAlpha,
+                            )
+                        }
                     }
                     smallCountryCallouts.forEach { callout ->
                         drawCircle(
