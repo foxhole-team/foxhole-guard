@@ -97,6 +97,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.State
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -156,6 +157,7 @@ import com.foxhole.beta.ui.theme.LocalFoxholeUiPalette
 import com.foxhole.beta.ui.theme.foxholeAppBackgroundLayer
 import eightbitlab.com.blurview.BlurTarget
 import kotlin.math.max
+import kotlin.math.roundToInt
 import android.graphics.Color as AndroidColor
 
 internal val ScreenHorizontalPadding = 16.dp
@@ -283,6 +285,7 @@ private const val TOP_CHROME_FROST_DARK_ALPHA = 0.018f
 private const val TOP_CHROME_FROST_LIGHT_ALPHA = 0.030f
 private const val TOP_CHROME_MIN_SCROLL_ALPHA = 0.64f
 private const val TOP_CHROME_MIN_SCROLL_RAMP_PROGRESS = 0.36f
+private const val SCRIM_BUCKET_STEP = 0.05f
 private const val BOTTOM_DOCK_CONTAINER_DARK_ALPHA = 1f
 private const val BOTTOM_DOCK_CONTAINER_LIGHT_ALPHA = 1f
 private const val BOTTOM_DOCK_BORDER_ALPHA = 0.24f
@@ -497,8 +500,16 @@ private fun BoxScope.FoxholeTopChrome(
                 )
             }
             val latestScrimProgress = rememberUpdatedState(scrimProgress)
+            // Bucket to 0.05 steps — reduces snapshotFlow emissions from every scroll
+            // pixel down to at most 20 distinct values across the 0..1 range.
+            val bucketedScrimProgress = remember {
+                derivedStateOf {
+                    (latestScrimProgress.value() / SCRIM_BUCKET_STEP).roundToInt() *
+                        SCRIM_BUCKET_STEP
+                }
+            }
             LaunchedEffect(controller) {
-                snapshotFlow { latestScrimProgress.value() }
+                snapshotFlow { bucketedScrimProgress.value }
                     .collect { progress -> controller.updateScrimProgress(progress) }
             }
         }
