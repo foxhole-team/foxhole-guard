@@ -7,7 +7,7 @@ import org.junit.Test
 
 class FoxholeNavigationPresentationTest {
     @Test
-    fun `detail transitions use system slide without legacy fade or heavy offset helpers`() {
+    fun `detail transitions use FoxholeMotionTokens fadeIn slide approach`() {
         val source =
             listOf(
                 java.io.File("src/main/kotlin/com/foxhole/beta/ui/FoxholeApp.kt"),
@@ -15,19 +15,18 @@ class FoxholeNavigationPresentationTest {
                 java.io.File("../app/src/main/kotlin/com/foxhole/beta/ui/FoxholeApp.kt"),
             ).first { file -> file.isFile }.readText()
 
-        // Detail transitions use stable slide APIs — no legacy fade helpers
-        assertTrue(source.contains("private fun detailSlideIn()"))
-        assertTrue(source.contains("private fun detailSlideOut()"))
+        // Detail transitions use fadeIn+slide with FoxholeMotionTokens
+        assertTrue(source.contains("private fun detailForwardEnter()"))
+        assertTrue(source.contains("private fun detailBackExit()"))
         assertTrue(source.contains("slideInHorizontally"))
         assertTrue(source.contains("slideOutHorizontally"))
-        // Root transitions stay instant
-        assertTrue(source.contains("EnterTransition.None"))
-        assertTrue(source.contains("ExitTransition.None"))
-        // No old fade helpers or alpha navigation APIs
-        assertFalse(source.contains("private fun detailForwardEnter()"))
-        assertFalse(source.contains("private fun detailBackExit()"))
-        assertFalse(source.contains("detailTransitionOffsetPx"))
-        assertFalse(source.contains("detailSecondaryOffsetPx"))
+        assertTrue(source.contains("fadeIn("))
+        assertTrue(source.contains("fadeOut("))
+        assertTrue(source.contains("detailTransitionOffsetPx"))
+        assertTrue(source.contains("detailSecondaryOffsetPx"))
+        // No plain slide-only helpers or instant-None root transitions
+        assertFalse(source.contains("private fun detailSlideIn()"))
+        assertFalse(source.contains("private fun detailSlideOut()"))
         assertFalse(source.contains("predictivePopTransitionSpec"))
     }
 
@@ -40,15 +39,15 @@ class FoxholeNavigationPresentationTest {
                 java.io.File("../app/src/main/kotlin/com/foxhole/beta/ui/FoxholeApp.kt"),
             ).first { file -> file.isFile }.readText()
 
-        // Detail transitions use fast stable slide; root stays instant
-        assertTrue(source.contains("NAV_SLIDE_MS"))
-        assertFalse(source.contains("private fun rootEnter()"))
-        assertFalse(source.contains("private fun rootExit()"))
-        assertFalse(source.contains("DETAIL_ENTER_TRANSITION_MS"))
-        assertFalse(source.contains("DETAIL_EXIT_TRANSITION_MS"))
-        assertFalse(source.contains("ROOT_TRANSITION_MS"))
+        // Detail transitions use FoxholeMotionTokens; no raw pixel constants
+        assertFalse(source.contains("NAV_SLIDE_MS"))
+        assertTrue(source.contains("private fun rootEnter()"))
+        assertTrue(source.contains("private fun rootExit()"))
+        assertTrue(source.contains("DETAIL_ENTER_TRANSITION_MS"))
+        assertTrue(source.contains("DETAIL_EXIT_TRANSITION_MS"))
+        assertTrue(source.contains("ROOT_TRANSITION_MS"))
         assertFalse(source.contains("DETAIL_TRANSITION_OFFSET_FRACTION = 0.14f"))
-        assertFalse(source.contains("DETAIL_TRANSITION_OFFSET_FRACTION = FoxholeMotionTokens.NavigationSlideFraction"))
+        assertTrue(source.contains("DETAIL_TRANSITION_OFFSET_FRACTION = FoxholeMotionTokens.NavigationSlideFraction"))
     }
 
     @Test
@@ -171,14 +170,14 @@ class FoxholeNavigationPresentationTest {
             source.substringAfter("NavHost(")
                 .substringBefore(") {\n                    navigation(")
 
-        // Root transitions are instant; detail transitions use isSettingsDetailRoute gate
+        // Root transitions use fade; detail transitions use isSettingsDetailRoute gate
         assertTrue(navHostBlock.contains("initialState.destination.route.isSettingsDetailRoute() &&"))
         assertTrue(navHostBlock.contains("targetState.destination.route.isSettingsDetailRoute()"))
-        assertTrue(navHostBlock.contains("EnterTransition.None"))
-        assertTrue(navHostBlock.contains("ExitTransition.None"))
-        // No old fade helpers
-        assertFalse(source.contains("detailForwardExit()"))
-        assertFalse(source.contains("detailBackEnter()"))
+        assertFalse(navHostBlock.contains("EnterTransition.None"))
+        assertFalse(navHostBlock.contains("ExitTransition.None"))
+        // Detail transition helpers are present
+        assertTrue(source.contains("detailForwardExit()"))
+        assertTrue(source.contains("detailBackEnter()"))
     }
 
     @Test
