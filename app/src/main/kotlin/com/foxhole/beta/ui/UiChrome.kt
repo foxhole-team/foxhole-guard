@@ -101,6 +101,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.referentialEqualityPolicy
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
@@ -201,6 +202,10 @@ internal class FoxholeTopChromeController {
     fun publish(state: FoxholeTopChromeState) {
         latestState = state
         topChromeView?.applyState(state)
+    }
+
+    fun updateScrimProgress(progress: Float) {
+        topChromeView?.scrimProgressState?.floatValue = progress
     }
 }
 
@@ -491,6 +496,11 @@ private fun BoxScope.FoxholeTopChrome(
                     ),
                 )
             }
+            val latestScrimProgress = rememberUpdatedState(scrimProgress)
+            LaunchedEffect(controller) {
+                snapshotFlow { latestScrimProgress.value() }
+                    .collect { progress -> controller.updateScrimProgress(progress) }
+            }
         }
         return
     }
@@ -558,6 +568,7 @@ internal class FoxholeTopChromeBlurView(
     val onNavigateUpState = mutableStateOf<(() -> Unit)?>(null, referentialEqualityPolicy())
     val actionsState = mutableStateOf<FoxholeTopChromeActions>({}, referentialEqualityPolicy())
     val themeModeState = mutableStateOf(ThemeMode.SYSTEM)
+    val scrimProgressState = mutableFloatStateOf(0f)
 
     init {
         clipChildren = true
@@ -567,23 +578,15 @@ internal class FoxholeTopChromeBlurView(
                 setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
                 setContent {
                     FoxholeTheme(themeMode = themeModeState.value) {
-                        val density = LocalDensity.current
-                        val gradientHeight = with(density) { LocalWindowInfo.current.containerSize.height.toDp() }
-                        Box(
-                            Modifier
-                                .fillMaxSize()
-                                .foxholeAppBackgroundLayer(
-                                    gradientHeight = gradientHeight,
-                                ),
-                        ) {
+                        Box(Modifier.fillMaxSize()) {
                             FoxholeTopChromeContent(
                                 title = titleState.value,
                                 statusTopPadding = statusTopPaddingState.value,
                                 contentTopPadding = contentTopPaddingState.value,
                                 onNavigateUp = onNavigateUpState.value,
                                 actions = actionsState.value,
-                                scrimProgress = { 1f },
-                                drawScrimLayer = false,
+                                scrimProgress = { scrimProgressState.floatValue },
+                                drawScrimLayer = true,
                             )
                         }
                     }
