@@ -422,7 +422,7 @@ private fun TrafficMapHeaderTitleBlock(
                     imageVector = Icons.Outlined.ArrowOutward,
                     contentDescription = stringResource(R.string.traffic_map_open_details),
                     modifier = Modifier.size(TrafficMapTokens.HeaderIconSizeDp.dp),
-                    tint = MaterialTheme.colorScheme.primary,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }

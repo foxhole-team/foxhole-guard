@@ -123,6 +123,8 @@ import com.foxhole.beta.ui.FoxholeScaffold
 import com.foxhole.beta.ui.ScreenHorizontalPadding
 import com.foxhole.beta.ui.ScreenSectionSpacing
 import com.foxhole.beta.ui.ScreenVerticalPadding
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.StateFlow
 
@@ -1093,14 +1095,19 @@ private fun HomeDashboardNetworkCardItem(
             )
         }
     val networkInfoPinnedForProtocolSearch = state.autoConnectRunning || state.protocolMetricsRefreshing
-    LaunchedEffect(networkInfoPinnedForProtocolSearch, state.ipInfo, state.connection.state) {
+    val networkIpTransitionInProgress =
+        state.connection.state in pinnedConnectionStates ||
+            state.ipInfoLoading ||
+            state.ipInfoRefreshReason != null ||
+            state.reconnectInProgress
+    LaunchedEffect(networkInfoPinnedForProtocolSearch, state.ipInfo, state.connection.state, networkIpTransitionInProgress) {
         when {
             networkInfoPinnedForProtocolSearch -> {
                 if (!keepPinnedNetworkInfo) {
                     keepPinnedNetworkInfo = true
                 }
             }
-            state.connection.state in pinnedConnectionStates && state.ipInfo == null && pinnedIpInfo != null -> {
+            networkIpTransitionInProgress && state.ipInfo == null && pinnedIpInfo != null -> {
                 keepPinnedNetworkInfo = true
             }
             state.ipInfo != null -> {
@@ -1797,6 +1804,16 @@ private fun DashboardCardDragContainer(
             blockedDirection = blockedReorderDirection,
             thresholdPx = moveThresholdPx,
         )
+    val dragScaleAnimatable = remember(card) { Animatable(1f) }
+    LaunchedEffect(active) {
+        dragScaleAnimatable.animateTo(
+            targetValue = if (active) DASHBOARD_CARD_ACTIVE_SCALE else 1f,
+            animationSpec = tween(
+                durationMillis = if (active) FoxholeMotionTokens.FastDurationMs else FoxholeMotionTokens.StandardDurationMs,
+                easing = if (active) FoxholeMotionTokens.NavigationIndicatorEasing else FoxholeMotionTokens.NavigationEnterEasing,
+            ),
+        )
+    }
 
     Box(
         modifier =
@@ -1807,7 +1824,7 @@ private fun DashboardCardDragContainer(
                 }
                 .graphicsLayer {
                     translationY = if (active) displayDragOffset else 0f
-                    val scale = if (active) 1.018f else 1f
+                    val scale = dragScaleAnimatable.value
                     scaleX = scale
                     scaleY = scale
                     shape = dragShape
@@ -2105,6 +2122,7 @@ private fun rememberHomeNetworkEmptyStartupSkeleton(
 }
 
 private const val DASHBOARD_CARD_ACTIVE_Z_INDEX = 100f
+private const val DASHBOARD_CARD_ACTIVE_SCALE = 1.018f
 private const val DASHBOARD_CARD_REORDER_THRESHOLD_FRACTION = 0.5f
 private const val DASHBOARD_CARD_EDGE_RESISTANCE_FRACTION = 0.18f
 private const val DASHBOARD_STARTUP_STAGE_EMPTY = 0
