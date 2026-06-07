@@ -245,15 +245,15 @@ class HomePerformanceSourceContractTest {
 
     @Test
     fun `app picker builds one normalized search index per app list`() {
-        val appPickerSource = testSourceFile("RoutingAppScreens.kt").readText()
+        val viewModelSource = testSourceFile("HomeViewModel.kt").readText()
 
-        assertTrue(
-            appPickerSource.contains(
-                "remember(state.installedApps) { buildInstalledAppSearchIndex(state.installedApps) }",
-            ),
-        )
-        assertTrue(appPickerSource.contains("filterIndexedApps(appSearchIndex, query)"))
+        // Index build and filtering are now in filteredPickerAppsFlow — not in composition
+        assertTrue(viewModelSource.contains("buildInstalledAppSearchIndex(apps)"))
+        assertTrue(viewModelSource.contains("filterIndexedApps(buildInstalledAppSearchIndex(apps), query)"))
+        // Ensure the old call-site pattern is not re-introduced in the screen
+        val appPickerSource = testSourceFile("RoutingAppScreens.kt").readText()
         assertFalse(appPickerSource.contains("filterApps(apps, query)"))
+        assertFalse(appPickerSource.contains("buildInstalledAppSearchIndex(state.installedApps)"))
     }
 
     @Test
@@ -285,11 +285,13 @@ class HomePerformanceSourceContractTest {
 
     @Test
     fun `app picker and icon loading expose macrobenchmark trace sections`() {
-        val routingSource = testSourceFile("RoutingAppScreens.kt").readText()
+        val viewModelSource = testSourceFile("HomeViewModel.kt").readText()
         val protocolSource = testSourceFile("ProfileProtocolUi.kt").readText()
 
-        assertTrue(routingSource.contains("traceAppPickerSection(\"AppPicker/filter\")"))
-        assertTrue(routingSource.contains("filterIndexedApps(appSearchIndex, query)"))
+        // Filtering moved to ViewModel with debounce — trace section must be there
+        assertTrue(viewModelSource.contains("Trace.beginSection(\"AppPicker/filter\")"))
+        assertTrue(viewModelSource.contains("filterIndexedApps(buildInstalledAppSearchIndex(apps), query)"))
+        assertTrue(viewModelSource.contains("debounce(150L)"))
         assertTrue(protocolSource.contains("traceAppIconSection(\"AppIcon/load\")"))
         assertTrue(protocolSource.contains("withContext(Dispatchers.IO)"))
     }

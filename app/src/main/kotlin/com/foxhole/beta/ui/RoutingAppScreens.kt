@@ -4,7 +4,7 @@ package com.foxhole.beta.ui
 
 import android.content.ClipData
 import android.content.ClipDescription
-import android.os.Trace
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.draganddrop.dragAndDropSource
@@ -560,8 +560,10 @@ fun AppPickerScreen(
     selectedPackages: List<String>,
     lockedPackages: Set<String>,
     state: RoutingRouteUiState,
+    filteredApps: List<InstalledAppOption>,
     snackbarHostState: SnackbarHostState,
     onNavigateUp: () -> Unit,
+    onQueryChange: (String) -> Unit,
     onSelectionChanged: (List<String>) -> Unit,
 ) {
     var query by rememberSaveable { mutableStateOf("") }
@@ -574,11 +576,11 @@ fun AppPickerScreen(
     val latestOnSelectionChanged by rememberUpdatedState(onSelectionChanged)
     val latestOnNavigateUp by rememberUpdatedState(onNavigateUp)
     val draftSelectionSet = remember(draftSelection) { draftSelection.toSet() }
-    val appSearchIndex = remember(state.installedApps) { buildInstalledAppSearchIndex(state.installedApps) }
-    val filteredApps = remember(appSearchIndex, query, appFilter) {
-        traceAppPickerSection("AppPicker/filter") {
-            filterIndexedApps(appSearchIndex, query)
-                .filter { app -> app.matchesFilter(appFilter) }
+    val displayedApps = remember(filteredApps, appFilter) {
+        if (appFilter == InstalledAppFilter.ALL) {
+            filteredApps
+        } else {
+            filteredApps.filter { app -> app.matchesFilter(appFilter) }
         }
     }
     LaunchedEffect(draftSelection, selectedPackages) {
@@ -611,7 +613,10 @@ fun AppPickerScreen(
         item {
             FoxholeSearchField(
                 value = query,
-                onValueChange = { query = it },
+                onValueChange = {
+                    query = it
+                    onQueryChange(it)
+                },
                 label = stringResource(R.string.search_apps),
                 tag = "routing_apps_picker_search",
             )
@@ -646,7 +651,7 @@ fun AppPickerScreen(
                     body = stringResource(R.string.loading_apps_summary),
                 )
             }
-        } else if (filteredApps.isEmpty()) {
+        } else if (displayedApps.isEmpty()) {
             item {
                 WarningBlock(
                     title = stringResource(R.string.no_matching_apps),
@@ -655,7 +660,7 @@ fun AppPickerScreen(
             }
         }
         items(
-            items = filteredApps,
+            items = displayedApps,
             key = InstalledAppOption::packageName,
             contentType = { "installed-app-row" },
         ) { app ->
@@ -733,15 +738,6 @@ private fun rememberAppPickerPopupsAllowed(onClosePopups: () -> Unit): Boolean {
         }
     }
     return popupsAllowed
-}
-
-private inline fun <T> traceAppPickerSection(name: String, block: () -> T): T {
-    Trace.beginSection(name)
-    return try {
-        block()
-    } finally {
-        Trace.endSection()
-    }
 }
 
 private const val APP_PICKER_SELECTION_SAVE_DEBOUNCE_MS = 350L

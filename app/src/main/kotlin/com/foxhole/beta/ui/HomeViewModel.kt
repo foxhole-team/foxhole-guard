@@ -71,12 +71,15 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.runningFold
 import kotlinx.coroutines.flow.stateIn
@@ -134,6 +137,7 @@ class HomeViewModel(
     internal val recommendedProtocolMutable = MutableStateFlow<ProtocolRecommendationState?>(null)
     internal val runtimeReloadPendingMutable = MutableStateFlow(false)
     internal val runtimeReconnectRequiredMutable = MutableStateFlow(false)
+    private val _appPickerQueryFlow = MutableStateFlow("")
     internal val reconnectInProgressMutable = MutableStateFlow(false)
     internal val torOperationMutable = MutableStateFlow(HomeTorOperationUiState())
     internal val torTransitionPromptMutable = MutableStateFlow<TorTransitionPrompt?>(null)
@@ -899,6 +903,36 @@ class HomeViewModel(
                 SharingStarted.WhileSubscribed(5_000),
                 RoutingRouteUiState(),
             )
+
+    @OptIn(kotlinx.coroutines.FlowPreview::class, kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    val filteredPickerAppsFlow: StateFlow<List<InstalledAppOption>> =
+        combine(
+            appPickerRouteState.map { it.installedApps }.distinctUntilChanged(),
+            _appPickerQueryFlow.debounce(150L).distinctUntilChanged(),
+        ) { apps, query -> apps to query }
+            .mapLatest { (apps, query) ->
+                withContext(Dispatchers.Default) {
+                    android.os.Trace.beginSection("AppPicker/filter")
+                    try {
+                        filterIndexedApps(buildInstalledAppSearchIndex(apps), query)
+                    } finally {
+                        android.os.Trace.endSection()
+                    }
+                }
+            }
+            .stateIn(
+                viewModelScope,
+                SharingStarted.WhileSubscribed(5_000),
+                emptyList(),
+            )
+
+    fun updateAppPickerQuery(query: String) {
+        _appPickerQueryFlow.value = query
+    }
+
+    fun clearAppPickerQuery() {
+        _appPickerQueryFlow.value = ""
+    }
 
     val diagnosticsRouteState: StateFlow<DiagnosticsRouteUiState> =
         combine(

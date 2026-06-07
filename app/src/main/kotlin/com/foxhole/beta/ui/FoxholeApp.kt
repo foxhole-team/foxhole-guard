@@ -650,16 +650,20 @@ fun FoxholeApp(
                     NavigationTransitionTelemetryEffect(AppRoute.ROUTING_APPS_PICKER, navigationTransitionTelemetry)
                     LaunchedEffect(Unit) {
                         viewModel.ensureInstalledAppsLoaded()
+                        viewModel.clearAppPickerQuery()
                     }
                     val state by viewModel.appPickerRouteState.collectAsStateWithLifecycle()
+                    val filteredApps by viewModel.filteredPickerAppsFlow.collectAsStateWithLifecycle()
                     AppPickerScreen(
                         title = stringResource(R.string.app_picker_title),
                         selectionTitle = stringResource(R.string.selected_app_exceptions),
                         selectedPackages = state.settings.expert.selectedPackages,
                         lockedPackages = state.settings.expert.blockedPackages.toSet(),
                         state = state,
+                        filteredApps = filteredApps,
                         snackbarHostState = snackbarHostState,
                         onNavigateUp = navController::navigateUp,
+                        onQueryChange = viewModel::updateAppPickerQuery,
                         onSelectionChanged = viewModel::onSelectedPackagesChanged,
                     )
                 }
@@ -670,16 +674,20 @@ fun FoxholeApp(
                     )
                     LaunchedEffect(Unit) {
                         viewModel.ensureInstalledAppsLoaded()
+                        viewModel.clearAppPickerQuery()
                     }
                     val state by viewModel.appPickerRouteState.collectAsStateWithLifecycle()
+                    val filteredApps by viewModel.filteredPickerAppsFlow.collectAsStateWithLifecycle()
                     AppPickerScreen(
                         title = stringResource(R.string.blocked_app_exceptions),
                         selectionTitle = stringResource(R.string.blocked_app_exceptions),
                         selectedPackages = state.settings.expert.blockedPackages,
                         lockedPackages = state.settings.expert.selectedPackages.toSet(),
                         state = state,
+                        filteredApps = filteredApps,
                         snackbarHostState = snackbarHostState,
                         onNavigateUp = navController::navigateUp,
+                        onQueryChange = viewModel::updateAppPickerQuery,
                         onSelectionChanged = viewModel::onBlockedPackagesChanged,
                     )
                 }
@@ -690,16 +698,20 @@ fun FoxholeApp(
                     )
                     LaunchedEffect(Unit) {
                         viewModel.ensureInstalledAppsLoaded()
+                        viewModel.clearAppPickerQuery()
                     }
                     val state by viewModel.appPickerRouteState.collectAsStateWithLifecycle()
+                    val filteredApps by viewModel.filteredPickerAppsFlow.collectAsStateWithLifecycle()
                     AppPickerScreen(
                         title = stringResource(R.string.privacy_route_selected_apps_title),
                         selectionTitle = stringResource(R.string.privacy_route_selected_apps_title),
                         selectedPackages = state.settings.privacyRoute.selectedPackages,
                         lockedPackages = emptySet(),
                         state = state,
+                        filteredApps = filteredApps,
                         snackbarHostState = snackbarHostState,
                         onNavigateUp = navController::navigateUp,
+                        onQueryChange = viewModel::updateAppPickerQuery,
                         onSelectionChanged = viewModel::onPrivacyRouteSelectedPackagesConfigured,
                     )
                 }
@@ -707,16 +719,20 @@ fun FoxholeApp(
                     NavigationTransitionTelemetryEffect(AppRoute.DNS_APPS_PICKER, navigationTransitionTelemetry)
                     LaunchedEffect(Unit) {
                         viewModel.ensureInstalledAppsLoaded()
+                        viewModel.clearAppPickerQuery()
                     }
                     val state by viewModel.appPickerRouteState.collectAsStateWithLifecycle()
+                    val filteredApps by viewModel.filteredPickerAppsFlow.collectAsStateWithLifecycle()
                     AppPickerScreen(
                         title = stringResource(R.string.dns_per_app_bypass_title),
                         selectionTitle = stringResource(R.string.dns_per_app_bypass_title),
                         selectedPackages = state.settings.dns.appBypassPackages,
                         lockedPackages = emptySet(),
                         state = state,
+                        filteredApps = filteredApps,
                         snackbarHostState = snackbarHostState,
                         onNavigateUp = navController::navigateUp,
+                        onQueryChange = viewModel::updateAppPickerQuery,
                         onSelectionChanged = viewModel::onDnsBypassPackagesChanged,
                     )
                 }
