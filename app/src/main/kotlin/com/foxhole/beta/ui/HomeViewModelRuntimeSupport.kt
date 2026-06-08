@@ -813,6 +813,11 @@ private fun Profile.runtimeProtocolHint(protocolOptionId: String?) =
         )?.protocolHint ?: protocolHint
 
 internal fun HomeViewModel.invalidateIpInfoRefreshesInternal(): Long {
+    // A pending foreground refresh sits in its start delay before calling startIpInfoRefresh();
+    // it must be cancelled here too, otherwise it can fetch and publish an IP after an explicit
+    // invalidate and silently overwrite the current network state.
+    foregroundRefreshJob?.cancel()
+    foregroundRefreshJob = null
     connectedIpRefreshJob?.cancel()
     connectedIpRefreshJob = null
     ipInfoRefreshJob?.cancel()
