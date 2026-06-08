@@ -486,7 +486,8 @@ internal fun HomeScreen(
                                                     Modifier
                                                 },
                                             )
-                                            .dashboardCardZIndex(activeReorderCard, DashboardCard.TRAFFIC),
+                                            .dashboardCardZIndex(activeReorderCard, DashboardCard.TRAFFIC)
+                                            .testTag("home_traffic_card"),
                                     card = DashboardCard.TRAFFIC,
                                     activeCard = activeReorderCard,
                                     onActiveCardChange = ::updateActiveReorderCard,

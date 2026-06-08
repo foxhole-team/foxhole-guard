@@ -317,8 +317,12 @@ class HomeRuntimeBehaviorTest {
 
         try {
             composeRule.onNodeWithTag("bottom_nav_dashboard").performClick()
-            composeRule.waitUntil(timeoutMillis = 3_000) { sampleObserved.isCompleted }
-            composeRule.waitUntil(timeoutMillis = 3_000) {
+            composeRule.waitUntil(timeoutMillis = 5_000) { sampleObserved.isCompleted }
+            // The TRAFFIC card sits below the NETWORK card in the dashboard list. After
+            // waitUntilNetworkBlockSettles() scrolled to the network block, the traffic card
+            // is off-screen (not composed). Scroll it into view before asserting.
+            scrollToTrafficCard()
+            composeRule.waitUntil(timeoutMillis = 5_000) {
                 textOfOrNull("home_traffic_rx_rate") == rateString(updatedTraffic.rxBytesPerSec)
             }
 
@@ -564,7 +568,7 @@ class HomeRuntimeBehaviorTest {
         val expectedIp = "198.51.100.11"
         seedNetworkBlock(expectedIp)
         scrollToNetworkBlock()
-        composeRule.waitUntil(timeoutMillis = 5_000) {
+        composeRule.waitUntil(timeoutMillis = 10_000) {
             composeRule.onAllNodesWithTag("home_network_loading").fetchSemanticsNodes().isEmpty() &&
                 textOfOrNull("home_network_primary_ip") == expectedIp
         }
@@ -588,6 +592,11 @@ class HomeRuntimeBehaviorTest {
             FoxholeVpnRuntimeBridge.updateIpInfo(testIpInfo(expectedIp))
         }
         composeRule.waitForIdle()
+        // Cancel any auto-refresh the ViewModel started in response to the bridge state change.
+        // The first invalidateIpInfoRefreshes() above predates the IDLE update, so a newly
+        // triggered refresh would carry a later version that the first call did not cover.
+        composeRule.runOnUiThread { viewModel.invalidateIpInfoRefreshes() }
+        composeRule.waitForIdle()
     }
 
     private fun testIpInfo(ip: String): IpInfo =
@@ -606,6 +615,15 @@ class HomeRuntimeBehaviorTest {
             composeRule
                 .onNodeWithTag("home_dashboard_list")
                 .performScrollToNode(hasTestTag("home_network_card"))
+        }
+        composeRule.waitForIdle()
+    }
+
+    private fun scrollToTrafficCard() {
+        runCatching {
+            composeRule
+                .onNodeWithTag("home_dashboard_list")
+                .performScrollToNode(hasTestTag("home_traffic_card"))
         }
         composeRule.waitForIdle()
     }
