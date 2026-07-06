@@ -37,7 +37,7 @@ jobs:
     timeout-minutes: 50
     steps:
       - name: checkout
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
         with:
           submodules: recursive
 
@@ -89,7 +89,7 @@ jobs:
     timeout-minutes: 25
     steps:
       - name: checkout
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
         with:
           submodules: recursive
 
@@ -115,7 +115,7 @@ jobs:
     timeout-minutes: 70
     steps:
       - name: checkout
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
         with:
           submodules: recursive
 
@@ -175,7 +175,7 @@ jobs:
           echo "hw.cpu.ncore=2" >> "$ANDROID_AVD_HOME/foxhole-ci.avd/config.ini"
 
       - name: run emulator tests
-        uses: ReactiveCircus/android-emulator-runner@e89f39f1abbbd05b1113a29cf4db69e7540cae5a
+        uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
         env:
           FOXHOLE_REQUIRED_CONNECTED_TEST_SPECS: ${{ github.event_name == 'pull_request' && 'com.foxhole.beta.ui.HomeScreenTest#opensSettingsFromBottomNavigation,com.foxhole.beta.ui.HomeScreenTest#opensProfilesFromHomeAction,com.foxhole.beta.ui.LiveLogsDialogTest' || '' }}
           FOXHOLE_STRICT_RELEASE_MACROBENCHMARK: ${{ (github.event_name == 'schedule' || github.ref == 'refs/heads/main') && '1' || '0' }}

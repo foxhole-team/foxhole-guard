@@ -28,7 +28,7 @@ jobs:
     timeout-minutes: 70
     steps:
       - name: checkout
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
         with:
           submodules: recursive
 
@@ -82,7 +82,7 @@ jobs:
           echo "hw.cpu.ncore=2" >> "$ANDROID_AVD_HOME/foxhole-release-ci.avd/config.ini"
 
       - name: run release emulator gates
-        uses: ReactiveCircus/android-emulator-runner@e89f39f1abbbd05b1113a29cf4db69e7540cae5a
+        uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
         env:
           FOXHOLE_EXTRA_CONNECTED_TEST_SPECS: com.foxhole.beta.vpn.TorRuntimeInstallerDeviceTest,com.foxhole.beta.vpn.DnsFilterAssetInstallerDeviceTest,com.foxhole.beta.vpn.VpnRuntimeSmokeTest
           FOXHOLE_LIVE_VPN_SMOKE: 1
@@ -125,7 +125,7 @@ jobs:
       EXPECTED_RELEASE_CERT_SHA256: fcbf14862040fbe26726f06f3016ec3b027d8431c76cb4c25c13c5a06837177c
     steps:
       - name: checkout
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
 
       - name: setup android libbox build
         uses: ./.github/actions/setup-android-libbox
@@ -291,7 +291,7 @@ jobs:
             ${{ steps.release_apk.outputs.asset_dir }}/*
 
       - name: attest release artifacts
-        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be
+        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373
         with:
           subject-path: ${{ steps.release_apk.outputs.asset_dir }}/*
 
