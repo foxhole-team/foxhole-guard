@@ -1,0 +1,62 @@
+.DS_Store
+.gradle/
+.kotlin/
+.idea/
+.playwright-cli/
+*.iml
+build/
+# i2pd keeps its CMake sources under build/ (upstream layout), so the generic build/ ignore above
+# would swallow them; keep the vendored source tree (its own .gitignore still drops generated output).
+!/third_party/i2pd/build/
+app/.cxx/
+captures/
+local.properties
+app/build/
+app/libs/
+# Built from source by scripts/build-i2pd.sh (policy: no prebuilt binaries in git).
+app/src/main/jniLibs/
+# Internal working artifacts and notes, not part of the shipped app.
+dev/
+TODO.md
+task_new.md
+output/
+artifacts/
+repo/
+.tmp/
+tmp/
+srclibs/
+.foxcore-src/
+*.keystore
+*.jks
+# The release keystore is PKCS12 (app/build.gradle.kts storeType), so the two patterns
+# above never covered the file this project actually signs with.
+*.p12
+*.pfx
+*.pem
+*.key
+keystore.properties
+*signing*.properties
+google-services.json
+*.log
+*.apk
+*.apks
+*.aab
+*.idsig
+bugreport-*.zip
+
+# Local scratch images, not part of the project.
+media/scratch/
+core/*/bin/
+.serena/
+.project
+.classpath
+.settings/
+
+# Push runbook is operator-internal, never ships publicly.
+docs/PUSH-PLAN.md
+PUSH-PLAN.md
+
+# Tor pluggable transports are build output of scripts/build-tor-transports.sh
+# (policy: no prebuilt binaries in git; Android W^X forbids fetching them at runtime).
+app/src/main/assets/tor/*/tor/pluggable_transports/lyrebird
+app/src/main/assets/tor/*/tor/pluggable_transports/conjure-client

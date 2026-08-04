@@ -1,0 +1,302 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "public_beta_*"
+      - "v*.*.*-*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      EXPECTED_RELEASE_CERT_SHA256: fcbf14862040fbe26726f06f3016ec3b027d8431c76cb4c25c13c5a06837177c
+    steps:
+      - name: checkout
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
+
+      # Builds the FoxCore native runtime from source: the core repository is checked
+      # out at the revision pinned in config/foxcore-revision.txt, the Rust toolchain
+      # comes from the core's rust-toolchain.toml, and cargo-ndk drives the Android
+      # cross-build. FOXCORE_READ_TOKEN is optional — the core repository is public.
+      - name: setup Android and FoxCore build
+        uses: ./.github/actions/setup-foxcore
+        with:
+          core-repository: ${{ vars.FOXCORE_REPO || 'foxhole-team/foxhole-guard-rust-core' }}
+          core-token: ${{ secrets.FOXCORE_READ_TOKEN }}
+
+      - name: prepare release signing inputs
+        shell: bash
+        env:
+          FOXHOLE_RELEASE_STORE_FILE_B64: ${{ secrets.FOXHOLE_RELEASE_STORE_FILE_B64 }}
+          FOXHOLE_RELEASE_STORE_PASSWORD: ${{ secrets.FOXHOLE_RELEASE_STORE_PASSWORD }}
+          FOXHOLE_RELEASE_KEY_ALIAS: ${{ secrets.FOXHOLE_RELEASE_KEY_ALIAS }}
+          FOXHOLE_RELEASE_KEY_PASSWORD: ${{ secrets.FOXHOLE_RELEASE_KEY_PASSWORD }}
+          FOXHOLE_RELEASE_STORE_TYPE: ${{ secrets.FOXHOLE_RELEASE_STORE_TYPE }}
+        run: |
+          set -euo pipefail
+          missing=()
+          for secret_name in \
+            FOXHOLE_RELEASE_STORE_FILE_B64 \
+            FOXHOLE_RELEASE_STORE_PASSWORD \
+            FOXHOLE_RELEASE_KEY_ALIAS \
+            FOXHOLE_RELEASE_KEY_PASSWORD
+          do
+            if [[ -z "${!secret_name:-}" ]]; then
+              missing+=("$secret_name")
+            fi
+          done
+          if (( ${#missing[@]} > 0 )); then
+            printf 'Release signing secrets are required. Missing: %s\n' "${missing[*]}" >&2
+            exit 1
+          fi
+          keystore_path="$RUNNER_TEMP/foxhole-release.p12"
+          if ! printf '%s' "$FOXHOLE_RELEASE_STORE_FILE_B64" | base64 --decode > "$keystore_path"; then
+            echo "FOXHOLE_RELEASE_STORE_FILE_B64 is not valid base64" >&2
+            exit 1
+          fi
+          chmod 600 "$keystore_path"
+          {
+            echo "FOXHOLE_RELEASE_STORE_FILE=$keystore_path"
+            echo "FOXHOLE_RELEASE_STORE_PASSWORD=$FOXHOLE_RELEASE_STORE_PASSWORD"
+            echo "FOXHOLE_RELEASE_KEY_ALIAS=$FOXHOLE_RELEASE_KEY_ALIAS"
+            echo "FOXHOLE_RELEASE_KEY_PASSWORD=$FOXHOLE_RELEASE_KEY_PASSWORD"
+            echo "FOXHOLE_RELEASE_STORE_TYPE=${FOXHOLE_RELEASE_STORE_TYPE:-PKCS12}"
+          } >> "$GITHUB_ENV"
+
+      - name: release quality gates
+        run: ./gradlew --no-daemon --console=plain --stacktrace detekt verifyDetektBaseline lintDebug lintRelease lintVitalRelease testDebugUnitTest jacocoDebugUnitTestReport jacocoDebugUnitTestCoverageVerification verifyReleaseBuildConfigDefaults
+
+      - name: verify pinned FoxCore workspace
+        working-directory: .foxcore-src
+        run: |
+          cargo "+${FOXCORE_RUST_TOOLCHAIN:?}" fmt --all -- --check
+          cargo "+${FOXCORE_RUST_TOOLCHAIN:?}" test --workspace --all-targets --locked
+          cargo "+${FOXCORE_RUST_TOOLCHAIN:?}" clippy --workspace --all-targets --locked -- -D warnings
+
+      - name: mandatory dependency vulnerability scan
+        run: scripts/run-osv-source-scan.sh
+
+      # The public beta ships arm64-v8a only (owner decision): the default
+      # foxhole.abis in app/build.gradle.kts is arm64-v8a, so the split build
+      # produces the arm64-v8a APK plus a universal APK with the same arm64 payload.
+      - name: build release
+        run: ./gradlew --no-daemon --console=plain --stacktrace -Pfoxhole.splitApks=true :app:validateReleaseSigningInputs assembleRelease verifyReleaseBuildConfigDefaults
+
+      - name: verify AdGuard DNS assets in release APKs
+        run: scripts/verify-adguard-dns-assets.sh app/build/outputs/apk/release/*.apk
+
+      - name: generate sbom
+        run: ./gradlew --no-daemon --console=plain --stacktrace cyclonedxBom -Pfoxhole.sbom=true
+
+      - name: public release preflight
+        shell: bash
+        env:
+          FOXHOLE_LAST_UPLOADED_VERSION_CODE: ${{ vars.FOXHOLE_LAST_UPLOADED_VERSION_CODE }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$FOXHOLE_LAST_UPLOADED_VERSION_CODE" ]]; then
+            echo "Repository variable FOXHOLE_LAST_UPLOADED_VERSION_CODE is required for public release preflight." >&2
+            exit 1
+          fi
+          if [[ ! "$FOXHOLE_LAST_UPLOADED_VERSION_CODE" =~ ^[1-9][0-9]*$ ]]; then
+            echo "FOXHOLE_LAST_UPLOADED_VERSION_CODE must be a positive integer; got an invalid repository variable value." >&2
+            exit 1
+          fi
+          ./gradlew \
+            --no-daemon \
+            --console=plain \
+            --stacktrace \
+            -Pfoxhole.sbom=true \
+            "-Pfoxhole.lastUploadedVersionCode=$FOXHOLE_LAST_UPLOADED_VERSION_CODE" \
+            :app:bundlePublicRelease \
+            :app:publicReleasePreflight
+
+      - name: upload public release bundle and symbols
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: public-release-bundle-${{ github.ref_name }}
+          if-no-files-found: error
+          path: |
+            app/build/outputs/bundle/publicRelease/*.aab
+            app/build/outputs/mapping/publicRelease/mapping.txt
+            app/build/outputs/native-debug-symbols/publicRelease/publicRelease-native-symbols.zip
+
+      - name: verify signed release APKs
+        id: release_apk
+        shell: bash
+        run: |
+          set -euo pipefail
+          apks=()
+          while IFS= read -r apk; do
+            apks+=("$apk")
+          done < <(find app/build/outputs/apk/release -maxdepth 1 -type f -name '*.apk' | sort)
+          # arm64-v8a only for the public beta: the ABI split plus the universal
+          # APK that carries the same arm64 payload.
+          if [[ "${#apks[@]}" -ne 2 ]]; then
+            printf 'Expected exactly two release APKs (arm64-v8a and universal), found %s:\n' "${#apks[@]}" >&2
+            if [[ "${#apks[@]}" -gt 0 ]]; then
+              printf ' - %s\n' "${apks[@]}" >&2
+            fi
+            exit 1
+          fi
+
+          for required_pattern in '*arm64-v8a*.apk' '*universal*.apk'; do
+            matches=()
+            while IFS= read -r matching_apk; do
+              matches+=("$matching_apk")
+            done < <(
+              find app/build/outputs/apk/release \
+                -maxdepth 1 \
+                -type f \
+                -name "$required_pattern" |
+                sort
+            )
+            if [[ "${#matches[@]}" -ne 1 || ! -f "${matches[0]}" ]]; then
+              echo "Expected exactly one release APK matching $required_pattern" >&2
+              printf 'Found APKs:\n' >&2
+              printf ' - %s\n' "${apks[@]}" >&2
+              exit 1
+            fi
+          done
+
+          apksigner="$ANDROID_SDK_ROOT/build-tools/37.0.0/apksigner"
+          if [[ ! -x "$apksigner" ]]; then
+            apksigner="$(find "$ANDROID_SDK_ROOT/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
+          fi
+          if [[ -z "${apksigner:-}" || ! -x "$apksigner" ]]; then
+            echo "apksigner not found under $ANDROID_SDK_ROOT/build-tools" >&2
+            exit 1
+          fi
+
+          expected_cert_sha256="$(printf '%s' "$EXPECTED_RELEASE_CERT_SHA256" | tr -d ':' | tr '[:upper:]' '[:lower:]')"
+          asset_dir="$RUNNER_TEMP/release-apks"
+          mkdir -p "$asset_dir"
+          cert_report="$asset_dir/release-certs.txt"
+          : > "$cert_report"
+          for apk_path in "${apks[@]}"; do
+            apk_name="$(basename "$apk_path")"
+            if [[ "$apk_name" == *unsigned* ]]; then
+              echo "Refusing to publish unsigned release output: $apk_name" >&2
+              exit 1
+            fi
+            current_cert_report="$RUNNER_TEMP/${apk_name}.certs.txt"
+            "$apksigner" verify --print-certs "$apk_path" | tee "$current_cert_report"
+            cat "$current_cert_report" >> "$cert_report"
+            actual_cert_sha256="$(
+              awk -F': ' '/certificate SHA-256 digest/ { print $NF; exit }' "$current_cert_report" |
+                tr -d ':' |
+                tr '[:upper:]' '[:lower:]'
+            )"
+            if [[ -z "$actual_cert_sha256" ]]; then
+              echo "Could not read signing certificate SHA-256 digest from apksigner output for $apk_name" >&2
+              exit 1
+            fi
+            if [[ "$actual_cert_sha256" != "$expected_cert_sha256" ]]; then
+              echo "Release signing certificate mismatch for $apk_name" >&2
+              echo "Expected: $expected_cert_sha256" >&2
+              echo "Actual:   $actual_cert_sha256" >&2
+              exit 1
+            fi
+            case "$apk_name" in
+              *arm64-v8a*) asset_name="Foxhole-${GITHUB_REF_NAME}-arm64-v8a-release.apk" ;;
+              *universal*) asset_name="Foxhole-${GITHUB_REF_NAME}-universal-release.apk" ;;
+              *)
+                echo "Unexpected release APK name: $apk_name" >&2
+                exit 1
+                ;;
+            esac
+            cp "$apk_path" "$asset_dir/$asset_name"
+          done
+          sbom_path="$(find build/reports -type f -name '*.json' | sort | head -n 1)"
+          if [[ -n "$sbom_path" && -f "$sbom_path" ]]; then
+            cp "$sbom_path" "$asset_dir/Foxhole-${GITHUB_REF_NAME}-sbom.cdx.json"
+          else
+            echo "CycloneDX SBOM JSON was not generated under build/reports" >&2
+            exit 1
+          fi
+          (
+            cd "$asset_dir"
+            release_apks=("Foxhole-${GITHUB_REF_NAME}-"*.apk)
+            sha256sum \
+              "${release_apks[@]}" \
+              "Foxhole-${GITHUB_REF_NAME}-sbom.cdx.json" \
+              release-certs.txt \
+              > SHA256SUMS
+          )
+          # The in-app updater orders releases by versionCode and verifies the APK digest before it
+          # reaches the installer, so both travel as a manifest asset rather than being parsed out
+          # of the tag name.
+          (
+            cd "$asset_dir"
+            arm64_apk="Foxhole-${GITHUB_REF_NAME}-arm64-v8a-release.apk"
+            apk_sha256="$(sha256sum "$arm64_apk" | cut -d' ' -f1)"
+            version_code="$(grep -oE '^ *versionCode = [0-9]+' "$GITHUB_WORKSPACE/app/build.gradle.kts" | grep -oE '[0-9]+' | head -n1)"
+            [[ -n "$version_code" ]] || { echo "could not read versionCode" >&2; exit 1; }
+            cat > update-manifest.json <<MANIFEST
+          {
+            "versionCode": $version_code,
+            "versionName": "${GITHUB_REF_NAME#v}",
+            "apkName": "$arm64_apk",
+            "apkSha256": "$apk_sha256",
+            "notes": "See the release notes on GitHub."
+          }
+          MANIFEST
+          )
+          echo "Release APK SHA-256 sums:"
+          cat "$asset_dir/SHA256SUMS"
+          echo "Signing cert SHA-256: $expected_cert_sha256"
+          {
+            echo "asset_dir=$asset_dir"
+            echo "sha256sums_path=$asset_dir/SHA256SUMS"
+            echo "cert_sha256=$expected_cert_sha256"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: upload release artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: release-apks-${{ github.ref_name }}
+          path: |
+            ${{ steps.release_apk.outputs.asset_dir }}/*
+
+      - name: attest release artifacts
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be
+        with:
+          subject-path: ${{ steps.release_apk.outputs.asset_dir }}/*
+
+      - name: publish github release
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          asset_dir="${{ steps.release_apk.outputs.asset_dir }}"
+          assets=("$asset_dir"/*.apk "$asset_dir"/*.cdx.json "$asset_dir/SHA256SUMS" "$asset_dir/release-certs.txt" "$asset_dir/update-manifest.json")
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release view "$GITHUB_REF_NAME" --json assets -q '.assets[].name' |
+              while IFS= read -r asset_name; do
+                case "$asset_name" in
+                  "Foxhole-${GITHUB_REF_NAME}-"*.apk|"Foxhole-${GITHUB_REF_NAME}-"*.cdx.json|SHA256SUMS|release-certs.txt|update-manifest.json)
+                    gh release delete-asset "$GITHUB_REF_NAME" "$asset_name" --yes
+                  ;;
+                esac
+              done
+            gh release upload "$GITHUB_REF_NAME" "${assets[@]}" --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" "${assets[@]}" --title "$GITHUB_REF_NAME" --generate-notes
+          fi

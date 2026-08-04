@@ -1,0 +1,114 @@
+Disabled: Source repository is not public yet; keep F-Droid metadata disabled until GitHub source can be cloned anonymously.
+
+Categories:
+  - VPN & Proxy
+  - Security
+License: GPL-3.0-or-later
+AuthorName: Foxhole
+SourceCode: https://github.com/foxhole-team/foxhole-guard
+IssueTracker: https://github.com/foxhole-team/foxhole-guard/issues
+
+AutoName: FoxHole Guard
+Summary: Privacy and protection - VPN, Tor, firewall, DNS filtering, no telemetry
+Description: |
+  FoxHole Guard is a privacy and device-protection app for Android. It
+  combines an encrypted VPN tunnel, Tor routing, a local firewall, DNS
+  filtering, and on-device security monitoring in one app - with no ads,
+  no analytics, and no telemetry. It is more than a VPN client: the
+  firewall, DNS protection, and Tor work even without a VPN profile, and
+  every analysis runs locally on the device. Connections run through the
+  native Rust FoxCore runtime; TLS verification is strict by default, and configs that
+  require insecure TLS need explicit per-profile consent.
+
+  What it protects and how:
+  - Traffic privacy: the VPN tunnel encrypts device traffic and replaces
+    the public IP address with the server address.
+  - Anonymity: Tor routing sends TCP traffic from selected apps, or the
+    whole device, through the Tor network - inside the VPN tunnel or on
+    its own without a VPN profile.
+  - Network control: the local firewall blocks internet access for
+    selected apps, keeps a connection journal, and feeds the live
+    traffic map, with or without a VPN.
+  - DNS hygiene: the DNS filter blocks ads, trackers, telemetry, and
+    malicious domains; system DNS protection works without a VPN profile.
+  - Device security: the new app monitor flags risky capabilities of new
+    apps, quarantine blocks new apps until access is allowed, and
+    anomaly analysis reports unusual traffic.
+
+  Key features:
+  - VPN tunnel and local protection modes
+  - Split tunnel for apps and domains
+  - Tor routing for selected apps or the entire device (TCP only)
+  - Local firewall with per-app blocking and quarantine for new apps
+  - Local DNS filtering with per-app and per-domain exceptions
+  - New app monitor with installer source and risk signals
+  - Anomaly analysis of local traffic
+  - Live traffic map with destination countries
+  - LAN proxy over Wi-Fi with proxy authentication
+  - Domain-based routing rules
+  - Import from files, clipboard, QR codes, and HTTPS subscriptions
+  - Smart Config with on-device auto-connect that ranks eligible
+    options, tries the recommended protocol first, validates it, and
+    falls back only after failure
+  - Local traffic statistics and subscription expiration display
+  - Encrypted local profile storage
+  - No ads, no analytics, no telemetry
+
+  Permission and privacy note:
+  - QUERY_ALL_PACKAGES is used to show installed apps for split tunnel
+    routing, firewall rules, DNS exceptions, the local installed-app
+    overview, and optional per-app traffic statistics.
+  - Usage Access (PACKAGE_USAGE_STATS) is requested only when per-app
+    traffic statistics are enabled.
+  - Package lists, local risk signals, traffic statistics, diagnostics,
+    and auto-connect history stay on the device unless explicitly
+    exported or shared.
+
+  Supported protocols:
+  - VLESS
+  - Trojan
+  - Shadowsocks
+  - VMess
+  - Hysteria2
+  - WireGuard
+  - Outline
+  - Naive
+  - TUIC
+  - AnyTLS
+
+  Release status:
+  - This is the 1.1.0-beta5 public beta of FoxHole Guard (versionCode 68).
+
+RepoType: git
+Repo: https://github.com/foxhole-team/foxhole-guard.git
+
+# The Gradle build refuses to configure without the FoxCore sources beside the
+# checkout (app/build.gradle.kts requires <core>/Cargo.toml) and compiles the
+# .so itself via <core>/scripts/android-build.sh. F-Droid runs Gradle offline,
+# so the Rust toolchain and every crate must be fetched before that step. This
+# recipe has NOT been validated on the F-Droid buildserver — it is unusable
+# until the sources are public, and must be run through `fdroid build` once the
+# repositories exist.
+Builds:
+  - versionName: '1.1.0-beta5'
+    versionCode: 68
+    commit: v1.1.0-beta5
+    submodules: false
+    sudo:
+      - curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs -o /tmp/rustup.sh
+      - sh /tmp/rustup.sh -y --default-toolchain 1.97.1 --profile minimal
+      - /root/.cargo/bin/cargo install cargo-ndk --version 4.1.2 --locked
+    prebuild:
+      # Pinned in config/foxcore-revision.txt; the path is where build.gradle.kts
+      # looks when FOXCORE_SOURCE_ROOT is unset.
+      - git clone https://github.com/foxhole-team/foxhole-core.git ../foxhole-guard-rust-core
+      - git -C ../foxhole-guard-rust-core checkout "$(cat config/foxcore-revision.txt)"
+      - cargo fetch --locked --manifest-path ../foxhole-guard-rust-core/Cargo.toml
+    gradle:
+      - yes
+    output: app/build/outputs/apk/release/app-release-unsigned.apk
+
+AutoUpdateMode: None
+UpdateCheckMode: None
+CurrentVersion: '1.1.0-beta5'
+CurrentVersionCode: 68

@@ -1,0 +1,11 @@
+Public beta 1.0 — first Foxhole Guard beta.
+
+- Status prints into the terminal instead of a modal
+- Protocol table: test/ping/latency/status per protocol
+- Rebuilt statistics screen with its own settings sheet
+- I2P no longer sticks on "connecting"
+- LAN proxy now always requires authentication
+
+Not ready yet: private file sharing is a placeholder screen, and the SENTINEL threat-intel feed ships dormant (no hosted feed).
+
+VPN profiles needing route excludes require Android 13 or newer.

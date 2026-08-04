@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?><!--
+    Флаги стран резолвятся динамически по ISO2-коду (CliFlagIcon ->
+    getIdentifier("flag_" + code)) — статических ссылок R.drawable.flag_* нет,
+    и release-шринкер выкидывал весь набор. Явный keep по маске.
+-->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@drawable/flag_*" />

@@ -1,0 +1,7 @@
+Release UI polish:
+• terminal and notifications fully localized;
+• localized titles in the signature pixel style;
+• page-flip profile picker on home, confirmations slide up from the bottom;
+• icons and geo flags in profiles, adaptive smart-profile table;
+• card-deck help, refreshed widgets with a live config preview;
+• cleaner statistics: Tor no longer shows up as a VPN profile.

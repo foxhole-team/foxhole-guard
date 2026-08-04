@@ -1,0 +1,10 @@
+vless://00000000-0000-4000-8000-000000000001@smart.example.com:8443?type=tcp&headerType=none&security=reality&encryption=none&sni=sni.example.com&fp=chrome&pbk=SampleRealityPublicKey000000000000000000000&sid=0123456789abcdef&spx=%2F&packetEncoding=xudp&mux=false#foxhole-sample-vless
+hysteria2://sample-hy2-password-0000000000000000@smart.example.com:8444/?sni=smart.example.com#foxhole-sample-hy2
+vmess://eyJhZGQiOiJzbWFydC5leGFtcGxlLmNvbSIsImFpZCI6IjAiLCJob3N0IjoiIiwiaWQiOiIwMDAwMDAwMC0wMDAwLTQwMDAtODAwMC0wMDAwMDAwMDAwMDIiLCJuZXQiOiJ0Y3AiLCJwYXRoIjoiIiwicG9ydCI6Ijg0NTEiLCJwcyI6ImZveGhvbGUtc2FtcGxlLXZtZXNzIiwic2N5IjoiYXV0byIsInRscyI6IiIsInR5cGUiOiJub25lIiwidiI6IjIifQ==
+trojan://sample-trojan-password-000000000000@smart.example.com:8445?security=tls&sni=smart.example.com&allowInsecure=0#foxhole-sample-trojan
+naive+https://sample-naive-user:sample-naive-password-000000000@smart.example.com:8449#foxhole-sample-naive
+ss://YWVzLTI1Ni1nY206c2FtcGxlLW91dGxpbmUtcGFzc3dvcmQtMDAwMDAwMDAwMDAw@smart.example.com:8446/?outline=1#foxhole-sample-outline
+ss://MjAyMi1ibGFrZTMtYWVzLTI1Ni1nY206VTJGdGNHeGxVMlZ5ZG1WeVVITnJNREF3TURBd01EQXdNREF3TURBd01EQXdNREE9OlUyRnRjR3hsVlhObGNsQnphekF3TURBd01EQXdNREF3TURBd01EQXdNREF3TURBPQ==@smart.example.com:8447#foxhole-sample-ss2022
+ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpzYW1wbGUtY2hhY2hhLXBhc3N3b3JkLTAwMDAwMDAwMDAwMDA@smart.example.com:8448/?outline=1#foxhole-sample-outline-chacha
+tg://proxy?server=smart.example.com&port=8450&secret=00112233445566778899aabbccddeeff00
+wireguard://U2FtcGxlV2lyZUd1YXJkUHJpdmF0ZUtleTAwMDAwMDA%3D@smart.example.com:51820?publickey=U2FtcGxlV2lyZUd1YXJkUHVibGljS2V5MDAwMDAwMDA%3D&address=10.66.0.2%2F32&allowed_ips=0.0.0.0%2F0&keepalive=25&dns=1.1.1.1%2C1.0.0.1&mtu=1380#foxhole-sample-wireguard

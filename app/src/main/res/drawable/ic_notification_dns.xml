@@ -1,0 +1,11 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- Защита DNS: щит + узел-резолвер (кольцо-вырез, точка снова залита через evenOdd). -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:fillType="evenOdd"
+        android:pathData="M12,2L20,5.2V11.2C20,16.4 16.6,20.3 12,22C7.4,20.3 4,16.4 4,11.2V5.2L12,2ZM12,7.2A4.4,4.4 0 1,0 12,16A4.4,4.4 0 1,0 12,7.2ZM12,9.8A1.8,1.8 0 1,0 12,13.4A1.8,1.8 0 1,0 12,9.8Z" />
+</vector>

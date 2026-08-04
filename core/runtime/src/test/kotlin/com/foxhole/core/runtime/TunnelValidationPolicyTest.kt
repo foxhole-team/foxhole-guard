@@ -1,0 +1,185 @@
+package com.foxhole.core.runtime
+
+import com.foxhole.core.model.ProtocolHint
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+class TunnelValidationPolicyTest {
+    @Test
+    fun `accepts vpn-bound reachability probes as tunnel validation`() {
+        assertTrue(acceptsTunnelValidationProbe(TunnelValidationProbeKind.VPN_IP_REFRESH))
+        assertTrue(acceptsTunnelValidationProbe(TunnelValidationProbeKind.VPN_VALIDATION_ENDPOINT))
+        assertFalse(acceptsTunnelValidationProbe(TunnelValidationProbeKind.VALIDATED_VPN_LITERAL_IP_ENDPOINT))
+        assertFalse(acceptsTunnelValidationProbe(TunnelValidationProbeKind.TUNNEL_RUNTIME_PROXY_IP_REFRESH))
+        assertFalse(acceptsTunnelValidationProbe(TunnelValidationProbeKind.TUNNEL_RUNTIME_PROXY_VALIDATION_ENDPOINT))
+    }
+
+    @Test
+    fun `accepts runtime proxy probes only when app split context allows it`() {
+        assertTrue(
+            acceptsTunnelValidationProbe(
+                TunnelValidationProbeKind.TUNNEL_RUNTIME_PROXY_IP_REFRESH,
+                TunnelValidationPolicyContext(allowRuntimeProxyTunnelValidation = true),
+            ),
+        )
+        assertTrue(
+            acceptsTunnelValidationProbe(
+                TunnelValidationProbeKind.TUNNEL_RUNTIME_PROXY_VALIDATION_ENDPOINT,
+                TunnelValidationPolicyContext(allowRuntimeProxyTunnelValidation = true),
+            ),
+        )
+        assertFalse(
+            acceptsTunnelValidationProbe(
+                TunnelValidationProbeKind.TUNNEL_RUNTIME_PROXY_IP_REFRESH,
+                TunnelValidationPolicyContext(allowRuntimeProxyTunnelValidation = false),
+            ),
+        )
+    }
+
+    @Test
+    fun `literal ip validation is diagnostic only`() {
+        assertFalse(
+            acceptsTunnelValidationProbe(
+                kind = TunnelValidationProbeKind.DNS_INDEPENDENT_LITERAL_IP,
+                context = TunnelValidationPolicyContext(),
+            ),
+        )
+        assertFalse(
+            acceptsTunnelValidationProbe(
+                kind = TunnelValidationProbeKind.DNS_INDEPENDENT_LITERAL_IP,
+                context =
+                TunnelValidationPolicyContext(
+                    allowDnsIndependentLiteralIpValidation = true,
+                ),
+            ),
+        )
+        assertFalse(
+            acceptsTunnelValidationProbe(
+                kind = TunnelValidationProbeKind.DNS_INDEPENDENT_LITERAL_IP,
+                context =
+                TunnelValidationPolicyContext(
+                    hasDnsIndependentLiteralIpValidationEvidence = true,
+                ),
+            ),
+        )
+        assertFalse(
+            acceptsTunnelValidationProbe(
+                kind = TunnelValidationProbeKind.DNS_INDEPENDENT_LITERAL_IP,
+                context =
+                TunnelValidationPolicyContext(
+                    allowDnsIndependentLiteralIpValidation = true,
+                    hasDnsIndependentLiteralIpValidationEvidence = true,
+                ),
+            ),
+        )
+    }
+
+    @Test
+    fun `strict private dns mode does not make literal ip validation sufficient`() {
+        val strictContext = tunnelValidationPolicyContextFor(PrivateDnsMode.STRICT)
+
+        assertFalse(
+            acceptsTunnelValidationProbe(
+                kind = TunnelValidationProbeKind.DNS_INDEPENDENT_LITERAL_IP,
+                context = strictContext,
+            ),
+        )
+        assertFalse(
+            acceptsTunnelValidationProbe(
+                kind = TunnelValidationProbeKind.DNS_INDEPENDENT_LITERAL_IP,
+                context =
+                strictContext.copy(
+                    hasDnsIndependentLiteralIpValidationEvidence = true,
+                ),
+            ),
+        )
+        assertFalse(
+            acceptsTunnelValidationProbe(
+                kind = TunnelValidationProbeKind.DNS_INDEPENDENT_LITERAL_IP,
+                context =
+                tunnelValidationPolicyContextFor(PrivateDnsMode.OFF).copy(
+                    hasDnsIndependentLiteralIpValidationEvidence = true,
+                ),
+            ),
+        )
+    }
+
+    @Test
+    fun `validated vpn literal ip endpoint is not enough for tunnel acceptance`() {
+        assertFalse(
+            acceptsValidatedVpnLiteralIpEndpointProbe(
+                androidValidated = true,
+                evidence = TunnelValidationEvidence(hasSuccessfulTunnelActivity = true),
+            ),
+        )
+        assertFalse(
+            acceptsValidatedVpnLiteralIpEndpointProbe(
+                androidValidated = false,
+                evidence = TunnelValidationEvidence(hasSuccessfulTunnelActivity = true),
+            ),
+        )
+        assertFalse(
+            acceptsValidatedVpnLiteralIpEndpointProbe(
+                androidValidated = true,
+                evidence = TunnelValidationEvidence(hasSuccessfulTunnelActivity = false),
+            ),
+        )
+        assertFalse(
+            acceptsValidatedVpnLiteralIpEndpointProbe(
+                androidValidated = true,
+                evidence =
+                TunnelValidationEvidence(
+                    hasSuccessfulTunnelActivity = true,
+                    fatalRuntimeMessage = "authentication failed",
+                ),
+            ),
+        )
+    }
+
+    @Test
+    fun `prefers ipv4 validation for ipv4 only wireguard config`() {
+        assertTrue(
+            shouldPreferIpv4TunnelValidation(
+                protocolHint = ProtocolHint.WIREGUARD,
+                configJson =
+                """
+                    {
+                      "endpoints": [
+                        {
+                          "type": "wireguard",
+                          "address": ["10.0.0.2/32"],
+                          "peers": [
+                            { "address": "wg.example.com", "port": 51820, "public_key": "public" }
+                          ]
+                        }
+                      ]
+                    }
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test
+    fun `keeps dual stack wireguard validation when config has ipv6 local address`() {
+        assertFalse(
+            shouldPreferIpv4TunnelValidation(
+                protocolHint = ProtocolHint.WIREGUARD,
+                configJson =
+                """
+                    {
+                      "endpoints": [
+                        {
+                          "type": "wireguard",
+                          "address": ["10.0.0.2/32", "fd00::2/128"],
+                          "peers": [
+                            { "address": "wg.example.com", "port": 51820, "public_key": "public" }
+                          ]
+                        }
+                      ]
+                    }
+                """.trimIndent(),
+            ),
+        )
+    }
+}

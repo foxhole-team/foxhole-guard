@@ -1,0 +1,609 @@
+/*
+* Copyright (c) 2013-2026, The PurpleI2P Project
+*
+* This file is part of Purple i2pd project and licensed under BSD3
+*
+* See full license text in LICENSE file at top of project tree
+*/
+
+#include <algorithm>
+#include <utility>
+#include <stdio.h>
+#include <ctime>
+#include <charconv>
+#include "util.h"
+#include "Base.h"
+#include "HTTP.h"
+
+namespace i2p
+{
+namespace http
+{
+	// list of valid HTTP methods
+	static constexpr std::array<std::string_view, 16> HTTP_METHODS =
+	{
+		"GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "CONNECT", // HTTP basic methods
+		"COPY", "LOCK", "MKCOL", "MOVE", "PROPFIND", "PROPPATCH", "UNLOCK", "SEARCH" // WebDAV methods, for SEARCH see rfc5323
+	};
+
+	// list of valid HTTP versions
+	static constexpr std::array<std::string_view, 2> HTTP_VERSIONS =
+	{
+		"HTTP/1.0", "HTTP/1.1"
+	};
+
+	static constexpr std::array<const char *, 7> weekdays =
+	{
+		"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"
+	};
+
+	static constexpr std::array<const char *, 12> months =
+	{
+		"Jan", "Feb", "Mar", "Apr", "May", "Jun",
+		"Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+	};
+
+	static inline bool is_http_version(std::string_view str)
+	{
+		return std::find(HTTP_VERSIONS.begin(), HTTP_VERSIONS.end(), str) != std::end(HTTP_VERSIONS);
+	}
+
+	static inline bool is_http_method(std::string_view str)
+	{
+		return std::find(HTTP_METHODS.begin(), HTTP_METHODS.end(), str) != std::end(HTTP_METHODS);
+	}
+
+	static void strsplit(std::string_view line, std::vector<std::string_view> &tokens, char delim, std::size_t limit = 0)
+	{
+		size_t count = 1, pos;
+		while ((pos = line.find (delim)) != line.npos)
+		{
+			count++;
+			if (limit > 0 && count >= limit) delim = '\n'; // reset delimiter
+			tokens.push_back (line.substr (0, pos));
+			line = line.substr (pos + 1);
+		}
+		if (!line.empty ()) tokens.push_back (line);
+	}
+
+	static std::pair<std::string, std::string> parse_header_line(std::string_view line)
+	{
+		std::size_t pos = 0;
+		std::size_t len = 1; /*: */
+		std::size_t max = line.length();
+		if ((pos = line.find(':', pos)) == std::string::npos)
+			return std::pair{"", ""}; // no ':' found
+		if (pos + 1 < max) // ':' at the end of header is valid
+		{
+			while ((pos + len) < max && isspace(line.at(pos + len)))
+				len++;
+			if (len == 1)
+				return std::pair{"", ""}; // no following space, but something else
+		}
+		return std::pair{std::string (line.substr(0, pos)), std::string (line.substr(pos + len))};
+	}
+
+	void gen_rfc7231_date(std::string & out) {
+		std::time_t now = std::time(nullptr);
+		char buf[128];
+		std::tm *tm = std::gmtime(&now);
+		snprintf(buf, sizeof(buf), "%s, %02d %s %d %02d:%02d:%02d GMT",
+			weekdays[tm->tm_wday], tm->tm_mday, months[tm->tm_mon],
+			tm->tm_year + 1900, tm->tm_hour, tm->tm_min, tm->tm_sec
+		);
+		out = buf;
+	}
+
+	bool URL::parse(const char *str, std::size_t len)
+	{
+		return parse({str, len ? len : strlen(str)});
+	}
+
+	bool URL::parse(std::string_view url)
+	{
+		if (url.empty ()) return false;
+		std::size_t pos_p = 0; /* < current parse position */
+		std::size_t pos_c = 0; /* < work position */
+		if(url.at(0) != '/' || pos_p > 0)
+		{
+			std::size_t pos_s = 0;
+
+			/* schema */
+			pos_c = url.find("://");
+			if (pos_c != std::string::npos) {
+				schema = url.substr(0, pos_c);
+				pos_p = pos_c + 3;
+			}
+
+			/* user[:pass] */
+			pos_s = url.find('/', pos_p); /* find first slash */
+			pos_c = url.find('@', pos_p); /* find end of 'user' or 'user:pass' part */
+
+			if (pos_c != std::string::npos && (pos_s == std::string::npos || pos_s > pos_c)) {
+				std::size_t delim = url.find(':', pos_p);
+				if (delim && delim != std::string::npos && delim < pos_c) {
+					user = url.substr(pos_p, delim - pos_p);
+					delim += 1;
+					pass = url.substr(delim, pos_c - delim);
+				} else if(delim) {
+					user = url.substr(pos_p, pos_c - pos_p);
+				}
+				pos_p = pos_c + 1;
+			}
+
+			/* hostname[:port][/path] */
+			if (url.at(pos_p) == '[') // ipv6
+			{
+				auto pos_b = url.find(']', pos_p);
+				if (pos_b == std::string::npos) return false;
+				ipv6 = true;
+				pos_c = url.find_first_of(":/", pos_b);
+			}
+			else
+				pos_c = url.find_first_of(":/", pos_p);
+
+			if (pos_c == std::string::npos) {
+				/* only hostname, without post and path */
+				host = ipv6 ?
+					url.substr(pos_p + 1, url.length() - 1) :
+					url.substr(pos_p, std::string::npos);
+				return true;
+			} else if (url.at(pos_c) == ':') {
+				host = ipv6 ?
+					url.substr(pos_p + 1, pos_c - pos_p - 2) :
+					url.substr(pos_p, pos_c - pos_p);
+				/* port[/path] */
+				pos_p = pos_c + 1;
+				pos_c = url.find('/', pos_p);
+				std::string_view port_str = (pos_c == std::string::npos)
+					? url.substr(pos_p, std::string::npos)
+					: url.substr(pos_p, pos_c - pos_p);
+				/* stoi throws exception on failure, we don't need it */
+				port = 0;
+				for (char c : port_str) {
+					if (c < '0' || c > '9')
+						return false;
+					port *= 10;
+					port += c - '0';
+				}
+				if (pos_c == std::string::npos)
+					return true; /* no path part */
+				pos_p = pos_c;
+			} else {
+				/* start of path part found */
+				host = ipv6 ?
+					url.substr(pos_p + 1, pos_c - pos_p - 2) :
+					url.substr(pos_p, pos_c - pos_p);
+				pos_p = pos_c;
+			}
+		}
+
+		/* pos_p now at start of path part */
+		pos_c = url.find_first_of("?#", pos_p);
+		if (pos_c == std::string::npos) {
+			/* only path, without fragment and query */
+			path = url.substr(pos_p, std::string::npos);
+			return true;
+		} else if (url.at(pos_c) == '?') {
+			/* found query part */
+			hasquery = true;
+			path = url.substr(pos_p, pos_c - pos_p);
+			pos_p = pos_c + 1;
+			pos_c = url.find('#', pos_p);
+			if (pos_c == std::string::npos) {
+				/* no fragment */
+				query = url.substr(pos_p, std::string::npos);
+				return true;
+			} else {
+				query = url.substr(pos_p, pos_c - pos_p);
+				pos_p = pos_c + 1;
+			}
+		} else {
+			/* found fragment part */
+			path = url.substr(pos_p, pos_c - pos_p);
+			pos_p = pos_c + 1;
+		}
+
+		/* pos_p now at start of fragment part */
+		frag = url.substr(pos_p, std::string::npos);
+		return true;
+	}
+
+	bool URL::parse_query(std::map<std::string, std::string> & params)
+	{
+		std::vector<std::string_view> tokens;
+		strsplit(query, tokens, '&');
+
+		params.clear();
+		for (const auto& it : tokens) {
+			if (!it.length()) // empty
+				continue;
+			std::size_t eq = it.find ('=');
+			if (eq != std::string::npos) {
+				auto e = std::pair<std::string, std::string>(it.substr(0, eq), it.substr(eq + 1));
+				params.insert(e);
+			} else {
+				auto e = std::pair<std::string, std::string>(it, "");
+				params.insert(e);
+			}
+		}
+		return true;
+	}
+
+	std::string URL::to_string() {
+		std::string out = "";
+		if (schema != "") {
+			out = schema + "://";
+			if (user != "" && pass != "") {
+				out += user + ":" + pass + "@";
+			} else if (user != "") {
+				out += user + "@";
+			}
+			if (ipv6) {
+				if (port) {
+					out += "[" + host + "]:" + std::to_string(port);
+				} else {
+					out += "[" + host + "]";
+				}
+			} else {
+				if (port) {
+					out += host + ":" + std::to_string(port);
+				} else {
+					out += host;
+				}
+			}
+		}
+		out += path;
+		if (hasquery) // add query even if it was empty
+			out += "?";
+		if (query != "")
+			out += query;
+		if (frag != "")
+			out += "#" + frag;
+		return out;
+	}
+
+	bool URL::is_i2p() const
+	{
+		return host.rfind(".i2p") == ( host.size() - 4 );
+	}
+
+	void HTTPMsg::add_header(const char *name, const std::string & value, bool replace) {
+		add_header(name, value.c_str(), replace);
+	}
+
+	void HTTPMsg::add_header(const char *name, const char *value, bool replace) {
+		std::size_t count = headers.count(name);
+		if (count && !replace)
+			return;
+		if (count) {
+			headers[name] = value;
+			return;
+		}
+		headers.insert(std::pair<std::string, std::string>(name, value));
+	}
+
+	void HTTPMsg::del_header(const char *name) {
+		headers.erase(name);
+	}
+
+	std::string HTTPMsg::get_header(const std::string& name) const
+	{
+		auto it = headers.find(name);
+		if (it == headers.end())
+			return "";
+		else
+			return it->second;
+	}
+
+	int HTTPReq::parse(const char *buf, size_t len)
+	{
+		return parse({buf, len});
+	}
+
+	int HTTPReq::parse(std::string_view str)
+	{
+		enum { REQ_LINE, HEADER_LINE } expect = REQ_LINE;
+		std::size_t eoh = str.find(HTTP_EOH); /* request head size */
+		std::size_t eol = 0, pos = 0;
+		URL url;
+
+		if (eoh == std::string::npos)
+			return 0; /* str not contains complete request */
+
+		while ((eol = str.find(CRLF, pos)) != std::string::npos)
+		{
+			if (expect == REQ_LINE)
+			{
+				std::string_view line = str.substr(pos, eol - pos);
+				std::vector<std::string_view> tokens;
+				strsplit(line, tokens, ' ');
+
+				if (tokens.size() != 3)
+					return -1;
+				if (!is_http_method(tokens[0]))
+					return -1;
+				if (!is_http_version(tokens[2]))
+					return -1;
+				if (!url.parse(tokens[1]))
+					return -1;
+				/* all ok */
+				method  = tokens[0];
+				uri     = tokens[1];
+				version = tokens[2];
+				expect  = HEADER_LINE;
+			}
+			else
+			{
+				std::string_view line = str.substr(pos, eol - pos);
+				auto p = parse_header_line(line);
+				if (p.first.length () > 0)
+					headers.push_back (p);
+				else
+					return -1;
+			}
+			pos = eol + CRLF.length();
+			if (pos >= eoh)
+				break;
+		}
+		return eoh + HTTP_EOH.length();
+	}
+
+	void HTTPReq::write(std::ostream & o)
+	{
+		o << method << " " << uri << " " << version << CRLF;
+		for (auto & h : headers)
+			o << h.first << ": " << h.second << CRLF;
+		o << CRLF;
+	}
+
+	std::string HTTPReq::to_string()
+	{
+		std::stringstream ss;
+		write(ss);
+		return ss.str();
+	}
+
+	void HTTPReq::AddHeader (const std::string& name, const std::string& value)
+	{
+		headers.push_back (std::make_pair(name, value));
+	}
+
+	void HTTPReq::UpdateHeader (const std::string& name, const std::string& value)
+	{
+		for (auto& it : headers)
+			if (boost::iequals(it.first, name))
+			{
+				it.second = value;
+				break;
+			}
+	}
+
+	void HTTPReq::RemoveHeader (const std::string& name, const std::string& exempt)
+	{
+		for (auto it = headers.begin (); it != headers.end ();)
+		{
+			if (boost::istarts_with(it->first, name) && !boost::iequals(it->first, exempt))
+				it = headers.erase (it);
+			else
+				it++;
+		}
+	}
+
+	std::string HTTPReq::GetHeader (std::string_view name) const
+	{
+		for (auto& it : headers)
+			if (boost::iequals(it.first, name))
+				return it.second;
+		return "";
+	}
+
+	size_t HTTPReq::GetNumHeaders (std::string_view name) const
+	{
+		size_t num = 0;
+		for (auto& it : headers)
+			if (boost::iequals(it.first, name)) num++;
+		return num;
+	}
+
+	bool HTTPRes::is_chunked() const
+	{
+		auto it = headers.find("Transfer-Encoding");
+		if (it == headers.end())
+			return false;
+		if (it->second.find("chunked") != std::string::npos)
+			return true;
+		return false;
+	}
+
+	bool HTTPRes::is_gzipped(bool includingI2PGzip) const
+	{
+		auto it = headers.find("Content-Encoding");
+		if (it == headers.end())
+			return false; /* no header */
+		if (it->second.find("gzip") != std::string::npos)
+			return true; /* gotcha! */
+		if (includingI2PGzip && it->second.find("x-i2p-gzip") != std::string::npos)
+			return true;
+		return false;
+	}
+
+	long int HTTPMsg::content_length() const
+	{
+		unsigned long int length = 0;
+		auto it = headers.find("Content-Length");
+		if (it == headers.end())
+			return -1;
+		errno = 0;
+		length = std::strtoul(it->second.c_str(), (char **) NULL, 10);
+		if (errno != 0)
+			return -1;
+		return length;
+	}
+
+	int HTTPRes::parse(const char *buf, size_t len)
+	{
+		return parse({buf,len});
+	}
+
+	int HTTPRes::parse(std::string_view str)
+	{
+		enum { RES_LINE, HEADER_LINE } expect = RES_LINE;
+		std::size_t eoh = str.find(HTTP_EOH); /* request head size */
+		std::size_t eol = 0, pos = 0;
+
+		if (eoh == std::string::npos)
+			return 0; /* str not contains complete request */
+
+		while ((eol = str.find(CRLF, pos)) != std::string::npos)
+		{
+			if (expect == RES_LINE)
+			{
+				std::string_view line = str.substr(pos, eol - pos);
+				std::vector<std::string_view> tokens;
+				strsplit(line, tokens, ' ', 3);
+				if (tokens.size() != 3)
+					return -1;
+				if (!is_http_version(tokens[0]))
+					return -1;
+				auto res = std::from_chars(tokens[1].data (), tokens[1].data() + tokens[1].size(), code);
+				if (res.ec != std::errc())
+					return -1;
+				if (code < 100 || code >= 600)
+					return -1;
+				/* all ok */
+				version = tokens[0];
+				status  = tokens[2];
+				expect  = HEADER_LINE;
+			}
+			else
+			{
+				std::string_view line = str.substr(pos, eol - pos);
+				auto p = parse_header_line(line);
+				if (p.first.length () > 0)
+					headers.insert (p);
+				else
+					return -1;
+			}
+			pos = eol + CRLF.length();
+			if (pos >= eoh)
+				break;
+		}
+		return eoh + HTTP_EOH.length();
+	}
+
+	std::string HTTPRes::to_string() {
+		if (version == "HTTP/1.1" && headers.count("Date") == 0) {
+			std::string date;
+			gen_rfc7231_date(date);
+			add_header("Date", date.c_str());
+		}
+		if (status == "OK" && code != 200)
+			status = HTTPCodeToStatus(code); // update
+		if (body.length() > 0 && headers.count("Content-Length") == 0)
+			add_header("Content-Length", std::to_string(body.length()).c_str());
+		/* build response */
+		std::stringstream ss;
+		ss << version << " " << code << " " << status << CRLF;
+		for (auto & h : headers) {
+			ss << h.first << ": " << h.second << CRLF;
+		}
+		ss << CRLF;
+		if (body.length() > 0)
+			ss << body;
+		return ss.str();
+	}
+
+	std::string_view HTTPCodeToStatus(int code)
+	{
+		std::string_view ptr;
+		switch (code)
+		{
+			case 105: ptr = "Name Not Resolved"; break;
+			/* success */
+			case 200: ptr = "OK"; break;
+			case 206: ptr = "Partial Content"; break;
+			/* redirect */
+			case 301: ptr = "Moved Permanently"; break;
+			case 302: ptr = "Found"; break;
+			case 304: ptr = "Not Modified"; break;
+			case 307: ptr = "Temporary Redirect"; break;
+			/* client error */
+			case 400: ptr = "Bad Request"; break;
+			case 401: ptr = "Unauthorized"; break;
+			case 403: ptr = "Forbidden"; break;
+			case 404: ptr = "Not Found"; break;
+			case 407: ptr = "Proxy Authentication Required"; break;
+			case 408: ptr = "Request Timeout"; break;
+			/* server error */
+			case 500: ptr = "Internal Server Error"; break;
+			case 502: ptr = "Bad Gateway"; break;
+			case 503: ptr = "Not Implemented"; break;
+			case 504: ptr = "Gateway Timeout"; break;
+			default:  ptr = "Unknown Status"; break;
+		}
+		return ptr;
+	}
+
+	std::string UrlDecode(std::string_view url, bool allow_null)
+	{
+		std::string decoded;
+		decoded.reserve (url.length ());
+		size_t start = 0;
+		for (size_t i = 0; i < url.length (); i++)
+		{
+			auto c = url[i];
+			if (c == '%')
+			{
+				decoded.append (url, start, i - start);
+				if (i + 2 <= url.length ())
+				{
+					unsigned char ch;
+					auto res = std::from_chars(url.data() + i + 1, url.data() + i + 3, ch, 16);
+					if (res.ec == std::errc() && (ch || allow_null))
+						decoded += ch;
+					else
+						decoded.append (url, i, 3);
+					i += 2;
+					start = i + 1;
+				}
+				else
+					break;
+			}
+		}
+		if (start < url.length ())
+			decoded.append (url, start);
+		return decoded;
+	}
+
+	bool MergeChunkedResponse (std::istream& in, std::ostream& out)
+	{
+		std::string hexLen;
+		while (!in.eof ())
+		{
+			std::getline (in, hexLen);
+			errno = 0;
+			long int len = strtoul(hexLen.c_str(), (char **) NULL, 16);
+			if (errno != 0)
+				return false; /* conversion error */
+			if (len == 0)
+				return true; /* end of stream */
+			if (len < 0 || len > 10 * 1024 * 1024) /* < 10Mb */
+				return false; /* too large chunk */
+			char * buf = new char[len];
+			in.read (buf, len);
+			out.write (buf, len);
+			delete[] buf;
+			std::getline (in, hexLen); // read \r\n after chunk
+		}
+		return true;
+	}
+
+	std::string CreateBasicAuthorizationString (const std::string& user, const std::string& pass)
+	{
+		if (user.empty () && pass.empty ()) return "";
+		return "Basic " + i2p::data::ToBase64Standard (user + ":" + pass);
+	}
+
+} // http
+} // i2p

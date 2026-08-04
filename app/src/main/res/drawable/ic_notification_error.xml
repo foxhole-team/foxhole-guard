@@ -1,0 +1,11 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- Ошибка подключения: щит + восклицательный знак (вырезы, evenOdd). -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:fillType="evenOdd"
+        android:pathData="M12,2L20,5.2V11.2C20,16.4 16.6,20.3 12,22C7.4,20.3 4,16.4 4,11.2V5.2L12,2ZM10.9,6.8H13.1V13.6H10.9ZM12,15.1A1.5,1.5 0 1,0 12,18.1A1.5,1.5 0 1,0 12,15.1Z" />
+</vector>

@@ -1,0 +1,556 @@
+/*
+* Copyright (c) 2013-2026, The PurpleI2P Project
+*
+* This file is part of Purple i2pd project and licensed under BSD3
+*
+* See full license text in LICENSE file at top of project tree
+*/
+
+#include <thread>
+#include <memory>
+#include <regex>
+
+#include "Daemon.h"
+
+#include "Config.h"
+#include "Log.h"
+#include "FS.h"
+#include "CPU.h"
+#include "Base.h"
+#include "version.h"
+#include "Transports.h"
+#include "RouterInfo.h"
+#include "RouterContext.h"
+#include "Tunnel.h"
+#include "HTTP.h"
+#include "NetDb.hpp"
+#include "Garlic.h"
+#include "Streaming.h"
+#include "Destination.h"
+#include "HTTPServer.h"
+#include "I2PControl.h"
+#include "ClientContext.h"
+#include "Crypto.h"
+#include "UPnP.h"
+#include "Timestamp.h"
+#include "I18N.h"
+
+namespace i2p
+{
+namespace util
+{
+	class Daemon_Singleton::Daemon_Singleton_Private
+	{
+	public:
+		Daemon_Singleton_Private() {};
+		~Daemon_Singleton_Private() {};
+
+		std::unique_ptr<i2p::http::HTTPServer> httpServer;
+		std::unique_ptr<i2p::client::I2PControlService> m_I2PControlService;
+		std::unique_ptr<i2p::transport::UPnP> UPnP;
+		std::unique_ptr<i2p::util::NTPTimeSync> m_NTPSync;
+	};
+
+	Daemon_Singleton::Daemon_Singleton() : isDaemon(false), running(true), d(*new Daemon_Singleton_Private()) {}
+	Daemon_Singleton::~Daemon_Singleton() {
+		delete &d;
+	}
+
+	bool Daemon_Singleton::IsService () const
+	{
+		bool service = false;
+		i2p::config::GetOption("service", service);
+		return service;
+	}
+
+	void Daemon_Singleton::setDataDir(std::string_view path)
+	{
+		if (!path.empty ())
+			DaemonDataDir = path;
+	}
+
+	bool Daemon_Singleton::init(int argc, char* argv[]) {
+		return init(argc, argv, nullptr);
+	}
+
+	bool Daemon_Singleton::init(int argc, char* argv[], std::shared_ptr<std::ostream> logstream)
+	{
+		i2p::config::Init();
+		i2p::config::ParseCmdline(argc, argv);
+
+		std::string config; i2p::config::GetOption("conf", config);
+		std::string datadir;
+		if(DaemonDataDir != "") {
+			datadir = DaemonDataDir;
+		} else {
+			i2p::config::GetOption("datadir", datadir);
+		}
+
+		i2p::fs::DetectDataDir(datadir, IsService());
+		i2p::fs::Init();
+
+		datadir = i2p::fs::GetDataDir();
+
+		if (config == "")
+		{
+			config = i2p::fs::DataDirPath("i2pd.conf");
+			if (!i2p::fs::Exists (config)) {
+				// use i2pd.conf only if exists
+				config = ""; /* reset */
+			}
+		}
+
+		i2p::config::ParseConfig(config);
+		i2p::config::Finalize();
+
+		i2p::config::GetOption("daemon", isDaemon);
+
+		std::string certsdir; i2p::config::GetOption("certsdir", certsdir);
+		i2p::fs::SetCertsDir(certsdir);
+
+		certsdir = i2p::fs::GetCertsDir();
+
+		std::string logs     = ""; i2p::config::GetOption("log",        logs);
+		std::string logfile  = ""; i2p::config::GetOption("logfile",    logfile);
+		std::string loglevel = ""; i2p::config::GetOption("loglevel",   loglevel);
+		bool logclftime;           i2p::config::GetOption("logclftime", logclftime);
+
+		/* setup logging */
+		if (logclftime)
+			i2p::log::Logger().SetTimeFormat ("[%d/%b/%Y:%H:%M:%S %z]");
+
+#if defined(WIN32_APP) || defined(__HAIKU__)
+		// Win32 app with GUI or Haiku supports only logging to file
+		logs = "file";
+#else
+		if (isDaemon && (logs == "" || logs == "stdout"))
+			logs = "file";
+#endif
+
+		i2p::log::Logger().SetLogLevel(loglevel);
+		if (logstream) {
+			LogPrint(eLogInfo, "Log: Sending messages to std::ostream");
+			i2p::log::Logger().SendTo (logstream);
+		} else if (logs == "file") {
+			if (logfile == "")
+				logfile = i2p::fs::DataDirPath("i2pd.log");
+			LogPrint(eLogInfo, "Log: Sending messages to ", logfile);
+			i2p::log::Logger().SendTo (logfile);
+#ifndef _WIN32
+		} else if (logs == "syslog") {
+			LogPrint(eLogInfo, "Log: Sending messages to syslog");
+			i2p::log::Logger().SendTo("i2pd", LOG_DAEMON);
+#endif
+		} else {
+			// use stdout -- default
+		}
+
+		LogPrint(eLogNone,  "i2pd v", VERSION, " (", I2P_VERSION, ") starting...");
+		LogPrint(eLogDebug, "FS: Main config file: ", config);
+		LogPrint(eLogDebug, "FS: Data directory: ", datadir);
+		LogPrint(eLogDebug, "FS: Certificates directory: ", certsdir);
+
+		bool precomputation; i2p::config::GetOption("precomputation.elgamal", precomputation);
+		bool ssu; i2p::config::GetOption("ssu", ssu);
+		if (!ssu && i2p::config::IsDefault ("precomputation.elgamal"))
+			precomputation = false; // we don't elgamal table if no ssu, unless it's specified explicitly
+		i2p::crypto::InitCrypto (precomputation);
+
+		i2p::transport::InitAddressFromIface (); // get address4/6 from interfaces
+
+		int netID; i2p::config::GetOption("netid", netID);
+		i2p::context.SetNetID (netID);
+
+		bool checkReserved; i2p::config::GetOption("reservedrange", checkReserved);
+		i2p::transport::transports.SetCheckReserved(checkReserved);
+
+		i2p::context.Init ();
+
+		i2p::transport::InitTransports ();
+
+		bool isFloodfill; i2p::config::GetOption("floodfill", isFloodfill);
+		if (isFloodfill)
+		{
+			LogPrint(eLogInfo, "Daemon: Router configured as floodfill");
+			i2p::context.SetFloodfill (true);
+		}
+		else
+			i2p::context.SetFloodfill (false);
+
+		bool transit; i2p::config::GetOption("notransit", transit);
+		i2p::context.SetAcceptsTunnels (!transit);
+		uint32_t transitTunnels; i2p::config::GetOption("limits.transittunnels", transitTunnels);
+		if (transitTunnels < 2)
+			transitTunnels = 2;
+		if (isFloodfill && i2p::config::IsDefault ("limits.transittunnels"))
+			transitTunnels *= 2; // double default number of transit tunnels for floodfill
+		i2p::tunnel::tunnels.SetMaxNumTransitTunnels (transitTunnels);
+
+		/* this section also honors 'floodfill' flag, if set above */
+		std::string bandwidth; i2p::config::GetOption("bandwidth", bandwidth);
+		if (bandwidth.length () > 0)
+		{
+			const auto NumBandwithRegex = std::regex(R"(^\d+$)");
+			const auto BandwithRegex = std::regex(R"((\d+)(b|kb|mb|gb))");
+			std::smatch bandWithMatch;
+
+			if (bandwidth.length () == 1 && ((bandwidth[0] >= 'K' && bandwidth[0] <= 'P') || bandwidth[0] == 'X' ))
+			{
+				i2p::context.SetBandwidth (bandwidth[0]);
+				LogPrint(eLogInfo, "Daemon: Bandwidth set to ", i2p::context.GetBandwidthLimit (), "KBps");
+			}
+			else if (std::regex_match(bandwidth, bandWithMatch, BandwithRegex))
+			{
+				const auto number = bandWithMatch[1].str();
+				const auto unit   = bandWithMatch[2].str();
+				int limit = std::atoi(number.c_str());
+				std::cout << unit;
+				if (unit == "b")
+				{
+					limit /= 1000;
+				}
+				else if(unit == "mb")
+				{
+					limit *= 1000;
+				} else if(unit == "gb")
+				{
+					limit *= 1000000;
+				}
+				// if limit more than 32 bits then its will be negative
+				if (limit < 0)
+				{
+					LogPrint(eLogInfo, "Daemon: Unexpected bandwidth ", bandwidth, ". Set to 'low'");
+					i2p::context.SetBandwidth (i2p::data::CAPS_FLAG_LOW_BANDWIDTH2);
+				} else {
+					i2p::context.SetBandwidth(limit);
+				}
+			}
+			else if(std::regex_search(bandwidth, NumBandwithRegex))
+			{
+				auto value = std::atoi(bandwidth.c_str());
+				if (value > 0)
+				{
+					i2p::context.SetBandwidth (value);
+					LogPrint(eLogInfo, "Daemon: Bandwidth set to ", i2p::context.GetBandwidthLimit (), " KBps");
+				}
+				else
+				{
+					LogPrint(eLogInfo, "Daemon: Unexpected bandwidth ", bandwidth, ". Set to 'low'");
+					i2p::context.SetBandwidth (i2p::data::CAPS_FLAG_LOW_BANDWIDTH2);
+				}
+			}
+		}
+		else if (isFloodfill)
+		{
+			LogPrint(eLogInfo, "Daemon: Floodfill bandwidth set to 'extra'");
+			i2p::context.SetBandwidth (i2p::data::CAPS_FLAG_EXTRA_BANDWIDTH2);
+		}
+		else
+		{
+#if IS_X86_64
+			if (std::thread::hardware_concurrency() >= 4) // quad core or more
+			{
+				LogPrint(eLogInfo, "Daemon: bandwidth set to 'extra'");
+				i2p::context.SetBandwidth (i2p::data::CAPS_FLAG_EXTRA_BANDWIDTH1);
+			}
+			else
+			{
+				LogPrint(eLogInfo, "Daemon: bandwidth set to 'high'");
+				i2p::context.SetBandwidth (i2p::data::CAPS_FLAG_HIGH_BANDWIDTH);
+			}
+#else
+			LogPrint(eLogInfo, "Daemon: bandwidth set to 'low'");
+			i2p::context.SetBandwidth (i2p::data::CAPS_FLAG_LOW_BANDWIDTH2);
+#endif
+		}
+
+		int shareRatio; i2p::config::GetOption("share", shareRatio);
+		i2p::context.SetShareRatio (shareRatio);
+
+		std::string family; i2p::config::GetOption("family", family);
+		i2p::context.SetFamily (family);
+		if (family.length () > 0)
+			LogPrint(eLogInfo, "Daemon: Router family set to ", family);
+
+		bool trust; i2p::config::GetOption("trust.enabled", trust);
+		if (trust)
+		{
+			LogPrint(eLogInfo, "Daemon: Explicit trust enabled");
+			std::string f; i2p::config::GetOption("trust.family", f); std::string_view fam(f);
+			std::string routers; i2p::config::GetOption("trust.routers", routers);
+			bool restricted = false;
+			if (fam.length() > 0)
+			{
+				std::vector<std::string_view> fams;
+				size_t pos = 0, comma;
+				do
+				{
+					comma = fam.find (',', pos);
+					fams.push_back (fam.substr (pos, comma != std::string::npos ? comma - pos : std::string::npos));
+					pos = comma + 1;
+				}
+				while (comma != std::string::npos);
+				i2p::transport::transports.RestrictRoutesToFamilies(fams);
+				restricted = fams.size() > 0;
+			}
+			if (!routers.empty ())
+			{
+				auto idents = i2p::data::ExtractIdentHashes (routers);
+				LogPrint(eLogInfo, "Daemon: Setting restricted routes to use ", idents.size(), " trusted routers");
+				i2p::transport::transports.RestrictRoutesToRouters(idents);
+				restricted = idents.size() > 0;
+			}
+			if(!restricted)
+				LogPrint(eLogError, "Daemon: No trusted routers of families specified");
+			bool hidden; i2p::config::GetOption("trust.hidden", hidden);
+			if (hidden)
+			{
+				LogPrint(eLogInfo, "Daemon: Hidden mode enabled");
+				i2p::context.SetHidden(true);
+			}
+		}
+
+		std::string httpLang; i2p::config::GetOption("http.lang", httpLang);
+		i2p::i18n::SetLanguage(httpLang);
+
+		return true;
+	}
+
+	bool Daemon_Singleton::start()
+	{
+		i2p::log::Logger().Start();
+		LogPrint(eLogInfo, "Daemon: Starting NetDB");
+		i2p::data::netdb.Start();
+
+		bool upnp; i2p::config::GetOption("upnp.enabled", upnp);
+		if (upnp) {
+			d.UPnP = std::unique_ptr<i2p::transport::UPnP>(new i2p::transport::UPnP);
+			d.UPnP->Start ();
+		}
+
+		bool nettime; i2p::config::GetOption("nettime.enabled", nettime);
+		if (nettime)
+		{
+			d.m_NTPSync = std::unique_ptr<i2p::util::NTPTimeSync>(new i2p::util::NTPTimeSync);
+			d.m_NTPSync->Start ();
+		}
+
+		bool ntcp2; i2p::config::GetOption("ntcp2.enabled", ntcp2);
+		bool ssu2; i2p::config::GetOption("ssu2.enabled", ssu2);
+		LogPrint(eLogInfo, "Daemon: Starting Transports");
+		if(!ssu2) LogPrint(eLogInfo, "Daemon: SSU2 disabled");
+		if(!ntcp2) LogPrint(eLogInfo, "Daemon: NTCP2 disabled");
+
+		i2p::transport::transports.Start(ntcp2, ssu2);
+		if (i2p::transport::transports.IsBoundSSU2() || i2p::transport::transports.IsBoundNTCP2())
+			LogPrint(eLogInfo, "Daemon: Transports started");
+		else
+		{
+			LogPrint(eLogCritical, "Daemon: Failed to start Transports");
+			/** shut down netdb right away */
+			i2p::transport::transports.Stop();
+			i2p::data::netdb.Stop();
+			return false;
+		}
+
+		bool http; i2p::config::GetOption("http.enabled", http);
+		if (http) {
+			std::string httpAddr; i2p::config::GetOption("http.address", httpAddr);
+			uint16_t    httpPort; i2p::config::GetOption("http.port", httpPort);
+			LogPrint(eLogInfo, "Daemon: Starting Webconsole at ", httpAddr, ":", httpPort);
+			try
+			{
+				d.httpServer = std::unique_ptr<i2p::http::HTTPServer>(new i2p::http::HTTPServer(httpAddr, httpPort));
+				d.httpServer->Start();
+			}
+			catch (std::exception& ex)
+			{
+				LogPrint (eLogCritical, "Daemon: Failed to start Webconsole: ", ex.what ());
+				ThrowFatal ("Unable to start webconsole at ", httpAddr, ":", httpPort, ": ", ex.what ());
+			}
+		}
+
+		LogPrint(eLogInfo, "Daemon: Starting Tunnels");
+		i2p::tunnel::tunnels.Start();
+
+		LogPrint(eLogInfo, "Daemon: Starting Router context");
+		i2p::context.Start();
+
+		LogPrint(eLogInfo, "Daemon: Starting Client");
+		i2p::client::context.Start ();
+
+		// I2P Control Protocol
+		bool i2pcontrol; i2p::config::GetOption("i2pcontrol.enabled", i2pcontrol);
+		if (i2pcontrol) {
+			std::string i2pcpAddr; i2p::config::GetOption("i2pcontrol.address", i2pcpAddr);
+			uint16_t    i2pcpPort; i2p::config::GetOption("i2pcontrol.port",    i2pcpPort);
+			LogPrint(eLogInfo, "Daemon: Starting I2PControl at ", i2pcpAddr, ":", i2pcpPort);
+			try
+			{
+				d.m_I2PControlService = std::unique_ptr<i2p::client::I2PControlService>(new i2p::client::I2PControlService (i2pcpAddr, i2pcpPort));
+				d.m_I2PControlService->Start ();
+			}
+			catch (std::exception& ex)
+			{
+				LogPrint (eLogCritical, "Daemon: Failed to start I2PControl: ", ex.what ());
+				ThrowFatal ("Unable to start I2PControl service at ", i2pcpAddr, ":", i2pcpPort, ": ", ex.what ());
+			}
+		}
+		return true;
+	}
+
+	bool Daemon_Singleton::stop()
+	{
+		LogPrint(eLogInfo, "Daemon: Shutting down");
+		LogPrint(eLogInfo, "Daemon: Stopping Client");
+		i2p::client::context.Stop();
+		LogPrint(eLogInfo, "Daemon: Stopping Router context");
+		i2p::context.Stop();
+		LogPrint(eLogInfo, "Daemon: Stopping Tunnels");
+		i2p::tunnel::tunnels.Stop();
+
+		if (d.UPnP)
+		{
+			d.UPnP->Stop ();
+			d.UPnP = nullptr;
+		}
+
+		if (d.m_NTPSync)
+		{
+			d.m_NTPSync->Stop ();
+			d.m_NTPSync = nullptr;
+		}
+
+		LogPrint(eLogInfo, "Daemon: Stopping Transports");
+		i2p::transport::transports.Stop();
+		LogPrint(eLogInfo, "Daemon: Stopping NetDB");
+		i2p::data::netdb.Stop();
+		if (d.httpServer) {
+			LogPrint(eLogInfo, "Daemon: Stopping HTTP Server");
+			d.httpServer->Stop();
+			d.httpServer = nullptr;
+		}
+		if (d.m_I2PControlService)
+		{
+			LogPrint(eLogInfo, "Daemon: Stopping I2PControl");
+			d.m_I2PControlService->Stop ();
+			d.m_I2PControlService = nullptr;
+		}
+		i2p::crypto::TerminateCrypto ();
+		i2p::log::Logger().Stop();
+
+		return true;
+	}
+
+	static void ShowUptime (std::stringstream& s, int seconds)
+	{
+		int num;
+
+		if ((num = seconds / 86400) > 0) {
+			s << num << " days, ";
+			seconds -= num * 86400;
+		}
+		if ((num = seconds / 3600) > 0) {
+			s << num << " hours, ";
+			seconds -= num * 3600;
+		}
+		if ((num = seconds / 60) > 0) {
+			s << num << " min, ";
+			seconds -= num * 60;
+		}
+		s << seconds << " seconds\n";
+	}
+
+	static void ShowTransfered (std::stringstream& s, size_t transfer)
+	{
+		auto bytes = transfer & 0x03ff;
+		transfer >>= 10;
+		auto kbytes = transfer & 0x03ff;
+		transfer >>= 10;
+		auto mbytes = transfer & 0x03ff;
+		transfer >>= 10;
+		auto gbytes = transfer;
+
+		if (gbytes)
+			s << gbytes << " GB, ";
+		if (mbytes)
+			s << mbytes << " MB, ";
+		if (kbytes)
+			s << kbytes << " KB, ";
+		s << bytes << " Bytes\n";
+	}
+
+	static void ShowNetworkStatus (std::stringstream& s, RouterStatus status, bool testing, RouterError error)
+	{
+		switch (status)
+		{
+			case eRouterStatusOK: s << "OK"; break;
+			case eRouterStatusFirewalled: s << "FW"; break;
+			case eRouterStatusUnknown: s << "Unk"; break;
+			case eRouterStatusProxy: s << "Proxy"; break;
+			case eRouterStatusMesh: s << "Mesh"; break;
+			case eRouterStatusStan: s << "Stan"; break;
+			default: s << "Unk";
+		};
+		if (testing)
+			s << " (Test)";
+		if (error != eRouterErrorNone)
+		{
+			switch (error)
+			{
+				case eRouterErrorClockSkew:
+					s << " - " << tr("Clock skew");
+				break;
+				case eRouterErrorOffline:
+					s << " - " << tr("Offline");
+				break;
+				case eRouterErrorSymmetricNAT:
+					s << " - " << tr("Symmetric NAT");
+				break;
+				case eRouterErrorFullConeNAT:
+					s << " - " << tr("Full cone NAT");
+				break;
+				case eRouterErrorNoDescriptors:
+					s << " - " << tr("No Descriptors");
+				break;
+				default: ;
+			}
+		}
+	}
+
+	void PrintMainWindowText (std::stringstream& s)
+	{
+		s << "\n";
+		s << "Status: ";
+		ShowNetworkStatus (s, i2p::context.GetStatus (), i2p::context.GetTesting(), i2p::context.GetError ());
+		if (i2p::context.SupportsV6 ())
+		{
+			s << " / ";
+			ShowNetworkStatus (s, i2p::context.GetStatusV6 (), i2p::context.GetTestingV6(), i2p::context.GetErrorV6 ());
+		}
+		s << "; ";
+		s << "Success Rate: " << i2p::tunnel::tunnels.GetTunnelCreationSuccessRate() << "%\n";
+		s << "Uptime: "; ShowUptime(s, i2p::context.GetUptime ());
+		auto gracefulTimeLeft = Daemon.GetGracefulShutdownInterval ();
+		if (gracefulTimeLeft > 0)
+		{
+			s << "Graceful shutdown, time left: "; ShowUptime(s, gracefulTimeLeft);
+		}
+		else
+			s << "\n";
+		s << "Inbound: " << i2p::transport::transports.GetInBandwidth() / 1024 << " KiB/s; ";
+		s << "Outbound: " << i2p::transport::transports.GetOutBandwidth() / 1024 << " KiB/s\n";
+		s << "Received: "; ShowTransfered (s, i2p::transport::transports.GetTotalReceivedBytes());
+		s << "Sent: "; ShowTransfered (s, i2p::transport::transports.GetTotalSentBytes());
+		s << "\n";
+		s << "Routers: " << i2p::data::netdb.GetNumRouters () << "; ";
+		s << "Floodfills: " << i2p::data::netdb.GetNumFloodfills () << "; ";
+		s << "LeaseSets: " << i2p::data::netdb.GetNumLeaseSets () << "\n";
+		s << "Tunnels: ";
+		s << "In: " << i2p::tunnel::tunnels.CountInboundTunnels() << "; ";
+		s << "Out: " << i2p::tunnel::tunnels.CountOutboundTunnels() << "; ";
+		s << "Transit: " << i2p::tunnel::tunnels.CountTransitTunnels() << "\n";
+		s << "\n";
+	}
+}
+}

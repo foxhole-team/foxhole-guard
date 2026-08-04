@@ -1,0 +1,6 @@
+Native FoxCore runtime:
+• VPN and Tor now run only through the Rust core, with no fallback engine;
+• strict typed configs cover VLESS, VMess, Trojan, Shadowsocks/Outline, Hysteria2, WireGuard, Naive, TUIC and AnyTLS;
+• one owner controls TUN start, reload, network changes and teardown;
+• DNS filtering statistics now come from typed core counters and events;
+• Android UI, CI and release ABI checks are wired directly to FoxCore.

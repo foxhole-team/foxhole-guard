@@ -1,0 +1,336 @@
+/*
+* Copyright (c) 2013-2026, The PurpleI2P Project
+*
+* This file is part of Purple i2pd project and licensed under BSD3
+*
+* See full license text in LICENSE file at top of project tree
+*/
+
+#ifndef UTIL_H
+#define UTIL_H
+
+#include <inttypes.h>
+#include <string>
+#include <map>
+#include <functional>
+#include <memory>
+#include <mutex>
+#include <thread>
+#include <utility>
+#include <charconv>
+#include <boost/asio.hpp>
+
+#ifdef ANDROID
+#ifndef __clang__
+#include <boost/lexical_cast.hpp>
+namespace std
+{
+	template <typename T>
+	std::string to_string(T value)
+	{
+		return boost::lexical_cast<std::string>(value);
+	}
+
+	inline int stoi(const std::string& str)
+	{
+		return boost::lexical_cast<int>(str);
+	}
+}
+#endif
+#endif
+
+namespace i2p
+{
+namespace util
+{
+
+	template<class T>
+	class MemoryPool
+	{
+		//BOOST_STATIC_ASSERT_MSG(sizeof(T) >= sizeof(void*), "size cannot be less that general pointer size");
+
+		public:
+
+			MemoryPool (): m_Head (nullptr) {}
+			~MemoryPool ()
+			{
+				CleanUp ();
+			}
+
+			void CleanUp ()
+			{
+				CleanUp (m_Head);
+				m_Head = nullptr;
+			}
+
+			template<typename... TArgs>
+			T * Acquire (TArgs&&... args)
+			{
+				if (!m_Head) return new T(std::forward<TArgs>(args)...);
+				else
+				{
+					auto tmp = m_Head;
+					m_Head = static_cast<T*>(*(void * *)m_Head); // next
+					return new (tmp)T(std::forward<TArgs>(args)...);
+				}
+			}
+
+			void Release (T * t)
+			{
+				if (!t) return;
+				t->~T ();
+				Splice (t);
+			}
+
+			template<typename... TArgs>
+			std::unique_ptr<T, std::function<void(T*)> > AcquireUnique (TArgs&&... args)
+			{
+				return std::unique_ptr<T, std::function<void(T*)> >(Acquire (std::forward<TArgs>(args)...),
+					std::bind (&MemoryPool<T>::Release, this, std::placeholders::_1));
+			}
+
+			template<typename... TArgs>
+			std::shared_ptr<T> AcquireShared (TArgs&&... args)
+			{
+				return std::shared_ptr<T>(Acquire (std::forward<TArgs>(args)...),
+					std::bind (&MemoryPool<T>::Release, this, std::placeholders::_1));
+			}
+
+		protected:
+
+			void CleanUp (T * head)
+			{
+				while (head)
+				{
+					auto tmp = head;
+					head = static_cast<T*>(*(void * *)head); // next
+					::operator delete ((void *)tmp);
+				}
+			}
+
+			void Splice (T * t)
+			{
+				*(void * *)t = m_Head; // next
+				m_Head = t;
+			}
+
+			void Splice (T * first, T * last)
+			{
+				*(void * *)last = m_Head; // next
+				m_Head = first;
+			}
+
+		protected:
+
+			T * m_Head;
+	};
+
+	template<class T>
+	class MemoryPoolMt: private MemoryPool<T>
+	{
+		public:
+
+			MemoryPoolMt () {}
+			template<typename... TArgs>
+			T * AcquireMt (TArgs&&... args)
+			{
+				T * ret = nullptr;
+				{
+					std::lock_guard<std::mutex> l(m_Mutex);
+					if (this->m_Head) // not empty
+						ret = this->Acquire (std::forward<TArgs>(args)...);
+				}
+				if (!ret) ret = new T(std::forward<TArgs>(args)...);
+				return ret;
+			}
+
+			void ReleaseMt (T * t)
+			{
+				if (!t) return;
+				t->~T ();
+				std::lock_guard<std::mutex> l(m_Mutex);
+				this->Splice (t);
+			}
+
+			void ReleaseMt (T * * arr, size_t num)
+			{
+				if (!arr || !num) return;
+				T * first = nullptr;
+				for (size_t i = 0; i < num; i++)
+				{
+					T * t = arr[i];
+					t->~T ();
+					*(void * *)t = first;
+					first = t;
+				}
+				std::lock_guard<std::mutex> l(m_Mutex);
+				this->Splice (first, arr[0]);
+			}
+
+			template<template<typename, typename...>class C, typename... R>
+			void ReleaseMt(const C<T *, R...>& c)
+			{
+				if (c.empty ()) return;
+				T * first = nullptr;
+				for (auto& it: c)
+				{
+					T * t = it;
+					t->~T ();
+					*(void * *)t = first;
+					first = t;
+				}
+				std::lock_guard<std::mutex> l(m_Mutex);
+				this->Splice (first, *(c.begin ()));
+			}
+
+			template<typename... TArgs>
+			std::shared_ptr<T> AcquireSharedMt (TArgs&&... args)
+			{
+				return std::shared_ptr<T>(AcquireMt (std::forward<TArgs>(args)...),
+					std::bind<void (MemoryPoolMt<T>::*)(T *)> (&MemoryPoolMt<T>::ReleaseMt, this, std::placeholders::_1));
+			}
+
+			void CleanUpMt ()
+			{
+				T * head;
+				{
+					std::lock_guard<std::mutex> l(m_Mutex);
+					head = this->m_Head;
+					this->m_Head = nullptr;
+				}
+				if (head) this->CleanUp (head);
+			}
+
+		private:
+
+			std::mutex m_Mutex;
+	};
+
+	class RunnableService
+	{
+		protected:
+
+			RunnableService (const std::string& name): m_Name (name), m_IsRunning (false) {}
+			virtual ~RunnableService () {}
+
+			auto& GetIOService () { return m_Service; }
+			bool IsRunning () const { return m_IsRunning; };
+
+			void StartIOService ();
+			void StopIOService ();
+
+			void SetName (std::string_view name);
+
+		private:
+
+			void Run ();
+
+		private:
+
+			std::string m_Name;
+			volatile bool m_IsRunning;
+			std::unique_ptr<std::thread> m_Thread;
+			boost::asio::io_context m_Service;
+	};
+
+	class RunnableServiceWithWork: public RunnableService
+	{
+		protected:
+
+			RunnableServiceWithWork (const std::string& name):
+				RunnableService (name), m_Work (GetIOService ().get_executor ()) {}
+
+		private:
+
+			boost::asio::executor_work_guard<boost::asio::io_context::executor_type> m_Work;
+	};
+
+	void SetThreadName (const char *name);
+
+	template<typename T>
+	class SaveStateHelper
+	{
+		public:
+
+			SaveStateHelper (T& orig): m_Original (orig), m_Copy (orig) {};
+			~SaveStateHelper () { m_Original = m_Copy; };
+
+		private:
+
+			T& m_Original;
+			T m_Copy;
+	};
+
+	class Mapping
+	{
+		public:
+
+			Mapping () = default;
+			Mapping (const Mapping& ) = default;
+			Mapping (Mapping&& ) = default;
+			Mapping (std::initializer_list<std::pair<const std::string, std::string> > options):
+				m_Options (options) {}
+
+			size_t FromBuffer (const uint8_t * buf, size_t len);
+			size_t FromBuffer (size_t size, const uint8_t * buf, size_t len); //without 2 bytes size
+			size_t ToBuffer (uint8_t * buf, size_t len) const;
+
+			std::string_view operator[](std::string_view param) const;
+			bool Insert (std::string_view param, std::string_view value);
+			bool Contains (std::string_view param) const;
+			void CleanUp ();
+			bool IsEmpty () const { return m_Options.empty (); }
+
+			static std::string_view ExtractString (const uint8_t * buf, size_t len);
+			static size_t WriteString (std::string_view str, uint8_t * buf, size_t len);
+			static size_t WriteOption (std::string_view param, std::string_view value, uint8_t * buf, size_t len);
+
+			template<typename T>
+			bool Get(std::string_view param, T& value) const
+			{
+				auto s = (*this)[param];
+				if (s.empty ()) return false;
+				auto res = std::from_chars(s.data(), s.data() + s.size(), value);
+				return res.ec == std::errc();
+			}
+			bool Get(std::string_view param, bool& value) const
+			{
+				auto s = (*this)[param];
+				if (s.empty ()) return false;
+				return GetBoolParamValue (s, value);
+			}
+			template<typename T>
+			bool Put (std::string_view param, T value)
+			{
+				return Insert (param, std::to_string (value));
+			}
+
+		private:
+
+			static bool GetBoolParamValue (std::string_view s, bool& value);
+
+		private:
+
+			std::map<std::string, std::string, std::less<> > m_Options;
+
+		public:
+
+			const decltype(m_Options)& GetOptions () const { return m_Options; }
+	};
+
+	namespace net
+	{
+		int GetMTU (const boost::asio::ip::address& localAddress);
+		int GetMaxMTU (const boost::asio::ip::address_v6& localAddress); // check tunnel broker for ipv6 address
+		const boost::asio::ip::address GetInterfaceAddress (const std::string & ifname, bool ipv6=false);
+		boost::asio::ip::address_v6 GetYggdrasilAddress ();
+		boost::asio::ip::address_v6 GetClearnetIPV6Address ();
+		bool IsLocalAddress (const boost::asio::ip::address& addr);
+		bool IsInReservedRange (const boost::asio::ip::address& host);
+		bool IsYggdrasilAddress (const boost::asio::ip::address& addr);
+		bool IsPortInReservedRange (const uint16_t port) noexcept;
+	}
+}
+}
+
+#endif

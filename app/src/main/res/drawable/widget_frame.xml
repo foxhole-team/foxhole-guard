@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Пиксель-рамка виджетов: жёсткий 2dp-строук акцентом по скруглению лаунчера, без заливки —
+     фон отдаёт per-widget конфиг (чёрный/белый + прозрачность). -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <stroke android:width="2dp" android:color="@color/cli_accent_dim" />
+    <corners android:radius="12dp" />
+    <solid android:color="@android:color/transparent" />
+</shape>

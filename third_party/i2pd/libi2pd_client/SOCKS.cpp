@@ -1,0 +1,947 @@
+/*
+* Copyright (c) 2013-2026, The PurpleI2P Project
+*
+* This file is part of Purple i2pd project and licensed under BSD3
+*
+* See full license text in LICENSE file at top of project tree
+*/
+
+#include <cstring>
+#include <cassert>
+#include <string>
+#include <atomic>
+#include "SOCKS.h"
+#include "Identity.h"
+#include "Streaming.h"
+#include "Destination.h"
+#include "ClientContext.h"
+#include "I2PEndian.h"
+#include "I2PTunnel.h"
+#include "I2PService.h"
+#include "util.h"
+#include "Socks5.h"
+#include "UDPTunnel.h"
+
+namespace i2p
+{
+namespace proxy
+{
+	static const size_t socks_buffer_size = 8192;
+	static const size_t max_socks_hostname_size = 255; // Limit for socks5 and bad idea to traverse
+
+	struct SOCKSDnsAddress
+	{
+		uint8_t size;
+		char value[max_socks_hostname_size];
+		void FromString (const std::string& str)
+		{
+			size = str.length();
+			if (str.length() > max_socks_hostname_size) size = max_socks_hostname_size;
+			memcpy(value,str.c_str(),size);
+		}
+		std::string ToString() { return std::string(value, size); }
+		void push_back (char c) { value[size++] = c; }
+	};
+
+	class SOCKSServer;
+	class SOCKSHandler: public i2p::client::I2PServiceHandler, public std::enable_shared_from_this<SOCKSHandler>
+	{
+		private:
+
+			enum state
+			{
+				GET_SOCKSV,
+				GET_COMMAND,
+				GET_PORT,
+				GET_IPV4,
+				GET4_IDENT,
+				GET4A_HOST,
+				GET5_AUTHNUM,
+				GET5_AUTH,
+				GET5_REQUESTV,
+				GET5_GETRSV,
+				GET5_GETADDRTYPE,
+				GET5_IPV6,
+				GET5_HOST_SIZE,
+				GET5_HOST,
+				GET5_USERPASSWD,
+				GET5_USER_SIZE,
+				GET5_USER,
+				GET5_PASSWD_SIZE,
+				GET5_PASSWD,
+				READY,
+				UPSTREAM_RESOLVE,
+				UPSTREAM_CONNECT,
+				UPSTREAM_HANDSHAKE
+			};
+			enum authMethods
+			{
+				AUTH_NONE = 0, //No authentication, skip to next step
+				AUTH_GSSAPI = 1, //GSSAPI authentication
+				AUTH_USERPASSWD = 2, //Username and password
+				AUTH_UNACCEPTABLE = 0xff //No acceptable method found
+			};
+			enum addrTypes
+			{
+				ADDR_IPV4 = 1, //IPv4 address (4 octets)
+				ADDR_DNS = 3, // DNS name (up to 255 octets)
+				ADDR_IPV6 = 4 //IPV6 address (16 octets)
+			};
+			enum errTypes
+			{
+				SOCKS5_OK = 0, // No error for SOCKS5
+				SOCKS5_GEN_FAIL = 1, // General server failure
+				SOCKS5_RULE_DENIED = 2, // Connection disallowed by ruleset
+				SOCKS5_NET_UNREACH = 3, // Network unreachable
+				SOCKS5_HOST_UNREACH = 4, // Host unreachable
+				SOCKS5_CONN_REFUSED = 5, // Connection refused by the peer
+				SOCKS5_TTL_EXPIRED = 6, // TTL Expired
+				SOCKS5_CMD_UNSUP = 7, // Command unsupported
+				SOCKS5_ADDR_UNSUP = 8, // Address type unsupported
+				SOCKS4_OK = 90, // No error for SOCKS4
+				SOCKS4_FAIL = 91, // Failed establishing connecting or not allowed
+				SOCKS4_IDENTD_MISSING = 92, // Couldn't connect to the identd server
+				SOCKS4_IDENTD_DIFFER = 93 // The ID reported by the application and by identd differ
+			};
+			enum cmdTypes
+			{
+				CMD_CONNECT = 1, // TCP Connect
+				CMD_BIND = 2, // TCP Bind
+				CMD_UDP = 3 // UDP associate
+			};
+			enum socksVersions
+			{
+				SOCKS4 = 4, // SOCKS4
+				SOCKS5 = 5 // SOCKS5
+			};
+			union address
+			{
+				uint32_t ip;
+				SOCKSDnsAddress dns;
+				uint8_t ipv6[16];
+			};
+
+			void EnterState(state nstate, uint8_t parseleft = 1);
+			bool HandleData(uint8_t *sock_buff, std::size_t len);
+			bool ValidateSOCKSRequest();
+			void HandleSockRecv(const boost::system::error_code & ecode, std::size_t bytes_transfered);
+			void Terminate();
+			void AsyncSockRead();
+			SOCKSServer * GetServer () { return (SOCKSServer *)GetOwner (); };
+			boost::asio::const_buffer GenerateSOCKS4Response(errTypes error, uint32_t ip, uint16_t port);
+			boost::asio::const_buffer GenerateSOCKS5Response(errTypes error, addrTypes type, const address &addr, uint16_t port);
+			bool Socks5ChooseAuth();
+			bool Socks5UserPasswdResponse ();
+			void SocksRequestFailed(errTypes error);
+			void SocksRequestSuccess();
+			void SentSocksFailed(const boost::system::error_code & ecode);
+			void SentSocksDone(const boost::system::error_code & ecode);
+			void SentSocksResponse(const boost::system::error_code & ecode);
+			void HandleStreamRequestComplete (std::shared_ptr<i2p::stream::Stream> stream);
+			void ForwardSOCKS();
+
+			template<typename Socket>
+			void SocksUpstreamSuccess(std::shared_ptr<Socket>& upstreamSock);
+			void AsyncUpstreamSockRead();
+			template<typename Socket>
+			void SendUpstreamRequest(std::shared_ptr<Socket>& upstreamSock);
+			void HandleUpstreamConnected(const boost::system::error_code & ecode,
+				const boost::asio::ip::tcp::endpoint& ep);
+			void HandleUpstreamResolved(const boost::system::error_code & ecode,
+				boost::asio::ip::tcp::resolver::results_type endpoints);
+
+			boost::asio::ip::tcp::resolver m_proxy_resolver;
+			uint8_t m_sock_buff[socks_buffer_size];
+			std::shared_ptr<boost::asio::ip::tcp::socket> m_sock, m_upstreamSock;
+#if defined(BOOST_ASIO_HAS_LOCAL_SOCKETS)
+			std::shared_ptr<boost::asio::local::stream_protocol::socket> m_upstreamLocalSock;
+#endif
+			std::shared_ptr<i2p::stream::Stream> m_stream;
+			uint8_t *m_remaining_data; //Data left to be sent
+			uint8_t *m_remaining_upstream_data; //upstream data left to be forwarded
+			uint8_t m_response[7+max_socks_hostname_size];
+			address m_address; //Address
+			std::size_t m_remaining_data_len; //Size of the data left to be sent
+			uint32_t m_4aip; //Used in 4a requests
+			uint16_t m_port;
+			uint8_t m_command;
+			uint8_t m_parseleft; //Octets left to parse
+			authMethods m_authchosen; //Authentication chosen
+			addrTypes m_addrtype; //Address type chosen
+			socksVersions m_socksv; //Socks version
+			cmdTypes m_cmd; // Command requested
+			state m_state;
+			const bool m_UseUpstreamProxy; // do we want to use the upstream proxy for non i2p addresses?
+			const std::string m_UpstreamProxyAddress;
+			const uint16_t m_UpstreamProxyPort;
+			std::string m_Username;
+			std::string m_Password;
+			std::unique_ptr<i2p::client::I2PUDPClientTunnel> m_UDPTunnel;
+
+		public:
+
+			SOCKSHandler(SOCKSServer * parent, std::shared_ptr<boost::asio::ip::tcp::socket> sock, const std::string & upstreamAddr, const uint16_t upstreamPort, const bool useUpstream) :
+				I2PServiceHandler(parent),
+				m_proxy_resolver(parent->GetService()),
+				m_sock(sock), m_stream(nullptr),
+				m_authchosen(AUTH_UNACCEPTABLE), m_addrtype(ADDR_IPV4),
+				m_UseUpstreamProxy(useUpstream),
+				m_UpstreamProxyAddress(upstreamAddr),
+				m_UpstreamProxyPort(upstreamPort)
+				{ m_address.ip = 0; EnterState(GET_SOCKSV); }
+
+			~SOCKSHandler() { Terminate(); }
+			void Handle() override { AsyncSockRead(); }
+	};
+
+	void SOCKSHandler::AsyncSockRead()
+	{
+		LogPrint(eLogDebug, "SOCKS: Async sock read");
+		if (m_sock) {
+			m_sock->async_receive(boost::asio::buffer(m_sock_buff, socks_buffer_size),
+				std::bind(&SOCKSHandler::HandleSockRecv, shared_from_this(),
+				std::placeholders::_1, std::placeholders::_2));
+		} else {
+			LogPrint(eLogError,"SOCKS: No socket for read");
+		}
+	}
+
+	void SOCKSHandler::Terminate()
+	{
+		if (Kill()) return;
+		if (m_sock)
+		{
+			LogPrint(eLogDebug, "SOCKS: Closing socket");
+			m_sock->close();
+			m_sock = nullptr;
+		}
+		if (m_upstreamSock)
+		{
+			LogPrint(eLogDebug, "SOCKS: Closing upstream socket");
+			m_upstreamSock->close();
+			m_upstreamSock = nullptr;
+		}
+#if defined(BOOST_ASIO_HAS_LOCAL_SOCKETS)
+		if (m_upstreamLocalSock)
+		{
+			LogPrint(eLogDebug, "SOCKS: Closing upstream local socket");
+			m_upstreamLocalSock->close();
+			m_upstreamLocalSock = nullptr;
+		}
+#endif
+		if (m_stream)
+		{
+			LogPrint(eLogDebug, "SOCKS: Closing stream");
+			m_stream->AsyncClose ();
+			m_stream = nullptr;
+		}
+		if (m_UDPTunnel)
+		{
+			m_UDPTunnel->Stop ();
+			GetServer ()->ReleaseLocalUDPPort (m_UDPTunnel->GetLocalEndpoint ().port ());
+			m_UDPTunnel = nullptr;
+		}
+		Done(shared_from_this());
+	}
+
+	boost::asio::const_buffer SOCKSHandler::GenerateSOCKS4Response(SOCKSHandler::errTypes error, uint32_t ip, uint16_t port)
+	{
+		assert(error >= SOCKS4_OK);
+		m_response[0] = '\x00';           // version
+		m_response[1] = error;            // response code
+		htobe16buf(m_response + 2, port); // port
+		htobe32buf(m_response + 4, ip);   // IP
+		return boost::asio::const_buffer (m_response,8);
+	}
+
+	boost::asio::const_buffer SOCKSHandler::GenerateSOCKS5Response(SOCKSHandler::errTypes error, SOCKSHandler::addrTypes type, const SOCKSHandler::address &addr, uint16_t port)
+	{
+		size_t size = 6;        // header + port
+		assert(error <= SOCKS5_ADDR_UNSUP);
+		m_response[0] = '\x05'; // version
+		m_response[1] = error;  // response code
+		m_response[2] = '\x00'; // reserved
+		m_response[3] = type;   // address type
+		switch (type)
+		{
+			case ADDR_IPV4:
+				size += 4;
+				htobe32buf(m_response + 4, addr.ip);
+				htobe16buf(m_response + size - 2, port);
+				break;
+			case ADDR_IPV6:
+				size += 16;
+				memcpy(m_response + 4, addr.ipv6, 16);
+				htobe16buf(m_response + size - 2, port);
+				break;
+			case ADDR_DNS:
+				std::string address(addr.dns.value, addr.dns.size);
+				if(address.substr(addr.dns.size - 4, 4) == ".i2p") // overwrite if requested address inside I2P
+				{
+					m_response[3] = ADDR_IPV4;
+					size += 4;
+					memset(m_response + 4, 0, 6); // six HEX zeros
+				}
+				else
+				{
+					size += (1 + addr.dns.size); /* name length + resolved address */
+					m_response[4] = addr.dns.size;
+					memcpy(m_response + 5, addr.dns.value, addr.dns.size);
+					htobe16buf(m_response + size - 2, port);
+				}
+				break;
+		}
+		return boost::asio::const_buffer (m_response, size);
+	}
+
+	bool SOCKSHandler::Socks5ChooseAuth()
+	{
+		m_response[0] = '\x05'; // Version
+		m_response[1] = m_authchosen; // Response code
+		boost::asio::const_buffer response(m_response, 2);
+		if (m_authchosen == AUTH_UNACCEPTABLE)
+		{
+			LogPrint(eLogWarning, "SOCKS: v5 authentication negotiation failed");
+			boost::asio::async_write(*m_sock, response, std::bind(&SOCKSHandler::SentSocksFailed, shared_from_this(), std::placeholders::_1));
+			return false;
+		}
+		else
+		{
+			LogPrint(eLogDebug, "SOCKS: v5 choosing authentication method: ", m_authchosen);
+			boost::asio::async_write(*m_sock, response, std::bind(&SOCKSHandler::SentSocksResponse, shared_from_this(), std::placeholders::_1));
+			return true;
+		}
+	}
+
+	bool SOCKSHandler::Socks5UserPasswdResponse ()
+	{
+		const bool accepted = GetServer ()->ValidateCredentials (m_Username, m_Password);
+		m_response[0] = 1; // Version of the subnegotiation
+		m_response[1] = accepted ? 0 : 1; // Response code
+		LogPrint(accepted ? eLogDebug : eLogWarning,
+			accepted ? "SOCKS: v5 credentials accepted" : "SOCKS: v5 credentials rejected");
+		boost::asio::async_write(*m_sock, boost::asio::const_buffer(m_response, 2),
+			std::bind(accepted ? &SOCKSHandler::SentSocksResponse : &SOCKSHandler::SentSocksFailed,
+				shared_from_this(), std::placeholders::_1));
+		return accepted;
+	}
+
+	/* All hope is lost beyond this point */
+	void SOCKSHandler::SocksRequestFailed(SOCKSHandler::errTypes error)
+	{
+		boost::asio::const_buffer response(nullptr,0);
+		assert(error != SOCKS4_OK && error != SOCKS5_OK);
+		switch (m_socksv)
+		{
+			case SOCKS4:
+				LogPrint(eLogWarning, "SOCKS: v4 request failed: ", error);
+				if (error < SOCKS4_OK) error = SOCKS4_FAIL; // Transparently map SOCKS5 errors
+				response = GenerateSOCKS4Response(error, m_4aip, m_port);
+			break;
+			case SOCKS5:
+				LogPrint(eLogWarning, "SOCKS: v5 request failed: ", error);
+				response = GenerateSOCKS5Response(error, m_addrtype, m_address, m_port);
+			break;
+		}
+		boost::asio::async_write(*m_sock, response, std::bind(&SOCKSHandler::SentSocksFailed,
+			shared_from_this(), std::placeholders::_1));
+	}
+
+	void SOCKSHandler::SocksRequestSuccess()
+	{
+		boost::asio::const_buffer response(nullptr,0);
+		// TODO: this should depend on things like the command type and callbacks may change
+		switch (m_socksv)
+		{
+			case SOCKS4:
+				LogPrint(eLogInfo, "SOCKS: v4 connection success");
+				response = GenerateSOCKS4Response(SOCKS4_OK, m_4aip, m_port);
+			break;
+			case SOCKS5:
+				LogPrint(eLogInfo, "SOCKS: v5 connection success");
+				if (m_cmd == CMD_UDP && m_UDPTunnel)
+				{
+					address ad;
+					// TODO: implement ipv6
+					ad.ip = m_UDPTunnel->GetLocalEndpoint ().address ().to_v4 ().to_uint ();
+					response = GenerateSOCKS5Response(SOCKS5_OK, ADDR_IPV4, ad, m_UDPTunnel->GetLocalEndpoint ().port ());
+				}
+				else
+				{
+					auto s = i2p::client::context.GetAddressBook().ToAddress(GetOwner()->GetLocalDestination()->GetIdentHash());
+					address ad; ad.dns.FromString(s);
+					// HACK only 16 bits passed in port as SOCKS5 doesn't allow for more
+					response = GenerateSOCKS5Response(SOCKS5_OK, ADDR_DNS, ad, m_stream ? m_stream->GetRecvStreamID() : 0);
+				}
+			break;
+		}
+		boost::asio::async_write(*m_sock, response, std::bind(&SOCKSHandler::SentSocksDone, shared_from_this(), std::placeholders::_1));
+	}
+
+	void SOCKSHandler::EnterState(SOCKSHandler::state nstate, uint8_t parseleft) {
+		switch (nstate)
+		{
+			case GET_PORT: parseleft = 2; break;
+			case GET_IPV4: m_addrtype = ADDR_IPV4; m_address.ip = 0; parseleft = 4; break;
+			case GET4_IDENT: m_4aip = m_address.ip; break;
+			case GET4A_HOST:
+			case GET5_HOST: m_addrtype = ADDR_DNS; m_address.dns.size = 0; break;
+			case GET5_IPV6: m_addrtype = ADDR_IPV6; parseleft = 16; break;
+			default:;
+		}
+		m_parseleft = parseleft;
+		m_state = nstate;
+	}
+
+	bool SOCKSHandler::ValidateSOCKSRequest()
+	{
+		if ( m_cmd != CMD_CONNECT && m_cmd != CMD_UDP)
+		{
+			// TODO: we need to support binds and other shit!
+			LogPrint(eLogError, "SOCKS: Unsupported command: ", m_cmd);
+			SocksRequestFailed(SOCKS5_CMD_UNSUP);
+			return false;
+		}
+		// TODO: we may want to support other address types!
+		if ( m_addrtype != ADDR_DNS )
+		{
+			switch (m_socksv)
+			{
+				case SOCKS5:
+					LogPrint(eLogError, "SOCKS: v5 unsupported address type: ", m_addrtype);
+				break;
+				case SOCKS4:
+					LogPrint(eLogError, "SOCKS: Request with v4a rejected because it's actually SOCKS4");
+				break;
+			}
+			SocksRequestFailed(SOCKS5_ADDR_UNSUP);
+			return false;
+		}
+		return true;
+	}
+
+	bool SOCKSHandler::HandleData(uint8_t *sock_buff, std::size_t len)
+	{
+		assert(len); // This should always be called with a least a byte left to parse
+		while (len > 0)
+		{
+			switch (m_state)
+			{
+				case GET_SOCKSV:
+					m_socksv = (SOCKSHandler::socksVersions) *sock_buff;
+					switch (*sock_buff)
+					{
+						case SOCKS4:
+							if (GetServer ()->IsAuthenticationRequired ())
+							{
+								LogPrint(eLogWarning, "SOCKS: rejected SOCKS4 while authentication is required");
+								Terminate();
+								return false;
+							}
+							EnterState(GET_COMMAND); //Initialize the parser at the right position
+						break;
+						case SOCKS5:
+							EnterState(GET5_AUTHNUM); //Initialize the parser at the right position
+						break;
+						default:
+							LogPrint(eLogError, "SOCKS: Rejected invalid version: ", ((int)*sock_buff));
+							Terminate();
+							return false;
+					}
+				break;
+				case GET5_AUTHNUM:
+					EnterState(GET5_AUTH, *sock_buff);
+				break;
+				case GET5_AUTH:
+					m_parseleft --;
+					if (*sock_buff == AUTH_USERPASSWD)
+						m_authchosen = AUTH_USERPASSWD;
+					else if (*sock_buff == AUTH_NONE && !GetServer ()->IsAuthenticationRequired () &&
+						m_authchosen == AUTH_UNACCEPTABLE)
+						m_authchosen = AUTH_NONE;
+					if ( m_parseleft == 0 )
+					{
+						if (!Socks5ChooseAuth()) return false;
+						if (m_authchosen == AUTH_USERPASSWD)
+							EnterState(GET5_USERPASSWD);
+						else
+							EnterState(GET5_REQUESTV);
+					}
+				break;
+				case GET_COMMAND:
+					switch (*sock_buff)
+					{
+						case CMD_CONNECT:
+						case CMD_BIND:
+						break;
+						case CMD_UDP:
+							if (m_socksv == SOCKS5) break;
+							[[fallthrough]];
+						default:
+							LogPrint(eLogError, "SOCKS: Invalid command: ", ((int)*sock_buff));
+							SocksRequestFailed(SOCKS5_GEN_FAIL);
+							return false;
+					}
+					m_cmd = (SOCKSHandler::cmdTypes)*sock_buff;
+					switch (m_socksv)
+					{
+						case SOCKS5: EnterState(GET5_GETRSV); break;
+						case SOCKS4: EnterState(GET_PORT); break;
+					}
+				break;
+				case GET_PORT:
+					m_port = (m_port << 8)|((uint16_t)*sock_buff);
+					m_parseleft--;
+					if (m_parseleft == 0)
+					{
+						switch (m_socksv)
+						{
+							case SOCKS5: EnterState(READY); break;
+							case SOCKS4: EnterState(GET_IPV4); break;
+						}
+					}
+				break;
+				case GET_IPV4:
+					m_address.ip = (m_address.ip << 8)|((uint32_t)*sock_buff);
+					m_parseleft--;
+					if (m_parseleft == 0)
+					{
+						switch (m_socksv)
+						{
+							case SOCKS5: EnterState(GET_PORT); break;
+							case SOCKS4: EnterState(GET4_IDENT); m_4aip = m_address.ip; break;
+						}
+					}
+				break;
+				case GET4_IDENT:
+					if (!*sock_buff)
+					{
+						if( m_4aip == 0 || m_4aip > 255 )
+							EnterState(READY);
+						else
+							EnterState(GET4A_HOST);
+					}
+				break;
+				case GET4A_HOST:
+					if (!*sock_buff)
+					{
+						EnterState(READY);
+						break;
+					}
+					if (m_address.dns.size >= max_socks_hostname_size)
+					{
+						LogPrint(eLogError, "SOCKS: v4a req failed: destination is too large");
+						SocksRequestFailed(SOCKS4_FAIL);
+						return false;
+					}
+					m_address.dns.push_back(*sock_buff);
+				break;
+				case GET5_REQUESTV:
+					if (*sock_buff != SOCKS5)
+					{
+						LogPrint(eLogError,"SOCKS: v5 rejected unknown request version: ", ((int)*sock_buff));
+						SocksRequestFailed(SOCKS5_GEN_FAIL);
+						return false;
+					}
+					EnterState(GET_COMMAND);
+				break;
+				case GET5_GETRSV:
+					if ( *sock_buff != 0 )
+					{
+						LogPrint(eLogError, "SOCKS: v5 unknown reserved field: ", ((int)*sock_buff));
+						SocksRequestFailed(SOCKS5_GEN_FAIL);
+						return false;
+					}
+					EnterState(GET5_GETADDRTYPE);
+				break;
+				case GET5_GETADDRTYPE:
+					switch (*sock_buff)
+					{
+						case ADDR_IPV4: EnterState(GET_IPV4); break;
+						case ADDR_IPV6: EnterState(GET5_IPV6); break;
+						case ADDR_DNS : EnterState(GET5_HOST_SIZE); break;
+						default:
+							LogPrint(eLogError, "SOCKS: v5 unknown address type: ", ((int)*sock_buff));
+							SocksRequestFailed(SOCKS5_GEN_FAIL);
+							return false;
+					}
+				break;
+				case GET5_IPV6:
+					m_address.ipv6[16-m_parseleft] = *sock_buff;
+					m_parseleft--;
+					if (m_parseleft == 0) EnterState(GET_PORT);
+				break;
+				case GET5_HOST_SIZE:
+					EnterState(GET5_HOST, *sock_buff);
+				break;
+				case GET5_HOST:
+					m_address.dns.push_back(*sock_buff);
+					m_parseleft--;
+					if (m_parseleft == 0) EnterState(GET_PORT);
+				break;
+				case GET5_USERPASSWD:
+					if (*sock_buff != 1)
+					{
+						LogPrint(eLogError,"SOCKS: v5 rejected invalid username/password subnegotiation: ", ((int)*sock_buff));
+						SocksRequestFailed(SOCKS5_GEN_FAIL);
+						return false;
+					}
+					EnterState(GET5_USER_SIZE);
+				break;
+				case GET5_USER_SIZE:
+					if (*sock_buff)
+						EnterState(GET5_USER, *sock_buff);
+					else // empty user
+						EnterState(GET5_PASSWD_SIZE);
+				break;
+				case GET5_USER:
+					m_Username.push_back (*sock_buff);
+					m_parseleft--;
+					if (m_parseleft == 0) EnterState(GET5_PASSWD_SIZE);
+				break;
+				case GET5_PASSWD_SIZE:
+					if (*sock_buff)
+						EnterState(GET5_PASSWD, *sock_buff);
+					else // empty password
+					{
+						if (!Socks5UserPasswdResponse ()) return false;
+						EnterState(GET5_REQUESTV);
+					}
+				break;
+				case GET5_PASSWD:
+					m_Password.push_back (*sock_buff);
+					m_parseleft--;
+					if (m_parseleft == 0)
+					{
+						if (!Socks5UserPasswdResponse ()) return false;
+						EnterState(GET5_REQUESTV);
+					}
+				break;
+				default:
+					LogPrint(eLogError, "SOCKS: Parse state?? ", m_state);
+					Terminate();
+					return false;
+			}
+			sock_buff++;
+			len--;
+			if (m_state == READY)
+			{
+				m_remaining_data_len = len;
+				m_remaining_data = sock_buff;
+				return ValidateSOCKSRequest();
+			}
+		}
+		return true;
+	}
+
+	void SOCKSHandler::HandleSockRecv(const boost::system::error_code & ecode, std::size_t len)
+	{
+		LogPrint(eLogDebug, "SOCKS: Received ", len, " bytes");
+		if(ecode)
+		{
+			LogPrint(eLogWarning, "SOCKS: Recv got error: ", ecode);
+			Terminate();
+			return;
+		}
+
+		if (HandleData(m_sock_buff, len))
+		{
+			if (m_state == READY)
+			{
+				const std::string addr = m_address.dns.ToString();
+				LogPrint(eLogInfo, "SOCKS: Requested ", addr, ":" , m_port);
+				const size_t addrlen = addr.size();
+				// does it end with .i2p?
+				if (addr.rfind(".i2p") == addrlen - 4)
+				{
+					// yes it does
+					switch (m_cmd)
+					{
+						case CMD_CONNECT:
+							//make an i2p session
+							GetOwner ()->UpdateLastActivityTime ();
+							GetOwner()->CreateStream ( std::bind (&SOCKSHandler::HandleStreamRequestComplete,
+								shared_from_this(), std::placeholders::_1), m_address.dns.ToString(), m_port);
+						break;
+						case CMD_UDP:
+							// create UDP client tunnel
+							LogPrint (eLogInfo, "SOCKS: New UDP associate connection");
+							m_UDPTunnel = std::make_unique<i2p::client::I2PUDPClientTunnel>("", addr,
+								GetServer ()->GetNextLocalUDPEndpoint (),
+							    GetOwner ()->GetLocalDestination (), m_port, false, i2p::datagram::eDatagramV3);
+							boost::asio::post (GetOwner ()->GetService (), [this](void)
+								{
+									SocksRequestSuccess();
+								});
+							break;
+						default: ;
+					}
+				}
+				else if (m_UseUpstreamProxy)
+					// forward it to upstream proxy
+					ForwardSOCKS();
+				else
+					// no upstream proxy
+					SocksRequestFailed(SOCKS5_ADDR_UNSUP);
+			}
+			else
+				AsyncSockRead();
+		}
+	}
+
+	void SOCKSHandler::SentSocksFailed(const boost::system::error_code & ecode)
+	{
+		if (ecode)
+			LogPrint (eLogError, "SOCKS: Closing socket after sending failure because: ", ecode.message ());
+		Terminate();
+	}
+
+	void SOCKSHandler::SentSocksDone(const boost::system::error_code & ecode)
+	{
+		if (!ecode)
+		{
+			if (m_cmd == CMD_CONNECT)
+			{
+				if (Kill()) return;
+				if (m_sock && m_sock->is_open ())
+				{
+					LogPrint (eLogInfo, "SOCKS: New I2PTunnel connection");
+					auto connection = std::make_shared<i2p::client::I2PTunnelConnection>(GetOwner(), m_sock, m_stream);
+					GetOwner()->AddHandler (connection);
+					connection->I2PConnect (m_remaining_data,m_remaining_data_len);
+					Done(shared_from_this());
+				}
+				else
+					Terminate ();
+			}
+			else if (m_cmd == CMD_UDP && m_UDPTunnel)
+			{
+				LogPrint (eLogInfo, "SOCKS: Start UDP tunnel");
+				m_UDPTunnel->Start ();
+				AsyncSockRead (); // associate socket
+			}
+		}
+		else
+		{
+			LogPrint (eLogError, "SOCKS: Closing socket after completion reply because: ", ecode.message ());
+			Terminate();
+		}
+	}
+
+	void SOCKSHandler::SentSocksResponse(const boost::system::error_code & ecode)
+	{
+		if (ecode)
+		{
+			LogPrint (eLogError, "SOCKS: Closing socket after sending reply because: ", ecode.message ());
+			Terminate();
+		}
+	}
+
+	void SOCKSHandler::HandleStreamRequestComplete (std::shared_ptr<i2p::stream::Stream> stream)
+	{
+		if (stream)
+		{
+			if (m_sock && m_sock->is_open ())
+			{
+				m_stream = stream;
+				SocksRequestSuccess();
+			}
+			else
+				stream->AsyncClose ();
+		}
+		else
+		{
+			LogPrint (eLogError, "SOCKS: Error when creating the stream, check the previous warnings for more info");
+			SocksRequestFailed(SOCKS5_HOST_UNREACH);
+		}
+	}
+
+	void SOCKSHandler::ForwardSOCKS()
+	{
+		LogPrint(eLogInfo, "SOCKS: Forwarding to upstream");
+		if (m_UpstreamProxyPort) // TCP
+		{
+			EnterState(UPSTREAM_RESOLVE);
+			m_proxy_resolver.async_resolve(m_UpstreamProxyAddress, std::to_string(m_UpstreamProxyPort),
+				std::bind(&SOCKSHandler::HandleUpstreamResolved, shared_from_this(), std::placeholders::_1, std::placeholders::_2));
+		}
+		else  if (!m_UpstreamProxyAddress.empty ())// local
+		{
+#if defined(BOOST_ASIO_HAS_LOCAL_SOCKETS)
+			EnterState(UPSTREAM_CONNECT);
+			m_upstreamLocalSock = std::make_shared<boost::asio::local::stream_protocol::socket>(GetOwner()->GetService());
+			auto s = shared_from_this ();
+			m_upstreamLocalSock->async_connect(m_UpstreamProxyAddress,
+			    [s](const boost::system::error_code& ecode)
+			    {
+					if (ecode)
+					{
+						LogPrint(eLogWarning, "SOCKS: Could not connect to local upstream proxy: ", ecode.message());
+						s->SocksRequestFailed(SOCKS5_NET_UNREACH);
+						return;
+					}
+					LogPrint(eLogInfo, "SOCKS: Connected to local upstream proxy");
+					s->SendUpstreamRequest(s->m_upstreamLocalSock);
+				});
+#else
+			LogPrint(eLogError, "SOCKS: Local sockets for upstream proxy not supported");
+			SocksRequestFailed(SOCKS5_ADDR_UNSUP);
+#endif
+		}
+		else
+		{
+			LogPrint(eLogError, "SOCKS: Incorrect upstream proxy address");
+			SocksRequestFailed(SOCKS5_ADDR_UNSUP);
+		}
+	}
+
+	template<typename Socket>
+	void SOCKSHandler::SocksUpstreamSuccess(std::shared_ptr<Socket>& upstreamSock)
+	{
+		LogPrint(eLogInfo, "SOCKS: Upstream success");
+		boost::asio::const_buffer response(nullptr, 0);
+		switch (m_socksv)
+		{
+			case SOCKS4:
+				LogPrint(eLogInfo, "SOCKS: v4 connection success");
+				response = GenerateSOCKS4Response(SOCKS4_OK, m_4aip, m_port);
+			break;
+			case SOCKS5:
+				LogPrint(eLogInfo, "SOCKS: v5 connection success");
+				//HACK only 16 bits passed in port as SOCKS5 doesn't allow for more
+				response = GenerateSOCKS5Response(SOCKS5_OK, ADDR_DNS, m_address, m_port);
+			break;
+		}
+		m_sock->send(response);
+		auto forwarder = CreateSocketsPipe (GetOwner(), m_sock, upstreamSock);
+		upstreamSock = nullptr;
+		m_sock = nullptr;
+		GetOwner()->AddHandler(forwarder);
+		forwarder->Start();
+		Terminate();
+	}
+
+	template<typename Socket>
+	void SOCKSHandler::SendUpstreamRequest(std::shared_ptr<Socket>& upstreamSock)
+	{
+		LogPrint(eLogInfo, "SOCKS: Negotiating with upstream proxy");
+		EnterState(UPSTREAM_HANDSHAKE);
+		if (upstreamSock)
+		{
+			auto s = shared_from_this ();
+			auto onHandshake = [s, &upstreamSock](const boost::system::error_code& ec)
+			{
+				if (!ec)
+					s->SocksUpstreamSuccess(upstreamSock);
+				else
+				{
+					s->SocksRequestFailed(SOCKS5_NET_UNREACH);
+					LogPrint(eLogError, "SOCKS: Upstream proxy failure: ", ec.message ());
+				}
+			};
+			switch (m_addrtype)
+			{
+				case ADDR_DNS:
+					i2p::transport::Socks5Handshake (*upstreamSock, std::make_pair(m_address.dns.ToString (), m_port), onHandshake);
+				break;
+				case ADDR_IPV4:
+					i2p::transport::Socks5Handshake (*upstreamSock, boost::asio::ip::tcp::endpoint (
+						boost::asio::ip::address_v4(m_address.ip), m_port), onHandshake);
+				break;
+				case ADDR_IPV6:
+				{
+					boost::asio::ip::address_v6::bytes_type bytes;
+					memcpy (bytes.data (), m_address.ipv6, 16);
+					i2p::transport::Socks5Handshake (*upstreamSock, boost::asio::ip::tcp::endpoint (
+						boost::asio::ip::address_v6(bytes), m_port), onHandshake);
+					break;
+				}
+				default:
+					LogPrint(eLogError, "SOCKS: Upstream proxy unknown address type: ", m_addrtype);
+			}
+		}
+		else
+			LogPrint(eLogError, "SOCKS: No upstream socket to send handshake to");
+	}
+
+	void SOCKSHandler::HandleUpstreamConnected(const boost::system::error_code & ecode,
+		const boost::asio::ip::tcp::endpoint&  ep)
+	{
+		if (ecode) {
+			LogPrint(eLogWarning, "SOCKS: Could not connect to upstream proxy: ", ecode.message());
+			SocksRequestFailed(SOCKS5_NET_UNREACH);
+			return;
+		}
+		LogPrint(eLogInfo, "SOCKS: Connected to upstream proxy");
+		SendUpstreamRequest(m_upstreamSock);
+	}
+
+	void SOCKSHandler::HandleUpstreamResolved(const boost::system::error_code & ecode,
+		boost::asio::ip::tcp::resolver::results_type endpoints)
+	{
+		if (ecode) {
+			// error resolving
+			LogPrint(eLogWarning, "SOCKS: Upstream proxy", m_UpstreamProxyAddress, " not resolved: ", ecode.message());
+			SocksRequestFailed(SOCKS5_NET_UNREACH);
+			return;
+		}
+		LogPrint(eLogInfo, "SOCKS: Upstream proxy resolved");
+		EnterState(UPSTREAM_CONNECT);
+		auto & service = GetOwner()->GetService();
+		m_upstreamSock = std::make_shared<boost::asio::ip::tcp::socket>(service);
+		boost::asio::async_connect(*m_upstreamSock, endpoints,
+			std::bind(&SOCKSHandler::HandleUpstreamConnected,
+			shared_from_this(), std::placeholders::_1, std::placeholders::_2));
+	}
+
+	SOCKSServer::SOCKSServer(const std::string& name, const std::string& address, uint16_t port,
+		bool outEnable, const std::string& outAddress, uint16_t outPort,
+		std::shared_ptr<i2p::client::ClientDestination> localDestination,
+		const std::string& username, const std::string& password) :
+			TCPIPAcceptor (address, port, localDestination ? localDestination : i2p::client::context.GetSharedLocalDestination ()),
+			m_Name (name), m_Username (username), m_Password (password)
+	{
+		m_UseUpstreamProxy = false;
+		if (outAddress.length() > 0 && outEnable)
+			SetUpstreamProxy(outAddress, outPort);
+	}
+
+	std::shared_ptr<i2p::client::I2PServiceHandler> SOCKSServer::CreateHandler(std::shared_ptr<boost::asio::ip::tcp::socket> socket)
+	{
+		return std::make_shared<SOCKSHandler> (this, socket, m_UpstreamProxyAddress, m_UpstreamProxyPort, m_UseUpstreamProxy);
+	}
+
+	bool SOCKSServer::ValidateCredentials (const std::string& username, const std::string& password) const
+	{
+		if (!IsAuthenticationRequired ()) return true;
+		return username == m_Username && password == m_Password;
+	}
+
+	void SOCKSServer::SetUpstreamProxy(const std::string & addr, const uint16_t port)
+	{
+		m_UpstreamProxyAddress = addr;
+		m_UpstreamProxyPort = port;
+		m_UseUpstreamProxy = true;
+	}
+
+	boost::asio::ip::udp::endpoint SOCKSServer::GetNextLocalUDPEndpoint ()
+	{
+		const auto& localEndpoint = GetLocalEndpoint ();
+		uint16_t port = localEndpoint.port ();
+#if __cplusplus >= 202002L // C++20
+		while (m_UDPPorts.contains (port))
+#else
+		while (m_UDPPorts.count (port) > 0)
+#endif
+			port++;
+		m_UDPPorts.insert (port);
+
+		return boost::asio::ip::udp::endpoint (localEndpoint.address (), port); // use proxy address
+	}
+
+	void SOCKSServer::ReleaseLocalUDPPort (uint16_t port)
+	{
+		m_UDPPorts.erase (port);
+	}
+}
+}

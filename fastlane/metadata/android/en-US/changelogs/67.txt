@@ -1,0 +1,6 @@
+First public beta build:
+• ships arm64-v8a only — 32-bit ARM is built but was not verified on hardware, and an unverified ABI has no place in a first release;
+• VLESS no longer waits for the server's response header before handing the connection over, which deadlocked against sing-box servers;
+• Tor pluggable transports are correctly advertised to the app instead of being reported as unsupported;
+• smaller download: per-ABI Tor assets for ABIs that are not shipped no longer travel in the package;
+• dead resources removed and Compose state holders specialised on the redraw path.

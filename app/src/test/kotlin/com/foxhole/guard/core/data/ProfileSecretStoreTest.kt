@@ -1,0 +1,98 @@
+package com.foxhole.guard.core.data
+
+import com.foxhole.core.model.ProtocolHint
+import com.foxhole.core.model.StoredProfileSecret
+import com.foxhole.core.model.retiredCustomConfigProtocolStorageToken
+import kotlinx.serialization.json.Json
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertThrows
+import org.junit.Assert.assertTrue
+import org.junit.Test
+import java.nio.file.Files
+
+class ProfileSecretStoreTest {
+    private val json = Json { ignoreUnknownKeys = false }
+
+    @Test
+    fun `rejects secret refs that cannot map to one local secret file`() {
+        val directory = Files.createTempDirectory("foxhole-profile-secret-ref").toFile()
+
+        assertThrows(IllegalArgumentException::class.java) {
+            profileSecretFileFor(directory, "../escape")
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            profileSecretFileFor(directory, "not-a-uuid")
+        }
+    }
+
+    @Test
+    fun `maps uuid secret refs inside profile secret directory`() {
+        val directory = Files.createTempDirectory("foxhole-profile-secret-ref").toFile()
+        val profileRefUnderTest = "123e4567-e89b-12d3-a456-426614174000"
+
+        val file = profileSecretFileFor(directory, profileRefUnderTest)
+
+        assertEquals(directory.canonicalFile, requireNotNull(file.parentFile).canonicalFile)
+        assertEquals("$profileRefUnderTest.json", file.name)
+    }
+
+    @Test
+    fun `orphan cleanup removes inactive secret files only`() {
+        val directory = Files.createTempDirectory("foxhole-profile-secret-cleanup").toFile()
+        val activeRef = "123e4567-e89b-12d3-a456-426614174000"
+        val orphanRef = "223e4567-e89b-12d3-a456-426614174000"
+        val invalidRef = "legacy-secret"
+        val activeFile = directory.resolve("$activeRef.json").apply { writeText("active") }
+        val orphanFile = directory.resolve("$orphanRef.json").apply { writeText("orphan") }
+        val invalidFile = directory.resolve("$invalidRef.json").apply { writeText("invalid") }
+
+        val deleted = deleteOrphanProfileSecretFiles(directory, setOf(activeRef))
+
+        assertEquals(2, deleted)
+        assertTrue(activeFile.exists())
+        assertFalse(orphanFile.exists())
+        assertFalse(invalidFile.exists())
+    }
+
+    @Test
+    fun `delete all profile secrets removes stored secret files only`() {
+        val directory = Files.createTempDirectory("foxhole-profile-secret-delete-all").toFile()
+        val firstRef = "123e4567-e89b-12d3-a456-426614174000"
+        val secondRef = "223e4567-e89b-12d3-a456-426614174000"
+        val firstFile = directory.resolve("$firstRef.json").apply { writeText("first") }
+        val secondFile = directory.resolve("$secondRef.json").apply { writeText("second") }
+        val unrelatedFile = directory.resolve("notes.txt").apply { writeText("keep") }
+
+        val deleted = deleteProfileSecretFiles(directory)
+
+        assertEquals(2, deleted)
+        assertFalse(firstFile.exists())
+        assertFalse(secondFile.exists())
+        assertTrue(unrelatedFile.exists())
+    }
+
+    @Test
+    fun `encrypted profile payload migrates retired protocol token before decoding`() {
+        val retired = retiredCustomConfigProtocolStorageToken()
+        val payload =
+            """
+            {
+              "protocolOptions": [
+                {
+                  "id": "legacy",
+                  "displayName": "Legacy",
+                  "protocolHint": "$retired",
+                  "normalizedConfigJson": "{}"
+                }
+              ]
+            }
+            """.trimIndent()
+
+        val migrated = migrateStoredProfileSecretPayload(payload, json)
+        val decoded = json.decodeFromString(StoredProfileSecret.serializer(), migrated)
+
+        assertEquals(ProtocolHint.CUSTOM_CONFIG, decoded.protocolOptions.single().protocolHint)
+        assertFalse(migrated.contains("\"$retired\""))
+    }
+}

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Ресурсное зеркало CliColors.accent для drawable-слоя виджетов (shape-строук не умеет
+         читать Compose-палитру). Меняется только вместе с CliColors. -->
+    <color name="cli_accent_dim">#C05808</color>
+</resources>

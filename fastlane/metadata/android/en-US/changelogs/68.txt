@@ -1,0 +1,5 @@
+Public beta 1.0 — first public FoxHole Guard release.
+
+- Runs entirely on FoxCore, our own Rust network runtime built from source
+- English and Russian texts cleaned up and unified
+- Ships arm64-v8a only for this beta

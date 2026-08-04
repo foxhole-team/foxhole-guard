@@ -1,0 +1,25 @@
+{
+  "schema": 1,
+  "format": "foxhole-dns-fst-v1",
+  "source": {
+    "name": "AdGuardSDNSFilter",
+    "repo": "https://github.com/AdguardTeam/AdGuardSDNSFilter",
+    "branch": "gh-pages",
+    "commit": "22e6d57d87556c71bd5add01c17c63065e43838f",
+    "input_path": "Filters/filter.txt",
+    "input_sha256": "552cd5fde37f95f4dfa85de32e0a4c168e1f88a2a53557e2d2187eaed4b36f99",
+    "license": "GPL-3.0"
+  },
+  "compiler": {
+    "binary": "foxcore-dns-compile",
+    "category": "ads",
+    "allowlist": "adguard-vpn-compatibility-allowlist.txt"
+  },
+  "artifact": {
+    "file": "adguard-dns-filter.fhds",
+    "size": 2132792,
+    "sha256": "420bb5373b3aa0ea3ad5e21473675a0d581e7621a58d78e1aa68143d7929a7f4",
+    "block_entries": 161314,
+    "allow_entries": 190
+  }
+}

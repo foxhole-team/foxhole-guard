@@ -1,0 +1,4 @@
+Public beta 1.0: first Foxhole beta release
+
+Notes:
+- VPN profiles that require route excludes need Android 13 or newer. On Android 12 and older, Foxhole rejects those profiles.
