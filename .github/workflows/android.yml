@@ -36,7 +36,7 @@ jobs:
     timeout-minutes: 50
     steps:
       - name: checkout
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
       # FOXCORE_READ_TOKEN is optional: the FoxCore repository is public, anonymous
       # checkout works, and forks without secrets must still be able to build.
