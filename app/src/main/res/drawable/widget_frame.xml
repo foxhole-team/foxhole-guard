@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Пиксельный пунктир обоих виджетов. Glance вставляет рамку на 4dp, поэтому
+     скругленная маска launcher больше не срезает углы. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <stroke
+        android:width="2dp"
+        android:color="@color/cli_accent"
+        android:dashWidth="7dp"
+        android:dashGap="4dp" />
+    <corners android:radius="8dp" />
+    <solid android:color="@android:color/transparent" />
+</shape>

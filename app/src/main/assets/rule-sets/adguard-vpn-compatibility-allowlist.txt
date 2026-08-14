@@ -1,0 +1,16 @@
+# Local compatibility allowlist used before the bundled AdGuard DNS block rule.
+# It keeps AdGuard VPN control-plane domains resolvable during FoxHole DNS filtering tests.
+adguard-vpn.com
+adguard-vpn.online
+adguard-vpn.net
+adguard-vpn.org
+adguard-vpn.info
+adguard-vpn.app
+adguard-vpn.io
+adguard-vpn.biz
+adguard-vpn.us
+adguard-vpn.uk
+adguard.com
+adguard.info
+adguard-dns.com
+adguard-dns.io

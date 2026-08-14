@@ -1,0 +1,115 @@
+name: setup Android and FoxHole Core build
+description: >-
+  Install the pinned Java, Android SDK and NDK inputs, fetch the pinned FoxHole Core source,
+  and install the Rust toolchain the core pins in its own rust-toolchain.toml.
+
+inputs:
+  core-repository:
+    description: >-
+      GitHub repository containing the FoxHole Core workspace. Workflows pass
+      `vars.FOXCORE_REPO` here with this default as the fallback placeholder.
+    required: false
+    default: foxhole-team/foxhole-core
+
+runs:
+  using: composite
+  steps:
+    - name: read pinned FoxHole Core revision
+      id: foxcore-pin
+      shell: bash
+      run: |
+        set -euo pipefail
+        revision="$(tr -d '[:space:]' < config/foxcore-revision.txt)"
+        if [[ ! "$revision" =~ ^[0-9a-f]{40}$ ]]; then
+          echo "config/foxcore-revision.txt must contain one full Git commit SHA." >&2
+          exit 1
+        fi
+        echo "revision=$revision" >> "$GITHUB_OUTPUT"
+
+    - name: checkout pinned public FoxHole Core
+      uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      with:
+        repository: ${{ inputs.core-repository }}
+        ref: ${{ steps.foxcore-pin.outputs.revision }}
+        path: .foxcore-src
+        persist-credentials: false
+
+    - name: setup Java
+      uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+      with:
+        distribution: temurin
+        java-version: "17"
+        cache: gradle
+
+    - name: setup Gradle
+      uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5
+
+    - name: install the Rust toolchain pinned by the FoxHole Core workspace
+      shell: bash
+      run: |
+        set -euo pipefail
+        # The core pins its toolchain in rust-toolchain.toml; this repository does
+        # not duplicate that pin. rustup honours the file automatically inside
+        # .foxcore-src; FOXCORE_RUST_TOOLCHAIN lets steps outside that directory
+        # (cargo-ndk install, cargo fetch) use the same toolchain explicitly.
+        toolchain_file=".foxcore-src/rust-toolchain.toml"
+        if [[ ! -f "$toolchain_file" ]]; then
+          echo "FoxHole Core checkout has no rust-toolchain.toml; the pinned core must declare its toolchain." >&2
+          exit 1
+        fi
+        toolchain="$(sed -n 's/^[[:space:]]*channel[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' "$toolchain_file" | head -n 1)"
+        if [[ -z "$toolchain" ]]; then
+          echo "Could not read channel from $toolchain_file" >&2
+          exit 1
+        fi
+        rustup toolchain install "$toolchain" --profile minimal --component clippy --component rustfmt
+        # The public beta ships arm64-v8a only; widening -Pfoxhole.abis needs the
+        # matching targets added here as well.
+        rustup target add --toolchain "$toolchain" aarch64-linux-android
+        echo "FOXCORE_RUST_TOOLCHAIN=$toolchain" >> "$GITHUB_ENV"
+        echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+
+    - name: install pinned Android SDK and NDK
+      shell: bash
+      run: |
+        set -euo pipefail
+        ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
+        if [[ ! -d "$ANDROID_SDK_ROOT" ]]; then
+          echo "Android SDK root not found: $ANDROID_SDK_ROOT" >&2
+          exit 1
+        fi
+        SDKMANAGER="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+        if [[ ! -x "$SDKMANAGER" ]]; then
+          SDKMANAGER="$(find "$ANDROID_SDK_ROOT/cmdline-tools" -path '*/bin/sdkmanager' | sort | tail -n 1)"
+        fi
+        if [[ -z "${SDKMANAGER:-}" || ! -x "$SDKMANAGER" ]]; then
+          echo "sdkmanager not found under $ANDROID_SDK_ROOT/cmdline-tools" >&2
+          exit 1
+        fi
+        {
+          echo "ANDROID_HOME=$ANDROID_SDK_ROOT"
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
+          echo "ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/29.0.14206865"
+          echo "FOXCORE_SOURCE_ROOT=$GITHUB_WORKSPACE/.foxcore-src"
+        } >> "$GITHUB_ENV"
+        {
+          dirname "$SDKMANAGER"
+          echo "$ANDROID_SDK_ROOT/platform-tools"
+        } >> "$GITHUB_PATH"
+        set +o pipefail
+        yes | "$SDKMANAGER" --licenses >/dev/null
+        set -o pipefail
+        "$SDKMANAGER" --channel=3 \
+          "platform-tools" \
+          "platforms;android-37.0" \
+          "build-tools;37.0.0" \
+          "ndk;29.0.14206865"
+
+    - name: install cargo-ndk and fetch locked Rust dependencies
+      shell: bash
+      run: |
+        set -euo pipefail
+        if [[ "$(cargo "+${FOXCORE_RUST_TOOLCHAIN:?}" ndk --version 2>/dev/null || true)" != "cargo-ndk 4.1.2" ]]; then
+          cargo "+${FOXCORE_RUST_TOOLCHAIN:?}" install cargo-ndk --version 4.1.2 --locked
+        fi
+        cargo "+${FOXCORE_RUST_TOOLCHAIN:?}" fetch --locked --manifest-path .foxcore-src/Cargo.toml

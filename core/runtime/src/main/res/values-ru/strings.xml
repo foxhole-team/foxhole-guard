@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+<string name="error_route_excludes_android_version">Для исключений маршрутов нужен Android 13 или новее. Этот профиль нельзя безопасно запустить на этом устройстве</string>
+<string name="error_route_excludes_too_many">В этом профиле слишком много исключений маршрутов (%1$d; лимит Android — %2$d). Сократите правила маршрутов и попробуйте снова</string>
+<string name="error_runtime_missing">В этой сборке нет нативной библиотеки FoxCore</string>
+<string name="error_vpn_package_split_unavailable">Некоторые выбранные приложения больше не установлены. Обновите список маршрутизации приложений и переподключитесь</string>
+</resources>

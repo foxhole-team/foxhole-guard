@@ -1,0 +1,301 @@
+name: android
+
+on:
+  workflow_dispatch:
+    inputs:
+      foxcore_smoke_only:
+        description: "Only build and verify the pinned FoxCore JNI artifact"
+        required: false
+        type: boolean
+        default: false
+      security_scan_only:
+        description: "Only run secret and dependency vulnerability scans"
+        required: false
+        type: boolean
+        default: false
+      release_candidate_only:
+        description: "Re-run security gates and build the signed release candidate"
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: build/unit/security verified
+    runs-on: ubuntu-24.04
+    # A cold public checkout compiles FoxCore, i2pd and Tor transports from pinned source before
+    # the Android package is assembled. Keep enough headroom for GitHub's uncached network while
+    # retaining a hard upper bound for genuine hangs.
+    timeout-minutes: 90
+    steps:
+      - name: checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          submodules: recursive
+          persist-credentials: false
+
+      - name: setup Android and FoxHole Core build
+        uses: ./.github/actions/setup-foxcore
+        with:
+          core-repository: ${{ vars.FOXCORE_REPO || 'foxhole-team/foxhole-core' }}
+
+      - name: pinned FoxCore native smoke
+        if: github.event_name == 'workflow_dispatch' && inputs.foxcore_smoke_only
+        run: ./gradlew --no-daemon --console=plain --stacktrace :app:prepareFoxCoreNative
+
+      # Run the cheap security gates before the cold native build so a policy failure is fast.
+      - name: secret scan
+        if: github.event_name != 'workflow_dispatch' || inputs.security_scan_only || !inputs.foxcore_smoke_only
+        run: scripts/run-gitleaks-scan.sh
+
+      - name: mandatory dependency vulnerability scan
+        if: github.event_name != 'workflow_dispatch' || inputs.security_scan_only || !inputs.foxcore_smoke_only
+        run: scripts/run-osv-source-scan.sh
+
+      - name: verify wrapper
+        if: >-
+          !inputs.foxcore_smoke_only &&
+          !inputs.security_scan_only &&
+          !inputs.release_candidate_only
+        run: ./gradlew --no-daemon --console=plain --version
+
+      - name: static analysis, lint, unit tests, and coverage
+        if: >-
+          !inputs.foxcore_smoke_only &&
+          !inputs.security_scan_only &&
+          !inputs.release_candidate_only
+        run: ./gradlew --no-daemon --console=plain --stacktrace :app:detekt verifyDetektBaseline :app:lintDebug :app:lintRelease :app:lintVitalRelease :app:testDebugUnitTest jacocoDebugUnitTestReport jacocoDebugUnitTestCoverageVerification verifyReleaseBuildConfigDefaults
+
+      - name: build debug APK
+        if: >-
+          !inputs.foxcore_smoke_only &&
+          !inputs.security_scan_only &&
+          !inputs.release_candidate_only
+        run: ./gradlew --no-daemon --console=plain --stacktrace :app:assembleDebug
+
+  release-candidate:
+    name: signed release candidate
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      github.ref == 'refs/heads/dev' &&
+      inputs.release_candidate_only
+    needs: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    permissions:
+      contents: write
+    steps:
+      - name: checkout verified dev commit
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          submodules: recursive
+          persist-credentials: false
+
+      - name: setup Android and FoxHole Core build
+        uses: ./.github/actions/setup-foxcore
+        with:
+          core-repository: ${{ vars.FOXCORE_REPO || 'foxhole-team/foxhole-core' }}
+
+      - name: prepare release signing inputs
+        shell: bash
+        env:
+          FOXHOLE_RELEASE_STORE_FILE_B64: ${{ secrets.FOXHOLE_RELEASE_STORE_FILE_B64 }}
+          FOXHOLE_RELEASE_STORE_PASSWORD: ${{ secrets.FOXHOLE_RELEASE_STORE_PASSWORD }}
+          FOXHOLE_RELEASE_KEY_ALIAS: ${{ secrets.FOXHOLE_RELEASE_KEY_ALIAS }}
+          FOXHOLE_RELEASE_KEY_PASSWORD: ${{ secrets.FOXHOLE_RELEASE_KEY_PASSWORD }}
+          FOXHOLE_RELEASE_STORE_TYPE: ${{ secrets.FOXHOLE_RELEASE_STORE_TYPE }}
+        run: |
+          set -euo pipefail
+          missing=()
+          for secret_name in \
+            FOXHOLE_RELEASE_STORE_FILE_B64 \
+            FOXHOLE_RELEASE_STORE_PASSWORD \
+            FOXHOLE_RELEASE_KEY_ALIAS \
+            FOXHOLE_RELEASE_KEY_PASSWORD
+          do
+            if [[ -z "${!secret_name:-}" ]]; then
+              missing+=("$secret_name")
+            fi
+          done
+          if (( ${#missing[@]} > 0 )); then
+            printf 'Release signing secrets are required. Missing: %s\n' "${missing[*]}" >&2
+            exit 1
+          fi
+          keystore_path="$RUNNER_TEMP/foxhole-release.p12"
+          if ! printf '%s' "$FOXHOLE_RELEASE_STORE_FILE_B64" | base64 --decode > "$keystore_path"; then
+            echo "FOXHOLE_RELEASE_STORE_FILE_B64 is not valid base64" >&2
+            exit 1
+          fi
+          chmod 600 "$keystore_path"
+          {
+            echo "FOXHOLE_RELEASE_STORE_FILE=$keystore_path"
+            echo "FOXHOLE_RELEASE_STORE_PASSWORD=$FOXHOLE_RELEASE_STORE_PASSWORD"
+            echo "FOXHOLE_RELEASE_KEY_ALIAS=$FOXHOLE_RELEASE_KEY_ALIAS"
+            echo "FOXHOLE_RELEASE_KEY_PASSWORD=$FOXHOLE_RELEASE_KEY_PASSWORD"
+            echo "FOXHOLE_RELEASE_STORE_TYPE=${FOXHOLE_RELEASE_STORE_TYPE:-PKCS12}"
+          } >> "$GITHUB_ENV"
+
+      - name: resolve published versionCode floor
+        id: published
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          version_code="$(scripts/package-release-candidate.sh published-code "$GITHUB_REPOSITORY")"
+          echo "version_code=$version_code" >> "$GITHUB_OUTPUT"
+
+      # This is the only APK assembly. main later downloads and publishes these exact,
+      # immutable bytes after proving that its Git tree is identical to this dev commit.
+      # AGP cannot build ABI-split APKs and an AAB in one invocation; verify the public bundle in a
+      # second, non-split configuration so both release shapes are checked without contaminating
+      # each other's resource-shrinker outputs.
+      - name: build and verify signed candidate
+        run: |
+          ./gradlew \
+            --no-daemon \
+            --console=plain \
+            --stacktrace \
+            -Pfoxhole.splitApks=true \
+            -Pfoxhole.sbom=true \
+            "-Pfoxhole.lastUploadedVersionCode=${{ steps.published.outputs.version_code }}" \
+            :app:validateReleaseSigningInputs \
+            :app:assembleRelease \
+            :app:verifyReleaseContainsNativeRuntime \
+            :app:verifyReleaseContainsBaselineProfile \
+            :app:verifyReleaseBuildConfigDefaults \
+            :app:verifyReleaseJniSurface
+          ./gradlew \
+            --no-daemon \
+            --console=plain \
+            --stacktrace \
+            -Pfoxhole.sbom=true \
+            "-Pfoxhole.lastUploadedVersionCode=${{ steps.published.outputs.version_code }}" \
+            :app:validateReleaseSigningInputs \
+            :app:publicReleasePreflight
+
+      - name: package immutable candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          candidate_dir="$RUNNER_TEMP/foxhole-release-candidate"
+          source_tree="$(git rev-parse 'HEAD^{tree}')"
+          FOXHOLE_SBOM_PATH=build/reports/cyclonedx/bom.json \
+            scripts/package-release-candidate.sh \
+              prepare \
+              "$candidate_dir" \
+              "$GITHUB_SHA" \
+              "$source_tree"
+
+      # Actions artifact storage can be exhausted independently of a valid build. Stage the six
+      # verified public files in a private draft release instead. Draft assets are hidden even
+      # after the repository becomes public, and main deletes this staging release after it has
+      # published and byte-compared the final immutable release.
+      - name: stage immutable candidate
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          candidate_dir="$RUNNER_TEMP/foxhole-release-candidate"
+          staging_tag="candidate-$GITHUB_SHA"
+          assets=()
+          while IFS= read -r asset; do
+            assets+=("$asset")
+          done < <(find "$candidate_dir" -mindepth 1 -maxdepth 1 -type f | LC_ALL=C sort)
+          [[ ${#assets[@]} -eq 6 ]] || {
+            echo "Expected exactly six verified candidate files." >&2
+            exit 1
+          }
+
+          if gh api "repos/$GITHUB_REPOSITORY/releases/tags/$staging_tag" >/dev/null 2>&1; then
+            echo "Refusing to replace a published release at $staging_tag." >&2
+            exit 1
+          fi
+          releases_json="$RUNNER_TEMP/releases-before-staging.json"
+          gh api -X GET "repos/$GITHUB_REPOSITORY/releases" -f per_page=100 > "$releases_json"
+          existing_ids=()
+          while IFS= read -r release_id; do
+            existing_ids+=("$release_id")
+          done < <(
+            jq -r --arg tag "$staging_tag" \
+              '.[] | select(.draft == true and .tag_name == $tag) | .id' \
+              "$releases_json"
+          )
+          (( ${#existing_ids[@]} <= 1 )) || {
+            echo "Multiple candidate drafts exist for $staging_tag." >&2
+            exit 1
+          }
+          if (( ${#existing_ids[@]} == 1 )); then
+            gh api -X DELETE "repos/$GITHUB_REPOSITORY/releases/${existing_ids[0]}"
+          fi
+
+          gh release create "$staging_tag" \
+            "${assets[@]}" \
+            --draft \
+            --notes "Immutable candidate for $GITHUB_SHA. Published only by the verified main workflow." \
+            --target "$GITHUB_SHA" \
+            --title "FoxHole Guard candidate $GITHUB_SHA"
+
+          releases_json="$RUNNER_TEMP/releases-after-staging.json"
+          gh api -X GET "repos/$GITHUB_REPOSITORY/releases" -f per_page=100 > "$releases_json"
+          staging_release_id="$(
+            jq -er \
+              --arg tag "$staging_tag" \
+              --arg sha "$GITHUB_SHA" '
+                [.[] | select(
+                  .draft == true and
+                  .tag_name == $tag and
+                  .target_commitish == $sha
+                )] |
+                if length == 1 then .[0].id else error("candidate draft is not unique") end
+              ' "$releases_json"
+          )"
+          [[ "$staging_release_id" =~ ^[1-9][0-9]*$ ]] || {
+            echo "Candidate staging release ID is invalid." >&2
+            exit 1
+          }
+          asset_count="$(
+            jq -r --argjson id "$staging_release_id" \
+              '.[] | select(.id == $id) | .assets | length' \
+              "$releases_json"
+          )"
+          [[ "$asset_count" == 6 ]] || {
+            echo "Candidate staging release must contain exactly six assets." >&2
+            exit 1
+          }
+
+          staged_dir="$RUNNER_TEMP/staged-release-candidate"
+          mkdir -p "$staged_dir"
+          for source in "${assets[@]}"; do
+            staged="$staged_dir/$(basename "$source")"
+            asset_url="$(
+              jq -er \
+                --argjson id "$staging_release_id" \
+                --arg name "$(basename "$source")" '
+                  [.[] | select(.id == $id) | .assets[] | select(.name == $name)] |
+                  if length == 1 then .[0].url else error("candidate asset is not unique") end
+                ' "$releases_json"
+            )"
+            gh api -H 'Accept: application/octet-stream' "$asset_url" > "$staged"
+            [[ -s "$staged" ]] || {
+              echo "Staging release is missing or has an empty $(basename "$source")." >&2
+              exit 1
+            }
+            cmp --silent "$source" "$staged" || {
+              echo "Staged bytes differ for $(basename "$source")." >&2
+              exit 1
+            }
+          done
+
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$staging_tag" >/dev/null 2>&1; then
+            echo "A draft candidate must not create a public Git ref." >&2
+            exit 1
+          fi

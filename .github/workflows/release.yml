@@ -1,0 +1,364 @@
+name: release
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  attestations: write
+  contents: write
+  id-token: write
+
+concurrency:
+  group: release-main
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: publish verified dev bytes
+    if: github.repository == 'foxhole-team/foxhole-guard'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: checkout main
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+
+      - name: verify public signed main authority
+        id: authority
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REF" == "refs/heads/main" ]] || {
+            echo "Release must run from refs/heads/main." >&2
+            exit 1
+          }
+          visibility="$(gh api "repos/$GITHUB_REPOSITORY" --jq '.visibility')"
+          [[ "$visibility" == "public" ]] || {
+            echo "Refusing to publish while $GITHUB_REPOSITORY is not public." >&2
+            exit 1
+          }
+          verified="$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA" --jq '.commit.verification.verified')"
+          reason="$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA" --jq '.commit.verification.reason')"
+          [[ "$verified" == "true" ]] || {
+            echo "main commit is not GitHub-verified (reason: $reason). Sign it with the registered release key." >&2
+            exit 1
+          }
+          main_tree="$(git rev-parse 'HEAD^{tree}')"
+          [[ "$main_tree" =~ ^[0-9a-f]{40}$ ]] || {
+            echo "Could not resolve the main Git tree." >&2
+            exit 1
+          }
+          echo "main_tree=$main_tree" >> "$GITHUB_OUTPUT"
+
+      # A main merge is publishable only when an already-successful dev run had byte-for-byte
+      # identical source content and retained its hidden immutable candidate draft.
+      - name: find matching successful dev candidate
+        id: candidate
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MAIN_TREE: ${{ steps.authority.outputs.main_tree }}
+        run: |
+          set -euo pipefail
+          runs_json="$RUNNER_TEMP/dev-runs.json"
+          releases_json="$RUNNER_TEMP/candidate-releases.json"
+          gh api \
+            -X GET \
+            "repos/$GITHUB_REPOSITORY/actions/workflows/android.yml/runs" \
+            -f branch=dev \
+            -f status=success \
+            -f per_page=100 \
+            > "$runs_json"
+          gh api -X GET "repos/$GITHUB_REPOSITORY/releases" -f per_page=100 > "$releases_json"
+
+          selected_run=""
+          selected_sha=""
+          selected_staging_tag=""
+          selected_staging_release_id=""
+          while IFS=$'\t' read -r run_id dev_sha; do
+            [[ "$run_id" =~ ^[1-9][0-9]*$ ]] || continue
+            [[ "$dev_sha" =~ ^[0-9a-f]{40}$ ]] || continue
+            dev_tree="$(gh api "repos/$GITHUB_REPOSITORY/git/commits/$dev_sha" --jq '.tree.sha')"
+            [[ "$dev_tree" == "$MAIN_TREE" ]] || continue
+
+            staging_tag="candidate-$dev_sha"
+            staging_count="$(
+              jq \
+                --arg tag "$staging_tag" \
+                --arg sha "$dev_sha" '
+                  [.[] | select(
+                    .draft == true and
+                    .tag_name == $tag and
+                    .target_commitish == $sha and
+                    (.assets | length) == 6
+                  )] | length
+                ' "$releases_json"
+            )"
+            [[ "$staging_count" == 1 ]] || continue
+            staging_release_id="$(
+              jq -er \
+                --arg tag "$staging_tag" \
+                --arg sha "$dev_sha" '
+                  .[] | select(
+                    .draft == true and
+                    .tag_name == $tag and
+                    .target_commitish == $sha and
+                    (.assets | length) == 6
+                  ) | .id
+                ' "$releases_json"
+            )"
+            [[ "$staging_release_id" =~ ^[1-9][0-9]*$ ]] || continue
+            selected_run="$run_id"
+            selected_sha="$dev_sha"
+            selected_staging_tag="$staging_tag"
+            selected_staging_release_id="$staging_release_id"
+            break
+          done < <(jq -r '.workflow_runs[] | [.id, .head_sha] | @tsv' "$runs_json")
+
+          [[ -n "$selected_run" ]] || {
+            echo "No successful, unexpired dev candidate has the same Git tree as main." >&2
+            exit 1
+          }
+          {
+            echo "run_id=$selected_run"
+            echo "dev_sha=$selected_sha"
+            echo "staging_tag=$selected_staging_tag"
+            echo "staging_release_id=$selected_staging_release_id"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: install APK verification tools
+        uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # v4
+
+      - name: install pinned Android build tools
+        shell: bash
+        run: sdkmanager "build-tools;37.0.0"
+
+      - name: download exact dev candidate
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STAGING_RELEASE_ID: ${{ steps.candidate.outputs.staging_release_id }}
+        run: |
+          set -euo pipefail
+          candidate_dir="$RUNNER_TEMP/foxhole-release-candidate"
+          mkdir -p "$candidate_dir"
+          release_json="$RUNNER_TEMP/candidate-release.json"
+          gh api "repos/$GITHUB_REPOSITORY/releases/$STAGING_RELEASE_ID" > "$release_json"
+          [[ "$(jq -r '.draft' "$release_json")" == true ]] || {
+            echo "Candidate staging release is not a draft." >&2
+            exit 1
+          }
+          [[ "$(jq -r '.assets | length' "$release_json")" == 6 ]] || {
+            echo "Candidate staging release must contain exactly six assets." >&2
+            exit 1
+          }
+          while IFS=$'\t' read -r asset_id asset_name; do
+            [[ "$asset_id" =~ ^[1-9][0-9]*$ ]] || exit 1
+            [[ "$asset_name" == "$(basename "$asset_name")" ]] || exit 1
+            gh api \
+              -H 'Accept: application/octet-stream' \
+              "repos/$GITHUB_REPOSITORY/releases/assets/$asset_id" \
+              > "$candidate_dir/$asset_name"
+          done < <(jq -r '.assets[] | [.id, .name] | @tsv' "$release_json")
+
+      - name: verify candidate bytes and release policy
+        id: policy
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEV_SHA: ${{ steps.candidate.outputs.dev_sha }}
+          MAIN_TREE: ${{ steps.authority.outputs.main_tree }}
+        run: |
+          set -euo pipefail
+          candidate_dir="$RUNNER_TEMP/foxhole-release-candidate"
+          scripts/package-release-candidate.sh verify "$candidate_dir" "$DEV_SHA" "$MAIN_TREE"
+
+          metadata="$candidate_dir/CANDIDATE.json"
+          tag="$(jq -er '.tag' "$metadata")"
+          version_name="$(jq -er '.versionName' "$metadata")"
+          version_code="$(jq -er '.versionCode' "$metadata")"
+          [[ "$tag" == "v$version_name" ]] || {
+            echo "Candidate tag/version mismatch." >&2
+            exit 1
+          }
+          published_code="$(scripts/package-release-candidate.sh published-code "$GITHUB_REPOSITORY")"
+          (( version_code > published_code )) || {
+            echo "versionCode $version_code is not newer than published $published_code." >&2
+            exit 1
+          }
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" >/dev/null 2>&1; then
+            echo "Tag $tag already exists; release is intentionally non-overwriting." >&2
+            exit 1
+          fi
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "Release $tag already exists; release is intentionally non-overwriting." >&2
+            exit 1
+          fi
+          {
+            echo "tag=$tag"
+            echo "version_name=$version_name"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: attest exact release files
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3
+        with:
+          subject-path: ${{ runner.temp }}/foxhole-release-candidate/*
+
+      # Create as a draft first so a failed upload/byte comparison never exposes a partial release.
+      - name: create and verify draft release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.policy.outputs.tag }}
+          VERSION_NAME: ${{ steps.policy.outputs.version_name }}
+        run: |
+          set -euo pipefail
+          candidate_dir="$RUNNER_TEMP/foxhole-release-candidate"
+          assets=()
+          while IFS= read -r asset; do
+            assets+=("$asset")
+          done < <(find "$candidate_dir" -mindepth 1 -maxdepth 1 -type f | LC_ALL=C sort)
+          [[ ${#assets[@]} -eq 6 ]] || {
+            echo "Expected exactly six verified release files." >&2
+            exit 1
+          }
+
+          cleanup_enabled=true
+          release_id=""
+          cleanup_release() {
+            if [[ "$cleanup_enabled" == true ]]; then
+              if [[ "$release_id" =~ ^[1-9][0-9]*$ ]]; then
+                gh api -X DELETE "repos/$GITHUB_REPOSITORY/releases/$release_id" >/dev/null 2>&1 || true
+              fi
+              if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$RELEASE_TAG" >/dev/null 2>&1; then
+                gh api -X DELETE "repos/$GITHUB_REPOSITORY/git/refs/tags/$RELEASE_TAG" \
+                  >/dev/null 2>&1 || true
+              fi
+            fi
+          }
+          trap cleanup_release EXIT
+
+          gh release create "$RELEASE_TAG" \
+            "${assets[@]}" \
+            --draft \
+            --generate-notes \
+            --target "$GITHUB_SHA" \
+            --title "FoxHole Guard $VERSION_NAME"
+
+          releases_json="$RUNNER_TEMP/releases-after-final-draft.json"
+          gh api -X GET "repos/$GITHUB_REPOSITORY/releases" -f per_page=100 > "$releases_json"
+          release_id="$(
+            jq -er \
+              --arg tag "$RELEASE_TAG" \
+              --arg sha "$GITHUB_SHA" '
+                [.[] | select(
+                  .draft == true and
+                  .tag_name == $tag and
+                  .target_commitish == $sha
+                )] |
+                if length == 1 then .[0].id else error("final draft is not unique") end
+              ' "$releases_json"
+          )"
+          [[ "$release_id" =~ ^[1-9][0-9]*$ ]] || {
+            echo "Final draft release ID is invalid." >&2
+            exit 1
+          }
+          asset_count="$(
+            jq -r --argjson id "$release_id" \
+              '.[] | select(.id == $id) | .assets | length' \
+              "$releases_json"
+          )"
+          [[ "$asset_count" == 6 ]] || {
+            echo "Final draft must contain exactly six assets." >&2
+            exit 1
+          }
+
+          published_dir="$RUNNER_TEMP/published-release"
+          mkdir -p "$published_dir"
+          for source in "${assets[@]}"; do
+            published="$published_dir/$(basename "$source")"
+            asset_url="$(
+              jq -er \
+                --argjson id "$release_id" \
+                --arg name "$(basename "$source")" '
+                  [.[] | select(.id == $id) | .assets[] | select(.name == $name)] |
+                  if length == 1 then .[0].url else error("final asset is not unique") end
+                ' "$releases_json"
+            )"
+            gh api -H 'Accept: application/octet-stream' "$asset_url" > "$published"
+            [[ -s "$published" ]] || {
+              echo "Draft release is missing or has an empty $(basename "$source")." >&2
+              exit 1
+            }
+            cmp --silent "$source" "$published" || {
+              echo "Published bytes differ for $(basename "$source")." >&2
+              exit 1
+            }
+          done
+
+          # Draft releases intentionally have no public Git ref and cannot be addressed through
+          # the tag endpoint. Publish the already byte-compared draft by its REST release ID.
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "Final release tag appeared before the verified draft was published." >&2
+            exit 1
+          fi
+          published_json="$RUNNER_TEMP/published-final-release.json"
+          gh api \
+            -X PATCH \
+            "repos/$GITHUB_REPOSITORY/releases/$release_id" \
+            -F draft=false \
+            -f make_latest=true \
+            > "$published_json"
+          [[ "$(jq -r '.draft' "$published_json")" == false ]] || {
+            echo "Release was not published after byte verification." >&2
+            exit 1
+          }
+          [[ "$(jq -r '.tag_name' "$published_json")" == "$RELEASE_TAG" ]] || {
+            echo "Published release tag changed unexpectedly." >&2
+            exit 1
+          }
+          release_by_tag_id="$(
+            gh api "repos/$GITHUB_REPOSITORY/releases/tags/$RELEASE_TAG" --jq '.id'
+          )"
+          [[ "$release_by_tag_id" == "$release_id" ]] || {
+            echo "Published tag does not resolve to the verified draft release." >&2
+            exit 1
+          }
+          tag_type="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$RELEASE_TAG" --jq '.object.type')"
+          tag_sha="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$RELEASE_TAG" --jq '.object.sha')"
+          [[ "$tag_type" == "commit" && "$tag_sha" == "$GITHUB_SHA" ]] || {
+            echo "Release tag does not point directly at the verified main commit." >&2
+            exit 1
+          }
+          cleanup_enabled=false
+
+      - name: remove private candidate staging release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STAGING_TAG: ${{ steps.candidate.outputs.staging_tag }}
+          STAGING_RELEASE_ID: ${{ steps.candidate.outputs.staging_release_id }}
+        run: |
+          set -euo pipefail
+          release_json="$RUNNER_TEMP/staging-release-cleanup.json"
+          gh api "repos/$GITHUB_REPOSITORY/releases/$STAGING_RELEASE_ID" > "$release_json"
+          [[ "$(jq -r '.draft' "$release_json")" == true ]] || {
+            echo "Refusing to remove a non-draft staging release." >&2
+            exit 1
+          }
+          [[ "$(jq -r '.tag_name' "$release_json")" == "$STAGING_TAG" ]] || {
+            echo "Refusing to remove a staging release with the wrong tag name." >&2
+            exit 1
+          }
+          gh api -X DELETE "repos/$GITHUB_REPOSITORY/releases/$STAGING_RELEASE_ID"
+          if gh api "repos/$GITHUB_REPOSITORY/releases/$STAGING_RELEASE_ID" >/dev/null 2>&1; then
+            echo "Candidate staging release still exists after cleanup." >&2
+            exit 1
+          fi

@@ -1,0 +1,87 @@
+Categories:
+  - VPN & Proxy
+  - Security
+License: GPL-3.0-or-later
+AuthorName: FoxHole Team
+SourceCode: https://github.com/foxhole-team/foxhole-guard
+IssueTracker: https://github.com/foxhole-team/foxhole-guard/issues
+
+AutoName: FoxHole Guard
+Summary: 'Privacy toolkit: VPN, Tor, firewall, DNS filtering, Sentinel, no telemetry'
+Description: |
+  FoxHole Guard is a privacy-focused app for VPN, Tor and I2P networking, with firewall, DNS filtering, and FoxHole Sentinel network anomaly monitoring.
+
+  The application combines its own FoxHole Core networking engine, VPN, access to the Tor and I2P networks, a local firewall, DNS filtering, a traffic map, FoxHole Sentinel, isolated web applications, and a proxy server on the local network.
+
+  FoxHole Guard contains no advertising, usage analytics, or telemetry. Application lists, statistics, logs, routing rules, and local analysis results remain on the device unless the user explicitly exports them.
+
+  The project is currently in an early beta stage. Some features are still under development.
+
+  Main features:
+
+  • FoxHole Core - a custom networking engine written in Rust;
+  • operating modes: VPN, Tor, and VPN + Tor with independent routing scenarios;
+  • traffic routing rules for applications, domains, and CIDR ranges;
+  • smart profiles with multiple VPN protocols in a single profile;
+  • access to the Tor network through Arti: routing and scheduled exit-node rotation;
+  • access to the I2P network through a separate local i2pd process;
+  • firewall: application blocking and quarantine;
+  • DNS management: UDP/TCP, DoT, and DoH;
+  • DNS filtering for ads, trackers, telemetry, and potentially malicious domains;
+  • traffic map and local connection statistics;
+  • FoxHole Sentinel: local application auditing, IOC matching, and network-event correlation;
+  • extensions: web applications and a proxy server on the local network;
+  • background services for web-application notifications and security-event monitoring;
+  • backup of profiles and settings.
+
+  Supported protocols: VLESS, VMess, Hysteria2, WireGuard, AmneziaWG, Trojan, Shadowsocks, Outline, Naive, TUIC, AnyTLS, ShadowTLS v3, SOCKS5, and HTTP CONNECT. Reality and Vision are supported.
+
+  DNS filters are built from the open AdGuard DNS filter. Downloaded data sets contain filtering data rather than executable code. Before use, the application verifies the signature, size, compatibility, and SHA-256 digest.
+
+  FoxHole Sentinel is a local security-monitoring module, not an antivirus. The current version uses Echap and MVT indicators, a network IOC matcher, correlation of IOCs with the owning application, and integration with the firewall and quarantine.
+
+  The FoxHole DB repository is used for updatable application data. The application can download four signed data sets: DNS filters, Tor bridges, indicators for the IOC matcher, and a GeoIP database.
+
+  Android permissions are used only for the stated features. QUERY_ALL_PACKAGES is required for routing, the firewall, quarantine, DNS exclusions, and local auditing. PACKAGE_USAGE_STATS is used only for local statistics and analysis features enabled by the user.
+
+  Network requests are made only for features enabled or initiated by the user: VPN, access to the Tor and I2P networks, updating v2raytun-type subscriptions, updating data sets, and web-application data.
+
+  License: GNU General Public License v3.0 or later (GPL-3.0-or-later).
+
+  Tor is a trademark of The Tor Project. FoxHole Guard is not a product of The Tor Project, AdGuard, I2P, or PurpleI2P and is not affiliated with them.
+
+RepoType: git
+Repo: https://github.com/foxhole-team/foxhole-guard.git
+
+# The Gradle build refuses to configure without the FoxHole Core sources beside the
+# checkout (app/build.gradle.kts requires <core>/Cargo.toml) and compiles the
+# .so itself via <core>/scripts/android-build.sh. F-Droid runs Gradle offline,
+# so the Rust toolchain and every crate must be fetched before that step. This
+# recipe has NOT been validated on the F-Droid buildserver — it is unusable
+# until the sources are public, and must be run through `fdroid build` once the
+# repositories exist.
+Builds:
+  - versionName: '0.0.1'
+    versionCode: 89
+    commit: v0.0.1
+    submodules: true
+    sudo:
+      - curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs -o /tmp/rustup.sh
+      - sh /tmp/rustup.sh -y --default-toolchain 1.97.1 --profile minimal
+      - /root/.cargo/bin/cargo install cargo-ndk --version 4.1.2 --locked
+    prebuild:
+      # Pinned in config/foxcore-revision.txt; the path is where build.gradle.kts
+      # looks when FOXCORE_SOURCE_ROOT is unset.
+      - git clone https://github.com/foxhole-team/foxhole-core.git ../foxhole-core
+      - git -C ../foxhole-core checkout "$(cat config/foxcore-revision.txt)"
+      - cargo fetch --locked --manifest-path ../foxhole-core/Cargo.toml
+    gradle:
+      - yes
+    gradleprops:
+      - foxhole.updateChannel=fdroid
+    output: app/build/outputs/apk/release/app-release-unsigned.apk
+
+AutoUpdateMode: None
+UpdateCheckMode: None
+CurrentVersion: '0.0.1'
+CurrentVersionCode: 89

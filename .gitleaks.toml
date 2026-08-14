@@ -1,0 +1,52 @@
+title = "Foxhole gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "vendored/generated files and deterministic non-secret fixtures"
+paths = [
+  '''(?:^|/)\.idea(?:/.*)?$''',
+  '''(?:^|/)artifacts(?:/.*)?$''',
+  '''(?:^|/)third_party/i2pd(?:/.*)?$''',
+  # setup-foxcore checks the separately published and independently scanned core repository out
+  # here. It is build input, not part of the app tree; scanning it again also walks generated
+  # native output created before this gate runs.
+  '''(?:^|/)\.foxcore-src(?:/.*)?$''',
+  '''(?:^|/)build(?:/.*)?$''',
+  '''(?:^|/)app/build(?:/.*)?$''',
+  # The published sample smart-config: every credential in it is a visible placeholder
+  # (`sample-hy2-password-0000…`, `secret=00112233445566…`). Left unlisted, the generic-api-key
+  # rule fires on it forever, and a gate that is always red is a gate people learn to ignore.
+  '''(?:^|/)foxhole-sample-smart-config/.*$''',
+  # Eclipse/Buildship output. It is gitignored, but `gitleaks dir` walks the filesystem rather
+  # than the index, so stale class output from before a scrub reads as a live leak.
+  '''(?:^|/)bin/(?:.*)?$''',
+]
+regexes = [
+  '''abcdefghijklmnopqrstuvwxyz0123456789''',
+  '''privacy-route-[a-z0-9-]+''',
+]
+
+# The dead test infrastructure this repository used to carry in tests, fixtures, notes and docs.
+# Default gitleaks rules flag neither a bare hostname nor a UUID, so the scan was green while the
+# tree held a real endpoint and a real account UUID. These rules exist to fail a relapse.
+#
+# Two things are deliberately NOT listed, because a published detector publishes what it detects:
+# the developer's own egress address (personal, and it only ever appeared in e2e notes that are gone)
+# and the serial numbers of the two bench phones. Their relapse risk is low; the cost of naming them
+# in a public file is permanent.
+[[rules]]
+id = "foxhole-live-test-endpoint"
+description = "hostname of a retired deployment (use example.com / example.net instead)"
+regex = '''(?i)\b(?:x-sec-net\.nl|axn666\.nl)\b'''
+
+[[rules]]
+id = "foxhole-live-test-address"
+description = "address of a retired deployment (use the RFC 5737 documentation ranges instead)"
+regex = '''\b(?:37\.139\.\d{1,3}\.\d{1,3}|83\.166\.245\.\d{1,3}|185\.62\.56\.\d{1,3})\b'''
+
+[[rules]]
+id = "foxhole-live-test-uuid"
+description = "UUID of a retired VLESS/VMess account"
+regex = '''(?i)\ba(?:86|43)ad(?:23[013]|466)\b'''

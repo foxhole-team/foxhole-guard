@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Static picker preview of the status-table geometry rendered by StatusWidget. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_preview_bg"
+    android:contentDescription="@string/cli_status_widget_label"
+    android:orientation="vertical"
+    android:padding="8dp"
+    tools:ignore="HardcodedText">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <ImageView
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:importantForAccessibility="no"
+            android:src="@drawable/ic_qs_tile"
+            app:tint="@color/cli_fg" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="4dp"
+            android:layout_weight="1"
+            android:fontFamily="@font/lanapixel"
+            android:text="FoxHole Guard"
+            android:textColor="@color/cli_accent"
+            android:textSize="12sp" />
+
+        <FrameLayout
+            android:layout_width="22dp"
+            android:layout_height="22dp">
+
+            <ImageView
+                android:layout_width="16dp"
+                android:layout_height="16dp"
+                android:layout_gravity="center"
+                android:importantForAccessibility="no"
+                android:src="@drawable/widget_refresh_pixel"
+                app:tint="@color/cli_fg" />
+        </FrameLayout>
+
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:fontFamily="@font/lanapixel"
+            android:text="@string/widget_status_state"
+            android:textColor="@color/cli_dim"
+            android:textSize="11sp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:fontFamily="@font/lanapixel"
+            android:text="@string/widget_status_connected"
+            android:textColor="@color/cli_ok"
+            android:textSize="11sp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="22dp"
+        android:layout_marginTop="2dp"
+        android:orientation="horizontal">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:background="@drawable/widget_stop_button"
+            android:fontFamily="@font/lanapixel"
+            android:gravity="center"
+            android:text="@string/widget_status_stop"
+            android:textColor="@color/cli_err"
+            android:textSize="11sp" />
+
+        <!-- RemoteViews rejects android.widget.Space in launcher previews. -->
+        <TextView
+            android:layout_width="4dp"
+            android:layout_height="match_parent" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:background="@drawable/widget_restart_button"
+            android:fontFamily="@font/lanapixel"
+            android:gravity="center"
+            android:text="@string/widget_status_restart"
+            android:textColor="@color/cli_accent"
+            android:textSize="11sp" />
+    </LinearLayout>
+</LinearLayout>
