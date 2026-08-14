@@ -1,0 +1,65 @@
+package com.foxhole.guard.ui.trafficmap
+
+import android.content.Context
+import android.util.Log
+import com.foxhole.guard.traffic.TRAFFIC_MAP_COUNTRY_SHAPES_ASSET
+import com.foxhole.guard.traffic.TrafficMapCountryShape
+import com.foxhole.guard.traffic.TrafficMapCountryShapeAssetParser
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
+import java.io.IOException
+
+internal sealed interface TrafficMapAssetState {
+    data object Idle : TrafficMapAssetState
+    data object Loading : TrafficMapAssetState
+    data class Ready(val shapes: List<TrafficMapCountryShape>) : TrafficMapAssetState
+    data object Error : TrafficMapAssetState
+}
+
+internal object TrafficMapAssets {
+    private const val TAG = "TrafficMapAssets"
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val mutex = Mutex()
+    private val _state = MutableStateFlow<TrafficMapAssetState>(TrafficMapAssetState.Idle)
+
+    val state: StateFlow<TrafficMapAssetState> = _state.asStateFlow()
+
+    fun prewarm(context: Context) {
+        if (_state.value is TrafficMapAssetState.Ready || _state.value is TrafficMapAssetState.Loading) return
+        val appContext = context.applicationContext
+        scope.launch {
+            mutex.withLock {
+                if (_state.value is TrafficMapAssetState.Ready || _state.value is TrafficMapAssetState.Loading) {
+                    return@withLock
+                }
+                _state.value = TrafficMapAssetState.Loading
+                _state.value = load(appContext)
+            }
+        }
+    }
+
+    private suspend fun load(context: Context): TrafficMapAssetState =
+        withContext(Dispatchers.IO) {
+            try {
+                context.assets.open(TRAFFIC_MAP_COUNTRY_SHAPES_ASSET).use { input ->
+                    val shapes = TrafficMapCountryShapeAssetParser().parse(input)
+                    if (shapes.isEmpty()) {
+                        TrafficMapAssetState.Error
+                    } else {
+                        TrafficMapAssetState.Ready(shapes)
+                    }
+                }
+            } catch (error: IOException) {
+                Log.w(TAG, "Failed to load traffic map shapes", error)
+                TrafficMapAssetState.Error
+            }
+        }
+}

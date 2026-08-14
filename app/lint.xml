@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<lint>
+    <!-- The terminal is deliberately phone-portrait; see the lifecycle rationale in the manifest. -->
+    <issue id="LockedOrientationActivity">
+        <ignore path="src/main/AndroidManifest.xml" />
+    </issue>
+    <issue id="DiscouragedApi">
+        <ignore path="src/main/AndroidManifest.xml" />
+    </issue>
+
+    <!-- These layouts need density-independent window caps; the warning has no API-26 fallback. -->
+    <issue id="ConfigurationScreenWidthHeight">
+        <ignore path="src/main/kotlin/com/foxhole/guard/ui/cli/components/CliBottomSheet.kt" />
+        <ignore path="src/main/kotlin/com/foxhole/guard/ui/cli/components/CliDropdownOption.kt" />
+    </issue>
+
+    <!-- Public composable call shape is stable and already covered by source/layout contracts. -->
+    <issue id="ModifierParameter">
+        <ignore path="src/main/kotlin/com/foxhole/guard/ui/cli/home/CliHomeFacts.kt" />
+        <ignore path="src/main/kotlin/com/foxhole/guard/ui/cli/map/CliRouteScheme.kt" />
+    </issue>
+
+    <!-- The values are compact terminal copy, not grammatical quantity sentences. -->
+    <issue id="PluralsCandidate">
+        <ignore path="src/main/res/values/strings.xml" />
+    </issue>
+
+    <!-- JavaScript is the explicit Web Apps feature boundary, not enabled for arbitrary app UI. -->
+    <issue id="SetJavaScriptEnabled">
+        <ignore path="src/main/kotlin/com/foxhole/guard/core/webapps/WebAppsWatchdog.kt" />
+    </issue>
+
+    <!-- Same pixels, distinct semantic resources: territory flag and notification channel icon. -->
+    <issue id="IconDuplicates">
+        <ignore path="src/main/res/drawable-nodpi/flag_mf.png" />
+        <ignore path="src/main/res/drawable-nodpi/ic_notification_vpn.png" />
+    </issue>
+
+    <!-- Lowercase/caps are intentional parts of the terminal button grammar. -->
+    <issue id="ButtonCase">
+        <ignore path="src/main/res/values/strings.xml" />
+    </issue>
+</lint>

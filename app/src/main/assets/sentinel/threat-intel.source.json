@@ -1,0 +1,15 @@
+{
+  "source": "https://github.com/AssoEchap/stalkerware-indicators",
+  "file": "ioc.yaml",
+  "revision": "a04c5c1958bff93fec3b1b56edbb412b209f2a38",
+  "license": "CC-BY-4.0",
+  "attribution": "Echap (https://echap.eu.org) and contributors",
+  "sourceSha256": "6052636f093dce2d329fc06b7d572c6d4462d73539f72f13d1af1f96ea74864e",
+  "entries": 147,
+  "skippedNonStalkerware": 0,
+  "packages": 612,
+  "certsSha1": 471,
+  "domains": 1421,
+  "ips": 65,
+  "builtBy": "scripts/build-sentinel-threat-intel.py"
+}

@@ -1,0 +1,328 @@
+package com.foxhole.guard.runtime
+
+import android.content.Context
+import com.foxhole.core.network.RemoteHostResolver
+import com.foxhole.core.network.ensurePublicHttpsUrl
+import com.foxhole.core.network.requirePublicHttpsUrl
+import com.foxhole.core.runtime.GeoIpDatabaseMetadata
+import com.foxhole.core.runtime.GeoIpDatabaseStore
+import com.foxhole.core.runtime.network.PublicRemoteDns
+import com.foxhole.guard.core.data.withBoundedRemoteFetchTimeouts
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
+import okhttp3.HttpUrl
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.ResponseBody
+import java.io.File
+import java.io.IOException
+import java.io.InputStream
+import java.io.OutputStream
+import java.security.DigestInputStream
+import java.security.MessageDigest
+
+/**
+ * Downloads the IP→country database from the FoxHole DB geo group (upstream: ip-location-db's
+ * dbip-country dataset, DB-IP Lite, CC BY 4.0 — the UI must keep the DB-IP attribution). A signed
+ * manifest carries the dataset version and pins both range CSVs by size and sha256; the version
+ * makes the probe cheap, and [GeoIpDatabaseStore.install] re-validates the ranges before anything
+ * replaces the active database.
+ */
+enum class GeoIpUpdateStatus {
+    UPDATED,
+    UP_TO_DATE,
+    FAILED,
+}
+
+data class GeoIpUpdateResult(
+    val status: GeoIpUpdateStatus,
+    val metadata: GeoIpDatabaseMetadata? = null,
+    val reason: String? = null,
+)
+
+@Serializable
+private data class FoxholeGeoIpManifest(
+    val schema: Int,
+    val name: String,
+    val format: String,
+    @SerialName("generated_at") val generatedAt: String,
+    val version: String,
+    val artifacts: List<FoxholeGeoIpArtifact>,
+)
+
+@Serializable
+private data class FoxholeGeoIpArtifact(
+    val file: String,
+    val size: Long,
+    val sha256: String,
+)
+
+class GeoIpUpdateClient(
+    context: Context,
+    private val httpClient: OkHttpClient,
+    private val json: Json,
+    private val resolver: RemoteHostResolver? = null,
+    // Read per call — see TorBridgeUpdateClient: the configured repository may change under a
+    // client that is already built.
+    private val manifestUrl: () -> String = { FOXHOLE_GEOIP_MANIFEST_URL },
+) {
+    private val appContext = context.applicationContext
+
+    /**
+     * Check-only version probe (the same verified manifest read the full update starts with):
+     * true when the published version differs from the installed one, null when the source is
+     * unreachable. No range CSV downloads.
+     */
+    suspend fun checkForUpdate(store: GeoIpDatabaseStore): Boolean? =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val manifest = guardedClient().fetchVerifiedManifest()
+                manifest.version.isNotBlank() && manifest.version != store.readMetadata()?.version
+            }.getOrNull()
+        }
+
+    suspend fun update(
+        store: GeoIpDatabaseStore,
+        onPhase: (RemoteUpdatePhase) -> Unit = {},
+        onProgress: (RemoteDownloadProgress) -> Unit = {},
+    ): GeoIpUpdateResult =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val client = guardedClient()
+                onPhase(RemoteUpdatePhase.CHECKING)
+                val manifest = client.fetchVerifiedManifest()
+                val installedVersion = store.readMetadata()?.version
+                if (installedVersion == manifest.version) {
+                    return@runCatching GeoIpUpdateResult(status = GeoIpUpdateStatus.UP_TO_DATE)
+                }
+                val manifestUrl = manifestUrl().asPublicHttpsUrl()
+                val ipv4 = manifest.artifactNamed(EXPECTED_IPV4_FILE)
+                val ipv6 = manifest.artifactNamed(EXPECTED_IPV6_FILE)
+                onPhase(RemoteUpdatePhase.DOWNLOADING)
+                val totalBytes = ipv4.size + ipv6.size
+                val ipv4File =
+                    client.downloadVerified(manifestUrl, ipv4, "geoip ipv4 ranges") { downloaded ->
+                        onProgress(RemoteDownloadProgress(downloaded, totalBytes))
+                    }
+                val ipv6File =
+                    runCatching {
+                        client.downloadVerified(manifestUrl, ipv6, "geoip ipv6 ranges") { downloaded ->
+                            onProgress(RemoteDownloadProgress(ipv4.size + downloaded, totalBytes))
+                        }
+                    }
+                        .onFailure { ipv4File.delete() }
+                        .getOrThrow()
+                onPhase(RemoteUpdatePhase.VERIFYING)
+                val metadata =
+                    try {
+                        store.install(
+                            version = manifest.version,
+                            sourceRepo = SOURCE_REPO,
+                            license = SOURCE_LICENSE,
+                            ipv4File = ipv4File,
+                            ipv6File = ipv6File,
+                        )
+                    } finally {
+                        ipv4File.delete()
+                        ipv6File.delete()
+                    }
+                GeoIpUpdateResult(status = GeoIpUpdateStatus.UPDATED, metadata = metadata)
+            }.getOrElse { error ->
+                GeoIpUpdateResult(
+                    status = GeoIpUpdateStatus.FAILED,
+                    reason = error.message ?: error.javaClass.simpleName,
+                )
+            }
+        }
+
+    /** Manifest + detached signature, verified against the pinned FoxHole DB key, then validated. */
+    private fun OkHttpClient.fetchVerifiedManifest(): FoxholeGeoIpManifest {
+        val manifestUrl = manifestUrl().asPublicHttpsUrl()
+        val manifestBytes = getBytes(manifestUrl, MAX_PACKAGE_BYTES, "geoip manifest")
+        val signatureBytes =
+            getBytes(manifestUrl.signatureUrl(), MAX_SIGNATURE_BYTES, "geoip manifest signature")
+        requireFoxholeDbManifestSignature(manifestBytes, signatureBytes)
+        val manifest = json.decodeFromString<FoxholeGeoIpManifest>(manifestBytes.toString(Charsets.UTF_8))
+        manifest.requireValid()
+        return manifest
+    }
+
+    private fun FoxholeGeoIpManifest.requireValid() {
+        require(schema == EXPECTED_MANIFEST_SCHEMA) { "unsupported geoip manifest schema" }
+        require(name == EXPECTED_MANIFEST_NAME) { "unexpected geoip manifest name" }
+        require(format == EXPECTED_ARTIFACT_FORMAT) { "unexpected geoip artifact format" }
+        require(version.isNotBlank()) { "empty geoip source version" }
+        artifactNamed(EXPECTED_IPV4_FILE)
+        artifactNamed(EXPECTED_IPV6_FILE)
+    }
+
+    private fun FoxholeGeoIpManifest.artifactNamed(file: String): FoxholeGeoIpArtifact {
+        val artifact =
+            requireNotNull(artifacts.firstOrNull { candidate -> candidate.file == file }) {
+                "geoip manifest is missing $file"
+            }
+        require(artifact.size in MIN_DATABASE_BYTES..MAX_DATABASE_BYTES) { "unexpected size of $file" }
+        require(artifact.sha256.isSha256Hex()) { "invalid sha256 of $file" }
+        return artifact
+    }
+
+    /** Streams the artifact to a temp file and rejects any size or sha256 divergence. */
+    private fun OkHttpClient.downloadVerified(
+        manifestUrl: HttpUrl,
+        artifact: FoxholeGeoIpArtifact,
+        label: String,
+        onProgress: (Long) -> Unit,
+    ): File {
+        val url = requireNotNull(manifestUrl.resolve(artifact.file)) { "invalid url for ${artifact.file}" }
+        val target = downloadToTempFile(url, artifact.size, label, onProgress)
+        var keep = false
+        try {
+            require(target.length() == artifact.size) { "$label size mismatch" }
+            require(target.sha256Hex() == artifact.sha256) { "$label sha256 mismatch" }
+            keep = true
+        } finally {
+            if (!keep) {
+                target.delete()
+            }
+        }
+        return target
+    }
+
+    private fun guardedClient(): OkHttpClient =
+        httpClient
+            .withBoundedRemoteFetchTimeouts(
+                connectTimeoutMs = CONNECT_TIMEOUT_MS,
+                readTimeoutMs = READ_TIMEOUT_MS,
+                callTimeoutMs = CALL_TIMEOUT_MS,
+            ).newBuilder()
+            .dns(PublicRemoteDns(httpClient.dns::lookup))
+            .build()
+
+    private fun String.asPublicHttpsUrl(): HttpUrl =
+        ensurePublicHttpsUrl(resolveHost = true, resolver = resolver)
+
+    private fun OkHttpClient.getBytes(
+        url: HttpUrl,
+        maxBytes: Long,
+        label: String,
+    ): ByteArray {
+        url.requirePublicHttpsUrl(resolveHost = true, resolver = resolver)
+        newCall(Request.Builder().url(url).get().build()).execute().use { response ->
+            if (!response.isSuccessful) {
+                throw IOException("$label request failed with HTTP ${response.code}")
+            }
+            return requireNotNull(response.body) { "$label response body is empty" }
+                .readBytesCapped(maxBytes)
+        }
+    }
+
+    private fun HttpUrl.signatureUrl(): HttpUrl =
+        newBuilder()
+            .encodedPath("$encodedPath.sig")
+            .build()
+
+    // Streamed digest: the range CSVs are tens of megabytes and must not visit the heap whole.
+    private fun File.sha256Hex(): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        DigestInputStream(inputStream().buffered(), digest).use { input ->
+            val buffer = ByteArray(DOWNLOAD_BUFFER_BYTES)
+            while (input.read(buffer) != -1) {
+                // The digest accumulates inside the stream.
+            }
+        }
+        return digest.digest().joinToString(separator = "") { byte -> "%02x".format(byte) }
+    }
+
+    // Streams straight to a cache file: the two range CSVs are ~10-20MB each and must not be
+    // buffered in the heap of a process we just finished shrinking.
+    private fun OkHttpClient.downloadToTempFile(
+        url: HttpUrl,
+        maxBytes: Long,
+        label: String,
+        onProgress: (Long) -> Unit,
+    ): File {
+        url.requirePublicHttpsUrl(resolveHost = true, resolver = resolver)
+        val target = File.createTempFile("geoip-download", ".csv", appContext.cacheDir)
+        var completed = false
+        try {
+            newCall(Request.Builder().url(url).get().build()).execute().use { response ->
+                if (!response.isSuccessful) {
+                    throw IOException("$label request failed with HTTP ${response.code}")
+                }
+                val total =
+                    requireNotNull(response.body) { "$label response body is empty" }
+                        .streamCappedTo(target, maxBytes, label, onProgress)
+                if (total < MIN_DATABASE_BYTES) {
+                    throw IOException("$label too small: $total bytes")
+                }
+            }
+            completed = true
+        } finally {
+            if (!completed) {
+                target.delete()
+            }
+        }
+        return target
+    }
+
+    // Streams the response body into [target] in fixed-size chunks and returns the byte count,
+    // aborting as soon as the running total would exceed [maxBytes].
+    private fun ResponseBody.streamCappedTo(
+        target: File,
+        maxBytes: Long,
+        label: String,
+        onProgress: (Long) -> Unit,
+    ): Long =
+        byteStream().use { input ->
+            target.outputStream().buffered().use { output ->
+                input.copyCappedTo(output, maxBytes, label, onProgress)
+            }
+        }
+
+    private fun InputStream.copyCappedTo(
+        output: OutputStream,
+        maxBytes: Long,
+        label: String,
+        onProgress: (Long) -> Unit,
+    ): Long {
+        var total = 0L
+        val buffer = ByteArray(DOWNLOAD_BUFFER_BYTES)
+        while (true) {
+            val read = read(buffer)
+            if (read == -1) {
+                break
+            }
+            total += read
+            if (total > maxBytes) {
+                throw IOException("$label exceeded $maxBytes bytes")
+            }
+            output.write(buffer, 0, read)
+            onProgress(total)
+        }
+        return total
+    }
+
+    companion object {
+        const val SOURCE_REPO = "https://github.com/sapics/ip-location-db"
+        const val SOURCE_LICENSE = "CC BY 4.0 (DB-IP Lite)"
+
+        // The FoxHole DB geo group: one signed manifest, artifacts resolved relative to it.
+        const val FOXHOLE_GEOIP_MANIFEST_URL = "$FOXHOLE_DB_PAGES_BASE_URL/geoip-manifest.json"
+        private const val EXPECTED_MANIFEST_SCHEMA = 1
+        private const val EXPECTED_MANIFEST_NAME = "foxhole-geoip"
+        private const val EXPECTED_ARTIFACT_FORMAT = "dbip-country-csv"
+        private const val EXPECTED_IPV4_FILE = "dbip-country-ipv4.csv"
+        private const val EXPECTED_IPV6_FILE = "dbip-country-ipv6.csv"
+        private const val MAX_SIGNATURE_BYTES = 8L * 1024L
+        private const val MAX_PACKAGE_BYTES = 64L * 1024L
+        private const val MAX_DATABASE_BYTES = 64L * 1024L * 1024L
+        private const val MIN_DATABASE_BYTES = 1024L * 1024L
+        private const val DOWNLOAD_BUFFER_BYTES = 64 * 1024
+        private const val CONNECT_TIMEOUT_MS = 10_000L
+        private const val READ_TIMEOUT_MS = 60_000L
+        private const val CALL_TIMEOUT_MS = 180_000L
+    }
+}

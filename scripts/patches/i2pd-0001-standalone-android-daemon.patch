@@ -1,0 +1,24 @@
+Subject: [PATCH] Build the standalone i2pd daemon on Android (DaemonUnix)
+
+FoxHole execs i2pd as a child process (packaged as libi2pd.so, like libTor.so),
+not as the JNI library the Android target defaults to. Under -DANDROID the daemon
+collapses to the DaemonAndroid stub (no start/stop/run, no gracefulShutdownInterval),
+so daemon/UnixDaemon.cpp fails to compile. Defining ANDROID_BINARY selects the real
+DaemonUnix while leaving the rest of i2pd's Android behaviour intact.
+
+--- a/build/CMakeLists.txt
++++ b/build/CMakeLists.txt
+@@ -180,6 +180,13 @@ if(UNIX)
+   list(APPEND DAEMON_SRC "${DAEMON_SRC_DIR}/UnixDaemon.cpp")
+   if(NOT(CMAKE_SYSTEM_NAME STREQUAL "OpenBSD" OR APPLE))
+     # "'sleep_for' is not a member of 'std::this_thread'" in gcc 4.7/4.8
+     add_definitions("-D_GLIBCXX_USE_NANOSLEEP=1")
+   endif()
++  # FoxHole runs i2pd as a standalone exec'd process (like libTor.so), not the JNI library the
++  # Android target defaults to. Under -DANDROID the daemon collapses to the DaemonAndroid stub
++  # (no start/stop/run), so UnixDaemon.cpp fails to compile. Defining ANDROID_BINARY selects the
++  # real DaemonUnix while keeping the rest of i2pd's Android behaviour intact.
++  if(ANDROID)
++    add_definitions("-DANDROID_BINARY")
++  endif()
+ endif()

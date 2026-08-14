@@ -1,0 +1,272 @@
+package com.foxhole.core.runtime
+import com.foxhole.core.model.CONNECTIVITY_PROBE_ENDPOINTS
+import com.foxhole.core.model.ConnectionSnapshot
+import com.foxhole.core.model.ConnectionState
+import com.foxhole.core.model.LatencyProbeMethod
+import com.foxhole.core.model.Settings
+import com.foxhole.core.model.TrafficMode
+import com.foxhole.guard.runtime.FoxholeVpnService
+import com.foxhole.guard.runtime.proxyConnectivityProbeEndpoints
+import com.foxhole.guard.runtime.runtimeValidationProbeEndpoints
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+class FoxholeConnectionControllerLatencyTest {
+    @Test
+    fun `latency probe endpoints use live neutral public https targets`() {
+        assertEquals(
+            CONNECTIVITY_PROBE_ENDPOINTS,
+            latencyProbeEndpoints(),
+        )
+    }
+
+    @Test
+    fun `proxy validation probes lightweight endpoints before ip info endpoint`() {
+        assertEquals(
+            CONNECTIVITY_PROBE_ENDPOINTS + "https://ipwho.is/",
+            proxyConnectivityProbeEndpoints(
+                preferredEndpoint = "https://ipwho.is/",
+                fallbackEndpoints = CONNECTIVITY_PROBE_ENDPOINTS,
+            ),
+        )
+    }
+
+    @Test
+    fun `proxy validation does not duplicate preferred lightweight endpoint`() {
+        assertEquals(
+            CONNECTIVITY_PROBE_ENDPOINTS,
+            proxyConnectivityProbeEndpoints(
+                preferredEndpoint = "https://cp.cloudflare.com/generate_204",
+                fallbackEndpoints = CONNECTIVITY_PROBE_ENDPOINTS,
+            ),
+        )
+    }
+
+    @Test
+    fun `runtime validation uses responsive lightweight endpoint before fallback endpoints`() {
+        assertEquals(
+            listOf(
+                "https://cp.cloudflare.com/generate_204",
+                "https://www.gstatic.com/generate_204",
+                "https://1.1.1.1/cdn-cgi/trace",
+                "https://www.google.com/generate_204",
+            ),
+            runtimeValidationProbeEndpoints(
+                fallbackEndpoints = CONNECTIVITY_PROBE_ENDPOINTS,
+            ),
+        )
+    }
+
+    @Test
+    fun `runtime validation does not duplicate bootstrap fallback endpoint`() {
+        assertEquals(
+            listOf(
+                "https://cp.cloudflare.com/generate_204",
+                "https://www.gstatic.com/generate_204",
+                "https://1.1.1.1/cdn-cgi/trace",
+            ),
+            runtimeValidationProbeEndpoints(
+                fallbackEndpoints = listOf(
+                    "https://cp.cloudflare.com/generate_204",
+                    "https://www.gstatic.com/generate_204",
+                ),
+            ),
+        )
+    }
+
+    @Test
+    fun `representative latency is null when there are no successful probes`() {
+        assertNull(representativeLatencyMs(emptyList()))
+    }
+
+    @Test
+    fun `representative latency keeps a single successful probe`() {
+        assertEquals(184L, representativeLatencyMs(listOf(184L)))
+    }
+
+    @Test
+    fun `representative latency averages two successful probes`() {
+        assertEquals(155L, representativeLatencyMs(listOf(130L, 180L)))
+    }
+
+    @Test
+    fun `representative latency uses the median and ignores outlier spikes`() {
+        assertEquals(122L, representativeLatencyMs(listOf(900L, 122L, 97L)))
+    }
+
+    @Test
+    fun `tunnel latency uses configured probe method`() {
+        assertEquals(
+            LatencyProbeMethod.ICMP,
+            effectiveLatencyProbeMethod(TrafficMode.TUNNEL, LatencyProbeMethod.ICMP),
+        )
+    }
+
+    @Test
+    fun `proxy latency keeps http probe path`() {
+        assertEquals(
+            LatencyProbeMethod.HTTP,
+            effectiveLatencyProbeMethod(TrafficMode.PROXY, LatencyProbeMethod.ICMP),
+        )
+    }
+
+    @Test
+    fun `tunnel latency falls back to http and tcp when configured probe is blocked`() {
+        assertEquals(
+            listOf(LatencyProbeMethod.ICMP, LatencyProbeMethod.HTTP, LatencyProbeMethod.TCP),
+            latencyProbeMethodOrder(TrafficMode.TUNNEL, LatencyProbeMethod.ICMP),
+        )
+    }
+
+    @Test
+    fun `tcp tunnel latency falls back to icmp when socket binding is blocked`() {
+        assertEquals(
+            listOf(LatencyProbeMethod.TCP, LatencyProbeMethod.HTTP, LatencyProbeMethod.ICMP),
+            latencyProbeMethodOrder(TrafficMode.TUNNEL, LatencyProbeMethod.TCP),
+        )
+    }
+
+    @Test
+    fun `proxy latency only uses http probe path`() {
+        assertEquals(
+            listOf(LatencyProbeMethod.HTTP),
+            latencyProbeMethodOrder(TrafficMode.PROXY, LatencyProbeMethod.ICMP),
+        )
+    }
+
+    @Test
+    fun `strict tunnel latency uses runtime proxy http path`() {
+        val snapshot =
+            ConnectionSnapshot(
+                state = ConnectionState.CONNECTED,
+                trafficMode = TrafficMode.TUNNEL,
+                profileId = 42L,
+            )
+
+        assertTrue(shouldUseRuntimeProxyForTunnelLatency(TrafficMode.TUNNEL, snapshot, Settings()))
+        assertEquals(
+            listOf(LatencyProbeMethod.HTTP),
+            latencyProbeMethodOrder(
+                trafficMode = TrafficMode.TUNNEL,
+                configuredMethod = LatencyProbeMethod.ICMP,
+                useRuntimeProxyForTunnel = true,
+            ),
+        )
+    }
+
+    @Test
+    fun `validated ordinary tunnel latency prefers vpn bound public probes`() {
+        val snapshot =
+            ConnectionSnapshot(
+                state = ConnectionState.CONNECTED,
+                trafficMode = TrafficMode.TUNNEL,
+                profileId = 42L,
+            )
+
+        assertTrue(shouldUseRuntimeProxyForTunnelLatency(TrafficMode.TUNNEL, snapshot, Settings()))
+        assertTrue(
+            shouldPreferVpnBoundTunnelLatency(
+                settings = Settings(),
+                snapshot = snapshot,
+                androidValidatedVpnNetwork = true,
+            ),
+        )
+        assertEquals(
+            listOf(LatencyProbeMethod.ICMP, LatencyProbeMethod.HTTP, LatencyProbeMethod.TCP),
+            latencyProbeMethodOrder(
+                trafficMode = TrafficMode.TUNNEL,
+                configuredMethod = LatencyProbeMethod.ICMP,
+                useRuntimeProxyForTunnel = false,
+            ),
+        )
+    }
+
+    @Test
+    fun `unvalidated strict tunnel latency keeps runtime proxy path`() {
+        val snapshot =
+            ConnectionSnapshot(
+                state = ConnectionState.CONNECTED,
+                trafficMode = TrafficMode.TUNNEL,
+                profileId = 42L,
+            )
+
+        assertFalse(
+            shouldPreferVpnBoundTunnelLatency(
+                settings = Settings(),
+                snapshot = snapshot,
+                androidValidatedVpnNetwork = false,
+            ),
+        )
+    }
+
+    @Test
+    fun `standalone tor tunnel latency does not prefer vpn bound probes`() {
+        val snapshot =
+            ConnectionSnapshot(
+                state = ConnectionState.CONNECTED,
+                trafficMode = TrafficMode.TUNNEL,
+                profileId = FoxholeVpnService.TOR_ONLY_PROFILE_ID,
+            )
+
+        assertFalse(
+            shouldPreferVpnBoundTunnelLatency(
+                settings = Settings(),
+                snapshot = snapshot,
+                androidValidatedVpnNetwork = true,
+            ),
+        )
+    }
+
+    @Test
+    fun `runtime proxy tunnel latency attempt is bounded before vpn fallback`() {
+        assertEquals(2_000L, runtimeProxyTunnelLatencyCallTimeoutMs(8_000L))
+        assertEquals(500L, runtimeProxyTunnelLatencyCallTimeoutMs(500L))
+        assertEquals(1L, runtimeProxyTunnelLatencyCallTimeoutMs(0L))
+    }
+
+    @Test
+    fun `idle tunnel latency does not use runtime proxy path`() {
+        val snapshot =
+            ConnectionSnapshot(
+                state = ConnectionState.IDLE,
+                trafficMode = TrafficMode.TUNNEL,
+                profileId = 42L,
+            )
+
+        assertFalse(shouldUseRuntimeProxyForTunnelLatency(TrafficMode.TUNNEL, snapshot, Settings()))
+    }
+
+    @Test
+    fun `icmp ping command uses bounded second timeout`() {
+        assertEquals(
+            listOf("/system/bin/ping", "-n", "-c", "1", "-W", "3", "cp.cloudflare.com"),
+            icmpPingCommand(host = "cp.cloudflare.com", timeoutMs = 2_500L),
+        )
+    }
+
+    @Test
+    fun `icmp ping command binds to safe vpn interface when available`() {
+        assertEquals(
+            listOf("/system/bin/ping", "-n", "-c", "1", "-W", "3", "-I", "tun0", "cp.cloudflare.com"),
+            icmpPingCommand(host = "cp.cloudflare.com", timeoutMs = 2_500L, interfaceName = "tun0"),
+        )
+    }
+
+    @Test
+    fun `icmp ping command ignores unsafe interface names`() {
+        assertEquals(
+            listOf("/system/bin/ping", "-n", "-c", "1", "-W", "3", "cp.cloudflare.com"),
+            icmpPingCommand(host = "cp.cloudflare.com", timeoutMs = 2_500L, interfaceName = "tun0;id"),
+        )
+    }
+
+    @Test
+    fun `icmp ping latency parser accepts common android output`() {
+        assertEquals(18L, parseIcmpPingLatencyMs("64 bytes from 1.1.1.1: icmp_seq=1 ttl=56 time=18.4 ms"))
+        assertEquals(1L, parseIcmpPingLatencyMs("64 bytes from 1.1.1.1: icmp_seq=1 ttl=56 time<1 ms"))
+        assertNull(parseIcmpPingLatencyMs("packet loss"))
+    }
+}

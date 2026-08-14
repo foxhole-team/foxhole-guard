@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <cache-path
+        name="shared_diagnostics"
+        path="diagnostics-export/" />
+    <cache-path
+        name="shared_profile_exports"
+        path="profile-export/" />
+    <cache-path
+        name="shared_file_invitations"
+        path="file-share-invitations/" />
+    <cache-path
+        name="shared_app_updates"
+        path="app-update/" />
+</paths>

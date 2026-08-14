@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+<string name="error_route_excludes_android_version">Route excludes need Android 13 or newer. This profile cannot start safely on this device</string>
+<string name="error_route_excludes_too_many">This profile has too many route excludes (%1$d; the Android limit is %2$d). Reduce the route rules and try again</string>
+<string name="error_runtime_missing">The FoxCore native library is not included in this build</string>
+<string name="error_vpn_package_split_unavailable">Some selected apps are no longer installed. Update the app routing list and reconnect</string>
+</resources>

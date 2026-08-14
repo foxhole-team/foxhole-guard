@@ -1,0 +1,40 @@
+FoxHole Guard is a privacy-focused app for VPN, Tor and I2P networking, with firewall, DNS filtering, and FoxHole Sentinel network anomaly monitoring.
+
+The application combines its own FoxHole Core networking engine, VPN, access to the Tor and I2P networks, a local firewall, DNS filtering, a traffic map, FoxHole Sentinel, isolated web applications, and a proxy server on the local network.
+
+FoxHole Guard contains no advertising, usage analytics, or telemetry. Application lists, statistics, logs, routing rules, and local analysis results remain on the device unless the user explicitly exports them.
+
+The project is currently in an early beta stage. Some features are still under development.
+
+Main features:
+
+• FoxHole Core - a custom networking engine written in Rust;
+• operating modes: VPN, Tor, and VPN + Tor with independent routing scenarios;
+• traffic routing rules for applications, domains, and CIDR ranges;
+• smart profiles with multiple VPN protocols in a single profile;
+• access to the Tor network through Arti: routing and scheduled exit-node rotation;
+• access to the I2P network through a separate local i2pd process;
+• firewall: application blocking and quarantine;
+• DNS management: UDP/TCP, DoT, and DoH;
+• DNS filtering for ads, trackers, telemetry, and potentially malicious domains;
+• traffic map and local connection statistics;
+• FoxHole Sentinel: local application auditing, IOC matching, and network-event correlation;
+• extensions: web applications and a proxy server on the local network;
+• background services for web-application notifications and security-event monitoring;
+• backup of profiles and settings.
+
+Supported protocols: VLESS, VMess, Hysteria2, WireGuard, AmneziaWG, Trojan, Shadowsocks, Outline, Naive, TUIC, AnyTLS, ShadowTLS v3, SOCKS5, and HTTP CONNECT. Reality and Vision are supported.
+
+DNS filters are built from the open AdGuard DNS filter. Downloaded data sets contain filtering data rather than executable code. Before use, the application verifies the signature, size, compatibility, and SHA-256 digest.
+
+FoxHole Sentinel is a local security-monitoring module, not an antivirus. The current version uses Echap and MVT indicators, a network IOC matcher, correlation of IOCs with the owning application, and integration with the firewall and quarantine.
+
+The FoxHole DB repository is used for updatable application data. The application can download four signed data sets: DNS filters, Tor bridges, indicators for the IOC matcher, and a GeoIP database.
+
+Android permissions are used only for the stated features. QUERY_ALL_PACKAGES is required for routing, the firewall, quarantine, DNS exclusions, and local auditing. PACKAGE_USAGE_STATS is used only for local statistics and analysis features enabled by the user.
+
+Network requests are made only for features enabled or initiated by the user: VPN, access to the Tor and I2P networks, updating v2raytun-type subscriptions, updating data sets, and web-application data.
+
+License: GNU General Public License v3.0 or later (GPL-3.0-or-later).
+
+Tor is a trademark of The Tor Project. FoxHole Guard is not a product of The Tor Project, AdGuard, I2P, or PurpleI2P and is not affiliated with them.

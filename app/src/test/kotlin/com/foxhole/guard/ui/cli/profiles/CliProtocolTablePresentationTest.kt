@@ -1,0 +1,180 @@
+package com.foxhole.guard.ui.cli.profiles
+
+import org.junit.Assert.assertEquals
+import org.junit.Test
+
+/**
+ * Контракт таблицы протоколов смарт-профиля: колонка S (приоритет состояний и скобочный алфавит)
+ * и формат ячеек T/P/L. Оба маппера чистые, поэтому регресс ловится без Compose-рантайма.
+ */
+class CliProtocolTablePresentationTest {
+
+    @Test
+    fun `testing wins over every other state`() {
+        val status = status(testing = true, down = true, enabled = false, active = true, measured = false)
+
+        assertEquals(CliProtocolStatus.TESTING, status)
+    }
+
+    @Test
+    fun `down wins over disabled and active`() {
+        val status = status(down = true, enabled = false, active = true, measured = false)
+
+        assertEquals(CliProtocolStatus.DOWN, status)
+    }
+
+    @Test
+    fun `disabled wins over active`() {
+        val status = status(enabled = false, active = true)
+
+        assertEquals(CliProtocolStatus.OFF, status)
+    }
+
+    @Test
+    fun `active protocol reads as active even before it was ever measured`() {
+        val status = status(active = true, measured = false)
+
+        assertEquals(CliProtocolStatus.ACTIVE, status)
+    }
+
+    @Test
+    fun `enabled protocol without a measurement is untested`() {
+        val status = status(measured = false)
+
+        assertEquals(CliProtocolStatus.UNTESTED, status)
+    }
+
+    @Test
+    fun `enabled measured protocol is ready`() {
+        val status = status()
+
+        assertEquals(CliProtocolStatus.READY, status)
+    }
+
+    @Test
+    fun `status glyphs stay in the bracket alphabet of the rest of the ui`() {
+        assertEquals("[~]", CliProtocolStatus.TESTING.glyph)
+        assertEquals("[!]", CliProtocolStatus.DOWN.glyph)
+        assertEquals("[ ]", CliProtocolStatus.OFF.glyph)
+        assertEquals("[x]", CliProtocolStatus.ACTIVE.glyph)
+        assertEquals("[?]", CliProtocolStatus.UNTESTED.glyph)
+        assertEquals("[x]", CliProtocolStatus.READY.glyph)
+    }
+
+    @Test
+    fun `every status glyph is three characters wide`() {
+        CliProtocolStatus.entries.forEach { status ->
+            assertEquals(status.name, 3, status.glyph.length)
+        }
+    }
+
+    @Test
+    fun `metric cell prints milliseconds when the value is known`() {
+        assertEquals("1234", cliProtocolMetricCell(CliProtocolStatus.READY, 1234L))
+        assertEquals("0", cliProtocolMetricCell(CliProtocolStatus.ACTIVE, 0L))
+    }
+
+    @Test
+    fun `metric cell falls back to a dash without a value`() {
+        assertEquals("—", cliProtocolMetricCell(CliProtocolStatus.READY, null))
+        assertEquals("—", cliProtocolMetricCell(CliProtocolStatus.UNTESTED, null))
+        assertEquals("—", cliProtocolMetricCell(CliProtocolStatus.OFF, null))
+    }
+
+    @Test
+    fun `testing and down override any remembered value in the metric cells`() {
+        assertEquals("…", cliProtocolMetricCell(CliProtocolStatus.TESTING, 42L))
+        assertEquals("—", cliProtocolMetricCell(CliProtocolStatus.DOWN, 42L))
+    }
+
+    private fun status(
+        testing: Boolean = false,
+        down: Boolean = false,
+        enabled: Boolean = true,
+        active: Boolean = false,
+        measured: Boolean = true,
+    ): CliProtocolStatus = cliProtocolStatus(
+        testing = testing,
+        down = down,
+        enabled = enabled,
+        active = active,
+        measured = measured,
+    )
+}
+
+/**
+ * Контракт распределения ширин метрических колонок T/P/L: колонка не уже своего контента,
+ * не шире капа от ширины хоста, а свободное место после резерва имени делится поровну —
+ * сетка расправляется по ширине, а не жмётся к правому краю.
+ */
+class CliProtocolColumnWidthTest {
+
+    @Test
+    fun `short values stretch to the cap when the even share exceeds it`() {
+        // host 720, статус 96, спейсинг 8: свободного после резерва имени (35%) —
+        // 720 - 252 - 96 - 32 = 340, доля на колонку 113; кап 15% = 108 — берётся кап.
+        val width = cliProtocolMetricColumnWidthPx(
+            measuredMaxPx = 40,
+            hostWidthPx = 720,
+            statusPx = 96,
+            spacingPx = 8,
+        )
+
+        assertEquals(108, width)
+    }
+
+    @Test
+    fun `even share below the cap is used as is`() {
+        // host 1000, статус 300, спейсинг 25: свободного 1000 - 350 - 300 - 100 = 250,
+        // доля 83; кап 150 — доля меньше капа и шире контента, значит берётся доля.
+        val width = cliProtocolMetricColumnWidthPx(
+            measuredMaxPx = 40,
+            hostWidthPx = 1000,
+            statusPx = 300,
+            spacingPx = 25,
+        )
+
+        assertEquals(83, width)
+    }
+
+    @Test
+    fun `column never shrinks below the measured content`() {
+        val width = cliProtocolMetricColumnWidthPx(
+            measuredMaxPx = 90,
+            hostWidthPx = 1000,
+            statusPx = 300,
+            spacingPx = 25,
+        )
+
+        assertEquals(90, width)
+    }
+
+    @Test
+    fun `content wider than the cap is truncated to the cap`() {
+        val width = cliProtocolMetricColumnWidthPx(
+            measuredMaxPx = 400,
+            hostWidthPx = 720,
+            statusPx = 96,
+            spacingPx = 8,
+        )
+
+        assertEquals(108, width)
+    }
+
+    @Test
+    fun `three columns plus status always leave the name its reserve`() {
+        val hostPx = 720
+        val statusPx = 96
+        val spacingPx = 8
+
+        val width = cliProtocolMetricColumnWidthPx(
+            measuredMaxPx = 40,
+            hostWidthPx = hostPx,
+            statusPx = statusPx,
+            spacingPx = spacingPx,
+        )
+
+        val nameLeftover = hostPx - 3 * width - statusPx - 4 * spacingPx
+        assertEquals(true, nameLeftover >= (hostPx * 0.35f).toInt())
+    }
+}
