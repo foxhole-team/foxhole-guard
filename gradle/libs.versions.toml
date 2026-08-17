@@ -1,10 +1,10 @@
 [versions]
-compose-bom = "2026.06.01"
+compose-bom = "2026.08.00"
 activity-compose = "1.13.0"
 lifecycle = "2.11.0"
 room = "2.8.4"
 work = "2.11.2"
-webkit = "1.16.0"
+webkit = "1.17.0"
 glance = "1.1.1"
 datastore = "1.2.1"
 security-crypto = "1.1.0"
@@ -32,7 +32,7 @@ zxing-embedded = "4.3.0"
 [libraries]
 androidx-core-ktx = { module = "androidx.core:core-ktx", version = "1.19.0" }
 androidx-core-splashscreen = { module = "androidx.core:core-splashscreen", version = "1.2.0" }
-androidx-appcompat = { module = "androidx.appcompat:appcompat", version = "1.7.1" }
+androidx-appcompat = { module = "androidx.appcompat:appcompat", version = "1.8.0" }
 androidx-webkit = { module = "androidx.webkit:webkit", version.ref = "webkit" }
 androidx-glance-appwidget = { module = "androidx.glance:glance-appwidget", version.ref = "glance" }
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activity-compose" }
