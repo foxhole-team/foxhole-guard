@@ -202,6 +202,9 @@ class ReleaseEngineeringContractTest {
         assertTrue(releaseWorkflow.contains("cmp --silent"))
         assertTrue(releaseWorkflow.contains("--draft"))
         assertTrue(releaseWorkflow.contains("--draft=false"))
+        assertTrue(releaseWorkflow.contains("releases/${'$'}release_id"))
+        assertTrue(releaseWorkflow.contains("releases/assets/${'$'}asset_id"))
+        assertFalse(releaseWorkflow.contains("gh release download"))
         assertFalse(candidateJob.contains("foxhole.releaseProbe=true"))
     }
 
