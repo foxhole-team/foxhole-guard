@@ -9,8 +9,6 @@ import com.foxhole.guard.core.settings.updateTrafficChartPage
 import com.foxhole.guard.core.settings.updateTrafficChartRangeMinutes
 import kotlinx.coroutines.launch
 
-// Traffic-widget chart settings handlers for HomeViewModel (extension functions only).
-
 internal fun HomeViewModel.onTrafficCardViewChanged(value: TrafficCardView) {
     viewModelScope.launch {
         container.settingsRepository.updateTrafficCardView(value)

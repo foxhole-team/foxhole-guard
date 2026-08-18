@@ -9,8 +9,6 @@ import java.io.File
 class RuntimeStaticSafetyGuardTest {
     @Test
     fun `allowlist entries point at files that exist`() {
-        // A moved or renamed file must be re-triaged, not silently exempted forever: dead
-        // allowlist entries are exactly how this guard rotted after the :core:runtime move.
         val missing =
             (LEGACY_BRIDGE_ALLOWLIST + RUNTIME_STATE_OWNER_ALLOWLIST)
                 .filterNot { path -> repoRoot().resolve(path).isFile }
@@ -56,8 +54,6 @@ class RuntimeStaticSafetyGuardTest {
 
         assertTrue(supervisor.contains("RuntimeStateMachine("))
         assertTrue(supervisor.contains("stateMachine.dispatch(event)"))
-        // Ф3c: transitions mint from the shared clock and are adopted by the state machine —
-        // the supervisor still never owns generation state itself.
         assertTrue(supervisor.contains("stateMachine.adoptTransition("))
         assertFalse(supervisor.contains("RuntimeStateStore("))
         assertFalse(supervisor.contains("AtomicLong"))
@@ -131,7 +127,6 @@ class RuntimeStaticSafetyGuardTest {
 
         assertTrue(fallbackBlock.contains("network = network"))
         assertTrue(fallbackBlock.contains("resolverNetwork = network"))
-        // The DNS probe must be bound to the candidate vpn network, not the unbound platform resolver.
         assertTrue(fallbackBlock.contains("network.getAllByName("))
         assertFalse(fallbackBlock.contains("InetAddress.getAllByName("))
     }
@@ -164,10 +159,6 @@ class RuntimeStaticSafetyGuardTest {
     fun `the single network service has the vpn foreground role`() {
         val manifest = projectFile("src/main/AndroidManifest.xml").readText()
 
-        // Every runtime service uses specialUse with an explicit subtype. systemExempted is
-        // banned on purpose: its runtime eligibility rides the VPN consent app-op, so a
-        // boot-restore or firewall start after consent revocation would crash with
-        // SecurityException instead of reaching the foreground-start-blocked handler.
         assertFalse(manifest.contains("android:foregroundServiceType=\"systemExempted\""))
         assertFalse(manifest.contains("android.permission.FOREGROUND_SERVICE_SYSTEM_EXEMPTED"))
         assertTrue(manifest.contains("android:foregroundServiceType=\"specialUse\""))
@@ -189,11 +180,8 @@ class RuntimeStaticSafetyGuardTest {
         val store =
             projectFile("src/main/kotlin/com/foxhole/core/runtime/GeoIpDatabaseStore.kt").readText()
 
-        // The geo database moved into the FoxHole DB feed (downloaded on demand): bundling it
-        // again would put ~24 MB of ranges back into every APK, so its absence IS the contract.
         assertFalse(File("app/src/main/assets/geoip/geoip").exists())
         assertFalse(File("../app/src/main/assets/geoip/geoip").exists())
-        // The downloaded override files stay the architecture-neutral source both readers share.
         assertTrue(resolver.contains("overrideIpv4File"))
         assertTrue(resolver.contains("overrideIpv6File"))
         assertTrue(store.contains("overrideIpv4File"))
@@ -225,8 +213,6 @@ class RuntimeStaticSafetyGuardTest {
         )
     }
 
-    // The fleet-wide bans police BOTH runtime source roots. Scanning only app/src/main silently
-    // exempted the engine after its move to :core:runtime (the guards' primary subject).
     private fun mainKotlinFiles(): List<File> =
         listOf(moduleRoot("app"), moduleRoot("core/runtime"))
             .flatMap { root ->
@@ -277,8 +263,6 @@ class RuntimeStaticSafetyGuardTest {
         val LEGACY_BRIDGE_ALLOWLIST =
             setOf(
                 "app/src/main/kotlin/com/foxhole/guard/FoxholeApplication.kt",
-                // Web apps: вотчдог/виджет/суб-экран читают снапшот (и виджет шлёт тот же
-                // оптимистичный апдейт, что тайл) — сознательно по образцу FoxholeTileService.
                 "app/src/main/kotlin/com/foxhole/guard/core/webapps/WebAppsWatchdog.kt",
                 "app/src/main/kotlin/com/foxhole/guard/widget/StatusWidget.kt",
                 "app/src/main/kotlin/com/foxhole/guard/ui/cli/settings/CliWebAppsSubScreen.kt",
@@ -288,22 +272,13 @@ class RuntimeStaticSafetyGuardTest {
                 "app/src/main/kotlin/com/foxhole/guard/runtime/FoxholeConnectionController.kt",
                 "app/src/main/kotlin/com/foxhole/guard/runtime/FoxholeConnectionControllerReconcileSupport.kt",
                 "core/runtime/src/main/kotlin/com/foxhole/core/runtime/FoxholeVpnRuntimeBridge.kt",
-                // Pre-existing phase publishers surfaced when the scan regained core/runtime
-                // coverage — queued for the single-owner supervisor rewrite, not new usages.
                 "core/runtime/src/main/kotlin/com/foxhole/core/runtime/I2pdManager.kt",
-                // LAN proxy: the same shape as I2pdManager above — a phase PUBLISHER, not a reader.
-                // The controller writes what the core reported; the service support reads the
-                // connection snapshot exactly like its FoxholeVpnService*Support siblings below.
-                // Every consumer of this state goes through FoxholeConnectionController.
                 "core/runtime/src/main/kotlin/com/foxhole/core/runtime/LanProxyRuntime.kt",
                 "app/src/main/kotlin/com/foxhole/guard/runtime/FoxholeVpnServiceLanProxySupport.kt",
                 "app/src/main/kotlin/com/foxhole/guard/runtime/FoxholeConnectionLifecycle.kt",
                 "app/src/main/kotlin/com/foxhole/guard/runtime/FoxholeTileService.kt",
-                // Read-only bridge consumer, same class as the tile/widget above.
                 "app/src/main/kotlin/com/foxhole/guard/runtime/ConnectionNotificationAction.kt",
                 "app/src/main/kotlin/com/foxhole/guard/runtime/FoxholeVpnService.kt",
-                // Mechanical extraction of the service-owned callbacks below. The owner reads the
-                // same legacy snapshot at the same network edges; it does not mint runtime state.
                 "app/src/main/kotlin/com/foxhole/guard/runtime/FoxholeVpnServiceNetworkCallbackOwner.kt",
                 "app/src/main/kotlin/com/foxhole/guard/runtime/FoxholeVpnServiceRuntimePolicies.kt",
                 "app/src/main/kotlin/com/foxhole/guard/runtime/FoxholeVpnServiceFailureAndBridgeSupport.kt",

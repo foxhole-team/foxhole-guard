@@ -37,11 +37,6 @@ internal data class CliStatsVpnTables(
     val transports: List<CliStatsVpnTransportRow> = emptyList(),
 )
 
-/**
- * Windowed VPN tables built only from timestamped facts. Protocol bytes come from traffic windows;
- * latency/errors come from metric events. TCP/UDP is joined through the persisted profile-option
- * transport that produced those facts. Ambiguous/unknown joins are omitted instead of guessed.
- */
 internal fun cliStatsVpnTables(
     window: StatisticsWindow,
     deviceWindows: List<TrafficWindow>,

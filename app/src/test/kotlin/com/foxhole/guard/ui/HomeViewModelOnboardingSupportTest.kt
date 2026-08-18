@@ -9,11 +9,12 @@ import org.junit.Test
 
 class HomeViewModelOnboardingSupportTest {
     @Test
-    fun `fresh wizard downloads only geo database by default`() {
+    fun `fresh wizard downloads the geo database and the fingerprint tables by default`() {
         assertEquals(
-            listOf(OnboardingDownload.GEOIP),
+            listOf(OnboardingDownload.GEOIP, OnboardingDownload.TLS_FINGERPRINTS),
             onboardingDownloadPlan(
                 geoIp = true,
+                tlsFingerprints = true,
                 dnsFilter = false,
                 torBridges = false,
                 threatIntel = false,
@@ -26,12 +27,14 @@ class HomeViewModelOnboardingSupportTest {
         assertEquals(
             listOf(
                 OnboardingDownload.GEOIP,
+                OnboardingDownload.TLS_FINGERPRINTS,
                 OnboardingDownload.DNS_FILTER,
                 OnboardingDownload.TOR_BRIDGES,
                 OnboardingDownload.THREAT_INTEL,
             ),
             onboardingDownloadPlan(
                 geoIp = true,
+                tlsFingerprints = true,
                 dnsFilter = true,
                 torBridges = true,
                 threatIntel = true,

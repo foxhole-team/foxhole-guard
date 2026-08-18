@@ -2,11 +2,6 @@ package com.foxhole.guard.ui
 
 import com.foxhole.core.model.Profile
 
-/**
- * Resolves the concrete protocol pinned by a Wi-Fi/cellular rule.
- * Single-protocol profiles need no extra pin; multi-protocol profiles never return an implicit
- * "auto" choice and fall back deterministically to the profile selection or first protocol.
- */
 internal fun Profile.resolveNetworkRuleProtocolOptionId(requestedOptionId: String?): String? =
     protocolOptions
         .takeIf { options -> options.size > 1 }

@@ -22,6 +22,9 @@ import kotlinx.coroutines.launch
 // no request network is threaded through this chain.
 internal fun FoxholeVpnService.startGeoRefresh() {
     stopGeoRefresh()
+    if (container.settingsRepository.settings.value.connection.geoOfflineMode) {
+        return
+    }
     geoRefreshJob =
         scope.launch(Dispatchers.IO) {
             if (FoxholeVpnService.GEO_REFRESH_INITIAL_DELAY_MS > 0) {

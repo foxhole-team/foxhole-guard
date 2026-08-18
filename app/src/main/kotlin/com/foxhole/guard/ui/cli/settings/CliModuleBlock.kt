@@ -13,34 +13,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.foxhole.core.model.VisualStyle
 import com.foxhole.guard.R
 import com.foxhole.guard.ui.cli.LocalCliColors
+import com.foxhole.guard.ui.cli.LocalCliVisualStyle
 import com.foxhole.guard.ui.cli.components.CliActionRow
 import com.foxhole.guard.ui.cli.components.CliToggleRow
 
-/**
- * One switchable part of the product — a module or an extra — as a settings block: the switch that
- * permits it and an always-visible way into its own screen.
- *
- * Shared rather than copied because the shape is the promise: everything that can be turned on and
- * configured separately — web apps, the proxy server, TOR, I2P, the firewall, anomaly detection —
- * reads the same way, and one whose settings were reachable only while it was enabled taught users
- * that turning it off also hides how it is configured. The settings row is therefore never gated on
- * the toggle.
- *
- * [icon] is mandatory rather than optional: a module is a thing in the product, and a bare label
- * made the block read as one more preference row. Both rows carry a glyph — the module's own icon,
- * then the settings cog — so the pair reads as one unit.
- *
- * The settings action is styled as an indented secondary row. An orange dashed elbow connects the
- * module heading to that nested row; only the connector is dashed — there is no outlined box.
- *
- * [settingsLabel] lets a module say "module settings" where an extra says "open settings" — the two
- * are not the same kind of thing, and the wording is the only place that shows.
- */
 @Composable
 internal fun CliModuleBlock(
     label: String,
@@ -55,7 +38,7 @@ internal fun CliModuleBlock(
     settingsAttentionColor: Color = Color.Unspecified,
 ) {
     val colors = LocalCliColors.current
-    val settingsActionColor = if (checked) colors.ok else colors.accent
+    val settingsActionColor = colors.accent
     Column {
         CliToggleRow(
             label = label,
@@ -82,19 +65,41 @@ internal fun CliModuleBlock(
     }
 }
 
-/** Dashed `└──` hierarchy mark from the module heading into its always-visible settings row. */
 @Composable
 private fun CliModuleSettingsConnector(color: Color) {
+    val plain = LocalCliVisualStyle.current == VisualStyle.PLAIN
     Canvas(
         modifier = Modifier
             .width(MODULE_SETTINGS_CONNECTOR_WIDTH)
             .height(MODULE_SETTINGS_ROW_HEIGHT),
     ) {
-        val strokeWidth = 1.dp.toPx()
+        val strokeWidth = if (plain) 1.5.dp.toPx() else 1.dp.toPx()
         val x = 8.dp.toPx()
         val y = size.height / 2f
         val arrowLength = 4.dp.toPx()
         val endX = size.width
+        if (plain) {
+            val corner = 8.dp.toPx()
+            val lane = Path().apply {
+                moveTo(x, 0f)
+                lineTo(x, y - corner)
+                quadraticTo(x, y, x + corner, y)
+                lineTo(endX - arrowLength / 2f, y)
+            }
+            drawPath(
+                path = lane,
+                color = color.copy(alpha = MODULE_SETTINGS_CONNECTOR_ALPHA),
+                style = Stroke(width = strokeWidth, cap = StrokeCap.Round),
+            )
+            val tip = Path().apply {
+                moveTo(endX, y)
+                lineTo(endX - arrowLength, y - arrowLength)
+                lineTo(endX - arrowLength, y + arrowLength)
+                close()
+            }
+            drawPath(path = tip, color = color.copy(alpha = MODULE_SETTINGS_CONNECTOR_ALPHA))
+            return@Canvas
+        }
         val path = Path().apply {
             moveTo(x, 0f)
             lineTo(x, y)

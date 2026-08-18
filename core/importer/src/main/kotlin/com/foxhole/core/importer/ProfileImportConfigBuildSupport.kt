@@ -74,10 +74,32 @@ internal open class ProfileImportConfigBuildSupport(
                 query["reserved"]?.requireSafeWireGuardUriValue("reserved")?.let { add("Reserved = $it") }
             }
         return parseWireGuardConfig(
-            raw = lines.joinToString(separator = "\n"),
+            raw = (lines + amneziaUriInterfaceLines(query)).joinToString(separator = "\n"),
             displayName = displayName,
             allowPrivateOutboundHosts = allowPrivateOutboundHosts,
         )
+    }
+
+    private fun amneziaUriInterfaceLines(query: Map<String, String>): List<String> {
+        // Re-spell link parameters as wg-quick lines so link and file imports share one parser.
+        val declared =
+            AMNEZIA_URI_QUERY_KEYS.mapNotNull { key ->
+                query[key]?.trim()?.takeIf(String::isNotBlank)?.let { key to it }
+            }
+        if (declared.isEmpty()) {
+            return emptyList()
+        }
+        val peerKeys = setOf("advancedsecurity")
+        return buildList {
+            add("[Interface]")
+            declared.filterNot { (key, _) -> key in peerKeys }.forEach { (key, value) ->
+                add("$key = ${value.requireSafeWireGuardUriValue(key)}")
+            }
+            declared.filter { (key, _) -> key in peerKeys }.forEach { (key, value) ->
+                add("[Peer]")
+                add("$key = ${value.requireSafeWireGuardUriValue(key)}")
+            }
+        }
     }
 
     @Suppress("CyclomaticComplexMethod")
@@ -122,6 +144,13 @@ internal open class ProfileImportConfigBuildSupport(
                 allowedIps = peerSection["AllowedIPs"]?.flatMap { it.split(',') }?.map(String::trim).orEmpty(),
                 localAddresses = localAddress,
             )
+        val mtu = interfaceSection["MTU"]?.firstOrNull()?.toIntOrNull()
+        val amnezia =
+            amneziaBlockFromInterface(
+                interfaceSection = interfaceSection,
+                peerSection = peerSection,
+                mtu = mtu ?: DEFAULT_WIREGUARD_IMPORT_MTU,
+            )
         val wireGuardEndpoint =
             buildJsonObject {
                 put("type", "wireguard")
@@ -134,8 +163,8 @@ internal open class ProfileImportConfigBuildSupport(
                     "address",
                     buildStringArray(localAddress),
                 )
-                interfaceSection["ListenPort"]?.firstOrNull()?.toIntOrNull()?.let { put("listen_port", it) }
-                interfaceSection["MTU"]?.firstOrNull()?.toIntOrNull()?.let { put("mtu", it) }
+                mtu?.let { put("mtu", it) }
+                amnezia?.let { put("amnezia", it) }
                 putJsonArray("peers") {
                     add(
                         buildJsonObject {
@@ -456,7 +485,10 @@ internal open class ProfileImportConfigBuildSupport(
             return null
         }
         val utlsFingerprint =
-            normalizeUtlsFingerprint(query.firstValue("fp", "fingerprint", "utlsFingerprint", "utls_fingerprint"))
+            normalizeUtlsFingerprint(
+                query.firstValue("fp", "fingerprint", "utlsFingerprint", "utls_fingerprint"),
+                reality = security == "reality",
+            )
         return buildJsonObject {
             put("enabled", true)
             put("server_name", query["sni"]?.takeIf { it.isNotBlank() } ?: host)
@@ -490,7 +522,7 @@ internal open class ProfileImportConfigBuildSupport(
             if (utlsFingerprint != null || security == "reality") {
                 putJsonObject("utls") {
                     put("enabled", true)
-                    put("fingerprint", utlsFingerprint ?: "chrome")
+                    put("fingerprint", utlsFingerprint ?: SUBSTITUTE_UTLS_FINGERPRINT)
                 }
             }
             if (security == "reality") {
@@ -548,12 +580,62 @@ internal open class ProfileImportConfigBuildSupport(
     internal fun Map<String, String>.booleanValue(vararg keys: String): Boolean? =
         firstValue(*keys)?.toFlexibleBoolean()
 
-    internal fun normalizeUtlsFingerprint(value: String?): String? =
-        when (val fingerprint = value?.trim()?.lowercase()) {
-            null, "", "auto", "off", "false", "0", "disabled" -> null
-            else -> fingerprint
+    internal fun normalizeUtlsFingerprint(
+        value: String?,
+        reality: Boolean,
+    ): String? {
+        val fingerprint = value?.trim()?.lowercase()
+        return when {
+            fingerprint.isNullOrEmpty() || fingerprint in UTLS_FINGERPRINT_OFF_VALUES -> null
+            fingerprint in SUPPORTED_UTLS_FINGERPRINTS -> fingerprint
+            // These TLS 1.2 parrots have no key_share for REALITY authentication.
+            reality && fingerprint in REALITY_IMPOSSIBLE_UTLS_FINGERPRINTS ->
+                error(
+                    "REALITY cannot use fp=$fingerprint: that parrot sends no key_share extension, and " +
+                        "REALITY derives its authentication key from the client's x25519 key share",
+                )
+            else -> SUBSTITUTE_UTLS_FINGERPRINT
         }
+    }
 }
+
+// Membership promises that FoxCore can emit the named ClientHello.
+val SUPPORTED_UTLS_FINGERPRINTS: Set<String> =
+    setOf(
+        "chrome",
+        "chrome_151",
+        "chrome_133",
+        "chrome_131",
+        "edge",
+        "edge_85",
+        "safari",
+        "safari_26_3",
+        "ios",
+        "ios_14",
+        "qq",
+        "qq_11_1",
+        "firefox",
+        "firefox_153",
+        "firefox_148",
+        "random",
+        "randomized",
+    )
+
+const val SUBSTITUTE_UTLS_FINGERPRINT: String = "chrome"
+
+private val REALITY_IMPOSSIBLE_UTLS_FINGERPRINTS = setOf("360", "android")
+
+private val UTLS_FINGERPRINT_OFF_VALUES = setOf("auto", "off", "false", "0", "disabled")
+
+fun unsupportedUtlsFingerprint(value: String?): String? {
+    val trimmed = value?.trim()?.takeIf(String::isNotBlank) ?: return null
+    val normalized = trimmed.lowercase()
+    return trimmed.takeUnless {
+        normalized in UTLS_FINGERPRINT_OFF_VALUES || normalized in SUPPORTED_UTLS_FINGERPRINTS
+    }
+}
+
+internal const val DEFAULT_WIREGUARD_IMPORT_MTU = 1420
 
 private fun String.requireSafeWireGuardUriValue(label: String): String =
     trim().also { normalized ->

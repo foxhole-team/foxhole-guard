@@ -1,11 +1,7 @@
 package com.foxhole.guard.ui
 
-// Pure math for the traffic widget's live chart: the nice-step scale with downward hysteresis
-// and the per-pixel column bucketing. Kept free of Compose so it unit-tests directly.
-
 internal const val TRAFFIC_CHART_MIN_STEP_BYTES_PER_SEC = 1_000L
 
-/** The smallest 1/2/5×10ⁿ step (≥ 1 KB/s) that covers [value] — the chart's full-scale value. */
 internal fun trafficChartNiceCeilStep(value: Long): Long {
     var step = TRAFFIC_CHART_MIN_STEP_BYTES_PER_SEC
     while (step < value) {
@@ -15,7 +11,6 @@ internal fun trafficChartNiceCeilStep(value: Long): Long {
 }
 
 private fun trafficChartNextStep(step: Long): Long {
-    // 1 → 2 → 5 → 10 …: the leading digit cycles, the magnitude carries.
     var magnitude = 1L
     var lead = step
     while (lead >= 10L) {
@@ -29,11 +24,6 @@ private fun trafficChartNextStep(step: Long): Long {
     }
 }
 
-/**
- * The chart's full-scale step with hysteresis: growing snaps immediately (clipping is worse than
- * a jump), shrinking waits for [TRAFFIC_CHART_SCALE_SHRINK_STREAK] consecutive updates below the
- * smaller step — one quiet second after a burst must not make the whole chart leap.
- */
 internal class TrafficChartScale {
     var step: Long = TRAFFIC_CHART_MIN_STEP_BYTES_PER_SEC
         private set
@@ -61,11 +51,6 @@ internal class TrafficChartScale {
 
 internal const val TRAFFIC_CHART_SCALE_SHRINK_STREAK = 3
 
-/**
- * The sample range one pixel column covers, oldest-first: [count] samples split across [columns]
- * columns, column [column] owning a non-empty contiguous slice (bucket-max absorbs windows wider
- * than the pixel raster).
- */
 internal fun trafficChartColumnRange(
     count: Int,
     columns: Int,
@@ -76,7 +61,6 @@ internal fun trafficChartColumnRange(
     return from.toInt()..to.toInt().coerceAtMost(count - 1)
 }
 
-/** Bucket-max of one lane over [range] (oldest-first sample indices). */
 internal fun TrafficChartHistory.laneMaxIn(
     lane: Int,
     range: IntRange,
@@ -89,10 +73,6 @@ internal fun TrafficChartHistory.laneMaxIn(
     return max
 }
 
-/**
- * Bucket-max of the VPN lane over [range]: the device total minus the TOR and I2P lanes, clamped
- * at zero per sample (the lanes are booked by different trackers and can momentarily disagree).
- */
 internal fun TrafficChartHistory.vpnLaneMaxIn(
     rx: Boolean,
     range: IntRange,
@@ -110,19 +90,11 @@ internal fun TrafficChartHistory.vpnLaneMaxIn(
     return max
 }
 
-// ── Fixed time window (the X axis always spans the full capacity; data hugs the right edge) ──
-
-/** Columns the fixed window renders: one per pixel, capped by capacity — independent of fill. */
 internal fun trafficChartWindowColumns(
     capacitySeconds: Int,
     widthPx: Int,
 ): Int = minOf(capacitySeconds, widthPx.coerceAtLeast(1))
 
-/**
- * The oldest-first SAMPLE range column [column] covers, or null while the column still precedes
- * the data: the window's slots span the full capacity and the samples occupy its newest
- * [sampleCount] slots, so the trace rides the right edge from the very first second.
- */
 internal fun trafficChartWindowSampleRange(
     capacitySeconds: Int,
     sampleCount: Int,
@@ -137,7 +109,6 @@ internal fun trafficChartWindowSampleRange(
     return (from - dataStartSlot)..(slots.last - dataStartSlot)
 }
 
-/** X of a column's right edge: the newest column ends exactly at the window's right edge. */
 internal fun trafficChartWindowColumnEndX(
     widthPx: Float,
     capacitySeconds: Int,
@@ -148,11 +119,6 @@ internal fun trafficChartWindowColumnEndX(
     return widthPx * (slotEnd + 1).toFloat() / capacitySeconds
 }
 
-/**
- * X where a column's VERTEX is plotted: the trace anchors column 0 at the left edge (its path
- * starts at x=0), every later column at its right edge — the crosshair and the tooltip must
- * anchor to the same spot or they float one column-width off the plotted line.
- */
 internal fun trafficChartColumnAnchorX(
     widthPx: Float,
     capacitySeconds: Int,
@@ -161,17 +127,12 @@ internal fun trafficChartColumnAnchorX(
 ): Float =
     if (column == 0) 0f else trafficChartWindowColumnEndX(widthPx, capacitySeconds, columns, column)
 
-/** Seconds back from "now" that [column] shows (0 = the newest slot at the right edge). */
 internal fun trafficChartColumnAgeSeconds(
     capacitySeconds: Int,
     columns: Int,
     column: Int,
 ): Int = capacitySeconds - 1 - trafficChartColumnRange(capacitySeconds, columns, column).last
 
-/**
- * The column under pointer [x], clamped into the data region; null while the ring is empty.
- * Integer division drifts the first guess by at most one column either way — the walk settles it.
- */
 internal fun trafficChartColumnAt(
     capacitySeconds: Int,
     sampleCount: Int,
@@ -186,7 +147,6 @@ internal fun trafficChartColumnAt(
     return trafficChartColumnForSlot(capacitySeconds, columns, slot)
 }
 
-/** The column showing [ageSeconds] (clamped into the data region); null while the ring is empty. */
 internal fun trafficChartColumnForAge(
     capacitySeconds: Int,
     sampleCount: Int,
@@ -213,10 +173,6 @@ private fun trafficChartColumnForSlot(
     return column
 }
 
-/**
- * «−m:ss» (or «−h:mm:ss» once the window reaches hours) label for [ageSeconds]; null at zero —
- * the caller names the right edge "now" in the UI language.
- */
 internal fun trafficChartAgeLabel(ageSeconds: Int): String? {
     if (ageSeconds <= 0) return null
     val minutes = ageSeconds / SECONDS_PER_MINUTE_INT

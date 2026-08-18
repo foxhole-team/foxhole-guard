@@ -19,17 +19,6 @@ import com.foxhole.guard.core.data.withInsecureTlsMarkers
 import com.foxhole.guard.userFacingErrorMessage
 import kotlinx.coroutines.sync.withLock
 
-/**
- * The edit surface behind the structured profile editor (`ui/cli/profiles/CliProfileEditor*`).
- *
- * Field edits are submitted as one repository batch: every changed protocol is validated before
- * the encrypted profile secret is written, so a later invalid card cannot partially save an earlier
- * one. Changing the *set* of protocols is done here against the profile secret, mirroring
- * `ProfileRepository.setProfileProtocolOptionEnabled`: serialize on the repository's secret mutex,
- * re-write the entity's protocolHint afterwards purely to fire Room's invalidation (the secret is
- * invisible to `observeProfiles()`), and keep the "at least one protocol, selection never dangling"
- * invariant the selection helpers rely on.
- */
 internal data class ProfileProtocolConfigEdit(
     val protocolOptionId: String?,
     val configJson: String,
@@ -67,10 +56,6 @@ internal suspend fun HomeViewModel.saveProfileProtocolConfigs(
     }.isSuccess
 }
 
-/**
- * Commits the visible editor as one validated action: all protocol configs are sanitized before
- * the encrypted secret is replaced, and the profile name joins the same editor result.
- */
 internal suspend fun HomeViewModel.saveProfileEditorChanges(
     profileId: Long,
     profileName: String,
@@ -108,13 +93,6 @@ internal suspend fun HomeViewModel.saveProfileEditorChanges(
     }.isSuccess
 }
 
-/**
- * Validates and saves text from the full-screen manual editor in one transaction.
- *
- * Stored FoxCore JSON takes the lossless sanitizer path. If the text is another supported local
- * format (a share link or WireGuard text), the ordinary importer normalizes it first. Subscriptions
- * and multi-profile bundles remain import actions rather than silently replacing one protocol.
- */
 internal suspend fun HomeViewModel.saveManualProfileConfig(
     profileId: Long,
     profileName: String,
@@ -142,12 +120,6 @@ internal suspend fun HomeViewModel.saveManualProfileConfig(
     )
 }
 
-/**
- * Registers one more protocol on the profile. A profile that never had options is converted on the
- * way in: its current resolved config becomes option #1 so the new protocol joins a real list
- * instead of overwriting the profile. The config is sanitized through the importer first, so an
- * invalid paste fails here rather than at connect time.
- */
 internal suspend fun HomeViewModel.addProfileProtocolOption(
     profileId: Long,
     displayName: String,
@@ -180,11 +152,6 @@ internal suspend fun HomeViewModel.addProfileProtocolOption(
         emitError(getApplication<Application>().userFacingErrorMessage(error, R.string.cli_prof_edit_add_failed))
     }.isSuccess
 
-/**
- * Drops one protocol. Refuses the last one (the same floor `protocolOptionEnabledUpdate` enforces),
- * and when the removed option was the selected one the selection moves to the first enabled
- * survivor together with the mirrored top-level config.
- */
 internal suspend fun HomeViewModel.removeProfileProtocolOption(
     profileId: Long,
     optionId: String,
@@ -222,16 +189,6 @@ internal suspend fun HomeViewModel.removeProfileProtocolOption(
         emitError(getApplication<Application>().userFacingErrorMessage(error, R.string.cli_prof_edit_remove_failed))
     }.isSuccess
 
-/**
- * Creates a new profile from a blank protocol template. An empty server is a valid editor draft but
- * deliberately invalid import input, so this path persists a local draft directly and leaves the
- * ordinary import parser strict. Returns the created profile, or null after reporting the failure.
- *
- * The direct draft path intentionally has no import deduplication. Every blank template of a given
- * type is the same bytes, so the duplicate guard used to hand the first profile back instead of
- * creating a fresh editor draft. A template is not an imported source; there is nothing to be a
- * duplicate of.
- */
 internal suspend fun HomeViewModel.createProfileFromTemplate(type: String): Profile? =
     runCatching {
         val normalizedType = type.trim().lowercase()
@@ -254,7 +211,6 @@ internal suspend fun HomeViewModel.createProfileFromTemplate(type: String): Prof
         emitError(getApplication<Application>().userFacingErrorMessage(error, R.string.cli_prof_edit_add_failed))
     }.getOrNull()
 
-/** Parses a pasted share URI into an addable protocol, or fails with the importer's own message. */
 internal suspend fun HomeViewModel.parseProtocolShareUri(shareUri: String): ParsedProtocolShareUri {
     val repository = container.profileRepository
     val expert = repository.settingsRepository.current().expert
@@ -340,7 +296,6 @@ private suspend fun ProfileRepository.sanitizeForProfile(
     )
 }
 
-/** The option list of a profile that may still be single-config: its config becomes option #1. */
 private fun StoredProfileSecret.materializedProtocolOptions(
     protocolHint: String,
 ): List<StoredProfileProtocolOption> =
@@ -372,8 +327,6 @@ private suspend fun ProfileRepository.persistProtocolOptions(
     fallbackProtocolHint: String,
 ) {
     secretMutationMutex.withLock { secretStore.write(secretRef, secret) }
-    // The enabled/option list lives in the secret, which observeProfiles() never reads; re-writing
-    // the entity's protocolHint is what makes Room re-emit so the editor and the list refresh.
     dao.updateProtocolHint(profileId, fallbackProtocolHint)
     diagnosticsLogger.record("profile", "profile protocol options changed")
 }

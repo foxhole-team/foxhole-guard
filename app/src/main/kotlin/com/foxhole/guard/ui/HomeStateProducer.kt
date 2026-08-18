@@ -238,11 +238,6 @@ internal class HomeStateProducer(
 
     private val activityStreams =
         combine(
-            // Live diagnostics burst per network event, and every record publishes a fresh
-            // ≤500-entry list; unthrottled, each one re-ran this combine and recomposed every
-            // open journal. The traffic tick above is already projected to 1 Hz — the journal
-            // stream gets the same treatment, except the first emission passes through
-            // instantly so combine() never stalls the dashboard on subscribe.
             container.diagnosticsLogger.entries.throttleLatest(LIVE_DIAGNOSTICS_THROTTLE_MS),
             container.anomalyRepository.recentEvents,
             appActivityStreams,
@@ -329,9 +324,6 @@ internal class HomeStateProducer(
                 reconnectInProgress = reconnectState.inProgress,
                 torOperation = localStreams.torOperation,
                 torPhase = connectionStreams.torPhase,
-                // With I2P disabled the phase must read OFFLINE, not the last live value. The
-                // runtime only advances the phase from i2pd logs and never resets it on a hot guard
-                // reload, so the UI showed "starting" forever after I2P was switched off.
                 i2pPhase = if (connectionStreams.settings.i2pRuntimeActive()) {
                     connectionStreams.i2pPhase
                 } else {
@@ -393,10 +385,6 @@ internal class HomeStateProducer(
         combine(
             coreUiState,
             statisticsActivityStreams,
-            // The statistics build reads only the running totals and a coarse "last activity"
-            // stamp from the live traffic, so the 1 Hz dashboard tick is projected down to a
-            // once-per-bucket tick: feeding the raw tick re-ran the whole heavy statistics
-            // aggregation every second while the screen was open.
             dashboardTraffic
                 .map { traffic -> traffic.toStatisticsTrafficTick() }
                 .distinctUntilChanged { previous, next ->
@@ -422,13 +410,6 @@ internal class HomeStateProducer(
                 ),
             )
 
-    /**
-     * Statistics-grade projection of the live traffic tick: per-second rates are dropped (nothing
-     * downstream of [statisticsUiState] reads them) and the activity stamp is bucketed, so the
-     * paired sampledAt/available dedupe caps traffic-driven statistics rebuilds at one per
-     * [STATISTICS_UI_NOW_BUCKET_MS] instead of one per second. Totals ride through raw — they are
-     * re-read fresh at each bucket flip.
-     */
     private fun TrafficSnapshot.toStatisticsTrafficTick(): TrafficSnapshot =
         copy(
             rxBytesPerSec = 0,
@@ -447,10 +428,6 @@ internal class HomeStateProducer(
     }
 }
 
-// Throttle-latest, not sample(): the first value must pass through with zero delay (a combine()
-// upstream that sits silent for a period stalls every state built from it on subscribe), and the
-// newest value must always land eventually — conflate keeps only the latest pending emission
-// while the delay paces the downstream.
 private fun <T> Flow<T>.throttleLatest(windowMs: Long): Flow<T> =
     conflate().transform { value ->
         emit(value)

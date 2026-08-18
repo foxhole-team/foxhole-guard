@@ -19,11 +19,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.util.concurrent.TimeUnit
 
-// Tor bridge settings support (the "Bridges" group on the Tor-core screen). Extracted from
-// HomeViewModel by domain, same pattern as the DNS-filter / GeoIP update support files.
-
-// Bridge lines land in torrc-defaults at Tor start; a live direct-Tor runtime reloads so the
-// change applies immediately, otherwise it applies on the next start.
 internal fun HomeViewModel.onTorBridgesEnabledChanged(value: Boolean) {
     updateRuntimeSettingAndMaybeReload {
         container.settingsRepository.updatePrivacyRouteBridgesEnabled(value)
@@ -70,8 +65,6 @@ internal fun HomeViewModel.onTorBridgeManualRefresh(useFoxholeSourceOverride: Bo
                     torBridgeRefreshInProgressMutable.value = false
                 }
             if (terminalPhase == FoxholeUpdatePhase.FAILED) {
-                // A failed verification must remain visible and retryable in the Tor settings.
-                // The next explicit refresh moves the phase back to CHECKING.
                 torBridgeUpdatePhaseMutable.value = FoxholeUpdatePhase.FAILED
             } else {
                 settleUpdatePhase({ phase -> torBridgeUpdatePhaseMutable.value = phase }, terminalPhase)
@@ -114,25 +107,18 @@ internal fun HomeViewModel.onTorBridgeManualRefreshCancel() {
     componentUpdates.torBridgeDownloadProgressMutable.value = null
 }
 
-/** Applies the user's bridge decision only after the consent/download flow has resolved. */
 internal fun HomeViewModel.onTorPermissionWithBridgeChoice(
     useBridges: Boolean,
     source: DatasetActivationSource,
 ) {
     viewModelScope.launch {
         val repository = container.settingsRepository
-        // Permission exits safe mode; bridge writes before this point would be normalized away.
         repository.updatePrivacyRoutePermitted(true)
         repository.updatePrivacyRouteBridgesUseFoxholeSource(source == DatasetActivationSource.FOXHOLE_DB)
         repository.updatePrivacyRouteBridgesEnabled(useBridges)
     }
 }
 
-/**
- * Whether the Tor module honestly needs to surface its bridge-list action. The cadence comes from
- * the same constant as WorkManager; a successful check (including UP_TO_DATE) satisfies the
- * interval, while a failed or never-run check remains immediately actionable.
- */
 internal fun torBridgeRefreshRequired(
     settings: PrivacyRouteSettings,
     nowMs: Long = System.currentTimeMillis(),
@@ -157,7 +143,6 @@ internal fun PrivacyRouteSettings.torBridgePersistenceMarker(): TorBridgePersist
         lastUpdateSuccess = bridgesLastUpdateSuccess,
     )
 
-/** A green DONE state is allowed only after this refresh changed the persisted verified state. */
 internal fun torBridgeVerifiedSuccess(
     phase: FoxholeUpdatePhase,
     settings: PrivacyRouteSettings,

@@ -3,11 +3,6 @@ package com.foxhole.guard.ui
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 
-/**
- * Per-protocol metrics state: latency/ping/down caches keyed by profile option, the smart-profile
- * refresh bookkeeping and the dashboard metrics-loading flag. HomeViewModel exposes same-named
- * aliases so the Support-file call sites read unchanged.
- */
 internal class HomeProtocolMetricsState {
     val profileOptionLatenciesMutable = MutableStateFlow<Map<ProfileOptionLatencyKey, Long>>(emptyMap())
     val profileOptionDownMutable = MutableStateFlow<Set<ProfileOptionLatencyKey>>(emptySet())
@@ -87,13 +82,6 @@ internal class HomeProtocolMetricsState {
     }
 }
 
-/**
- * Generation fence for one connected-route latency probe.
- *
- * A pending IP lookup and a probe from the previous route may finish after a reconnect or network
- * handover. Only the current generation can acquire/release the dashboard loading presentation, so
- * that stale completion can neither leave a spinner behind nor clear the next real probe's one.
- */
 internal class DashboardLatencyRefreshCoordinator {
     private var generation = 0L
     private var loadingGeneration: Long? = null

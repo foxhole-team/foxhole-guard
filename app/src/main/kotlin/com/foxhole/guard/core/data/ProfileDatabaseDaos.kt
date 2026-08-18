@@ -353,36 +353,12 @@ interface AnomalyDao {
         where packageName = :packageName
             and networkType = :networkType
             and hourBucket = :hourBucket
-        order by startedAtMs desc
+        order by startedAtMs desc, id desc
         limit :limit
         """,
     )
     suspend fun recentAppTrafficWindows(
         packageName: String,
-        networkType: String,
-        hourBucket: Int,
-        limit: Int,
-    ): List<AppTrafficWindowEntity>
-
-    @Query(
-        """
-        select * from app_traffic_windows as outer_window
-        where outer_window.packageName in (:packageNames)
-            and outer_window.networkType = :networkType
-            and outer_window.hourBucket = :hourBucket
-            and outer_window.id in (
-                select recent.id from app_traffic_windows as recent
-                where recent.packageName = outer_window.packageName
-                    and recent.networkType = outer_window.networkType
-                    and recent.hourBucket = outer_window.hourBucket
-                order by recent.startedAtMs desc, recent.id desc
-                limit :limit
-            )
-        order by outer_window.packageName asc, outer_window.startedAtMs desc, outer_window.id desc
-        """,
-    )
-    suspend fun recentAppTrafficWindowsForPackages(
-        packageNames: List<String>,
         networkType: String,
         hourBucket: Int,
         limit: Int,

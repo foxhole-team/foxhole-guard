@@ -39,8 +39,7 @@ SCHEMA = 4
 
 PACKAGE_RE = re.compile(r"^[a-z][a-z0-9_]*(\.[a-z0-9_]+)+$", re.IGNORECASE)
 SHA1_RE = re.compile(r"^[0-9a-f]{40}$", re.IGNORECASE)
-# Mirrors foxhole-db/build-threat-intel.sh exactly: the seed and the signed feed must produce the
-# same sets from the same upstream revision, or a device would change behavior on first update.
+# Mirrors foxhole-db/build-threat-intel.sh: seed and signed feed must produce the same sets from the same upstream revision, or a device changes behavior on first update.
 DOMAIN_RE = re.compile(r"^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$")
 IPV4_RE = re.compile(r"^(?:\d{1,3}\.){3}\d{1,3}$")
 IPV6_RE = re.compile(r"^[0-9a-f:]{3,45}$")
@@ -111,8 +110,6 @@ def parse_ioc(text: str) -> tuple[list[str], list[str], list[str], list[str], di
     certs: set[str] = set()
     domains: set[str] = set()
     ips: set[str] = set()
-    # indicator -> kind. A louder classification wins a duplicate: one family's controller is
-    # another's marketing host, and dropping the stronger claim would silence a real C2 entry.
     kinds: dict[str, str] = {}
     entries = 0
     skipped = 0
@@ -159,7 +156,7 @@ def parse_ioc(text: str) -> tuple[list[str], list[str], list[str], list[str], di
             continue
         stripped = line.strip()
         if stripped.startswith("- "):
-            # An unquoted YAML scalar ends at " #": the upstream file annotates some hosts inline.
+            # An unquoted YAML scalar ends at " #": upstream annotates some hosts inline.
             value = stripped[2:].split(" #", 1)[0].strip().strip("'\"")
             if key == "packages" and PACKAGE_RE.match(value):
                 entry_packages.add(value.lower())
@@ -211,8 +208,7 @@ def main() -> int:
         "certsSha1": certs,
         "domains": domains,
         "ips": ips,
-        # Only what upstream actually said. An indicator listed without a `c2:`/`websites:` context
-        # is left out entirely, which the app reads as UNCLASSIFIED — never as the loudest kind.
+        # An indicator with no `c2:`/`websites:` context is dropped, which the app reads as UNCLASSIFIED rather than the loudest kind.
         "indicatorKinds": {k: kinds[k] for k in sorted(kinds) if kinds[k] != UNCLASSIFIED},
     }
     OUTPUT.write_text(json.dumps(document, indent=2, ensure_ascii=False) + "\n")

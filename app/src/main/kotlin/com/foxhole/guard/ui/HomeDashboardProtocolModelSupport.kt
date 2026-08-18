@@ -2,10 +2,6 @@ package com.foxhole.guard.ui
 import com.foxhole.core.model.ConnectionState
 import com.foxhole.guard.runtime.FoxholeVpnService
 
-// Dashboard protocol row model: merges probe results, remembered smart-start latencies and the
-// live tunnel latency into the per-option presentation. Extracted from HomeUiSupport (file split
-// by domain).
-
 private data class HomeDashboardProfileLatencyState(
     val presentation: HomeDashboardLatencyPresentation,
     val latenciesByOptionId: Map<String, Long>,
@@ -15,9 +11,6 @@ private data class HomeDashboardProfileLatencyState(
     val connectionMetricsLoading: Boolean,
 )
 
-// The server ping only backs the connection-details section for a real VPN profile route (or an
-// active auto-connect scan). A local-guard/firewall or Tor-only runtime has no VPN profile ping to
-// show, matching resolveDashboardLatencyPresentation which blanks the profile latency there.
 private fun serverPingRelevantForDashboardDetails(state: HomeRouteUiState): Boolean =
     state.autoConnect.running ||
         (
@@ -78,8 +71,6 @@ private data class DashboardOptionLatencyInputs(
     val latencyUnavailableOptionIds: Set<String>,
 )
 
-// Merges the remembered smart-start latencies, live protocol metrics and the auto-connect scan
-// results into the per-option latency/down/unavailable inputs of the dashboard protocol row.
 private fun HomeRouteUiState.dashboardOptionLatencyInputs(): DashboardOptionLatencyInputs {
     val mergedLatenciesByOptionId =
         smartStartRememberedLatenciesByOptionId +
@@ -148,11 +139,6 @@ private data class DashboardIconLatencyOverlay(
     val latencyUnavailableOptionIds: Set<String>,
 )
 
-// The live tunnel latency (the pill next to the profile name) must colour the protocol icon of
-// the connected option immediately, not wait for the next smart-start probe sweep — otherwise
-// the pill goes yellow/red while the icon keeps a stale green. During an auto-connect scan the
-// presentation belongs to the option being probed, not the resolved one, and the per-option
-// scan results are merged already — so the overlay applies to settled connections only.
 private fun HomeRouteUiState.dashboardIconLatencyOverlay(
     latencyState: HomeDashboardProfileLatencyState,
 ): DashboardIconLatencyOverlay {
@@ -217,8 +203,6 @@ private fun HomeRouteUiState.shouldShowDashboardProfileLatency(): Boolean =
     if (
         (
             connection.profileId == FoxholeVpnService.LOCAL_GUARD_PROFILE_ID ||
-                // A Tor-only runtime has no VPN profile ping: while Tor is connecting/connected the
-                // profile card must not animate a latency skeleton for the idle VPN profile.
                 connection.profileId == FoxholeVpnService.TOR_ONLY_PROFILE_ID
             ) &&
         !autoConnect.running

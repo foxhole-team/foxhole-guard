@@ -27,7 +27,6 @@ interface I2pdManager {
      */
     suspend fun ensureStarted(settings: I2pSettings = I2pSettings()): I2pdEndpoints
 
-    /** Waits until the local SOCKS proxy accepts the per-start credentials. Does not claim a TUN. */
     suspend fun awaitReady(timeoutMs: Long): Boolean
 
     /** Publishes CONNECTED only for a probed endpoint generation carried by an applied Android TUN. */
@@ -106,6 +105,9 @@ internal data class I2pdProcessManagerHooks(
     val generateWebConsolePassword: () -> String = ::newI2pdWebConsolePassword,
     val generateSocksPassword: () -> String = ::newI2pdSocksPassword,
     val socksProxyReady: ((I2pdEndpoints) -> Boolean)? = null,
+    val clientTunnelCount: suspend () -> Int? = ::i2pdClientTunnelCount,
+    val reapStartupOrphans: (String, String) -> Int = ::reapI2pdOrphansByIdentity,
+    val startSocksCredentialGate: (Int, Int, String, String) -> I2pdSocksGate = ::openI2pdSocksGate,
     // Lifecycle generations mint from the shared control-plane clock (Ф3c); all staleness fences
     // compare against the stored field, so the shared mint source changes nothing.
     val nextGeneration: () -> Long = RuntimeGenerationClock::next,
@@ -114,6 +116,24 @@ internal data class I2pdProcessManagerHooks(
         processLauncher = DefaultI2pdProcessLauncher,
         socksProxyReady = ::i2pdAuthenticatedSocksProxyReady,
     )
+}
+
+private fun reapI2pdOrphansByIdentity(
+    executablePath: String,
+    dataDirectoryRoot: String,
+): Int =
+    RuntimeChildProcessReaper(
+        selfPid = android.os.Process.myPid(),
+        killProcess = { pid -> android.os.Process.killProcess(pid) },
+    ).reapOrphans(executablePath = executablePath, dataDirectoryRoot = dataDirectoryRoot)
+
+internal object I2pdStartupOrphanReap {
+    // A second scan could match and kill the child launched by this app process.
+    private val claimed = java.util.concurrent.atomic.AtomicBoolean(false)
+
+    fun claim(): Boolean = claimed.compareAndSet(false, true)
+
+    internal fun resetForTest() = claimed.set(false)
 }
 
 private object DefaultI2pdProcessLauncher : RuntimeChildProcessLauncher {
@@ -161,6 +181,9 @@ class I2pdProcessManager internal constructor(
     @Volatile
     private var process: Process? = null
 
+    @Volatile
+    private var socksGate: I2pdSocksGate? = null
+
     private var processGeneration: Long = NO_GENERATION
     private var lifecycleGeneration: Long = 0L
     private var readyProxyGeneration: Long = NO_GENERATION
@@ -195,6 +218,10 @@ class I2pdProcessManager internal constructor(
             }
         }
 
+        val idleAtEntry =
+            synchronized(stateLock) {
+                process == null && currentSnapshot.state == I2pdState.IDLE
+            }
         val priorStopGeneration = stopLocked(I2pdStopPolicy())
         val allocation = allocateStartEndpoints()
         lateinit var endpoints: I2pdEndpoints
@@ -219,24 +246,23 @@ class I2pdProcessManager internal constructor(
                 lifecycleGeneration
             }
         val httpProxyPort = endpoints.httpProxyPort
-        val socksPort = endpoints.socksPort
+        val routerSocksPort = allocation.routerSocksPort
         var startedProcess: Process? = null
         try {
             val paths = prepareRuntime()
             requireCurrentGeneration(generation)
+            reapOrphansBeforeFirstStart(idleAtEntry, paths)
             applyAddressBook(File(paths.dataDirectory), settings.addressBook)
             val confFile =
                 writeConf(
                     dataDirectory = File(paths.dataDirectory),
                     httpProxyPort = httpProxyPort,
-                    socksPort = socksPort,
+                    socksPort = routerSocksPort,
                     relayTransitTraffic = startConfiguration.effectiveRelay,
                     transitBandwidth = startConfiguration.bandwidthChar,
                     transitTunnelsLimit = settings.transitTunnelsLimit,
                     webConsolePort = webConsolePort,
                     webConsolePassword = webConsolePassword,
-                    socksUsername = endpoints.socksUsername,
-                    socksPassword = endpoints.socksPassword,
                 )
             val args =
                 listOf(
@@ -249,31 +275,27 @@ class I2pdProcessManager internal constructor(
             requireCurrentGeneration(generation)
             val started = hooks.processLauncher.launch(args, File(paths.dataDirectory))
             startedProcess = started
+            val gate =
+                hooks.startSocksCredentialGate(
+                    routerSocksPort,
+                    httpProxyPort,
+                    endpoints.socksUsername,
+                    endpoints.socksPassword,
+                )
+            endpoints = endpoints.copy(socksPort = gate.port)
+            val socksPort = endpoints.socksPort
             val published =
-                synchronized(stateLock) {
-                    if (lifecycleGeneration != generation || process != null) {
-                        false
-                    } else {
-                        process = started
-                        processGeneration = generation
-                        appliedConfigFingerprint = startConfiguration.fingerprint
-                        I2pdWebConsole.endpoint = I2pdWebConsoleEndpoint(webConsolePort, webConsolePassword)
-                        I2pdSocksProxy.endpoint =
-                            I2pdSocksProxyEndpoint(
-                                port = socksPort,
-                                username = endpoints.socksUsername,
-                                password = endpoints.socksPassword,
-                            )
-                        FoxholeVpnRuntimeBridge.updateI2pPhase(
-                            I2pPhaseSnapshot(
-                                phase = I2pNetworkPhase.STARTING,
-                                startedAt = System.currentTimeMillis(),
-                            ),
-                        )
-                        true
-                    }
-                }
+                publishStartedProcess(
+                    generation = generation,
+                    started = started,
+                    gate = gate,
+                    endpoints = endpoints,
+                    fingerprint = startConfiguration.fingerprint,
+                    webConsolePort = webConsolePort,
+                    webConsolePassword = webConsolePassword,
+                )
             if (!published) {
+                runCatching { gate.close() }
                 retainIfTerminationFailed(started)
                 cancelI2pdStart()
             }
@@ -317,20 +339,28 @@ class I2pdProcessManager internal constructor(
                     endpoints = endpoints,
                 )
             }
+        var listenerUp = false
+        var lastTunnels: Int? = null
         val ready =
             withTimeoutOrNull(timeoutMs.coerceAtLeast(1L)) {
                 while (true) {
                     if (!isCurrentProcess(session.process, session.generation) || !session.process.isAlive) {
                         return@withTimeoutOrNull false
                     }
-                    val accepts =
-                        hooks.socksProxyReady?.invoke(session.endpoints)
-                            ?: hooks.localPortAccepts(session.endpoints.socksPort)
-                    if (!isCurrentProcess(session.process, session.generation)) {
-                        return@withTimeoutOrNull false
+                    if (!listenerUp) {
+                        listenerUp =
+                            hooks.socksProxyReady?.invoke(session.endpoints)
+                                ?: hooks.localPortAccepts(session.endpoints.socksPort)
+                        if (!isCurrentProcess(session.process, session.generation)) {
+                            return@withTimeoutOrNull false
+                        }
                     }
-                    if (accepts && recordProxyReady(session)) {
-                        return@withTimeoutOrNull true
+                    if (listenerUp) {
+                        // A listening proxy is not usable until inbound and outbound tunnels exist.
+                        lastTunnels = hooks.clientTunnelCount()
+                        if (i2pdTunnelsBuilt(lastTunnels) && recordProxyReady(session)) {
+                            return@withTimeoutOrNull true
+                        }
                     }
                     delay(I2PD_READY_POLL_MS)
                 }
@@ -339,8 +369,8 @@ class I2pdProcessManager internal constructor(
             } == true
         diagnosticsLogger.recordStructured(
             "i2pd",
-            if (ready) "i2pd proxy ready" else "i2pd proxy wait failed",
-            "socks_port=${session.endpoints.socksPort}",
+            i2pdReadyOutcome(ready = ready, listenerUp = listenerUp),
+            "socks_port=${session.endpoints.socksPort} client_tunnels=${lastTunnels ?: "unknown"}",
         )
         return ready
     }
@@ -471,6 +501,61 @@ class I2pdProcessManager internal constructor(
 
     override fun snapshot(): I2pdSnapshot = currentSnapshot
 
+    @Suppress("LongParameterList")
+    private fun publishStartedProcess(
+        generation: Long,
+        started: Process,
+        gate: I2pdSocksGate,
+        endpoints: I2pdEndpoints,
+        fingerprint: Int,
+        webConsolePort: Int,
+        webConsolePassword: String,
+    ): Boolean =
+        synchronized(stateLock) {
+            if (lifecycleGeneration != generation || process != null) {
+                false
+            } else {
+                process = started
+                processGeneration = generation
+                socksGate = gate
+                appliedConfigFingerprint = fingerprint
+                I2pdWebConsole.endpoint = I2pdWebConsoleEndpoint(webConsolePort, webConsolePassword)
+                I2pdSocksProxy.endpoint =
+                    I2pdSocksProxyEndpoint(
+                        port = endpoints.socksPort,
+                        username = endpoints.socksUsername,
+                        password = endpoints.socksPassword,
+                    )
+                FoxholeVpnRuntimeBridge.updateI2pPhase(
+                    I2pPhaseSnapshot(
+                        phase = I2pNetworkPhase.STARTING,
+                        startedAt = System.currentTimeMillis(),
+                    ),
+                )
+                true
+            }
+        }
+
+    private fun reapOrphansBeforeFirstStart(
+        idleAtEntry: Boolean,
+        paths: I2pdRuntimePaths,
+    ) {
+        if (!idleAtEntry || !I2pdStartupOrphanReap.claim()) {
+            return
+        }
+        val reaped =
+            runCatching {
+                hooks.reapStartupOrphans(paths.executablePath, paths.dataDirectory)
+            }.getOrDefault(0)
+        if (reaped > 0) {
+            diagnosticsLogger.recordStructured(
+                "i2pd",
+                "i2pd orphan from a previous app process reaped at start",
+                "count=$reaped",
+            )
+        }
+    }
+
     private fun applyAddressBook(
         dataDirectory: File,
         entries: List<I2pAddressBookEntry>,
@@ -499,8 +584,6 @@ class I2pdProcessManager internal constructor(
         transitTunnelsLimit: Int,
         webConsolePort: Int,
         webConsolePassword: String,
-        socksUsername: String,
-        socksPassword: String,
     ): File {
         val content =
             buildI2pdConfLines(
@@ -511,8 +594,6 @@ class I2pdProcessManager internal constructor(
                 transitTunnelsLimit = transitTunnelsLimit,
                 webConsolePort = webConsolePort,
                 webConsolePassword = webConsolePassword,
-                socksUsername = socksUsername,
-                socksPassword = socksPassword,
             ).joinToString(separator = "\n", postfix = "\n")
         return File(dataDirectory, CONF_FILE_NAME).apply {
             parentFile?.mkdirs()
@@ -627,10 +708,11 @@ class I2pdProcessManager internal constructor(
             endpoints =
             I2pdEndpoints(
                 httpProxyPort = hooks.allocateLoopbackPort(),
-                socksPort = hooks.allocateLoopbackPort(),
+                socksPort = 0,
                 socksUsername = I2PD_SOCKS_PROXY_USER,
                 socksPassword = hooks.generateSocksPassword(),
             ),
+            routerSocksPort = hooks.allocateLoopbackPort(),
             webConsolePort = hooks.allocateLoopbackPort(),
             webConsolePassword = hooks.generateWebConsolePassword(),
         )
@@ -703,6 +785,8 @@ class I2pdProcessManager internal constructor(
         }
 
     private fun clearPublishedStateLocked() {
+        socksGate?.let { gate -> runCatching { gate.close() } }
+        socksGate = null
         appliedConfigFingerprint = null
         readyProxyGeneration = NO_GENERATION
         I2pdWebConsole.endpoint = null
@@ -733,6 +817,7 @@ private data class I2pdStartConfiguration(
 
 private data class I2pdStartEndpointAllocation(
     val endpoints: I2pdEndpoints,
+    val routerSocksPort: Int,
     val webConsolePort: Int,
     val webConsolePassword: String,
 )
@@ -749,6 +834,23 @@ private data class I2pdStopCapture(
 
 private fun allocateI2pdLoopbackPort(): Int =
     ServerSocket(0, 1, InetAddress.getByName("127.0.0.1")).use { socket -> socket.localPort }
+
+private suspend fun i2pdClientTunnelCount(): Int? = readI2pdRouterStatus()?.clientTunnels
+
+internal fun i2pdTunnelsBuilt(clientTunnels: Int?): Boolean =
+    (clientTunnels ?: 0) >= I2PD_MIN_CLIENT_TUNNELS
+
+internal const val I2PD_MIN_CLIENT_TUNNELS = 2
+
+internal fun i2pdReadyOutcome(
+    ready: Boolean,
+    listenerUp: Boolean,
+): String =
+    when {
+        ready -> "i2pd proxy ready"
+        listenerUp -> "i2pd proxy up but tunnels not built"
+        else -> "i2pd proxy wait failed"
+    }
 
 private fun i2pdLocalPortAccepts(port: Int): Boolean =
     runCatching {
@@ -806,7 +908,7 @@ internal fun isJournalWorthyI2pdLine(line: String): Boolean {
     return I2PD_JOURNAL_MARKERS.any { marker -> lower.contains(marker) }
 }
 
-private val I2PD_JOURNAL_MARKERS =
+internal val I2PD_JOURNAL_MARKERS =
     listOf(
         "reseed",
         "netdb",
@@ -820,6 +922,9 @@ private val I2PD_JOURNAL_MARKERS =
         "error",
         "warn",
         "critical",
+        "unrecognised option",
+        "unrecognized option",
+        "missing/unreadable config",
     )
 
 /**

@@ -20,24 +20,20 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.webkit.WebViewCompat
+import androidx.webkit.WebViewFeature
 import com.foxhole.guard.R
 import com.foxhole.guard.core.data.WebAppEntity
 import com.foxhole.guard.core.webapps.WebAppProfiles
 import com.foxhole.guard.core.webapps.WebAppProxyCredentials
 import com.foxhole.guard.core.webapps.isAllowedWebAppUrl
+import com.foxhole.guard.core.webapps.webAppShimJs
 import com.foxhole.guard.ui.cli.CliSpacing
 import com.foxhole.guard.ui.cli.LocalCliColors
 import com.foxhole.guard.ui.cli.components.CliActionRow
 import com.foxhole.guard.ui.cli.components.CliDivider
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
-/**
- * Full-screen web-app frame, drawn over the whole app including the dock, with the name and a
- * close button on top; system back closes it too. The WebView lives per opening (v1 has no pool) —
- * sessions persist in the app's own profile ([WebAppProfiles]), shared only with the watchdog's
- * poll of the same app and flushed on close. Without MULTI_PROFILE cookies ride the shared
- * default profile, as before the split.
- */
 @Composable
 internal fun CliWebAppFrame(
     app: WebAppEntity,
@@ -86,8 +82,6 @@ internal fun CliWebAppFrame(
     }
 }
 
-// JS is mandatory — HTML5 apps do not work without it. The XSS surface is confined to the app's
-// domain (outward navigation is blocked below), with file/content access and mixed content off.
 @SuppressLint("SetJavaScriptEnabled")
 internal fun buildWebAppWebView(
     context: Context,
@@ -96,6 +90,8 @@ internal fun buildWebAppWebView(
     proxyCredentials: WebAppProxyCredentials?,
     onExternalBlocked: (String) -> Unit,
 ): WebView {
+    var documentStartScriptInstalled = false
+    val shimScript = webAppShimJs(initialBadge = 0, bridged = false)
     return WebView(context).apply {
         WebAppProfiles.install(this, appId)
         settings.javaScriptEnabled = true
@@ -129,6 +125,10 @@ internal fun buildWebAppWebView(
                 if (!isAllowedWebAppUrl(appUrl, url)) {
                     view.stopLoading()
                     onExternalBlocked(url?.toHttpUrlOrNull()?.host.orEmpty().ifEmpty { "invalid" })
+                    return
+                }
+                if (!documentStartScriptInstalled) {
+                    view.evaluateJavascript(shimScript, null)
                 }
             }
 
@@ -144,5 +144,11 @@ internal fun buildWebAppWebView(
                 return true
             }
         }
+    }.also { view ->
+        documentStartScriptInstalled =
+            WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT) &&
+            runCatching {
+                WebViewCompat.addDocumentStartJavaScript(view, shimScript, setOf("*"))
+            }.isSuccess
     }
 }

@@ -39,13 +39,6 @@ class GuardJournalReport(
     val headHash: String?,
 )
 
-/**
- * Post-unlock verification: walks every journal file in seq order, recomputes the
- * hash chain, opens sealed payloads with the unwrapped private key, checks clock
- * monotonicity and compares the password-anchored keybox checkpoint against the
- * recomputed line hash at that seq. History missing BEFORE the checkpoint is legal
- * pruning; anything else missing, edited or reordered surfaces as an anomaly.
- */
 internal class GuardJournalVerifier(
     private val directory: File,
     private val crypto: GuardCrypto,
@@ -89,7 +82,6 @@ internal class GuardJournalVerifier(
                         return@forEach
                     }
                     if (expectedSeq == null) {
-                        // First surviving record: history before it is legal only when checkpointed.
                         if (record.seq > 0 && (anchorSeq == null || record.seq > anchorSeq + 1)) {
                             anomalies += GuardJournalAnomaly(record.seq, GuardJournalAnomaly.Kind.SEQUENCE_GAP, "journal starts past the checkpoint")
                         }

@@ -7,7 +7,6 @@ import android.content.pm.PackageManager
 import android.os.Build
 import java.security.MessageDigest
 
-/** Lightweight package facts for the guard journal / inventory (no sentinel scoring). */
 internal class GuardPackageInspector(
     context: Context,
 ) {
@@ -26,10 +25,6 @@ internal class GuardPackageInspector(
                         firstInstallTime = info.firstInstallTime,
                     )
                 }
-            // A PackageManager query never legitimately comes back empty: this app is itself
-            // installed. An empty answer means the Binder call was throttled, the user profile is
-            // locked or package visibility denied everything - i.e. the inventory is UNKNOWN. Fail
-            // the query instead of handing back a list that diffs into "every app was uninstalled".
             check(apps.isNotEmpty()) { "package manager returned no packages" }
             apps
         }
@@ -55,7 +50,6 @@ internal class GuardPackageInspector(
             }
         }.getOrNull()
 
-    /** One PackageManager Binder query per reconciliation, not one query per installed app. */
     private fun installedPackages(): List<PackageInfo> =
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             packageManager.getInstalledPackages(PackageManager.PackageInfoFlags.of(signingFlags().toLong()))

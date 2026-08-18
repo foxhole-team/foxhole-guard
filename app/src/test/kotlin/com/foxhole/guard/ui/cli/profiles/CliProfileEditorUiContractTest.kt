@@ -1,5 +1,6 @@
 package com.foxhole.guard.ui.cli.profiles
 
+import com.foxhole.core.importer.SUPPORTED_UTLS_FINGERPRINTS
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -7,7 +8,7 @@ import java.io.File
 
 class CliProfileEditorUiContractTest {
     @Test
-    fun `profile help belongs to the profiles screen only`() {
+    fun `the profiles header carries help beside create and the editor stays bare`() {
         val profiles =
             projectFile(
                 "src/main/kotlin/com/foxhole/guard/ui/cli/profiles/CliProfilesScreen.kt",
@@ -17,6 +18,7 @@ class CliProfileEditorUiContractTest {
                 "src/main/kotlin/com/foxhole/guard/ui/cli/profiles/CliProfileEditorScreen.kt",
             ).readText()
 
+        assertTrue(profiles.contains("CliTopBarHelpButton"))
         assertTrue(profiles.contains("bodyRes = R.string.cli_help_editor_body"))
         assertFalse(editor.contains("CliContextHelpButton"))
     }
@@ -74,7 +76,7 @@ class CliProfileEditorUiContractTest {
         assertFalse(footer.contains("filled = true"))
         assertTrue(editor.contains("CliManualProfileEditor("))
         assertTrue(manual.contains(".fillMaxSize()"))
-        assertTrue(manual.indexOf("cli_common_no_cancel") < manual.indexOf("cli_prof_config_save"))
+        assertTrue(manual.indexOf("cli_common_no_cancel") < manual.indexOf("cli_prof_config_save_action"))
         assertTrue(support.contains("parser.sanitizeResolvedConfig("))
         assertTrue(support.contains("parser.parseUserInput("))
         assertTrue(support.contains("ProfileSourceType.SUBSCRIPTION_URL"))
@@ -93,6 +95,16 @@ class CliProfileEditorUiContractTest {
 
         assertTrue(batchSave.contains("profileRepository.updateProfileEditor("))
         assertFalse(batchSave.contains("profileRepository.updateResolvedConfig("))
+    }
+
+    @Test
+    fun `every fingerprint the editor offers is one the importer accepts`() {
+        for (choice in UTLS_FINGERPRINTS.filter(String::isNotEmpty)) {
+            assertTrue(
+                "the editor offers fp=$choice, which the importer does not accept",
+                choice in SUPPORTED_UTLS_FINGERPRINTS,
+            )
+        }
     }
 
     private fun projectFile(path: String): File =

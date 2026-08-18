@@ -36,17 +36,23 @@ import com.foxhole.core.model.ConnectionState
 import com.foxhole.core.model.IpInfo
 import com.foxhole.core.model.RoutingModePreset
 import com.foxhole.core.model.TorNetworkPhase
+import com.foxhole.core.model.VisualStyle
+import com.foxhole.core.model.networkUp
 import com.foxhole.guard.R
 import com.foxhole.guard.ui.HomeViewModel
 import com.foxhole.guard.ui.PendingRoutingScenarioChange
 import com.foxhole.guard.ui.TorTransitionPrompt
 import com.foxhole.guard.ui.cli.CliCommands
 import com.foxhole.guard.ui.cli.CliSpacing
+import com.foxhole.guard.ui.cli.LocalCliVisualStyle
+import com.foxhole.guard.ui.cli.cliPanelSwap
 import com.foxhole.guard.ui.cli.cliSlide
+import com.foxhole.guard.ui.cli.components.CliChromeTailSpacer
 import com.foxhole.guard.ui.cli.components.CliConfirmSheet
+import com.foxhole.guard.ui.cli.components.CliHomeSectionGap
 import com.foxhole.guard.ui.cli.components.CliLoadingRow
 import com.foxhole.guard.ui.cli.components.CliRoutingChangeConfirmSheet
-import com.foxhole.guard.ui.cli.components.CliSectionDivider
+import com.foxhole.guard.ui.cli.onboarding.CliQuickStartSheetContent
 import com.foxhole.guard.ui.confirmPendingRoutingScenario
 import com.foxhole.guard.ui.dismissPendingRoutingScenario
 import com.foxhole.guard.ui.isPrimaryConnectionRuntime
@@ -55,10 +61,6 @@ import com.foxhole.guard.ui.refreshIpInfo
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-/**
- * Home: top ~half is the terminal panel (brand logo + scrolling status log), the bottom half
- * is the touch control block - profile row, connection facts and the CONNECT/TOR buttons.
- */
 @Composable
 internal fun CliHomeScreen(
     viewModel: HomeViewModel,
@@ -75,14 +77,23 @@ internal fun CliHomeScreen(
     val pendingRoutingChange by
         viewModel.pendingRoutingScenarioConfirmation.collectAsStateWithLifecycle()
     var selectorOpen by rememberSaveable { mutableStateOf(false) }
+    var expandedSmartId by rememberSaveable { mutableStateOf<Long?>(null) }
     var pendingModeCycle by rememberSaveable { mutableStateOf<CliConnectMode?>(null) }
     var clearTerminalOpen by rememberSaveable { mutableStateOf(false) }
+    var quickStartOpen by rememberSaveable { mutableStateOf(false) }
     val profileGeoRefresh = rememberProfileGeoRefresh(viewModel, terminal, home)
-
-    // The consent sheet that used to live here is gone with the button that raised it: the mode
-    // cycler is absent while the Tor module is off, so nothing on this screen can ask for the
-    // permission any more. It is granted where the module is — settings → TOR / I2P — and the
-    // screen no longer carries a sheet for a path that cannot be reached.
+    val selectorScope = rememberCoroutineScope()
+    val closeSelector: () -> Unit = {
+        if (expandedSmartId == null) {
+            selectorOpen = false
+        } else {
+            expandedSmartId = null
+            selectorScope.launch {
+                delay(SELECTOR_COLLAPSE_MS.toLong())
+                selectorOpen = false
+            }
+        }
+    }
 
     CliHomeNarrationEffects(
         viewModel = viewModel,
@@ -92,20 +103,22 @@ internal fun CliHomeScreen(
     )
 
     val connection = home.connection
-    // The firewall is a background filter, not a route: it takes no part in connected/disconnected,
-    // colours no status and drives no buttons (see [isRouteConnection]).
     val connected = connection.isRouteConnection()
     val busy = connection.isRouteTransition()
 
-    BackHandler(enabled = selectorOpen) { selectorOpen = false }
+    BackHandler(enabled = selectorOpen) { closeSelector() }
 
     val statusPrinters = rememberCliStatusPrinters(viewModel = viewModel, terminal = terminal, home = home)
+
+    if (quickStartOpen) {
+        CliQuickStartSheetContent(onDismiss = { quickStartOpen = false })
+    }
 
     Column(
         modifier = modifier
             .fillMaxSize()
             .pointerInput(selectorOpen) {
-                if (selectorOpen) detectTapGestures { selectorOpen = false }
+                if (selectorOpen) detectTapGestures { closeSelector() }
             }
             .padding(horizontal = CliSpacing.md),
     ) {
@@ -115,8 +128,9 @@ internal fun CliHomeScreen(
             listState = terminalListState,
             followsOutput = terminalFollowsOutput,
             onFollowsOutputChanged = onTerminalFollowsOutputChanged,
-            onInteraction = { selectorOpen = false },
+            onInteraction = closeSelector,
             onClearRequested = { clearTerminalOpen = true },
+            onHelpRequested = { quickStartOpen = true },
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f),
@@ -126,7 +140,7 @@ internal fun CliHomeScreen(
             terminal = terminal,
             onDismiss = { clearTerminalOpen = false },
         )
-        CliSectionDivider()
+        CliHomeSectionGap()
 
         CliHomeConfirmationSlot(
             viewModel = viewModel,
@@ -141,93 +155,181 @@ internal fun CliHomeScreen(
             torIdentityProbe = torIdentityProbe,
             connected = connected,
             selectorOpen = selectorOpen,
-            onSelectorOpenChanged = { selectorOpen = it },
-            onProfileHold = profileGeoRefresh.onHold,
+            expandedSmartId = expandedSmartId,
+            onExpandedSmartChange = { expandedSmartId = it },
+            onSelectorOpen = { selectorOpen = true },
+            onSelectorClose = closeSelector,
+            onProfileHold = profileGeoRefresh.onRefresh,
         )
 
-        CliSectionDivider()
-        if (cliHomeButtonsReady(home.profilesLoaded, home.settingsHydrated)) {
-            CliSecondaryButtonsRow(
-                viewModel = viewModel,
-                terminal = terminal,
-                home = home,
-                connected = connected,
-                // Tap prints the current state; hold adds identity, encryption and the journal tails.
-                onStatus = {
-                    selectorOpen = false
-                    statusPrinters.tap()
-                },
-                onStatusHold = {
-                    selectorOpen = false
-                    statusPrinters.hold()
-                },
-            )
-            Spacer(modifier = Modifier.height(CliSpacing.sm))
-            CliPrimaryButtonsRow(
-                viewModel = viewModel,
-                terminal = terminal,
-                home = home,
-                connected = connected,
-                busy = busy,
-                subscriptionRefreshInProgress = subscriptionRefreshInProgress,
-                atomicModePromptPending = pendingRoutingChange is PendingRoutingScenarioChange.OperatingMode,
-                pendingModeCycle = pendingModeCycle,
-                onPendingModeCycleChanged = { pendingModeCycle = it },
-                onInteraction = { selectorOpen = false },
-            )
-        } else {
-            CliHomeButtonsLoadingState()
-        }
-        Spacer(modifier = Modifier.height(CliSpacing.sm))
+        CliHomeSectionGap()
+        CliHomeButtonsArea(
+            viewModel = viewModel,
+            terminal = terminal,
+            home = home,
+            connected = connected,
+            busy = busy,
+            subscriptionRefreshInProgress = subscriptionRefreshInProgress,
+            atomicModePromptPending =
+            pendingRoutingChange is PendingRoutingScenarioChange.OperatingMode,
+            pendingModeCycle = pendingModeCycle,
+            onPendingModeCycleChanged = { pendingModeCycle = it },
+            statusPrinters = statusPrinters,
+            onCloseSelector = closeSelector,
+        )
+        CliChromeTailSpacer()
     }
 }
 
-/** Profile facts and selector share one measured slot, so paging never jerks the button rows. */
 @Composable
+@Suppress("LongParameterList")
+private fun CliHomeButtonsArea(
+    viewModel: HomeViewModel,
+    terminal: CliTerminalState,
+    home: com.foxhole.guard.ui.HomeRouteUiState,
+    connected: Boolean,
+    busy: Boolean,
+    subscriptionRefreshInProgress: Boolean,
+    atomicModePromptPending: Boolean,
+    pendingModeCycle: CliConnectMode?,
+    onPendingModeCycleChanged: (CliConnectMode?) -> Unit,
+    statusPrinters: CliStatusPrinters,
+    onCloseSelector: () -> Unit,
+) {
+    val plainStyle = LocalCliVisualStyle.current == VisualStyle.PLAIN
+    AnimatedContent(
+        targetState = cliHomeButtonsReady(home.profilesLoaded, home.settingsHydrated),
+        transitionSpec = { cliPanelSwap(forward = true, plain = plainStyle) },
+        label = "homeButtons",
+    ) { buttonsReady ->
+        if (buttonsReady) {
+            Column {
+                CliSecondaryButtonsRow(
+                    viewModel = viewModel,
+                    terminal = terminal,
+                    home = home,
+                    connected = connected,
+                    onStatus = {
+                        onCloseSelector()
+                        statusPrinters.tap()
+                    },
+                    onStatusHold = {
+                        onCloseSelector()
+                        statusPrinters.hold()
+                    },
+                )
+                Spacer(modifier = Modifier.height(CliSpacing.sm))
+                CliPrimaryButtonsRow(
+                    viewModel = viewModel,
+                    terminal = terminal,
+                    home = home,
+                    connected = connected,
+                    busy = busy,
+                    subscriptionRefreshInProgress = subscriptionRefreshInProgress,
+                    atomicModePromptPending = atomicModePromptPending,
+                    pendingModeCycle = pendingModeCycle,
+                    onPendingModeCycleChanged = onPendingModeCycleChanged,
+                    onInteraction = onCloseSelector,
+                )
+            }
+        } else {
+            CliHomeButtonsLoadingState()
+        }
+    }
+}
+
+@Composable
+@Suppress("LongParameterList")
 private fun CliHomeProfileArea(
     viewModel: HomeViewModel,
     home: com.foxhole.guard.ui.HomeRouteUiState,
     torIdentityProbe: com.foxhole.guard.ui.TorIdentityProbeState,
     connected: Boolean,
     selectorOpen: Boolean,
-    onSelectorOpenChanged: (Boolean) -> Unit,
+    expandedSmartId: Long?,
+    onExpandedSmartChange: (Long?) -> Unit,
+    onSelectorOpen: () -> Unit,
+    onSelectorClose: () -> Unit,
     onProfileHold: () -> Unit,
 ) {
     var profileAreaMinHeightPx by rememberSaveable { mutableIntStateOf(0) }
-    val density = LocalDensity.current
-    AnimatedContent(
-        targetState = selectorOpen,
-        transitionSpec = { cliSlide(forward = targetState) },
-        label = "profileArea",
-    ) { selecting ->
+    var smartSelectorHeightActive by remember { mutableStateOf(expandedSmartId != null) }
+    LaunchedEffect(selectorOpen, expandedSmartId) {
         when {
-            selecting ->
+            !selectorOpen -> smartSelectorHeightActive = false
+            expandedSmartId != null -> smartSelectorHeightActive = true
+            smartSelectorHeightActive -> {
+                delay(SELECTOR_COLLAPSE_MS.toLong())
+                smartSelectorHeightActive = false
+            }
+        }
+    }
+    val density = LocalDensity.current
+    val profileAreaMinHeight = with(density) { profileAreaMinHeightPx.toDp() }
+    val selectorHeightModifier = if (
+        cliProfileSelectorUsesFixedHeight(
+            measuredHeightPx = profileAreaMinHeightPx,
+            smartHeightActive = smartSelectorHeightActive,
+        )
+    ) {
+        Modifier.height(profileAreaMinHeight)
+    } else {
+        Modifier.heightIn(min = profileAreaMinHeight)
+    }
+    val surface = when {
+        selectorOpen -> CliProfileAreaSurface.SELECTOR
+        !home.profilesLoaded -> CliProfileAreaSurface.LOADING
+        else -> CliProfileAreaSurface.FACTS
+    }
+    AnimatedContent(
+        targetState = surface,
+        transitionSpec = {
+            cliSlide(
+                forward = targetState == CliProfileAreaSurface.SELECTOR ||
+                    initialState == CliProfileAreaSurface.LOADING,
+            )
+        },
+        label = "profileArea",
+    ) { shown ->
+        when (shown) {
+            CliProfileAreaSurface.SELECTOR ->
                 CliProfileQuickSelector(
                     viewModel = viewModel,
-                    onDone = { onSelectorOpenChanged(false) },
-                    modifier = Modifier.heightIn(
-                        min = with(density) { profileAreaMinHeightPx.toDp() },
-                    ),
+                    expandedSmartId = expandedSmartId,
+                    onExpandedSmartChange = onExpandedSmartChange,
+                    onDone = onSelectorClose,
+                    modifier = selectorHeightModifier,
                 )
-            !home.profilesLoaded -> CliHomeBootLoadingPanel(viewModel = viewModel, home = home)
-            else ->
+            CliProfileAreaSurface.LOADING ->
+                CliHomeBootLoadingPanel(viewModel = viewModel, home = home)
+            CliProfileAreaSurface.FACTS ->
                 CliConnectionFactsPanel(
                     viewModel = viewModel,
                     home = home,
                     torIdentityProbe = torIdentityProbe,
                     connected = connected,
-                    onProfileTap = { onSelectorOpenChanged(true) },
+                    onProfileTap = onSelectorOpen,
                     onProfileHold = {
-                        onSelectorOpenChanged(false)
+                        onSelectorClose()
                         onProfileHold()
                     },
-                    modifier = Modifier.onSizeChanged { profileAreaMinHeightPx = it.height },
+                    modifier = Modifier
+                        .heightIn(min = profileAreaMinHeight)
+                        .onSizeChanged { size ->
+                            profileAreaMinHeightPx = maxOf(profileAreaMinHeightPx, size.height)
+                        },
                 )
         }
     }
 }
 
-/** One modal slot: an atomic-off change takes precedence over the older Tor safety prompt. */
+internal fun cliProfileSelectorUsesFixedHeight(
+    measuredHeightPx: Int,
+    smartHeightActive: Boolean,
+): Boolean = measuredHeightPx > 0 && !smartHeightActive
+
+private enum class CliProfileAreaSurface { SELECTOR, LOADING, FACTS }
+
 @Composable
 private fun CliHomeConfirmationSlot(
     viewModel: HomeViewModel,
@@ -265,7 +367,7 @@ private fun CliHomeConfirmationSlot(
 
 @Immutable
 private data class CliProfileGeoRefreshActions(
-    val onHold: () -> Unit,
+    val onRefresh: () -> Unit,
 )
 
 @Composable
@@ -290,7 +392,7 @@ private fun rememberProfileGeoRefresh(
         }
     }
     return CliProfileGeoRefreshActions(
-        onHold = {
+        onRefresh = {
             baselineAt = latestFetchedAt
             observedLoading = home.ipInfoLoading
             pending = true
@@ -318,7 +420,6 @@ private fun CliClearTerminalSheet(
     )
 }
 
-/** Latest identity generation among physical, profile and Tor routes for manual refresh proof. */
 internal fun com.foxhole.guard.ui.HomeRouteUiState.latestNetworkGeoFetchedAt(): Long =
     maxOf(
         deviceIpInfo?.fetchedAt ?: 0L,
@@ -331,7 +432,6 @@ internal fun cliHomeButtonsReady(profilesLoaded: Boolean, settingsHydrated: Bool
 
 internal const val CLI_HOME_BUTTONS_LOADING_TAG = "cli_home_buttons_loading"
 
-/** Keeps both 48dp button rows reserved while cold-start data is still being decrypted. */
 @Composable
 private fun CliHomeButtonsLoadingState() {
     Box(
@@ -347,10 +447,6 @@ private fun CliHomeButtonsLoadingState() {
 
 private val CLI_HOME_BUTTONS_BLOCK_HEIGHT = 48.dp * 2 + CliSpacing.sm
 
-/**
- * Everything the terminal narrates by itself: the boot stages and one effect per snapshot stream.
- * Extracted whole so the screen body stays a layout, not a mixture of layout and wiring.
- */
 @Composable
 private fun CliHomeNarrationEffects(
     viewModel: HomeViewModel,
@@ -364,21 +460,30 @@ private fun CliHomeNarrationEffects(
         pendingFirewallPackages.size,
         pendingFirewallPackages.size,
     )
-    // The status block resolves per-lane app icons from the loaded inventory.
+    val torOnlyLive = isTorOnlyLive(home)
+    val activeRuntimes = activeRuntimes(home = home, torOnlyLive = torOnlyLive)
+    val currentStatusWord = cliStatusWordFor(
+        state = home.connection.routeState(),
+        runtimes = activeRuntimes,
+        i2pConnected = activeRuntimes.i2p && home.i2pPhase.phase.networkUp,
+        firewallLive = cliFirewallLive(
+            settings = home.settings,
+            connection = home.connection,
+            runtimes = activeRuntimes,
+        ),
+    )
+    val currentStatusText = cliStatusWordText(currentStatusWord)
     LaunchedEffect(Unit) { viewModel.loadInstalledApps() }
     LaunchedEffect(Unit) { terminal.welcome(com.foxhole.guard.BuildConfig.VERSION_NAME) }
-    // Cold-boot narration: "loading environment…" until the profile store decrypts, then the
-    // one-time ready line.
-    LaunchedEffect(home.profilesLoaded) { terminal.onBootStage(home.profilesLoaded) }
+    LaunchedEffect(home.profilesLoaded, currentStatusText, currentStatusWord) {
+        terminal.updateCurrentStatus(currentStatusText, cliStatusWordTone(currentStatusWord))
+        terminal.onBootStage(home.profilesLoaded)
+    }
     LaunchedEffect(home.settingsHydrated, pendingFirewallPackages) {
         if (home.settingsHydrated) {
             terminal.onPendingFirewallActions(pendingFirewallPackages, pendingFirewallMessage)
         }
     }
-    // One ordered transaction for VPN → Tor → I2P → route identities. Separate effects race on a warm
-    // connected composition: an IP could commit before CONNECTED opened its live row, then that
-    // late row would stay spinning forever. Replaying deduped snapshots here is cheap and makes the
-    // terminal order deterministic: VPN final identity first, followed by Tor and I2P.
     LaunchedEffect(
         home.connection,
         home.torPhase,
@@ -408,12 +513,6 @@ private fun CliHomeNarrationEffects(
 
 private const val TOR_TERMINAL_STAGE_VISIBLE_MS = 650L
 
-/**
- * Only a result fetched for this connected generation may become the terminal's VPN identity.
- * The dashboard intentionally retains the previous/device address while a post-connect lookup is
- * running; the generation boundary, rather than the loading flag (which is cleared after publish),
- * prevents that retained value from producing a contradictory `VPN IP` row.
- */
 internal fun terminalVpnIdentity(
     home: com.foxhole.guard.ui.HomeRouteUiState,
     notBeforeMs: Long? = home.connection.lastChangeAt,
@@ -425,21 +524,12 @@ internal fun terminalVpnIdentity(
             info.fetchedAt >= notBeforeMs
     }
 
-/** What a tap and a hold on STATUS do. There is no status modal — both answer into the log. */
 @Immutable
 private data class CliStatusPrinters(
     val tap: () -> Unit,
     val hold: () -> Unit,
 )
 
-/**
- * The two `status` answers.
- *
- * The short one is built in composition and printed straight away. The long one also quotes the
- * journals, which are read asynchronously: the command echoes at once, the read parks its result in
- * [pendingExtras], the next composition builds the rows from it — string resources and all — and the
- * effect prints them and clears the holder.
- */
 @Composable
 private fun rememberCliStatusPrinters(
     viewModel: HomeViewModel,
@@ -459,25 +549,25 @@ private fun rememberCliStatusPrinters(
         }
     }
     val scope = rememberCoroutineScope()
+    val statusCommand = stringResource(R.string.cli_cmd_status)
+    val statusNote = stringResource(R.string.cli_home_status_note)
+    val statusFullCommand = stringResource(R.string.cli_cmd_status_full)
+    val statusFullNote = stringResource(R.string.cli_home_status_full_note)
     return CliStatusPrinters(
         tap = {
-            terminal.command(CliCommands.STATUS)
+            terminal.command(statusCommand)
+            terminal.footnote(statusNote)
             terminal.emitBlock(statusRows)
         },
         hold = {
-            terminal.command(CliCommands.STATUS_ALL)
-            // The extended block is the one that prints the address, so it is also the one with a
-            // reason to re-query it.
+            terminal.command(statusFullCommand)
+            terminal.footnote(statusFullNote)
             viewModel.refreshIpInfo()
             scope.launch { pendingExtras = viewModel.cliStatusExtras() }
         },
     )
 }
 
-/**
- * The connect MODE axis of the primary row. VPN <-> VPN+TOR is live (the existing tor
- * toggle semantics); TOR (tor-only) is selectable only while idle and is UI-state only.
- */
 internal enum class CliConnectMode(
     val label: String,
     val preset: RoutingModePreset,

@@ -4,25 +4,56 @@ import android.app.Application
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName
 import androidx.lifecycle.viewModelScope
-import com.foxhole.guard.core.settings.updateWidgetAlphaPercent
-import com.foxhole.guard.core.settings.updateWidgetBlackBackground
+import com.foxhole.guard.core.settings.updateFoxWidgetAnimationEnabled
+import com.foxhole.guard.core.settings.updateStatusWidgetAppearance
+import com.foxhole.guard.core.settings.updateWebAppsWidgetAppearance
 import com.foxhole.guard.widget.FoxStatusWidgetReceiver
 import com.foxhole.guard.widget.StatusWidgetReceiver
 import com.foxhole.guard.widget.WebAppsWidgetReceiver
+import com.foxhole.guard.widget.statusAppearanceForWidget
+import com.foxhole.guard.widget.webAppsAppearanceForWidget
 import kotlinx.coroutines.launch
 
-// Home widget defaults from app settings; the widgets pick up changes through the settings
-// collector in FoxholeApplication.
+internal fun HomeViewModel.onWidgetBlackBackgroundChanged(kind: HomeWidgetKind, value: Boolean) {
+    updateWidgetAppearance(kind) { current -> current.copy(blackBackground = value) }
+}
 
-internal fun HomeViewModel.onWidgetBlackBackgroundChanged(value: Boolean) {
+internal fun HomeViewModel.onWidgetAlphaPercentChanged(kind: HomeWidgetKind, value: Int) {
+    updateWidgetAppearance(kind) { current -> current.copy(alphaPercent = value.coerceIn(0, 100)) }
+}
+
+internal fun HomeViewModel.onWidgetOutlineChanged(kind: HomeWidgetKind, value: Boolean) {
+    updateWidgetAppearance(kind) { current -> current.copy(outline = value) }
+}
+
+internal fun HomeViewModel.onFoxWidgetAnimationChanged(value: Boolean) {
     viewModelScope.launch {
-        container.settingsRepository.updateWidgetBlackBackground(value)
+        container.settingsRepository.updateFoxWidgetAnimationEnabled(value)
     }
 }
 
-internal fun HomeViewModel.onWidgetAlphaPercentChanged(value: Int) {
+private fun HomeViewModel.updateWidgetAppearance(
+    kind: HomeWidgetKind,
+    transform: (com.foxhole.core.model.WidgetKindAppearance) -> com.foxhole.core.model.WidgetKindAppearance,
+) {
+    val settings = container.settingsRepository.settings.value
+    val context = getApplication<Application>()
+    val baseAppearance =
+        when (kind) {
+            HomeWidgetKind.CONNECTION ->
+                settings.widgets.statusAppearanceForWidget(context, settings.ui.panelAppearance)
+            HomeWidgetKind.WEB_APPS ->
+                settings.widgets.webAppsAppearanceForWidget(context, settings.ui.panelAppearance)
+            HomeWidgetKind.STATUS -> null
+        }
     viewModelScope.launch {
-        container.settingsRepository.updateWidgetAlphaPercent(value)
+        when (kind) {
+            HomeWidgetKind.CONNECTION ->
+                container.settingsRepository.updateStatusWidgetAppearance(transform, baseAppearance)
+            HomeWidgetKind.WEB_APPS ->
+                container.settingsRepository.updateWebAppsWidgetAppearance(transform, baseAppearance)
+            HomeWidgetKind.STATUS -> Unit
+        }
     }
 }
 

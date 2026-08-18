@@ -16,7 +16,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 // Current schema version. Kept as a named constant so the migration-chain guard
 // (ProfileDatabaseMigrationsTest) can assert every step up to it exists — bumping it without adding
 // the matching migration then fails CI instead of destructively wiping user profiles at runtime.
-internal const val PROFILE_DATABASE_VERSION = 13
+internal const val PROFILE_DATABASE_VERSION = 14
 
 @Database(
     entities = [
@@ -185,7 +185,8 @@ abstract class ProfileDatabase : RoomDatabase() {
                 "create index if not exists `index_app_traffic_windows_packageName` on `app_traffic_windows` (`packageName`)"
             )
             db.execSQL(
-                "create index if not exists `index_app_traffic_windows_packageName_networkType_hourBucket` on `app_traffic_windows` (`packageName`, `networkType`, `hourBucket`)"
+                "create index if not exists `index_app_traffic_windows_packageName_networkType_hourBucket_startedAtMs_id` " +
+                    "on `app_traffic_windows` (`packageName`, `networkType`, `hourBucket`, `startedAtMs`, `id`)"
             )
         }
 
@@ -474,6 +475,21 @@ abstract class ProfileDatabase : RoomDatabase() {
                 }
             }
 
+        private val MIGRATION_13_14 =
+            object : Migration(13, 14) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL(
+                        "drop index if exists `index_app_traffic_windows_packageName_networkType_hourBucket`",
+                    )
+                    db.execSQL(
+                        "create index if not exists " +
+                            "`index_app_traffic_windows_packageName_networkType_hourBucket_startedAtMs_id` " +
+                            "on `app_traffic_windows` " +
+                            "(`packageName`, `networkType`, `hourBucket`, `startedAtMs`, `id`)",
+                    )
+                }
+            }
+
         // Single source of truth for the migration chain: reused by create() and by the migration
         // tests so a forgotten step is caught in CI (ProfileDatabaseMigrationsTest) instead of
         // triggering the destructive fallback below and silently wiping the user's profiles.
@@ -491,6 +507,7 @@ abstract class ProfileDatabase : RoomDatabase() {
                 MIGRATION_10_11,
                 MIGRATION_11_12,
                 MIGRATION_12_13,
+                MIGRATION_13_14,
             )
 
         fun create(

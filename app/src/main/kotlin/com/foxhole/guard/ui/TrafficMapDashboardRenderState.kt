@@ -8,7 +8,6 @@ internal enum class TrafficMapDashboardRenderState {
     RENDERED,
 }
 
-/** The OWN runtime's connection phase, the only thing that moves the fox terminal. */
 internal enum class TrafficMapFoxPhase {
     DISCONNECTED,
     CONNECTING,

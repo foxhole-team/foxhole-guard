@@ -4,6 +4,7 @@ import com.foxhole.core.model.DnsSettings
 import com.foxhole.core.model.dnsRuleSetFilteringEnabled
 import com.foxhole.core.model.requestedDnsRuleSetTags
 import com.foxhole.core.runtime.RuntimeDiagnosticsSink
+import com.foxhole.core.runtime.RuntimeDnsRuleSetInstallOutcome
 import com.foxhole.core.runtime.RuntimeSettings
 
 class DnsFilterUpdateRepository(
@@ -13,6 +14,14 @@ class DnsFilterUpdateRepository(
     private val diagnosticsLogger: RuntimeDiagnosticsSink,
     private val installedManifestProvider: suspend () -> DnsFilterManifest? = { null },
     private val installedRuleSetsProvider: suspend () -> InstalledDnsRuleSets = { InstalledDnsRuleSets() },
+    private val liveRuleSetInstaller: suspend (
+        name: String,
+        manifest: ByteArray,
+        signature: ByteArray,
+        artifact: ByteArray,
+    ) -> RuntimeDnsRuleSetInstallOutcome = { _, _, _, _ ->
+        RuntimeDnsRuleSetInstallOutcome.Deferred
+    },
 ) {
     // Probes the update source for a newer rule set without downloading any artifact. On the
     // schema-2 channel "newer" is per list: a level switch (say trackers Normal -> Pro) asks for a
@@ -85,6 +94,13 @@ class DnsFilterUpdateRepository(
         onProgress: (RemoteDownloadProgress) -> Unit = {},
     ): DnsFilterUpdateResult {
         val dnsSettings = dnsSettingsOverride ?: settingsRepository.current().dns
+        var liveActivation: RuntimeDnsRuleSetInstallOutcome? = null
+        val activatingStore =
+            LiveActivatingDnsRuleSetStore(
+                delegate = store,
+                installer = liveRuleSetInstaller,
+                onOutcome = { outcome -> liveActivation = outcome },
+            )
         val result =
             when {
                 !dnsSettings.dnsRuleSetFilteringEnabled() ->
@@ -94,7 +110,7 @@ class DnsFilterUpdateRepository(
                 else ->
                     client.update(
                         manifestUrl = dnsSettings.dnsFilterUpdateUrl,
-                        store = store,
+                        store = activatingStore,
                         requestedTags = dnsSettings.requestedDnsRuleSetTags(),
                         installedRuleSets = installedRuleSetsProvider(),
                         installedCommit = installedManifestProvider()?.source?.commit,
@@ -102,6 +118,14 @@ class DnsFilterUpdateRepository(
                         onProgress = onProgress,
                     )
             }
+        recordRefreshResult(result, liveActivation)
+        return result.copy(liveActivation = liveActivation)
+    }
+
+    private suspend fun recordRefreshResult(
+        result: DnsFilterUpdateResult,
+        liveActivation: RuntimeDnsRuleSetInstallOutcome?,
+    ) {
         when (result.status) {
             DnsFilterUpdateStatus.UPDATED -> {
                 settingsRepository.markDnsFiltersUpdated()
@@ -109,6 +133,21 @@ class DnsFilterUpdateRepository(
                     "dns",
                     "filter update installed sourceCommit=${result.sourceCommit.orEmpty()} path=${result.installedPath.orEmpty()}",
                 )
+                when (val activation = liveActivation) {
+                    is RuntimeDnsRuleSetInstallOutcome.Installed ->
+                        diagnosticsLogger.record(
+                            "dns",
+                            "live filter activation revision=${activation.revision}",
+                        )
+                    RuntimeDnsRuleSetInstallOutcome.Deferred ->
+                        diagnosticsLogger.record("dns", "live filter activation deferred until next start")
+                    RuntimeDnsRuleSetInstallOutcome.Superseded ->
+                        diagnosticsLogger.record("dns", "live filter activation superseded by runtime transition")
+                    RuntimeDnsRuleSetInstallOutcome.Rejected ->
+                        diagnosticsLogger.recordFailure("dns", "live filter activation rejected by FoxCore")
+                    null ->
+                        diagnosticsLogger.record("dns", "live filter activation was not attempted")
+                }
             }
             DnsFilterUpdateStatus.UP_TO_DATE -> {
                 settingsRepository.markDnsFiltersChecked()
@@ -125,6 +164,31 @@ class DnsFilterUpdateRepository(
                     "filter update failed retryable=${result.retryable} error=${result.reason.orEmpty()}",
                 )
         }
-        return result
+    }
+}
+
+internal class LiveActivatingDnsRuleSetStore(
+    private val delegate: DnsFilterRuleSetStore,
+    private val installer: suspend (
+        name: String,
+        manifest: ByteArray,
+        signature: ByteArray,
+        artifact: ByteArray,
+    ) -> RuntimeDnsRuleSetInstallOutcome,
+    private val onOutcome: (RuntimeDnsRuleSetInstallOutcome) -> Unit,
+) : DnsFilterRuleSetStore {
+    override suspend fun installVerifiedDnsRuleSet(ruleSet: VerifiedDnsRuleSet): String {
+        val path = delegate.installVerifiedDnsRuleSet(ruleSet)
+        val outcome =
+            runCatching {
+                installer(
+                    ruleSet.manifest.name,
+                    ruleSet.manifestBytes,
+                    ruleSet.signatureBytes,
+                    ruleSet.artifactBytes,
+                )
+            }.getOrDefault(RuntimeDnsRuleSetInstallOutcome.Rejected)
+        onOutcome(outcome)
+        return path
     }
 }

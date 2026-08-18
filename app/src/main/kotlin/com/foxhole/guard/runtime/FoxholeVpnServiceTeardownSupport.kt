@@ -17,13 +17,17 @@ import com.foxhole.core.model.I2pNetworkPhase
 import com.foxhole.core.model.RuntimeTeardownPhase
 import com.foxhole.core.model.TOR_ONLY_PROFILE_ID
 import com.foxhole.core.model.VpnSession
+import com.foxhole.core.runtime.FailClosedEvent
 import com.foxhole.core.runtime.FoxholeRuntime
+import com.foxhole.core.runtime.I2pTunnelTransition
 import com.foxhole.core.runtime.LocalGuardMode
 import com.foxhole.core.runtime.NativeRuntimeSnapshot
+import com.foxhole.core.runtime.RevokeOutcome
 import com.foxhole.core.runtime.RuntimeChildProcessReaper
 import com.foxhole.core.runtime.RuntimeResumeStateStore
 import com.foxhole.core.runtime.RuntimeStopPolicy
 import com.foxhole.core.runtime.RuntimeStopResult
+import com.foxhole.core.runtime.applyKillSwitch
 import com.foxhole.core.runtime.establishNextInterfaceThenStopRetired
 import com.foxhole.core.runtime.stopEveryRetiredRuntime
 import com.foxhole.core.runtime.stopFailClosed
@@ -205,6 +209,7 @@ internal suspend fun FoxholeVpnService.retireActiveTunnelForLocalGuardHandover(
     // going away before guard-network tracking must not read as network loss — that produced a
     // false RECONNECTING over the starting guard and a parasitic heal.
     tunnelVpnNetworkHandle?.let(ignoredVpnNetworkLossHandles::add)
+    applyI2pCarrierPlan(I2pTunnelTransition.TUNNEL_STOPPED)
     return RuntimeHandoverPreparation(
         ready = true,
         previousVpnNetworkHandle = tunnelVpnNetworkHandle,
@@ -351,6 +356,7 @@ internal suspend fun FoxholeVpnService.stopRuntimeFailClosed(
         recordRuntimeResourceSnapshot(event = event)
         return result
     }
+    cutEveryFlowIfKillSwitchArmed(runtime = currentRuntime, event = FailClosedEvent.RUNTIME_STOPPING, reason = reason)
     val result =
         if (policy == null) {
             currentRuntime.stopFailClosed(
@@ -373,6 +379,22 @@ internal suspend fun FoxholeVpnService.stopRuntimeFailClosed(
         async = false,
     )
     return result
+}
+
+internal fun FoxholeVpnService.cutEveryFlowIfKillSwitchArmed(
+    runtime: FoxholeRuntime,
+    event: FailClosedEvent,
+    reason: String,
+) {
+    val armed = container.settingsRepository.settings.value.expert.killSwitchEnabled
+    val outcome = runtime.applyKillSwitch(armed = armed, event = event) ?: return
+    container.diagnosticsLogger.recordStructured(
+        "connection",
+        "kill switch cut every flow",
+        "event=${event.name.lowercase()}",
+        "reason=$reason",
+        "outcome=${(outcome as? RevokeOutcome.Revoked)?.flows?.toString() ?: outcome.toString()}",
+    )
 }
 
 @Suppress("ReturnCount")
@@ -646,6 +668,7 @@ internal suspend fun FoxholeVpnService.stopRuntimeHelpersIfNeeded(
         "transport_orphans_reaped=$reaped",
     )
     onTeardownPhase?.invoke(RuntimeTeardownPhase.I2P)
+    applyI2pCarrierPlan(I2pTunnelTransition.RUNTIME_STOPPING)
     stopI2pdProcessIfNeeded(reason)
 }
 

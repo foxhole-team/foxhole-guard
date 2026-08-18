@@ -4,6 +4,7 @@ import com.foxhole.core.model.DnsFilterCategory
 import com.foxhole.core.network.RemoteHostResolver
 import com.foxhole.core.network.ensurePublicHttpsUrl
 import com.foxhole.core.network.requirePublicHttpsUrl
+import com.foxhole.core.runtime.RuntimeDnsRuleSetInstallOutcome
 import com.foxhole.core.runtime.network.PublicRemoteDns
 import com.foxhole.guard.BuildConfig
 import com.foxhole.guard.core.data.withBoundedRemoteFetchTimeouts
@@ -126,6 +127,7 @@ data class DnsFilterUpdateResult(
     val installedPath: String? = null,
     val sourceCommit: String? = null,
     val reason: String? = null,
+    val liveActivation: RuntimeDnsRuleSetInstallOutcome? = null,
 )
 
 enum class DnsFilterUpdateAvailability {
@@ -463,7 +465,7 @@ class DnsFilterUpdateClient(
         const val MAX_RULE_SET_BYTES = 64L * 1024L * 1024L
         const val MAX_RULE_ENTRIES = 5_000_000L
         const val MAX_MANIFEST_BYTES = 64L * 1024L
-        const val MAX_SIGNATURE_BYTES = 256L
+        const val MAX_SIGNATURE_BYTES = MAX_FOXHOLE_DB_SIGNATURE_BYTES
         const val MAX_PUBLIC_KEY_BYTES = 4 * 1024
         const val MAX_GENERATED_AT_FUTURE_SKEW_SECONDS = 10L * 60L
         const val MAX_MANIFEST_VALIDITY_SECONDS = 31L * 24L * 60L * 60L

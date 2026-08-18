@@ -250,10 +250,9 @@ class DnsFilterAssetInstaller(
         const val ADGUARD_VPN_COMPATIBILITY_ASSET_PATH =
             "rule-sets/adguard-vpn-compatibility-allowlist.txt"
         const val MAX_MANIFEST_BYTES = 64 * 1024
-        const val MAX_SIGNATURE_BYTES = 256
-        const val FOXCORE_DNS_UPDATE_PUBLIC_KEY_BASE64 =
-            "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEUucWYOJ+RmNoGzlv6lyQ7TdvK1Op" +
-                "6TRMy+ADsghRHXfKh8gIytQMTq0hKq7TB1GRmVeyysYX3kpmuGGz1buayA=="
+        val MAX_SIGNATURE_BYTES = MAX_FOXHOLE_DB_SIGNATURE_BYTES.toInt()
+
+        val FOXCORE_DNS_UPDATE_PUBLIC_KEY_BASE64 = FOXHOLE_DB_MANIFEST_PUBLIC_KEY_DER_BASE64
         val FOXCORE_DNS_FST_MAGIC =
             byteArrayOf(
                 'F'.code.toByte(),

@@ -6,7 +6,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
 
-/** Release contract for action buttons that temporarily disable while work is in progress. */
 class CliButtonDisabledOutlineTest {
     @Test
     fun `disabled action dims its fill and content but never its outline`() {

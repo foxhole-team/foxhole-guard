@@ -3,6 +3,8 @@ package com.foxhole.guard.widget
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.DpSize
@@ -36,7 +38,7 @@ import androidx.glance.layout.size
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
-import com.foxhole.core.model.WidgetDefaultsSettings
+import com.foxhole.core.model.WidgetKindAppearance
 import com.foxhole.guard.FoxholeApplication
 import com.foxhole.guard.R
 import com.foxhole.guard.core.data.WebAppEntity
@@ -48,14 +50,9 @@ import com.foxhole.guard.ui.cli.CliColors
 import com.foxhole.guard.ui.cli.CliMainActivity
 import kotlinx.coroutines.withTimeoutOrNull
 
-/** One launcher row shows four apps; the second row unlocks the next four. */
 internal fun webAppSlots(size: DpSize): Int =
     if (size.width >= WIDE_WIDTH_THRESHOLD || size.height >= TALL_HEIGHT_THRESHOLD) 8 else 4
 
-/**
- * The web apps widget: a logo row plus the first four or eight apps in sort order, with the same
- * badges as the screen. A tap opens the app's frame. Background comes from the per-widget config.
- */
 class WebAppsWidget : GlanceAppWidget() {
     override val sizeMode: SizeMode =
         SizeMode.Responsive(
@@ -69,7 +66,6 @@ class WebAppsWidget : GlanceAppWidget() {
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val graph = (context.applicationContext as FoxholeApplication).appGraph
-        // Under app lock the database is closed by databaseReadyGate: show empty rather than hang.
         val apps =
             withTimeoutOrNull(WIDGET_DB_TIMEOUT_MS) {
                 runCatching { graph.webAppsRepository.listWebApps() }.getOrDefault(emptyList())
@@ -80,11 +76,16 @@ class WebAppsWidget : GlanceAppWidget() {
                     ?.let { bitmap -> app.id to bitmap.circularCrop(WIDGET_ICON_PX) }
             }.toMap()
 
-        val defaults = graph.settingsRepository.settings.value.widgets
         provideContent {
             val prefs = currentState<Preferences>()
+            val settings by graph.settingsRepository.settings.collectAsState()
+            val defaults =
+                settings.widgets.webAppsAppearanceForWidget(
+                    context = context,
+                    panelAppearance = settings.ui.panelAppearance,
+                )
             val background = widgetBackground(prefs, defaults)
-            val outlined = widgetOutlineEnabled(prefs)
+            val outlined = widgetOutlineEnabled(prefs, defaults)
             val slots = webAppSlots(LocalSize.current)
             WebAppsWidgetContent(
                 context = context,
@@ -228,7 +229,6 @@ private fun WebAppWidgetCell(
     }
 }
 
-/** Per-widget background config, stored in the widget's Glance state. */
 internal data class WidgetBackground(
     val fill: Color,
     val text: Color,
@@ -240,9 +240,10 @@ internal val WIDGET_BG_BLACK_KEY: Preferences.Key<Boolean> = booleanPreferencesK
 internal val WIDGET_ALPHA_KEY: Preferences.Key<Int> = intPreferencesKey("alpha_percent")
 internal val WIDGET_OUTLINE_KEY: Preferences.Key<Boolean> = booleanPreferencesKey("outline_enabled")
 
-internal fun widgetOutlineEnabled(prefs: Preferences): Boolean = prefs[WIDGET_OUTLINE_KEY] ?: true
+internal fun widgetOutlineEnabled(prefs: Preferences, defaults: WidgetKindAppearance): Boolean =
+    prefs[WIDGET_OUTLINE_KEY] ?: defaults.outline
 
-internal fun widgetBackground(prefs: Preferences, defaults: WidgetDefaultsSettings): WidgetBackground {
+internal fun widgetBackground(prefs: Preferences, defaults: WidgetKindAppearance): WidgetBackground {
     val isBlack = prefs[WIDGET_BG_BLACK_KEY] ?: defaults.blackBackground
     val alpha = (prefs[WIDGET_ALPHA_KEY] ?: defaults.alphaPercent).coerceIn(0, 100) / 100f
     return WidgetBackground(
@@ -253,8 +254,6 @@ internal fun widgetBackground(prefs: Preferences, defaults: WidgetDefaultsSettin
     )
 }
 
-// The accent has one source, CliColors: widgets do not duplicate the hex, and lightening and
-// transparency derive from that same token.
 internal val WIDGET_ACCENT = CliColors().accent
 internal val WIDGET_OK = CliColors().ok
 internal val WIDGET_INFO = CliColors().info

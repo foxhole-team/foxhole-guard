@@ -13,16 +13,6 @@ import org.junit.Test
 import java.io.File
 import java.nio.file.Files
 
-/**
- * Связка «терминал ↔ журнал»: состояние отдаёт наружу каждую закоммиченную строку, а прочитанную с
- * диска историю ставит перед тем, что напечатала текущая сессия. Экранное окно при этом остаётся
- * своим — файл держит весь срок, экран держит свои последние строки.
- *
- * Холодный старт публикуется РАЗОМ. История читается с диска асинхронно и по времени стоит выше
- * всего, что печатает текущий запуск, поэтому порядок «сначала показать свои строки, потом вставить
- * историю над ними» сдвигал вниз весь видимый список — это и был рывок. До публикации на экране
- * ровно одна строка: сообщение о расшифровке.
- */
 class CliTerminalJournalWiringTest {
 
     private val history = listOf(
@@ -38,11 +28,13 @@ class CliTerminalJournalWiringTest {
         terminal.welcome("1.2.3")
         terminal.publishColdStart()
 
-        assertEquals(terminal.lines.map { it.text }, recorded.map { it.text })
+        assertEquals(
+            terminal.lines.filter { it.id != Long.MIN_VALUE }.map { it.text },
+            recorded.map { it.text },
+        )
         assertTrue(recorded.isNotEmpty())
     }
 
-    /** Пока хранилище профилей не открылось, на экране только сообщение о расшифровке. */
     @Test
     fun `a cold start shows the decrypting notice and nothing else`() {
         val recorded = mutableListOf<CliTerminalLine>()
@@ -51,12 +43,11 @@ class CliTerminalJournalWiringTest {
         terminal.welcome("1.2.3")
         terminal.onBootStage(profilesLoaded = false)
 
-        assertEquals(listOf("loading"), terminal.lines.map { it.text })
-        // Сообщение о расшифровке описывает запуск, а не событие: в журнал оно не идёт.
+        assertTrue(terminal.lines.isEmpty())
+        assertEquals("loading", terminal.bootProgress?.text)
         assertTrue(recorded.isEmpty())
     }
 
-    /** Публикация ждёт оба сигнала — и журнал, и открытое хранилище. */
     @Test
     fun `the log stays held until both the journal and the profile store report in`() {
         val terminal = CliTerminalState(strings = strings())
@@ -65,7 +56,8 @@ class CliTerminalJournalWiringTest {
 
         terminal.onJournalRestored(history)
 
-        assertEquals(listOf("loading"), terminal.lines.map { it.text })
+        assertTrue(terminal.lines.isEmpty())
+        assertEquals("loading", terminal.bootProgress?.text)
     }
 
     @Test
@@ -78,10 +70,9 @@ class CliTerminalJournalWiringTest {
         terminal.onBootStage(profilesLoaded = true)
 
         assertEquals(
-            listOf("yesterday: reconnect", "yesterday: tunnel up", "✻ FoxHole Guard · 1.2.3", "ready"),
+            listOf("yesterday: reconnect", "yesterday: tunnel up", "FoxHole Guard · v1.2.3", "ready"),
             terminal.lines.map { it.text },
         )
-        // Ключи LazyColumn обязаны остаться уникальными, иначе список падает на дублях.
         assertEquals(terminal.lines.size, terminal.lines.map { it.id }.distinct().size)
     }
 
@@ -93,7 +84,7 @@ class CliTerminalJournalWiringTest {
         terminal.publishColdStart(history)
 
         assertEquals(
-            listOf("yesterday: reconnect", "yesterday: tunnel up", "✻ FoxHole Guard · 1.2.3", "ready"),
+            listOf("yesterday: reconnect", "yesterday: tunnel up", "FoxHole Guard · v1.2.3", "ready"),
             terminal.lines.map { it.text },
         )
         assertEquals(terminal.lines.size, terminal.lines.map { it.id }.distinct().size)
@@ -129,14 +120,14 @@ class CliTerminalJournalWiringTest {
 
         assertEquals(1, clearCalls)
         assertEquals(
-            listOf("✻ FoxHole Guard · 1.2.3", "ready"),
+            listOf("FoxHole Guard · v1.2.3", "ready"),
             terminal.lines.map { it.text },
         )
         assertNull(terminal.promptText)
         assertFalse(terminal.blockPending)
         terminal.note("fresh")
         assertEquals(
-            listOf("✻ FoxHole Guard · 1.2.3", "ready", "fresh"),
+            listOf("FoxHole Guard · v1.2.3", "ready", "fresh"),
             terminal.lines.map { it.text },
         )
     }
@@ -165,11 +156,10 @@ class CliTerminalJournalWiringTest {
 
         assertTrue(
             "journal reset did not retain the canonical session facts",
-            awaitJournalText(file, listOf("✻ FoxHole Guard · 1.2.3", "ready")),
+            awaitJournalText(file, listOf("FoxHole Guard · v1.2.3")),
         )
     }
 
-    /** Журнал, доехавший после публикации, — обычное восстановление, а не второй холодный старт. */
     @Test
     fun `a journal read that lands after publication still goes above the session`() {
         val terminal = CliTerminalState(strings = strings())
@@ -179,7 +169,7 @@ class CliTerminalJournalWiringTest {
         terminal.onJournalRestored(history)
 
         assertEquals(
-            listOf("yesterday: reconnect", "yesterday: tunnel up", "✻ FoxHole Guard · 1.2.3", "ready"),
+            listOf("yesterday: reconnect", "yesterday: tunnel up", "FoxHole Guard · v1.2.3", "ready"),
             terminal.lines.map { it.text },
         )
     }
@@ -203,7 +193,6 @@ class CliTerminalJournalWiringTest {
             writer.record(CliTerminalLine(timestampMs = NOW_MS, text = "line $index", tone = CliLineTone.INFO))
         }
         writer.shutdown()
-        // shutdown() ставит последний flush в ту же однопоточную очередь; ждём, пока она встанет.
         assertTrue("journal writer did not finish", awaitJournal(file))
 
         val reread = CliTerminalStore(file = file, fileCipher = PlainTestFileCipher)
@@ -266,6 +255,7 @@ class CliTerminalJournalWiringTest {
         unknown = "unknown",
         closed = "closed",
         torBesideVpn = "tor beside vpn",
+        torStarting = "tor starting",
         torConnecting = "tor connecting",
         torCircuits = "tor circuits",
         torConnected = "tor connected",

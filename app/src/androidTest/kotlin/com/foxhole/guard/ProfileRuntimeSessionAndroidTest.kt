@@ -142,10 +142,10 @@ internal class ProfileRuntimeSessionAndroidTest : ProfileRuntimeSessionAndroidTe
 
     @Test
     fun manualFreshImportConnectsWhenRequested() {
-        if (InstrumentationRegistry.getArguments().getString("foxhole.liveConnect") != "1") {
-            Log.d(TEST_TAG, "manual live connect skipped")
-            return
-        }
+        assumeTrue(
+            "manual live connect skipped: pass -e foxhole.liveConnect 1 to run it",
+            InstrumentationRegistry.getArguments().getString("foxhole.liveConnect") == "1",
+        )
         runBlocking {
             val app = ApplicationProvider.getApplicationContext<FoxholeApplication>()
             if (VpnService.prepare(app) != null) {
@@ -168,10 +168,10 @@ internal class ProfileRuntimeSessionAndroidTest : ProfileRuntimeSessionAndroidTe
 
     @Test
     fun manualDirectShareLinksLogTerminalStateAndDiagnostics() {
-        if (InstrumentationRegistry.getArguments().getString("foxhole.liveDirectLinks") != "1") {
-            Log.d(TEST_TAG, "manual direct-link live connect skipped")
-            return
-        }
+        assumeTrue(
+            "manual direct-link live connect skipped: pass -e foxhole.liveDirectLinks 1 to run it",
+            InstrumentationRegistry.getArguments().getString("foxhole.liveDirectLinks") == "1",
+        )
         runBlocking {
             val app = ApplicationProvider.getApplicationContext<FoxholeApplication>()
             assumeTrue("manual direct-link live connect requires pre-granted VPN permission", VpnService.prepare(app) == null)
@@ -216,10 +216,10 @@ internal class ProfileRuntimeSessionAndroidTest : ProfileRuntimeSessionAndroidTe
 
     @Test
     fun manualDirectShareHysteriaWarmupThenTcpRuntime() {
-        if (InstrumentationRegistry.getArguments().getString("foxhole.liveDirectWarmup") != "1") {
-            Log.d(TEST_TAG, "manual direct-link warmup live connect skipped")
-            return
-        }
+        assumeTrue(
+            "manual direct-link warmup live connect skipped: pass -e foxhole.liveDirectWarmup 1 to run it",
+            InstrumentationRegistry.getArguments().getString("foxhole.liveDirectWarmup") == "1",
+        )
         runBlocking {
             val app = ApplicationProvider.getApplicationContext<FoxholeApplication>()
             assumeTrue("manual direct-link warmup requires pre-granted VPN permission", VpnService.prepare(app) == null)
@@ -240,10 +240,10 @@ internal class ProfileRuntimeSessionAndroidTest : ProfileRuntimeSessionAndroidTe
 
     @Test
     fun manualSmartSubscriptionLogsImportAndTargetProtocolRuntime() {
-        if (InstrumentationRegistry.getArguments().getString("foxhole.liveSmartSubscription") != "1") {
-            Log.d(TEST_TAG, "manual smart subscription live connect skipped")
-            return
-        }
+        assumeTrue(
+            "manual smart subscription live connect skipped: pass -e foxhole.liveSmartSubscription 1 to run it",
+            InstrumentationRegistry.getArguments().getString("foxhole.liveSmartSubscription") == "1",
+        )
         runBlocking {
             val app = ApplicationProvider.getApplicationContext<FoxholeApplication>()
             val requireSuccess = requireLiveSmartSuccess()
@@ -347,10 +347,10 @@ internal class ProfileRuntimeSessionAndroidTest : ProfileRuntimeSessionAndroidTe
 
     @Test
     fun manualSmartSubscriptionTcpTorRuntime() {
-        if (InstrumentationRegistry.getArguments().getString("foxhole.liveSmartTcpTor") != "1") {
-            Log.d(TEST_TAG, "manual smart TCP TOR live connect skipped")
-            return
-        }
+        assumeTrue(
+            "manual smart TCP TOR live connect skipped: pass -e foxhole.liveSmartTcpTor 1 to run it",
+            InstrumentationRegistry.getArguments().getString("foxhole.liveSmartTcpTor") == "1",
+        )
         runBlocking {
             val app = ApplicationProvider.getApplicationContext<FoxholeApplication>()
             val subscriptionInput = smartSubscriptionInput()
@@ -463,10 +463,10 @@ internal class ProfileRuntimeSessionAndroidTest : ProfileRuntimeSessionAndroidTe
 
     @Test
     fun manualSmartHysteriaLocalGuardSwitchingRuntime() {
-        if (InstrumentationRegistry.getArguments().getString("foxhole.liveSmartLocalGuardSwitch") != "1") {
-            Log.d(TEST_TAG, "manual smart local guard switching skipped")
-            return
-        }
+        assumeTrue(
+            "manual smart local guard switching skipped: pass -e foxhole.liveSmartLocalGuardSwitch 1 to run it",
+            InstrumentationRegistry.getArguments().getString("foxhole.liveSmartLocalGuardSwitch") == "1",
+        )
         runBlocking {
             val app = ApplicationProvider.getApplicationContext<FoxholeApplication>()
             val subscriptionInput = smartSubscriptionInput()
@@ -585,10 +585,10 @@ internal class ProfileRuntimeSessionAndroidTest : ProfileRuntimeSessionAndroidTe
 
     @Test
     fun manualTorOnlyRuntimeConnectsWhenRequested() {
-        if (InstrumentationRegistry.getArguments().getString("foxhole.liveTorOnly") != "1") {
-            Log.d(TEST_TAG, "manual TOR-only live connect skipped")
-            return
-        }
+        assumeTrue(
+            "manual TOR-only live connect skipped: pass -e foxhole.liveTorOnly 1 to run it",
+            InstrumentationRegistry.getArguments().getString("foxhole.liveTorOnly") == "1",
+        )
         runBlocking {
             val app = ApplicationProvider.getApplicationContext<FoxholeApplication>()
             val requireSuccess =
@@ -604,10 +604,6 @@ internal class ProfileRuntimeSessionAndroidTest : ProfileRuntimeSessionAndroidTe
             clearProfiles(app)
             disconnectAndWaitForIdle(app)
 
-            // Bridges ship ON, and on a network that does not block Tor they are the slower path —
-            // and a stale bundled list turns "Tor is reachable" into "Arti bootstrap timed out at
-            // 8% (filtered)". The knob exists so a red run says WHICH of the two it was instead of
-            // leaving the reader to guess: pass foxhole.torBridges=off to take them out.
             InstrumentationRegistry
                 .getArguments()
                 .getString("foxhole.torBridges")
@@ -616,10 +612,6 @@ internal class ProfileRuntimeSessionAndroidTest : ProfileRuntimeSessionAndroidTe
                     Log.d(TEST_TAG, "liveTorOnly bridges=$requested")
                 }
             app.container.settingsRepository.updatePrivacyRouteMode(PrivacyRouteMode.TOR_OVER_VPN)
-            // TOR alone is the route ENABLED plus bypassVpnTunnel — Tor dials out next to the
-            // tunnel instead of through it. Without the bypass the settings still read «VPN + TOR»,
-            // and the runtime correctly refuses to start that without a VPN profile, which this
-            // test has just cleared.
             app.container.settingsRepository.updatePrivacyRouteBypassVpnTunnel(true)
             app.container.settingsRepository.updatePrivacyRouteScope(PrivacyRouteScope.ALL_APPS)
             app.container.settingsRepository.updatePrivacyRouteSelectedPackages(emptyList())
@@ -658,10 +650,10 @@ internal class ProfileRuntimeSessionAndroidTest : ProfileRuntimeSessionAndroidTe
 
     @Test
     fun manualSplitTunnelIncludeOneAppRuntime() {
-        if (InstrumentationRegistry.getArguments().getString("foxhole.liveSplitIncludeOneApp") != "1") {
-            Log.d(TEST_TAG, "manual split include-one-app live runtime skipped")
-            return
-        }
+        assumeTrue(
+            "manual split include-one-app live runtime skipped: pass -e foxhole.liveSplitIncludeOneApp 1 to run it",
+            InstrumentationRegistry.getArguments().getString("foxhole.liveSplitIncludeOneApp") == "1",
+        )
         runBlocking {
             val app = ApplicationProvider.getApplicationContext<FoxholeApplication>()
             val requireSuccess =

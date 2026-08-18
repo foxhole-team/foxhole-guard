@@ -128,7 +128,11 @@ internal fun destinationCountryTrackingRuntimeEnabled(settings: Settings): Boole
         settings.statistics.enabled &&
         (
             settings.statistics.countryTrafficEnabled ||
-                (settings.statistics.anomalyMetricsEnabled && settings.anomaly.analyzeDestinationCountries)
+                (
+                    settings.anomaly.enabled &&
+                        settings.statistics.anomalyMetricsEnabled &&
+                        settings.anomaly.analyzeDestinationCountries
+                    )
             )
 
 internal fun dnsRuntimeStatsRuntimeEnabled(settings: Settings): Boolean =

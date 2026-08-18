@@ -14,10 +14,6 @@ import com.foxhole.guard.core.settings.applyRoutingModePresetTo
 import com.foxhole.guard.userFacingErrorMessage
 import kotlinx.coroutines.launch
 
-// Routing presets, rules, catalogs and geoip database handlers for HomeViewModel.
-// Extracted from HomeViewModelSettingsSupport (file split by domain); extension functions only.
-
-/** Applies the new UI's MODE choice and hot-reloads a live TUN when only rules changed. */
 internal fun HomeViewModel.onRoutingModePresetSelected(
     preset: RoutingModePreset,
     scope: PrivacyRouteScope,
@@ -32,7 +28,6 @@ internal fun HomeViewModel.onRoutingModePresetSelected(
     return true
 }
 
-/** Persists the selected MODE before starting its matching runtime. */
 internal fun HomeViewModel.startRoutingMode(
     preset: RoutingModePreset,
     scope: PrivacyRouteScope,
@@ -76,16 +71,10 @@ internal fun HomeViewModel.routingModePresetSelectable(
         snackbars.tryEmit(errorBanner(R.string.privacy_route_core_forbidden))
         return false
     }
-    // A selected-app Tor route is runnable only when the TOR lane itself has members. The old
-    // aggregate check included VPN-lane apps, so a VPN-only selection made the UI accept a route
-    // that the runtime correctly refused to build.
     if (usesTor && !prospective.torScopeRunnable()) {
         snackbars.tryEmit(errorBanner(R.string.privacy_route_select_apps_first))
         return false
     }
-    // Judged on the settings this preset WOULD write, not on the ones on disk: the collision is
-    // created by the choice being made. Refusing here is the whole point — nothing has been
-    // persisted, no reload has been asked for, and the live tunnel is untouched.
     if (usesTor && prospective.torAllAppsCollidesWithVpnIncludeSplit()) {
         snackbars.tryEmit(errorBanner(R.string.error_tor_all_apps_needs_full_tunnel))
         return false
@@ -272,10 +261,6 @@ internal suspend fun HomeViewModel.exportPresetDocument(presetId: Long): String 
     presetId
 )
 
-// --- GeoIP database (offline IP→country ranges used by the dashboard, Tor exit geo and the
-// traffic map). The About screen shows the installed version and lets the user pull the latest
-// dataset from the open-source GitHub mirror.
-
 data class GeoIpDatabaseUiState(
     val info: com.foxhole.core.runtime.GeoIpDatabaseInfo? = null,
     val phase: FoxholeUpdatePhase = FoxholeUpdatePhase.IDLE,
@@ -328,8 +313,6 @@ internal fun HomeViewModel.onGeoIpDatabaseUpdateCancel() {
     setGeoIpUpdatePhase(FoxholeUpdatePhase.IDLE)
 }
 
-// Holds a terminal update status ("No updates" / "Done" / "Failed") briefly so the user can read
-// it, then returns the control to its resting "Update" state.
 internal suspend fun HomeViewModel.settleUpdatePhase(
     set: (FoxholeUpdatePhase) -> Unit,
     terminalPhase: FoxholeUpdatePhase,

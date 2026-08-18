@@ -39,6 +39,18 @@ internal fun ExpertSettings.vpnExcludedPackages(): List<String> =
 internal fun ExpertSettings.torLanePackages(): List<String> =
     normalizedRuntimePackages(packages(AppTunnelLane.TOR))
 
+internal fun ExpertSettings.vpnLanePackages(): List<String> =
+    normalizedRuntimePackages(packages(AppTunnelLane.VPN))
+
+internal fun ExpertSettings.failClosedBlockPackages(
+    torLaneCarried: Boolean,
+    vpnLaneCarried: Boolean,
+): List<String> =
+    normalizedRuntimePackages(
+        torLanePackages().takeUnless { torLaneCarried }.orEmpty() +
+            vpnLanePackages().takeUnless { vpnLaneCarried }.orEmpty(),
+    )
+
 internal fun normalizedRuntimePackages(packageNames: List<String>): List<String> =
     packageNames
         .map(String::trim)

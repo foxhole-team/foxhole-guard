@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
@@ -22,23 +23,31 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.foxhole.core.model.AccentColor
 import com.foxhole.core.model.AppLocale
 import com.foxhole.core.model.LatencyProbeMethod
 import com.foxhole.core.model.PanelAppearance
 import com.foxhole.core.model.Settings
 import com.foxhole.core.model.TrafficMode
 import com.foxhole.core.model.TunStack
+import com.foxhole.core.model.VisualStyle
 import com.foxhole.guard.R
 import com.foxhole.guard.ui.HomeViewModel
 import com.foxhole.guard.ui.SettingsRouteUiState
 import com.foxhole.guard.ui.cli.CliRetentionUnit
 import com.foxhole.guard.ui.cli.CliSpacing
 import com.foxhole.guard.ui.cli.CliTerminalPrefs
+import com.foxhole.guard.ui.cli.CliTopContentGap
 import com.foxhole.guard.ui.cli.LocalCliColors
+import com.foxhole.guard.ui.cli.LocalCliPanelAppearance
+import com.foxhole.guard.ui.cli.cliAccentSwatch
+import com.foxhole.guard.ui.cli.cliDynamicAccentOrNull
 import com.foxhole.guard.ui.cli.cliSlide
 import com.foxhole.guard.ui.cli.components.CliActionRow
+import com.foxhole.guard.ui.cli.components.CliChromeTailSpacer
 import com.foxhole.guard.ui.cli.components.CliDropdownOption
 import com.foxhole.guard.ui.cli.components.CliDropdownRow
+import com.foxhole.guard.ui.cli.components.CliGlassHeaderScreen
 import com.foxhole.guard.ui.cli.components.CliInputModal
 import com.foxhole.guard.ui.cli.components.CliPanel
 import com.foxhole.guard.ui.cli.components.CliRowDivider
@@ -46,6 +55,7 @@ import com.foxhole.guard.ui.cli.components.CliScreenHeader
 import com.foxhole.guard.ui.cli.components.CliStringSetSaver
 import com.foxhole.guard.ui.cli.components.CliToggleRow
 import com.foxhole.guard.ui.cli.logs.CliLogsScreen
+import com.foxhole.guard.ui.onAccentColorSelected
 import com.foxhole.guard.ui.onAtomicConnectionChanged
 import com.foxhole.guard.ui.onAutoReconnectChanged
 import com.foxhole.guard.ui.onAutoStartChanged
@@ -56,15 +66,9 @@ import com.foxhole.guard.ui.onMtuChanged
 import com.foxhole.guard.ui.onPanelAppearanceSelected
 import com.foxhole.guard.ui.onPreferIpv6Changed
 import com.foxhole.guard.ui.onTunStackSelected
+import com.foxhole.guard.ui.onVisualStyleSelected
 import com.foxhole.guard.ui.onWebAppsEnabledChanged
 
-/**
- * The `cfg` tab, regrouped after the classic SettingsHomeScreen: network / dns / security /
- * tor·i2p / application. Every group is a collapsible `── section ──` panel, collapsed by
- * default; the open set is a saveable key set, so it survives rotation and process death.
- * Selects float as anchored dropdown popups ([CliDropdownRow]); toggles apply instantly
- * through the same VM extensions the classic screens use.
- */
 @Composable
 internal fun CliSettingsScreen(
     viewModel: HomeViewModel,
@@ -81,7 +85,6 @@ internal fun CliSettingsScreen(
     }
 
     BackHandler(enabled = subScreen != null) { subScreen = null }
-    // Sub-screens push in from the right and pop back out, following the shared cliSlide law.
     AnimatedContent(
         targetState = subScreen,
         transitionSpec = { cliSlide(forward = targetState != null) },
@@ -93,7 +96,7 @@ internal fun CliSettingsScreen(
                 key = sub,
                 viewModel = viewModel,
                 onBack = { subScreen = null },
-                modifier = Modifier,
+                modifier = Modifier.statusBarsPadding().padding(top = CliTopContentGap),
             )
         } else {
             CliSettingsRootColumn(
@@ -116,83 +119,83 @@ private fun CliSettingsRootColumn(
     onOpenSub: (String) -> Unit,
 ) {
     val dnsUpdatePhase by viewModel.dnsFilterUpdatePhase.collectAsStateWithLifecycle()
-    // No hydration gate, same as the classic settings screens: the VM warms settings up in
-    // init, and every write goes through repository update lambdas over the CURRENT value,
-    // so a pre-hydration frame can only look default, not overwrite anything.
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = CliSpacing.md),
-    ) {
-        // Root list only - the sub-screens returned above carry their own back rows.
-        // Section order is a product decision: network, rules, dns, security, application,
-        // modules, extras.
-        CliScreenHeader(label = stringResource(R.string.cli_dock_settings), icon = R.drawable.pix_settings)
-        CliNetworkSection(
-            viewModel = viewModel,
-            state = state,
-            expanded = SECTION_NETWORK in expandedSections,
-            onToggleExpanded = { onToggleSection(SECTION_NETWORK) },
-        )
-        Spacer(modifier = Modifier.height(CliSpacing.sm))
-        CliRulesSection(
-            viewModel = viewModel,
-            state = state,
-            expanded = SECTION_RULES in expandedSections,
-            onToggleExpanded = { onToggleSection(SECTION_RULES) },
-        )
-        Spacer(modifier = Modifier.height(CliSpacing.sm))
-        CliDnsSection(
-            viewModel = viewModel,
-            dns = state.settings.dns,
-            domainStrategy = state.settings.traffic.domainStrategy,
-            sniff = state.settings.expert.sniff,
-            refreshInProgress = state.dnsFilterRefreshInProgress,
-            refreshPhase = dnsUpdatePhase,
-            expanded = SECTION_DNS in expandedSections,
-            onToggleExpanded = { onToggleSection(SECTION_DNS) },
-            onOpenAppBypass = { onOpenSub(SUB_DNS_BYPASS) },
-        )
-        Spacer(modifier = Modifier.height(CliSpacing.sm))
-        CliSecuritySection(
-            viewModel = viewModel,
-            settings = state.settings,
-            expanded = SECTION_SECURITY in expandedSections,
-            onToggleExpanded = { onToggleSection(SECTION_SECURITY) },
-        )
-        Spacer(modifier = Modifier.height(CliSpacing.sm))
-        CliApplicationSection(
-            viewModel = viewModel,
-            settings = state.settings,
-            expanded = SECTION_APP in expandedSections,
-            onToggleExpanded = { onToggleSection(SECTION_APP) },
-            onOpenSub = onOpenSub,
-        )
-        Spacer(modifier = Modifier.height(CliSpacing.sm))
-        CliModulesSection(
-            viewModel = viewModel,
-            settings = state.settings,
-            expanded = SECTION_MODULES in expandedSections,
-            onToggleExpanded = { onToggleSection(SECTION_MODULES) },
-            onOpenTor = { onOpenSub(SUB_TOR) },
-            onOpenI2p = { onOpenSub(SUB_I2P) },
-            onOpenFirewall = { onOpenSub(SUB_FIREWALL) },
-            onOpenAnomaly = { onOpenSub(SUB_ANOMALY) },
-        )
-        Spacer(modifier = Modifier.height(CliSpacing.sm))
-        CliExtrasSection(
-            settings = state.settings,
-            expanded = SECTION_EXTRAS in expandedSections,
-            onToggleExpanded = { onToggleSection(SECTION_EXTRAS) },
-            onWebAppsEnabledChanged = viewModel::onWebAppsEnabledChanged,
-            onProxyServerEnabledChanged = viewModel::onLocalProxyLanAccessChanged,
-            onOpenWebApps = { onOpenSub(SUB_WEBAPPS) },
-            onOpenProxyServer = { onOpenSub(SUB_LAN_PROXY) },
-        )
-        Spacer(modifier = Modifier.height(CliSpacing.sm))
-        CliMoreSection(viewModel = viewModel, onOpenSub = onOpenSub)
-        Spacer(modifier = Modifier.height(CliSpacing.sm))
+    CliGlassHeaderScreen(
+        header = {
+            CliScreenHeader(label = stringResource(R.string.cli_dock_settings), icon = R.drawable.pix_settings)
+        },
+    ) { topInset ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = CliSpacing.md),
+        ) {
+            Spacer(modifier = Modifier.height(topInset))
+            CliNetworkSection(
+                viewModel = viewModel,
+                state = state,
+                expanded = SECTION_NETWORK in expandedSections,
+                onToggleExpanded = { onToggleSection(SECTION_NETWORK) },
+            )
+            Spacer(modifier = Modifier.height(CliSpacing.sm))
+            CliRulesSection(
+                viewModel = viewModel,
+                state = state,
+                expanded = SECTION_RULES in expandedSections,
+                onToggleExpanded = { onToggleSection(SECTION_RULES) },
+            )
+            Spacer(modifier = Modifier.height(CliSpacing.sm))
+            CliDnsSection(
+                viewModel = viewModel,
+                dns = state.settings.dns,
+                domainStrategy = state.settings.traffic.domainStrategy,
+                sniff = state.settings.expert.sniff,
+                refreshInProgress = state.dnsFilterRefreshInProgress,
+                refreshPhase = dnsUpdatePhase,
+                expanded = SECTION_DNS in expandedSections,
+                onToggleExpanded = { onToggleSection(SECTION_DNS) },
+                onOpenAppBypass = { onOpenSub(SUB_DNS_BYPASS) },
+            )
+            Spacer(modifier = Modifier.height(CliSpacing.sm))
+            CliSecuritySection(
+                viewModel = viewModel,
+                settings = state.settings,
+                expanded = SECTION_SECURITY in expandedSections,
+                onToggleExpanded = { onToggleSection(SECTION_SECURITY) },
+            )
+            Spacer(modifier = Modifier.height(CliSpacing.sm))
+            CliApplicationSection(
+                viewModel = viewModel,
+                settings = state.settings,
+                expanded = SECTION_APP in expandedSections,
+                onToggleExpanded = { onToggleSection(SECTION_APP) },
+                onOpenSub = onOpenSub,
+            )
+            Spacer(modifier = Modifier.height(CliSpacing.sm))
+            CliModulesSection(
+                viewModel = viewModel,
+                settings = state.settings,
+                expanded = SECTION_MODULES in expandedSections,
+                onToggleExpanded = { onToggleSection(SECTION_MODULES) },
+                onOpenTor = { onOpenSub(SUB_TOR) },
+                onOpenI2p = { onOpenSub(SUB_I2P) },
+                onOpenFirewall = { onOpenSub(SUB_FIREWALL) },
+                onOpenAnomaly = { onOpenSub(SUB_ANOMALY) },
+            )
+            Spacer(modifier = Modifier.height(CliSpacing.sm))
+            CliExtrasSection(
+                settings = state.settings,
+                expanded = SECTION_EXTRAS in expandedSections,
+                onToggleExpanded = { onToggleSection(SECTION_EXTRAS) },
+                onWebAppsEnabledChanged = viewModel::onWebAppsEnabledChanged,
+                onProxyServerEnabledChanged = viewModel::onLocalProxyLanAccessChanged,
+                onOpenWebApps = { onOpenSub(SUB_WEBAPPS) },
+                onOpenProxyServer = { onOpenSub(SUB_LAN_PROXY) },
+            )
+            Spacer(modifier = Modifier.height(CliSpacing.sm))
+            CliMoreSection(viewModel = viewModel, onOpenSub = onOpenSub)
+            CliChromeTailSpacer()
+        }
     }
 }
 
@@ -203,8 +206,6 @@ private fun CliCfgSubScreen(
     onBack: () -> Unit,
     modifier: Modifier,
 ) {
-    // There are no top back rows: system back closes a sub-screen via the host BackHandler and
-    // screens open straight into content. The I2P screen is frozen and keeps its row.
     when (key) {
         SUB_DNS_BYPASS -> CliDnsBypassAppsScreen(viewModel, modifier)
         SUB_TOR -> CliTorSubScreen(viewModel, modifier)
@@ -222,8 +223,6 @@ private fun CliCfgSubScreen(
         )
         SUB_ABOUT -> CliAboutSubScreen(viewModel, modifier)
         SUB_HELP -> CliHelpSubScreen(modifier)
-        // A key saved by an older build (e.g. "routing", now the apps tab) restores into
-        // nothing renderable - pop back instead of leaving the user on a blank screen.
         else -> LaunchedEffect(key) { onBack() }
     }
 }
@@ -247,17 +246,12 @@ private const val SECTION_RULES = "rules"
 private const val SECTION_DNS = "dns"
 private const val SECTION_SECURITY = "security"
 
-// Renamed from "privacy" when TOR/I2P stopped being a group of their own and became two of the
-// four modules. The old key only ever named a saved expansion state, so a stale one simply
-// restores as collapsed.
 private const val SECTION_MODULES = "modules"
 private const val SECTION_APP = "application"
 private const val SECTION_EXTRAS = "extras"
 
-/** Shared option id for the free-input entry of preset dropdowns («custom…»). */
 internal const val CLI_OPT_CUSTOM = "custom"
 
-/** network: connection behaviors, tunnel shape and the per-transport network rules. */
 @Composable
 private fun CliNetworkSection(
     viewModel: HomeViewModel,
@@ -276,16 +270,12 @@ private fun CliNetworkSection(
         expanded = expanded,
         onToggleExpanded = onToggleExpanded,
     ) {
-        // Two independent promises, so two switches. Atomic scenario application decides whether
-        // operating-mode and VPN/Tor scenario choices ask first; reconnect restores a route that
-        // drops on its own.
-        // Network rules stay atomic regardless, and neither switch starts a connection.
         CliToggleRow(
             label = stringResource(R.string.cli_cfg_atomic_connection),
             icon = R.drawable.pix_shield,
             checked = settings.connection.atomicConnection,
             onToggle = viewModel::onAtomicConnectionChanged,
-            note = stringResource(R.string.cli_cfg_atomic_connection_note),
+            infoText = stringResource(R.string.cli_cfg_atomic_connection_note),
         )
         CliRowDivider()
         CliToggleRow(
@@ -293,18 +283,15 @@ private fun CliNetworkSection(
             icon = R.drawable.pix_restart,
             checked = settings.connection.autoReconnect,
             onToggle = viewModel::onAutoReconnectChanged,
-            note = stringResource(R.string.cli_cfg_auto_reconnect_note),
+            infoText = stringResource(R.string.cli_cfg_auto_reconnect_note),
         )
         CliRowDivider()
-        // The note is the whole behaviour, not a hint at it: what starts after a reboot depends on
-        // whether the database is password-locked, and the two halves start separately
-        // (BootReceiver.bootRestorePlan).
         CliToggleRow(
             label = stringResource(R.string.cli_cfg_auto_start),
             icon = R.drawable.pix_power,
             checked = settings.connection.autoStartOnBoot,
             onToggle = viewModel::onAutoStartChanged,
-            note = stringResource(R.string.cli_cfg_auto_start_note),
+            infoText = stringResource(R.string.cli_cfg_auto_start_note),
         )
         CliRowDivider()
         CliDropdownRow(
@@ -342,7 +329,6 @@ private fun CliNetworkSection(
     }
 }
 
-/** Network rules: its own collapsible root section for wifi/cellular profile bindings. */
 @Composable
 private fun CliRulesSection(
     viewModel: HomeViewModel,
@@ -364,7 +350,6 @@ private fun CliRulesSection(
     }
 }
 
-/** MTU: standard frame sizes as presets, the custom option opens a digits input below. */
 @Composable
 private fun CliMtuRows(
     viewModel: HomeViewModel,
@@ -392,6 +377,7 @@ private fun CliMtuRows(
     if (customOpen) {
         CliInputModal(
             title = stringResource(R.string.cli_input_value_title),
+            icon = R.drawable.pix_up,
             prompt = "mtu",
             value = mtuText,
             onValueChange = { raw -> mtuText = raw.filter(Char::isDigit).take(4) },
@@ -407,12 +393,10 @@ private fun CliMtuRows(
     }
 }
 
-// ipv6 minimum, typical vpn overhead, ethernet, jumbo.
 private val MTU_PRESETS = listOf(1280, 1400, 1500, 9000)
 private const val MIN_MTU = 576
 private const val MAX_MTU = 9000
 
-/** application: panel appearance, language and terminal upkeep. */
 @Composable
 private fun CliApplicationSection(
     viewModel: HomeViewModel,
@@ -431,33 +415,58 @@ private fun CliApplicationSection(
         expanded = expanded,
         onToggleExpanded = onToggleExpanded,
     ) {
-        // Labels resolve before the options are built: no stringResource inside a map lambda
-        // (the statistics window dropdown does the same).
+        val autoAppearanceLabel = stringResource(R.string.cli_cfg_appearance_auto)
         val standardAppearanceLabel = stringResource(R.string.cli_cfg_appearance_standard)
         val darkAppearanceLabel = stringResource(R.string.cli_cfg_appearance_dark)
+        val lightAppearanceLabel = stringResource(R.string.cli_cfg_appearance_light)
+        val appearanceLabel = { appearance: PanelAppearance ->
+            panelAppearanceLabel(
+                appearance,
+                autoAppearanceLabel,
+                standardAppearanceLabel,
+                darkAppearanceLabel,
+                lightAppearanceLabel,
+            )
+        }
         CliDropdownRow(
             label = stringResource(R.string.cli_cfg_appearance),
             icon = R.drawable.pix_star,
-            value = panelAppearanceLabel(
-                settings.ui.panelAppearance,
-                standardAppearanceLabel,
-                darkAppearanceLabel,
-            ),
+            value = appearanceLabel(settings.ui.panelAppearance),
             options = PanelAppearance.entries.map { appearance ->
                 CliDropdownOption(
                     id = appearance.name,
-                    label = panelAppearanceLabel(
-                        appearance,
-                        standardAppearanceLabel,
-                        darkAppearanceLabel,
-                    ),
+                    label = appearanceLabel(appearance),
+                    icon = panelAppearanceIcon(appearance),
                 )
             },
             selectedId = settings.ui.panelAppearance.name,
             onSelect = { id ->
                 viewModel.onPanelAppearanceSelected(PanelAppearance.valueOf(id))
             },
+            showSelectedOptionIcon = true,
         )
+        CliRowDivider()
+        val pixelVisualLabel = stringResource(R.string.cli_cfg_visual_style_pixel)
+        val plainVisualLabel = stringResource(R.string.cli_cfg_visual_style_plain)
+        CliDropdownRow(
+            label = stringResource(R.string.cli_cfg_visual_style),
+            icon = R.drawable.pix_edit,
+            value = visualStyleLabel(settings.ui.visualStyle, pixelVisualLabel, plainVisualLabel),
+            options = VisualStyle.entries.map { style ->
+                CliDropdownOption(
+                    id = style.name,
+                    label = visualStyleLabel(style, pixelVisualLabel, plainVisualLabel),
+                    icon = visualStyleIcon(style),
+                )
+            },
+            selectedId = settings.ui.visualStyle.name,
+            onSelect = { id ->
+                viewModel.onVisualStyleSelected(VisualStyle.valueOf(id))
+            },
+            showSelectedOptionIcon = true,
+        )
+        CliRowDivider()
+        CliAccentColorRow(viewModel = viewModel, settings = settings)
         CliRowDivider()
         val systemLocaleLabel = stringResource(R.string.cli_cfg_locale_system)
         val russianLocaleLabel = stringResource(R.string.cli_cfg_locale_ru)
@@ -470,16 +479,16 @@ private fun CliApplicationSection(
                 CliDropdownOption(
                     id = locale.name,
                     label = localeLabel(locale, systemLocaleLabel, russianLocaleLabel, englishLocaleLabel),
+                    flagCountry = localeFlagCountry(locale),
                 )
             },
             selectedId = settings.ui.locale.name,
             onSelect = { id -> viewModel.onLocaleSelected(AppLocale.valueOf(id)) },
+            showSelectedOptionIcon = true,
         )
         CliRowDivider()
         CliTerminalClearRows()
         CliRowDivider()
-        // Home widget defaults are a surface of their own, not two loose preferences among the
-        // app-wide ones: they open as a sub-screen beside the backup one.
         CliActionRow(
             label = stringResource(R.string.cli_cfg_widgets),
             icon = R.drawable.pix_home,
@@ -494,10 +503,6 @@ private fun CliApplicationSection(
     }
 }
 
-/**
- * Updates, journals, help and about live at the settings root as a flat panel of action rows:
- * this is a primary entry point and must not be hidden inside the application expander.
- */
 @Composable
 private fun CliMoreSection(
     viewModel: HomeViewModel,
@@ -507,21 +512,22 @@ private fun CliMoreSection(
         CliActionRow(
             label = stringResource(R.string.cli_cfg_more_updates),
             icon = R.drawable.pix_settings,
-            // The blinking pixel: a pending FoxHole DB / app update is visible from the root,
-            // without entering the screen.
             attention = rememberCliUpdatesAttention(viewModel),
             onTap = { onOpenSub(SUB_UPDATES) },
         )
+        CliRowDivider()
         CliActionRow(
             label = stringResource(R.string.cli_cfg_more_journals),
             icon = R.drawable.pix_journal,
             onTap = { onOpenSub(SUB_LOGS) },
         )
+        CliRowDivider()
         CliActionRow(
             label = stringResource(R.string.cli_cfg_more_help),
             icon = R.drawable.pix_info,
             onTap = { onOpenSub(SUB_HELP) },
         )
+        CliRowDivider()
         CliActionRow(
             label = stringResource(R.string.cli_cfg_more_about),
             icon = R.drawable.pix_star,
@@ -530,11 +536,6 @@ private fun CliMoreSection(
     }
 }
 
-/**
- * How long the home terminal keeps its lines: four presets plus a free entry in hours or in days.
- * The value is device-local and it is a real promise now — CliTerminalStore holds the journal on
- * disk for exactly this long, so shortening it here erases what has already fallen outside.
- */
 @Composable
 private fun CliTerminalClearRows() {
     val context = LocalContext.current
@@ -545,9 +546,6 @@ private fun CliTerminalClearRows() {
         CliTerminalPrefs.writeRetentionHours(context, hours)
         retentionHours = CliTerminalPrefs.readRetentionHours(context)
     }
-    // TODO(strings): the two custom entries read "<custom> · h" and "<custom> · d" — the unit
-    //  letters are the same non-translatable suffixes the preset labels already use, so no new
-    //  catalogue key was needed. Revisit if the coordinator wants spelled-out units.
     val customLabel = stringResource(R.string.cli_common_custom)
     CliDropdownRow(
         label = stringResource(R.string.cli_cfg_terminal_clear),
@@ -574,14 +572,11 @@ private fun CliTerminalClearRows() {
     customUnit?.let { unit ->
         CliInputModal(
             title = stringResource(R.string.cli_input_value_title),
+            icon = R.drawable.pix_clock,
             prompt = if (unit == CliRetentionUnit.DAYS) "d" else "h",
             value = customValue,
-            // Digits only and at most three of them: there is no way to type a negative number, and
-            // the largest thing that fits (999 days) clamps to the ceiling instead of overflowing.
             onValueChange = { raw -> customValue = raw.filter(Char::isDigit).take(CUSTOM_ENTRY_MAX_DIGITS) },
             onSubmit = {
-                // Null means the entry is empty or zero: the modal stays open rather than storing a
-                // retention that would expire every line the moment it was written.
                 CliTerminalPrefs.hoursFromInput(customValue, unit)?.let { hours ->
                     applyHours(hours)
                     customUnit = null
@@ -593,7 +588,6 @@ private fun CliTerminalClearRows() {
     }
 }
 
-/** Which dropdown row is ticked: a preset by its own hours, anything else by the unit it reads in. */
 private fun terminalRetentionOptionId(retentionHours: Int): String =
     when {
         retentionHours in TERMINAL_CLEAR_PRESETS -> retentionHours.toString()
@@ -607,9 +601,6 @@ private const val CLI_OPT_CUSTOM_HOURS = "custom_hours"
 private const val CLI_OPT_CUSTOM_DAYS = "custom_days"
 private const val CUSTOM_ENTRY_MAX_DIGITS = 3
 
-// Locale names are self-describing words, not translations - same in every UI language, which is
-// why both catalogues carry the same value. They come from the catalogues all the same: a literal
-// here is invisible to the translation parity gate and cannot be reviewed with the other strings.
 private fun localeLabel(
     locale: AppLocale,
     systemLabel: String,
@@ -623,9 +614,83 @@ private fun localeLabel(
 
 private fun panelAppearanceLabel(
     appearance: PanelAppearance,
+    autoLabel: String,
     standardLabel: String,
     darkLabel: String,
+    lightLabel: String,
 ): String = when (appearance) {
+    PanelAppearance.AUTO -> autoLabel
     PanelAppearance.STANDARD -> standardLabel
     PanelAppearance.DARK -> darkLabel
+    PanelAppearance.LIGHT -> lightLabel
+}
+
+private fun panelAppearanceIcon(appearance: PanelAppearance): Int = when (appearance) {
+    PanelAppearance.AUTO -> R.drawable.pix_star
+    PanelAppearance.STANDARD -> R.drawable.pix_device
+    PanelAppearance.DARK -> R.drawable.pix_incognito
+    PanelAppearance.LIGHT -> R.drawable.pix_globe
+}
+
+private fun visualStyleIcon(style: VisualStyle): Int = when (style) {
+    VisualStyle.PIXEL -> R.drawable.pix_qr
+    VisualStyle.PLAIN -> R.drawable.pix_edit
+}
+
+@Composable
+private fun CliAccentColorRow(viewModel: HomeViewModel, settings: Settings) {
+    val appearance = LocalCliPanelAppearance.current
+    val colors = LocalCliColors.current
+    val autoLabel = stringResource(R.string.cli_cfg_accent_auto)
+    val orangeLabel = stringResource(R.string.cli_cfg_accent_orange)
+    val greenLabel = stringResource(R.string.cli_cfg_accent_green)
+    val limeLabel = stringResource(R.string.cli_cfg_accent_lime)
+    val blueLabel = stringResource(R.string.cli_cfg_accent_blue)
+    val pinkLabel = stringResource(R.string.cli_cfg_accent_pink)
+    val cyanLabel = stringResource(R.string.cli_cfg_accent_cyan)
+    val accentLabel = { accent: AccentColor ->
+        when (accent) {
+            AccentColor.AUTO -> autoLabel
+            AccentColor.ORANGE -> orangeLabel
+            AccentColor.GREEN -> greenLabel
+            AccentColor.LIME -> limeLabel
+            AccentColor.BLUE -> blueLabel
+            AccentColor.PINK -> pinkLabel
+            AccentColor.CYAN -> cyanLabel
+        }
+    }
+    CliDropdownRow(
+        label = stringResource(R.string.cli_cfg_accent),
+        icon = R.drawable.pix_star,
+        value = accentLabel(settings.ui.accentColor),
+        options = AccentColor.entries.map { accent ->
+            CliDropdownOption(
+                id = accent.name,
+                label = accentLabel(accent),
+                swatch = if (accent == AccentColor.AUTO) {
+                    cliDynamicAccentOrNull() ?: colors.accent
+                } else {
+                    cliAccentSwatch(appearance, accent)
+                },
+            )
+        },
+        selectedId = settings.ui.accentColor.name,
+        onSelect = { id -> viewModel.onAccentColorSelected(AccentColor.valueOf(id)) },
+        showSelectedOptionIcon = true,
+    )
+}
+
+private fun visualStyleLabel(
+    style: VisualStyle,
+    pixelLabel: String,
+    plainLabel: String,
+): String = when (style) {
+    VisualStyle.PIXEL -> pixelLabel
+    VisualStyle.PLAIN -> plainLabel
+}
+
+private fun localeFlagCountry(locale: AppLocale): String? = when (locale) {
+    AppLocale.SYSTEM -> null
+    AppLocale.RU -> "ru"
+    AppLocale.EN -> "gb"
 }

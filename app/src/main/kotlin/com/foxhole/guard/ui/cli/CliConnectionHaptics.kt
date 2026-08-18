@@ -24,10 +24,6 @@ internal data class CliConnectionHapticTracker(
     val connectedSession: Boolean = false,
 )
 
-/**
- * Reduces noisy runtime states into two tactile edges. RECONNECTING keeps the current session
- * armed, so a temporary hand-off neither emits a false disconnect nor a second success tick.
- */
 internal fun CliConnectionHapticTracker.next(
     state: ConnectionState,
 ): Pair<CliConnectionHapticTracker, CliConnectionHapticEvent?> {
@@ -43,7 +39,6 @@ internal fun CliConnectionHapticTracker.next(
     }
 }
 
-/** App-wide rather than home-only: a connection finishing while another tab is open still lands. */
 @Composable
 internal fun CliConnectionHapticEffect(viewModel: HomeViewModel) {
     val home by viewModel.homeRouteState.collectAsStateWithLifecycle()
@@ -69,7 +64,6 @@ internal fun CliConnectionHapticEffect(viewModel: HomeViewModel) {
                 }
             null -> return@LaunchedEffect
         }
-        // No IGNORE_GLOBAL_SETTING flag: FoxHole follows the device's tactile-feedback setting.
         view.performHapticFeedback(feedback)
     }
 }

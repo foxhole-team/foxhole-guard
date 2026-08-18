@@ -1,5 +1,6 @@
 package com.foxhole.guard.ui.cli.home
 
+import android.os.SystemClock
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.SemanticsMatcher
@@ -38,8 +39,6 @@ import org.junit.Test
 class CliHomeRuntimeBehaviorTest {
     private val composeRule = createAndroidComposeRule<CliMainActivity>()
 
-    // Onboarding first, and outside the compose rule: it launches the activity as it evaluates, so
-    // a @Before would run after the wizard was already on screen. See onboardingCompletedRule().
     @get:Rule
     val ruleChain: RuleChain =
         RuleChain.outerRule(onboardingCompletedRule()).around(composeRule)
@@ -50,8 +49,7 @@ class CliHomeRuntimeBehaviorTest {
         FoxholeVpnRuntimeBridge.clearTransientState()
         FoxholeVpnRuntimeBridge.update(ConnectionSnapshot(), refreshLastChangeAt = false)
         waitForHome()
-        // resetModeSettings switches the TOR module off, and without it the mode cycler is absent
-        // from the row rather than dimmed — see cliHomeButtonLayout.
+        waitForInitialNetworkRefresh()
         waitForModeAbsent()
     }
 
@@ -73,7 +71,7 @@ class CliHomeRuntimeBehaviorTest {
     }
 
     @Test
-    fun connectingKeepsThePreviouslyValidatedIpVisible() {
+    fun connectingHidesThePreviousIpBehindTheRefreshIndicator() {
         seedIp(TEST_IP)
 
         composeRule.runOnUiThread {
@@ -93,8 +91,9 @@ class CliHomeRuntimeBehaviorTest {
                     useUnmergedTree = true,
                 )
                 .fetchSemanticsNodes()
-                .isNotEmpty()
+                .isEmpty()
         }
+        composeRule.onNodeWithTag(CLI_HOME_IP_TAG, useUnmergedTree = true).assertIsDisplayed()
     }
 
     @Test
@@ -120,7 +119,6 @@ class CliHomeRuntimeBehaviorTest {
 
     @Test
     fun theModeCyclerFollowsTheTorModuleAndGrantingItRoutesNothing() {
-        // Module off: nothing to cycle to, so the slot is gone and START holds the row alone.
         waitForModeAbsent()
 
         runBlocking {
@@ -128,8 +126,6 @@ class CliHomeRuntimeBehaviorTest {
         }
         composeRule.waitForIdle()
 
-        // Granting the module hands the cycler back on VPN — turning TOR on is not routing through
-        // it, so the privacy route stays disabled until the user cycles the mode.
         waitForMode(CliConnectMode.VPN)
         assertFalse(app().container.settingsRepository.settings.value.privacyRoute.enabled)
     }
@@ -152,8 +148,6 @@ class CliHomeRuntimeBehaviorTest {
             )
         composeRule.runOnUiThread {
             viewModel.invalidateIpInfoRefreshes()
-            // This is a test fixture reset, not a real route transition. Advancing lastChangeAt
-            // here would correctly make the just-created identity stale and hide it.
             FoxholeVpnRuntimeBridge.update(ConnectionSnapshot(), refreshLastChangeAt = false)
             FoxholeVpnRuntimeBridge.updateIpInfo(info)
             FoxholeVpnRuntimeBridge.updateDeviceIpInfo(info)
@@ -173,6 +167,20 @@ class CliHomeRuntimeBehaviorTest {
                 )
                 .fetchSemanticsNodes()
                 .isNotEmpty()
+        }
+    }
+
+    private fun waitForInitialNetworkRefresh() {
+        val viewModel =
+            ViewModelProvider(
+                composeRule.activity,
+                HomeViewModel.factory(app()),
+            )[HomeViewModel::class.java]
+        val settleNotBefore = SystemClock.uptimeMillis() + INITIAL_NETWORK_SETTLE_MS
+        composeRule.waitUntil(timeoutMillis = STATE_TIMEOUT_MS) {
+            SystemClock.uptimeMillis() >= settleNotBefore &&
+                viewModel.activeIpInfoRefreshReason == null &&
+                viewModel.ipInfoRefreshJob?.isActive != true
         }
     }
 
@@ -221,8 +229,8 @@ class CliHomeRuntimeBehaviorTest {
         composeRule.activity.application as FoxholeApplication
 
     private companion object {
-        // The dashboard intentionally rejects documentation/private ranges as public identity.
         const val TEST_IP = "8.8.4.4"
+        const val INITIAL_NETWORK_SETTLE_MS = 2_000L
         const val STATE_TIMEOUT_MS = 10_000L
     }
 }

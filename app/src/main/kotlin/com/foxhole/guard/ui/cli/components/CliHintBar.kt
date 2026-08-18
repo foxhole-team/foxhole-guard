@@ -1,39 +1,57 @@
 package com.foxhole.guard.ui.cli.components
 
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.foxhole.core.model.VisualStyle
 import com.foxhole.guard.R
+import com.foxhole.guard.ui.cli.CliMotion
 import com.foxhole.guard.ui.cli.CliScreen
 import com.foxhole.guard.ui.cli.CliSpacing
+import com.foxhole.guard.ui.cli.CliType
 import com.foxhole.guard.ui.cli.LocalCliColors
-import kotlinx.coroutines.delay
+import com.foxhole.guard.ui.cli.LocalCliMetricScale
+import com.foxhole.guard.ui.cli.LocalCliVisualStyle
+import com.foxhole.guard.ui.cli.cliLabelText
+import com.foxhole.guard.ui.cli.cliScaledSp
 
 /**
- * Bottom navigation styled as an icon dock: one glyph from the 16x16 1-bit pixel pack per
- * screen. Each cell is a >=48dp tap target; the active tab is accent-tinted, the rest dim.
- * The screen name lives in the contentDescription only (cli_dock_*).
+ * Both styles share the rounded dock now; retro merely keeps its own palette underneath.
+ *
+ * The dock is the app's fixed furniture, so it renders at the reference scale in both styles —
+ * [LocalCliMetricScale] is re-provided as 1f here and the Modern notch stops at its edge.
  */
 @Composable
 internal fun CliHintBar(
@@ -42,65 +60,156 @@ internal fun CliHintBar(
     modifier: Modifier = Modifier,
     screens: List<CliScreen> = CliScreen.entries,
 ) {
+    CompositionLocalProvider(LocalCliMetricScale provides CLI_DOCK_METRIC_SCALE) {
+        CliModernDock(current = current, onSelect = onSelect, screens = screens, modifier = modifier)
+    }
+}
+
+private const val CLI_DOCK_METRIC_SCALE = 1f
+
+@Composable
+private fun CliModernDock(
+    current: CliScreen,
+    onSelect: (CliScreen) -> Unit,
+    screens: List<CliScreen>,
+    modifier: Modifier = Modifier,
+) {
     val colors = LocalCliColors.current
-    Row(
+    val shape = RoundedCornerShape(MODERN_DOCK_CORNER)
+    BoxWithConstraints(
         modifier = modifier
             .fillMaxWidth()
-            .background(colors.bg)
-            .testTag(CLI_DOCK_TAG)
-            .padding(horizontal = CliSpacing.xs),
-        horizontalArrangement = Arrangement.SpaceEvenly,
-        verticalAlignment = Alignment.CenterVertically,
+            .padding(
+                start = CliSpacing.sm,
+                end = CliSpacing.sm,
+                top = MODERN_DOCK_LIFT_TOP,
+                bottom = MODERN_DOCK_LIFT_BOTTOM,
+            )
+            .testTag(CLI_DOCK_TAG),
     ) {
-        screens.forEach { screen ->
-            val active = screen == current
+        val itemWidth = maxWidth / screens.size
+        val compact = itemWidth < MODERN_DOCK_COMPACT_ITEM_WIDTH
+        val dropWidth = if (compact) MODERN_DOCK_DROP_WIDTH_COMPACT else MODERN_DOCK_DROP_WIDTH
+        val activeIndex = screens.indexOf(current).coerceAtLeast(0)
+        val dropX by animateDpAsState(
+            targetValue = itemWidth * activeIndex + (itemWidth - dropWidth) / 2,
+            animationSpec = CliMotion.emphasis(),
+            label = "cliDockDrop",
+        )
+        CliGlassSurface(
+            shape = shape,
+            modifier = Modifier
+                .fillMaxWidth()
+                .border(1.dp, colors.border, shape),
+        ) {
             Box(
                 modifier = Modifier
-                    .weight(1f)
-                    .defaultMinSize(minHeight = 48.dp)
-                    .testTag(cliDockItemTag(screen))
-                    .cliPressable { onSelect(screen) },
-                contentAlignment = Alignment.Center,
-            ) {
-                CliPixIcon(
-                    id = dockIcon(screen),
-                    contentDescription = stringResource(dockLabel(screen)),
-                    tint = if (active) colors.accent else colors.dim,
-                    size = 24.dp,
-                )
-                // The pixel underline marks the active tab; a two-step flash on arrival is the
-                // press feedback — hard steps, no slide (see CliDockMarker).
-                if (active) {
-                    CliDockMarker(modifier = Modifier.align(Alignment.BottomCenter))
+                    .offset(x = dropX)
+                    .padding(top = if (compact) MODERN_DOCK_DROP_TOP_COMPACT else MODERN_DOCK_DROP_TOP)
+                    .width(dropWidth)
+                    .height(if (compact) MODERN_DOCK_DROP_HEIGHT_COMPACT else MODERN_DOCK_DROP_HEIGHT)
+                    .clip(RoundedCornerShape(percent = 50))
+                    .background(colors.accent.copy(alpha = MODERN_DOCK_DROP_ALPHA)),
+            )
+            Row(modifier = Modifier.fillMaxWidth()) {
+                screens.forEach { screen ->
+                    CliModernDockItem(
+                        screen = screen,
+                        active = screen == current,
+                        onSelect = onSelect,
+                        compact = compact,
+                        modifier = Modifier.weight(1f),
+                    )
                 }
             }
         }
     }
 }
 
-/**
- * The active tab's pixel underline. On appearing it flashes bright → accent in two hard steps —
- * the arrival feedback of a cursor, not a sliding indicator; there is nothing to animate between
- * tabs because each tab draws its own marker.
- */
 @Composable
-private fun CliDockMarker(modifier: Modifier = Modifier) {
+private fun CliModernDockItem(
+    screen: CliScreen,
+    active: Boolean,
+    onSelect: (CliScreen) -> Unit,
+    compact: Boolean,
+    modifier: Modifier = Modifier,
+) {
     val colors = LocalCliColors.current
-    var arrived by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) {
-        delay(DOCK_MARKER_FLASH_MS)
-        arrived = true
-    }
-    Box(
-        modifier = modifier
-            .padding(bottom = 4.dp)
-            .width(16.dp)
-            .height(2.dp)
-            .background(if (arrived) colors.accent else colors.accentBright),
+    val tint = if (active) colors.accent else colors.dim
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    val pressScale by animateFloatAsState(
+        targetValue = if (pressed) MODERN_DOCK_PRESS_SCALE else 1f,
+        animationSpec = CliMotion.press(),
+        label = "cliDockPressScale",
     )
+    val glowAlpha by animateFloatAsState(
+        targetValue = if (pressed) MODERN_DOCK_PRESS_GLOW_ALPHA else 0f,
+        animationSpec = CliMotion.press(),
+        label = "cliDockPressGlow",
+    )
+    Column(
+        modifier = modifier
+            .defaultMinSize(
+                minHeight = if (compact) MODERN_DOCK_MIN_HEIGHT_COMPACT else MODERN_DOCK_MIN_HEIGHT,
+            )
+            .testTag(cliDockItemTag(screen))
+            .clip(RoundedCornerShape(MODERN_DOCK_CORNER))
+            .background(colors.accent.copy(alpha = glowAlpha))
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+            ) { onSelect(screen) }
+            .graphicsLayer {
+                scaleX = pressScale
+                scaleY = pressScale
+            }
+            .padding(vertical = if (compact) MODERN_DOCK_ITEM_PADDING_COMPACT else MODERN_DOCK_ITEM_PADDING),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        CliPixIcon(
+            id = dockIcon(screen),
+            contentDescription = stringResource(dockLabel(screen)),
+            tint = tint,
+            size = if (compact) MODERN_DOCK_ICON_SIZE_COMPACT else MODERN_DOCK_ICON_SIZE,
+        )
+        Spacer(modifier = Modifier.height(2.dp))
+        Text(
+            text = cliLabelText(stringResource(dockLabel(screen))),
+            style = if (compact) {
+                CliType.small.copy(fontSize = cliScaledSp(10f), lineHeight = cliScaledSp(12f))
+            } else {
+                CliType.small.copy(fontSize = cliScaledSp(11f), lineHeight = cliScaledSp(13f))
+            },
+            color = tint,
+            maxLines = 1,
+        )
+    }
 }
 
-private const val DOCK_MARKER_FLASH_MS = 150L
+private val MODERN_DOCK_CORNER = 22.dp
+private val MODERN_DOCK_DROP_WIDTH = 48.dp
+private val MODERN_DOCK_DROP_WIDTH_COMPACT = 40.dp
+private val MODERN_DOCK_DROP_HEIGHT = 32.dp
+private val MODERN_DOCK_DROP_HEIGHT_COMPACT = 27.dp
+private val MODERN_DOCK_ICON_SIZE = 24.dp
+private val MODERN_DOCK_ICON_SIZE_COMPACT = 20.dp
+
+private val MODERN_DOCK_COMPACT_ITEM_WIDTH = 52.dp
+
+private val MODERN_DOCK_ITEM_PADDING = 11.dp
+private val MODERN_DOCK_ITEM_PADDING_COMPACT = 8.dp
+private val MODERN_DOCK_DROP_TOP =
+    MODERN_DOCK_ITEM_PADDING - (MODERN_DOCK_DROP_HEIGHT - MODERN_DOCK_ICON_SIZE) / 2
+private val MODERN_DOCK_DROP_TOP_COMPACT =
+    MODERN_DOCK_ITEM_PADDING_COMPACT - (MODERN_DOCK_DROP_HEIGHT_COMPACT - MODERN_DOCK_ICON_SIZE_COMPACT) / 2
+private val MODERN_DOCK_MIN_HEIGHT = 64.dp
+private val MODERN_DOCK_MIN_HEIGHT_COMPACT = 54.dp
+private val MODERN_DOCK_LIFT_TOP = 2.dp
+private val MODERN_DOCK_LIFT_BOTTOM = 10.dp
+private const val MODERN_DOCK_DROP_ALPHA = 0.16f
+private const val MODERN_DOCK_PRESS_SCALE = 0.90f
+private const val MODERN_DOCK_PRESS_GLOW_ALPHA = 0.10f
 
 internal const val CLI_DOCK_TAG = "cli_dock"
 
@@ -126,11 +235,6 @@ private fun dockLabel(screen: CliScreen): Int = when (screen) {
     CliScreen.SETTINGS -> R.string.cli_dock_settings
 }
 
-/**
- * Thin `╌╌╌╌` divider used between the content and the hint bar: a pixel-dash of sharp
- * 2x1dp squares with 2dp gaps instead of a solid hairline - the same border color as
- * before, but with the 16-bit stitch texture.
- */
 @Composable
 internal fun CliDivider(
     modifier: Modifier = Modifier,
@@ -139,10 +243,6 @@ internal fun CliDivider(
     CliPixelStitch(alpha = 0.7f, color = color, modifier = modifier)
 }
 
-/**
- * Row divider for list panels: the same pixel hatch, quieter — it separates rows without
- * shouting over the text.
- */
 @Composable
 internal fun CliRowDivider(
     modifier: Modifier = Modifier,
@@ -155,13 +255,18 @@ internal fun CliRowDivider(
     )
 }
 
-/**
- * Divider *between* sections of a multi-section screen: the same stitch at section rhythm, its
- * padding preserving the previous total Spacer(sm) gap with the line laid in the middle.
- */
 @Composable
 internal fun CliSectionDivider(modifier: Modifier = Modifier) {
     CliPixelStitch(alpha = 0.5f, modifier = modifier.padding(vertical = CliSpacing.xs))
+}
+
+@Composable
+internal fun CliHomeSectionGap(modifier: Modifier = Modifier) {
+    if (LocalCliVisualStyle.current == VisualStyle.PIXEL) {
+        CliSectionDivider(modifier)
+    } else {
+        Spacer(modifier = modifier.height(CliSpacing.sm))
+    }
 }
 
 @Composable

@@ -40,11 +40,6 @@ enum class GuardEventType {
     CORE_EVENT_GAP,
 }
 
-/**
- * Sealed payload of one journal record. Flat on purpose: every field is optional
- * except the type, so one schema carries package events, tamper events and
- * lifecycle markers without a serializer hierarchy.
- */
 @Serializable
 data class GuardEvent(
     val type: GuardEventType,
@@ -65,12 +60,8 @@ data class GuardEvent(
 )
 
 /**
- * Plaintext envelope of one JSONL line. The payload is crypto_box_seal'ed to the
- * guard public key (writable while locked, readable only with the password); the
- * envelope itself stays readable so the chain can be walked without unlocking.
- * prevHash = SHA-256 hex of the previous line's exact bytes; seq is strictly
- * sequential; the timestamp triple (wallClock, elapsedRealtime, bootCount) makes
- * clock rollbacks and reboots visible to the verifier.
+ * Payload is crypto_box_seal'ed to the guard public key; the envelope stays plaintext so the chain can be walked while locked.
+ * prevHash = SHA-256 hex of the previous line's exact bytes, seq strictly sequential, and the wallClock/elapsedRealtime/bootCount triple makes clock rollbacks and reboots visible to the verifier.
  */
 @Serializable
 data class GuardJournalRecord(
@@ -82,7 +73,6 @@ data class GuardJournalRecord(
     val sealed: String,
 )
 
-/** Envelope + decrypted payload, as surfaced to the verified journal UI. */
 data class GuardJournalEntry(
     val record: GuardJournalRecord,
     val event: GuardEvent?,

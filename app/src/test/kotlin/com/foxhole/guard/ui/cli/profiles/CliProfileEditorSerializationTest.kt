@@ -9,10 +9,6 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/**
- * The structured editor's contract: a field edit touches exactly one leaf of the outbound and every
- * other key — advanced, per-type or unknown — comes back out untouched.
- */
 class CliProfileEditorSerializationTest {
     private val json = Json
 
@@ -134,7 +130,7 @@ class CliProfileEditorSerializationTest {
             """,
         )
 
-        val trimmed = slot.withoutOutbound(0)
+        val trimmed = slot.withoutEntry(CliEditorProtocolRef(slotIndex = 0, entryIndex = 0))
 
         val outbounds = trimmed.root.cliOutbounds()
         assertEquals(listOf("b", "proxy", "direct"), outbounds.map(JsonObject::cliOutboundTag))
@@ -155,10 +151,48 @@ class CliProfileEditorSerializationTest {
                 root = outbound("""{"outbounds":[$original]}"""),
             )
 
-        val unchanged = slot.withOutbound(index = 0, outbound = original)
+        val unchanged = slot.withEntry(CliEditorProtocolRef(slotIndex = 0, entryIndex = 0), original)
 
         assertFalse(unchanged.dirty)
         assertTrue(listOf(unchanged).pendingEdits().isEmpty())
+    }
+
+    @Test
+    fun `a wireguard template lands in endpoints and its peer fields round-trip`() {
+        val created = cliNewProtocolConfig(JsonObject(emptyMap()), cliBlankOutbound("wireguard"))
+
+        assertTrue(created.cliOutbounds().none { it.cliOutboundType() == "wireguard" })
+        val endpoint = created.cliEndpoints().single()
+        assertEquals("wireguard", endpoint.cliOutboundType())
+        val selector = created.cliOutbounds().last()
+        assertEquals("wireguard", selector["default"].toString().trim('"'))
+        assertEquals("""["wireguard"]""", selector["outbounds"].toString())
+
+        val server = field(endpoint, "server")
+        val publicKey = field(endpoint, "peer_public_key")
+        val edited = endpoint
+            .writeCliProtoField(server, "peer.example.com")
+            .writeCliProtoField(publicKey, "public-key-1")
+
+        assertEquals("peer.example.com", edited.readCliProtoField(server))
+        assertEquals("public-key-1", edited.readCliProtoField(publicKey))
+        assertEquals("51820", edited.readCliProtoField(field(edited, "server_port")))
+        assertEquals("0.0.0.0/0,::/0", edited.readCliProtoField(field(edited, "allowed_ips")))
+    }
+
+    @Test
+    fun `deleting the only endpoint drops the endpoints key rather than leaving it empty`() {
+        val slot =
+            CliEditorSlot(
+                optionId = "wireguard",
+                label = "wireguard",
+                enabled = true,
+                root = cliNewProtocolConfig(JsonObject(emptyMap()), cliBlankOutbound("wireguard")),
+            )
+        val refs = listOf(slot).protocolRefs()
+
+        assertEquals(listOf(CliEditorProtocolRef(0, 0, endpoint = true)), refs)
+        assertNull(slot.withoutEntry(refs.single()).root["endpoints"])
     }
 
     @Test

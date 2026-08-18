@@ -4,7 +4,6 @@ import android.content.Context
 import android.os.SystemClock
 import android.provider.Settings
 
-/** Time sources behind an interface so journal logic runs in JVM tests. */
 interface GuardClock {
     fun wallClockMs(): Long
 

@@ -10,7 +10,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.foxhole.core.model.Settings
-import com.foxhole.core.runtime.i2pWouldRaiseTransparentGuard
 import com.foxhole.guard.R
 import com.foxhole.guard.ui.DatasetActivationFeature
 import com.foxhole.guard.ui.DatasetActivationSource
@@ -37,18 +36,6 @@ import com.foxhole.guard.ui.torBridgeDownloadProgress
 import com.foxhole.guard.ui.torBridgePersistenceMarker
 import com.foxhole.guard.ui.torBridgeVerifiedSuccess
 
-/**
- * The modules of the product, as one list: TOR, I2P, the firewall and anomaly detection.
- *
- * What makes something a module rather than a setting is that it has a surface of its own and a
- * switch of its own — so all four read identically here: the switch that permits the module, then
- * the way into its own settings, which stays reachable whether or not the switch is on. The
- * firewall and anomaly detection used to be plain rows inside the security group, where a
- * device-wide packet filter read as a preference beside "block screenshots".
- *
- * One pixel rule BETWEEN modules and none inside them: the rule separates modules from each other,
- * and a line between a module's own two rows split the pair it was supposed to hold together.
- */
 @Composable
 internal fun CliModulesSection(
     viewModel: HomeViewModel,
@@ -121,7 +108,6 @@ internal fun CliModulesSection(
     }
 }
 
-/** The first OFF -> ON edge asks for the bridge policy before TOR permission is persisted. */
 @Composable
 private fun CliTorModuleBlock(
     viewModel: HomeViewModel,
@@ -144,10 +130,6 @@ private fun CliTorModuleBlock(
     )
 }
 
-/**
- * The sheet deliberately lives outside the collapsible module panel. A panel visibility change
- * must not destroy a first-enable decision before the user can choose a source and confirm it.
- */
 @Composable
 private fun CliTorDatasetActivationSheet(
     viewModel: HomeViewModel,
@@ -188,10 +170,9 @@ private fun CliTorDatasetActivationSheet(
 }
 
 /**
- * I2P. Turning it on with nothing else running raises the transparent guard, and that guard
- * deliberately applies no rules — not the block lane, not DNS filtering. It is a tunnel the user
- * did not ask for carrying traffic it does not filter, so it is asked for rather than assumed.
- * Turning I2P off needs no such warning.
+ * Permission only. The transparent-guard consent used to hang off this switch, which made
+ * enabling a module the same act as opening a network; it now sits on the home connect button,
+ * the press that actually starts the router.
  */
 @Composable
 private fun CliI2pModuleBlock(
@@ -199,47 +180,15 @@ private fun CliI2pModuleBlock(
     settings: Settings,
     onOpenSettings: () -> Unit,
 ) {
-    var transparentGuardConsent by remember { mutableStateOf(false) }
-    // The pack has no I2P mark; the globe stands for "another network of its own" until one
-    // is drawn.
     CliModuleBlock(
         label = stringResource(R.string.cli_cfg_i2p_core),
         icon = R.drawable.pix_globe,
         checked = settings.i2p.enabled,
-        onToggle = { enable ->
-            if (enable && settings.i2pWouldRaiseTransparentGuard()) {
-                transparentGuardConsent = true
-            } else {
-                viewModel.onI2pEnabledChanged(enable)
-            }
-        },
+        onToggle = viewModel::onI2pEnabledChanged,
         onOpenSettings = onOpenSettings,
     )
-    if (transparentGuardConsent) {
-        CliConfirmSheet(
-            title = stringResource(R.string.cli_cfg_i2p_core),
-            icon = R.drawable.pix_globe,
-            question = stringResource(R.string.cli_i2p_transparent_guard_body),
-            confirmLabel = stringResource(R.string.cli_i2p_transparent_guard_yes),
-            onConfirm = {
-                transparentGuardConsent = false
-                viewModel.onI2pEnabledChanged(true)
-            },
-            onDismiss = { transparentGuardConsent = false },
-        )
-    }
 }
 
-/**
- * The firewall, with both of its consents. They rise as the shared bottom modal rather than
- * unfolding under the row: arming a device-wide packet filter is exactly the class of answer that
- * must not be given by a chip that appeared where the user's finger already was.
- *
- * Turning it off takes more with it than the row says: the local guard is the tunnel the app rules
- * and the new-app quarantine are applied through, and with no VPN or TOR connection up there is
- * nothing left applying them. The sheet names what stops so the switch is not the only place that
- * knows.
- */
 @Composable
 private fun CliFirewallModuleBlock(
     viewModel: HomeViewModel,
@@ -275,8 +224,6 @@ private fun CliFirewallModuleBlock(
         settingsAttentionColor = LocalCliColors.current.firewall,
     )
     if (consentOpen) {
-        // "Do not ask again" was removed by product decision: the firewall confirmation is
-        // always asked and there is no silent path.
         CliConfirmSheet(
             title = stringResource(R.string.cli_cfg_firewall),
             icon = R.drawable.pix_fire,
@@ -304,11 +251,6 @@ private fun CliFirewallModuleBlock(
     }
 }
 
-/**
- * Anomaly detection. The detector leans on the security lists, so switching it on with only the
- * bundled seed on the device offers the FoxHole DB download right here — the switch is where the
- * user learns the module needs data, not the screen behind it.
- */
 @Composable
 private fun CliAnomalyModuleBlock(
     viewModel: HomeViewModel,

@@ -71,10 +71,6 @@ internal suspend fun HomeViewModel.maybeFinishTorOperation(
     ipInfo: IpInfo?,
 ) {
     val publishableIpInfo = ipInfo?.takeIf(torOperation::canPublishTorIp) ?: return
-    // Claim the operation (checked against the source-of-truth mutable, not the derived UI state,
-    // which lags a frame) and clear it BEFORE the suspending banner emit: the bridge/timeout tick
-    // and the TOR_ROUTE dashboard refresh race to finish the same operation, and the loser must
-    // see it already cleared — otherwise the user gets two "Tor connected" banners.
     if (!torOperationMutable.value.active) {
         return
     }
@@ -127,10 +123,6 @@ private suspend fun HomeViewModel.failTorOperationIfStillActive(startedAt: Long)
     if (current.startedAt != startedAt || !current.active) {
         return
     }
-    // The operation may run out of its window with the runtime already carrying a validated Tor
-    // route while only the display-side exit probe is slow — that is not a bootstrap failure, and
-    // the red "Tor did not connect" banner on a working route confused users. Clear silently; the
-    // background exit refresh keeps filling the Tor window in.
     val snapshot = container.connectionController.snapshot.value
     val torRouteCarried =
         snapshot.state == ConnectionState.CONNECTED &&
@@ -142,12 +134,6 @@ private suspend fun HomeViewModel.failTorOperationIfStillActive(startedAt: Long)
     clearTorOperation()
 }
 
-// The Tor exit IP is display data (Tor window, map node, network-card TOR identity), not a
-// liveness gate — the runtime validates Tor sessions on Tor's own bootstrap. The post-connect
-// TOR_ROUTE refresh is a BOUNDED retry round, and a fresh circuit can start answering the exit
-// probe long after that round exhausts; giving up forever left the dashboard stuck without a Tor
-// exit for the whole session. This supervisor keeps re-probing quietly (exponential backoff capped
-// below) for as long as an engaged CONNECTED Tor route has no accepted exit yet.
 internal fun HomeViewModel.superviseTorExitBackgroundRefresh(
     snapshot: ConnectionSnapshot,
     torIpInfo: IpInfo?,
@@ -171,14 +157,9 @@ internal fun HomeViewModel.superviseTorExitBackgroundRefresh(
             var delayMs = HomeViewModel.TOR_EXIT_BACKGROUND_REFRESH_INITIAL_DELAY_MS
             while (true) {
                 delay(delayMs)
-                // Stay out of a foreground TOR_ROUTE round's way instead of doubling its probes.
                 if (ipInfoRefreshJob == null && postConnectTorRouteRefreshJob == null) {
                     val info = refreshTorExitInBackground()
                     if (info != null) {
-                        // A background attempt is intentionally silent while the network request is
-                        // in flight. Reopening LOOKING_UP before every retry made the terminal spin
-                        // forever after the one visible probe had already timed out. Promote only a
-                        // completed candidate into a fresh generation, then confirm it atomically.
                         val generation = beginTorIdentityProbe(retryAfterFailure = true)
                         if (publishTorRouteExit(info)) {
                             break
@@ -258,7 +239,6 @@ internal fun HomeViewModel.cancelTorIdentityProbe() {
 }
 
 internal suspend fun HomeViewModel.emitTorConnectedBanner(ipInfo: IpInfo) {
-    // Tor is country-only: exit geo comes from the offline geoip database, no city lookup.
     val country =
         ipInfo.countryName
             ?: ipInfo.countryCode

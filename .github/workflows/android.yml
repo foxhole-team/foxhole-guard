@@ -1,6 +1,21 @@
 name: android
 
 on:
+  push:
+    branches:
+      - dev
+  pull_request:
+    paths:
+      - ".github/**"
+      - "app/**"
+      - "config/**"
+      - "core/**"
+      - "gradle/**"
+      - "scripts/**"
+      - "third_party/**"
+      - "build.gradle.kts"
+      - "settings.gradle.kts"
+      - "gradle.properties"
   workflow_dispatch:
     inputs:
       foxcore_smoke_only:
@@ -13,14 +28,12 @@ on:
         required: false
         type: boolean
         default: false
-      release_candidate_only:
-        description: "Re-run security gates and build the signed release candidate"
-        required: false
-        type: boolean
-        default: false
 
 permissions:
   contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 concurrency:
   group: android-${{ github.ref }}
@@ -30,13 +43,11 @@ jobs:
   verify:
     name: build/unit/security verified
     runs-on: ubuntu-24.04
-    # A cold public checkout compiles FoxCore, i2pd and Tor transports from pinned source before
-    # the Android package is assembled. Keep enough headroom for GitHub's uncached network while
-    # retaining a hard upper bound for genuine hangs.
+    # A cold public checkout compiles FoxCore, i2pd and the Tor transports from source, so the timeout must clear GitHub's uncached network.
     timeout-minutes: 90
     steps:
       - name: checkout
-        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           submodules: recursive
           persist-credentials: false
@@ -60,40 +71,26 @@ jobs:
         run: scripts/run-osv-source-scan.sh
 
       - name: verify wrapper
-        if: >-
-          !inputs.foxcore_smoke_only &&
-          !inputs.security_scan_only &&
-          !inputs.release_candidate_only
+        if: github.event_name != 'workflow_dispatch' || (!inputs.foxcore_smoke_only && !inputs.security_scan_only)
         run: ./gradlew --no-daemon --console=plain --version
 
       - name: static analysis, lint, unit tests, and coverage
-        if: >-
-          !inputs.foxcore_smoke_only &&
-          !inputs.security_scan_only &&
-          !inputs.release_candidate_only
+        if: github.event_name != 'workflow_dispatch' || (!inputs.foxcore_smoke_only && !inputs.security_scan_only)
         run: ./gradlew --no-daemon --console=plain --stacktrace :app:detekt verifyDetektBaseline :app:lintDebug :app:lintRelease :app:lintVitalRelease :app:testDebugUnitTest jacocoDebugUnitTestReport jacocoDebugUnitTestCoverageVerification verifyReleaseBuildConfigDefaults
 
       - name: build debug APK
-        if: >-
-          !inputs.foxcore_smoke_only &&
-          !inputs.security_scan_only &&
-          !inputs.release_candidate_only
+        if: github.event_name != 'workflow_dispatch' || (!inputs.foxcore_smoke_only && !inputs.security_scan_only)
         run: ./gradlew --no-daemon --console=plain --stacktrace :app:assembleDebug
 
   release-candidate:
     name: signed release candidate
-    if: >-
-      github.event_name == 'workflow_dispatch' &&
-      github.ref == 'refs/heads/dev' &&
-      inputs.release_candidate_only
+    if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
     needs: verify
     runs-on: ubuntu-24.04
     timeout-minutes: 90
-    permissions:
-      contents: write
     steps:
       - name: checkout verified dev commit
-        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           submodules: recursive
           persist-credentials: false
@@ -152,11 +149,8 @@ jobs:
           version_code="$(scripts/package-release-candidate.sh published-code "$GITHUB_REPOSITORY")"
           echo "version_code=$version_code" >> "$GITHUB_OUTPUT"
 
-      # This is the only APK assembly. main later downloads and publishes these exact,
-      # immutable bytes after proving that its Git tree is identical to this dev commit.
-      # AGP cannot build ABI-split APKs and an AAB in one invocation; verify the public bundle in a
-      # second, non-split configuration so both release shapes are checked without contaminating
-      # each other's resource-shrinker outputs.
+      # The only APK assembly; main republishes these exact bytes.
+      # AGP cannot build ABI-split APKs and an AAB in one invocation, so the bundle is verified in a second, non-split configuration.
       - name: build and verify signed candidate
         run: |
           ./gradlew \
@@ -194,108 +188,23 @@ jobs:
               "$GITHUB_SHA" \
               "$source_tree"
 
-      # Actions artifact storage can be exhausted independently of a valid build. Stage the six
-      # verified public files in a private draft release instead. Draft assets are hidden even
-      # after the repository becomes public, and main deletes this staging release after it has
-      # published and byte-compared the final immutable release.
-      - name: stage immutable candidate
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          candidate_dir="$RUNNER_TEMP/foxhole-release-candidate"
-          staging_tag="candidate-$GITHUB_SHA"
-          assets=()
-          while IFS= read -r asset; do
-            assets+=("$asset")
-          done < <(find "$candidate_dir" -mindepth 1 -maxdepth 1 -type f | LC_ALL=C sort)
-          [[ ${#assets[@]} -eq 6 ]] || {
-            echo "Expected exactly six verified candidate files." >&2
-            exit 1
-          }
+      - name: upload immutable candidate
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: foxhole-app-${{ github.sha }}
+          path: ${{ runner.temp }}/foxhole-release-candidate/*
+          if-no-files-found: error
+          retention-days: 3
+          compression-level: 0
 
-          if gh api "repos/$GITHUB_REPOSITORY/releases/tags/$staging_tag" >/dev/null 2>&1; then
-            echo "Refusing to replace a published release at $staging_tag." >&2
-            exit 1
-          fi
-          releases_json="$RUNNER_TEMP/releases-before-staging.json"
-          gh api -X GET "repos/$GITHUB_REPOSITORY/releases" -f per_page=100 > "$releases_json"
-          existing_ids=()
-          while IFS= read -r release_id; do
-            existing_ids+=("$release_id")
-          done < <(
-            jq -r --arg tag "$staging_tag" \
-              '.[] | select(.draft == true and .tag_name == $tag) | .id' \
-              "$releases_json"
-          )
-          (( ${#existing_ids[@]} <= 1 )) || {
-            echo "Multiple candidate drafts exist for $staging_tag." >&2
-            exit 1
-          }
-          if (( ${#existing_ids[@]} == 1 )); then
-            gh api -X DELETE "repos/$GITHUB_REPOSITORY/releases/${existing_ids[0]}"
-          fi
-
-          gh release create "$staging_tag" \
-            "${assets[@]}" \
-            --draft \
-            --notes "Immutable candidate for $GITHUB_SHA. Published only by the verified main workflow." \
-            --target "$GITHUB_SHA" \
-            --title "FoxHole Guard candidate $GITHUB_SHA"
-
-          releases_json="$RUNNER_TEMP/releases-after-staging.json"
-          gh api -X GET "repos/$GITHUB_REPOSITORY/releases" -f per_page=100 > "$releases_json"
-          staging_release_id="$(
-            jq -er \
-              --arg tag "$staging_tag" \
-              --arg sha "$GITHUB_SHA" '
-                [.[] | select(
-                  .draft == true and
-                  .tag_name == $tag and
-                  .target_commitish == $sha
-                )] |
-                if length == 1 then .[0].id else error("candidate draft is not unique") end
-              ' "$releases_json"
-          )"
-          [[ "$staging_release_id" =~ ^[1-9][0-9]*$ ]] || {
-            echo "Candidate staging release ID is invalid." >&2
-            exit 1
-          }
-          asset_count="$(
-            jq -r --argjson id "$staging_release_id" \
-              '.[] | select(.id == $id) | .assets | length' \
-              "$releases_json"
-          )"
-          [[ "$asset_count" == 6 ]] || {
-            echo "Candidate staging release must contain exactly six assets." >&2
-            exit 1
-          }
-
-          staged_dir="$RUNNER_TEMP/staged-release-candidate"
-          mkdir -p "$staged_dir"
-          for source in "${assets[@]}"; do
-            staged="$staged_dir/$(basename "$source")"
-            asset_url="$(
-              jq -er \
-                --argjson id "$staging_release_id" \
-                --arg name "$(basename "$source")" '
-                  [.[] | select(.id == $id) | .assets[] | select(.name == $name)] |
-                  if length == 1 then .[0].url else error("candidate asset is not unique") end
-                ' "$releases_json"
-            )"
-            gh api -H 'Accept: application/octet-stream' "$asset_url" > "$staged"
-            [[ -s "$staged" ]] || {
-              echo "Staging release is missing or has an empty $(basename "$source")." >&2
-              exit 1
-            }
-            cmp --silent "$source" "$staged" || {
-              echo "Staged bytes differ for $(basename "$source")." >&2
-              exit 1
-            }
-          done
-
-          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$staging_tag" >/dev/null 2>&1; then
-            echo "A draft candidate must not create a public Git ref." >&2
-            exit 1
-          fi
+      # Mapping and native symbols stay authenticated Actions artifacts, never attached to the public release.
+      - name: retain private diagnostics
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: foxhole-private-diagnostics-${{ github.sha }}
+          path: |
+            app/build/outputs/mapping/release/mapping.txt
+            app/build/outputs/mapping/publicRelease/mapping.txt
+            app/build/outputs/native-debug-symbols/publicRelease/publicRelease-native-symbols.zip
+          if-no-files-found: error
+          retention-days: 3

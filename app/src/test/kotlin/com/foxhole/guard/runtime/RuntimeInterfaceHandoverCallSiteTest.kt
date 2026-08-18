@@ -5,7 +5,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
 
-/** Guards the Android service call sites for the behaviour-tested handover seam. */
 class RuntimeInterfaceHandoverCallSiteTest {
     private val connectSource =
         File("src/main/kotlin/com/foxhole/guard/runtime/FoxholeVpnServiceConnectSupport.kt").readText()
@@ -68,8 +67,6 @@ class RuntimeInterfaceHandoverCallSiteTest {
 
     @Test
     fun `neither switch path stops a runtime before the replacement interface exists`() {
-        // These are the two calls that close a live TUN. Both mode-switch paths must reach them
-        // only through the handover, which runs them after the incoming establish.
         listOf("connect" to connectSource, "local guard" to localGuardSource).forEach { (path, source) ->
             val code = source.withoutComments()
             assertEquals("$path must not stop a runtime directly", 0, code.occurrencesOf("stopRuntimeFailClosed("))
@@ -141,7 +138,6 @@ class RuntimeInterfaceHandoverCallSiteTest {
 
     private fun String.occurrencesOf(needle: String): Int = split(needle).size - 1
 
-    /** These files explain the handover in prose; only the code may be asserted against. */
     private fun String.withoutComments(): String =
         lineSequence()
             .filterNot { line -> line.trimStart().startsWith("//") || line.trimStart().startsWith("*") }

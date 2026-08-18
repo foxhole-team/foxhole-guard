@@ -19,46 +19,18 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 
-/**
- * Live web apps on hardware: a web app created on a running tunnel, loaded in the production
- * frame, and shown to have left through that tunnel.
- *
- * The feature has two device-only halves and neither had coverage: the metadata fetch that
- * turns a URL into an app, and the WebView that renders it. The WebView half is the one that
- * cannot be reasoned about off-device at all — it has its own network stack inside the app
- * process, and whether that stack follows the VPN split is an Android runtime property, not a
- * code property.
- *
- * **So the assertion is the address the site sees, not the connection state.** The test reads
- * the client IP from the configured echo endpoint twice: once directly with the tunnel down,
- * and once out of the production `buildWebAppWebView` with the tunnel up. Equal addresses fail
- * the test — that is a WebView rendering the user's web app straight onto the underlying
- * network while every indicator in the app says the tunnel is carrying it, which is precisely
- * the leak this feature exists to prevent.
- *
- * One further fact is asserted around it: the production push watchdog completes a real pass
- * over the tunnel (`lastPolledAtMs` moves, through the same WebView path it uses in the field).
- *
- * **What this does not prove:** which route rule carried the packets. The observable is the
- * egress identity, so a configuration that tunnels the WebView through the wrong outbound —
- * but still a tunnelled one — would pass. Proving the rule itself needs per-flow attribution
- * the app does not expose to a test.
- *
- * Manual gate: `-Pandroid.testInstrumentationRunnerArguments.foxhole.liveWebApps=1`. Needs a
- * subscription (same inputs as the other live suites) and, optionally,
- * `foxhole.webAppUrl=<https url that echoes the caller's IP>`.
- */
 @RunWith(AndroidJUnit4::class)
 internal class LiveWebAppsAndroidTest : ProfileRuntimeSessionAndroidTestSupport() {
     @Test
     fun manualWebAppLoadsThroughTheTunnel() {
-        if (InstrumentationRegistry.getArguments().getString("foxhole.liveWebApps") != "1") {
-            Log.d(TEST_TAG, "live web apps skipped")
-            return
-        }
+        assumeTrue(
+            "live web apps skipped: pass -e foxhole.liveWebApps 1 to run it",
+            InstrumentationRegistry.getArguments().getString("foxhole.liveWebApps") == "1",
+        )
         runBlocking {
             val app = ApplicationProvider.getApplicationContext<FoxholeApplication>()
             shell("pm grant ${app.packageName} android.permission.POST_NOTIFICATIONS")
@@ -80,8 +52,6 @@ internal class LiveWebAppsAndroidTest : ProfileRuntimeSessionAndroidTestSupport(
                 clearProfiles(app)
                 baselineRuntimeSettings(app)
 
-                // Leg one: who the site thinks we are with no tunnel. Everything below is a
-                // comparison against this string, so it is taken before anything is started.
                 val directIdentity =
                     withContext(Dispatchers.IO) {
                         overlayHttpGet(url = webAppUrl, timeoutMs = DIRECT_FETCH_TIMEOUT_MS)
@@ -92,9 +62,6 @@ internal class LiveWebAppsAndroidTest : ProfileRuntimeSessionAndroidTestSupport(
                     IP_LITERAL.containsMatchIn(directIdentity),
                 )
 
-                // Web apps are configured BEFORE connecting on purpose: the runtime signature the
-                // web-apps transport gate compares against is derived from settings, so flipping
-                // them under a live session would leave the gate permanently closed.
                 settings.updateWebAppsEnabled(true)
                 settings.updateWebAppsPushService(true)
 
@@ -116,8 +83,6 @@ internal class LiveWebAppsAndroidTest : ProfileRuntimeSessionAndroidTestSupport(
                     app.container.connectionController.isConnectedRuntimeCurrent(),
                 )
 
-                // Creating the app is itself an on-tunnel network operation: the preview fetch
-                // is the app's own bounded metadata client, and it has to reach the site.
                 val preview = app.container.webAppsRepository.preview(webAppUrl)
                 assertTrue(
                     "the web app preview fetch failed on a live tunnel: ${preview.exceptionOrNull()}",
@@ -129,7 +94,6 @@ internal class LiveWebAppsAndroidTest : ProfileRuntimeSessionAndroidTestSupport(
                 assertTrue("the created web app was not persisted", stored != null)
                 assertEquals("the stored web app points at a different URL", preview.getOrThrow().url, stored?.url)
 
-                // Leg two: the production frame's WebView, on the same endpoint.
                 val frameIdentity = loadWebAppIdentity(app, id, stored!!.url)
                 Log.d(TEST_TAG, "liveWebApps frameIdentity=$frameIdentity")
                 assertTrue(
@@ -140,14 +104,12 @@ internal class LiveWebAppsAndroidTest : ProfileRuntimeSessionAndroidTestSupport(
                     "the web app frame did not render an IP address: ${frameIdentity.take(120)}",
                     IP_LITERAL.containsMatchIn(frameIdentity),
                 )
-                // The whole point: same address means the WebView went out beside the tunnel.
                 assertNotEquals(
                     "the web app frame kept the untunnelled exit address: its traffic bypassed the tunnel",
                     directIdentity,
                     frameIdentity,
                 )
 
-                // The production push watchdog, on the same tunnel, through its own WebView.
                 app.container.webAppsWatchdog.pollOnce()
                 assertTrue(
                     "the web apps watchdog never completed a pass over the tunnel",
@@ -167,15 +129,6 @@ internal class LiveWebAppsAndroidTest : ProfileRuntimeSessionAndroidTestSupport(
         }
     }
 
-    /**
-     * Loads [url] in the production web app frame and returns what the page renders.
-     *
-     * The WebView is built by the shipped factory rather than a test-local one, so the frame's
-     * own settings (mixed content off, file access off, the same-site navigation clamp) are the
-     * ones under test. Its `WebViewClient` is left untouched — the page text is polled instead
-     * of waiting on `onPageFinished`, because replacing the client to observe the load would
-     * replace the policy this test is here to exercise.
-     */
     private suspend fun loadWebAppIdentity(
         app: FoxholeApplication,
         appId: Long,
@@ -186,10 +139,6 @@ internal class LiveWebAppsAndroidTest : ProfileRuntimeSessionAndroidTestSupport(
         var created: WebView? = null
         instrumentation.runOnMainSync {
             created =
-                // No proxy credentials: this test drives the production WebView over the device's
-                // own network to prove the navigation lock and the external-host block, neither of
-                // which involves the proxy leg. Passing null keeps it exercising the same builder
-                // the app uses rather than a test-only variant.
                 buildWebAppWebView(app, appId, url, proxyCredentials = null) { host -> blocked += host }
                     .also { view -> view.loadUrl(url) }
         }
@@ -218,7 +167,6 @@ internal class LiveWebAppsAndroidTest : ProfileRuntimeSessionAndroidTestSupport(
         return decodeJavascriptString(raw)
     }
 
-    /** `evaluateJavascript` hands back a JSON literal, so `"1.2.3.4\n"` has to be unwrapped. */
     private fun decodeJavascriptString(raw: String): String {
         if (raw.isEmpty() || raw == "null") {
             return ""
@@ -246,11 +194,6 @@ internal class LiveWebAppsAndroidTest : ProfileRuntimeSessionAndroidTestSupport(
             ?: DEFAULT_WEB_APP_URL
 
     private companion object {
-        /**
-         * A plain-text client-IP echo, already one of the app's own IP-info fallbacks. HTTPS and
-         * a dotted host are both required by the web app origin policy, so an endpoint that is
-         * neither cannot be configured as a web app at all.
-         */
         const val DEFAULT_WEB_APP_URL = "https://api.ipify.org"
         const val DIRECT_FETCH_TIMEOUT_MS = 30_000
         const val WEB_VIEW_LOAD_TIMEOUT_MS = 60_000L

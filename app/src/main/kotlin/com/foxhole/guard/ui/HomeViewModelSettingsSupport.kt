@@ -69,10 +69,6 @@ internal fun HomeViewModel.deleteProfile(profileId: Long) {
     }
 }
 
-/**
- * Per-protocol on/off toggle from the smart-profile management sheet (N1). Persists the enabled flag
- * in the profile secret; the profiles flow re-emits so the sheet reflects the change immediately.
- */
 internal fun HomeViewModel.setSmartProfileProtocolEnabled(
     profileId: Long,
     optionId: String,
@@ -295,11 +291,6 @@ private fun HomeViewModel.preflightAndApplyDnsRuleSetSettings(value: DnsSettings
     }
 }
 
-/**
- * Commits the enabled flag only after the downloaded data set passed both signature/persistence
- * checks and the runtime asset verifier. The write is awaited in the same coroutine as the
- * preflight, so a success line can never race ahead of persistence or leave a missing asset behind.
- */
 private suspend fun HomeViewModel.applyVerifiedDnsSettings(
     value: DnsSettings,
 ): Boolean =
@@ -312,9 +303,7 @@ private suspend fun HomeViewModel.applyVerifiedDnsSettings(
                 settings.dns.autoUpdateFilters &&
                 settings.dns.dnsRuleSetFilteringEnabled(),
         )
-        // Even an UP_TO_DATE source is a runtime change here: filtering itself just became
-        // enabled, so request the same reload as a freshly downloaded data set.
-        reloadRuntimeAfterDnsRuleSetRefreshIfNeeded(DnsFilterUpdateStatus.UPDATED)
+        reloadRuntimeAfterDnsRuleSetEnableIfNeeded()
         true
     } catch (error: CancellationException) {
         throw error
@@ -326,9 +315,6 @@ private suspend fun HomeViewModel.applyVerifiedDnsSettings(
         false
     }
 
-// Re-enable path when a verified list is already on disk: enable immediately (no download modal),
-// then probe the update source. A newer list is auto-installed when auto-update is on, or surfaced
-// as the "update available" prompt when it is off; an up-to-date or unreachable source is silent.
 internal fun HomeViewModel.onDnsFilterReEnabled(value: DnsSettings) {
     dnsFilterUpdateAvailableMutable.value = false
     updateDnsSettingsAndMaybeReconnect(value)
@@ -348,7 +334,6 @@ internal fun HomeViewModel.onDnsFilterReEnabled(value: DnsSettings) {
     }
 }
 
-// Confirm action of the "update available" prompt: download the newer list and reload the runtime.
 internal fun HomeViewModel.onDnsFilterUpdateNow() {
     onDnsFilterManualRefresh()
 }
@@ -365,9 +350,6 @@ private fun HomeViewModel.refreshDnsFilterInBackground() {
         dnsFilterRefreshInProgressMutable.value = true
         try {
             runCatching { container.dnsFilterUpdateRepository.refreshNow(requireAutoEnabled = false) }
-                .onSuccess { result ->
-                    reloadRuntimeAfterDnsRuleSetRefreshIfNeeded(result.status)
-                }
                 .onFailure { error ->
                     container.diagnosticsLogger.recordFailure(
                         "dns",
@@ -393,9 +375,6 @@ internal fun HomeViewModel.onDnsFilterEnablePreflight(
             dnsFilterRefreshInProgressMutable.value = true
             val verifiedRuleSetReady =
                 try {
-                    // Hard upper bound so the interactive "enable + load" never hangs the dialog at 92% if
-                    // the source is unreachable/slow (OkHttp's call timeout does not cover host resolution).
-                    // On timeout the dialog resolves to the ERROR state instead of spinning forever.
                     withTimeoutOrNull(DNS_FILTER_PREFLIGHT_TIMEOUT_MS) {
                         refreshVerifiedDnsRuleSet(value).isSuccessfulDnsRefresh()
                     } ?: false
@@ -406,9 +385,6 @@ internal fun HomeViewModel.onDnsFilterEnablePreflight(
         }
 }
 
-// Lets the enable-DNS-filter dialog's Cancel button actually abort an in-flight download instead of
-// only hiding the dialog while dnsFilterRefreshInProgressMutable stays stuck true in the background
-// (which would silently block a retry until the original attempt's 30s timeout elapsed).
 internal fun HomeViewModel.onDnsFilterEnablePreflightCancelled() {
     dnsFilterEnablePreflightJob?.cancel()
     dnsFilterEnablePreflightJob = null
@@ -417,9 +393,6 @@ internal fun HomeViewModel.onDnsFilterEnablePreflightCancelled() {
 
 private const val DNS_FILTER_PREFLIGHT_TIMEOUT_MS = 30_000L
 
-// Enabling is one truthful transaction: the FoxHole DB request must succeed (or prove that the
-// installed commit is current), and the resulting local rule set must pass the runtime verifier.
-// Production carries no DNS data-set fallback: the verified FoxHole DB bundle is mandatory.
 private suspend fun HomeViewModel.refreshVerifiedDnsRuleSet(value: DnsSettings): FoxholeUpdatePhase {
     val updateResult =
         runCatching {
@@ -446,9 +419,6 @@ private suspend fun HomeViewModel.verifiedDnsRefreshPhase(status: DnsFilterUpdat
             .getOrDefault(false)
     val terminalPhase = dnsFilterVerifiedTerminalPhase(status, verifiedRuleSetReady)
     if (!terminalPhase.isSuccessfulDnsRefresh()) return terminalPhase
-    // UP_TO_DATE means the signed remote commit equals the installed one. Once the local runtime
-    // verifier also accepts it, persist that fact so Updates cannot keep claiming "download
-    // required" after the terminal has truthfully reported a current data set.
     if (status == DnsFilterUpdateStatus.UP_TO_DATE) {
         container.settingsRepository.markDnsFiltersUpdated()
     }
@@ -498,7 +468,6 @@ private suspend fun HomeViewModel.runDnsFilterManualRefreshRequest(): FoxholeUpd
             when (val terminalPhase = verifiedDnsRefreshPhase(result.status)) {
                 FoxholeUpdatePhase.DONE -> {
                     dnsFilterUpdateAvailableMutable.value = false
-                    reloadRuntimeAfterDnsRuleSetRefreshIfNeeded(result.status)
                     emitSuccess(getApplication<Application>().getString(R.string.dns_filter_refresh_complete))
                     terminalPhase
                 }
@@ -537,8 +506,8 @@ internal fun HomeViewModel.onDnsFilterManualRefreshCancel() {
 private fun FoxholeUpdatePhase.isSuccessfulDnsRefresh(): Boolean =
     this == FoxholeUpdatePhase.DONE || this == FoxholeUpdatePhase.NO_UPDATE
 
-private suspend fun HomeViewModel.reloadRuntimeAfterDnsRuleSetRefreshIfNeeded(status: DnsFilterUpdateStatus) {
-    if (!shouldReloadRuntimeAfterDnsRuleSetRefresh(status, container.settingsRepository.current().dns)) {
+private suspend fun HomeViewModel.reloadRuntimeAfterDnsRuleSetEnableIfNeeded() {
+    if (!shouldReloadRuntimeAfterDnsRuleSetEnable(container.settingsRepository.current().dns)) {
         return
     }
     val snapshot = container.connectionController.snapshot.value

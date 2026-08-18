@@ -1,6 +1,6 @@
 Categories:
-  - VPN & Proxy
   - Security
+  - VPN & Proxy
 License: GPL-3.0-or-later
 AuthorName: FoxHole Team
 SourceCode: https://github.com/foxhole-team/foxhole-guard
@@ -53,35 +53,86 @@ Description: |
 RepoType: git
 Repo: https://github.com/foxhole-team/foxhole-guard.git
 
-# The Gradle build refuses to configure without the FoxHole Core sources beside the
-# checkout (app/build.gradle.kts requires <core>/Cargo.toml) and compiles the
-# .so itself via <core>/scripts/android-build.sh. F-Droid runs Gradle offline,
-# so the Rust toolchain and every crate must be fetched before that step. This
-# recipe has NOT been validated on the F-Droid buildserver — it is unusable
-# until the sources are public, and must be run through `fdroid build` once the
-# repositories exist.
 Builds:
-  - versionName: '0.0.1'
+  - versionName: 0.0.1
     versionCode: 89
     commit: v0.0.1
     submodules: true
     sudo:
-      - curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs -o /tmp/rustup.sh
-      - sh /tmp/rustup.sh -y --default-toolchain 1.97.1 --profile minimal
-      - /root/.cargo/bin/cargo install cargo-ndk --version 4.1.2 --locked
-    prebuild:
-      # Pinned in config/foxcore-revision.txt; the path is where build.gradle.kts
-      # looks when FOXCORE_SOURCE_ROOT is unset.
-      - git clone https://github.com/foxhole-team/foxhole-core.git ../foxhole-core
-      - git -C ../foxhole-core checkout "$(cat config/foxcore-revision.txt)"
-      - cargo fetch --locked --manifest-path ../foxhole-core/Cargo.toml
+      - apt-get update
+      - apt-get install -y --no-install-recommends build-essential ca-certificates
+        cmake curl git ninja-build perl pkg-config rustup
     gradle:
       - yes
+    output: app/build/outputs/apk/release/app-release-unsigned.apk
+    prebuild:
+      - git clone https://github.com/foxhole-team/foxhole-core.git ../foxhole-core
+      - git -C ../foxhole-core checkout "$(cat config/foxcore-revision.txt)"
+      - rustup set profile minimal
+      - rustup default 1.97.1
+      - rustup component add clippy rustfmt
+      - rustup target add aarch64-linux-android
+      - cargo install cargo-ndk --version 4.1.2 --locked
+      - (cd ../foxhole-core && cargo fetch --locked)
+      - scripts/fetch-native-deps.sh
+    ndk: 29.0.14206865
     gradleprops:
       - foxhole.updateChannel=fdroid
-    output: app/build/outputs/apk/release/app-release-unsigned.apk
+      - foxhole.nativeOffline=true
 
-AutoUpdateMode: None
-UpdateCheckMode: None
-CurrentVersion: '0.0.1'
-CurrentVersionCode: 89
+  - versionName: 0.0.2
+    versionCode: 90
+    commit: v0.0.2
+    submodules: true
+    sudo:
+      - apt-get update
+      - apt-get install -y --no-install-recommends build-essential ca-certificates
+        cmake curl git ninja-build perl pkg-config rustup
+    gradle:
+      - yes
+    output: app/build/outputs/apk/release/app-release-unsigned.apk
+    prebuild:
+      - git clone https://github.com/foxhole-team/foxhole-core.git ../foxhole-core
+      - git -C ../foxhole-core checkout "$(cat config/foxcore-revision.txt)"
+      - rustup set profile minimal
+      - rustup default 1.97.1
+      - rustup component add clippy rustfmt
+      - rustup target add aarch64-linux-android
+      - cargo install cargo-ndk --version 4.1.2 --locked
+      - (cd ../foxhole-core && cargo fetch --locked)
+      - scripts/fetch-native-deps.sh
+    ndk: 29.0.14206865
+    gradleprops:
+      - foxhole.updateChannel=fdroid
+      - foxhole.nativeOffline=true
+
+MaintainerNotes: |-
+  Every network fetch happens in sudo:/prebuild:; the Gradle phase runs with
+  foxhole.nativeOffline=true, which makes scripts/build-i2pd.sh and
+  scripts/build-tor-transports.sh abort instead of downloading. prebuild: seeds
+  three caches: Rust (cargo fetch --locked against FoxCore's Cargo.lock) and, via
+  scripts/fetch-native-deps.sh, the OpenSSL/Boost source tarballs, the pinned Go
+  toolchain and the lyrebird/conjure sources plus their Go module cache. Pins and
+  sha256 digests live in scripts/native-deps.sh; the Go modules are verified by
+  each upstream's go.sum, the transport sources by commit id.
+  cargo fetch runs from inside ../foxhole-core on purpose: rustup resolves that
+  workspace's rust-toolchain.toml there, so the toolchain and its components are
+  materialised in prebuild rather than downloaded mid-Gradle.
+  FoxHole Core is a separate pinned source workspace; the recipe checks out the
+  revision named by config/foxcore-revision.txt in the tagged tree, so a release
+  bump needs no recipe edit. ndk: matches the ndkVersion pinned in
+  app/build.gradle.kts and required by FoxCore's scripts/android-build.sh.
+  foxhole.updateFloorVersionCode is deliberately unset. It means "the versionCode
+  that supersedes this build", and F-Droid builds an entry once, while nothing
+  supersedes it yet, and never rebuilds a published versionCode - so for the
+  newest entry there is no correct value, and for an older one it can no longer
+  be stamped. foxhole.updateSupportedUntilEpochDay is stampable here, but its
+  value is a per-release support decision nothing in the tree carries; when it is
+  used, note that AutoUpdateMode copies gradleprops verbatim, so a new entry must
+  get a fresh horizon rather than inherit the previous one.
+  The build is arm64-v8a only, matching the public upstream release.
+
+AutoUpdateMode: Version v%v
+UpdateCheckMode: Tags ^v[0-9].*$
+CurrentVersion: 0.0.2
+CurrentVersionCode: 90

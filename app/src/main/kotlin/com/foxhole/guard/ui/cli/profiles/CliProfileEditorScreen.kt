@@ -15,6 +15,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -27,6 +28,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -37,20 +39,15 @@ import com.foxhole.guard.ui.addProfileProtocolOption
 import com.foxhole.guard.ui.cli.CliSpacing
 import com.foxhole.guard.ui.cli.CliType
 import com.foxhole.guard.ui.cli.LocalCliColors
+import com.foxhole.guard.ui.cli.LocalCliPanelAppearance
+import com.foxhole.guard.ui.cli.LocalCliType
 import com.foxhole.guard.ui.cli.components.CliButton
 import com.foxhole.guard.ui.cli.components.CliElbowLine
 import com.foxhole.guard.ui.cli.components.CliInputRow
 import com.foxhole.guard.ui.cli.components.CliScreenHeader
+import com.foxhole.guard.ui.cli.components.cliModalSurfaceColor
 import kotlinx.serialization.json.JsonObject
 
-/**
- * The structured profile editor (replaces the old whole-config text dialog): an editable profile
- * name on top, then one collapsible form per protocol parsed out of the profile's configs. Every
- * form edit is applied to the parsed config tree in place, so `SAVE` writes back the very same
- * document with only the touched leaves changed — infra outbounds, dns/route/inbounds and unknown
- * keys survive verbatim. Enable/disable and add/remove change the profile's protocol *set* and
- * persist immediately (pending field edits are flushed first); the rest waits for `SAVE`.
- */
 @Composable
 internal fun CliProfileEditorScreen(
     viewModel: HomeViewModel,
@@ -96,7 +93,12 @@ internal fun CliProfileEditorScreen(
                 },
             )
         } else {
-            Column(modifier = Modifier.fillMaxSize().background(colors.bg).padding(CliSpacing.md)) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(cliModalSurfaceColor(LocalCliPanelAppearance.current, colors.panel))
+                    .padding(CliSpacing.md),
+            ) {
                 CliProfileEditorHeader(
                     name = name,
                     onNameChange = { name = it },
@@ -150,8 +152,6 @@ private fun CliProfileEditorHeader(
         ),
         icon = R.drawable.pix_edit,
     )
-    // The name is part of the same dirty editor transaction as protocol fields. It is never
-    // persisted merely because the IME closed.
     CliInputRow(
         prompt = stringResource(R.string.cli_prof_rename_prompt),
         value = name,
@@ -159,7 +159,6 @@ private fun CliProfileEditorHeader(
     )
 }
 
-/** Adds one blank protocol of [type] using the first slot's config as the infra template. */
 private suspend fun HomeViewModel.addBlankProtocolOption(
     profileId: Long,
     type: String,
@@ -190,21 +189,16 @@ private fun CliProfileEditorList(
         return
     }
     LazyColumn(modifier = modifier) {
-        items(slots.protocolRefs(), key = { "${it.slotIndex}:${it.outboundIndex}" }) { ref ->
+        items(slots.protocolRefs(), key = { "${it.slotIndex}:${it.endpoint}:${it.entryIndex}" }) { ref ->
             val slot = slots[ref.slotIndex]
-            val optionId = slot.optionId
             CliProfileEditorProtocolCard(
-                outbound = slot.outboundAt(ref.outboundIndex),
+                outbound = slot.entryAt(ref),
                 slotLabel = slot.label,
-                enabled = profile.protocolEnabled(optionId),
+                enabled = profile.protocolEnabled(slot.optionId),
                 expanded = controller.expanded == ref,
                 onToggleExpanded = { controller.toggleExpanded(ref) },
                 onOutboundChange = { outbound -> controller.changeOutbound(ref, outbound) },
                 onDelete = { controller.deleteProtocol(ref) },
-                canToggleEnabled = optionId != null && profile.protocolOptions.size > 1,
-                onToggleEnabled = {
-                    optionId?.let { id -> controller.toggleEnabled(id, !profile.protocolEnabled(id)) }
-                },
                 modifier = Modifier.padding(bottom = CliSpacing.sm),
             )
         }
@@ -232,44 +226,60 @@ private fun CliProfileEditorFooter(
     onCancel: () -> Unit,
 ) {
     val colors = LocalCliColors.current
-    if (dirty) {
-        CliElbowLine(text = stringResource(R.string.cli_prof_edit_dirty), color = colors.warn)
-        CliButton(
-            label = stringResource(R.string.cli_prof_config_save),
-            color = colors.ok,
-            iconContent = { tint -> CliDisketteIcon(tint = tint) },
-            enabled = !busy,
-            onClick = onSave,
+    CliEditorControlTypography {
+        if (dirty) {
+            CliElbowLine(text = stringResource(R.string.cli_prof_edit_dirty), color = colors.warn)
+            CliButton(
+                label = stringResource(R.string.cli_prof_config_save_action),
+                color = colors.ok,
+                iconContent = { tint -> CliDisketteIcon(tint = tint) },
+                enabled = !busy,
+                onClick = onSave,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Spacer(modifier = Modifier.height(CliSpacing.sm))
+        }
+        Row(
             modifier = Modifier.fillMaxWidth(),
-        )
-        Spacer(modifier = Modifier.height(CliSpacing.sm))
-    }
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(CliSpacing.sm),
-    ) {
-        CliButton(
-            label = stringResource(R.string.cli_common_no_cancel),
-            color = colors.err,
-            dashed = true,
-            enabled = !busy,
-            dimWhenDisabled = false,
-            onClick = onCancel,
-            modifier = Modifier.weight(0.8f),
-        )
-        CliButton(
-            label = stringResource(R.string.cli_prof_edit_raw),
-            color = colors.accent,
-            icon = R.drawable.pix_edit,
-            enabled = !busy,
-            dimWhenDisabled = false,
-            onClick = onOpenManual,
-            modifier = Modifier.weight(1.4f),
-        )
+            horizontalArrangement = Arrangement.spacedBy(CliSpacing.sm),
+        ) {
+            CliButton(
+                label = stringResource(R.string.cli_common_no_cancel),
+                color = colors.err,
+                dashed = true,
+                enabled = !busy,
+                dimWhenDisabled = false,
+                onClick = onCancel,
+                modifier = Modifier.weight(EDITOR_CANCEL_WEIGHT),
+            )
+            CliButton(
+                label = stringResource(R.string.cli_prof_edit_raw),
+                color = colors.accent,
+                icon = R.drawable.pix_edit,
+                enabled = !busy,
+                dimWhenDisabled = false,
+                onClick = onOpenManual,
+                modifier = Modifier.weight(EDITOR_PHRASE_WEIGHT),
+            )
+        }
     }
 }
 
-/** Monochrome 16×16 floppy glyph drawn on the same integer grid as the bundled pixel pack. */
+@Composable
+internal fun CliEditorControlTypography(content: @Composable () -> Unit) {
+    val type = LocalCliType.current
+    val scoped = remember(type) { type.copy(button = type.button.scaledBy(EDITOR_BUTTON_STEP_RATIO)) }
+    CompositionLocalProvider(LocalCliType provides scoped, content = content)
+}
+
+internal fun TextStyle.scaledBy(ratio: Float): TextStyle =
+    copy(fontSize = fontSize * ratio, lineHeight = lineHeight * ratio)
+
+private const val EDITOR_BUTTON_STEP_RATIO = 0.82f
+
+private const val EDITOR_CANCEL_WEIGHT = 1f
+private const val EDITOR_PHRASE_WEIGHT = 2f
+
 @Suppress("MagicNumber")
 @Composable
 internal fun CliDisketteIcon(tint: Color) {

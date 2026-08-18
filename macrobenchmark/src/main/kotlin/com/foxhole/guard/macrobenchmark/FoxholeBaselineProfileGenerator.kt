@@ -54,9 +54,6 @@ class FoxholeBaselineProfileGenerator {
                 detailTag = "statistics_settings_screen",
                 labels = listOf("Statistics", "Статистика"),
             )
-            // The Security and Application screens are the heaviest detail screens to compose on
-            // first navigation; profiling them here AOT-compiles their composables so the release
-            // first-open does not run interpreted (which showed up as the worst transition frames).
             openSettingsDetail(
                 rowTag = "settings_security_action",
                 detailTag = "security_settings_screen",
@@ -67,8 +64,6 @@ class FoxholeBaselineProfileGenerator {
                 detailTag = "application_settings_screen",
                 labels = listOf("App settings", "Настройки приложения"),
             )
-            // The privacy-route row only exists when TOR or I2P is enabled (both default off), so
-            // it is optional: a default-state device simply skips it instead of failing the run.
             openSettingsDetail(
                 rowTag = "settings_privacy_route_action",
                 detailTag = "privacy_route_settings_screen",
@@ -103,9 +98,6 @@ class FoxholeBaselineProfileGenerator {
         optional: Boolean = false,
     ) {
         openSettingsHome()
-        // The settings LazyColumn keeps its scroll offset across detail push/pop, so a run that
-        // scrolled down to reach one row would miss a later row that sits above it. Start every
-        // search from the top.
         resetSettingsScrollToTop()
         var row = findByTestTag(rowTag) ?: findByAnyText(labels)
         var findAttempts = 0
@@ -115,8 +107,6 @@ class FoxholeBaselineProfileGenerator {
             findAttempts++
         }
         if (row == null) {
-            // Optional rows (privacy-route only appears with TOR/I2P on) are skipped silently;
-            // a mandatory missing row aborts loudly.
             if (optional) {
                 resetSettingsScrollToTop()
                 return
@@ -134,9 +124,6 @@ class FoxholeBaselineProfileGenerator {
             }
             clickCenter(refreshed)
         }
-        // Only assert the round trip if the detail screen actually opened; a coordinate tap that
-        // never left settings home would otherwise pass a vacuous "returned home" check (some
-        // labels, e.g. "DNS", are visible on the settings home list too).
         val detailOpened = waitForTestTag(detailTag) || waitForAnyText(labels.filter { it != "DNS" })
         if (!detailOpened) {
             if (optional) {
@@ -152,7 +139,6 @@ class FoxholeBaselineProfileGenerator {
         }
     }
 
-    /** Dismiss the once-per-version alpha/test-build sheet if it is covering the dashboard. */
     private fun dismissAlphaNoticeIfPresent() {
         if (!waitForTestTag("alpha_notice_sheet") && findByAnyText(ALPHA_NOTICE_LABELS) == null) {
             return
@@ -235,8 +221,6 @@ class FoxholeBaselineProfileGenerator {
             }
             device.waitForIdle()
         }
-        // Fail loud: a silent fallthrough here used to burn every remaining wait in the journey
-        // (and the 7 iterations after it) polling for a screen that could no longer appear.
         error("Baseline profile: settings home did not open; ${visibleStateForDebug()}")
     }
 
@@ -251,9 +235,6 @@ class FoxholeBaselineProfileGenerator {
     }
 
     private fun clickSettingsBottomNav() {
-        // A dock item's label only renders while SELECTED (the pill morph): the unselected
-        // Settings item is icon-only, so the testTag is the primary selector; text and the
-        // coordinate tap are legacy fallbacks.
         findByTestTag("bottom_nav_settings")?.let { node ->
             if (clickCenter(node)) {
                 return
@@ -264,16 +245,11 @@ class FoxholeBaselineProfileGenerator {
                 return
             }
         }
-        // The unselected dock item is icon-only (no text node), but its content-description is
-        // always set; its centre lands on the clickable parent. This is the reliable path on the
-        // floating pill dock, where the item centres are NOT at the 0.25/0.75 coordinate ratios.
         findByDesc(BOTTOM_NAV_SETTINGS_LABELS)?.let { node ->
             if (clickCenter(node)) {
                 return
             }
         }
-        // Blind coordinate tap ONLY while the app under test owns the screen: at hotseat height
-        // (0.93) a miss on the launcher opens whatever app sits in the dock.
         if (device.currentPackageName != PACKAGE_NAME) {
             return
         }
@@ -323,8 +299,6 @@ class FoxholeBaselineProfileGenerator {
         if (!waitUntil { isSettingsHomeVisible() }) {
             return false
         }
-        // Settle past the two-pane cross-fade: while it plays, BOTH panes are in the tree, so a
-        // transient settings_screen can settle back on the dashboard. Confirm the settled state.
         device.waitForIdle()
         repeat(SETTINGS_SETTLE_POLLS) {
             if (isSettingsHomeVisible() && !isDashboardVisible()) {
@@ -346,21 +320,11 @@ class FoxholeBaselineProfileGenerator {
                     findByAnyText(SETTINGS_HOME_SECONDARY_LABELS) != null
             )
 
-    /**
-     * The launcher intent's CLEAR_TASK against a singleTask activity can leave the app parked in
-     * the background mid-journey; every navigation step used to poll its bounded waits into dead
-     * air when that happened (x8 collect iterations = the observed "endless" run). Bring the app
-     * back with a plain shell start, or abort the iteration loudly.
-     */
     private fun MacrobenchmarkScope.ensureFoxholeForeground() {
         device.waitForIdle()
         if (isDashboardVisible() || isSettingsHomeVisible()) {
             return
         }
-        // Relaunch through the SAME launcher intent as the journey start: a bare shell `am start`
-        // recreates the activity WITHOUT the test-tags-as-resource-id extra, which silently blinds
-        // every findByTestTag for the rest of the run (observed as "visibleTags=none" with the
-        // Dashboard label on screen).
         startActivityAndWait(foxholeLauncherIntent())
         device.waitForIdle()
         repeat(OPEN_POLL_COUNT) {

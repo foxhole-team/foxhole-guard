@@ -8,6 +8,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.foxhole.core.model.ACTIVE_CONNECTION_STATES
+import com.foxhole.core.model.AccentColor
 import com.foxhole.core.model.CachedActiveProfile
 import com.foxhole.core.model.ConnectionState
 import com.foxhole.core.model.InstalledAppOption
@@ -21,7 +22,9 @@ import com.foxhole.core.model.TrafficMapSectionId
 import com.foxhole.core.model.TrafficMapUiState
 import com.foxhole.core.model.TrafficMode
 import com.foxhole.core.model.TrafficSnapshot
+import com.foxhole.core.model.VisualStyle
 import com.foxhole.core.model.normalizedTrafficMapSectionOrder
+import com.foxhole.core.runtime.TorGeoIpCountryResolver
 import com.foxhole.guard.BuildConfig
 import com.foxhole.guard.FoxholeApplication
 import com.foxhole.guard.FoxholeHomeDependencies
@@ -35,6 +38,7 @@ import com.foxhole.guard.core.settings.updatePrivacyRouteAutoRotateExit
 import com.foxhole.guard.core.settings.updatePrivacyRouteAutoRotateInterval
 import com.foxhole.guard.core.webapps.WebAppProxyCredentials
 import com.foxhole.guard.runtime.FoxholeVpnService
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
@@ -45,15 +49,12 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
-// HomeViewModel is deliberately a facade: its body is one-line delegates into the per-domain
-// HomeViewModel*Support extension files, so the screens compose against a single UI contract.
-// The member count therefore measures the size of that contract, not tangled logic — splitting
-// the facade itself would fragment the contract without removing any complexity.
 @Suppress("LargeClass", "TooManyFunctions")
 class HomeViewModel(
     application: Application,
@@ -68,8 +69,6 @@ class HomeViewModel(
     internal val initialSettings = container.settingsRepository.settings.value
     internal val clipboard = application.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
 
-    // The traffic widget's live-chart ring (per-second lane rates). VM-owned so the history
-    // survives section switches and the text/chart flips; range changes resize it in place.
     internal val trafficChartRecorder =
         TrafficChartRecorder(
             scope = viewModelScope,
@@ -157,8 +156,6 @@ class HomeViewModel(
     internal val geoIpDatabaseUiStateMutable = componentUpdates.geoIpDatabaseUiStateMutable
     val geoIpDatabaseUiState: kotlinx.coroutines.flow.StateFlow<GeoIpDatabaseUiState> = geoIpDatabaseUiStateMutable
 
-    // Fed by the once-per-start availability probe (Component updates screen). The settings-home
-    // blue dot lights only for the MANUAL story: checking on, auto-update off, updates waiting.
     internal val componentGeoIpUpdateAvailableMutable = componentUpdates.componentGeoIpUpdateAvailableMutable
     val componentUpdatesIndicatorVisible: kotlinx.coroutines.flow.StateFlow<Boolean> =
         combine(
@@ -174,8 +171,6 @@ class HomeViewModel(
     internal val profileReconnectPromptUntilMutable = connectionFlow.profileReconnectPromptUntilMutable
     internal val insecureTlsImportWarningMutable = importFlow.insecureTlsImportWarningMutable
 
-    // Add-profile confirmation: EVERY import (clipboard/file/QR/URL) parks here first with the
-    // parsed protocol + domain preview; yes proceeds into the ordinary import path, no drops it.
     internal val profileImportConfirmationMutable = importFlow.profileImportConfirmationMutable
     internal val catalogPresetPreviewsMutable = componentUpdates.catalogPresetPreviewsMutable
     internal val startupActiveProfileMutable = connectionFlow.startupActiveProfileMutable
@@ -230,15 +225,32 @@ class HomeViewModel(
                 initialSettings.ui.panelAppearance,
             )
 
-    // Feeds FoxholeTheme directly (like themeMode): the monochrome-TOR palette swap has to reach
-    // the CompositionLocal at the theme root, above every screen.
+    val visualStyle: StateFlow<VisualStyle> =
+        container.settingsRepository.settings
+            .map { settings -> settings.ui.visualStyle }
+            .distinctUntilChanged()
+            .stateIn(
+                viewModelScope,
+                SharingStarted.Eagerly,
+                initialSettings.ui.visualStyle,
+            )
+
+    val accentColor: StateFlow<AccentColor> =
+        container.settingsRepository.settings
+            .map { settings -> settings.ui.accentColor }
+            .distinctUntilChanged()
+            .stateIn(
+                viewModelScope,
+                SharingStarted.Eagerly,
+                initialSettings.ui.accentColor,
+            )
+
     val monochromeTorTheme: StateFlow<Boolean> =
         container.settingsRepository.settings
             .map { it.ui.monochromeTorTheme }
             .distinctUntilChanged()
             .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
-    /** A hot projection of one [coreUiState] field for chrome-level observers. */
     private fun <T> uiProjection(
         initial: T,
         selector: (HomeUiState) -> T,
@@ -253,8 +265,6 @@ class HomeViewModel(
 
     val lockState: StateFlow<com.foxhole.guard.core.security.LockState> = appLockManager.lockState
 
-    // FLAG_SECURE tracks the screenshot toggle OR any locked state: the unlock screen is
-    // always protected from screenshots/recents regardless of the user setting.
     val secureScreenEnabled: StateFlow<Boolean> =
         combine(
             uiProjection(initialSettings.expert.blockScreenshots) { it.settings.expert.blockScreenshots },
@@ -270,11 +280,22 @@ class HomeViewModel(
     val blurEffectsEnabled: StateFlow<Boolean> =
         uiProjection(initialSettings.ui.blurEffectsEnabled) { it.settings.ui.blurEffectsEnabled }
 
+    private val dnsGeoResolver by lazy { TorGeoIpCountryResolver(getApplication()) }
+
+    val dnsServerCountryCode: StateFlow<String?> =
+        combine(
+            uiProjection(initialSettings.dns.server) { it.settings.dns.server },
+            uiProjection(initialSettings.dns.secureMode) { it.settings.dns.secureMode },
+        ) { server, secureMode ->
+            server.trim().takeIf(String::isNotBlank) ?: defaultDnsServerFor(secureMode)
+        }
+            .map { server -> dnsServerHostForGeo(server)?.let(dnsGeoResolver::countryCodeForIpAddress) }
+            .flowOn(Dispatchers.Default)
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
     val mapWidgetMapOnRight: StateFlow<Boolean> =
         uiProjection(initialSettings.ui.mapWidgetMapOnRight) { it.settings.ui.mapWidgetMapOnRight }
 
-    // The "layout editing" switch gating every long-press reorder surface (dashboard cards,
-    // statistics widgets, connection-map sections).
     val layoutEditingEnabled: StateFlow<Boolean> =
         uiProjection(initialSettings.ui.layoutEditingEnabled) { it.settings.ui.layoutEditingEnabled }
 
@@ -287,11 +308,6 @@ class HomeViewModel(
     internal val pendingRoutingScenarioConfirmationMutable =
         connectionFlow.pendingRoutingScenarioConfirmationMutable
 
-    /**
-     * The VPN/Tor scenario change waiting for the user's yes, raised only while atomic scenario
-     * application is off. The routing screen renders the ordinary confirm sheet; Home operating
-     * modes never feed it and retain their own live-switch behavior.
-     */
     internal val pendingRoutingScenarioConfirmation: StateFlow<PendingRoutingScenarioChange?> =
         pendingRoutingScenarioConfirmationMutable.asStateFlow()
 
@@ -336,11 +352,6 @@ class HomeViewModel(
 
     val homeRouteState: StateFlow<HomeRouteUiState> = routeStateProducer.homeRouteState
 
-    /**
-     * The LAN proxy as the core reports it — read through the connection controller like every other
-     * runtime stream, not folded into the settings projection: it is a runtime fact, and a screen
-     * that renders the saved switch instead is exactly the bug this replaced.
-     */
     val lanProxyStatus: StateFlow<LanProxyStatusSnapshot> = container.connectionController.lanProxyStatus
     internal val dashboardLayoutState: StateFlow<DashboardLayoutUiState> = routeStateProducer.dashboardLayoutState
     internal val dashboardHeaderState: StateFlow<DashboardHeaderUiState> = routeStateProducer.dashboardHeaderState
@@ -358,7 +369,6 @@ class HomeViewModel(
         routeStateProducer.dashboardFeatureDialogState
     val trafficMapUiState: StateFlow<TrafficMapUiState> = routeStateProducer.trafficMapUiState
 
-    // Persisted display order of the connection-map screen sections (map / route / table).
     val trafficMapSectionOrder: StateFlow<List<TrafficMapSectionId>> =
         container.settingsRepository.settings
             .map { settings -> normalizedTrafficMapSectionOrder(settings.ui.trafficMapSectionOrder) }
@@ -381,13 +391,6 @@ class HomeViewModel(
 
     val diagnosticsRouteState: StateFlow<DiagnosticsRouteUiState> = routeStateProducer.diagnosticsRouteState
 
-    /**
-     * Whether the first-run wizard still has to run.
-     *
-     * Gated on [SettingsRepository.hydrated] and seeded false on purpose: the bootstrap settings read
-     * before hydration carry the *default* onboarding flag, not the stored one, so an install that
-     * finished the wizard long ago would flash it again on every cold start.
-     */
     val onboardingRequired: StateFlow<Boolean> =
         combine(
             container.settingsRepository.hydrated,
@@ -395,7 +398,6 @@ class HomeViewModel(
         ) { hydrated, settings -> hydrated && !settings.ui.onboardingCompleted }
             .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
-    /** Follows quick start once: shown only after that sheet is done and before acknowledgement. */
     val betaNoticeRequired: StateFlow<Boolean> =
         combine(
             container.settingsRepository.hydrated,
@@ -411,16 +413,8 @@ class HomeViewModel(
         viewModelScope.launch { container.settingsRepository.acknowledgeBetaNotice() }
     }
 
-    /**
-     * User-facing banners, which the CLI front end prints into the terminal journal. Buffered
-     * across activity lifetimes on purpose — see [FoxholeBannerEvents]; a `MutableSharedFlow` here
-     * silently discarded everything emitted while the UI was destroyed.
-     */
     internal val snackbars = FoxholeBannerEvents()
 
-    // Web apps: the screen list, the add-form state and the open full-screen frame. The frame
-    // state lives in the view model rather than rememberSaveable, so it survives rotation and can
-    // open from a notification or widget before the webapps screen composes.
     val webAppsState: StateFlow<List<WebAppEntity>> =
         container.webAppsRepository.observeWebApps()
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
@@ -429,15 +423,10 @@ class HomeViewModel(
     internal val openWebAppMutable = MutableStateFlow<WebAppEntity?>(null)
     val openWebAppState: StateFlow<WebAppEntity?> = openWebAppMutable.asStateFlow()
 
-    /**
-     * Credentials for the proxy the open frame was routed through, so its WebView can answer the
-     * proxy's auth challenge. Set only while a route is actually installed.
-     */
     internal val webAppProxyCredentialsMutable = MutableStateFlow<WebAppProxyCredentials?>(null)
     internal val webAppProxyCredentials: StateFlow<WebAppProxyCredentials?> =
         webAppProxyCredentialsMutable.asStateFlow()
 
-    // The action-confirmation gate: the pending action outlives the prompt's composition.
     internal var pendingSensitiveAction: (() -> Unit)? = null
     internal val actionAuthVisibleMutable = MutableStateFlow(false)
     val actionAuthVisible: StateFlow<Boolean> = actionAuthVisibleMutable.asStateFlow()
@@ -490,12 +479,9 @@ class HomeViewModel(
     internal var statisticsVisible: Boolean = false
     internal var reconnectPromptPendingUntilDashboard: Boolean = false
 
-    // Network-rules reactions: the last handled network+profile pair (so one network change is
-    // acted on once) and the recommendation awaiting the user's confirmation via banner action.
     internal var lastNetworkRuleHandledKey: String? by connectionFlow::lastNetworkRuleHandledKey
     internal var pendingNetworkRuleOverride: NetworkProfileOverride? by connectionFlow::pendingNetworkRuleOverride
 
-    // Provider-DNS fallback notice dedupe: one banner per profile+option+server combination.
     internal var lastProviderDnsFallbackNoticeKey: String? = null
 
     init {
@@ -509,6 +495,7 @@ class HomeViewModel(
         startStartupProfilePreload()
         startActiveProfileStartupSync()
         startConnectionSnapshotSupervision()
+        startConnectDurationSupervision()
         startTorOperationSupervision()
         startRuntimeTorExitSupervision()
         startAuthAttemptNoticeSupervision()
@@ -584,8 +571,6 @@ class HomeViewModel(
             }
     }
 
-    // The old dashboard Restart button (and its "restart VPN or TOR?" chooser modal) is gone; a
-    // plain restart reconnects the VPN profile - Tor rides along per its own placement rules.
     fun onRestartActiveProfile() {
         if (isConnectionControlThrottled()) return
         val activeProfile = controlUiState.value.activeProfile ?: return
@@ -619,8 +604,6 @@ class HomeViewModel(
             }
     }
 
-    // The alpha notice: shown on a fresh install and once after every upgrade (the acknowledged
-    // versionCode stops matching the build's). Acknowledging it stores THIS build's code.
     val alphaNoticeVisible: StateFlow<Boolean> =
         container.settingsRepository.settings
             .map { it.ui.alphaNoticeShownVersionCode != BuildConfig.VERSION_CODE }
@@ -666,8 +649,6 @@ class HomeViewModel(
                 delay(PROFILE_RECONNECT_PROMPT_WINDOW_MS)
                 profileReconnectPromptUntilMutable.value = 0L
                 profileReconnectPromptJob = null
-                // The reconnect offer expired unused: the primary button returns to a plain Stop
-                // (same contract as the route-mode restart prompt, which reverts on expiry).
                 if (!reconnectInProgressMutable.value) {
                     clearRuntimeReconnectRequired()
                 }

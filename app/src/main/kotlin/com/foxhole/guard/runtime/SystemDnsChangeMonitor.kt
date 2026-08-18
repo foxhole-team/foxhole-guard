@@ -90,7 +90,11 @@ internal class SystemDnsChangeMonitor(
             }
         }
 
+    @Volatile
+    private var registered = false
+
     fun start() {
+        if (registered) return
         val connectivity = appContext.getSystemService<ConnectivityManager>() ?: return
         val request =
             NetworkRequest.Builder()
@@ -98,6 +102,15 @@ internal class SystemDnsChangeMonitor(
                 .addCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN)
                 .build()
         runCatching { connectivity.registerNetworkCallback(request, callback) }
+            .onSuccess { registered = true }
+    }
+
+    fun stop() {
+        if (!registered) return
+        val connectivity = appContext.getSystemService<ConnectivityManager>() ?: return
+        runCatching { connectivity.unregisterNetworkCallback(callback) }
+        registered = false
+        synchronized(lock) { dnsByNetworkHandle.clear() }
     }
 
     internal fun onDnsServersObserved(

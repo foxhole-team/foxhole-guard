@@ -13,6 +13,14 @@ class I2pTrafficCollectionPolicyTest {
     @Test
     fun `connected router traffic reaches statistics within one short UI interval`() {
         assertEquals(5_000L, FoxholeVpnService.I2P_TRAFFIC_SAMPLE_INTERVAL_MS)
+        assertEquals(5_000L, i2pTrafficSampleIntervalMs(0L))
+        assertEquals(5_000L, i2pTrafficSampleIntervalMs(FoxholeVpnService.I2P_TRAFFIC_SAMPLE_WARMUP_MS - 1L))
+    }
+
+    @Test
+    fun `a settled session samples the hourly store once a minute`() {
+        assertEquals(60_000L, i2pTrafficSampleIntervalMs(FoxholeVpnService.I2P_TRAFFIC_SAMPLE_WARMUP_MS))
+        assertEquals(60_000L, i2pTrafficSampleIntervalMs(6L * 60L * 60L * 1_000L))
     }
 
     @Test

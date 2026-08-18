@@ -3,10 +3,6 @@ package com.foxhole.guard.ui.cli.profiles
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
-/**
- * Контракт таблицы протоколов смарт-профиля: колонка S (приоритет состояний и скобочный алфавит)
- * и формат ячеек T/P/L. Оба маппера чистые, поэтому регресс ловится без Compose-рантайма.
- */
 class CliProtocolTablePresentationTest {
 
     @Test
@@ -102,17 +98,10 @@ class CliProtocolTablePresentationTest {
     )
 }
 
-/**
- * Контракт распределения ширин метрических колонок T/P/L: колонка не уже своего контента,
- * не шире капа от ширины хоста, а свободное место после резерва имени делится поровну —
- * сетка расправляется по ширине, а не жмётся к правому краю.
- */
 class CliProtocolColumnWidthTest {
 
     @Test
     fun `short values stretch to the cap when the even share exceeds it`() {
-        // host 720, статус 96, спейсинг 8: свободного после резерва имени (35%) —
-        // 720 - 252 - 96 - 32 = 340, доля на колонку 113; кап 15% = 108 — берётся кап.
         val width = cliProtocolMetricColumnWidthPx(
             measuredMaxPx = 40,
             hostWidthPx = 720,
@@ -125,8 +114,6 @@ class CliProtocolColumnWidthTest {
 
     @Test
     fun `even share below the cap is used as is`() {
-        // host 1000, статус 300, спейсинг 25: свободного 1000 - 350 - 300 - 100 = 250,
-        // доля 83; кап 150 — доля меньше капа и шире контента, значит берётся доля.
         val width = cliProtocolMetricColumnWidthPx(
             measuredMaxPx = 40,
             hostWidthPx = 1000,

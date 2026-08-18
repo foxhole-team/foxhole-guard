@@ -8,11 +8,6 @@ import com.foxhole.core.model.TOR_ONLY_PROFILE_ID
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
-/**
- * Сентинел-сессии (Tor-only `-20`, local guard `-10`) пишут трафик под служебными именами,
- * но панели VPN-профилей/протоколов обязаны их отсекать: Tor показан собственной панелью,
- * guard — фильтр, а не подключение.
- */
 class StatisticsSentinelFilterTest {
 
     private fun state(totals: List<ProfileTrafficTotal>) = StatisticsRouteUiState(

@@ -234,7 +234,6 @@ class CliStatsOverviewTest {
         assertEquals(150L, overview(window = StatisticsWindow.MONTH, appTrafficWindows = windows).vpnBytes)
     }
 
-    /** Полосы берутся из записанного, а не из текущих настроек — иначе история едет за режимом. */
     @Test
     fun `sparkline buckets split bytes by time and by the route that was recorded`() {
         val windowMs = 4L * HOUR_MS
@@ -244,7 +243,6 @@ class CliStatsOverviewTest {
                 listOf(
                     trafficWindow(NOW_MS - windowMs + 1L, rxBytes = 100L),
                     trafficWindow(NOW_MS - HOUR_MS / 2, rxBytes = 30L),
-                    // Older than the window: must not leak into bucket 0.
                     trafficWindow(NOW_MS - 2 * windowMs, rxBytes = 999L),
                 ),
                 windowMs = windowMs,
@@ -263,10 +261,6 @@ class CliStatsOverviewTest {
         assertEquals(30L, buckets[3].torBytes)
     }
 
-    /**
-     * Разворот главного дефекта: трафик записан под Tor, а модуль сейчас выключен — столбец обязан
-     * остаться на своей полосе. Настройки в расчёт больше не входят вовсе.
-     */
     @Test
     fun `recorded tor traffic keeps its lane after the module is switched off`() {
         val buckets =
@@ -282,7 +276,6 @@ class CliStatsOverviewTest {
         assertEquals(0L, buckets[0].vpnBytes)
     }
 
-    /** Один и тот же минутный ряд не может считаться и за Tor, и за фаервол. */
     @Test
     fun `a tor minute over the local guard is not counted twice`() {
         val buckets =
@@ -362,7 +355,6 @@ class CliStatsOverviewTest {
                 i2pActive = false,
             ),
         )
-        // Permission alone is not an enabled Tor route, and a paused I2P module owns no column.
         assertEquals(
             CliStatsChartLanes(),
             cliStatsChartLanes(
@@ -395,7 +387,6 @@ class CliStatsOverviewTest {
         val hero = cliStatsHero(
             windows = listOf(trafficWindow(NOW_MS - HOUR_MS, rxBytes = 80L)),
             deviceWindows = listOf(deviceWindow(NOW_MS - HOUR_MS, rxBytes = 80L, vpnMode = VpnMode.TOR)),
-            anomalyEvents = emptyList(),
             nowMs = NOW_MS,
         )
         assertEquals(0L, hero.vpnBytes24h)
@@ -408,7 +399,6 @@ class CliStatsOverviewTest {
             windows = listOf(trafficWindow(NOW_MS - HOUR_MS, rxBytes = 80L)),
             deviceWindows = listOf(deviceWindow(NOW_MS - HOUR_MS, rxBytes = 80L)),
             i2pBuckets = listOf(i2pBucket(NOW_MS - HOUR_MS, ownBytes = 30L)),
-            anomalyEvents = emptyList(),
             nowMs = NOW_MS,
         )
 
@@ -428,7 +418,6 @@ class CliStatsOverviewTest {
                 i2pBuckets =
                 listOf(
                     i2pBucket(NOW_MS - windowMs + 1L, ownBytes = 70L, transitBytes = 500L),
-                    // Older than the window: must not leak into bucket 0.
                     i2pBucket(NOW_MS - 2 * windowMs, ownBytes = 999L),
                 ),
             )
@@ -474,8 +463,6 @@ class CliStatsOverviewTest {
                 i2pBuckets = listOf(i2pBucket(NOW_MS - HOUR_MS / 2, ownBytes = 30L)),
             ).single()
 
-        // The 70 non-I2P bytes crossed both hops. I2P was already present in the 100-byte device
-        // aggregate, so it is carved out once and the physical total remains exactly 100.
         assertEquals(70L, bucket.vpnBytes)
         assertEquals(70L, bucket.torBytes)
         assertEquals(30L, bucket.i2pBytes)
@@ -548,7 +535,6 @@ class CliStatsOverviewTest {
                     trafficWindow(NOW_MS - 5 * HOUR_MS, packageName = "a", rxBytes = 600L),
                 ),
             )
-        // DAY window buckets by hour: the busiest hour carries 3600 bytes -> 1 byte per second.
         assertEquals(1L, result.peakRateBytesPerSec)
         assertEquals(2, result.appsWithTraffic)
     }

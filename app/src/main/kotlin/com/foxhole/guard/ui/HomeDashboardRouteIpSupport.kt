@@ -46,10 +46,6 @@ internal fun HomeRouteUiState.shouldShowHomeNetworkIpInfoLoading(
     return manualRefreshNeedsSkeleton || missingIpNeedsSkeleton
 }
 
-// Tor inside the tunnel owns the whole tunnel egress, so a VPN identity is unobservable: no
-// probe can return the VPN server's own address, and the missing-IP skeleton would spin
-// forever. Render the static placeholder rows instead (the Tor exit lives in the Tor window);
-// a manual refresh may still show its explicit skeleton window below.
 private fun HomeRouteUiState.vpnIdentityUnobservableUnderTor(dashboardIpInfo: IpInfo?): Boolean =
     dashboardIpInfo == null &&
         connection.torActive &&
@@ -147,9 +143,6 @@ internal fun HomeRouteUiState.homeNetworkTitleRes(
 private fun HomeRouteUiState.shouldShowTorRouteNetworkTitle(): Boolean =
     settings.privacyRoute.enabled &&
         !hasDashboardRouteProfile() &&
-        // TOR must be the LIVE route, not merely permitted with a stale exit IP left over from a
-        // prior run. Otherwise an I2P-only session (which raises the local guard) would inherit the
-        // old TOR network title; the Network widget never shows I2P — it falls through to direct.
         (
             torOperation.active ||
                 (connection.torActive && torIpInfo?.hasVisiblePublicAddress() == true)
@@ -184,11 +177,7 @@ private fun ConnectionSnapshot.isDashboardRouteTrafficMode(): Boolean =
 internal fun HomeRouteUiState.dashboardVisibleIpInfo(visibleIpInfo: IpInfo?): IpInfo? {
     val candidate =
         when {
-            // Engaged Tor-only runtime: show the Tor exit, but drop it while an operation or a
-            // reconnect is in flight so the rows shimmer instead of pinning the previous exit IP.
             hasEngagedTorOnlyRuntime() -> torIpInfo.takeUnless { torOperation.active || reconnectInProgress }
-            // Tor start before the Tor-only profile lands in the snapshot: shimmer, never the
-            // pre-Tor identity.
             torOperation.active && settings.privacyRoute.enabled && !hasDashboardRouteProfile() -> null
             shouldPreferTorRouteIpInfoOnDashboard() -> torIpInfo
             shouldUseDeviceIpInfoAfterStoppedRoute() -> deviceIpInfo
@@ -201,22 +190,13 @@ private fun HomeRouteUiState.hasEngagedTorOnlyRuntime(): Boolean =
     connection.profileId == FoxholeVpnService.TOR_ONLY_PROFILE_ID &&
         connection.state != ConnectionState.IDLE
 
-// A stopped Tor-only session must release the dashboard back to the device identity (the
-// generic stopped-route fallback deliberately excludes TOR_ONLY, which used to pin the card
-// on the dead Tor exit after Stop TOR).
 private fun HomeRouteUiState.hasStoppedTorOnlyRuntime(): Boolean =
     connection.state == ConnectionState.IDLE &&
         connection.profileId == FoxholeVpnService.TOR_ONLY_PROFILE_ID
 
 private fun HomeRouteUiState.shouldPreferTorRouteIpInfoOnDashboard(): Boolean =
     torIpInfo?.hasVisiblePublicAddress() == true &&
-        // When a VPN route profile is the active egress, the dashboard network card must show the
-        // VPN identity — the Tor exit IP belongs only to the Tor window. So the dashboard only
-        // prefers the Tor IP when Tor is the real egress (no active VPN route: Tor-only, or Tor
-        // going direct because the VPN is off / firewall-only).
         !hasDashboardRouteProfile() &&
-        // Key on the APPLIED runtime, never the persisted privacyRoute setting: a firewall/DNS guard
-        // (torActive = false) that inherits an enabled Tor setting must not pin the stale Tor exit.
         (
             (torOperation.active && settings.privacyRoute.enabled) ||
                 connection.torActive ||
@@ -291,9 +271,6 @@ internal fun IpInfo.visibleIpCandidates(): List<String> {
             .map { it.trim() }
             .filter { it.isNotBlank() }
             .distinct()
-    // Prefer IPv4 for the dashboard: only fall back to IPv6 when no public IPv4 address is known, so
-    // the shown IP never flips from an IPv4 value to an IPv6 one across refreshes. IPv6 must stay a
-    // candidate when every IPv4 is private (e.g. CGNAT with a public IPv6), or the card shows "-".
     val ipv4Candidates = all.filterNot { candidate -> candidate.substringBefore('%').contains(':') }
     return if (ipv4Candidates.any { candidate -> candidate.isPublicInternetAddress() }) {
         ipv4Candidates

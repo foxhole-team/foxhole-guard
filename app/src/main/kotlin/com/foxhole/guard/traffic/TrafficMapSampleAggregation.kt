@@ -5,9 +5,6 @@ import com.foxhole.core.model.TrafficMapCountryDetail
 import com.foxhole.core.model.TrafficWindow
 import java.util.Locale
 
-// Sample-window aggregation: day/7-day/window rollups and network-activity details.
-// Split from TrafficMapAggregation.kt.
-
 internal fun aggregateTrafficMapSamples(
     samples: List<TrafficMapConnectionSample>,
 ): Map<String, TrafficMapAggregate> {
@@ -99,8 +96,6 @@ internal fun trafficMapCountryDetailsFromNetworkActivity(
                 MutableTrafficMapCountryDetail(countryCode)
             }
         country.observe(event.timestampMs)
-        // Our own sockets are the tunnel carrier to the VPN server: attributing them as an "app"
-        // painted FoxHole itself into the VPN server country's apps column.
         val packageNames =
             event.packageNames
                 .normalizedTrafficMapPackageNames()

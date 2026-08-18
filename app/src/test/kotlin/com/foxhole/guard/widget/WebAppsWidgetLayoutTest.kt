@@ -5,7 +5,6 @@ import androidx.compose.ui.unit.dp
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
-/** Квадрат 2×2 — 4 аппа в один ряд; прямоугольник 4×2 — 8 в два ряда. */
 internal class WebAppsWidgetLayoutTest {
     @Test
     fun `square widget shows four apps`() {

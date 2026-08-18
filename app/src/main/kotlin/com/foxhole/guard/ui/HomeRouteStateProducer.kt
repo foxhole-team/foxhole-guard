@@ -32,12 +32,6 @@ import kotlinx.coroutines.withContext
 private val settingsRouteStateSharing = SharingStarted.Lazily
 private val settingsProfileRouteStateSharing = SharingStarted.Eagerly
 
-// The cheap dashboard projections share EAGERLY. While another section is shown the dashboard
-// pane's lifecycle is capped at CREATED, so WhileSubscribed flows stopped, cached the pre-change
-// value and replayed one stale frame on return — a settings toggle visibly re-applied AFTER
-// navigating back instead of being in place. These recompute only on settings/connection events;
-// the 1 Hz traffic state and the map state keep the lazy policy (their upstreams tick constantly)
-// and are refreshed by an immediate sample on wake instead.
 private val dashboardProjectionSharing = SharingStarted.Eagerly
 
 internal data class HomeProtocolMetricsStateSources(
@@ -80,14 +74,6 @@ internal class HomeRouteStateProducer(
     private val benchmarkTrafficMapEnabled: Boolean,
     private val currentNetworkFingerprintKey: () -> String?,
 ) {
-    // The map's own sharing scope. `scope` is the ViewModel's (Dispatchers.Main.immediate), and a
-    // stateIn STARTED there publishes every value on the main thread even when the computation
-    // rides flowOn(Default). While the dashboard is live, Compose's AndroidUiDispatcher trampolines
-    // its snapshot-apply work in a single looper message and can hold the thread for seconds — the
-    // map's publications then simply never got a turn, so a connected tunnel kept showing standby
-    // (caught on device: main RUNNABLE inside advanceGlobalSnapshot while the map flow had already
-    // computed isAvailable=true). Sharing the map on Default keeps the value moving; Compose reads
-    // it through collectAsStateWithLifecycle on main as before.
     private val mapSharingScope = scope + Dispatchers.Default
 
     private val protocolMetricsPingState =
@@ -148,8 +134,6 @@ internal class HomeRouteStateProducer(
                 currentNetworkFingerprintKey = currentNetworkFingerprintKey(),
             )
         }
-            // Folded in after the five typed sources rather than as a sixth: the LAN proxy state is
-            // published by the runtime, not derived from any of them, and the typed combine is full.
             .combine(container.connectionController.lanProxyStatus) { state, lanProxy ->
                 state.copy(lanProxy = lanProxy)
             }
@@ -280,11 +264,6 @@ internal class HomeRouteStateProducer(
                 HomeRouteUiState(settings = initialSettings).toDashboardFeatureDialogUiState(),
             )
 
-    // The network revision is in here for its edges, not its value: hasActiveVpnNetwork() is a poll
-    // of the connectivity snapshot, so without it the map only re-asked "is our tunnel up?" when
-    // the connection snapshot or the settings happened to emit — and the VPN network routinely
-    // appears AFTER the CONNECTED snapshot, leaving the card on standby until the next unrelated
-    // change woke the flow.
     private val trafficMapRuntimeAvailable =
         combine(
             container.connectionController.snapshot,
@@ -377,8 +356,6 @@ internal class HomeRouteStateProducer(
             runtimeAvailable = trafficMapRuntimeAvailable,
             recentTrafficWindows = container.anomalyRepository.recentTrafficWindows,
             recentNetworkActivityEvents = container.anomalyRepository.recentNetworkActivityEvents,
-            // Always raw: the data only exists while the user's own journal switch is on, so a
-            // second privacy gate on top of it was retired with the sanitize setting.
             showPrivateNetworkDetails = flowOf(true),
             historyCutoffMs =
             container.settingsRepository.settings
@@ -404,19 +381,10 @@ internal class HomeRouteStateProducer(
             state.withTrafficMapRouteContext(coreState, serverPings, tunnelPings)
         }
             .distinctUntilChanged()
-            // Cap the map's update rate: traffic/ping samples tick sub-second, but redrawing the
-            // Canvas-backed map that often janks scrolling. ~1 Hz is plenty for a map and keeps the
-            // (uniquely heavy) map card from recomposing mid-scroll.
             .sample(TRAFFIC_MAP_REFRESH_INTERVAL_MS)
-            // Off the main thread: enabling the firewall over a live VPN flips
-            // map+statistics+activity logging on in one burst, and running this route-context
-            // merge on Main used to starve input dispatching for >5s.
             .flowOn(Dispatchers.Default)
             .stateIn(
                 mapSharingScope,
-                // Loading and simplifying the country registry is deliberately demand-driven.
-                // Home/settings don't render map data, while the map and statistics routes both
-                // subscribe here and retain the last value across their short navigation gaps.
                 SharingStarted.WhileSubscribed(5_000),
                 TrafficMapUiState(),
             )
@@ -522,15 +490,10 @@ internal class HomeRouteStateProducer(
 
     val statisticsRouteState: StateFlow<StatisticsRouteUiState> =
         run {
-            // The dashboard build only reads the live destination points — the rest of the ~1 Hz
-            // traffic-map state (routes, animation phases) must not rebuild the whole statistics
-            // snapshot on every tick.
             val statisticsMapDestinations =
                 trafficMapUiState
                     .map { mapState -> mapState.destinations }
                     .distinctUntilChanged()
-            // Last built snapshot survives leaving the route so re-entry paints instantly;
-            // retention is bounded (see retainedStatisticsDashboard).
             var lastDashboard: StatisticsDashboardUiState? = null
             combine(
                 routeSources.statisticsUiState,
@@ -547,9 +510,6 @@ internal class HomeRouteStateProducer(
                         buildStatisticsDashboardUiState(
                             state = routeState,
                             liveDestinations = liveDestinations,
-                            // Bucketed so equal inputs build EQUAL snapshots — the
-                            // distinctUntilChanged below dedupes them and the UI stops
-                            // re-emitting once a second on the traffic tick.
                             nowMs = System.currentTimeMillis().toStatisticsUiNowBucket(),
                             usageAccessGranted = usageAccessGranted,
                         ).copy(ready = true)
@@ -565,15 +525,9 @@ internal class HomeRouteStateProducer(
                     )
                 }
             }
-                // Hydration rides as a separate late combine so the heavy dashboard build above
-                // never re-runs just because the settings store finished loading.
                 .combine(container.settingsRepository.hydrated) { routeState, hydrated ->
                     routeState.copy(settingsHydrated = hydrated)
                 }
-                // Same reason for the persisted I2P counters: the recorder writes on its own
-                // cadence and must not restart the dashboard aggregation, so the store rides its
-                // own late combine. TOR needs no such field — its bytes come from the persisted
-                // per-app windows, which the summary can actually slice by the picked window.
                 .combine(container.i2pTrafficRepository.history) { routeState, i2pTrafficHistory ->
                     routeState.copy(i2pTrafficHistory = i2pTrafficHistory)
                 }
@@ -582,9 +536,6 @@ internal class HomeRouteStateProducer(
                 .stateIn(
                     scope,
                     SharingStarted.WhileSubscribed(5_000),
-                    // Seed with the LIVE settings snapshot, not defaults: the first combine
-                    // emission takes seconds (heavy statistics flows), and a default-settings
-                    // seed marked hydrated would resurrect the "flashes disabled" bug.
                     StatisticsRouteUiState(
                         settings = container.settingsRepository.settings.value,
                         settingsHydrated = container.settingsRepository.hydrated.value,
@@ -650,10 +601,6 @@ internal class HomeRouteStateProducer(
 
     val diagnosticsRouteState: StateFlow<DiagnosticsRouteUiState> =
         routeSources.uiState
-            // No dashboardTraffic in the mix: the Logs screen never renders traffic, and combining
-            // with the ~1Hz traffic tick recomposed the whole screen every second. Seeding the
-            // initial value from the live uiState kills the first-frame flash of default settings
-            // (the settings section popped in a beat after entering the screen).
             .map { state -> state.toDiagnosticsRouteUiState() }
             .combine(container.settingsRepository.hydrated) { routeState, hydrated ->
                 routeState.copy(settingsHydrated = hydrated)

@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
@@ -24,10 +25,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.foxhole.core.model.AnomalySeverity
 import com.foxhole.core.model.AppTunnelLane
 import com.foxhole.core.model.InstalledAppOption
 import com.foxhole.core.model.PrivacyRouteScope
@@ -46,17 +46,19 @@ import com.foxhole.guard.ui.cli.CliSpacing
 import com.foxhole.guard.ui.cli.CliType
 import com.foxhole.guard.ui.cli.LocalCliColors
 import com.foxhole.guard.ui.cli.components.CliButton
+import com.foxhole.guard.ui.cli.components.CliChromeTailSpacer
 import com.foxhole.guard.ui.cli.components.CliDashedInfoNote
 import com.foxhole.guard.ui.cli.components.CliDropdownOption
 import com.foxhole.guard.ui.cli.components.CliDropdownRow
 import com.foxhole.guard.ui.cli.components.CliElbowLine
 import com.foxhole.guard.ui.cli.components.CliFlagIcon
+import com.foxhole.guard.ui.cli.components.CliGlassHeaderScreen
 import com.foxhole.guard.ui.cli.components.CliKeyValue
-import com.foxhole.guard.ui.cli.components.CliLoadingRow
 import com.foxhole.guard.ui.cli.components.CliPanel
 import com.foxhole.guard.ui.cli.components.CliPixIcon
 import com.foxhole.guard.ui.cli.components.CliRowDivider
 import com.foxhole.guard.ui.cli.components.CliScreenHeader
+import com.foxhole.guard.ui.cli.components.CliSectionPreloader
 import com.foxhole.guard.ui.cli.components.cliPressable
 import com.foxhole.guard.ui.cli.components.rememberNowMsTicker
 import com.foxhole.guard.ui.cli.home.activeRuntimes
@@ -66,30 +68,15 @@ import com.foxhole.guard.ui.onStatisticsEnabledChanged
 import com.foxhole.guard.ui.onStatisticsWindowChanged
 import com.foxhole.guard.ui.toStatisticsUiNowBucket
 
-/**
- * Statistics as terminal tables. Group order is the user's own: (1) overview behind a persisted
- * day/week window, (2) firewall — attempts and anomalies, shown only while the firewall is on,
- * (3) profiles and protocols, (4) dns — only while the filter is on, (5) apps. The Tor and I2P
- * detail tables keep their own fixed periods and stay below the five groups.
- *
- * The header gear opens [CliStatsSettingsSheet]: it is the only surface that turns collection on, so
- * it stays reachable through every empty state. Data is the same StatisticsDashboardUiState the
- * classic screen renders (plus the home route's Tor phase); production is visibility-gated, so
- * CliApp flips onStatisticsUiVisibilityChanged for us.
- */
 @Composable
 internal fun CliStatsScreen(
     viewModel: HomeViewModel,
     modifier: Modifier = Modifier,
 ) {
     val state by viewModel.statisticsRouteState.collectAsStateWithLifecycle()
-    // Tor phase rides the home route state only; the statistics route does not carry it.
     val home by viewModel.homeRouteState.collectAsStateWithLifecycle()
     var settingsOpen by rememberSaveable { mutableStateOf(false) }
 
-    // The sheet rises BEFORE the content, and so before its every early exit: collection is
-    // enabled exactly when the screen is empty. Hydration is the only gate — before it a write
-    // from the sheet would persist a bootstrap default instead of the real value.
     if (settingsOpen && state.settingsHydrated) {
         CliStatsSettingsSheet(
             viewModel = viewModel,
@@ -107,7 +94,6 @@ internal fun CliStatsScreen(
     CliStatsContent(state = state, home = home, actions = actions, modifier = modifier)
 }
 
-/** The screen's whole layout, over plain state and callbacks. */
 @Composable
 internal fun CliStatsContent(
     state: StatisticsRouteUiState,
@@ -117,86 +103,85 @@ internal fun CliStatsContent(
 ) {
     val colors = LocalCliColors.current
     val dashboard = state.statisticsDashboard
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = CliSpacing.md),
-    ) {
-        CliScreenHeader(
-            label = stringResource(R.string.cli_dock_stats),
-            icon = R.drawable.pix_stats,
-            trailing = {
-                CliStatsSettingsButton(
-                    enabled = state.settingsHydrated,
-                    onClick = actions.openSettings,
-                )
-            },
-        )
-        // Donor gating order: settings hydration -> statistics consent (opt-in, default OFF)
-        // -> dashboard readiness. Zeros while collection is off must not read as measurements.
-        if (!state.settingsHydrated) {
-            CliPanel(
+    CliGlassHeaderScreen(
+        modifier = modifier,
+        header = {
+            CliScreenHeader(
+                label = stringResource(R.string.cli_dock_stats),
                 icon = R.drawable.pix_stats,
-                title = stringResource(R.string.cli_stats_title),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                CliLoadingRow(text = stringResource(R.string.cli_common_loading_settings))
-            }
-            return
-        }
-        if (!state.settings.statistics.enabled) {
-            CliPanel(
-                icon = R.drawable.pix_stats,
-                title = stringResource(R.string.cli_stats_title),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(
-                    text = stringResource(R.string.cli_stats_consent_body),
-                    style = CliType.body,
-                    color = colors.dim,
+                trailing = {
+                    CliStatsSettingsButton(
+                        enabled = state.settingsHydrated,
+                        onClick = actions.openSettings,
+                    )
+                },
+            )
+        },
+    ) { topInset ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = CliSpacing.md),
+        ) {
+            if (!state.settingsHydrated) {
+                CliSectionPreloader(
+                    text = stringResource(R.string.cli_common_loading_settings),
+                    modifier = Modifier.padding(top = topInset),
                 )
-                Spacer(modifier = Modifier.height(CliSpacing.sm))
-                CliDashedInfoNote(
-                    text = stringResource(R.string.cli_stats_consent_note),
-                )
-                Spacer(modifier = Modifier.height(CliSpacing.sm))
-                CliButton(
-                    label = stringResource(R.string.cli_stats_enable_module),
-                    onClick = actions.enableStatistics,
-                    modifier = Modifier.align(Alignment.CenterHorizontally),
-                )
+                return@Column
             }
-            return
-        }
-        if (!dashboard.ready) {
-            CliPanel(
-                icon = R.drawable.pix_stats,
-                title = stringResource(R.string.cli_stats_title),
-                modifier = Modifier.fillMaxWidth()
+            if (state.settings.statistics.enabled && !dashboard.ready) {
+                CliSectionPreloader(
+                    text = stringResource(R.string.cli_stats_collecting),
+                    modifier = Modifier.padding(top = topInset),
+                )
+                return@Column
+            }
+            if (!state.settings.statistics.enabled) {
+                Box(
+                    modifier = Modifier.fillMaxSize().padding(top = topInset),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            text = stringResource(R.string.cli_stats_consent_body),
+                            style = CliType.body,
+                            color = colors.dim,
+                            textAlign = TextAlign.Center,
+                        )
+                        Spacer(modifier = Modifier.height(CliSpacing.sm))
+                        CliDashedInfoNote(
+                            text = stringResource(R.string.cli_stats_consent_note),
+                            centered = true,
+                        )
+                        Spacer(modifier = Modifier.height(CliSpacing.sm))
+                        CliButton(
+                            label = stringResource(R.string.cli_stats_enable_module),
+                            onClick = actions.enableStatistics,
+                        )
+                    }
+                }
+                return@Column
+            }
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState()),
             ) {
-                CliLoadingRow(text = stringResource(R.string.cli_stats_collecting))
+                Spacer(modifier = Modifier.height(topInset))
+                CliStatsBody(state = state, home = home, onSelectWindow = actions.selectWindow)
+                CliChromeTailSpacer()
             }
-            return
         }
-
-        CliStatsBody(state = state, home = home, onSelectWindow = actions.selectWindow)
     }
 }
 
-/**
- * Everything the statistics screen can do to the world. Three callbacks instead of the whole
- * [HomeViewModel]: [CliStatsContent] is then composable on its own — see the `@Preview`s in the
- * debug source set — which is the point of splitting the screen in two. (The settings sheet still
- * takes the view model; it writes a dozen settings and narrowing it is a separate job.)
- */
 internal data class CliStatsActions(
     val openSettings: () -> Unit,
     val enableStatistics: () -> Unit,
     val selectWindow: (StatisticsWindow) -> Unit,
 )
 
-/** Header gear — the only entry into statistics settings (the CLI has no top bar). */
 @Composable
 private fun CliStatsSettingsButton(
     enabled: Boolean,
@@ -204,24 +189,21 @@ private fun CliStatsSettingsButton(
 ) {
     val colors = LocalCliColors.current
     Box(
-        // requiredSize: the 48dp target overlaps the fixed header slot without inflating the row.
         modifier = Modifier
             .requiredSize(SETTINGS_BUTTON_SIZE)
+            .offset(x = SETTINGS_BUTTON_EDGE_SHIFT)
             .cliPressable(enabled = enabled, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         CliPixIcon(
             id = R.drawable.pix_settings,
             contentDescription = stringResource(R.string.cli_stats_settings_title),
-            // Dimmed until settings hydrate: the sheet cannot open before then, and a gear that
-            // presses but does nothing reads as a broken screen.
+            size = SETTINGS_BUTTON_GLYPH_SIZE,
             tint = if (enabled) colors.accent else colors.faint,
         )
     }
 }
 
-// Group order is the user's explicit requirement: overview, firewall, profiles+protocols, dns,
-// apps. The Tor table goes last: not part of the five, but its data is visible nowhere else.
 @Composable
 private fun CliStatsBody(
     state: StatisticsRouteUiState,
@@ -232,20 +214,15 @@ private fun CliStatsBody(
         state.appTrafficWindows,
         state.trafficWindows,
         state.i2pTrafficHistory,
-        state.anomalyEvents,
         state.statisticsDashboard.nowMs,
     ) {
         cliStatsHero(
             windows = state.appTrafficWindows,
             deviceWindows = state.trafficWindows,
             i2pBuckets = state.i2pTrafficHistory.buckets,
-            anomalyEvents = state.anomalyEvents,
             nowMs = state.statisticsDashboard.nowMs,
         )
     }
-    // Inside the dashboard.ready gate, so nowMs is a real bucketed clock, not 0. The device
-    // windows preserve the recorded VPN/TOR split for both the graph and its traffic totals; the
-    // I2P store supplies its independent graph/summary lane.
     val overview = remember(
         state.appTrafficWindows,
         state.protocolMetricEvents,
@@ -295,7 +272,7 @@ private fun CliStatsBody(
             lanes = chartLanes,
             onSelectWindow = onSelectWindow,
         )
-        CliStatsFirewallGroup(state = state, hero = hero)
+        CliStatsFirewallGroup(state = state)
         CliStatsProfileTablePanel(state.statisticsDashboard.statistics.profileTraffic)
         CliStatsVpnProtocolTablePanel(
             window = state.settings.ui.statisticsWindow,
@@ -315,17 +292,6 @@ private fun CliStatsBody(
     }
 }
 
-/**
- * Group (1): vpn/tor/i2p traffic, average latency, vpn errors and best/worst protocols for the
- * chosen window; the day/week/month dropdown persists forever. Every row here is cut by that
- * window — the "all time" label is mandatory on the ones that fall back to a cumulative number
- * and therefore do not react to the dropdown.
- */
-/**
- * Which lanes the chart speaks for. Same rule for every one of them as the Tor row above: the
- * module's own switch, or bytes that were actually measured on it — a lane is never hidden after
- * it moved traffic, and never claimed for a module the user turned off.
- */
 internal fun cliStatsChartLanes(
     overview: CliStatsOverview,
     settings: Settings,
@@ -347,7 +313,6 @@ private fun CliStatsOverviewPanel(
     onSelectWindow: (StatisticsWindow) -> Unit,
 ) {
     val colors = LocalCliColors.current
-    // Window labels resolve before building options: no stringResource inside a map lambda.
     val dayLabel = stringResource(R.string.cli_stats_range_day)
     val weekLabel = stringResource(R.string.cli_stats_range_week)
     val monthLabel = stringResource(R.string.cli_stats_range_month)
@@ -376,8 +341,6 @@ private fun CliStatsOverviewPanel(
                 valueColor = colors.vpn,
             )
         }
-        // A disabled module gets no status-shaped traffic row. Historical traffic keeps the row
-        // and chart lane visible even after Tor is turned off.
         if (lanes.tor) {
             CliRowDivider()
             CliKeyValue(
@@ -386,8 +349,6 @@ private fun CliStatsOverviewPanel(
                 valueColor = colors.tor,
             )
         }
-        // A live/engaged module gets its row before the first sample; historical I2P keeps the row
-        // after it is paused, exactly like the other route lanes.
         if (lanes.i2p) {
             CliRowDivider()
             CliKeyValue(
@@ -396,12 +357,11 @@ private fun CliStatsOverviewPanel(
                 valueColor = colors.i2p,
             )
         }
-        // Always on screen — an empty window renders the grid at zero instead of vanishing.
         Spacer(modifier = Modifier.height(CliSpacing.xs))
         CliStatsSparkline(
             buckets = overview.buckets,
             lanes = lanes,
-            window = overview.window,
+            axis = overview.axis,
         )
         Spacer(modifier = Modifier.height(CliSpacing.xs))
         overview.peakRateBytesPerSec?.let { peak ->
@@ -424,7 +384,6 @@ private fun CliStatsOverviewPanel(
             value = statsSourceValue(overview.latencySource, CliFormat.latency(overview.avgLatencyMs)),
             valueColor = if (overview.latencySource == CliStatsOverviewSource.NONE) colors.dim else colors.fg,
         )
-        // The share alone: the raw failures/attempts pair beside it said the same thing twice.
         CliRowDivider()
         CliKeyValue(
             key = stringResource(R.string.cli_stats_key_vpn_errors),
@@ -435,9 +394,6 @@ private fun CliStatsOverviewPanel(
                 else -> colors.ok
             },
         )
-        // These two name WHICH protocol, and that is all they are for. Their own error share used
-        // to ride along and put a third and fourth percentage under the one above it; the numbers
-        // per protocol live in the VPN protocols table.
         CliRowDivider()
         CliStatsProtocolErrorRow(
             key = stringResource(R.string.cli_stats_key_errors_worst),
@@ -461,7 +417,6 @@ private fun CliStatsOverviewPanel(
     }
 }
 
-/** The protocol's name, or the empty state: a zero here would be a different claim. */
 @Composable
 private fun CliStatsProtocolErrorRow(
     key: String,
@@ -480,7 +435,6 @@ private fun CliStatsProtocolErrorRow(
     )
 }
 
-/** Value with a source label: window as-is, cumulative gets a note, empty reads "no data". */
 @Composable
 private fun statsSourceValue(
     source: CliStatsOverviewSource,
@@ -505,25 +459,16 @@ internal fun statisticsWindowLabel(
         StatisticsWindow.MONTH -> monthLabel
     }
 
-/**
- * Group (2): blocked-connection attempts and anomalies. Visible ONLY while the firewall is on —
- * the user's explicit requirement, so the anomaly detector hides with it.
- */
 @Composable
-private fun CliStatsFirewallGroup(
-    state: StatisticsRouteUiState,
-    hero: CliStatsHero,
-) {
+private fun CliStatsFirewallGroup(state: StatisticsRouteUiState) {
     if (!state.settings.expert.firewallEnabled) return
     CliStatsFirewallPanel(state)
-    CliStatsAnomalyPanel(state = state, hero = hero)
 }
 
 @Composable
 private fun CliStatsFirewallPanel(state: StatisticsRouteUiState) {
     val colors = LocalCliColors.current
     val expert = state.settings.expert
-    // The BLOCK-lane list only counts while the blocking switch is on.
     val blockedPackages = if (expert.blockedPackagesEnabled) expert.blockedLanePackages() else emptyList()
     val nowMs = state.statisticsDashboard.nowMs.toStatisticsUiNowBucket()
     val rows = remember(state.networkActivityEvents, blockedPackages, nowMs) {
@@ -546,7 +491,6 @@ private fun CliStatsFirewallPanel(state: StatisticsRouteUiState) {
             value = attempts.toString(),
             valueColor = if (attempts > 0) colors.warn else colors.ok,
         )
-        // An index instead of firstOrNull-per-row over the whole app inventory.
         val installedIndex = remember(state.installedApps) {
             state.installedApps.associateBy { it.packageName }
         }
@@ -557,81 +501,6 @@ private fun CliStatsFirewallPanel(state: StatisticsRouteUiState) {
     }
 }
 
-/**
- * Anomaly detail: 24h count and share of anomalous traffic, severity breakdown and latest
- * events. Visible only while the detector is enabled.
- */
-@Composable
-private fun CliStatsAnomalyPanel(
-    state: StatisticsRouteUiState,
-    hero: CliStatsHero,
-) {
-    if (!state.settings.anomaly.enabled) return
-    val colors = LocalCliColors.current
-    // remember on every panel selection: the whole screen recomposes on each statistics tick,
-    // and re-sorting unchanged input is wasted work (hero/overview canon).
-    val events = remember(state.anomalyEvents) {
-        state.anomalyEvents.sortedByDescending { it.createdAtMs }
-    }
-    Spacer(modifier = Modifier.height(CliSpacing.sm))
-    CliPanel(
-        title = stringResource(R.string.cli_stats_anomalies_title),
-        icon = R.drawable.pix_status,
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        CliKeyValue(
-            key = stringResource(R.string.cli_stats_key_anomalies),
-            value = "${CliFormat.percent(hero.anomalyTrafficRatio24h)} · ${hero.anomalyCount24h}",
-            valueColor = if (hero.anomalyCount24h > 0) colors.warn else colors.ok,
-        )
-        AnomalySeverity.entries.forEach { severity ->
-            val count = events.count { it.severity == severity }
-            if (count > 0) {
-                CliRowDivider()
-                CliKeyValue(
-                    key = severity.name.lowercase(),
-                    value = count.toString(),
-                    valueColor = if (severity == AnomalySeverity.HIGH) colors.err else colors.dim,
-                )
-            }
-        }
-        val installedIndex = remember(state.installedApps) {
-            state.installedApps.associateBy { it.packageName }
-        }
-        events.take(ANOMALY_ROWS_MAX).forEach { event ->
-            val app = event.packageName
-                ?.let { pkg -> appLabel(installedIndex, pkg) }
-            CliRowDivider()
-            Row(modifier = Modifier.padding(vertical = 2.dp)) {
-                Text(
-                    text = "[${CliFormat.clock(event.createdAtMs)}] ",
-                    style = CliType.small,
-                    color = colors.faint,
-                )
-                Text(
-                    text = listOfNotNull(event.type.name.lowercase(), app).joinToString(" · "),
-                    style = CliType.small,
-                    color = colors.fg,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f),
-                )
-            }
-        }
-        if (events.isEmpty()) {
-            Text(
-                text = stringResource(R.string.cli_stats_anomalies_empty),
-                style = CliType.small,
-                color = colors.dim,
-            )
-        }
-    }
-}
-
-/**
- * Group (4): dns filter — block/pass, category breakdown and top apps. Visible exactly while the
- * filter is on (user requirement), not once queries accumulate.
- */
 @Composable
 private fun CliStatsDnsPanel(state: StatisticsRouteUiState) {
     if (!state.settings.dns.dnsRuleSetFilteringEnabled()) return
@@ -679,11 +548,6 @@ private fun CliStatsDnsPanel(state: StatisticsRouteUiState) {
     }
 }
 
-/**
- * Tor detail: phase/bootstrap/uptime + 24h traffic, route scope and exit node (flag + ip + geo).
- * Visible while anything Tor-meaningful exists. Numbers are deliberately fixed 24h — the
- * overview window does not cut them, as the key's label states.
- */
 @Composable
 private fun CliStatsTorPanel(
     state: StatisticsRouteUiState,
@@ -768,7 +632,6 @@ private fun CliStatsTorPanel(
     }
 }
 
-/** Tor's selected-app scope is visual: real launcher icons, six at most, then a compact +N. */
 @Composable
 private fun CliStatsTorAppScopeRow(
     packages: List<String>,
@@ -833,9 +696,10 @@ private fun appLabel(installedIndex: Map<String, InstalledAppOption>, packageNam
     installedIndex[packageName]?.label?.ifEmpty { packageName } ?: packageName
 
 private val SETTINGS_BUTTON_SIZE = 48.dp
+private val SETTINGS_BUTTON_GLYPH_SIZE = 20.dp
+private val SETTINGS_BUTTON_EDGE_SHIFT = 12.dp
 
 private const val DNS_APP_ROWS_MAX = 4
-private const val ANOMALY_ROWS_MAX = 4
 private const val FIREWALL_ROWS_MAX = 4
 private const val TOR_APP_ICONS_MAX = 6
 private val TOR_APP_ICON_SIZE = 16.dp

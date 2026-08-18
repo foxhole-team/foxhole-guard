@@ -6,10 +6,6 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-// R5: the routing-change decision matrix. A settings change against a LIVE runtime either
-// reloads it in place (hot-set: no restart, no prompt) or demands a full teardown->start
-// transition that the UI confirms first. Every live-change entry point must consult this one
-// matrix instead of comparing traffic modes ad hoc.
 class HomeViewModelRoutingDecisionTest {
 
     private fun shape(
@@ -68,11 +64,8 @@ class HomeViewModelRoutingDecisionTest {
             java.io.File("src/main/kotlin/com/foxhole/guard/ui/HomeViewModelAppRoutingSettingsSupport.kt").readText()
         val runtimeSupportSource =
             java.io.File("src/main/kotlin/com/foxhole/guard/ui/HomeViewModelRuntimeSupport.kt").readText()
-        // Split-mode, app-set and privacy-route changes decide via the matrix...
         assertTrue(appRoutingSource.contains("resolveRoutingChangeAction"))
-        // ...and so does the shared reload gate used by the proxy/tor setting handlers.
         assertTrue(runtimeSupportSource.contains("resolveRoutingChangeAction"))
-        // The ad-hoc comparisons the matrix replaced must stay gone.
         assertFalse(appRoutingSource.contains("liveSnapshot.trafficMode != targetTrafficMode"))
         assertFalse(appRoutingSource.contains("targetTrafficMode == liveTrafficMode"))
         assertFalse(appRoutingSource.contains("shouldUseHotReloadForPrivacyRouteModeChange"))

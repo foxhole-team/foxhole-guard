@@ -5,12 +5,6 @@ import com.foxhole.guard.runtime.RemoteDownloadProgress
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 
-/**
- * Component-update state owned in one place: DNS filter, Tor bridge and GeoIP database refresh
- * flows plus their in-flight jobs. HomeViewModel exposes same-named aliases so the Support-file
- * call sites read unchanged; the fields narrow behind methods once the source-contract tests
- * stop pinning raw writes.
- */
 internal class HomeComponentUpdatesState {
     val dnsFilterRefreshInProgressMutable = MutableStateFlow(false)
     val dnsFilterUpdateAvailableMutable = MutableStateFlow(false)
@@ -20,6 +14,8 @@ internal class HomeComponentUpdatesState {
     val torBridgeDownloadProgressMutable = MutableStateFlow<RemoteDownloadProgress?>(null)
     val threatIntelUpdatePhaseMutable = MutableStateFlow(FoxholeUpdatePhase.IDLE)
     val threatIntelDownloadProgressMutable = MutableStateFlow<RemoteDownloadProgress?>(null)
+    val tlsFingerprintUpdatePhaseMutable = MutableStateFlow(FoxholeUpdatePhase.IDLE)
+    val tlsFingerprintDownloadProgressMutable = MutableStateFlow<RemoteDownloadProgress?>(null)
     val geoIpDatabaseUiStateMutable = MutableStateFlow(GeoIpDatabaseUiState())
     val componentGeoIpUpdateAvailableMutable = MutableStateFlow(false)
     val catalogPresetPreviewsMutable =
@@ -31,5 +27,6 @@ internal class HomeComponentUpdatesState {
     var geoIpDatabaseUpdateJob: Job? = null
     var torBridgeManualRefreshJob: Job? = null
     var threatIntelManualRefreshJob: Job? = null
+    var tlsFingerprintManualRefreshJob: Job? = null
     var appUpdateJob: Job? = null
 }

@@ -1,53 +1,15 @@
 #!/usr/bin/env bash
-#
-# Builds libi2pd.so (the i2pd daemon executable, packaged under a lib*.so name so Android extracts it
-# into nativeLibraryDir and lets us exec it, exactly like libTor.so) from the pinned i2pd submodule at
-# third_party/i2pd, for every shipped ABI. Reproducible from a clean checkout — no prebuilt ELF in
-# the repo — which is what F-Droid's scanner requires.
-#
-# STATUS: authored + executed end-to-end 2026-07-12 on Ubuntu 26.04 with NDK r28c. The arm64-v8a
-# artifact was smoke-tested on a device: i2pd v2.60.0 boots, reseeds against the bundled certificates,
-# and builds inbound+outbound tunnels. Re-run on a clean box to reproduce all four ABIs.
-#
-# What it does, per shipped ABI (arm64-v8a armeabi-v7a x86_64):
-#   1. Cross-compiles OpenSSL (static, no-shared) from the pinned source tarball.
-#   2. Cross-compiles Boost filesystem+program_options (static) directly with b2 — the only two
-#      components i2pd needs. (Boost-for-Android's helper caps at 1.82; b2 handles any version.)
-#   3. Configures i2pd against those + the NDK's own zlib, links a dynamic PIE (WITH_STATIC=OFF: a
-#      fully static Android binary breaks getaddrinfo/NSS, which i2pd needs for reseed DNS), with a
-#      static libc++ so no libc++_shared.so is required at runtime.
-#   4. Copies build/i2pd -> app/src/main/jniLibs/<abi>/libi2pd.so (extractable, +x).
-# It also syncs i2pd's reseed/family certificates into the app assets: without them reseed cannot
-# verify the su3 bundles and the router never bootstraps.
-#
-# Required env:
-#   ANDROID_NDK_HOME          - NDK r28 root (has build/cmake/android.toolchain.cmake)
-# Optional env:
-#   I2PD_ABIS                 - space-separated ABI list (default: all shipped ABIs)
-#   I2PD_WORK_DIR             - scratch dir for OpenSSL/Boost builds (default: build/i2pd-deps)
-#   I2PD_OPENSSL_VERSION      - default 3.5.4
-#   I2PD_BOOST_VERSION        - default 1.84.0
-#   I2PD_OPENSSL_SHA256       - required when overriding the OpenSSL version
-#   I2PD_BOOST_SHA256         - required when overriding the Boost version
 set -euo pipefail
 
-repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source-path=SCRIPTDIR source=native-deps.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/native-deps.sh"
+
+repo_root="$native_deps_repo_root"
 i2pd_dir="${I2PD_SOURCE_DIR:-$repo_root/third_party/i2pd}"
 version_file="$repo_root/third_party/i2pd.version"
 read -r -a abis <<< "${I2PD_ABIS:-arm64-v8a armeabi-v7a x86_64}"
 api="${I2PD_ANDROID_API:-26}"
-work="${I2PD_WORK_DIR:-$repo_root/build/i2pd-deps}"
-openssl_ver="${I2PD_OPENSSL_VERSION:-3.5.4}"
-boost_ver="${I2PD_BOOST_VERSION:-1.84.0}"
-boost_us="boost_${boost_ver//./_}"
-case "$openssl_ver" in
-  3.5.4) openssl_sha256="${I2PD_OPENSSL_SHA256:-967311f84955316969bdb1d8d4b983718ef42338639c621ec4c34fddef355e99}" ;;
-  *) openssl_sha256="${I2PD_OPENSSL_SHA256:?set I2PD_OPENSSL_SHA256 when overriding I2PD_OPENSSL_VERSION}" ;;
-esac
-case "$boost_ver" in
-  1.84.0) boost_sha256="${I2PD_BOOST_SHA256:-cc4b893acf645c9d4b698e9a0f08ca8846aa5d6c68275c14c3e7949c24109454}" ;;
-  *) boost_sha256="${I2PD_BOOST_SHA256:?set I2PD_BOOST_SHA256 when overriding I2PD_BOOST_VERSION}" ;;
-esac
+work="$i2pd_work_dir"
 
 log() { printf '[build-i2pd] %s\n' "$*"; }
 
@@ -67,8 +29,6 @@ fi
 : "${ANDROID_NDK_HOME:?set ANDROID_NDK_HOME or Android SDK root with an installed NDK}"
 toolchain="$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake"
 [[ -f "$toolchain" ]] || { echo "NDK cmake toolchain not found: $toolchain" >&2; exit 1; }
-# The NDK ships exactly one host toolchain per platform (darwin-x86_64 is also the Apple Silicon
-# tag); resolve it instead of hardcoding the Linux one so the bootstrap is reproducible on macOS.
 case "$(uname -s)" in
   Darwin) host_tag=darwin-x86_64 ;;
   Linux) host_tag=linux-x86_64 ;;
@@ -80,39 +40,9 @@ sysroot="$toolbin/../sysroot"
 jobs="$( (command -v nproc >/dev/null 2>&1 && nproc) || sysctl -n hw.ncpu )"
 mkdir -p "$work"
 
-dl() { curl -fL --retry 6 --retry-delay 4 --retry-all-errors -C - --connect-timeout 20 -o "$2" "$1"; }
+fetch_verified "$openssl_url" "$work/openssl.tgz" "$openssl_sha256" "OpenSSL $openssl_ver"
+fetch_verified "$boost_url" "$work/$boost_us.tar.bz2" "$boost_sha256" "Boost $boost_ver"
 
-sha256_file() {
-  if command -v sha256sum >/dev/null 2>&1; then
-    sha256sum "$1" | awk '{print $1}'
-  else
-    shasum -a 256 "$1" | awk '{print $1}'
-  fi
-}
-
-verify_source_archive() {
-  local archive="$1" expected="$2" label="$3" actual
-  actual="$(sha256_file "$archive")"
-  if [[ "$actual" != "$expected" ]]; then
-    printf '%s source checksum mismatch: expected %s, got %s\n' "$label" "$expected" "$actual" >&2
-    exit 1
-  fi
-  log "verified $label source sha256=$expected"
-}
-
-# ---- source tarballs (pre-seed $work/openssl.tgz and $work/$boost_us.tar.bz2 to skip download) ----
-if [[ ! -f "$work/openssl.tgz" ]]; then
-  log "downloading OpenSSL $openssl_ver"
-  dl "https://github.com/openssl/openssl/releases/download/openssl-$openssl_ver/openssl-$openssl_ver.tar.gz" "$work/openssl.tgz"
-fi
-if [[ ! -f "$work/$boost_us.tar.bz2" ]]; then
-  log "downloading Boost $boost_ver"
-  dl "https://archives.boost.io/release/$boost_ver/source/$boost_us.tar.bz2" "$work/$boost_us.tar.bz2"
-fi
-verify_source_archive "$work/openssl.tgz" "$openssl_sha256" "OpenSSL $openssl_ver"
-verify_source_archive "$work/$boost_us.tar.bz2" "$boost_sha256" "Boost $boost_ver"
-
-# ---- apply tracked i2pd source patches idempotently (same approach as build-libbox.sh) ----
 shopt -s nullglob
 for patch_file in "$repo_root"/scripts/patches/i2pd-*.patch; do
   patch_name="$(basename "$patch_file")"
@@ -125,7 +55,6 @@ for patch_file in "$repo_root"/scripts/patches/i2pd-*.patch; do
 done
 shopt -u nullglob
 
-# ---- sync reseed/family certificates into app assets (required for reseed to verify su3) ----
 cert_src="$i2pd_dir/contrib/certificates"
 cert_dst="$repo_root/app/src/main/assets/i2pd/certificates"
 if [[ -d "$cert_src" ]]; then
@@ -134,7 +63,6 @@ if [[ -d "$cert_src" ]]; then
   log "synced $(find "$cert_dst" -type f | wc -l | tr -d ' ') reseed/family certificates into assets"
 fi
 
-# ---- per-ABI toolchain mapping ----
 ssl_target_for() { case "$1" in
   arm64-v8a) echo android-arm64 ;; armeabi-v7a) echo android-arm ;;
   x86) echo android-x86 ;; x86_64) echo android-x86_64 ;; esac; }
@@ -153,7 +81,6 @@ for abi in "${abis[@]}"; do
   ssl_target="$(ssl_target_for "$abi")"; clang="$(clang_for "$abi")"; triple="$(triple_for "$abi")"
   openssl_out="$work/openssl-$abi"; boost_out="$work/boost-$abi"
 
-  # OpenSSL
   if [[ ! -f "$openssl_out/lib/libcrypto.a" && ! -f "$openssl_out/lib64/libcrypto.a" ]]; then
     log "[$abi] OpenSSL"
     rm -rf "$work/openssl-src-$abi"; mkdir -p "$work/openssl-src-$abi"
@@ -166,12 +93,9 @@ for abi in "${abis[@]}"; do
   fi
   [[ -d "$openssl_out/lib64" ]] && ln -sfn lib64 "$openssl_out/lib" 2>/dev/null || true
 
-  # Boost (filesystem + program_options) via b2
   if [[ ! -f "$boost_out/lib/libboost_filesystem.a" ]]; then
     log "[$abi] Boost"
     [[ -d "$work/$boost_us" ]] || tar xf "$work/$boost_us.tar.bz2" -C "$work"
-    # b2 splits a hyphenated toolset version tag into subfeatures (clang-armeabi-v7a breaks), so the
-    # tag must be alphanumeric only.
     b2tag="clang-ndk${abi//[-_]/}"
     ( cd "$work/$boost_us"
       [[ -x ./b2 ]] || ./bootstrap.sh --with-libraries=filesystem,program_options >/dev/null
@@ -189,7 +113,6 @@ EOF
         --with-filesystem --with-program_options install >/dev/null )
   fi
 
-  # i2pd -> libi2pd.so
   log "[$abi] i2pd"
   build_dir="$repo_root/build/i2pd/$abi"; out_dir="$repo_root/app/src/main/jniLibs/$abi"
   rm -rf "$build_dir"; mkdir -p "$build_dir" "$out_dir"

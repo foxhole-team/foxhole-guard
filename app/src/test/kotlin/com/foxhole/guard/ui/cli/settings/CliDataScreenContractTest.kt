@@ -22,7 +22,6 @@ class CliDataScreenContractTest {
             assertTrue("missing destructive action $action", destructivePanel.contains(action))
         }
 
-        // Сам ряд поднят в components/CliRows.kt — контракт arm-then-модалка проверяется там.
         val destructiveRow = componentsRowsFile().substringAfter("internal fun CliDestructiveRow")
         assertTrue(destructiveRow.contains("if (confirmAction == key)"))
         assertTrue(destructiveRow.contains("CliConfirmSheet("))
@@ -38,8 +37,6 @@ class CliDataScreenContractTest {
         assertTrue(source.contains("R.string.cli_data_restore_preview"))
         assertTrue(source.contains("R.string.cli_data_restore_confirm"))
         assertTrue(source.contains("viewModel.restoreBackup(document)"))
-        // Отказ и применение гасят оба состояния: документ и saveable-uri, из которого
-        // превью перечитывается после пересоздания экрана.
         assertTrue(source.contains("pendingRestore = null"))
         assertTrue(source.contains("pendingRestoreUri = null"))
     }

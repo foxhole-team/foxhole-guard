@@ -40,6 +40,14 @@ interface FoxholeRuntime {
 
     fun drainRuntimeAuditEventsJson(max: Int): String? = null
 
+    /** Installs an already persisted signed DNS bundle into the current engine generation. */
+    suspend fun installDnsRuleSet(
+        name: String,
+        manifest: ByteArray,
+        signature: ByteArray,
+        artifact: ByteArray,
+    ): RuntimeDnsRuleSetInstallOutcome = RuntimeDnsRuleSetInstallOutcome.Deferred
+
     /**
      * Brings the LAN proxy in line with [request] on the live session, or takes it down when the
      * request is null. [blocked] states a reason the caller already knows makes publishing
@@ -90,4 +98,14 @@ interface FoxholeRuntime {
 
     fun onDefaultNetworkLost() {
     }
+}
+
+sealed interface RuntimeDnsRuleSetInstallOutcome {
+    data class Installed(val revision: Long) : RuntimeDnsRuleSetInstallOutcome
+
+    data object Deferred : RuntimeDnsRuleSetInstallOutcome
+
+    data object Superseded : RuntimeDnsRuleSetInstallOutcome
+
+    data object Rejected : RuntimeDnsRuleSetInstallOutcome
 }

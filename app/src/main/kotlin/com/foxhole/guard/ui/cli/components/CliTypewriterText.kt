@@ -14,12 +14,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import com.foxhole.guard.ui.cli.CliType
 import kotlinx.coroutines.delay
 
-/**
- * Terminal-style text that TYPES its content in and, when [text] changes, DELETES back to the
- * common prefix before typing the new tail — the home-screen status idiom. Enter into composition
- * types from empty; [instant] renders statically (the "already typed once" path for the cold-start
- * brand header).
- */
 @Composable
 internal fun CliTypewriterText(
     text: String,
@@ -36,14 +30,13 @@ internal fun CliTypewriterText(
             displayed = text
             return@LaunchedEffect
         }
-        // Delete down to the longest common prefix, then type the new tail.
         val common = displayed.commonPrefixWith(text).length
         while (displayed.length > common) {
-            delay(DELETE_CHAR_DELAY_MS)
+            delay(CLI_ERASE_STEP_MS)
             displayed = displayed.dropLast(1)
         }
         while (displayed.length < text.length) {
-            delay(TYPE_CHAR_DELAY_MS)
+            delay(CLI_TYPE_STEP_MS)
             displayed = text.take(displayed.length + 1)
         }
         onFullyTyped?.invoke()
@@ -58,5 +51,26 @@ internal fun CliTypewriterText(
     )
 }
 
-private const val TYPE_CHAR_DELAY_MS = 18L
-private const val DELETE_CHAR_DELAY_MS = 9L
+@Composable
+internal fun rememberCliTypedText(
+    text: String,
+    enabled: Boolean = true,
+): String {
+    var displayed by remember { mutableStateOf(text) }
+    LaunchedEffect(text, enabled) {
+        if (!enabled) {
+            displayed = text
+            return@LaunchedEffect
+        }
+        val common = displayed.commonPrefixWith(text).length
+        while (displayed.length > common) {
+            delay(CLI_ERASE_STEP_MS)
+            displayed = displayed.dropLast(1)
+        }
+        while (displayed.length < text.length) {
+            delay(CLI_TYPE_STEP_MS)
+            displayed = text.take(displayed.length + 1)
+        }
+    }
+    return if (enabled) displayed else text
+}

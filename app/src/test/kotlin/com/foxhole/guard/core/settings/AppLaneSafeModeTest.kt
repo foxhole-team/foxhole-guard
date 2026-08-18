@@ -9,11 +9,6 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/**
- * Safe mode (the "factory expert defaults" flag, on for every fresh install) must end the moment
- * the user pins an app to any lane: while it is on, [Settings.normalized] strips every non-BLOCK
- * lane, so a wrong safe-mode clause makes Apps-screen additions silently vanish on write.
- */
 internal class AppLaneSafeModeTest {
     private val pristine = Settings()
 
@@ -28,8 +23,6 @@ internal class AppLaneSafeModeTest {
 
         assertFalse(result.connection.safeModeEnabled)
         assertEquals(AppTunnelLane.VPN, result.expert.appAssignments["com.app.one"])
-        // Pinning an app records WHERE it goes under a split; it must not switch the VPN off
-        // whole-device reach. Whole device ignores the assignment until the user picks a split.
         assertEquals(PerAppRoutingMode.FULL_TUNNEL, result.expert.perAppRoutingMode)
         assertEquals(TrafficMode.TUNNEL, result.traffic.mode)
     }
@@ -80,8 +73,6 @@ internal class AppLaneSafeModeTest {
                 .fold(pristine) { acc, packageName -> updateAppLaneIn(acc, packageName, AppTunnelLane.BLOCK) }
                 .normalized()
 
-        // Same destination as the old per-package loop — the difference is that the runtime never
-        // observes the two intermediate memberships the loop published.
         assertEquals(sequential.expert.appAssignments, batched.expert.appAssignments)
         assertEquals(3, batched.expert.appAssignments.size)
         assertTrue(batched.expert.blockedPackagesEnabled)

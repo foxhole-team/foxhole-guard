@@ -20,6 +20,24 @@ class PublicUrlPolicyTest {
         "https://192.168.0.10/config".ensurePublicHttpsUrl()
     }
 
+    @Test(expected = IllegalArgumentException::class)
+    fun `rejects the reserved ietf assignment block`() {
+        "https://192.0.0.8/config".ensurePublicHttpsUrl()
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun `rejects the documentation block`() {
+        "https://192.0.2.10/config".ensurePublicHttpsUrl()
+    }
+
+    @Test
+    fun `accepts routable space inside 192 0 0 0 slash 16`() {
+        assertEquals(
+            "https://192.0.5.10/config",
+            "https://192.0.5.10/config".ensurePublicHttpsUrl().toString(),
+        )
+    }
+
     /**
      * The connect path resolves the profile's own server host while the tunnel it is rebuilding is
      * already up, so the answer comes out of FoxCore's fake-IP pool. Refusing it as "private" is

@@ -3,8 +3,9 @@ title = "Foxhole gitleaks config"
 [extend]
 useDefault = true
 
-[allowlist]
+[[allowlists]]
 description = "vendored/generated files and deterministic non-secret fixtures"
+condition = "OR"
 paths = [
   '''(?:^|/)\.idea(?:/.*)?$''',
   '''(?:^|/)artifacts(?:/.*)?$''',
@@ -26,6 +27,7 @@ paths = [
 regexes = [
   '''abcdefghijklmnopqrstuvwxyz0123456789''',
   '''privacy-route-[a-z0-9-]+''',
+  '''amnezia-private-key''',
 ]
 
 # The dead test infrastructure this repository used to carry in tests, fixtures, notes and docs.

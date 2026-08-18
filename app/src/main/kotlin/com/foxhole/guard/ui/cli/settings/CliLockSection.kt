@@ -34,17 +34,8 @@ import com.foxhole.guard.ui.onGuardHostingSelected
 import com.foxhole.guard.ui.onSystemBiometricToggled
 import kotlinx.coroutines.launch
 
-/**
- * The security group: data encryption (custom-password lifecycle through [CliPinPanel] over the
- * setup coordinator, the relock timeout, Sentinel and biometrics) and the screenshot block. SYSTEM
- * lock stays configurable only in the classic UI in v1 - an existing SYSTEM mode is shown read-only
- * here.
- *
- * The firewall and anomaly detection used to lead this group and are now modules of their own (see
- * CliModulesSection): both have a surface and a switch, which is what makes something a module, and
- * a device-wide packet filter read wrong as a preference row beside "block screenshots".
- */
 @Composable
+@Suppress("LongMethod")
 internal fun CliSecuritySection(
     viewModel: HomeViewModel,
     settings: Settings,
@@ -54,8 +45,6 @@ internal fun CliSecuritySection(
     val colors = LocalCliColors.current
     // saveable: rotation mid-flow must not reset ENABLE/CHANGE/DISABLE to the start.
     var pinFlow by rememberSaveable { mutableStateOf<CliPinFlow?>(null) }
-    // The on/off answer is taken before the key entry opens, so the section stays on screen
-    // underneath the modal that asks it.
     var consentFlow by rememberSaveable { mutableStateOf<CliPinFlow?>(null) }
     var eventMonitoring by rememberSaveable { mutableStateOf(true) }
     var appJournal by rememberSaveable { mutableStateOf(true) }
@@ -80,9 +69,7 @@ internal fun CliSecuritySection(
         expanded = expanded,
         onToggleExpanded = onToggleExpanded,
     ) {
-        // Group order is a product decision: data encryption, then screenshots.
         if (mode == AppLockMode.PASSWORD) {
-            // The dropdown carries the two password actions; nothing is "selected".
             CliDropdownRow(
                 label = stringResource(R.string.cli_lock_password),
                 icon = R.drawable.pix_lock,
@@ -93,8 +80,6 @@ internal fun CliSecuritySection(
                 ),
                 selectedId = null,
                 onSelect = { id ->
-                    // Changing a password is not switching encryption on or off, so it goes
-                    // straight to the key entry; disabling it asks first, like enabling does.
                     if (id == LOCK_OPT_CHANGE) {
                         pinFlow = CliPinFlow.CHANGE
                     } else {
@@ -128,13 +113,15 @@ internal fun CliSecuritySection(
             CliRowDivider()
         }
         if (mode == AppLockMode.PASSWORD) {
+            val eventMonitoringActive = settings.anomaly.enabled && settings.appLock.eventMonitoringEnabled
             CliToggleRow(
                 label = stringResource(R.string.cli_lock_event_monitoring),
                 icon = R.drawable.pix_shield,
-                checked = settings.appLock.eventMonitoringEnabled,
+                checked = eventMonitoringActive,
                 onToggle = viewModel::onEventMonitoringChanged,
+                enabled = settings.anomaly.enabled,
             )
-            if (settings.appLock.eventMonitoringEnabled) {
+            if (eventMonitoringActive) {
                 CliRowDivider()
                 CliDropdownRow(
                     label = stringResource(R.string.cli_lock_guard_hosting),
@@ -149,8 +136,10 @@ internal fun CliSecuritySection(
             }
             CliRowDivider()
         }
-        CliBiometricRow(viewModel = viewModel, settings = settings)
-        CliRowDivider()
+        if (mode != AppLockMode.OFF && viewModel.biometricStrongAvailable()) {
+            CliBiometricRow(viewModel = viewModel, settings = settings)
+            CliRowDivider()
+        }
         CliToggleRow(
             label = stringResource(R.string.cli_cfg_block_screenshots),
             icon = R.drawable.pix_forbidden,
@@ -174,18 +163,11 @@ internal fun CliSecuritySection(
     }
 }
 
-/**
- * Biometrics on top of either lock mode. SYSTEM = plain setting behind a confirm prompt;
- * PASSWORD = the prompt's cipher seals a hardware-bound master-key copy (donor contract).
- */
 @Composable
 private fun CliBiometricRow(
     viewModel: HomeViewModel,
     settings: Settings,
 ) {
-    if (settings.appLock.mode == AppLockMode.OFF || !viewModel.biometricStrongAvailable()) {
-        return
-    }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     CliToggleRow(

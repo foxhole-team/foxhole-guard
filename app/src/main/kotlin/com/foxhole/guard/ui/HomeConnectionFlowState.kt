@@ -6,11 +6,6 @@ import com.foxhole.core.model.TrafficMode
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 
-/**
- * Connection-flow state: auto-connect, reconnect, runtime-reload/restart prompts and the startup
- * profile stream. HomeViewModel exposes same-named aliases so the Support-file call sites read
- * unchanged.
- */
 internal class HomeConnectionFlowState(
     initialStartupProfile: Profile?,
 ) {
@@ -21,8 +16,6 @@ internal class HomeConnectionFlowState(
     val profileReconnectPromptUntilMutable = MutableStateFlow(0L)
     val startupActiveProfileMutable = MutableStateFlow(initialStartupProfile)
 
-    // A Home operating mode or VPN/Tor scenario parked while atomic application is off. Network
-    // rules never enter this state because they remain atomic unconditionally.
     val pendingRoutingScenarioConfirmationMutable =
         MutableStateFlow<PendingRoutingScenarioChange?>(null)
     var autoConnectJob: Job? = null

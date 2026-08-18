@@ -9,6 +9,7 @@ import com.foxhole.core.model.ConnectionSnapshot
 import com.foxhole.core.model.ConnectionState
 import com.foxhole.core.model.TrafficMode
 import com.foxhole.core.model.VpnSession
+import com.foxhole.core.runtime.FailClosedEvent
 import com.foxhole.core.runtime.FoxholeVpnRuntimeBridge
 import com.foxhole.core.runtime.LocalGuardMode
 import com.foxhole.core.runtime.i2pRuntimeActive
@@ -197,6 +198,13 @@ internal fun FoxholeVpnService.handleVpnNetworkLost(
         return
     }
     container.i2pdManager.markCarrierUnavailable()
+    runtimeInstanceStore.current()?.let { runtime ->
+        cutEveryFlowIfKillSwitchArmed(
+            runtime = runtime,
+            event = FailClosedEvent.TUNNEL_LOST,
+            reason = reason,
+        )
+    }
     activeVpnNetworkHandle = null
     invalidateValidationEpoch("vpn_network_lost")
     stopGeoRefresh()

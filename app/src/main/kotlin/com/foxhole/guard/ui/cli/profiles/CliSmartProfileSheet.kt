@@ -1,9 +1,13 @@
 package com.foxhole.guard.ui.cli.profiles
 
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -12,29 +16,26 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.foxhole.core.model.PerAppRoutingMode
 import com.foxhole.core.model.Profile
+import com.foxhole.core.model.TrafficMode
 import com.foxhole.guard.R
 import com.foxhole.guard.ui.HomeViewModel
 import com.foxhole.guard.ui.ProfilesRouteUiState
 import com.foxhole.guard.ui.cancelSmartProfileMetricsRefresh
 import com.foxhole.guard.ui.cli.CliSpacing
+import com.foxhole.guard.ui.cli.CliType
 import com.foxhole.guard.ui.cli.LocalCliColors
+import com.foxhole.guard.ui.cli.cliLabelText
 import com.foxhole.guard.ui.cli.components.CliBottomSheet
 import com.foxhole.guard.ui.cli.components.CliButton
 import com.foxhole.guard.ui.cli.components.CliConfirmSheet
 import com.foxhole.guard.ui.cli.components.CliContextHelpButton
 import com.foxhole.guard.ui.refreshSmartProfileMetrics
+import com.foxhole.guard.ui.refreshSmartProfileMetricsInVpnMode
 import com.foxhole.guard.ui.setSmartProfileProtocolEnabled
 
-/**
- * Smart-profile management on the shared [CliBottomSheet] (profiles screen only). It slides up
- * carrying the available-protocol table ([CliProtocolDropdown]) whose S column doubles as the
- * per-protocol on/off toggle (N1), and a single bottom row of two buttons: `[close]` dismisses,
- * `[test]` re-probes the metrics — this sheet and the profile detail sheet are the only places
- * where TEST lives. Picking a protocol row switches to it and dismisses the sheet so any resulting
- * switch confirm (B3/P2) is visible anchored to the bottom of the screen. Only meaningful for smart
- * profiles (`protocolOptions.size > 1`); the caller gates it.
- */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 internal fun CliSmartProfileSheet(
     viewModel: HomeViewModel,
@@ -51,6 +52,20 @@ internal fun CliSmartProfileSheet(
         icon = R.drawable.pix_profiles,
         trailing = { CliContextHelpButton(bodyRes = R.string.cli_help_smart_body) },
     ) {
+        Text(
+            text = cliLabelText(profile.name),
+            style = CliType.body,
+            color = colors.fg,
+            maxLines = 1,
+            modifier = Modifier
+                .fillMaxWidth()
+                .basicMarquee(
+                    iterations = Int.MAX_VALUE,
+                    initialDelayMillis = SMART_PROFILE_NAME_MARQUEE_DELAY_MS,
+                    repeatDelayMillis = SMART_PROFILE_NAME_MARQUEE_REPEAT_MS,
+                ),
+        )
+        Spacer(modifier = Modifier.height(CliSpacing.xs))
         CliProtocolDropdown(
             viewModel = viewModel,
             state = state,
@@ -63,7 +78,6 @@ internal fun CliSmartProfileSheet(
         Spacer(modifier = Modifier.height(CliSpacing.md))
         val refreshing = profile.id in state.smartProfileMetricsRefreshingProfileIds
         Row(horizontalArrangement = Arrangement.spacedBy(CliSpacing.sm)) {
-            // Sheet palette: the dismissing action wears the dashed err outline at the left.
             CliButton(
                 label = stringResource(R.string.cli_prof_smart_close),
                 color = colors.err,
@@ -81,11 +95,9 @@ internal fun CliSmartProfileSheet(
     }
 }
 
-/**
- * The one smart-profile TEST button. Its two homes — this sheet and the profile detail sheet —
- * must look and behave identically. While measuring it becomes an enabled Stop action, so the
- * retained structured Job is cancelled immediately instead of waiting for a probe timeout.
- */
+private const val SMART_PROFILE_NAME_MARQUEE_DELAY_MS = 700
+private const val SMART_PROFILE_NAME_MARQUEE_REPEAT_MS = 900
+
 @Composable
 internal fun CliSmartTestButton(
     viewModel: HomeViewModel,
@@ -105,7 +117,13 @@ internal fun CliSmartTestButton(
         onClick = {
             when (smartProfileTestAction(testing)) {
                 SmartProfileTestAction.START -> {
-                    if (protocolTestRequiresVpnOnlyConfirmation(home.settings.privacyRoute.enabled)) {
+                    if (
+                        protocolTestRequiresVpnOnlyConfirmation(
+                            privacyRouteEnabled = home.settings.privacyRoute.enabled,
+                            trafficMode = home.settings.traffic.mode,
+                            perAppRoutingMode = home.settings.expert.perAppRoutingMode,
+                        )
+                    ) {
                         confirmVpnOnlyTest = true
                     } else {
                         viewModel.refreshSmartProfileMetrics(profileId)
@@ -124,7 +142,7 @@ internal fun CliSmartTestButton(
             confirmLabel = stringResource(R.string.cli_prof_test_warning_confirm),
             onConfirm = {
                 confirmVpnOnlyTest = false
-                viewModel.refreshSmartProfileMetrics(profileId)
+                viewModel.refreshSmartProfileMetricsInVpnMode(profileId)
             },
             onDismiss = { confirmVpnOnlyTest = false },
         )
@@ -136,5 +154,11 @@ internal enum class SmartProfileTestAction { START, STOP }
 internal fun smartProfileTestAction(testing: Boolean): SmartProfileTestAction =
     if (testing) SmartProfileTestAction.STOP else SmartProfileTestAction.START
 
-internal fun protocolTestRequiresVpnOnlyConfirmation(privacyRouteEnabled: Boolean): Boolean =
-    privacyRouteEnabled
+internal fun protocolTestRequiresVpnOnlyConfirmation(
+    privacyRouteEnabled: Boolean,
+    trafficMode: TrafficMode,
+    perAppRoutingMode: PerAppRoutingMode,
+): Boolean =
+    privacyRouteEnabled ||
+        trafficMode != TrafficMode.TUNNEL ||
+        perAppRoutingMode != PerAppRoutingMode.FULL_TUNNEL

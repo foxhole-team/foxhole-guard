@@ -7,14 +7,20 @@ import com.foxhole.core.model.ACTIVE_CONNECTION_STATES
 import com.foxhole.core.model.AutoConnectReasonCode
 import com.foxhole.core.model.ConnectionSnapshot
 import com.foxhole.core.model.ConnectionState
+import com.foxhole.core.model.PerAppRoutingMode
+import com.foxhole.core.model.PrivacyRouteSettings
 import com.foxhole.core.model.Profile
 import com.foxhole.core.model.ProtocolMetricEventKind
+import com.foxhole.core.model.RoutingModePreset
+import com.foxhole.core.model.Settings
+import com.foxhole.core.model.TrafficMode
 import com.foxhole.core.profile.AutoConnectProbeCandidate
 import com.foxhole.core.profile.AutoConnectProbeResult
 import com.foxhole.core.profile.MultiProtocolProfileSupport
 import com.foxhole.core.profile.classifyAutoConnectProbeFailure
 import com.foxhole.guard.R
 import com.foxhole.guard.core.data.prepareProfileForConnection
+import com.foxhole.guard.core.settings.applyRoutingModePresetTo
 import com.foxhole.guard.core.settings.recordSmartProfileBaseline
 import com.foxhole.guard.core.settings.recordSmartProfileServerPing
 import com.foxhole.guard.core.settings.smartStartEnabledProtocolSetHash
@@ -30,9 +36,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
-
-// Smart-profile protocol metrics: the manual refresh run, its probes, fallbacks, restore
-// path, and the protocol recommendation acceptance.
 
 private fun HomeViewModel.fullScanAutoConnectCandidates(
     profile: Profile,
@@ -95,6 +98,37 @@ private const val SERVER_PING_WEIGHT = 0.25
 private const val VALIDATION_PENALTY = 0.15
 private const val TRAFFIC_PENALTY = 0.10
 
+internal data class ProtocolTestRoutingCheckpoint(
+    val safeModeEnabled: Boolean,
+    val trafficMode: TrafficMode,
+    val perAppRoutingMode: PerAppRoutingMode,
+    val privacyRoute: PrivacyRouteSettings,
+)
+
+internal fun Settings.protocolTestRoutingCheckpoint() =
+    ProtocolTestRoutingCheckpoint(
+        safeModeEnabled = connection.safeModeEnabled,
+        trafficMode = traffic.mode,
+        perAppRoutingMode = expert.perAppRoutingMode,
+        privacyRoute = privacyRoute,
+    )
+
+internal fun Settings.forVpnOnlyProtocolTest(): Settings {
+    val vpn = applyRoutingModePresetTo(this, RoutingModePreset.VPN, privacyRoute.scope)
+    return vpn.copy(
+        expert = vpn.expert.copy(perAppRoutingMode = PerAppRoutingMode.FULL_TUNNEL),
+    )
+}
+
+internal fun Settings.restoreAfterVpnOnlyProtocolTest(
+    checkpoint: ProtocolTestRoutingCheckpoint,
+): Settings = copy(
+    connection = connection.copy(safeModeEnabled = checkpoint.safeModeEnabled),
+    traffic = traffic.copy(mode = checkpoint.trafficMode),
+    expert = expert.copy(perAppRoutingMode = checkpoint.perAppRoutingMode),
+    privacyRoute = checkpoint.privacyRoute,
+)
+
 private fun HomeViewModel.updateRecommendedProtocolUi(
     profileId: Long,
     profile: Profile,
@@ -124,13 +158,20 @@ private fun HomeViewModel.smartProfileMetricsRefreshBlocked(): Boolean {
     return false
 }
 
-// This is the transaction boundary for one manual scan: prepare once, probe every candidate,
-// restore the prior runtime on success/cancel/failure, then clear the shared UI state. Keeping the
-// try/catch/finally together makes that restoration invariant visible and prevents split cleanup.
 @Suppress("CyclomaticComplexMethod", "LongMethod")
 internal fun HomeViewModel.refreshSmartProfileMetrics(profileId: Long) {
-    // A previous cancelled run may still be restoring the user's connection in NonCancellable.
-    // Do not overlap a second runtime transaction with that structured cleanup.
+    startSmartProfileMetricsRefresh(profileId = profileId, switchToVpnMode = false)
+}
+
+internal fun HomeViewModel.refreshSmartProfileMetricsInVpnMode(profileId: Long) {
+    startSmartProfileMetricsRefresh(profileId = profileId, switchToVpnMode = true)
+}
+
+@Suppress("CyclomaticComplexMethod", "LongMethod")
+private fun HomeViewModel.startSmartProfileMetricsRefresh(
+    profileId: Long,
+    switchToVpnMode: Boolean,
+) {
     if (protocolMetricsRefreshJob?.isCompleted == false) return
     if (smartProfileMetricsRefreshBlocked()) {
         protocolMetricsRefreshJob = null
@@ -147,17 +188,28 @@ internal fun HomeViewModel.refreshSmartProfileMetrics(profileId: Long) {
             var restoreFailure = false
             var preparedProfileId = profileId
             var restoreSubscriptionPrepared = false
+            var routingCheckpoint: ProtocolTestRoutingCheckpoint? = null
+            var routingRestored = !switchToVpnMode
+            suspend fun restoreRoutingMode() {
+                val checkpoint = routingCheckpoint ?: return
+                container.settingsRepository.update { current ->
+                    current.restoreAfterVpnOnlyProtocolTest(checkpoint)
+                }
+                routingRestored = true
+            }
             try {
                 val initialSnapshot = container.connectionController.snapshot.value
+                if (switchToVpnMode) {
+                    val initialSettings = container.settingsRepository.current()
+                    routingCheckpoint = initialSettings.protocolTestRoutingCheckpoint()
+                    container.settingsRepository.update { current -> current.forVpnOnlyProtocolTest() }
+                    emitRoutingScenarioSelected(R.string.cli_st_vpn)
+                }
                 val initialRestoreProfileId = protocolTestRestoreProfileId(initialSnapshot)
                 val preparedConnection =
                     container.profileRepository.prepareProfileForConnection(
                         profileId = profileId,
                         requestedProtocolOptionId = null,
-                        // TEST measures the options already accepted into this profile. A remote
-                        // subscription refresh is a separate user action: making it a prerequisite
-                        // here caused the scan to fail before its first candidate whenever the
-                        // source host was temporarily unavailable or local-guard DNS was settling.
                         refreshSubscription = false,
                     )
                 val profile = preparedConnection.profile
@@ -206,6 +258,7 @@ internal fun HomeViewModel.refreshSmartProfileMetrics(profileId: Long) {
                     )
                     updateRecommendedProtocolUi(preparedProfileId, profile, recommendedIds)
                 }
+                restoreRoutingMode()
                 restoreConnectionAfterMetricsRefresh(
                     restoreProfileId = restoreProfileId,
                     restoreOptionId = restoreOptionId,
@@ -220,6 +273,7 @@ internal fun HomeViewModel.refreshSmartProfileMetrics(profileId: Long) {
                 )
             } catch (cancelled: CancellationException) {
                 withContext(NonCancellable) {
+                    restoreRoutingMode()
                     if (protocolMetricsRestoreOnCancel) {
                         restoredConnection =
                             runCatching {
@@ -245,6 +299,9 @@ internal fun HomeViewModel.refreshSmartProfileMetrics(profileId: Long) {
                 emitError(getApplication<Application>().getString(R.string.protocol_metrics_refresh_failed))
             } finally {
                 withContext(NonCancellable) {
+                    if (!routingRestored) {
+                        restoreFailure = runCatching { restoreRoutingMode() }.isFailure
+                    }
                     if (shouldRestoreAfterProtocolTest(protocolMetricsRestoreOnCancel, restoredConnection)) {
                         restoreFailure =
                             runCatching {
@@ -253,7 +310,7 @@ internal fun HomeViewModel.refreshSmartProfileMetrics(profileId: Long) {
                                     restoreOptionId = restoreOptionId,
                                     subscriptionRefreshPrepared = restoreSubscriptionPrepared,
                                 )
-                            }.isFailure
+                            }.isFailure || restoreFailure
                     }
                     if (restoreFailure) {
                         emitError(getApplication<Application>().getString(R.string.protocol_metrics_restore_failed))
@@ -275,8 +332,6 @@ internal fun HomeViewModel.refreshSmartProfileMetrics(profileId: Long) {
     refreshJob.start()
 }
 
-// Probes every candidate sequentially through a frozen-device profile TUN. Candidate switches are
-// make-before-break: the old master TUN stays parked until its replacement is established.
 private suspend fun HomeViewModel.runSmartProfileMetricsProbes(
     profileId: Long,
     candidates: List<AutoConnectProbeCandidate>,
@@ -337,8 +392,6 @@ private fun HomeViewModel.recordSmartProfileMetricsProbeOutcome(
     }
 }
 
-// Ends the refresh with either a "connect to the faster protocol" recommendation banner or the
-// plain refreshed toast when the selected option is already the best one.
 private suspend fun HomeViewModel.announceSmartProfileMetricsOutcome(
     profileId: Long,
     recommendedIds: List<String>,
@@ -380,8 +433,6 @@ private suspend fun HomeViewModel.announceSmartProfileMetricsOutcome(
 
 internal fun HomeViewModel.cancelSmartProfileMetricsRefresh(restoreConnection: Boolean = true) {
     protocolMetricsRestoreOnCancel = restoreConnection
-    // Presentation clears synchronously on the tap. The retained Job still owns any required
-    // connection restore, but the Stop action never waits for the current candidate timeout.
     protocolMetrics.clearRefreshPresentation()
     clearAutoConnectUiState()
     val runningJob = protocolMetricsRefreshJob
@@ -485,9 +536,6 @@ private fun HomeViewModel.protocolMetricsProbeTimeoutResult(
     timeoutMs: Long,
 ): AutoConnectProbeResult {
     val elapsedMs = (SystemClock.elapsedRealtime() - startedAtElapsedMs).coerceAtLeast(1L)
-    // Do not tear down the candidate TUN here. A timed-out service command is still bounded by
-    // its own runtime deadline, and keeping its master interface preserves the test's fail-closed
-    // traffic freeze until the queued replacement candidate takes ownership.
     val reasonCode =
         classifyAutoConnectProbeFailure(
             snapshot = null,
@@ -622,10 +670,6 @@ private suspend fun HomeViewModel.restoreConnectionAfterMetricsRefresh(
         awaitDisconnectedForAutoConnect(previousVpnNetworkHandle)
     } else {
         val previousVpnNetworkHandle = container.connectionController.currentVpnNetworkHandle()
-        // The metrics-refresh scan just force-disconnected and rapid-fire re-probed every candidate
-        // option, including this one -- a transient hiccup during that forced probe can leave this
-        // exact option marked "down" even though the connection restored below is genuinely fine.
-        // Clear that stale flag so the UI doesn't show a false red/disabled status for it.
         if (restoreOptionId != null) {
             profileOptionDownMutable.value -= ProfileOptionLatencyKey(restoreProfileId, restoreOptionId)
         }
@@ -650,10 +694,6 @@ internal fun shouldRestoreAfterProtocolTest(
     restoredConnection: Boolean,
 ): Boolean = restoreRequested && !restoredConnection
 
-/**
- * Dismiss/expiry of the recommendation offer. The measurement it came from ages out, so once the
- * banner is gone the armed state must go with it instead of lingering for the rest of the session.
- */
 internal fun HomeViewModel.onProtocolRecommendationDismissed() {
     recommendedProtocolMutable.value = null
 }

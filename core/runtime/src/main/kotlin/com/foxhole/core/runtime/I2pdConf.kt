@@ -3,15 +3,8 @@ package com.foxhole.core.runtime
 import com.foxhole.core.model.I2pAddressBookEntry
 import java.util.Locale
 
-/**
- * Pure builder for the generated i2pd.conf. Kept top-level and Android-free so the port templating
- * and the disabled-surface set are unit-tested on the JVM. Only the authenticated local SOCKS
- * client proxy is exposed on loopback; HTTP proxy/SAM/BOB/I2CP/i2pcontrol/UPnP stay off. The webconsole is the one status
- * surface left on: loopback-only, Basic-auth with a per-start random password, and read only by the
- * I2P window's router table (any other local app hits the auth wall). NTCP2 (TCP) and SSU2 (UDP)
- * are both enabled — i2pd falls back to NTCP2 by itself when the tunnel drops i2pd's own UDP.
- */
-@Suppress("UnusedParameter")
+// Unknown i2pd keys are fatal; keep this list aligned with the vendored 2.60.0 option table.
+// SOCKS has no credential option, so exposure is limited to loopback and a per-start port.
 fun buildI2pdConfLines(
     httpProxyPort: Int,
     socksPort: Int,
@@ -20,8 +13,6 @@ fun buildI2pdConfLines(
     transitTunnelsLimit: Int = 250,
     webConsolePort: Int = 0,
     webConsolePassword: String = "",
-    socksUsername: String = "",
-    socksPassword: String = "",
 ): List<String> =
     buildList {
         add("daemon = false")
@@ -38,14 +29,16 @@ fun buildI2pdConfLines(
         add("bandwidth = $transitBandwidth")
         add("")
         add("[httpproxy]")
-        add("enabled = false")
+        add("enabled = true")
+        add("address = 127.0.0.1")
+        add("port = $httpProxyPort")
+        add("addresshelper = true")
+        add("outproxy =")
         add("")
         add("[socksproxy]")
         add("enabled = true")
         add("address = 127.0.0.1")
         add("port = $socksPort")
-        add("username = ${socksUsername.filter(Char::isLetterOrDigit)}")
-        add("password = ${socksPassword.filter(Char::isLetterOrDigit)}")
         add("")
         add("[sam]")
         add("enabled = false")
@@ -91,6 +84,24 @@ fun buildI2pdConfLines(
         add("defaulturl =")
         add("subscriptions =")
     }
+
+fun i2pdConfKeys(lines: List<String>): List<String> {
+    var section = ""
+    return lines.mapNotNull { raw ->
+        val line = raw.trim()
+        when {
+            line.isEmpty() || line.startsWith("#") -> null
+            line.startsWith("[") && line.endsWith("]") -> {
+                section = line.removeSurrounding("[", "]")
+                null
+            }
+            else ->
+                line.substringBefore('=').trim().takeIf(String::isNotEmpty)?.let { key ->
+                    if (section.isEmpty()) key else "$section.$key"
+                }
+        }
+    }
+}
 
 const val I2PD_SOCKS_PROXY_USER = "foxhole"
 

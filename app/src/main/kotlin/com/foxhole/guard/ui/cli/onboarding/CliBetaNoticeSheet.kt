@@ -15,11 +15,6 @@ import com.foxhole.guard.ui.cli.components.CliBottomSheet
 import com.foxhole.guard.ui.cli.components.CliButton
 import com.foxhole.guard.ui.cli.components.cliMarchingBorder
 
-/**
- * Shown once after quick start. Dismissing it is the acknowledgement, so the swipe and the button
- * write the same flag — a sheet that could be swiped away without recording it would return on the
- * next cold start.
- */
 @Composable
 internal fun CliBetaNoticeSheet(onAcknowledge: () -> Unit) {
     val colors = LocalCliColors.current
@@ -48,7 +43,6 @@ internal fun CliBetaNoticeSheet(onAcknowledge: () -> Unit) {
             )
         }
         Spacer(modifier = Modifier.height(CliSpacing.md))
-        // Sheet palette: the single confirming action is the filled ok button, full width.
         CliButton(
             label = stringResource(R.string.cli_beta_notice_ack),
             filled = true,

@@ -37,27 +37,20 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 
-/**
- * Hardware acceptance for the ownership edge that previously left Android's old TUN alive.
- *
- * Both public VPN scenarios use the same packet tunnel. The proxy scenario only adds the private
- * loopback HTTP surface, so exercising both here proves that the UI label cannot select a weaker
- * teardown path. The second pass deliberately overlaps Tor removal's NORMAL reload with USER_STOP,
- * reproducing the preemption race reported on Pixel before accepting the replacement firewall TUN.
- */
 @RunWith(AndroidJUnit4::class)
 internal class LiveTorFirewallHandoverRuntimeTest : ProfileRuntimeSessionAndroidTestSupport() {
     @Test
     fun torVpnScenariosHandOverToFirewallWithNetworkProof() =
         runBlocking {
             val args = InstrumentationRegistry.getArguments()
-            if (args.getString(ARG_ENABLED) != "1") {
-                Log.d(TEST_TAG, "live Tor/firewall handover skipped")
-                return@runBlocking
-            }
+            assumeTrue(
+                "live Tor/firewall handover skipped: pass -e $ARG_ENABLED 1 to run it",
+                args.getString(ARG_ENABLED) == "1",
+            )
             val app = ApplicationProvider.getApplicationContext<FoxholeApplication>()
             assertTrue("VPN permission missing for live Tor/firewall handover", ensureVpnPermission(app))
             val subscription = smartSubscriptionInput()

@@ -212,7 +212,6 @@ class HomeReconnectPolicyTest {
 
     @Test
     fun `tor over vpn mode changes hot reload instead of reconnecting tunnel`() {
-        // Attach/detach of the Tor overlay keeps the runtime shape: hot reload.
         assertEquals(
             RoutingChangeAction.HOT_RELOAD,
             resolveRoutingChangeAction(
@@ -220,7 +219,6 @@ class HomeReconnectPolicyTest {
                 new = RoutingChangeState(TrafficMode.TUNNEL),
             ),
         )
-        // Turning Tor off while the standalone tor-only session is engaged stops that session.
         assertEquals(
             RoutingChangeAction.FULL_SWITCH,
             resolveRoutingChangeAction(

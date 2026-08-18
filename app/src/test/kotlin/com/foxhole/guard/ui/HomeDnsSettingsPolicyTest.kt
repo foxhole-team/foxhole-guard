@@ -106,22 +106,14 @@ class HomeDnsSettingsPolicyTest {
     }
 
     @Test
-    fun `successful dns refresh reloads active runtime only when rule set filtering is enabled`() {
+    fun `enabling dns rule set filtering reloads only with an active rule set`() {
         assertTrue(
-            shouldReloadRuntimeAfterDnsRuleSetRefresh(
-                status = DnsFilterUpdateStatus.UPDATED,
+            shouldReloadRuntimeAfterDnsRuleSetEnable(
                 dnsSettings = DnsSettings(filteringEnabled = true),
             ),
         )
         assertFalse(
-            shouldReloadRuntimeAfterDnsRuleSetRefresh(
-                status = DnsFilterUpdateStatus.SKIPPED,
-                dnsSettings = DnsSettings(filteringEnabled = true),
-            ),
-        )
-        assertFalse(
-            shouldReloadRuntimeAfterDnsRuleSetRefresh(
-                status = DnsFilterUpdateStatus.UPDATED,
+            shouldReloadRuntimeAfterDnsRuleSetEnable(
                 dnsSettings = DnsSettings(filteringEnabled = false),
             ),
         )
@@ -132,15 +124,10 @@ class HomeDnsSettingsPolicyTest {
         val source = cliSettingsSource("CliSettingsDnsSection.kt")
         val updates = cliSettingsSource("CliUpdatesSubScreen.kt")
 
-        // The per-category controls live below the master toggle and collapse when it is off
-        // (the filtering group early-returns on !filteringEnabled), and the tracker-list level is
-        // itself gated on the trackers category.
         assertTrue(source.contains("if (!dns.filteringEnabled)"))
         assertTrue(source.contains("R.string.cli_cfg_dns_tracker_level"))
         assertTrue(source.contains("dnsTrackerLevelVisible(dns)"))
         assertFalse(source.contains("dns-filter-update"))
-        // The updates screen refreshes dns through the unified FoxHole DB action, which walks
-        // every enabled group — the manual dns refresh stays reachable through it.
         assertTrue(updates.contains("onFoxholeDbRefreshAll"))
     }
 
@@ -152,7 +139,6 @@ class HomeDnsSettingsPolicyTest {
         assertTrue(source.contains("CliSheetActionsRow("))
         assertTrue(source.contains("R.string.cli_dns_filter_enable_body"))
         assertTrue(source.contains("R.drawable.pix_info"))
-        // Informational footnotes use the quiet note blue, not the brand-neon info token.
         assertTrue(source.contains("tint = colors.note"))
         assertTrue(source.contains("R.string.cli_dns_filter_enable_info"))
     }

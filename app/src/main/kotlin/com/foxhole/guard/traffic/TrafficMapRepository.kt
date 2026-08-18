@@ -36,20 +36,11 @@ class TrafficMapRepository(
     private val retainedConnectionAccumulatorState = MutableStateFlow(TrafficMapConnectionAccumulator())
     private val dnsResolverState = MutableStateFlow<TrafficMapDnsResolverAggregate?>(null)
 
-    // "Clear map history" watermark: aggregates ignore statistics windows and network-activity
-    // events older than this. Live for the current process; the persisted twin arrives through
-    // trafficMapState's historyCutoffMs flow so the cut survives restarts.
     private val historyCutoffMsState = MutableStateFlow(0L)
 
-    // Session tunnel totals (what the dashboard traffic widget shows); the VPN server node rides
-    // the same source so the two never disagree. Injected by the VPN service when tracking starts
-    // (runtime state is fenced behind the service layer); without a session it reads zero and the
-    // node honestly falls back to the connection accumulator.
     @Volatile
     private var sessionTrafficBytesProvider: () -> Long = { 0L }
 
-    // Country of the configured DNS resolver: keeps the DNS node on the map from the moment the
-    // tunnel is up, before (or without) any observed DNS egress samples.
     @Volatile
     private var dnsServerCountryProvider: () -> String? = { null }
 
@@ -95,8 +86,6 @@ class TrafficMapRepository(
     ): Job {
         this.sessionTrafficBytesProvider = sessionTrafficBytesProvider
         this.dnsServerCountryProvider = dnsServerCountryProvider
-        // DNS resolver samples never enter the destination accumulator (they are not app
-        // destinations); they feed their own aggregate so the resolver always shows on the map.
         val destinationSamples =
             connectionSamples.map { samples ->
                 val (dnsSamples, destinations) =
@@ -115,9 +104,6 @@ class TrafficMapRepository(
             .map { accumulator ->
                 RetainedTrafficMapSnapshot(
                     accumulator = accumulator,
-                    // Sentinel's window aggregator consumes a cumulative counter and computes its
-                    // own deltas. Live country aggregates drop a connection as soon as it closes,
-                    // which reset the counter and erased short-flow bytes; retain session totals.
                     countryBytes = accumulator.sessionCountryBytes(),
                 )
             }
@@ -135,11 +121,6 @@ class TrafficMapRepository(
         dnsResolverState.value = null
     }
 
-    /**
-     * "Clear map history": drops the live session aggregates and raises the watermark so the
-     * 24h/7d aggregates and the per-country details stop reading anything recorded before now.
-     * The underlying statistics windows and journals are untouched — only the map forgets.
-     */
     fun clearTrafficMapHistory(nowMs: Long = nowProvider()) {
         clearDestinationCountryBytes()
         historyCutoffMsState.value = maxOf(historyCutoffMsState.value, nowMs)
@@ -229,8 +210,6 @@ class TrafficMapRepository(
         dnsResolver: TrafficMapDnsResolverAggregate? = null,
     ): TrafficMapUiState {
         val mapAnchorInfo = originInfo ?: routeInfo ?: torInfo
-        // City-refined where the city is known and the country is large enough to matter; the
-        // plain country point otherwise (see TrafficMapCityAnchors).
         val origin =
             mapAnchorInfo?.countryCode
                 ?.let(::trafficMapOrigin)
@@ -238,9 +217,6 @@ class TrafficMapRepository(
         val visibleDestinations =
             destinationSnapshot.points
                 .take(MaxTrafficMapDestinations)
-        // The VPN server node carries the SESSION tunnel totals (the same source the dashboard
-        // traffic widget shows) — the destination-sample sum starts at observation time and made
-        // the node disagree with the widget.
         val sessionBytes = sessionTrafficBytesProvider().coerceAtLeast(0L)
         val routeAggregate =
             destinationSnapshot.routeAggregate.let { aggregate ->
@@ -252,8 +228,6 @@ class TrafficMapRepository(
         val torExit =
             torInfo
                 ?.let { info -> trafficMapTorPoint(info, routeAggregate) }
-        // The resolver node never disappears while the tunnel is up: without observed DNS egress
-        // samples it falls back to the configured server's country with zeroed counters.
         val dnsServer =
             dnsResolver?.let(::trafficMapDnsServerPoint)
                 ?: trafficMapDnsServerFallbackPoint()
@@ -305,8 +279,6 @@ class TrafficMapRepository(
             unknownCountryBytes = destinationSnapshot.unknownCountryBytes,
             unknownCountryConnections = destinationSnapshot.unknownCountryConnections,
             hiddenCountryCount = destinationSnapshot.hiddenCountryCount,
-            // The widget legend's "Total" reads the same session tunnel counters as the traffic
-            // widget whenever they exceed the per-country sample sum.
             totalBytes = maxOf(destinationSnapshot.totalBytes, sessionBytes),
             totalConnections = destinationSnapshot.totalConnections,
             countryCount = destinationSnapshot.countryCount,
@@ -324,19 +296,12 @@ class TrafficMapRepository(
                 )
             }
 
-    // The destination bundle used to be one combine that rebuilt live/5min/session/24h/7d AND the
-    // country details on every ~3s accumulator tick. Split by real change cadence: the accumulator
-    // drives only its own snapshots; 24h/7d re-aggregate only when the persisted statistics windows
-    // (or the watermark) change (~1/min); details only when the activity journal or the privacy
-    // toggle change. The assembled bundle type and its contents stay identical.
     private fun trafficMapDestinationBundleFlow(
         recentTrafficWindows: Flow<List<TrafficWindow>>,
         recentNetworkActivityEvents: Flow<List<NetworkActivityEvent>>,
         showPrivateNetworkDetails: Flow<Boolean>,
         historyCutoffMs: Flow<Long>,
     ): Flow<TrafficMapDestinationBundle> {
-        // Effective clear-history watermark: the persisted cutoff from settings and the
-        // in-process one raised by clearTrafficMapHistory, whichever is later.
         val effectiveHistoryCutoffMs =
             combine(historyCutoffMs.distinctUntilChanged(), historyCutoffMsState) { persisted, live ->
                 maxOf(persisted, live)
@@ -421,10 +386,6 @@ class TrafficMapRepository(
                 lastSampleAtMs = accumulator.lastSampleAtMs,
                 newCountryCodes = accumulator.newCountryCodes,
             )
-                // The session totals (and with them the VPN-server row and the "Total" row of the
-                // detail table) carry the tunnel counters — the same source the traffic widget
-                // shows. The per-country sample sum alone starts at observation time and misses
-                // DNS/unresolved/overhead bytes, which made the table disagree with the widget.
                 .withSessionTunnelFloor(sessionTrafficBytesProvider().coerceAtLeast(0L))
                 .toPeriodSnapshot(
                     period = TrafficMapPeriod.SESSION,
@@ -440,8 +401,6 @@ class TrafficMapRepository(
     private fun trafficMapOrigin(countryCode: String): TrafficMapCountryCoordinate? =
         countryRegistry().coordinate(countryCode)
 
-    // Anchors the dot to the resolved city on large countries (US/CA/RU/…); everywhere else — and
-    // for unknown cities — the shared country point stays, so dots without a city all coincide.
     private fun TrafficMapCountryCoordinate.withCityAnchor(city: String?): TrafficMapCountryCoordinate {
         val anchor = TrafficMapCityAnchors.resolve(countryCode = countryCode, city = city) ?: return this
         return copy(lat = anchor.lat, lon = anchor.lon)
@@ -491,8 +450,6 @@ class TrafficMapRepository(
         aggregate: TrafficMapRouteAggregate,
     ): TrafficMapPoint? {
         val coordinate = trafficMapOrigin(torInfo.countryCode) ?: return null
-        // Tor exits are country-only: no city is ever resolved for a Tor circuit, so the label
-        // must not fall back to a stale city value.
         return TrafficMapPoint(
             countryCode = coordinate.countryCode,
             label = torInfo.countryName?.takeIf(String::isNotBlank) ?: coordinate.label,
@@ -521,9 +478,6 @@ class TrafficMapRepository(
     }
 
     private fun trafficMapDnsServerFallbackPoint(): TrafficMapPoint? {
-        // The resolver dot stays on the map even with the runtime down: the configured DNS
-        // server's country is a stable fact of the setup, and hiding the blue dot between
-        // sessions read as the resolver "disappearing".
         val countryCode = normalizeCountryCode(dnsServerCountryProvider()) ?: return null
         val coordinate = trafficMapOrigin(countryCode) ?: return null
         return TrafficMapPoint(
@@ -591,8 +545,6 @@ private fun trafficMapWindowSnapshots(
     nowMs: Long,
     countryRegistry: TrafficMapCountryRegistry,
 ): TrafficMapWindowSnapshots {
-    // Clear-history watermark: the statistics windows persist (the map must not touch them),
-    // so the map simply stops reading anything older.
     val visibleTrafficWindows =
         if (historyCutoffMs > 0L) {
             recentTrafficWindows.filter { window -> window.startedAtMs >= historyCutoffMs }
@@ -628,7 +580,6 @@ private fun trafficMapVisibleCountryDetails(
     historyCutoffMs: Long,
     ownPackageNames: Set<String>,
 ): Map<String, TrafficMapCountryDetail> {
-    // Same watermark rule as the traffic windows: the journal persists, the map stops reading.
     val visibleNetworkActivityEvents =
         if (historyCutoffMs > 0L) {
             networkActivityEvents.filter { event -> event.timestampMs >= historyCutoffMs }

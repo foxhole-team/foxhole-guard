@@ -22,23 +22,19 @@ import com.foxhole.guard.R
 import com.foxhole.guard.ui.cli.CliSpacing
 import com.foxhole.guard.ui.cli.CliType
 import com.foxhole.guard.ui.cli.LocalCliColors
+import com.foxhole.guard.ui.cli.components.CliBadge
 import com.foxhole.guard.ui.cli.components.CliBottomSheet
 import com.foxhole.guard.ui.cli.components.CliChip
 import com.foxhole.guard.ui.cli.components.CliElbowLine
+import com.foxhole.guard.ui.cli.components.CliInfoSheet
 import com.foxhole.guard.ui.cli.components.CliInputRow
 import com.foxhole.guard.ui.cli.components.CliPixIcon
 import com.foxhole.guard.ui.cli.components.CliRowDivider
+import com.foxhole.guard.ui.cli.components.CliRowInfoGlyph
 import com.foxhole.guard.ui.cli.components.CliSheetAction
 import com.foxhole.guard.ui.cli.components.CliSheetActionsRow
 import com.foxhole.guard.ui.cli.components.cliPressable
 
-/**
- * The updates screen's top-bar control: opens [CliUpdateSourcesSheet].
- *
- * A header button rather than a row on the screen, for the same reason the help button is one —
- * this is about where the screen gets its data, not about the data; putting it among the status
- * rows would read as one more thing to press during an update.
- */
 @Composable
 internal fun CliUpdateSourcesButton(
     sources: UpdateSourceSettings,
@@ -49,8 +45,6 @@ internal fun CliUpdateSourcesButton(
     val colors = LocalCliColors.current
     var open by rememberSaveable { mutableStateOf(false) }
     Box(
-        // requiredSize, like the help button: keeps a 48dp target by overlapping the header
-        // instead of inflating its row.
         modifier = modifier
             .requiredSize(SOURCES_BUTTON_SIZE)
             .cliPressable(onClick = { open = true }),
@@ -76,18 +70,6 @@ internal fun CliUpdateSourcesButton(
     }
 }
 
-/**
- * Where updates come from: the FoxHole DB repository and the app's own release feed, each shown as
- * the channel currently in use with a "change" chip that reveals the field.
- *
- * Editing is explicit on purpose. These two fields decide which server the device trusts for data
- * and for its own next version, so they stay folded away behind a chip and are written only on
- * confirm — nothing here applies while the user is still typing.
- *
- * The app feed also carries a token, and only that one does: a private repository answers 404 to an
- * anonymous reader, so a personal build pushed to a private repo is unreachable without it. The
- * data repository needs no token — it is served as static files, and a private one would not be.
- */
 @Composable
 private fun CliUpdateSourcesSheet(
     sources: UpdateSourceSettings,
@@ -96,22 +78,30 @@ private fun CliUpdateSourcesSheet(
     onApply: (UpdateSourceSettings) -> Unit,
 ) {
     val colors = LocalCliColors.current
-    // Seeded from the stored values: what is on screen is what would be saved, so "change" opens
-    // an editable copy of the current channel rather than an empty field.
     var database by rememberSaveable { mutableStateOf(sources.databaseBaseUrl) }
     var releases by rememberSaveable { mutableStateOf(sources.appReleasesUrl) }
     var token by rememberSaveable { mutableStateOf(sources.appReleasesToken) }
     var databaseOpen by rememberSaveable { mutableStateOf(false) }
     var releasesOpen by rememberSaveable { mutableStateOf(false) }
+    var noteOpen by rememberSaveable { mutableStateOf(false) }
     val officialLabel = stringResource(R.string.cli_updates_sources_official)
+    if (noteOpen) {
+        CliInfoSheet(
+            text = stringResource(R.string.cli_updates_sources_note),
+            onDismiss = { noteOpen = false },
+        )
+    }
     CliBottomSheet(
         onDismiss = onDismiss,
         title = stringResource(R.string.cli_updates_sources_title),
         icon = R.drawable.pix_settings,
+        trailing = { CliRowInfoGlyph(onTap = { noteOpen = true }) },
     ) {
         CliUpdateChannelRow(
             label = stringResource(R.string.cli_foxdb_title),
             value = database.ifBlank { officialLabel },
+            official = database.isBlank(),
+            officialLabel = officialLabel,
             editing = databaseOpen,
             onToggleEdit = { databaseOpen = !databaseOpen },
         )
@@ -130,6 +120,8 @@ private fun CliUpdateSourcesSheet(
             CliUpdateChannelRow(
                 label = stringResource(R.string.cli_updates_app),
                 value = releases.ifBlank { officialLabel },
+                official = releases.isBlank(),
+                officialLabel = officialLabel,
                 editing = releasesOpen,
                 onToggleEdit = { releasesOpen = !releasesOpen },
             )
@@ -157,8 +149,6 @@ private fun CliUpdateSourcesSheet(
                 )
             }
         }
-        Spacer(modifier = Modifier.height(CliSpacing.xs))
-        CliElbowLine(text = stringResource(R.string.cli_updates_sources_note))
         Spacer(modifier = Modifier.height(CliSpacing.md))
         CliSheetActionsRow(
             onCancel = onDismiss,
@@ -180,11 +170,12 @@ private fun CliUpdateSourcesSheet(
     }
 }
 
-/** One channel: what it points at now, and the chip that folds the field open. */
 @Composable
 private fun CliUpdateChannelRow(
     label: String,
     value: String,
+    official: Boolean,
+    officialLabel: String,
     editing: Boolean,
     onToggleEdit: () -> Unit,
 ) {
@@ -195,14 +186,23 @@ private fun CliUpdateChannelRow(
     ) {
         Text(text = label, style = CliType.body, color = colors.dim, maxLines = 1)
         Spacer(modifier = Modifier.width(CliSpacing.sm))
-        Text(
-            text = value,
-            style = CliType.body,
-            color = colors.fg,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
+        Row(
             modifier = Modifier.weight(1f),
-        )
+            verticalAlignment = Alignment.Top,
+        ) {
+            Text(
+                text = value,
+                style = CliType.body,
+                color = colors.fg,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false),
+            )
+            if (official) {
+                Spacer(modifier = Modifier.width(BADGE_GAP))
+                CliBadge(text = officialLabel, color = colors.ok)
+            }
+        }
         Spacer(modifier = Modifier.width(CliSpacing.sm))
         CliChip(
             label = stringResource(R.string.cli_updates_sources_change),
@@ -211,6 +211,8 @@ private fun CliUpdateChannelRow(
         )
     }
 }
+
+private val BADGE_GAP = 3.dp
 
 private val SOURCES_BUTTON_SIZE = 48.dp
 

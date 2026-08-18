@@ -35,7 +35,6 @@ import com.foxhole.guard.ui.reduce
 import com.foxhole.guard.ui.selectSource
 import kotlinx.coroutines.delay
 
-/** One canonical source -> required data -> verified activation sheet for Tor and Sentinel. */
 @Composable
 internal fun CliDatasetActivationSheet(
     state: DatasetActivationState,

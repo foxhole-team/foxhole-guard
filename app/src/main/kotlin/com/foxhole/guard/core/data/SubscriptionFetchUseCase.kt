@@ -1,5 +1,6 @@
 package com.foxhole.guard.core.data
 
+import com.foxhole.core.importer.SubscriptionHeaderMetadata
 import com.foxhole.core.importer.SubscriptionMetadataParser
 import com.foxhole.core.network.RemoteHostResolver
 import com.foxhole.guard.BuildConfig
@@ -8,8 +9,6 @@ import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import java.nio.charset.StandardCharsets
-import java.util.Base64
 import javax.net.SocketFactory
 
 internal data class SubscriptionResponse(
@@ -18,6 +17,7 @@ internal data class SubscriptionResponse(
     val metadataTitle: String? = null,
     val subscriptionExpiresAt: Long? = null,
     val notModified: Boolean = false,
+    val metadata: SubscriptionHeaderMetadata = SubscriptionHeaderMetadata(),
 )
 
 internal class SubscriptionFetchUseCase(
@@ -106,17 +106,28 @@ internal class SubscriptionFetchUseCase(
                 ),
             )
         }
+        val metadata = SubscriptionMetadataParser.parseHeaderMetadata(response.headers::get)
         return SubscriptionResponse(
             body = response.body.orEmpty(),
-            etag = response.headers["ETag"],
-            metadataTitle = response.headers["profile-title"].decodeSubscriptionMetadataHeader(),
+            etag = metadata.etag,
+            metadataTitle = metadata.title,
             subscriptionExpiresAt =
-            SubscriptionMetadataParser
-                .expirationFromSubscriptionUserinfo(response.headers["subscription-userinfo"])
+            metadata.userInfo?.expiresAt
                 ?: SubscriptionMetadataParser.expirationFromSubscriptionUrl(sourceUrl),
+            metadata = metadata,
         )
     }
 }
+
+internal fun SubscriptionHeaderMetadata.redactedSummary(): String =
+    "subscription metadata titlePresent=${!title.isNullOrBlank()} " +
+        "updateIntervalHours=${updateIntervalHours ?: "none"} " +
+        "announcePresent=${!announcement.isNullOrBlank()} " +
+        "announceUrlPresent=${!announcementUrl.isNullOrBlank()} " +
+        "supportUrlPresent=${!supportUrl.isNullOrBlank()} " +
+        "webPageUrlPresent=${!webPageUrl.isNullOrBlank()} " +
+        "quota=${userInfo?.totalBytes?.let { "limited" } ?: "unlimited"} " +
+        "expiryPresent=${userInfo?.expiresAt != null}"
 
 internal fun OkHttpClient.withUnderlyingSocketFactory(socketFactory: SocketFactory?): OkHttpClient =
     if (socketFactory == null || socketFactory === this.socketFactory) {
@@ -124,19 +135,3 @@ internal fun OkHttpClient.withUnderlyingSocketFactory(socketFactory: SocketFacto
     } else {
         newBuilder().socketFactory(socketFactory).build()
     }
-
-private fun String?.decodeSubscriptionMetadataHeader(): String? {
-    val raw = this?.trim()?.takeIf { it.isNotBlank() } ?: return null
-    val value =
-        if (raw.startsWith("base64:", ignoreCase = true)) {
-            runCatching {
-                String(
-                    Base64.getDecoder().decode(raw.removePrefix("base64:").removePrefix("BASE64:")),
-                    StandardCharsets.UTF_8,
-                )
-            }.getOrNull()
-        } else {
-            raw
-        }
-    return value?.trim()?.takeIf { it.isNotBlank() }
-}

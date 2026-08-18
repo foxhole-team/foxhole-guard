@@ -2,8 +2,6 @@ package com.foxhole.guard.core.settings
 
 import kotlinx.serialization.json.Json
 
-// Shared fixture of the SettingsRepositoryTest suites (fields and builders every slice uses).
-// Split from SettingsRepositoryTest.kt.
 internal open class SettingsRepositoryTestSupport {
     protected val json =
         Json {

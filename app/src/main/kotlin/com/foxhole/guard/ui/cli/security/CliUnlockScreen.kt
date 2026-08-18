@@ -84,12 +84,6 @@ internal fun CliUnlockScreen(
     modifier: Modifier = Modifier,
 ) {
     val colors = LocalCliColors.current
-    // Box + a scrollable, content-sized Column, not a Column that fills the screen: `imePadding`
-    // shrinks the gate to whatever the keyboard leaves, and on a short screen the legacy-password
-    // layout (banner, panel, prompt, field, status, actions, and the reset control once it is
-    // offered) no longer fits in that strip — the bottom of it was simply cut off, with no way to
-    // reach the reset. The scroll node measures the content freely and then clamps itself to the
-    // space available, so while everything fits this lays out exactly as the centred column did.
     Box(
         modifier = modifier.fillMaxSize().background(colors.bg).imePadding(),
         contentAlignment = Alignment.Center,

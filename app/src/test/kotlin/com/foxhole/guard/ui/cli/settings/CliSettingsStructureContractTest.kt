@@ -6,46 +6,42 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
 
-/**
- * Структура экрана настроек: настройки виджетов — отдельный подэкран (как бекап), а каждый
- * модуль-блок несёт свою иконку перед именем.
- */
 class CliSettingsStructureContractTest {
 
     @Test
     fun `widget defaults live on their own sub-screen`() {
         val root = cli("settings/CliSettingsScreen.kt")
 
-        // Ключ подэкрана заведён, разведён в when и открывается строкой действия.
         assertTrue(root.contains("""private const val SUB_WIDGETS = "widgets""""))
         assertTrue(root.contains("SUB_WIDGETS -> CliWidgetsSubScreen(viewModel, modifier)"))
         assertTrue(root.contains("onTap = { onOpenSub(SUB_WIDGETS) }"))
-        // И самих рядов в корне больше нет — иначе настройка живёт в двух местах сразу.
         assertFalse(root.contains("R.string.cli_cfg_widget_bg"))
         assertFalse(root.contains("R.string.cli_cfg_widget_alpha"))
     }
 
     @Test
-    fun `the widgets sub-screen carries both defaults in the backup screen's shape`() {
+    fun `the widgets sub-screen carries per-kind panels with honest previews`() {
         val screen = cli("settings/CliWidgetsSubScreen.kt")
 
         assertTrue(screen.contains("CliScreenHeader("))
         assertTrue(screen.contains("CliPanel("))
-        assertTrue(screen.contains("R.string.cli_cfg_widget_bg"))
-        assertTrue(screen.contains("R.string.cli_cfg_widget_alpha"))
-        assertTrue(screen.contains("viewModel.onWidgetBlackBackgroundChanged"))
-        assertTrue(screen.contains("viewModel.onWidgetAlphaPercentChanged"))
+        assertTrue(screen.contains("viewModel.onWidgetBlackBackgroundChanged(kind"))
+        assertTrue(screen.contains("viewModel.onWidgetAlphaPercentChanged(kind"))
+        assertTrue(screen.contains("viewModel.onWidgetOutlineChanged(kind"))
+        assertTrue(screen.contains("onFoxWidgetAnimationChanged"))
         assertTrue(screen.contains("HomeWidgetKind.CONNECTION"))
         assertTrue(screen.contains("HomeWidgetKind.WEB_APPS"))
         assertTrue(screen.contains("HomeWidgetKind.STATUS"))
-        assertEquals(3, Regex("viewModel\\.onAddHomeWidget\\(").findAll(screen).count())
+        assertEquals(2, Regex("viewModel\\.onAddHomeWidget\\(").findAll(screen).count())
+        assertTrue(screen.contains("CliStatusWidgetPreview"))
+        assertTrue(screen.contains("CliWebAppsWidgetPreview"))
+        assertTrue(screen.contains("connected = connected"))
     }
 
     @Test
     fun `a module block cannot be declared without a leading icon`() {
         val block = cli("settings/CliModuleBlock.kt")
 
-        // Не nullable и без значения по умолчанию: иконка — часть контракта блока.
         assertTrue(block.contains("@DrawableRes icon: Int,"))
         assertTrue(block.contains("icon = icon,"))
         assertTrue(block.contains("icon = R.drawable.pix_settings,"))
@@ -59,12 +55,10 @@ class CliSettingsStructureContractTest {
                     cli(relative).split("CliModuleBlock(").drop(1).map { relative to it }
                 }
 
-        // Два дополнения и четыре модуля: Tor, I2P, фаервол, детекция аномалий.
         assertEquals(6, callSites.size)
         callSites.forEach { (relative, call) ->
-            // Иконка — второй именованный аргумент, так что окна в несколько строк хватает.
             val head = call.lineSequence().take(MODULE_BLOCK_HEAD_LINES).joinToString("\n")
-            assertTrue("$relative: у CliModuleBlock нет иконки", head.contains("icon = R.drawable.pix_"))
+            assertTrue("$relative: CliModuleBlock has no icon", head.contains("icon = R.drawable.pix_"))
         }
     }
 

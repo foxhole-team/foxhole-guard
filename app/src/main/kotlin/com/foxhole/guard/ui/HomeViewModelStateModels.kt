@@ -72,19 +72,10 @@ sealed class TorTransitionPrompt {
         val protocolName: String?,
     ) : TorTransitionPrompt()
 
-    // Both a VPN route and Tor are up: ask which one the Restart action should restart.
-
-    // Tor is placed inside the tunnel (bypass off), a VPN profile is saved, but the VPN is not
-    // running: starting Tor now means a direct-from-device Tor connection, so warn and ask.
     object StartTorFromDeviceWithoutVpn : TorTransitionPrompt()
 
-    // A live UDP tunnel cannot carry Tor inside it, but Tor can run beside the VPN on the device
-    // route. Continue switches the placement to beside (bypass on) and starts Tor there.
     object StartTorBesideUdpVpn : TorTransitionPrompt()
 
-    // A mode change requested while a VPN tunnel is already live. Shown with a countdown that reverts
-    // to the running mode on timeout, so the button never silently reshapes a live connection.
-    // `secondsLeft` ticks 15→0; confirm applies `target`/`scope`, cancel/timeout applies nothing.
     data class LiveModeSwitch(
         val target: RoutingModePreset,
         val scope: PrivacyRouteScope,
@@ -92,16 +83,11 @@ sealed class TorTransitionPrompt {
         val secondsLeft: Int,
     ) : TorTransitionPrompt()
 
-    // The user asked to activate a DIFFERENT profile than the one carrying the live tunnel. Confirm
-    // swaps the active profile and reconnects onto it; cancel leaves the running tunnel untouched.
     data class SwitchProfileWhileConnected(
         val profileId: Long,
         val profileName: String,
     ) : TorTransitionPrompt()
 
-    // A smart profile's protocol option was tapped while its tunnel is live and the chosen option is
-    // not the running one. Confirm persists the option and reconnects; cancel keeps the running
-    // protocol (the selection is never applied, so nothing has to be reverted).
     data class SwitchProtocolWhileConnected(
         val profileId: Long,
         val protocolOptionId: String,
@@ -260,17 +246,10 @@ private fun <T> List<T>.takeLatest(
     }
 }
 
-/**
- * What the settings home list needs to lay itself out. The component switches decide both which
- * rows exist (a disabled Statistics core takes its row with it) and how the privacy-route row names
- * itself — TOR routing, I2P, or both.
- */
 data class SettingsHomeNavUiState(
     val expertVisible: Boolean = false,
     val torEnabled: Boolean = false,
     val i2pEnabled: Boolean = false,
-    // With both cores on, whether TOR was enabled first — drives the combined row title's order
-    // («… TOR и I2P» vs «… I2P и TOR») and the section order inside the screen.
     val torFirst: Boolean = true,
     val statisticsEnabled: Boolean = false,
 )
@@ -290,18 +269,11 @@ internal data class PendingConnectRequest(
 data class ProfileImportConfirmationState(
     val rawInput: String,
     val preview: com.foxhole.guard.core.data.ProfileImportPreview,
-    // Insecure-TLS consent is folded into the SAME sheet: the warning block and the extra
-    // "exclude and apply" button render right in the confirmation instead of a second dialog.
     val insecureTls: Boolean = false,
     val insecureTlsProtocolLabels: List<String> = emptyList(),
     val canExcludeInsecureTls: Boolean = false,
-    // A subscription URL carries no protocol/security facts until its body has been fetched and
-    // parsed. Confirmation stays fail-closed during that inspection, so a fast tap cannot skip an
-    // INSECURE-TLS warning that arrives a moment later.
     val subscriptionInspectionInProgress: Boolean = false,
     val subscriptionInspectionFailed: Boolean = false,
-    // The same source is already stored: the sheet flips into its already-added state, offering
-    // cancel or refresh instead of silently importing a twin.
     val duplicateProfileId: Long? = null,
     val duplicateProfileName: String? = null,
     val duplicateIsSubscription: Boolean = false,

@@ -18,28 +18,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import com.foxhole.core.model.VisualStyle
 import com.foxhole.guard.R
 import com.foxhole.guard.ui.cli.CliSpacing
 import com.foxhole.guard.ui.cli.CliType
 import com.foxhole.guard.ui.cli.LocalCliColors
+import com.foxhole.guard.ui.cli.LocalCliVisualStyle
 import com.foxhole.guard.ui.cli.cliDisplayStyle
+import com.foxhole.guard.ui.cli.cliLabelText
+import com.foxhole.guard.ui.cli.cliScaledSp
 
-/**
- * Terminal prompt header of a top-level screen: `fox > stats`. One dim small-type line
- * with a 6dp gap below - just enough to name the tab. An optional [suffix] is rendered
- * dim after the label (` · selected: 3` while profiles marks rows for export); the label
- * ellipsizes first so the suffix stays readable. The home screen keeps its own brand
- * header with the fox sprite and never uses this.
- *
- * [icon] is the letter-height screen glyph before the `fhg >` brand and section title,
- * accent-tinted.
- * [iconGlyph] is the pixel-font alternative for a glyph such as the Help screen's question mark.
- *
- * [trailing] is the screen's own control pinned to the right edge (the statistics gear) — the CLI
- * has no top app bar, so this header is where a screen-level action belongs. The full-width outer
- * row owns that alignment centrally; individual screens must not nudge their controls sideways.
- */
 @Composable
 internal fun CliScreenHeader(
     label: String,
@@ -73,27 +61,28 @@ internal fun CliScreenHeader(
                 Box(modifier = Modifier.size(CliHeaderIconSize), contentAlignment = Alignment.Center) {
                     Text(
                         text = iconGlyph,
-                        style = CliType.small.copy(fontSize = 12.sp, lineHeight = 12.sp),
+                        style = CliType.small.copy(fontSize = cliScaledSp(16f), lineHeight = cliScaledSp(16f)),
                         color = colors.accent,
                         maxLines = 1,
                     )
                 }
                 Spacer(modifier = Modifier.width(CliSpacing.xs))
             }
-            val brandText = stringResource(R.string.cli_screen_header)
+            if (LocalCliVisualStyle.current == VisualStyle.PIXEL) {
+                val brandText = stringResource(R.string.cli_screen_header)
+                Text(
+                    text = brandText,
+                    style = cliDisplayStyle(brandText),
+                    color = colors.accent,
+                    maxLines = 1,
+                )
+                Spacer(modifier = Modifier.width(CliSpacing.xs))
+            }
             Text(
-                text = brandText,
-                style = cliDisplayStyle(brandText),
-                color = colors.accent,
-                maxLines = 1,
-            )
-            Spacer(modifier = Modifier.width(CliSpacing.xs))
-            Text(
-                text = label,
-                // A Cyrillic title moves wholesale to PS2P, since Silkscreen is Latin-only.
+                text = cliLabelText(label),
                 style = cliDisplayStyle(label),
                 color = colors.accent,
-                maxLines = 1,
+                maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f, fill = trailing != null),
             )
@@ -107,8 +96,6 @@ internal fun CliScreenHeader(
             }
         }
         if (trailing != null) {
-            // A fixed-height slot: the 48dp button overlaps neighbouring padding instead of
-            // inflating the header, so screens with and without a trailing control match.
             Box(
                 modifier = Modifier.height(CliHeaderControlSlotHeight),
                 contentAlignment = Alignment.CenterEnd,
@@ -119,14 +106,9 @@ internal fun CliScreenHeader(
     }
 }
 
-// The canon display line height; the trailing control centres on it.
 internal val CliHeaderControlSlotHeight = 21.dp
-internal val CliHeaderIconSize = 12.dp
+internal val CliHeaderIconSize = 18.dp
 
-/**
- * The back row for full-screen push screens. Settings sub-screens with [CliScreenHeader] live
- * without it — their only way back is system back. There is no third pattern.
- */
 @Composable
 internal fun CliBackRow(
     label: String,

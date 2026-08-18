@@ -7,15 +7,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Test
 
-/**
- * The rename is a migration, and a migration is only correct while it still knows what it is
- * migrating FROM.
- *
- * Nothing in the app reads the legacy ids any more, so a later edit could quietly drop them from
- * the cleanup list — or, worse, someone renames a watchdog again and leaves the list pointing at
- * the generation before last. These assertions are the only place the two generations are held
- * side by side.
- */
 class WatchdogRenameMigrationTest {
 
     @Test
@@ -24,10 +15,6 @@ class WatchdogRenameMigrationTest {
         assertEquals(listOf("foxhole_webapps", "foxhole-guard"), legacyWatchdogChannelIdsForTest())
     }
 
-    /**
-     * And that they are genuinely the previous generation: a legacy id that still matched a live
-     * one would make the migration cancel the work it had just scheduled.
-     */
     @Test
     fun `no legacy identifier collides with a current one`() {
         val current = setOf(
@@ -39,16 +26,15 @@ class WatchdogRenameMigrationTest {
         )
 
         (legacyWatchdogWorkNamesForTest() + legacyWatchdogChannelIdsForTest()).forEach { legacy ->
-            assertFalse("«$legacy» одновременно старый и живой идентификатор", legacy in current)
+            assertFalse("\"$legacy\" is both a legacy and a live identifier", legacy in current)
         }
     }
 
-    /** The two spellings are different on purpose; a name with a space is not an id. */
     @Test
     fun `the readable name and the identifier are not the same string`() {
         assertFalse(WatchdogNames.WEB == WatchdogNames.WEB_ID)
         assertFalse(WatchdogNames.GUARD == WatchdogNames.GUARD_ID)
-        assertFalse("идентификатор не может содержать пробел", WatchdogNames.WEB_ID.contains(' '))
-        assertFalse("идентификатор не может содержать пробел", WatchdogNames.GUARD_ID.contains(' '))
+        assertFalse("an identifier must not contain a space", WatchdogNames.WEB_ID.contains(' '))
+        assertFalse("an identifier must not contain a space", WatchdogNames.GUARD_ID.contains(' '))
     }
 }

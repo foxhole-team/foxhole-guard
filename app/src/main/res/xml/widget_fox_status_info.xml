@@ -11,7 +11,7 @@
     android:maxResizeWidth="400dp"
     android:maxResizeHeight="110dp"
     android:configure="com.foxhole.guard.widget.FoxStatusWidgetConfigActivity"
-    android:widgetFeatures="reconfigurable"
+    android:widgetFeatures="reconfigurable|configuration_optional"
     android:resizeMode="horizontal"
     android:updatePeriodMillis="0"
     android:initialLayout="@layout/glance_default_loading_layout"

@@ -49,11 +49,6 @@ import com.foxhole.guard.ui.onDnsSettingsChanged
 import com.foxhole.guard.ui.onDomainStrategySelected
 import com.foxhole.guard.ui.onSniffChanged
 
-/**
- * The dns panel. Enabling the filter goes through onDnsSettingsChanged, whose built-in
- * preflight downloads the rule set and reports progress both in its pixel sheet and through the
- * existing terminal banner bridge.
- */
 @Composable
 internal fun CliDnsSection(
     viewModel: HomeViewModel,
@@ -120,7 +115,7 @@ internal fun CliDnsSection(
             icon = R.drawable.pix_settings,
             checked = dns.replaceSystemDns,
             onToggle = viewModel::onDnsReplaceSystemDnsChanged,
-            note = stringResource(R.string.cli_cfg_dns_replace_system_note),
+            infoText = stringResource(R.string.cli_cfg_dns_replace_system_note),
         )
         if (dnsReplaceSystemIpv6WarningVisible(dns)) {
             CliElbowLine(
@@ -140,7 +135,6 @@ internal fun CliDnsSection(
     }
 }
 
-/** Filter master + the per-category blocks, each level dropdown gated on its category. */
 @Composable
 private fun CliDnsFilteringGroup(
     viewModel: HomeViewModel,
@@ -149,8 +143,6 @@ private fun CliDnsFilteringGroup(
     refreshPhase: FoxholeUpdatePhase,
 ) {
     val colors = LocalCliColors.current
-    // This is the current modal state, not a one-time "seen" preference. Cancel leaves DNS OFF,
-    // so the very next OFF -> ON request must open the confirmation again.
     var enableConfirmationOpen by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(dns.filteringEnabled) {
         if (dns.filteringEnabled) enableConfirmationOpen = false
@@ -253,13 +245,11 @@ private fun CliDnsFilteringGroup(
     }
 }
 
-/** Every OFF -> ON edge requires consent; OFF and already-ON transitions never do. */
 internal fun dnsFilteringEnableConfirmationRequired(
     currentlyEnabled: Boolean,
     requestedEnabled: Boolean,
 ): Boolean = !currentlyEnabled && requestedEnabled
 
-/** Confirmation for the first half of the atomic enable + verified FoxHole DB refresh. */
 @Composable
 private fun CliDnsFilterEnableSheet(
     phase: FoxholeUpdatePhase,
@@ -311,7 +301,6 @@ private fun CliDnsFilterEnableSheet(
     }
 }
 
-/** Resolver placement + leak controls: how DNS reaches the network and what falls outside it. */
 @Composable
 private fun CliDnsResolverGroup(
     viewModel: HomeViewModel,
@@ -361,7 +350,6 @@ private fun CliDnsResolverGroup(
     )
 }
 
-/** Resolver row: known presets re-address by secure mode; custom opens a free-form input. */
 @Composable
 private fun CliDnsServerRows(
     viewModel: HomeViewModel,
@@ -398,12 +386,12 @@ private fun CliDnsServerRows(
     if (customOpen) {
         CliInputModal(
             title = stringResource(R.string.cli_input_value_title),
+            icon = R.drawable.pix_dns,
             prompt = "dns",
             value = customServer,
             onValueChange = { customServer = it.take(MAX_SERVER_LENGTH) },
             onSubmit = {
                 if (customServer.isNotBlank()) {
-                    // The repository normalizes schemes/blank input (normalizedDnsServer).
                     viewModel.onDnsSettingsChanged(dns.copy(server = customServer.trim()))
                     customOpen = false
                 }
@@ -413,10 +401,6 @@ private fun CliDnsServerRows(
     }
 }
 
-/**
- * Domain bypass rules: `✗ domain` rows to delete plus an input to add (repo normalizes).
- * Not a select - the trigger row just folds the rule list in and out inline.
- */
 @Composable
 private fun CliDnsBypassRows(
     viewModel: HomeViewModel,
@@ -453,6 +437,7 @@ private fun CliDnsBypassRows(
     if (addOpen) {
         CliInputModal(
             title = stringResource(R.string.cli_input_domain_title),
+            icon = R.drawable.pix_globe,
             prompt = "+",
             value = newDomain,
             onValueChange = { newDomain = it.take(MAX_SERVER_LENGTH) },
@@ -468,8 +453,6 @@ private fun CliDnsBypassRows(
     }
 }
 
-// Pure gating predicates for the DNS panel, extracted so the show/hide rules are unit-testable
-// without composing the UI.
 internal fun dnsTrackerLevelVisible(dns: DnsSettings): Boolean =
     dns.filteringEnabled && dns.blockTrackers
 
@@ -487,7 +470,6 @@ internal fun dnsReplaceSystemIpv6WarningVisible(dns: DnsSettings): Boolean =
 
 private const val MAX_SERVER_LENGTH = 253
 
-// Technical protocol wire names, identical in every locale.
 private fun secureModeDetail(mode: SecureDnsMode): String = when (mode) {
     SecureDnsMode.DOH -> "dns-over-https"
     SecureDnsMode.DOT -> "dns-over-tls"

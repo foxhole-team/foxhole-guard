@@ -26,6 +26,7 @@ import com.foxhole.guard.ui.HomeViewModel
 import com.foxhole.guard.ui.TorBridgePersistenceMarker
 import com.foxhole.guard.ui.cli.CliSpacing
 import com.foxhole.guard.ui.cli.CliType
+import com.foxhole.guard.ui.cli.LocalCliBottomChromeClearance
 import com.foxhole.guard.ui.cli.LocalCliColors
 import com.foxhole.guard.ui.cli.components.CliActionRow
 import com.foxhole.guard.ui.cli.components.CliBottomSheet
@@ -38,6 +39,7 @@ import com.foxhole.guard.ui.cli.components.CliSheetActionsRow
 import com.foxhole.guard.ui.cli.components.CliStageProgress
 import com.foxhole.guard.ui.cli.components.CliToggleRow
 import com.foxhole.guard.ui.isRunning
+import com.foxhole.guard.ui.onAtomicConnectionChanged
 import com.foxhole.guard.ui.onPrivacyRouteBypassVpnTunnelConfigured
 import com.foxhole.guard.ui.onTorBridgeManualRefresh
 import com.foxhole.guard.ui.onTorBridgeManualRefreshCancel
@@ -52,7 +54,6 @@ import kotlinx.coroutines.delay
 
 private val ROTATE_INTERVAL_MINUTES = listOf(10, 15, 20, 30, 60)
 
-/** Tor sub-screen: the route behaviors and the bridges block, everything live-wired. */
 @Composable
 internal fun CliTorSubScreen(
     viewModel: HomeViewModel,
@@ -65,54 +66,71 @@ internal fun CliTorSubScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
             .padding(horizontal = CliSpacing.md),
     ) {
         CliScreenHeader(label = stringResource(R.string.cli_cfg_more_tor), icon = R.drawable.pix_tor)
-        CliPanel(
-            title = stringResource(R.string.cli_tor_route_title),
-            icon = R.drawable.pix_tor,
-            modifier = Modifier.fillMaxWidth(),
+
+        Column(
+
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(bottom = LocalCliBottomChromeClearance.current),
+
         ) {
-            CliToggleRow(
-                label = stringResource(R.string.cli_tor_bypass_vpn),
-                icon = R.drawable.pix_export,
-                checked = privacyRoute.bypassVpnTunnel,
-                onToggle = viewModel::onPrivacyRouteBypassVpnTunnelConfigured,
-                note = stringResource(R.string.cli_tor_bypass_vpn_note),
-            )
-            CliToggleRow(
-                label = stringResource(R.string.cli_tor_rotate_exit),
-                icon = R.drawable.pix_restart,
-                checked = privacyRoute.autoRotateExit,
-                onToggle = viewModel::onPrivacyRouteAutoRotateExitChanged,
-            )
-            if (privacyRoute.autoRotateExit) {
-                CliDropdownRow(
-                    label = stringResource(R.string.cli_tor_rotate_interval),
-                    icon = R.drawable.pix_clock,
-                    value = "${privacyRoute.autoRotateIntervalMinutes}m",
-                    options = ROTATE_INTERVAL_MINUTES.map { minutes ->
-                        CliDropdownOption(id = minutes.toString(), label = "${minutes}m")
-                    },
-                    selectedId = privacyRoute.autoRotateIntervalMinutes.toString(),
-                    onSelect = { id ->
-                        id.toIntOrNull()?.let(viewModel::onPrivacyRouteAutoRotateIntervalSelected)
-                    },
+            CliPanel(
+                title = stringResource(R.string.cli_tor_route_title),
+                icon = R.drawable.pix_tor,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                if (!privacyRoute.permitted) {
+                    CliToggleRow(
+                        label = stringResource(R.string.cli_cfg_atomic_connection),
+                        icon = R.drawable.pix_shield,
+                        checked = state.settings.connection.atomicConnection,
+                        onToggle = viewModel::onAtomicConnectionChanged,
+                        infoText = stringResource(R.string.cli_cfg_atomic_connection_note),
+                    )
+                }
+                CliToggleRow(
+                    label = stringResource(R.string.cli_tor_bypass_vpn),
+                    icon = R.drawable.pix_export,
+                    checked = privacyRoute.bypassVpnTunnel,
+                    onToggle = viewModel::onPrivacyRouteBypassVpnTunnelConfigured,
+                    infoText = stringResource(R.string.cli_tor_bypass_vpn_note),
                 )
+                CliToggleRow(
+                    label = stringResource(R.string.cli_tor_rotate_exit),
+                    icon = R.drawable.pix_restart,
+                    checked = privacyRoute.autoRotateExit,
+                    onToggle = viewModel::onPrivacyRouteAutoRotateExitChanged,
+                )
+                if (privacyRoute.autoRotateExit) {
+                    CliDropdownRow(
+                        label = stringResource(R.string.cli_tor_rotate_interval),
+                        icon = R.drawable.pix_clock,
+                        value = "${privacyRoute.autoRotateIntervalMinutes}m",
+                        options = ROTATE_INTERVAL_MINUTES.map { minutes ->
+                            CliDropdownOption(id = minutes.toString(), label = "${minutes}m")
+                        },
+                        selectedId = privacyRoute.autoRotateIntervalMinutes.toString(),
+                        onSelect = { id ->
+                            id.toIntOrNull()?.let(viewModel::onPrivacyRouteAutoRotateIntervalSelected)
+                        },
+                    )
+                }
             }
+            Spacer(modifier = Modifier.height(CliSpacing.sm))
+            CliTorBridgesPanel(
+                viewModel = viewModel,
+                privacyRoute = privacyRoute,
+                bridgePhase = bridgePhase,
+            )
+            Spacer(modifier = Modifier.height(CliSpacing.sm))
         }
-        Spacer(modifier = Modifier.height(CliSpacing.sm))
-        CliTorBridgesPanel(
-            viewModel = viewModel,
-            privacyRoute = privacyRoute,
-            bridgePhase = bridgePhase,
-        )
-        Spacer(modifier = Modifier.height(CliSpacing.sm))
     }
 }
 
-/** The bridges master toggle; every OFF -> ON checks whether the existing list needs attention. */
 @Composable
 private fun CliBridgesToggleRow(
     viewModel: HomeViewModel,
@@ -287,8 +305,6 @@ private fun CliTorBridgeUpdateSheet(
                 )
             }
             phase == FoxholeUpdatePhase.DONE || phase == FoxholeUpdatePhase.NO_UPDATE -> {
-                // A terminal phase can race the Settings StateFlow by one frame. Keep showing
-                // verification until the repository's persisted success is observable.
                 CliStageProgress(
                     stageLabel = stringResource(R.string.cli_wizard_phase_verifying),
                     completedStages = checkNotNull(completedStages),
@@ -334,7 +350,6 @@ private fun CliTorBridgeUpdateSheet(
     }
 }
 
-/** Four honest stages: check, download, verify, then persisted success. */
 internal fun torBridgeStageProgress(
     phase: FoxholeUpdatePhase,
     verifiedSuccess: Boolean,

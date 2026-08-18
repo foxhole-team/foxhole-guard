@@ -146,7 +146,7 @@ private sealed interface PackageChangePreparation {
 private fun Settings.packageChangeRelevance(change: PackageInventoryChange): PackageChangeRelevance {
     val quarantineEnabled = expert.newAppQuarantineEnabled
     return PackageChangeRelevance(
-        monitoringEnabled = statistics.enabled && statistics.appChangesEnabled,
+        monitoringEnabled = anomaly.enabled && statistics.enabled && statistics.appChangesEnabled,
         quarantineEnabled = quarantineEnabled,
         // Any lane membership (tor/vpn/block/exclude) makes the change runtime-relevant:
         // an uninstall must drop the package's UID from the live tun filter, and a fresh

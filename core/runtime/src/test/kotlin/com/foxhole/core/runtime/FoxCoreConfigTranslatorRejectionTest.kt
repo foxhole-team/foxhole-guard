@@ -450,16 +450,6 @@ internal class FoxCoreConfigTranslatorRejectionTest : FoxCoreConfigTranslatorTes
                     FoxCoreConfigRejection.UNSUPPORTED_FIELD,
                 ),
                 RejectionCase(
-                    "WireGuard listen port has no FoxCore equivalent",
-                    ProtocolHint.WIREGUARD,
-                    legacyConfig(
-                        wireGuard {
-                            put("listen_port", 51820)
-                        },
-                    ),
-                    FoxCoreConfigRejection.UNSUPPORTED_FIELD,
-                ),
-                RejectionCase(
                     "multiple WireGuard peers cannot collapse to one",
                     ProtocolHint.WIREGUARD,
                     legacyConfig(wireGuard(peerCount = 2)),

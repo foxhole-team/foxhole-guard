@@ -2,12 +2,6 @@ package com.foxhole.guard.ui.cli.profiles
 
 import java.util.Locale
 
-/**
- * The profile model carries no country — the endpoint host lives in an encrypted secret — but
- * subscription node names almost always reveal it: an upper-case ISO2 code ("DE-1", "HY2 NL") or an
- * emoji flag. The resolver reads only these reliable forms; lower-case letter pairs are not treated
- * as countries ("de" inside "node"), because no flag beats the wrong flag.
- */
 internal fun profileCountryCode(vararg names: String?): String? =
     names.firstNotNullOfOrNull { name ->
         name?.takeIf(String::isNotBlank)?.let(::countryCodeFromName)
@@ -22,7 +16,6 @@ private fun countryCodeFromName(name: String): String? {
         .firstOrNull(IsoCountries::contains)
 }
 
-// A pair of regional indicators U+1F1E6..U+1F1FF is an emoji flag; the first valid pair wins.
 private fun emojiFlagCountry(name: String): String? {
     val codePoints = name.codePoints().toArray()
     for (index in 0 until codePoints.size - 1) {

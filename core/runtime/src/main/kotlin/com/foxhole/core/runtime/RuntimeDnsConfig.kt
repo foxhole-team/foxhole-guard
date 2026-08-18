@@ -363,8 +363,7 @@ internal fun buildDnsRules(
         }
         val adGuardVpnCompatibilityDomains =
             dnsFilterRuntimePaths
-                ?.adGuardVpnCompatibilityDomains
-                .orEmpty()
+                .adGuardVpnCompatibilityDomains
                 .filter(String::isNotBlank)
         if (adGuardVpnCompatibilityDomains.isNotEmpty()) {
             add(

@@ -129,7 +129,7 @@ data class RoutingRuleEntity(
             name = name,
             enabled = enabled,
             order = order,
-            action = RoutingRuleAction.valueOf(action),
+            action = RoutingRuleAction.fromStoredName(action),
             matchDomains = matchDomains,
             matchIpCidrs = matchIpCidrs,
             matchPorts = matchPorts,
@@ -275,7 +275,7 @@ data class TrafficWindowEntity(
     indices = [
         Index("startedAtMs"),
         Index("packageName"),
-        Index(value = ["packageName", "networkType", "hourBucket"]),
+        Index(value = ["packageName", "networkType", "hourBucket", "startedAtMs", "id"]),
     ],
 )
 data class AppTrafficWindowEntity(

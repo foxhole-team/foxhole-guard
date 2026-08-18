@@ -27,11 +27,6 @@ import com.foxhole.guard.ui.cli.CliSpacing
 import com.foxhole.guard.ui.cli.CliType
 import com.foxhole.guard.ui.cli.LocalCliColors
 
-/**
- * `prompt > input_` line: the terminal text input. The field itself is borderless mono
- * text after the accent prompt; an optional trailing chip keeps a one-tap action
- * (paste-and-import) on the same line.
- */
 @Composable
 internal fun CliInputRow(
     prompt: String,
@@ -46,8 +41,6 @@ internal fun CliInputRow(
     password: Boolean = false,
 ) {
     val colors = LocalCliColors.current
-    // autoFocus: a field surfaced by choosing "custom" takes focus at once, so the keyboard opens
-    // without a second tap.
     val focusRequester = remember { FocusRequester() }
     if (autoFocus) {
         LaunchedEffect(Unit) { focusRequester.requestFocus() }
@@ -67,7 +60,6 @@ internal fun CliInputRow(
                 cursorBrush = SolidColor(colors.fg),
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(
-                    // Numeric fields raise the digit keyboard immediately.
                     keyboardType = when {
                         numeric -> KeyboardType.Number
                         password -> KeyboardType.Password

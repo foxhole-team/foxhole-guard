@@ -17,24 +17,8 @@ import com.foxhole.guard.R
 import com.foxhole.guard.ui.cli.CliSpacing
 import com.foxhole.guard.ui.cli.CliType
 import com.foxhole.guard.ui.cli.LocalCliColors
+import com.foxhole.guard.ui.cli.cliLabelText
 
-/**
- * The one yes/no modal of the app. Every consequential or destructive confirmation — the firewall
- * switch, the encryption switch, erasing local data, dropping a protocol — rises from the bottom
- * edge through this sheet instead of unfolding inline under the row that asked.
- *
- * Why one shape: an inline y/n grows the screen under the user's finger, so the "yes" chip lands
- * where the row used to be and the question can scroll out of sight while it is armed. A sheet
- * cannot be missed, a swipe or the scrim always means no, and the answer is given in one fixed
- * place whatever asked it.
- *
- * The button row is [CliSheetActionsRow] — the app-wide sheet palette: dashed err cancel at
- * the left, filled ok confirm at the right, both spanning the sheet. This row is deliberately
- * full width and is NOT subject to the trailing-edge rule that governs inline controls.
- *
- * [content] carries anything the answer depends on (the encryption consent's companion switches);
- * it is laid out between the question and the buttons, inside the sheet's own gutters.
- */
 @Composable
 internal fun CliConfirmSheet(
     title: String,
@@ -45,7 +29,6 @@ internal fun CliConfirmSheet(
     @DrawableRes icon: Int? = null,
     confirmLabel: String? = null,
     note: String? = null,
-    // Device tests drive the two answers by tag; a caller that has such a test names them here.
     confirmTag: String? = null,
     cancelTag: String? = null,
     content: (@Composable ColumnScope.() -> Unit)? = null,
@@ -58,7 +41,7 @@ internal fun CliConfirmSheet(
         icon = icon,
     ) {
         Text(
-            text = question,
+            text = cliLabelText(question),
             style = CliType.body,
             color = colors.fg,
         )
@@ -85,7 +68,6 @@ internal fun CliConfirmSheet(
     }
 }
 
-/** One confirm/save/enable action of a sheet's bottom row. */
 internal data class CliSheetAction(
     val label: String,
     val onClick: () -> Unit,
@@ -96,12 +78,6 @@ internal data class CliSheetAction(
 
 internal enum class CliSheetActionTone { CONFIRM, DESTRUCTIVE, ACCENT }
 
-/**
- * The single bottom action row of every sheet: cancel at the left in a dashed err outline,
- * the confirming action filled in the ok tone at the right, both spanning the sheet. More
- * than one action stacks full-width above a full-width cancel — three buttons across cannot
- * hold their labels on narrow devices. No action at all leaves cancel alone, full width.
- */
 @Composable
 internal fun CliSheetActionsRow(
     onCancel: () -> Unit,

@@ -82,9 +82,26 @@ class AppTrafficPrivacyGateTest {
         assertTrue(recordTrafficBlock.contains("sentinelTrafficWindowCollectionEnabled(settings)"))
         assertTrue(recordTrafficBlock.contains("appTrafficLocalStorageAllowed(settings)"))
         assertTrue(recordTrafficBlock.contains("dao.insertAppTrafficWindows(retainedAppWindows.map"))
-        assertFalse(recordTrafficBlock.contains("dao.insertAppTrafficWindows(appWindows.map"))
-        assertTrue(directRecordBlock.contains("appTrafficLocalStorageAllowed(settingsRepository.current())"))
+        assertTrue(recordTrafficBlock.contains("if (!settings.anomaly.enabled)"))
+        assertTrue(
+            recordTrafficBlock.indexOf("if (!settings.anomaly.enabled)") <
+                recordTrafficBlock.indexOf("val history ="),
+        )
+        assertTrue(directRecordBlock.contains("appTrafficLocalStorageAllowed(settings)"))
+        assertTrue(directRecordBlock.contains("if (settings.anomaly.enabled)"))
         assertTrue(directRecordBlock.contains("return"))
+    }
+
+    @Test
+    fun `disabled Sentinel unsubscribes from its event observer`() {
+        val source = sourceFile("guard/core/sentinel/anomaly/AnomalyRepository.kt").readText()
+        val recentEvents =
+            source
+                .substringAfter("val recentEvents:")
+                .substringBefore("val recentAppTrafficWindows:")
+
+        assertTrue(recentEvents.contains("if (!settings.anomaly.enabled)"))
+        assertTrue(recentEvents.contains("flowOf(emptyList())"))
     }
 
     @Test

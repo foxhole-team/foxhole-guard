@@ -6,11 +6,6 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/**
- * The uncaught-crash report is the only crash artefact this app produces (no Play Vitals, no
- * crash-reporting SDK), and it is written into the journal that redacts everything that looks
- * like a host, an address or a secret. These tests pin both halves of that contract.
- */
 class CrashReportFormatTest {
     private val thread = Thread("main")
 
@@ -18,8 +13,6 @@ class CrashReportFormatTest {
     fun `report survives the journal sanitizer unchanged`() {
         val report = formatUncaughtCrashReport(thread, crashWithStack())
 
-        // Dotted class names read as hostnames to the sanitizer: an unescaped stack trace would be
-        // persisted as a row of "[host]", destroying the only part worth keeping.
         assertEquals(report, DiagnosticSanitizer.sanitizeForPersistence(report))
         assertFalse(report, report.contains("[host]"))
         assertFalse(report, report.contains("[redacted]"))
@@ -70,8 +63,6 @@ class CrashReportFormatTest {
 
     @Test
     fun `hex-shaped frames are not mistaken for addresses by the sanitizer`() {
-        // `Foo#add:42` used to persist as `Foo#[ip]`: "add" is valid hex and the sanitizer reads
-        // "<hex>:<digits>" as IPv6. The regression the '@' separator exists for.
         val error = IllegalStateException()
         error.stackTrace = arrayOf(StackTraceElement("com.foxhole.guard.Cafe", "add", "Cafe.kt", 42))
 

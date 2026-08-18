@@ -8,11 +8,6 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/**
- * Пуш-вотчдог web apps опрашивает сайты фоновым WebView, поэтому его трафик обязан ходить только
- * за поднятым guard'ом: инвариант «пуш включён ⇒ фаервол включён» держится на записи — ручное
- * выключение фаервола гасит пуш при следующей нормализации, а не оставляет вотчдог без туннеля.
- */
 internal class WebAppsNormalizationTest {
     @Test
     fun `push is forced off when firewall is off`() {

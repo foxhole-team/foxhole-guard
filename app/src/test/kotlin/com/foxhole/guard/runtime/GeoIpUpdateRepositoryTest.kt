@@ -29,8 +29,6 @@ class GeoIpUpdateRepositoryTest {
         assertEquals(72L * 60L * 60L * 1000L, GEOIP_CHECK_INTERVAL_MS)
     }
 
-    // Mirrors GeoIpUpdateRepository.isUpdateCheckDue without a real GeoIpDatabaseStore (which needs
-    // a Context) — the gate is pure arithmetic over the stored last-checked timestamp.
     private fun isUpdateCheckDue(lastChecked: Long?, nowMs: Long): Boolean {
         lastChecked ?: return true
         return nowMs - lastChecked >= GEOIP_CHECK_INTERVAL_MS

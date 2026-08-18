@@ -22,6 +22,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
+import com.foxhole.core.model.PanelAppearance
 import com.foxhole.guard.FoxholeApplication
 import com.foxhole.guard.core.data.profileDatabaseDowngradeDetected
 import com.foxhole.guard.ui.HomeViewModel
@@ -31,11 +32,6 @@ import com.foxhole.guard.ui.applyWebAppOpenIntent
 import kotlinx.coroutines.launch
 import android.graphics.Color as AndroidColor
 
-/**
- * The single launcher of FoxHole Guard: database downgrade gate, VPN consent,
- * notifications, secure-screen policy and app-lock foreground/background timers around
- * the lightweight terminal UI.
- */
 class CliMainActivity : AppCompatActivity() {
 
     private val homeViewModel: HomeViewModel by viewModels { HomeViewModel.factory(application) }
@@ -59,15 +55,12 @@ class CliMainActivity : AppCompatActivity() {
         installSplashScreen()
         super.onCreate(savedInstanceState)
         applyDarkEdgeToEdge()
-        // A downgraded (newer-schema) database is fail-loud
-        // everywhere, so it must be detected before the first homeViewModel touch.
         if (profileDatabaseDowngradeDetected(this)) {
             setContent { CliTheme { CliDatabaseDowngradeScreen() } }
             return
         }
         homeViewModel.applyBenchmarkIntent(intent)
         homeViewModel.applyNetworkRuleSwitchIntent(intent)
-        // The frame state lives in the view model above the lock gate, so it opens after unlock.
         homeViewModel.applyWebAppOpenIntent(intent)
 
         lifecycleScope.launch {
@@ -85,7 +78,17 @@ class CliMainActivity : AppCompatActivity() {
 
         setContent {
             val panelAppearance by homeViewModel.panelAppearance.collectAsStateWithLifecycle()
-            CliTheme(panelAppearance = panelAppearance) {
+            val visualStyle by homeViewModel.visualStyle.collectAsStateWithLifecycle()
+            val accentColor by homeViewModel.accentColor.collectAsStateWithLifecycle()
+            val resolvedAppearance = cliResolvedPanelAppearance(panelAppearance)
+            LaunchedEffect(resolvedAppearance) {
+                applyEdgeToEdge(light = resolvedAppearance == PanelAppearance.LIGHT)
+            }
+            CliTheme(
+                panelAppearance = panelAppearance,
+                visualStyle = visualStyle,
+                accentColor = accentColor,
+            ) {
                 LaunchedEffect(Unit) {
                     homeViewModel.requestVpnPermission.collect {
                         val prepareIntent = android.net.VpnService.prepare(this@CliMainActivity)
@@ -108,16 +111,12 @@ class CliMainActivity : AppCompatActivity() {
 
     override fun onStop() {
         super.onStop()
-        // Arms the app-lock away timer, same as the classic UI.
         homeViewModel.onAppBackgrounded()
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        // No lock gate here, exactly as in onCreate: the activity is singleTask, so every relaunch
-        // of a live process lands here, and the gate silently lost a web-app tap made while
-        // locked.
         homeViewModel.applyBenchmarkIntent(intent)
         homeViewModel.applyNetworkRuleSwitchIntent(intent)
         homeViewModel.applyWebAppOpenIntent(intent)
@@ -152,10 +151,15 @@ class CliMainActivity : AppCompatActivity() {
         window.decorView.invalidate()
     }
 
-    // The CLI chrome is dark-only: both bars stay transparent over the terminal background.
-    private fun applyDarkEdgeToEdge() {
-        val dark = SystemBarStyle.dark(AndroidColor.TRANSPARENT)
-        enableEdgeToEdge(statusBarStyle = dark, navigationBarStyle = dark)
+    private fun applyDarkEdgeToEdge() = applyEdgeToEdge(light = false)
+
+    private fun applyEdgeToEdge(light: Boolean) {
+        val style = if (light) {
+            SystemBarStyle.light(AndroidColor.TRANSPARENT, AndroidColor.TRANSPARENT)
+        } else {
+            SystemBarStyle.dark(AndroidColor.TRANSPARENT)
+        }
+        enableEdgeToEdge(statusBarStyle = style, navigationBarStyle = style)
         WindowCompat.setDecorFitsSystemWindows(window, false)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             @Suppress("DEPRECATION")
@@ -165,7 +169,6 @@ class CliMainActivity : AppCompatActivity() {
     }
 
     companion object {
-        /** Long extra: the id of the web app whose frame should open. */
         const val EXTRA_OPEN_WEB_APP_ID = "open_web_app_id"
     }
 }

@@ -16,14 +16,6 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.foxhole.guard.core.sentinel.anomaly.UsageAccessState
 import com.foxhole.guard.core.sentinel.anomaly.UsageStatsAccess
 
-/**
- * Usage Access is the one system permission without which per-app statistics are physically empty.
- * It is granted on a settings screen rather than in a dialog, so the state must be re-read on every
- * return to the app: the user leaves to grant it and comes back through ON_RESUME.
- *
- * A port of the original front's helpers into the CLI canon; the check itself lives in
- * [UsageStatsAccess].
- */
 @Composable
 internal fun rememberUsageAccessState(): UsageAccessState {
     val context = LocalContext.current
@@ -45,13 +37,11 @@ internal fun rememberUsageAccessState(): UsageAccessState {
     return state
 }
 
-/** A single tap remains armed while Android owns the permission screen. */
 internal fun shouldCompleteAppTrafficEnable(
     usageAccessGranted: Boolean,
     enablePending: Boolean,
 ): Boolean = usageAccessGranted && enablePending
 
-/** The Usage Access screen; on ROMs lacking it, fall back to the settings root. */
 internal fun openUsageAccessSettings(context: Context) {
     runCatching {
         context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))

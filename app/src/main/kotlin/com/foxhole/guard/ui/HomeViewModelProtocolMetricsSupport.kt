@@ -30,10 +30,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 
-// Protocol latency/ping metrics caching and connected-dashboard latency refresh for
-// HomeViewModel. Split out of HomeViewModelAutoConnectSupport (behaviour-preserving);
-// HomeViewModel extension functions, resolved same-module.
-
 internal fun HomeViewModel.cacheProtocolLatency(
     profileId: Long,
     optionId: String,
@@ -291,18 +287,11 @@ internal fun HomeViewModel.scheduleActiveProfileLatencyRefresh(
                         selectedOptionId = selectedOptionId,
                         serverPingResult = serverPingResult,
                     )
-                    // The bounded probes have produced their terminal value/unavailable state.
-                    // End presentation ownership before the best-effort memory persistence below,
-                    // so slow encrypted storage can never extend the dashboard spinner.
                     waitingForInitialSample =
                         clearDashboardMetricsLoadingAfterInitialSample(
                             waitingForInitialSample = waitingForInitialSample,
                             refreshGeneration = refreshGeneration,
                         )
-                    // The connected protocol's measurements ARE its latest smart-profile memory:
-                    // persist them (first sample immediately, then throttled) so the latency icon
-                    // and the protocol-management window keep showing the value of the protocol
-                    // that is actually connected, not a stale probe from the last full refresh.
                     val nowMs = System.currentTimeMillis()
                     if (nowMs - lastMemoryPersistAtMs >= HomeViewModel.CONNECTED_METRICS_MEMORY_PERSIST_INTERVAL_MS) {
                         val persisted =
@@ -381,8 +370,6 @@ private suspend fun HomeViewModel.measureConnectedServerTcpPing(
         } ?: error("server tcp ping timed out")
     }
 
-// True when a public probe through the tunnel measures the VPN protocol itself; false when Tor
-// owns the tunnel egress and the probe would measure the Tor circuit instead.
 private fun HomeViewModel.connectedTunnelProbeMeasuresVpn(): Boolean {
     val snapshot = container.connectionController.snapshot.value
     return !snapshot.torActive ||
@@ -395,9 +382,6 @@ private suspend fun HomeViewModel.persistConnectedProtocolMetricsToSmartMemory(
     latencyResult: Result<Long>,
     serverPingResult: Result<Long>,
 ): Boolean {
-    // When Tor owns the tunnel egress the public probe measures the Tor circuit, not the VPN
-    // protocol — remembering it would poison this protocol's latency memory (and its icon color).
-    // The direct-to-server TCP ping stays valid either way.
     val latencyMs =
         latencyResult
             .getOrNull()
@@ -453,10 +437,6 @@ private fun HomeViewModel.cacheDashboardPublicPing(
             optionId = selectedOptionId,
             pingMs = pingMs,
         )
-        // The same probe also IS the connected protocol's live latency (auto-connect measures it
-        // with the same call), so feed the latency cache too — this is what keeps the protocol
-        // icon color and the management-window latency column live while connected. Skipped when
-        // Tor owns the tunnel egress: then the probe measures the Tor circuit, not the protocol.
         if (connectedTunnelProbeMeasuresVpn()) {
             cacheProtocolLatency(
                 profileId = activeProfileId,

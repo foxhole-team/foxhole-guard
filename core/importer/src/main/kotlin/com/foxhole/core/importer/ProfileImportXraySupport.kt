@@ -363,11 +363,12 @@ internal open class ProfileImportXraySupport(
                         "utlsFingerprint",
                         "utls_fingerprint",
                     ),
+                    reality = security == "reality" || realitySettings != null,
                 )
             if (utlsFingerprint != null || security == "reality" || realitySettings != null) {
                 putJsonObject("utls") {
                     put("enabled", true)
-                    put("fingerprint", utlsFingerprint ?: "chrome")
+                    put("fingerprint", utlsFingerprint ?: SUBSTITUTE_UTLS_FINGERPRINT)
                 }
             }
             if (security == "reality" || realitySettings != null) {

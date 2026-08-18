@@ -20,12 +20,6 @@ data class GuardInventorySnapshot(
     val apps: List<GuardInventoryApp> = emptyList(),
 )
 
-/**
- * Last-seen package inventory used to reconcile missed broadcasts while locked.
- * Keystore-encrypted (readable without the password by design): a root attacker can
- * read the app list here, but cannot erase reconciliation *history* undetectably -
- * that lands in the sealed journal.
- */
 internal class GuardInventorySnapshotStore(
     private val file: File,
     private val cipher: FileCipher,
@@ -54,20 +48,15 @@ internal class GuardInventorySnapshotStore(
     }
 }
 
-/** Pure diff between two inventories -> journal events for missed changes. */
 internal object GuardInventoryDiff {
     fun diff(
         previous: GuardInventorySnapshot,
         current: GuardInventorySnapshot,
     ): List<GuardEvent> {
         if (previous.capturedAt == 0L) {
-            // First capture: nothing to compare against, do not fabricate installs.
             return emptyList()
         }
         if (current.apps.isEmpty() && previous.apps.isNotEmpty()) {
-            // Second, independent fail-closed gate behind GuardPackageInspector.snapshotInstalledApps:
-            // a package query that came back empty describes an UNKNOWN device, never a device whose
-            // every app was uninstalled at once. Reporting nothing is the only safe reading.
             return emptyList()
         }
         val before = previous.apps.associateBy(GuardInventoryApp::packageName)
@@ -86,13 +75,6 @@ internal object GuardInventoryDiff {
         return events.sortedBy { event -> event.packageName.orEmpty() }
     }
 
-    /**
-     * Whether the package changed identity since the last snapshot.
-     *
-     * Each nullable field is compared only when the OLD snapshot carried it: a field this device
-     * could not read back then is unknown, not "was absent", and treating unknown as a difference
-     * would report a replacement on every pass for every package the query cannot fully describe.
-     */
     private fun GuardInventoryApp.differsFrom(current: GuardInventoryApp): Boolean =
         versionCode != current.versionCode ||
             (uid != null && uid != current.uid) ||

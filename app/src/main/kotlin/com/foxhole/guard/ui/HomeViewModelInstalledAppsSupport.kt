@@ -15,9 +15,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-// Installed-app inventory loading for the routing/anomaly pickers plus the high-frequency
-// traffic sampling visibility switch.
-
 internal fun HomeViewModel.loadInstalledApps(force: Boolean = false) {
     val activeLoadJob = installedAppsLoadJob
     val hasLoadedApps = installedAppsLoadedMutable.value

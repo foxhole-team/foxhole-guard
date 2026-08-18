@@ -18,26 +18,14 @@ import com.google.zxing.qrcode.QRCodeWriter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-/**
- * Thin CLI-side bridge over the existing profile-export read API: resolves the selected
- * profiles/protocol options into raw config texts (same repository call the classic
- * export sheet uses) and offers small SAF/clipboard/QR helpers around them. No new
- * backend semantics live here.
- */
 internal data class CliProfileConfigExport(
     val profileId: Long,
     val profileName: String,
     val fileBaseName: String,
     val configs: List<String>,
-    // A subscription (multi-protocol/smart) profile always saves as a plain `.txt` bundle, even when
-    // only one of its configs is selected; a plain single-config user profile keeps its `.json`.
     val isSubscription: Boolean,
 )
 
-/**
- * `txt` for subscriptions and any mixed/multi-config bundle; `json` only for a single JSON document
- * belonging to a plain (non-subscription) profile.
- */
 internal val CliProfileConfigExport.fileExtension: String
     get() = when {
         isSubscription -> "txt"
@@ -54,11 +42,6 @@ internal val CliProfileConfigExport.fileName: String
 internal fun CliProfileConfigExport.joinedConfigs(): String =
     configs.joinToString(separator = "\n") { config -> config.trimEnd() }
 
-/**
- * Reads the resolved config text for every selected export choice. Mirrors the private
- * resolve step of HomeViewModelProfileExportSupport: profile from the repository,
- * choices filtered by selection keys, config via getResolvedConfig.
- */
 internal suspend fun HomeViewModel.cliResolveExportConfigs(
     requests: List<ProfileExportSelectionRequest>,
 ): List<CliProfileConfigExport> =
@@ -82,7 +65,6 @@ internal suspend fun HomeViewModel.cliResolveExportConfigs(
         )
     }
 
-/** Every selected config on its own line (newline-separated across all profiles); clip is sensitive. */
 internal fun cliCopyConfigsToClipboard(
     context: Context,
     exports: List<CliProfileConfigExport>,
@@ -94,7 +76,6 @@ internal fun cliCopyConfigsToClipboard(
             .joinToString(separator = "\n") { config -> config.trim() }
     val clip =
         ClipData.newPlainText("FoxHole profiles", text).apply {
-            // Same sensitive-clip marking as the LAN proxy password copy (API 33 masks it).
             description.extras =
                 PersistableBundle().apply {
                     putBoolean("android.content.extra.IS_SENSITIVE", true)
@@ -103,7 +84,6 @@ internal fun cliCopyConfigsToClipboard(
     clipboard.setPrimaryClip(clip)
 }
 
-/** Writes one export payload into a SAF CreateDocument uri. */
 internal suspend fun cliWriteExportToUri(
     resolver: ContentResolver,
     uri: Uri,
@@ -117,7 +97,6 @@ internal suspend fun cliWriteExportToUri(
         }.getOrDefault(false)
     }
 
-/** One file per profile inside a SAF OpenDocumentTree folder; returns the written count. */
 internal suspend fun cliWriteExportsToTree(
     resolver: ContentResolver,
     treeUri: Uri,
@@ -147,10 +126,6 @@ internal suspend fun cliWriteExportsToTree(
         }
     }
 
-/**
- * Config text -> QR bitmap via the zxing core bundled with zxing-android-embedded.
- * Null when the payload does not fit a QR code (or any other encode failure).
- */
 internal fun cliGenerateQrBitmap(
     text: String,
     sizePx: Int,
@@ -176,7 +151,6 @@ internal fun cliGenerateQrBitmap(
         Bitmap.createBitmap(pixels, matrix.width, matrix.height, Bitmap.Config.ARGB_8888)
     }.getOrNull()
 
-/** Same sanitize contract as the core export artifact names. */
 private fun cliSanitizeExportName(value: String): String =
     value
         .trim()

@@ -19,12 +19,6 @@ import com.foxhole.guard.ui.cli.components.CliToggleRow
 import com.foxhole.guard.ui.isRunning
 import kotlinx.coroutines.delay
 
-/**
- * The one "FoxHole DB update required" sheet. It rises when a feature whose data group holds
- * nothing is switched on (anomalies → security lists, bridges → the bridge list, the map → the
- * geo database) and offers the download right there, plus the auto-update switch so the next
- * gap never appears. Cancel merely closes — the feature stays on, its data arrives later.
- */
 @Composable
 internal fun CliFoxholeDbUpdateSheet(
     groupLabel: String,

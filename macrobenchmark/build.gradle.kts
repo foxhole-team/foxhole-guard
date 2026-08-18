@@ -12,7 +12,7 @@ android {
         minSdk = 28
         targetSdk = 37
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        testInstrumentationRunnerArguments["androidx.benchmark.suppressErrors"] = "EMULATOR,DEBUGGABLE,DEVICE-TRACING-MISCONFIGURED"
+        testInstrumentationRunnerArguments["androidx.benchmark.suppressErrors"] = "EMULATOR,DEBUGGABLE"
         buildConfigField("String", "TARGET_PACKAGE_NAME", "\"$targetPackageName\"")
     }
 

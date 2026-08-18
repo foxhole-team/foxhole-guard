@@ -46,7 +46,9 @@ internal open class ProfileImportNodeSupport(
             "hy2", "hysteria2" -> parseHysteria2Uri(value, allowPrivateOutboundHosts, allowInsecureTls)
             "tuic" -> parseTuicUri(value, allowPrivateOutboundHosts, allowInsecureTls)
             "anytls" -> parseAnytlsUri(value, allowPrivateOutboundHosts, allowInsecureTls)
-            "wireguard", "wg" -> parseWireGuardUri(value, allowPrivateOutboundHosts)
+            "wireguard", "wg", "awg", "amnezia", "amneziawg" ->
+                parseWireGuardUri(value, allowPrivateOutboundHosts)
+
             else -> error("unsupported share uri")
         }
     }
@@ -62,13 +64,16 @@ internal open class ProfileImportNodeSupport(
         validateOutboundHost(host, allowPrivateOutboundHosts)
         val port = uri.port.takeIf { it > 0 } ?: 443
         val displayName = displayNameFromUri(uri, host)
+        val encryption = query["encryption"]?.trim()?.lowercase().orEmpty()
+        // sing-box supports plain VLESS only; dropping Xray encryption would change the handshake.
+        require(encryption.isEmpty() || encryption == "none") { "unsupported vless encryption: $encryption" }
         val outbound =
             buildJsonObject {
                 put("type", "vless")
                 put("tag", tagFor(displayName, "vless", host, port, uri.userInfo))
                 put("server", host)
                 put("server_port", port)
-                put("uuid", uri.userInfo ?: error("missing uuid"))
+                put("uuid", uri.userInfo?.takeIf(String::isNotBlank) ?: error("missing uuid"))
                 query["flow"]?.takeIf { it.isNotBlank() }?.let { put("flow", it) }
                 buildVlessNetwork(query)?.let { put("network", it) }
                 query.firstValue(
@@ -104,7 +109,7 @@ internal open class ProfileImportNodeSupport(
                 put("tag", tagFor(displayName, "trojan", host, port, uri.userInfo))
                 put("server", host)
                 put("server_port", port)
-                put("password", uri.userInfo ?: error("missing password"))
+                put("password", uri.userInfo?.takeIf(String::isNotBlank) ?: error("missing password"))
                 buildTls(
                     query = query,
                     host = host,
@@ -229,13 +234,8 @@ internal open class ProfileImportNodeSupport(
         return ProxyNode(displayName, hint, outbound)
     }
 
-    internal fun buildVlessNetwork(query: Map<String, String>): String? {
-        query["network"]?.trim()?.lowercase()?.takeIf { it in setOf("tcp", "udp") }?.let { return it }
-        return when (query["type"].orEmpty().trim().lowercase()) {
-            "tcp" -> "tcp"
-            else -> null
-        }
-    }
+    internal fun buildVlessNetwork(query: Map<String, String>): String? =
+        query["network"]?.trim()?.lowercase()?.takeIf { it in setOf("tcp", "udp") }
 
     internal fun decodeOutlineAccessKey(value: String): String {
         val payload = value.removePrefix("outline://")
@@ -312,7 +312,7 @@ internal open class ProfileImportNodeSupport(
         val port = uri.port.takeIf { it > 0 } ?: 443
         val serverPorts = parseHysteriaServerPorts(query["server_ports"] ?: query["mport"])
         val displayName = displayNameFromUri(uri, host)
-        val password = uri.userInfo ?: error("missing password")
+        val password = uri.userInfo?.takeIf(String::isNotBlank) ?: error("missing password")
         val outbound =
             buildJsonObject {
                 put("type", "hysteria2")
@@ -345,9 +345,14 @@ internal open class ProfileImportNodeSupport(
                         .takeIf(List<String>::isNotEmpty)
                         ?.let { pins -> put("certificate_public_key_sha256", buildStringArray(pins)) }
                 }
-                buildHysteria2Obfs(query["obfs"], query["obfs-password"])?.let { put("obfs", it) }
-                query["upmbps"]?.toIntOrNull()?.let { put("up_mbps", it) }
-                query["downmbps"]?.toIntOrNull()?.let { put("down_mbps", it) }
+                buildHysteria2Obfs(
+                    query["obfs"],
+                    query.firstNonBlank("obfs-password", "obfs_password", "obfspassword"),
+                )?.let { put("obfs", it) }
+                parseHysteriaBandwidthMbps(query.firstNonBlank("upmbps", "up_mbps", "up"))?.let { put("up_mbps", it) }
+                parseHysteriaBandwidthMbps(
+                    query.firstNonBlank("downmbps", "down_mbps", "down"),
+                )?.let { put("down_mbps", it) }
             }
         return ProxyNode(
             displayName = displayName,
@@ -599,9 +604,13 @@ private fun parseNodeLinesWithCapabilities(
         raw.lineSequence()
             .map(normalize)
             .filter { it.isNotBlank() && !it.startsWith("#") }
+            .take(MAX_SUBSCRIPTION_ENTRY_LINES + 1)
             .toList()
     if (lines.isEmpty()) {
         return ParsedNodeLines(emptyList(), emptyList())
+    }
+    require(lines.size <= MAX_SUBSCRIPTION_ENTRY_LINES) {
+        "subscription declares more than $MAX_SUBSCRIPTION_ENTRY_LINES entries"
     }
     val parsed = mutableListOf<ProfileImportCoreSupport.ProxyNode>()
     val reports = mutableListOf<SubscriptionEntryReport>()
@@ -624,7 +633,7 @@ private fun parseNodeLinesWithCapabilities(
                 parsed += node
                 reports +=
                     SubscriptionEntryReport(
-                        protocolLabel = acceptedShareProtocolLabel(scheme, node.protocolHint),
+                        protocolLabel = acceptedShareProtocolLabel(scheme, node),
                         protocolHint = node.protocolHint,
                         status = SubscriptionEntryStatus.ACCEPTED,
                         sourceLine = index + 1,
@@ -644,7 +653,6 @@ private fun parseNodeLinesWithCapabilities(
 private fun unsupportedProtocolLabel(scheme: String): String =
     when (scheme) {
         "tg", "mtproto" -> "MTPROTO"
-        "awg", "amnezia", "amneziawg" -> "AMNEZIAWG"
         else ->
             scheme
                 .take(MAX_PROTOCOL_LABEL_LENGTH)
@@ -655,12 +663,12 @@ private fun unsupportedProtocolLabel(scheme: String): String =
 
 private fun acceptedShareProtocolLabel(
     scheme: String,
-    protocolHint: ProtocolHint,
+    node: ProfileImportCoreSupport.ProxyNode,
 ): String =
-    if (protocolHint == ProtocolHint.OUTLINE) {
-        "OUTLINE"
-    } else {
-        shareProtocolLabel(scheme)
+    when {
+        node.protocolHint == ProtocolHint.OUTLINE -> "OUTLINE"
+        node.carriesAmneziaObfuscation() -> AMNEZIAWG_PROTOCOL_LABEL
+        else -> shareProtocolLabel(scheme)
     }
 
 private fun shareProtocolLabel(scheme: String): String =
@@ -671,6 +679,7 @@ private fun shareProtocolLabel(scheme: String): String =
         "hy2", "hysteria2" -> "HYSTERIA2"
         "tuic" -> "TUIC"
         "anytls" -> "ANYTLS"
+        "awg", "amnezia", "amneziawg" -> "WIREGUARD"
         else -> scheme.uppercase()
     }
 
@@ -689,6 +698,9 @@ private val SUPPORTED_SHARE_URI_SCHEMES =
         "anytls",
         "wireguard",
         "wg",
+        "awg",
+        "amnezia",
+        "amneziawg",
     )
 
 private const val MAX_PROTOCOL_LABEL_LENGTH = 32

@@ -49,13 +49,6 @@ internal fun shouldPublishTorIpInfoForDashboardRefresh(
     target == IpInfoRefreshTarget.TOR ||
         reason == IpInfoRefreshReason.TOR_ROUTE
 
-/**
- * With Tor riding inside the tunnel, every tunnel-bound probe egresses through Tor, so a VPN_BOUND
- * result is the *Tor exit*, not the VPN identity. The dashboard network card keeps VPN display
- * priority: such results go to the dedicated Tor channel and must never overwrite the VPN IP.
- * Mirrors the runtime-side hold (shouldPublishRuntimeProxyIpInfoToDashboard) for viewmodel-driven
- * refreshes (foreground/manual/geo-enrichment), which previously leaked the Tor exit into the card.
- */
 internal fun HomeViewModel.torRouteOwnsTunnelEgress(target: IpInfoRefreshTarget): Boolean {
     if (target != IpInfoRefreshTarget.VPN_BOUND) {
         return false
@@ -88,14 +81,6 @@ internal fun shouldAcceptTorRouteIpRefresh(
         !info.matchesVisibleIpAddress(currentNonTorIpInfo) &&
         (!torOperation.active || torOperation.canAcceptTorIp(info))
 
-/**
- * Single owner for the Tor route exit shown on the dashboard and map. Every writer (the runtime
- * bridge channel, the TOR_ROUTE refresh, the Tor-operation completion) goes through here so the same
- * guards apply everywhere: Tor must be visible, the exit must differ from the current VPN exit (so a
- * VPN-bound probe is never published as the Tor exit), and an active Tor operation must accept it.
- * The resolved country/city is retained across same-IP updates so a quick country-less probe cannot
- * wipe the geo the map needs to plot the Tor node.
- */
 internal fun HomeViewModel.publishTorRouteExit(candidate: IpInfo): Boolean {
     val probePhase = torIdentityProbeMutable.state.value.phase
     if (probePhase == TorIdentityProbePhase.FAILED || probePhase == TorIdentityProbePhase.CANCELLED) {

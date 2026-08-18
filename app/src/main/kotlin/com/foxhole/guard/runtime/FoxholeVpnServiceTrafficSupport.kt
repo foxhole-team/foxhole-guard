@@ -1,5 +1,6 @@
 package com.foxhole.guard.runtime
 
+import android.os.SystemClock
 import com.foxhole.core.model.DnsRuntimeStats
 import com.foxhole.core.model.I2pTrafficStats
 import com.foxhole.core.model.LOCAL_GUARD_PROFILE_ID
@@ -8,6 +9,7 @@ import com.foxhole.core.model.TorTrafficStats
 import com.foxhole.core.model.TunnelAppTrafficStats
 import com.foxhole.core.runtime.FoxholeVpnRuntimeBridge
 import com.foxhole.core.runtime.RuntimeUpdatePolicy
+import com.foxhole.guard.core.sentinel.anomaly.sentinelTrafficWindowCollectionEnabled
 import com.foxhole.guard.guardian.GuardEvent
 import com.foxhole.guard.guardian.GuardEventType
 import com.foxhole.guard.traffic.RuntimeAuditEvent
@@ -64,8 +66,13 @@ internal fun FoxholeVpnService.stopAppTrafficStatsUpdates() {
  */
 internal fun FoxholeVpnService.startI2pTrafficStatsUpdates() {
     stopI2pTrafficStatsUpdates()
+    if (!i2pTrafficSamplingPossible(container.settingsRepository.settings.value)) {
+        scope.launch(Dispatchers.IO) { container.i2pTrafficRepository.resetSampleCursors() }
+        return
+    }
     // No cursor reset here: the teardown below already recorded the previous session's tail and
     // reset in one ordered step. Doing it again from a second coroutine would race that one.
+    val startedAtMs = SystemClock.elapsedRealtime()
     sessionTicker.register(
         id = FoxholeVpnService.TICKER_TASK_I2P_TRAFFIC,
         // Prime the cumulative cursors at session start. With the first pass delayed by 30 s,
@@ -74,25 +81,38 @@ internal fun FoxholeVpnService.startI2pTrafficStatsUpdates() {
         // its first minute. The immediate pass sees the freshly reset session counter and records
         // no bytes, then the first timed pass can persist the whole first interval.
         fireImmediately = true,
-        intervalMs = { FoxholeVpnService.I2P_TRAFFIC_SAMPLE_INTERVAL_MS },
+        intervalMs = {
+            i2pTrafficSampleIntervalMs(SystemClock.elapsedRealtime() - startedAtMs)
+        },
         runOn = Dispatchers.IO,
     ) {
+        val settings = container.settingsRepository.settings.value
+        if (!i2pTrafficSamplingPossible(settings)) {
+            container.i2pTrafficRepository.resetSampleCursors()
+            stopI2pTrafficStatsUpdates()
+            return@register
+        }
         // Keep the cumulative cursor warm for the whole statistics-consent window, including while
         // I2P is paused. The router counter stays stable while i2pd is down. If
         // we reset the cursor on every paused tick, the first sample after a dashboard I2P toggle
         // merely primed at an already non-zero value and discarded that entire first interval.
-        if (i2pTrafficStatsRuntimeEnabled(container.settingsRepository.settings.value)) {
-            container.i2pTrafficRepository.sample()
-        } else {
-            // Collection consent is off: drop the cursor so opting back in cannot bank the gap.
-            container.i2pTrafficRepository.resetSampleCursors()
-        }
+        container.i2pTrafficRepository.sample()
     }
 }
 
 internal fun FoxholeVpnService.stopI2pTrafficStatsUpdates() {
     sessionTicker.unregister(FoxholeVpnService.TICKER_TASK_I2P_TRAFFIC)
 }
+
+internal fun i2pTrafficSamplingPossible(settings: Settings): Boolean =
+    settings.i2p.enabled && i2pTrafficStatsRuntimeEnabled(settings)
+
+internal fun i2pTrafficSampleIntervalMs(sessionElapsedMs: Long): Long =
+    if (sessionElapsedMs < FoxholeVpnService.I2P_TRAFFIC_SAMPLE_WARMUP_MS) {
+        FoxholeVpnService.I2P_TRAFFIC_SAMPLE_INTERVAL_MS
+    } else {
+        FoxholeVpnService.I2P_TRAFFIC_SAMPLE_STEADY_INTERVAL_MS
+    }
 
 /** Persisted I2P counters follow statistics consent; router engagement only changes the counter. */
 internal fun i2pTrafficStatsRuntimeEnabled(settings: Settings): Boolean =
@@ -103,9 +123,8 @@ internal fun i2pTrafficStatsRuntimeEnabled(settings: Settings): Boolean =
  * can survive them too; a real router restart is handled by the cumulative-counter restart rule.
  */
 private fun FoxholeVpnService.recordFinalI2pTrafficSample() {
-    // Sample even if the router was just paused: its console may still expose the final cumulative
-    // reading while teardown is progressing.
-    if (!i2pTrafficStatsRuntimeEnabled(container.settingsRepository.settings.value)) {
+    // A paused router can still expose its final cumulative counters.
+    if (!i2pTrafficSamplingPossible(container.settingsRepository.settings.value)) {
         return
     }
     scope.launch(Dispatchers.IO) {
@@ -370,12 +389,18 @@ internal fun shouldIncludeRuntimeProcessInfo(
 internal fun FoxholeVpnService.startDnsGuardWindowUpdates() {
     stopDnsGuardWindowUpdates()
     trafficSampler.start()
+    if (!sentinelTrafficWindowCollectionEnabled(container.settingsRepository.settings.value)) {
+        return
+    }
     sessionTicker.register(
         id = FoxholeVpnService.TICKER_TASK_DNS_GUARD_WINDOW,
         fireImmediately = false,
         intervalMs = { RuntimeUpdatePolicy.trafficUpdateIntervalMs(highFrequencyUiActive = false) },
     ) {
         recordAnomalyTrafficWindow(trafficSampler.sample())
+        if (!sentinelTrafficWindowCollectionEnabled(container.settingsRepository.settings.value)) {
+            stopDnsGuardWindowUpdates()
+        }
     }
 }
 

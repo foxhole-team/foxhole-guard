@@ -9,9 +9,6 @@ import androidx.fragment.app.FragmentActivity
 import com.foxhole.guard.R
 import javax.crypto.Cipher
 
-// System BiometricPrompt bridges for the CLI lock section - the prompt itself is the one
-// system dialog that legitimately breaks the terminal idiom (donor pattern).
-
 internal fun showCliBiometricConfirmPrompt(
     context: Context,
     onConfirmed: () -> Unit,

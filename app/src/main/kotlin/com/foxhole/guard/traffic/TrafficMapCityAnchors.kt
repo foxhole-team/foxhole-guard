@@ -2,20 +2,6 @@ package com.foxhole.guard.traffic
 
 import java.util.Locale
 
-/**
- * City-level anchors for the traffic map, deliberately small and deliberately partial.
- *
- * Country centroids are fine for compact countries (all of Europe reads clearly with one dot per
- * country), but on large countries a single centroid puts a New York exit in the middle of Kansas.
- * So only the geographically large countries carry a compact table of major cities (the ones geo
- * endpoints actually return for VPN exits and device locations); everything else — and any city
- * the table does not know — falls back to the country point, so unknown cities all share one
- * anchor by design.
- *
- * Lookup is a normalized in-memory map hit: lowercase, alphanumerics only (so "Rostov-on-Don",
- * "Xi'an" and "São Paulo" match their plain spellings), with Russian-script aliases for the
- * countries where localized geo endpoints return Cyrillic names.
- */
 internal object TrafficMapCityAnchors {
     fun resolve(
         countryCode: String?,

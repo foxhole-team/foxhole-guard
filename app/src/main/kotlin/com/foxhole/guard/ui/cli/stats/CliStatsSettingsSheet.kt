@@ -38,14 +38,6 @@ import com.foxhole.guard.ui.onStatisticsRetentionSelected
 import com.foxhole.guard.ui.onStatisticsSessionOnlyChanged
 import com.foxhole.guard.ui.resetUsageTracking
 
-/**
- * The only surface that *enables* collection. Without it the stats screen is structurally empty:
- * the stream gates require flags that default to false and are set nowhere else in the CLI.
- *
- * Four groups: collection, the six canon metrics, per-app stats behind Usage Access, and
- * clearing. The clear buttons are labelled with what they actually erase — both reach well beyond
- * "statistics".
- */
 @Composable
 internal fun CliStatsSettingsSheet(
     viewModel: HomeViewModel,
@@ -61,8 +53,6 @@ internal fun CliStatsSettingsSheet(
         title = stringResource(R.string.cli_stats_settings_title),
         icon = R.drawable.pix_stats,
     ) {
-        // The height cap and the scroll that used to live here moved into CliBottomSheet: every
-        // sheet needs them, and only this one and the quick start had them.
         CliStatsCollectionPanel(viewModel = viewModel, settings = settings)
         Spacer(modifier = Modifier.height(CliSpacing.sm))
         CliStatsMetricsPanel(viewModel = viewModel, settings = settings)
@@ -77,7 +67,6 @@ internal fun CliStatsSettingsSheet(
     }
 }
 
-/** The master collection toggle plus everything describing how it writes. */
 @Composable
 private fun CliStatsCollectionPanel(
     viewModel: HomeViewModel,
@@ -129,10 +118,6 @@ private fun CliStatsCollectionPanel(
     }
 }
 
-/**
- * Exactly the six canon metrics; the ones dropped from the model are not resurrected here. While
- * the master toggle is off every row is inactive — a metric without collection means nothing.
- */
 @Composable
 private fun CliStatsMetricsPanel(
     viewModel: HomeViewModel,
@@ -184,22 +169,6 @@ private fun CliStatsMetricsPanel(
                 stringResource(R.string.cli_stats_set_metric_countries_note)
             },
         )
-        CliStatsMetricRow(
-            viewModel = viewModel,
-            metric = StatisticsMetric.ANOMALIES,
-            icon = R.drawable.pix_status,
-            label = stringResource(R.string.cli_stats_set_metric_anomalies),
-            checked = settings.statistics.anomalyMetricsEnabled,
-            enabled = enabled,
-        )
-        CliStatsMetricRow(
-            viewModel = viewModel,
-            metric = StatisticsMetric.APP_CHANGES,
-            icon = R.drawable.pix_journal,
-            label = stringResource(R.string.cli_stats_set_metric_app_changes),
-            checked = settings.statistics.appChangesEnabled,
-            enabled = enabled,
-        )
     }
 }
 
@@ -223,12 +192,6 @@ private fun CliStatsMetricRow(
     )
 }
 
-/**
- * Per-app traffic recording. Without Usage Access the toggle cannot turn on at all: the tap goes
- * to system settings and the pending tap completes automatically once
- * [rememberUsageAccessState] reports the grant on resume.
- * Consent is written atomically with the recording flag, so no separate consent call is needed.
- */
 @Composable
 private fun CliStatsAppsPanel(
     viewModel: HomeViewModel,
@@ -251,15 +214,9 @@ private fun CliStatsAppsPanel(
         CliToggleRow(
             label = stringResource(R.string.cli_stats_set_app_usage),
             icon = R.drawable.pix_apps,
-            // Keep the user's preference visible even when Android revokes/temporarily cannot
-            // report Usage Access. The note explains why collection is paused; only an explicit
-            // off tap may clear the preference and its privacy data.
             checked = settings.appTrafficStatsEnabled,
             onToggle = { value ->
                 if (value && !usageAccessGranted) {
-                    // This tap is the user's enable intent. Android completes it on another
-                    // screen, so remember the intent and commit immediately on ON_RESUME instead
-                    // of forcing a confusing second tap.
                     enableAfterUsageGrant = true
                     openUsageAccessSettings(context)
                 } else {
@@ -273,12 +230,6 @@ private fun CliStatsAppsPanel(
     }
 }
 
-/**
- * Clearing. Every button is labelled with what it erases: resetUsageTracking also wipes
- * anomaly_events, network_activity_events, protocol_metric_events and seen_destination_countries,
- * clearAppTrafficLocalData additionally *disables* per-app traffic recording, and
- * clearI2pTrafficStatistics drops both I2P counters over every period at once.
- */
 @Composable
 private fun CliStatsClearPanel(viewModel: HomeViewModel) {
     var confirmAction by rememberSaveable { mutableStateOf<String?>(null) }

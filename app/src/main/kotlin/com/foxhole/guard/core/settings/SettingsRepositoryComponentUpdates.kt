@@ -28,6 +28,9 @@ suspend fun SettingsRepository.updateUpdateSources(value: UpdateSourceSettings) 
 suspend fun SettingsRepository.updateGeoIpAutoUpdate(value: Boolean) =
     update { it.copy(connection = it.connection.copy(geoIpAutoUpdate = value)) }
 
+suspend fun SettingsRepository.updateTlsFingerprintAutoUpdate(value: Boolean) =
+    update { it.copy(connection = it.connection.copy(tlsFingerprintAutoUpdate = value)) }
+
 suspend fun SettingsRepository.updateComponentUpdateCheckEnabled(value: Boolean) =
     update { it.copy(connection = it.connection.copy(componentUpdateCheckEnabled = value)) }
 
@@ -36,7 +39,12 @@ suspend fun SettingsRepository.updateComponentUpdateCheckEnabled(value: Boolean)
 suspend fun SettingsRepository.updateComponentAutoUpdate(value: Boolean) =
     update {
         it.copy(
-            connection = it.connection.copy(componentAutoUpdateEnabled = value, geoIpAutoUpdate = value),
+            connection =
+            it.connection.copy(
+                componentAutoUpdateEnabled = value,
+                geoIpAutoUpdate = value,
+                tlsFingerprintAutoUpdate = value,
+            ),
             dns = it.dns.copy(autoUpdateFilters = value),
             privacyRoute = it.privacyRoute.copy(bridgesAutoUpdate = value),
         )

@@ -6,6 +6,7 @@ import androidx.core.content.getSystemService
 import com.foxhole.guard.core.sentinel.InstalledAppSecurityNotifier
 import com.foxhole.guard.core.sentinel.anomaly.SentinelDetectionNotifier
 import com.foxhole.guard.core.webapps.WebAppsNotifier
+import com.foxhole.guard.runtime.AppUpdateNotifier
 import com.foxhole.guard.runtime.FoxholeConnectionServiceContract
 import com.foxhole.guard.runtime.NetworkRuleRecommendationNotifier
 import com.foxhole.guard.runtime.SystemDnsChangeMonitor
@@ -39,6 +40,9 @@ internal fun Context.refreshLocalizedNotificationChannels() {
     }
     if (SystemDnsChangeMonitor.CHANNEL_ID in registered) {
         SystemDnsChangeMonitor(this).ensureChannel()
+    }
+    if (AppUpdateNotifier.CHANNEL_ID in registered) {
+        AppUpdateNotifier(this).ensureChannel()
     }
     if (FoxholeConnectionServiceContract.NOTIFICATION_CHANNEL_ID in registered) {
         // The services carry a locale-wrapped base context; from the app context the wrap is ours.

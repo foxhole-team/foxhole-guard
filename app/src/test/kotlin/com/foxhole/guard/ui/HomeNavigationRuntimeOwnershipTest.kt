@@ -6,14 +6,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
 
-/**
- * Guards the ownership boundary between flat CLI navigation and process/runtime reconciliation.
- *
- * Switching a dock tab disposes and recreates the Home content, but it is not an Android lifecycle
- * transition. It must therefore neither create another [HomeViewModel] nor dispatch runtime repair.
- * The activity RESUMED boundary remains the single owner of foreground reconciliation, while the
- * terminal and its single-consumer banner collector live above the tab switch.
- */
 class HomeNavigationRuntimeOwnershipTest {
     private val activitySource = source("ui/cli/CliMainActivity.kt")
     private val cliAppSource = source("ui/cli/CliApp.kt")

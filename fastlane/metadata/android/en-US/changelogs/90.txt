@@ -1,0 +1,6 @@
+0.0.2 public beta
+
+- Fixed terminal prompt alignment and one-shot status, VPN+Tor startup narration, fail-closed smart-profile tests from per-app VPN proxy scenarios, protocol-table alignment, whole-card profile tap/hold actions, help icons, the Tor IP row across mode switches, dashboard refresh, scenarios, charts, and light-theme dialogs.
+- Switching Sentinel off now stops its background analysis, and the costly encrypted database scan has been removed.
+- Added the AmneziaWG manual template. Signed DNS updates now activate live when filtering is running, already-current TLS tables no longer report an update error, and the app-to-core JNI seam is checked in release gates.
+- Updated the five signed FoxHole DB feeds and the public architecture documentation.

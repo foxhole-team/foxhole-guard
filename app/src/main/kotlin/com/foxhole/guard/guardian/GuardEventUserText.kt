@@ -4,7 +4,6 @@ import android.content.Context
 import androidx.annotation.StringRes
 import com.foxhole.guard.R
 
-/** Localized security-journal text; sealed payload internals never leak into the user-facing row. */
 internal fun GuardJournalEntry.userFacingMessage(context: Context): String {
     val event = event ?: return context.getString(R.string.guard_event_sealed, record.seq)
     val facts = mutableListOf(context.getString(event.type.userLabelRes()))

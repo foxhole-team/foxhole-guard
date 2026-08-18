@@ -3,7 +3,7 @@ set -euo pipefail
 
 mkdir -p build/reports/security
 
-GITLEAKS_VERSION="${GITLEAKS_VERSION:-8.24.2}"
+GITLEAKS_VERSION="${GITLEAKS_VERSION:-8.30.1}"
 GITLEAKS_TAG="${GITLEAKS_TAG:-v$GITLEAKS_VERSION}"
 GITLEAKS_ASSET="${GITLEAKS_ASSET:-}"
 SCAN_TMP="${RUNNER_TEMP:-${TMPDIR:-/tmp}}"
@@ -66,11 +66,6 @@ mkdir -p "$GITLEAKS_EXTRACT_DIR"
 tar -xzf "$GITLEAKS_ARCHIVE_PATH" -C "$GITLEAKS_EXTRACT_DIR" gitleaks
 chmod +x "$GITLEAKS_BIN_PATH"
 
-# Two scans, because they answer different questions and the second one is what matters
-# before a repository is published: `dir` reads the working tree (what a fresh clone gets),
-# `git --log-opts=--all` reads every commit on every ref (what `git log -p` hands anybody).
-# This gate used to run only the first, so a secret removed in HEAD but alive three commits
-# back passed it.
 working_tree_status=0
 "$GITLEAKS_BIN_PATH" dir . \
   -c .gitleaks.toml \
@@ -79,9 +74,6 @@ working_tree_status=0
   --report-format json \
   --report-path "$REPORT_PATH" || working_tree_status=$?
 
-# Runs even when the working tree scan found something: `set -e` used to abort here, so the
-# history half — the one that matters before publishing — never executed on exactly the runs
-# where somebody was already looking.
 history_status=0
 "$GITLEAKS_BIN_PATH" git . \
   -c .gitleaks.toml \

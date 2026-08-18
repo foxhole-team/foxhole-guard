@@ -36,8 +36,6 @@ class CountryTrafficAggregatorTest {
                 liveDestinations = emptyList(),
             )
 
-        // The aggregator now returns the FULL sorted list (the "show all" sheet needs every
-        // country); the dashboard card collapses the overflow separately.
         assertEquals(6, rows.size)
         assertEquals("SE", rows.last().countryCode)
 

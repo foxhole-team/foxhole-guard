@@ -5,6 +5,7 @@ import android.os.ParcelFileDescriptor
 import com.foxhole.core.model.FoxCoreDnsRuleSetBootstrap
 import com.foxhole.core.model.FoxCoreSessionConfig
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
@@ -30,8 +31,11 @@ internal class FoxCoreNativeSessionStarter(
         translated: FoxCoreSessionConfig,
     ): FoxCoreNativeSessionStart? {
         val immutableFingerprint =
-            immutableEngineFingerprint(translated.engineConfigJson) ?: return null
-        val dnsPayload = trustedDnsPayload(translated.dnsRuleSetBootstrap) ?: return null
+            immutableEngineFingerprint(
+                configJson = translated.engineConfigJson,
+                dnsRuleSetBootstrap = translated.dnsRuleSetBootstrap,
+            ) ?: return null
+        val dnsPayload = dnsStartPayload(translated.dnsRuleSetBootstrap) ?: return null
         val nativeHandle =
             startHandle(
                 tun = tun,
@@ -44,11 +48,14 @@ internal class FoxCoreNativeSessionStarter(
             handle = nativeHandle.handle,
             nativeTunFd = nativeHandle.tunFd,
             immutableFingerprint = immutableFingerprint,
-            policyRevision = installSignedDnsUpdate(nativeHandle.handle, translated.dnsRuleSetBootstrap),
+            policyRevision = INITIAL_POLICY_REVISION,
         )
     }
 
-    fun immutableEngineFingerprint(configJson: String): String? =
+    fun immutableEngineFingerprint(
+        configJson: String,
+        dnsRuleSetBootstrap: FoxCoreDnsRuleSetBootstrap?,
+    ): String? =
         runCatching {
             val root = json.parseToJsonElement(configJson).jsonObject
             val immutable =
@@ -56,16 +63,46 @@ internal class FoxCoreNativeSessionStarter(
                     IMMUTABLE_ENGINE_KEYS.forEach { key ->
                         root[key]?.let { value -> put(key, value) }
                     }
+                    put(
+                        DNS_RULE_SET_TRUST_KEY,
+                        dnsRuleSetBootstrap?.let { bootstrap ->
+                            buildJsonObject {
+                                put("name", bootstrap.name)
+                                put("public_key", bootstrap.publicKeyBase64)
+                            }
+                        } ?: JsonNull,
+                    )
                 }
             sha256(immutable.toString().toByteArray(Charsets.UTF_8))
         }.getOrNull()
 
-    private fun trustedDnsPayload(bootstrap: FoxCoreDnsRuleSetBootstrap?): TrustedDnsPayload? {
+    private fun dnsStartPayload(bootstrap: FoxCoreDnsRuleSetBootstrap?): FoxCoreDnsStartPayload? {
         if (bootstrap == null) {
-            return TrustedDnsPayload()
+            return FoxCoreDnsStartPayload.None
         }
-        return loadTrustedDnsRuleSet(bootstrap.artifactPath, bootstrap.artifactSha256)
-            ?.let(::TrustedDnsPayload)
+        return runCatching {
+            val update = bootstrap.signedUpdate
+            val artifact =
+                readVerifiedDnsArtifact(
+                    path = update?.artifactPath ?: bootstrap.artifactPath,
+                    expectedSha256 = bootstrap.artifactSha256,
+                )
+            if (update == null) {
+                FoxCoreDnsStartPayload.Trusted(
+                    name = bootstrap.name,
+                    artifact = artifact,
+                )
+            } else {
+                FoxCoreDnsStartPayload.Signed(
+                    name = bootstrap.name,
+                    manifest = readBoundedFile(update.manifestPath, MAX_DNS_RULE_SET_MANIFEST_BYTES),
+                    signature = readBoundedFile(update.signaturePath, MAX_DNS_RULE_SET_SIGNATURE_BYTES),
+                    artifact = artifact,
+                )
+            }
+        }.onFailure {
+            diagnosticsLogger.record("dns", "FoxCore DNS start payload rejected")
+        }.getOrNull()
     }
 
     private fun startHandle(
@@ -73,7 +110,7 @@ internal class FoxCoreNativeSessionStarter(
         network: Network,
         host: RuntimeServiceHost,
         translated: FoxCoreSessionConfig,
-        dnsPayload: TrustedDnsPayload,
+        dnsPayload: FoxCoreDnsStartPayload,
     ): FoxCoreNativeHandle? {
         val duplicatedFd =
             runCatching { ParcelFileDescriptor.dup(tun.fileDescriptor).detachFd() }
@@ -81,19 +118,12 @@ internal class FoxCoreNativeSessionStarter(
                 ?: return null
         val handle =
             runCatching {
-                translated.dnsRuleSetBootstrap?.let { bootstrap ->
-                    native.startWithNetworkAndTrustedDnsRuleSet(
-                        tunFd = duplicatedFd,
-                        configJson = translated.engineConfigJson,
-                        networkHandle = network.networkHandle,
-                        name = bootstrap.name,
-                        artifact = requireNotNull(dnsPayload.artifact),
-                        host = host,
-                    )
-                } ?: native.startWithNetwork(
+                invokeFoxCoreNativeStart(
+                    native = native,
                     tunFd = duplicatedFd,
                     configJson = translated.engineConfigJson,
                     networkHandle = network.networkHandle,
+                    dnsPayload = dnsPayload,
                     host = host,
                 )
             }.onFailure { error ->
@@ -116,46 +146,16 @@ internal class FoxCoreNativeSessionStarter(
         )
     }
 
-    private fun loadTrustedDnsRuleSet(
+    private fun readVerifiedDnsArtifact(
         path: String,
         expectedSha256: String,
-    ): ByteArray? =
-        runCatching {
-            val file = File(path)
-            require(file.isFile)
-            require(file.length() in 1..MAX_DNS_RULE_SET_BYTES)
-            val bytes = file.readBytes()
-            require(bytes.size >= FOXCORE_DNS_RULE_SET_MAGIC.size)
-            require(bytes.startsWith(FOXCORE_DNS_RULE_SET_MAGIC))
-            require(sha256(bytes).equals(expectedSha256, ignoreCase = true))
-            bytes
-        }.onFailure {
-            diagnosticsLogger.record("dns", "trusted FoxCore DNS rule set rejected")
-        }.getOrNull()
-
-    private fun installSignedDnsUpdate(
-        handle: Long,
-        bootstrap: FoxCoreDnsRuleSetBootstrap?,
-    ): Long =
-        bootstrap
-            ?.signedUpdate
-            ?.let { update ->
-                runCatching {
-                    native.installDnsRuleSet(
-                        handle = handle,
-                        name = bootstrap.name,
-                        manifest = readBoundedFile(update.manifestPath, MAX_DNS_RULE_SET_MANIFEST_BYTES),
-                        signature = readBoundedFile(update.signaturePath, MAX_DNS_RULE_SET_SIGNATURE_BYTES),
-                        artifact = readBoundedFile(update.artifactPath, MAX_DNS_RULE_SET_BYTES),
-                    )
-                }.onFailure {
-                    // The Android-verified artifact remains active. A stale, corrupt or
-                    // rolled-back update must neither fail open nor tear down a healthy tunnel.
-                    diagnosticsLogger.record("dns", "signed FoxCore DNS update rejected")
-                }.getOrNull()
-            }
-            ?.takeIf { revision -> revision > 0L }
-            ?: INITIAL_POLICY_REVISION
+    ): ByteArray {
+        val bytes = readBoundedFile(path, MAX_DNS_RULE_SET_BYTES)
+        require(bytes.size >= FOXCORE_DNS_RULE_SET_MAGIC.size)
+        require(bytes.startsWith(FOXCORE_DNS_RULE_SET_MAGIC))
+        require(sha256(bytes).equals(expectedSha256, ignoreCase = true))
+        return bytes
+    }
 
     private fun readBoundedFile(
         path: String,
@@ -204,6 +204,7 @@ internal class FoxCoreNativeSessionStarter(
         const val MAX_DNS_RULE_SET_BYTES = 64L * 1024L * 1024L
         const val MAX_DNS_RULE_SET_MANIFEST_BYTES = 64L * 1024L
         const val MAX_DNS_RULE_SET_SIGNATURE_BYTES = 256L
+        const val DNS_RULE_SET_TRUST_KEY = "dns_rule_set_trust"
 
         val IMMUTABLE_ENGINE_KEYS = listOf("schema_version", "outbound", "outbounds", "tun", "runtime")
         val FOXCORE_DNS_RULE_SET_MAGIC =
@@ -232,6 +233,51 @@ private data class FoxCoreNativeHandle(
     val tunFd: Int,
 )
 
-private data class TrustedDnsPayload(
-    val artifact: ByteArray? = null,
-)
+internal sealed interface FoxCoreDnsStartPayload {
+    data object None : FoxCoreDnsStartPayload
+
+    data class Trusted(
+        val name: String,
+        val artifact: ByteArray,
+    ) : FoxCoreDnsStartPayload
+
+    data class Signed(
+        val name: String,
+        val manifest: ByteArray,
+        val signature: ByteArray,
+        val artifact: ByteArray,
+    ) : FoxCoreDnsStartPayload
+}
+
+internal fun invokeFoxCoreNativeStart(
+    native: FoxCoreNativeApi,
+    tunFd: Int,
+    configJson: String,
+    networkHandle: Long,
+    dnsPayload: FoxCoreDnsStartPayload,
+    host: RuntimeServiceHost,
+): Long =
+    when (dnsPayload) {
+        FoxCoreDnsStartPayload.None ->
+            native.startWithNetwork(tunFd, configJson, networkHandle, host)
+        is FoxCoreDnsStartPayload.Trusted ->
+            native.startWithNetworkAndTrustedDnsRuleSet(
+                tunFd,
+                configJson,
+                networkHandle,
+                dnsPayload.name,
+                dnsPayload.artifact,
+                host,
+            )
+        is FoxCoreDnsStartPayload.Signed ->
+            native.startWithNetworkAndDnsRuleSet(
+                tunFd,
+                configJson,
+                networkHandle,
+                dnsPayload.name,
+                dnsPayload.manifest,
+                dnsPayload.signature,
+                dnsPayload.artifact,
+                host,
+            )
+    }

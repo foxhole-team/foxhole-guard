@@ -15,22 +15,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
-import com.foxhole.guard.R
+import com.foxhole.guard.widget.FOX_STATUS_ANIMATION_FRAMES
 import kotlinx.coroutines.delay
-
-/**
- * The home screen's brand hero: a cyber fox before a neon portal, six frames of the final logo
- * looping forever at 330ms a frame. The frames share the app's black background, so the art merges
- * into the terminal without a frame.
- */
-private val HERO_FRAMES = intArrayOf(
-    R.drawable.fox_hero_1,
-    R.drawable.fox_hero_2,
-    R.drawable.fox_hero_3,
-    R.drawable.fox_hero_4,
-    R.drawable.fox_hero_5,
-    R.drawable.fox_hero_6,
-)
 
 private const val FRAME_MS = 330L
 
@@ -39,20 +25,19 @@ internal fun CliFoxHero(
     modifier: Modifier = Modifier,
     size: Dp = 112.dp,
 ) {
+    val frames = FOX_STATUS_ANIMATION_FRAMES
     var frame by remember { mutableIntStateOf(0) }
-    // The ticker runs only while the hero is composed *and* the app is visible: a delay loop is not
-    // tied to the frame clock and would keep ticking in the background without this gate.
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     LaunchedEffect(lifecycle) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             while (true) {
                 delay(FRAME_MS)
-                frame = (frame + 1) % HERO_FRAMES.size
+                frame = (frame + 1) % frames.size
             }
         }
     }
     Image(
-        painter = painterResource(HERO_FRAMES[frame]),
+        painter = painterResource(frames[frame % frames.size]),
         contentDescription = null,
         modifier = modifier.size(size),
     )

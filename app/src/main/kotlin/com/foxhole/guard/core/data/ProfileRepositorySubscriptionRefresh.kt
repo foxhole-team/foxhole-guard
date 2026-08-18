@@ -93,6 +93,7 @@ internal suspend fun ProfileRepository.refreshProfileWithReportLocked(
             Charsets.UTF_8
         ).size} etagPresent=${!response.etag.isNullOrBlank()} metadataTitlePresent=${!response.metadataTitle.isNullOrBlank()} expirationPresent=${response.subscriptionExpiresAt != null}",
     )
+    diagnosticsLogger.record("profile", response.metadata.redactedSummary())
 
     val subscriptionGroup = loadSubscriptionGroup(sourceUrl)
     val protocolsBefore = subscriptionGroup.subscriptionProtocolHints()

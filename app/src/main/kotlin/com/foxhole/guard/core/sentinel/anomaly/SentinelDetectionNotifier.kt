@@ -17,6 +17,8 @@ class SentinelDetectionNotifier(
 
     fun notify(event: AnomalyEvent): Boolean = anomalyNotifier.notify(event)
 
+    fun cancelAll() = anomalyNotifier.cancelAll()
+
     internal fun ensureChannel() = anomalyNotifier.ensureChannel()
 
     companion object {

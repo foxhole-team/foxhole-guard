@@ -6,6 +6,8 @@ import com.foxhole.core.model.ProtocolHint
 import com.foxhole.core.model.StoredProfileProtocolOption
 import com.foxhole.core.model.SubscriptionEntryReport
 import com.foxhole.core.network.RemoteHostResolver
+import com.foxhole.core.network.isPrivateOrLocalAddress
+import com.foxhole.core.network.isTunnelSynthesizedAddress
 import com.foxhole.core.network.requirePublicRemoteHost
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -31,7 +33,20 @@ internal open class ProfileImportCoreSupport(
     protected val remoteHostResolver: RemoteHostResolver? = null,
 ) {
     internal fun decodeSubscriptionCandidate(candidate: String): String? {
-        return runCatching { decodeBase64Url(candidate) }.getOrNull()?.takeIf { it.contains("://") }
+        if (candidate.length > MAX_SUBSCRIPTION_PAYLOAD_CHARS) {
+            return null
+        }
+        val compact = candidate.filterNot { character -> character.isWhitespace() || character.isImportPadding() }
+        if (compact.isBlank() || compact.length < MIN_BASE64_SUBSCRIPTION_LENGTH) {
+            return null
+        }
+        return runCatching { decodeBase64Url(compact) }.getOrNull()?.takeIf { it.contains("://") }
+    }
+
+    internal fun requireBoundedImportPayload(value: String) {
+        require(value.length <= MAX_SUBSCRIPTION_PAYLOAD_CHARS) {
+            "import payload is too large: ${value.length} characters"
+        }
     }
 
     internal fun normalizeInput(input: String): String = input.trimStart {
@@ -79,7 +94,7 @@ internal open class ProfileImportCoreSupport(
         )
         internal val SHARE_URI_REGEX =
             Regex(
-                """(?<![A-Za-z0-9+.-])(?:vless|trojan|naive\+https|naive|ss|outline|vmess|hy2|hysteria2|tuic|anytls)://[^\s<>"']+""",
+                """(?<![A-Za-z0-9+.-])(?:vless|trojan|naive\+https|naive|ss|outline|vmess|hy2|hysteria2|tuic|anytls|wireguard|wg|amneziawg|amnezia|awg)://[^\s<>"']+""",
                 RegexOption.IGNORE_CASE,
             )
     }
@@ -216,7 +231,9 @@ internal open class ProfileImportCoreSupport(
         return parameters
     }
 
-    internal fun uriDecode(value: String): String = URLDecoder.decode(value, StandardCharsets.UTF_8.name())
+    // URLDecoder is form decoding; preserve literal '+' from share URIs.
+    internal fun uriDecode(value: String): String =
+        URLDecoder.decode(value.replace("+", "%2B"), StandardCharsets.UTF_8.name())
 
     @Suppress("ThrowsCount")
     internal fun parseLenientUri(value: String): URI {
@@ -269,10 +286,11 @@ internal open class ProfileImportCoreSupport(
         fallbackHost: String,
     ): String {
         val fragment =
-            uri.fragment
+            uri.rawFragment
                 ?.takeIf { it.isNotBlank() }
-                ?.let(::uriDecode)
-                ?.substringBefore('?')
+                ?.let { raw -> runCatching { uriDecode(raw) }.getOrDefault(raw) }
+                ?.trim()
+                ?.take(MAX_NODE_DISPLAY_NAME_LENGTH)
                 ?.trim()
         return fragment?.takeIf { it.isNotBlank() } ?: fallbackHost
     }
@@ -411,11 +429,24 @@ internal open class ProfileImportCoreSupport(
         if (allowPrivateOutboundHosts) {
             return
         }
-        extractNormalizedRemoteHosts(config)
-            .distinct()
-            .forEach { host ->
-                host.requirePublicRemoteHost(resolveHost = true, resolver = remoteHostResolver)
-            }
+        // TLS names and HTTP Host headers are presented on an existing connection, not dialled.
+        val hosts = extractNormalizedRemoteHosts(config)
+        hosts.dialled.distinct().forEach { host ->
+            host.requirePublicRemoteHost(resolveHost = true, resolver = remoteHostResolver)
+        }
+        hosts.presented.distinct().forEach(::requirePresentedRemoteName)
+    }
+
+    private fun requirePresentedRemoteName(host: String) {
+        host.requirePublicRemoteHost(resolveHost = false, resolver = remoteHostResolver)
+        val resolve = remoteHostResolver ?: systemRemoteHostResolver
+        val addresses =
+            runCatching { resolve(host.trim().lowercase().trimEnd('.')) }.getOrDefault(emptyList())
+        require(
+            addresses.none { address ->
+                address.isPrivateOrLocalAddress() && !address.isTunnelSynthesizedAddress()
+            },
+        ) { "private or loopback hosts are not allowed" }
     }
 
     internal fun requireAllowedOutboundHosts(
@@ -442,42 +473,44 @@ internal open class ProfileImportCoreSupport(
             ?.requirePublicRemoteHost(resolveHost = true, resolver = remoteHostResolver)
     }
 
-    private fun extractNormalizedRemoteHosts(config: JsonObject): List<String> =
-        buildList {
-            config["outbounds"]?.jsonArray?.forEach { outboundElement ->
-                val outbound = outboundElement.jsonObject
-                outbound["server"]
+    private fun extractNormalizedRemoteHosts(config: JsonObject): NormalizedConfigHosts {
+        val dialled = mutableListOf<String>()
+        val presented = mutableListOf<String>()
+        config["outbounds"]?.jsonArray?.forEach { outboundElement ->
+            val outbound = outboundElement.jsonObject
+            outbound["server"]
+                ?.jsonPrimitive
+                ?.contentOrNull
+                ?.let(::normalizeRemoteHostValue)
+                ?.let(dialled::add)
+            outbound["peers"]?.jsonArray?.forEach { peerElement ->
+                peerElement.jsonObject["server"]
                     ?.jsonPrimitive
                     ?.contentOrNull
                     ?.let(::normalizeRemoteHostValue)
-                    ?.let(::add)
-                outbound["peers"]?.jsonArray?.forEach { peerElement ->
-                    peerElement.jsonObject["server"]
-                        ?.jsonPrimitive
-                        ?.contentOrNull
-                        ?.let(::normalizeRemoteHostValue)
-                        ?.let(::add)
-                }
-                addAll(outbound["tls"]?.jsonObject?.get("server_name")?.collectHostValues().orEmpty())
-                outbound["transport"]?.jsonObject?.let { transport ->
-                    addAll(transport["host"]?.collectHostValues().orEmpty())
-                    addAll(transport["headers"]?.jsonObject?.get("Host")?.collectHostValues().orEmpty())
-                }
+                    ?.let(dialled::add)
             }
-            config["endpoints"]?.jsonArray?.forEach { endpointElement ->
-                val endpoint = endpointElement.jsonObject
-                endpoint["peers"]?.jsonArray?.forEach { peerElement ->
-                    peerElement.jsonObject["address"]
-                        ?.jsonPrimitive
-                        ?.contentOrNull
-                        ?.let(::normalizeRemoteHostValue)
-                        ?.let(::add)
-                }
-            }
-            config["dns"]?.jsonObject?.get("servers")?.jsonArray?.forEach { serverElement ->
-                extractDnsServerHost(serverElement)?.let(::add)
+            presented += outbound["tls"]?.jsonObject?.get("server_name")?.collectHostValues().orEmpty()
+            outbound["transport"]?.jsonObject?.let { transport ->
+                presented += transport["host"]?.collectHostValues().orEmpty()
+                presented += transport["headers"]?.jsonObject?.get("Host")?.collectHostValues().orEmpty()
             }
         }
+        config["endpoints"]?.jsonArray?.forEach { endpointElement ->
+            val endpoint = endpointElement.jsonObject
+            endpoint["peers"]?.jsonArray?.forEach { peerElement ->
+                peerElement.jsonObject["address"]
+                    ?.jsonPrimitive
+                    ?.contentOrNull
+                    ?.let(::normalizeRemoteHostValue)
+                    ?.let(dialled::add)
+            }
+        }
+        config["dns"]?.jsonObject?.get("servers")?.jsonArray?.forEach { serverElement ->
+            extractDnsServerHost(serverElement)?.let(dialled::add)
+        }
+        return NormalizedConfigHosts(dialled = dialled, presented = presented)
+    }
 
     private fun JsonElement.collectHostValues(): List<String> =
         when (this) {
@@ -622,7 +655,17 @@ internal open class ProfileImportCoreSupport(
     }
 }
 
+private data class NormalizedConfigHosts(
+    val dialled: List<String>,
+    val presented: List<String>,
+)
+
 private val nodeTagSanitizeRegex = Regex("[^a-z0-9]+")
+
+internal const val MAX_SUBSCRIPTION_PAYLOAD_CHARS = 4 * 1024 * 1024
+internal const val MAX_SUBSCRIPTION_ENTRY_LINES = 4096
+internal const val MAX_NODE_DISPLAY_NAME_LENGTH = 256
+private const val MIN_BASE64_SUBSCRIPTION_LENGTH = 8
 
 /**
  * The managed tag for the resolver a WireGuard `DNS =` line becomes.

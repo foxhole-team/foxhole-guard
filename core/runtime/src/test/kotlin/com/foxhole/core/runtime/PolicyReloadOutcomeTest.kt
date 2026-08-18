@@ -8,11 +8,7 @@ import org.junit.Test
 class PolicyReloadOutcomeTest {
     @Test
     fun `a permanent refusal and a retryable one are not the same failure`() {
-        // The defect this pins: all eight refusal codes arrived as one
-        // POLICY_RELOAD_FAILED, so "this build has no Tor" — which should
-        // retire the switch — looked exactly like "somebody moved the
-        // revision", which should just be retried. A routing change the user
-        // asked for went nowhere and said nothing.
+        // Permanent capability failures must not collapse into retryable revision conflicts.
         assertEquals(
             FoxCoreRuntimeFailure.POLICY_TOR_UNAVAILABLE,
             policyReloadFailure(FoxholeNativeEngine.RELOAD_TOR_UNAVAILABLE.toLong()),
@@ -32,12 +28,13 @@ class PolicyReloadOutcomeTest {
     }
 
     @Test
-    fun `the three route refusals share one failure because the user fixes them the same way`() {
+    fun `the four route refusals share one failure because the user fixes them the same way`() {
         val routeCodes =
             listOf(
                 FoxholeNativeEngine.RELOAD_OVERLAY_WITHOUT_FAKE_IP,
                 FoxholeNativeEngine.RELOAD_NO_ATTRIBUTION,
                 FoxholeNativeEngine.RELOAD_PACKET_TUNNEL_REJECTS_FAKE_IP,
+                FoxholeNativeEngine.RELOAD_PACKET_TUNNEL_REJECTS_PRIMARY_DNS,
             )
         routeCodes.forEach { code ->
             assertEquals(
@@ -75,6 +72,7 @@ class PolicyReloadOutcomeTest {
             FoxholeNativeEngine.RELOAD_OVERLAY_WITHOUT_FAKE_IP,
             FoxholeNativeEngine.RELOAD_NO_ATTRIBUTION,
             FoxholeNativeEngine.RELOAD_PACKET_TUNNEL_REJECTS_FAKE_IP,
+            FoxholeNativeEngine.RELOAD_PACKET_TUNNEL_REJECTS_PRIMARY_DNS,
         ).forEach { code ->
             assertFalse("code $code", policyReloadIsRetryable(code.toLong()))
         }

@@ -10,24 +10,23 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.foxhole.core.model.VisualStyle
 import com.foxhole.guard.ui.cli.CliSpacing
 import com.foxhole.guard.ui.cli.CliType
 import com.foxhole.guard.ui.cli.LocalCliColors
+import com.foxhole.guard.ui.cli.LocalCliVisualStyle
 import kotlin.math.ceil
 
-/**
- * Discrete stage progress for work that exposes phases but no trustworthy byte count.
- * Each completed phase lights one hard-edged pixel segment; there is deliberately no percentage
- * interpolation between stages.
- */
 @Composable
 internal fun CliStageProgress(
     stageLabel: String,
@@ -41,6 +40,25 @@ internal fun CliStageProgress(
     val safeTotal = totalStages.coerceAtLeast(1)
     val safeCompleted = completedStages.coerceIn(0, safeTotal)
     val progressColor = if (color == Color.Unspecified) colors.accent else color
+    if (LocalCliVisualStyle.current == VisualStyle.PLAIN) {
+        val progressText = "$stageLabel · $safeCompleted/$safeTotal"
+        if (running) {
+            CliShimmerText(
+                text = progressText,
+                style = CliType.small,
+                baseColor = progressColor,
+                modifier = modifier.fillMaxWidth().testTag(CLI_STAGE_PROGRESS_TAG),
+            )
+        } else {
+            Text(
+                text = progressText,
+                style = CliType.small,
+                color = progressColor,
+                modifier = modifier.fillMaxWidth().testTag(CLI_STAGE_PROGRESS_TAG),
+            )
+        }
+        return
+    }
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -75,7 +93,6 @@ internal fun CliStageProgress(
     }
 }
 
-/** Byte/fraction progress in the same hard-edged segment grammar as staged updates. */
 @Composable
 internal fun CliPixelProgressBar(
     fraction: Float,
@@ -106,6 +123,26 @@ private fun CliPixelProgressSegments(
     val colors = LocalCliColors.current
     val safeTotal = totalSegments.coerceAtLeast(1)
     val safeCompleted = completedSegments.coerceIn(0, safeTotal)
+    if (LocalCliVisualStyle.current == VisualStyle.PLAIN) {
+        val shape = RoundedCornerShape(4.dp)
+        Box(
+            modifier = modifier
+                .fillMaxWidth()
+                .height(8.dp)
+                .clip(shape)
+                .background(colors.panel)
+                .border(1.dp, colors.border, shape),
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(safeCompleted.toFloat() / safeTotal)
+                    .height(8.dp)
+                    .clip(shape)
+                    .background(color),
+            )
+        }
+        return
+    }
     Row(
         modifier = modifier.fillMaxWidth().height(8.dp),
         horizontalArrangement = Arrangement.spacedBy(2.dp),

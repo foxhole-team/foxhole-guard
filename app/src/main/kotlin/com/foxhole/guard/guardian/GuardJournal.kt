@@ -9,11 +9,8 @@ import java.security.MessageDigest
 import java.util.Base64
 
 /**
- * Append-only, hash-chained, sealed journal (`filesDir/guard/journal/guard-*.jsonl`).
- * The write path needs only the plaintext guard public key: it works while the app
- * is locked, straight after boot, and inside receiver budgets (no Argon2, no
- * Keystore). Rotation keeps the chain intact across files; pre-checkpoint files may
- * be pruned without looking like tampering to the verifier.
+ * Append-only hash-chained sealed journal; the write path needs only the plaintext guard public key, so it works while locked, straight after boot and inside receiver budgets (no Argon2, no Keystore).
+ * Rotation keeps the chain intact across files, and pre-checkpoint files may be pruned without looking like tampering to the verifier.
  */
 internal class GuardJournal(
     private val directory: File,
@@ -39,14 +36,9 @@ internal class GuardJournal(
 
     fun isActive(): Boolean = publicKeyProvider() != null
 
-    /** Last durable envelope timestamp; readable while locked because payloads alone are sealed. */
     @Synchronized
     fun lastRecordWallClockMs(): Long? = loadHead().lastWallClock.takeIf { timestamp -> timestamp > 0L }
 
-    /**
-     * Appends one sealed event. Returns false (and writes nothing) when the guard
-     * public key is unavailable, i.e. password protection is off.
-     */
     @Synchronized
     fun append(event: GuardEvent): Boolean {
         val publicKey = publicKeyProvider() ?: return false
@@ -59,7 +51,6 @@ internal class GuardJournal(
             pruneCheckpointedFiles()
             true
         }.getOrElse {
-            // Re-read disk after any failed write or fsync.
             head = null
             false
         }
@@ -68,7 +59,6 @@ internal class GuardJournal(
     @Synchronized
     fun deleteAll() {
         journalFiles().forEach(File::delete)
-        // Factory reset must remove staged journal records too.
         directory
             .listFiles { file -> file.isFile && file.name.endsWith(STAGED_SUFFIX) }
             .orEmpty()
@@ -95,7 +85,6 @@ internal class GuardJournal(
         val target = targetFileFor(state, record.seq)
         FileOutputStream(target, true).use { output ->
             output.write((line + "\n").encodeToByteArray())
-            // Report success only after journal evidence reaches stable storage.
             output.fd.sync()
         }
         state.nextSeq = record.seq + 1
@@ -116,37 +105,17 @@ internal class GuardJournal(
         }
         directory.mkdirs()
         val target = File(directory, fileNameFor(seq))
-        // Repair a torn first record before reusing its sequence-derived filename.
         if (!target.isFile || repairTornTail(target)) {
             return target
         }
-        // Preserve non-tail corruption as evidence and continue in a new file.
         return firstFreeFileFrom(seq)
     }
 
-    /**
-     * Whether the cached head file may still take another record.
-     *
-     * `endsWithNewline` is the same guarantee `currentFile` was chosen under, re-checked against
-     * the file itself: a cached head does not prove the bytes on disk are still whole, and
-     * appending behind a fragment glues the next JSON object to it. One seek, not a parse, so it
-     * stays affordable on every append.
-     */
     private fun File.isStillAppendable(): Boolean = isFile && length() < maxFileBytes && endsWithNewline(this)
 
     /**
-     * Makes a file that a crash left mid-record safe to append to again, and reports whether it
-     * succeeded.
-     *
-     * Only the trailing fragment - the bytes after the last newline, which no verifier could ever
-     * parse - is dropped. If any *earlier* line fails to decode the damage is not a torn write
-     * (append-only writing can only ever damage the last line), so this refuses: truncating there
-     * would delete decodable records that follow the damage, which is exactly the evidence a
-     * tampering report is built from.
-     *
-     * The rewrite is staged and renamed over the original, so the repair itself can never be the
-     * thing that leaves a torn file: rename(2) either replaces the file whole or not at all, and a
-     * failure anywhere leaves the original bytes untouched.
+     * Only the trailing fragment after the last newline may be dropped; an earlier decode failure is not a torn write, so repair refuses rather than deleting the later records a tampering report is built from.
+     * The rewrite is staged and renamed over the original so the repair itself can never leave a torn file.
      */
     private fun repairTornTail(file: File): Boolean {
         val content = runCatching(file::readText).getOrNull() ?: return false
@@ -182,7 +151,6 @@ internal class GuardJournal(
             false
         }
 
-    /** The first unused journal file name at or after [seq]; names stay ordered by first seq. */
     private fun firstFreeFileFrom(seq: Long): File {
         for (offset in 0 until MAX_FILE_NAME_PROBES) {
             val candidate = File(directory, fileNameFor(seq + offset))
@@ -190,7 +158,6 @@ internal class GuardJournal(
                 return candidate
             }
         }
-        // Fail closed when no target filename can be validated.
         error("no free guard journal file name after seq $seq")
     }
 
@@ -215,7 +182,6 @@ internal class GuardJournal(
         val removable = files.dropLast(maxFiles)
         for (file in removable) {
             val nextFirstSeq = files.getOrNull(files.indexOf(file) + 1)?.let(::firstSeqOf) ?: continue
-            // Never prune records newer than the password-anchored checkpoint.
             if (nextFirstSeq - 1 < checkpointSeq) {
                 file.delete()
             }
@@ -224,25 +190,15 @@ internal class GuardJournal(
 
     private fun loadHead(): HeadState {
         head?.let { return it }
-        // Preserve torn tails as evidence; repair only before filename reuse.
         val state = headFromFiles(journalFiles())
         head = state
         return state
     }
 
-    /**
-     * Recovers the chain head after a restart. A crash can leave the newest file holding nothing
-     * but a torn fragment (the writer created it and died mid-record); the last *decodable* record
-     * then lives in an older file, so the scan walks backwards until it finds one instead of
-     * guessing a sequence number from the damaged file's size. Guessing produced a fabricated seq
-     * and a placeholder prevHash, which permanently reported an ordinary crash as a rewritten
-     * journal and corrupted the very next record's chain link.
-     */
     private fun headFromFiles(files: List<File>): HeadState {
         for (file in files.asReversed()) {
             headFromFileOrNull(file)?.let { return it }
         }
-        // Start a new chain; the keybox detects deletion of prior history.
         return HeadState(
             nextSeq = 0L,
             headHash = "",
@@ -267,7 +223,6 @@ internal class GuardJournal(
             lastWallClock = record.wallClock,
             lastElapsedRealtime = record.elapsedRealtime,
             lastBootCount = record.bootCount,
-            // Continue in a new file after an incomplete or unparseable tail.
             currentFile = file.takeIf { tailIsCompleteAndValid },
         )
     }
@@ -287,7 +242,6 @@ internal class GuardJournal(
         const val MAX_FILE_BYTES = 256L * 1024L
         const val MAX_FILES = 32
 
-        // Keep staged repairs outside the journal filename grammar.
         private const val STAGED_SUFFIX = ".repair"
         private const val MAX_FILE_NAME_PROBES = 1024
         private const val NEWLINE_BYTE = '\n'.code

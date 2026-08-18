@@ -3,11 +3,6 @@ package com.foxhole.guard.ui
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 
-/**
- * Tor/I2P operation state: the running-operation banner, the transition prompt and the timeout /
- * background-refresh / protocol-revert jobs the Tor support files juggle. HomeViewModel exposes
- * same-named aliases so the Support-file call sites read unchanged.
- */
 internal class HomeTorOperationState {
     val torOperationMutable = MutableStateFlow(HomeTorOperationUiState())
     val torTransitionPromptMutable = MutableStateFlow<TorTransitionPrompt?>(null)
@@ -26,7 +21,6 @@ internal data class TorIdentityProbeState(
     val phase: TorIdentityProbePhase = TorIdentityProbePhase.IDLE,
 )
 
-/** Generation fence for the terminal-facing Tor identity lookup. */
 internal class TorIdentityProbeTracker {
     val state = MutableStateFlow(TorIdentityProbeState())
     private var nextGeneration = 0L

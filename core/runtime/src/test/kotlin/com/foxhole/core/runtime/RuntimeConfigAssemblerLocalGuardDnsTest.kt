@@ -220,11 +220,22 @@ internal class RuntimeConfigAssemblerLocalGuardDnsTest : RuntimeConfigAssemblerT
         // Disabling i2p drops the guard again (nothing else keeps it up).
         assertEquals(null, i2pOutside.copy(i2p = i2pOutside.i2p.copy(enabled = false)).localGuardModeOrNull())
 
-        // The legacy allowOutsideTunnel field no longer changes the carrier contract.
+        assertEquals(
+            null,
+            Settings(
+                i2p = com.foxhole.core.model.I2pSettings(enabled = true, allowOutsideTunnel = false)
+            ).localGuardModeOrNull(),
+        )
+        assertFalse(
+            Settings(
+                i2p = com.foxhole.core.model.I2pSettings(enabled = true, allowOutsideTunnel = false)
+            ).i2pRaisesLocalGuard(),
+        )
         assertEquals(
             LocalGuardMode.FIREWALL,
             Settings(
-                i2p = com.foxhole.core.model.I2pSettings(enabled = true, allowOutsideTunnel = false)
+                expert = ExpertSettings(firewallEnabled = true),
+                i2p = com.foxhole.core.model.I2pSettings(enabled = true, allowOutsideTunnel = false),
             ).localGuardModeOrNull(),
         )
 

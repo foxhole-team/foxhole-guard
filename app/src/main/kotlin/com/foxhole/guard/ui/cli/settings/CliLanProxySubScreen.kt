@@ -35,6 +35,7 @@ import com.foxhole.guard.R
 import com.foxhole.guard.ui.HomeViewModel
 import com.foxhole.guard.ui.cli.CliSpacing
 import com.foxhole.guard.ui.cli.CliType
+import com.foxhole.guard.ui.cli.LocalCliBottomChromeClearance
 import com.foxhole.guard.ui.cli.LocalCliColors
 import com.foxhole.guard.ui.cli.components.CliActionRow
 import com.foxhole.guard.ui.cli.components.CliContextHelpButton
@@ -52,12 +53,6 @@ import com.foxhole.guard.ui.onLanProxySurfaceModeSelected
 import com.foxhole.guard.ui.onLocalProxyLanAccessChanged
 import com.foxhole.guard.ui.onSocksSurfaceChanged
 
-/**
- * The LAN proxy as its own extras screen: it shares the same TUN's socks5/http/mixed surface with
- * the current Wi-Fi network. Authentication is mandatory and has no off switch — without a password
- * the LAN inbound does not come up at all (fail-closed, see RuntimeLocalSurface). The client-to-phone
- * hop gets no extra encryption, and the screen says so plainly.
- */
 @Composable
 internal fun CliLanProxySubScreen(
     viewModel: HomeViewModel,
@@ -72,7 +67,6 @@ internal fun CliLanProxySubScreen(
         modifier =
         modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
             .padding(horizontal = CliSpacing.md),
     ) {
         CliScreenHeader(
@@ -80,54 +74,53 @@ internal fun CliLanProxySubScreen(
             icon = R.drawable.pix_device,
             trailing = { CliContextHelpButton(bodyRes = R.string.cli_help_lan_proxy_body) },
         )
-        CliPanel(
-            title = stringResource(R.string.cli_route_lan_proxy),
-            icon = R.drawable.pix_link,
-            modifier = Modifier.fillMaxWidth(),
+
+        Column(
+
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(bottom = LocalCliBottomChromeClearance.current),
+
         ) {
-            CliToggleRow(
-                label = stringResource(R.string.cli_lan_proxy_enable),
-                icon = R.drawable.pix_device,
-                checked = lan.allowLanAccess,
-                onToggle = viewModel::onLocalProxyLanAccessChanged,
-                note = stringResource(R.string.cli_lan_proxy_trusted_note),
-            )
-            if (lan.allowLanAccess) {
-                CliDropdownRow(
-                    label = stringResource(R.string.cli_route_lan_mode),
-                    icon = R.drawable.pix_link,
-                    value = lan.lanProxyMode.name.lowercase(),
-                    options = ProxySurfaceMode.entries.map { surface ->
-                        CliDropdownOption(id = surface.name, label = surface.name.lowercase())
-                    },
-                    selectedId = lan.lanProxyMode.name,
-                    onSelect = { id -> viewModel.onLanProxySurfaceModeSelected(ProxySurfaceMode.valueOf(id)) },
+            CliPanel(
+                title = stringResource(R.string.cli_route_lan_proxy),
+                icon = R.drawable.pix_link,
+                modifier = Modifier.fillMaxWidth(),
+                infoText = stringResource(R.string.cli_lan_proxy_compat_note),
+            ) {
+                CliToggleRow(
+                    label = stringResource(R.string.cli_lan_proxy_enable),
+                    icon = R.drawable.pix_device,
+                    checked = lan.allowLanAccess,
+                    onToggle = viewModel::onLocalProxyLanAccessChanged,
+                    infoText = stringResource(R.string.cli_lan_proxy_trusted_note),
                 )
-                CliLanPortRow(viewModel = viewModel, lan = lan)
+                if (lan.allowLanAccess) {
+                    CliDropdownRow(
+                        label = stringResource(R.string.cli_route_lan_mode),
+                        icon = R.drawable.pix_link,
+                        value = lan.lanProxyMode.name.lowercase(),
+                        options = ProxySurfaceMode.entries.map { surface ->
+                            CliDropdownOption(id = surface.name, label = surface.name.lowercase())
+                        },
+                        selectedId = lan.lanProxyMode.name,
+                        onSelect = { id -> viewModel.onLanProxySurfaceModeSelected(ProxySurfaceMode.valueOf(id)) },
+                    )
+                    CliLanPortRow(viewModel = viewModel, lan = lan)
+                }
             }
+            if (lan.allowLanAccess) {
+                Spacer(modifier = Modifier.height(CliSpacing.sm))
+                CliLanProxyStatusPanel(status = lanStatus)
+                Spacer(modifier = Modifier.height(CliSpacing.sm))
+                CliLanProxyAuthPanel(viewModel = viewModel, lan = lan)
+            }
+            Spacer(modifier = Modifier.height(CliSpacing.md))
         }
-        if (lan.allowLanAccess) {
-            Spacer(modifier = Modifier.height(CliSpacing.sm))
-            CliLanProxyStatusPanel(status = lanStatus)
-            Spacer(modifier = Modifier.height(CliSpacing.sm))
-            CliLanProxyAuthPanel(viewModel = viewModel, lan = lan)
-        }
-        Text(
-            text = stringResource(R.string.cli_lan_proxy_compat_note),
-            style = CliType.small,
-            color = colors.dim,
-            modifier = Modifier.padding(top = CliSpacing.sm, bottom = CliSpacing.md),
-        )
     }
 }
 
-/**
- * SOCKS5/HTTP username+password. Auth is MANDATORY — there is deliberately no off switch here: the
- * LAN leg is published on the phone's Wi-Fi address, so an anonymous surface would relay the owner's
- * VPN/Tor for anyone on that network. The login/password stay editable; if the password is left
- * empty the runtime refuses to raise the LAN inbound at all, and the panel says so instead of
- * letting the user believe the surface is up. The password row copies to the clipboard.
- */
 @Composable
 private fun CliLanProxyAuthPanel(
     viewModel: HomeViewModel,
@@ -138,13 +131,8 @@ private fun CliLanProxyAuthPanel(
         icon = R.drawable.pix_lock,
         title = stringResource(R.string.cli_lan_proxy_auth),
         modifier = Modifier.fillMaxWidth(),
+        infoText = stringResource(R.string.cli_lan_proxy_auth_required_note),
     ) {
-        Text(
-            text = stringResource(R.string.cli_lan_proxy_auth_required_note),
-            style = CliType.small,
-            color = colors.dim,
-            modifier = Modifier.padding(bottom = CliSpacing.xs),
-        )
         CliInputRow(
             prompt = "user",
             value = lan.lanAuth.username,
@@ -177,13 +165,6 @@ private fun CliLanProxyAuthPanel(
     }
 }
 
-/**
- * What the core reports back, and nothing else.
- *
- * Addresses are shown only in the states where the core actually published them, and a
- * not-serving state always carries its reason: the whole point of this panel is that "the switch
- * is on" and "the network can reach you" are different facts.
- */
 @Composable
 private fun CliLanProxyStatusPanel(status: LanProxyStatusSnapshot) {
     val colors = LocalCliColors.current
@@ -276,11 +257,6 @@ private val LanProxyUnavailableReason.labelRes: Int
             LanProxyUnavailableReason.UNKNOWN -> R.string.cli_lan_proxy_reason_unknown
         }
 
-/**
- * Ports, one row per protocol actually offered. BOTH is two listeners on two ports — the previous
- * single "mixed" port could not describe it, and a client that only speaks SOCKS had no way to know
- * which port was its own.
- */
 @Composable
 private fun CliLanPortRow(
     viewModel: HomeViewModel,
@@ -304,12 +280,6 @@ private fun CliLanPortRow(
     }
 }
 
-/**
- * The port has no meaningful presets: the row opens the value modal straight away.
- *
- * Shared with the device-local proxy on the routing screen — the two surfaces differ in where they
- * listen, not in what a port is.
- */
 @Composable
 internal fun CliProxyPortRow(
     key: String,
@@ -332,6 +302,7 @@ internal fun CliProxyPortRow(
     if (customOpen) {
         CliInputModal(
             title = stringResource(R.string.cli_input_value_title),
+            icon = R.drawable.pix_link,
             prompt = "port",
             value = portText,
             onValueChange = { raw -> portText = raw.filter(Char::isDigit).take(5) },

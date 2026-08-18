@@ -4,11 +4,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Test
 
-/**
- * Пер-app профили WebView: у каждого веб-аппа своё стабильное имя профиля (никогда не
- * зарезервированное "Default"), а путь очистки данных выбирается по возможностям WebView —
- * профили, per-site, либо только полный вайп с явным согласием.
- */
 internal class WebAppProfilesTest {
     @Test
     fun `profile name is stable and derived from the app id`() {

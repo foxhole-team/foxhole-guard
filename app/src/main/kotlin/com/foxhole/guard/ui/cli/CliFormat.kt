@@ -3,7 +3,6 @@ package com.foxhole.guard.ui.cli
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
-/** Terminal-style value formatting shared by the CLI screens. */
 internal object CliFormat {
 
     fun bytes(value: Long): String {

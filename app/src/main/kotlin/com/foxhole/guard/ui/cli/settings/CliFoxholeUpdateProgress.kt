@@ -9,7 +9,6 @@ import com.foxhole.guard.ui.cli.LocalCliColors
 import com.foxhole.guard.ui.cli.components.CliStageProgress
 import com.foxhole.guard.ui.isRunning
 
-/** One pixel-stage presentation for every FoxHole DB surface. */
 @Composable
 internal fun CliFoxholeUpdateProgress(
     phase: FoxholeUpdatePhase,

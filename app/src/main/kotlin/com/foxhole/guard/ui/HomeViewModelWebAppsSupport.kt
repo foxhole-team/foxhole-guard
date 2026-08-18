@@ -24,11 +24,6 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
-// Web apps settings toggles. The push service is the only one that touches the runtime: enabling
-// it raises the firewall, so it repeats the side effects of the direct firewall toggle and
-// reconciles guard.
-
-/** Single write point for the open frame: the watchdog mutes notifications for the visible app. */
 private fun HomeViewModel.setOpenWebApp(app: WebAppEntity?) {
     openWebAppMutable.value = app
     getApplication<FoxholeApplication>().appGraph.webAppsWatchdog.foregroundWebAppId = app?.id
@@ -55,19 +50,15 @@ internal fun HomeViewModel.onWebAppsEnabledChanged(value: Boolean) {
     }
 }
 
-/** Called after the firewall consent form, which the UI shows while the firewall is off. */
 internal fun HomeViewModel.onWebAppsPushServiceChanged(value: Boolean) {
     viewModelScope.launch {
         val firewallWasOff = !container.settingsRepository.current().expert.firewallEnabled
         container.settingsRepository.updateWebAppsPushService(value)
         if (value && firewallWasOff) {
-            // Indirect firewall enablement gets the same wiring as the direct toggle.
             container.settingsRepository.updateShowFirewallStatus(true)
             applyTrafficMapSupportSettings()
         }
         if (value) {
-            // The watchdog posts system notifications, so the permission is needed even when the
-            // firewall is already on.
             requestNotificationPermission.tryEmit(Unit)
         }
         syncLocalGuardWithPermissionRequest()
@@ -77,7 +68,6 @@ internal fun HomeViewModel.onWebAppsPushServiceChanged(value: Boolean) {
     }
 }
 
-/** Isolation is a UI-level gate over an unchanged runtime: a plain setting, no reconnect. */
 internal fun HomeViewModel.onWebAppsIsolationChanged(value: Boolean) {
     viewModelScope.launch {
         container.settingsRepository.updateWebAppsIsolation(value)
@@ -96,7 +86,6 @@ internal fun HomeViewModel.onWebAppsPollIntervalChanged(value: Int) {
     }
 }
 
-/** Add-web-app form: idle -> loading -> ready/error; ok resets to idle. */
 internal sealed interface WebAppAddUiState {
     data object Idle : WebAppAddUiState
 
@@ -181,9 +170,6 @@ internal fun HomeViewModel.removeWebApp(id: Long) {
         container.webAppsRepository.remove(id)
         val graph = getApplication<FoxholeApplication>().appGraph
         graph.webAppsNotifier.cancel(id)
-        // Removal drops the app's profile (or, pre-profiles, the site's cookies and storages), so
-        // a deleted login does not linger. Per-app only: a removal must not wipe the other web
-        // apps, so the no-capability WebView keeps its data until a consented full wipe.
         removed?.let { entity ->
             graph.webAppsWatchdog.withPollingPaused {
                 graph.webAppsDataCleaner.clearApp(entity.id, entity.url)
@@ -192,7 +178,6 @@ internal fun HomeViewModel.removeWebApp(id: Long) {
     }
 }
 
-/** Opening the frame clears the app badge: its notifications count as read. */
 internal fun HomeViewModel.openWebApp(id: Long) {
     viewModelScope.launch {
         val app = container.webAppsRepository.webApp(id) ?: return@launch
@@ -212,10 +197,6 @@ internal fun HomeViewModel.openWebApp(id: Long) {
             )
             return@launch
         }
-        // The route is installed BEFORE the frame's WebView exists: a proxy override applied to a
-        // live WebView leaves the first requests on whatever network the process had. A refusal
-        // (no route the core can publish, an override the WebView provider will not take) closes
-        // the door instead of opening an unrouted frame.
         val activation =
             getApplication<FoxholeApplication>().appGraph.webAppsWatchdog.acquireForegroundProxy(
                 appId = app.id,
@@ -238,10 +219,6 @@ internal fun HomeViewModel.closeWebApp() {
     setOpenWebApp(null)
 }
 
-/**
- * The frame's WebView is gone. Only now may the process-global override come down — and the
- * credentials it was holding go with it.
- */
 internal fun HomeViewModel.onWebAppFrameReleased() {
     viewModelScope.launch {
         webAppProxyCredentialsMutable.value = null
@@ -249,10 +226,6 @@ internal fun HomeViewModel.onWebAppFrameReleased() {
     }
 }
 
-/**
- * With isolation on, destroy the WebView before a stopped/reconnecting TUN can fall back to the
- * default network; with it off the frame survives tunnel churn — the current network is allowed.
- */
 internal fun HomeViewModel.startWebAppRouteSupervision() {
     viewModelScope.launch {
         combine(
@@ -276,7 +249,6 @@ internal fun HomeViewModel.startWebAppRouteSupervision() {
     }
 }
 
-/** Notification or widget tap: the intent extra carrying the app id opens its frame. */
 internal fun HomeViewModel.applyWebAppOpenIntent(intent: Intent?) {
     if (intent == null) {
         return
@@ -285,16 +257,9 @@ internal fun HomeViewModel.applyWebAppOpenIntent(intent: Intent?) {
     if (id <= 0L) {
         return
     }
-    // Re-delivery of the same intent on recreate must not reopen the frame.
     intent.removeExtra(CliMainActivity.EXTRA_OPEN_WEB_APP_ID)
     openWebApp(id)
 }
-
-// Web-app data wipe: the app's own profile natively when the WebView supports MULTI_PROFILE,
-// per-site via DELETE_BROWSING_DATA otherwise, and with neither only the whole shared profile
-// (the UI asks first). The watchdog pauses around a wipe so its hidden WebView is not holding
-// the site — or the profile — open, and the badge resets — a logged-out site has nothing unread
-// to count.
 
 internal fun HomeViewModel.webAppPerAppClearSupported(): Boolean =
     getApplication<FoxholeApplication>().appGraph.webAppsDataCleaner.perAppClearSupported
@@ -338,11 +303,9 @@ internal fun HomeViewModel.clearAllWebAppsData() {
     }
 }
 
-/** True when the system will not show web-app notifications: master toggle off or channel muted. */
 internal fun HomeViewModel.webAppNotificationsBlocked(): Boolean =
     getApplication<FoxholeApplication>().appGraph.webAppsNotifier.deliveryBlocked()
 
-/** Terminal note about an external link blocked in the frame: navigation is locked to the domain. */
 internal fun HomeViewModel.notifyWebAppExternalBlocked(host: String) {
     viewModelScope.launch {
         emitInfo(getApplication<Application>().getString(R.string.cli_webapps_external_blocked, host))

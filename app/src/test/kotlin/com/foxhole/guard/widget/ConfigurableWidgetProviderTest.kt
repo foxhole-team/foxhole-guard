@@ -2,6 +2,7 @@ package com.foxhole.guard.widget
 
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.mutablePreferencesOf
+import com.foxhole.core.model.WidgetKindAppearance
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -25,9 +26,12 @@ internal class ConfigurableWidgetProviderTest {
     }
 
     @Test
-    fun `outline defaults on and remains an instance preference`() {
-        assertTrue(widgetOutlineEnabled(emptyPreferences()))
-        assertFalse(widgetOutlineEnabled(mutablePreferencesOf(WIDGET_OUTLINE_KEY to false)))
-        assertTrue(widgetOutlineEnabled(mutablePreferencesOf(WIDGET_OUTLINE_KEY to true)))
+    fun `outline follows the kind's app setting until the instance overrides it`() {
+        val outlineOn = WidgetKindAppearance(outline = true)
+        val outlineOff = WidgetKindAppearance(outline = false)
+        assertTrue(widgetOutlineEnabled(emptyPreferences(), outlineOn))
+        assertFalse(widgetOutlineEnabled(emptyPreferences(), outlineOff))
+        assertFalse(widgetOutlineEnabled(mutablePreferencesOf(WIDGET_OUTLINE_KEY to false), outlineOn))
+        assertTrue(widgetOutlineEnabled(mutablePreferencesOf(WIDGET_OUTLINE_KEY to true), outlineOff))
     }
 }

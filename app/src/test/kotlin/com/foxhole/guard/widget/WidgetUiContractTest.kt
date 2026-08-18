@@ -40,7 +40,7 @@ internal class WidgetUiContractTest {
         assertTrue(status.contains("StatusWidgetFacts("))
         assertTrue(status.contains("Column(modifier = GlanceModifier.fillMaxWidth())"))
         assertTrue(status.contains("STATUS_WIDGET_EXPANDED_HEIGHT = 162.dp"))
-        assertTrue(status.contains("STATUS_WIDGET_CONTROL_HEIGHT = 24.dp"))
+        assertTrue(status.contains("STATUS_WIDGET_CONTROL_HEIGHT = 32.dp"))
         assertTrue(status.contains(".padding(horizontal = 12.dp, vertical = 8.dp)"))
         assertFalse(status.contains("sectionLabel = context.getString(R.string.widget_status_section)"))
         assertTrue(config.contains("WidgetPreviewKind.STATUS -> WidgetStatusConfigPreview"))
@@ -75,7 +75,7 @@ internal class WidgetUiContractTest {
         val modalFrame = source("main/kotlin/com/foxhole/guard/ui/cli/components/CliModalFrame.kt")
         val previewFrame = source("main/res/drawable/widget_preview_bg.xml")
 
-        assertEquals(2, Regex("drawRoundRect\\(").findAll(modalFrame).count())
+        assertEquals(3, Regex("drawRoundRect\\(").findAll(modalFrame).count())
         assertTrue(modalFrame.contains("CLI_DASHED_FRAME_RADIUS = 8.dp"))
         assertTrue(modalFrame.contains("val inset = cell / 2f"))
         assertTrue(previewFrame.contains("android:radius=\"8dp\""))
@@ -106,8 +106,10 @@ internal class WidgetUiContractTest {
             )
         }
         assertTrue(chrome.contains("modifier = GlanceModifier.fillMaxWidth()"))
-        assertTrue(preview.contains("@drawable/widget_stop_button"))
-        assertTrue(preview.contains("@drawable/widget_restart_button"))
+        assertTrue(preview.contains("@drawable/widget_start_button"))
+        assertTrue(preview.contains("@string/widget_status_disconnected"))
+        assertFalse(preview.contains("@drawable/widget_stop_button"))
+        assertFalse(preview.contains("@drawable/widget_restart_button"))
         assertFalse(preview.contains("<Space"))
         assertFalse(preview.contains("widget_refresh_button"))
         assertTrue(preview.contains("@drawable/widget_refresh_pixel"))
@@ -149,8 +151,8 @@ internal class WidgetUiContractTest {
         assertTrue(config.contains("prefs[WIDGET_OUTLINE_KEY]"))
         assertTrue(config.contains("CliToggleRow("))
         assertTrue(config.contains("if (outlined) base.cliDashedBorder(colors.accent) else base"))
-        assertTrue(status.contains("widgetOutlineEnabled(prefs)"))
-        assertTrue(webApps.contains("widgetOutlineEnabled(prefs)"))
+        assertTrue(status.contains("widgetOutlineEnabled(prefs, defaults)"))
+        assertTrue(webApps.contains("widgetOutlineEnabled(prefs, defaults)"))
         assertTrue(chrome.contains("if (outlined)"))
     }
 
@@ -169,7 +171,11 @@ internal class WidgetUiContractTest {
         assertTrue(settings.contains("runCatching"))
         assertTrue(settings.contains("return\n        }"))
         assertTrue(settings.contains("launcher widget request failed"))
-        assertEquals(3, Regex("viewModel\\.onAddHomeWidget\\(").findAll(screen).count())
+        assertTrue(screen.contains("kind = HomeWidgetKind.CONNECTION,"))
+        assertTrue(screen.contains("kind = HomeWidgetKind.WEB_APPS,"))
+        assertEquals(1, Regex("onAddHomeWidget\\(kind\\)").findAll(kindPanel(screen)).count())
+        assertEquals(1, Regex("onAddHomeWidget\\(HomeWidgetKind\\.STATUS\\)").findAll(foxPanel(screen)).count())
+        assertEquals(2, Regex("viewModel\\.onAddHomeWidget\\(").findAll(screen).count())
         assertTrue(connection.contains("android:configure=\"com.foxhole.guard.widget.WidgetConfigActivity\""))
         assertTrue(webApps.contains("android:configure=\"com.foxhole.guard.widget.WidgetConfigActivity\""))
         assertTrue(
@@ -190,8 +196,9 @@ internal class WidgetUiContractTest {
         assertTrue(note.contains(".padding(vertical = outerVerticalPadding)"))
         assertTrue(
             note.indexOf(".padding(vertical = outerVerticalPadding)") <
-                note.indexOf(".cliDashedBorder(colors.note)"),
+                note.indexOf(".then(frame)"),
         )
+        assertTrue(note.contains("Modifier.cliDashedBorder(noteColor)"))
         assertFalse(note.contains("CliSpinner"))
         assertFalse(note.contains("Progress"))
     }
@@ -242,7 +249,9 @@ internal class WidgetUiContractTest {
         assertTrue(settings.contains("R.string.cli_status_widget_description"))
         assertTrue(settings.contains("R.string.cli_webapps_widget_description"))
         assertTrue(settings.contains("R.string.fox_status_widget_description"))
-        assertEquals(3, Regex("CliElbowLine\\(").findAll(settings).count())
+        assertTrue(kindPanel(settings).contains("infoText = description"))
+        assertTrue(foxPanel(settings).contains("infoText = stringResource(R.string.fox_status_widget_description)"))
+        assertEquals(0, Regex("CliElbowLine\\(").findAll(settings).count())
         assertTrue(statusPreview.contains("@string/cli_status_widget_label"))
         assertTrue(webAppsPreview.contains("@string/cli_webapps_widget_label"))
         assertTrue(foxPreview.contains("@string/fox_status_widget_label"))
@@ -261,7 +270,7 @@ internal class WidgetUiContractTest {
         assertTrue(metadata.contains("android:maxResizeWidth=\"400dp\""))
         assertFalse(widget.contains("WidgetPixelFrame("))
         assertTrue(widget.contains("StatusWidgetCommandReceiver.ACTION_TOGGLE"))
-        assertTrue(widget.contains("FOX_STATUS_ANIMATION_KEY] ?: true"))
+        assertTrue(widget.contains("FOX_STATUS_ANIMATION_KEY] ?: settings.widgets.foxAnimationEnabled"))
         assertTrue(widget.contains("generation.incrementAndGet()"))
         assertTrue(widget.contains("while (generation.get() == ownedGeneration)"))
         assertTrue(widget.contains("animatedWidgetIds(context)"))
@@ -308,6 +317,20 @@ internal class WidgetUiContractTest {
         assertTrue(fillHeight in 0.72f..0.90f)
         assertTrue(minX >= 8 && minY >= 8)
         assertTrue(maxX <= image.width - 9 && maxY <= image.height - 9)
+    }
+
+    private fun kindPanel(screen: String): String =
+        slice(screen, "private fun CliWidgetKindPanel(", "private fun CliFoxWidgetPanel(")
+
+    private fun foxPanel(screen: String): String =
+        slice(screen, "private fun CliFoxWidgetPanel(", "private fun CliStatusWidgetPreview(")
+
+    private fun slice(source: String, from: String, until: String): String {
+        val start = source.indexOf(from)
+        assertTrue(start >= 0)
+        val end = source.indexOf(until, startIndex = start)
+        assertTrue(end > start)
+        return source.substring(start, end)
     }
 
     private fun source(relative: String): String = file(relative).readText()

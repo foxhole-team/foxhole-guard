@@ -246,9 +246,6 @@ internal fun statisticsUiState(
 internal fun protocolTrafficItems(state: StatisticsRouteUiState): List<ProfileTrafficUiItem> {
     val items =
         state.settings.profileTrafficTotals
-            // Sentinel sessions are not VPN profiles: Tor-only and local guard publish service
-            // traffic records but must not look like user profiles. Tor traffic stays in its own
-            // panel and summary row.
             .filterNot { total ->
                 total.profileId == TOR_ONLY_PROFILE_ID || total.profileId == LOCAL_GUARD_PROFILE_ID
             }
@@ -310,8 +307,6 @@ internal fun profileTrafficItems(state: StatisticsRouteUiState): List<ProfileTra
             )
         }.sortedByDescending(ProfileTrafficUiItem::updatedAt)
 
-// Service and undefined configurations are not user protocols: the VPN protocols panel shows only
-// real ones, as does the home fact.
 private fun ProtocolHint.isDisplayableVpnProtocol(): Boolean =
     this != ProtocolHint.UNKNOWN && this != ProtocolHint.CUSTOM_CONFIG
 

@@ -13,11 +13,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/**
- * The recorder half of the I2P section: how two cumulative counters become hourly buckets plus a
- * lifetime aggregate, what happens when a counter restarts, and that the clear action really empties
- * the store instead of letting a live session pour it straight back in.
- */
 class I2pTrafficRepositoryTest {
     private val dao = FakeI2pTrafficDao()
     private var networkTotalBytes = 0L
@@ -40,7 +35,6 @@ class I2pTrafficRepositoryTest {
     @Test
     fun `the first sample only primes the cursors so no gap is banked as one hour`() =
         runBlocking {
-            // A router that has been up for a while before collection started.
             networkTotalBytes = 5_000L
             transitTotalBytes = 9_000L
             repository.sample()
@@ -66,8 +60,6 @@ class I2pTrafficRepositoryTest {
     @Test
     fun `an immediate zero prime preserves the first timed traffic interval`() =
         runBlocking {
-            // This is the service start sequence: its immediate ticker pass sees the freshly reset
-            // counter, then the first timed pass must persist everything moved since start.
             repository.sample()
             nowMs += 5_000L
             networkTotalBytes = 1_234L
@@ -94,7 +86,6 @@ class I2pTrafficRepositoryTest {
                 ),
                 dao.buckets,
             )
-            // The lifetime row does not care about hours: it is the sum of every delta ever.
             assertEquals(250L, dao.totalsOwn)
         }
 
@@ -104,7 +95,6 @@ class I2pTrafficRepositoryTest {
             repository.sample()
             transitTotalBytes = 4_000L
             repository.sample()
-            // i2pd restarted: its transit counter begins again from a small number.
             transitTotalBytes = 60L
             repository.sample()
 
@@ -117,14 +107,11 @@ class I2pTrafficRepositoryTest {
             repository.sample()
             transitTotalBytes = 1_000L
             repository.sample()
-            // The webconsole did not answer; the router may still be running with its counter high.
             transitTotalBytes = null
             repository.sample()
             transitTotalBytes = 1_500L
             repository.sample()
 
-            // 1_000 then 500 — not 1_000 + 1_500, which is what a cursor zeroed by the failure
-            // would have produced.
             assertEquals(1_500L, dao.totalsTransit)
         }
 
@@ -134,8 +121,6 @@ class I2pTrafficRepositoryTest {
             repository.sample()
             networkTotalBytes = 6_000L
             repository.sample()
-            // End of session: the tail is banked and the cursors are dropped, because the counter
-            // the next session feeds starts from zero again.
             repository.resetSampleCursors()
 
             networkTotalBytes = 0L
@@ -143,7 +128,6 @@ class I2pTrafficRepositoryTest {
             networkTotalBytes = 7_000L
             repository.sample()
 
-            // 6_000 + 7_000. A cursor still holding 6_000 would have credited only 1_000.
             assertEquals(13_000L, dao.totalsOwn)
         }
 
@@ -170,8 +154,6 @@ class I2pTrafficRepositoryTest {
             repository.sample()
             repository.clear()
 
-            // The session counter keeps climbing from where it was; only what came after the
-            // clear may be recorded again.
             networkTotalBytes = 950L
             repository.sample()
             assertTrue("the sample after a clear must only re-prime", dao.buckets.isEmpty())
@@ -230,7 +212,6 @@ class I2pTrafficRepositoryTest {
     }
 }
 
-/** In-memory stand-in for the Room DAO: the same accumulate-in-place semantics, none of SQLite. */
 private class FakeI2pTrafficDao : I2pTrafficDao {
     val buckets = linkedMapOf<Long, Pair<Long, Long>>()
     var totalsOwn = 0L

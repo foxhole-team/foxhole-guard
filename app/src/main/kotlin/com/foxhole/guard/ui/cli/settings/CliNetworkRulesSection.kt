@@ -19,12 +19,6 @@ import com.foxhole.guard.ui.cli.components.CliToggleRow
 import com.foxhole.guard.ui.onNetworkRulesChanged
 import com.foxhole.guard.ui.resolveNetworkRuleProtocolOptionId
 
-/**
- * Network rules, rendered as a sub-block of the network group (no panel of its own): the
- * model is a flat wifi/cellular pair (no rule list), each block is enable + auto-connect +
- * profile override (+ protocol pin for multi-protocol profiles); cellular adds the data-saver pair
- * written as one toggle. Single write path: onNetworkRulesChanged.
- */
 @Composable
 internal fun CliNetworkRulesRows(
     viewModel: HomeViewModel,
@@ -57,12 +51,11 @@ internal fun CliNetworkRulesRows(
                     ),
                 )
             },
-            note = stringResource(R.string.cli_cfg_nr_data_saver_note),
+            infoText = stringResource(R.string.cli_cfg_nr_data_saver_note),
         )
     }
 }
 
-/** One transport's fields plus copy-writers, so wifi and cellular share the block UI. */
 private class TransportRuleBinding(
     val labelRes: Int,
     val iconRes: Int,
@@ -135,11 +128,7 @@ private fun TransportRuleBlock(
         icon = R.drawable.pix_power,
         checked = binding.autoConnect,
         onToggle = { onUpdate(binding.setAutoConnect(it)) },
-        note = if (binding.autoConnect) {
-            null
-        } else {
-            stringResource(R.string.cli_cfg_nr_recommend_note)
-        },
+        infoText = stringResource(R.string.cli_cfg_nr_recommend_note),
     )
     CliRowDivider()
     val selectedProfile = profiles.firstOrNull { it.id == binding.profileId }

@@ -36,6 +36,8 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.foxhole.core.model.PanelAppearance
+import com.foxhole.core.model.VisualStyle
 import com.foxhole.guard.R
 import com.foxhole.guard.runtime.RemoteUpdatePhase
 import com.foxhole.guard.ui.HomeViewModel
@@ -45,8 +47,9 @@ import com.foxhole.guard.ui.OnboardingProgress
 import com.foxhole.guard.ui.cli.CliSpacing
 import com.foxhole.guard.ui.cli.CliType
 import com.foxhole.guard.ui.cli.LocalCliColors
+import com.foxhole.guard.ui.cli.LocalCliVisualStyle
 import com.foxhole.guard.ui.cli.cliDisplayStyle
-import com.foxhole.guard.ui.cli.cliSlide
+import com.foxhole.guard.ui.cli.cliPanelSwap
 import com.foxhole.guard.ui.cli.components.CliButton
 import com.foxhole.guard.ui.cli.components.CliDropdownOption
 import com.foxhole.guard.ui.cli.components.CliDropdownRow
@@ -60,16 +63,10 @@ import com.foxhole.guard.ui.cli.fox.CliFoxHero
 import com.foxhole.guard.ui.onOnboardingDownload
 import com.foxhole.guard.ui.onOnboardingFinished
 import com.foxhole.guard.ui.onOnboardingSkipped
+import com.foxhole.guard.ui.onPanelAppearanceSelected
+import com.foxhole.guard.ui.onVisualStyleSelected
 import com.foxhole.guard.ui.onboardingProgress
 
-/**
- * First-run wizard, composed instead of the app until the user finishes or skips it.
- *
- * The logo and product heading stay fixed while only the step body slides horizontally. Choices are
- * held in composition until the final action; abandoning the wizard therefore leaves a fresh install
- * untouched. A data-set selection always leads through the progress screen, including an explicit
- * skip with no network work.
- */
 @Composable
 internal fun CliOnboardingWizard(viewModel: HomeViewModel) {
     val colors = LocalCliColors.current
@@ -146,18 +143,20 @@ private fun WizardStepContent(
     onChoicesChange: (OnboardingWizardChoices) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    // All pages share this fixed viewport. Different step heights therefore cannot resize the
-    // transition container and introduce a vertical jump into a horizontal page change.
+    val plainStyle = LocalCliVisualStyle.current == VisualStyle.PLAIN
     Box(modifier = modifier, contentAlignment = Alignment.TopStart) {
         AnimatedContent(
             targetState = step,
-            transitionSpec = { cliSlide(forward = targetState > initialState) },
+            transitionSpec = {
+                cliPanelSwap(forward = targetState > initialState, plain = plainStyle)
+            },
             contentAlignment = Alignment.TopStart,
             label = "onboarding-step",
             modifier = Modifier.fillMaxSize().clipToBounds(),
         ) { currentStep ->
             when (currentStep) {
                 LICENSE_STEP -> WizardLicenseStep(
+                    viewModel = viewModel,
                     accepted = choices.licenseAccepted,
                     validationError = licenseValidationError,
                     onAcceptedChange = { onChoicesChange(choices.copy(licenseAccepted = it)) },
@@ -226,6 +225,8 @@ private fun WizardStepContent(
                 DATA_STEP -> WizardDataSetsStep(
                     geoIp = choices.geoDownload,
                     onGeoIpChange = { onChoicesChange(choices.copy(geoDownload = it)) },
+                    tlsFingerprints = choices.tlsFingerprintDownload,
+                    onTlsFingerprintsChange = { onChoicesChange(choices.copy(tlsFingerprintDownload = it)) },
                     dnsFilter = choices.dnsDownload,
                     onDnsFilterChange = { onChoicesChange(choices.copy(dnsDownload = it)) },
                     torBridges = choices.torBridgesDownload,
@@ -242,6 +243,7 @@ private fun WizardStepContent(
                     dnsFilter = choices.dnsDownload,
                     torBridges = choices.torBridgesDownload,
                     geoIp = choices.geoDownload,
+                    tlsFingerprints = choices.tlsFingerprintDownload,
                     threatIntel = choices.threatIntelDownload,
                 )
             }
@@ -278,6 +280,7 @@ private fun WizardHeader() {
 
 @Composable
 private fun WizardLicenseStep(
+    viewModel: HomeViewModel,
     accepted: Boolean,
     validationError: Boolean,
     onAcceptedChange: (Boolean) -> Unit,
@@ -301,6 +304,8 @@ private fun WizardLicenseStep(
             checked = accepted,
             onToggle = onAcceptedChange,
         )
+        Spacer(modifier = Modifier.height(CliSpacing.sm))
+        WizardAppearancePanel(viewModel = viewModel)
         Spacer(modifier = Modifier.height(CliSpacing.sm))
         val skipNote = stringResource(R.string.cli_wizard_skip_note)
         Column(
@@ -383,8 +388,6 @@ private fun WizardComponentsStep(
                 onToggle = onTorChange,
                 note = stringResource(R.string.cli_wizard_component_tor_note),
             )
-            // Bridges live directly under Tor. Their source defaults to the Tor Project; opting
-            // into FoxHole DB also selects the signed bridge data set on the next wizard page.
             if (torEnabled) {
                 CliToggleRow(
                     label = stringResource(R.string.cli_wizard_component_tor_bridges),
@@ -465,11 +468,51 @@ private fun WizardComponentsStep(
     }
 }
 
-/**
- * The call to relay for I2P. Text never blinks — while the offer is unengaged the frame carries
- * the marching dashes instead (the same live edge as the app's modals), and it settles into a
- * static border once I2P is on and the decision is made.
- */
+@Composable
+private fun WizardAppearancePanel(viewModel: HomeViewModel) {
+    val visualStyle by viewModel.visualStyle.collectAsStateWithLifecycle()
+    val panelAppearance by viewModel.panelAppearance.collectAsStateWithLifecycle()
+    CliPanel(title = stringResource(R.string.cli_wizard_appearance_caption), icon = R.drawable.pix_star) {
+        val pixelLabel = stringResource(R.string.cli_cfg_visual_style_pixel)
+        val plainLabel = stringResource(R.string.cli_cfg_visual_style_plain)
+        CliDropdownRow(
+            label = stringResource(R.string.cli_wizard_visual_style),
+            icon = R.drawable.pix_edit,
+            value = if (visualStyle == VisualStyle.PIXEL) pixelLabel else plainLabel,
+            options = VisualStyle.entries.map { style ->
+                CliDropdownOption(
+                    id = style.name,
+                    label = if (style == VisualStyle.PIXEL) pixelLabel else plainLabel,
+                )
+            },
+            selectedId = visualStyle.name,
+            onSelect = { id -> viewModel.onVisualStyleSelected(VisualStyle.valueOf(id)) },
+        )
+        val autoLabel = stringResource(R.string.cli_cfg_appearance_auto)
+        val standardLabel = stringResource(R.string.cli_cfg_appearance_standard)
+        val darkLabel = stringResource(R.string.cli_cfg_appearance_dark)
+        val lightLabel = stringResource(R.string.cli_cfg_appearance_light)
+        val paletteLabel = { appearance: PanelAppearance ->
+            when (appearance) {
+                PanelAppearance.AUTO -> autoLabel
+                PanelAppearance.STANDARD -> standardLabel
+                PanelAppearance.DARK -> darkLabel
+                PanelAppearance.LIGHT -> lightLabel
+            }
+        }
+        CliDropdownRow(
+            label = stringResource(R.string.cli_cfg_appearance),
+            icon = R.drawable.pix_star,
+            value = paletteLabel(panelAppearance),
+            options = PanelAppearance.entries.map { appearance ->
+                CliDropdownOption(id = appearance.name, label = paletteLabel(appearance))
+            },
+            selectedId = panelAppearance.name,
+            onSelect = { id -> viewModel.onPanelAppearanceSelected(PanelAppearance.valueOf(id)) },
+        )
+    }
+}
+
 @Composable
 private fun I2pRelayBanner(i2pEnabled: Boolean, relay: Boolean, onRelayChange: (Boolean) -> Unit) {
     val colors = LocalCliColors.current
@@ -505,22 +548,17 @@ private fun I2pRelayBanner(i2pEnabled: Boolean, relay: Boolean, onRelayChange: (
             label = stringResource(R.string.cli_wizard_i2p_banner_toggle),
             checked = relay,
             onToggle = onRelayChange,
-            // Relaying is meaningless without the router; the row stays visible so the offer is not
-            // hidden, but it cannot be armed before I2P itself is on.
             enabled = i2pEnabled,
         )
     }
 }
 
-/**
- * FoxHole DB selection is deliberately separate from enabling modules. GeoIP starts selected;
- * DNS, Tor bridges and FoxHole Sentinel data require an explicit check. Actions stay in the shared
- * pinned footer, so this page follows the same geometry as every other wizard step.
- */
 @Composable
 private fun WizardDataSetsStep(
     geoIp: Boolean,
     onGeoIpChange: (Boolean) -> Unit,
+    tlsFingerprints: Boolean,
+    onTlsFingerprintsChange: (Boolean) -> Unit,
     dnsFilter: Boolean,
     onDnsFilterChange: (Boolean) -> Unit,
     torBridges: Boolean,
@@ -548,6 +586,12 @@ private fun WizardDataSetsStep(
                 checked = geoIp,
                 onToggle = onGeoIpChange,
                 note = stringResource(R.string.cli_wizard_geo_later_note),
+            )
+            CliToggleRow(
+                label = stringResource(R.string.cli_wizard_download_tls),
+                checked = tlsFingerprints,
+                onToggle = onTlsFingerprintsChange,
+                note = stringResource(R.string.cli_wizard_download_tls_note),
             )
             CliToggleRow(
                 label = stringResource(R.string.cli_wizard_download_dns),
@@ -589,17 +633,17 @@ private fun WizardDownloadStep(
     torBridges: Boolean,
     geoIp: Boolean,
     threatIntel: Boolean,
+    tlsFingerprints: Boolean,
 ) {
     val colors = LocalCliColors.current
     LaunchedEffect(progress.running, progress.finished, progress.items) {
         if (!progress.running && !progress.finished && progress.items.isEmpty()) {
-            // Recovers a process/activity recreation after the selection step without requiring a
-            // second tap. The view model rejects duplicate in-flight calls.
             viewModel.onOnboardingDownload(
                 dnsFilter = dnsFilter,
                 torBridges = torBridges,
                 geoIp = geoIp,
                 threatIntel = threatIntel,
+                tlsFingerprints = tlsFingerprints,
             )
         }
     }
@@ -633,10 +677,13 @@ private fun WizardDownloadStep(
                 if (geoIp) {
                     WizardPlannedRow(stringResource(R.string.cli_wizard_download_geoip))
                 }
+                if (tlsFingerprints) {
+                    WizardPlannedRow(stringResource(R.string.cli_wizard_download_tls))
+                }
                 if (threatIntel) {
                     WizardPlannedRow(stringResource(R.string.cli_wizard_download_sentinel))
                 }
-                if (listOf(dnsFilter, torBridges, geoIp, threatIntel).none()) {
+                if (listOf(dnsFilter, torBridges, geoIp, threatIntel, tlsFingerprints).none()) {
                     Text(
                         text = stringResource(R.string.cli_wizard_download_none),
                         style = CliType.small,
@@ -668,6 +715,7 @@ private fun WizardDownloadRow(state: OnboardingDownloadState) {
         OnboardingDownload.TOR_BRIDGES -> stringResource(R.string.cli_wizard_download_bridges)
         OnboardingDownload.GEOIP -> stringResource(R.string.cli_wizard_download_geoip)
         OnboardingDownload.THREAT_INTEL -> stringResource(R.string.cli_wizard_download_sentinel)
+        OnboardingDownload.TLS_FINGERPRINTS -> stringResource(R.string.cli_wizard_download_tls)
     }
     val status = wizardDownloadStatus(state)
     val tone = when {
@@ -749,17 +797,12 @@ private fun WizardFooter(
                 ),
                 onClick = onContinue,
                 modifier = Modifier.weight(1f),
-                // Outlined until the step is satisfied: dimming alone still reads as a live
-                // primary button, and the licence/download steps must make "not yet" unmistakable.
                 filled = canContinue && step != LICENSE_STEP,
                 enabled = step == LICENSE_STEP || canContinue,
                 dimWhenDisabled = step != LICENSE_STEP,
                 color = colors.ok,
             )
         }
-        // Reserve the optional second action row on every page. If this slot only appears on the
-        // data-set page, the parent remeasures the animated viewport halfway through its slide and
-        // turns an otherwise horizontal transition into a visible diagonal jump.
         Spacer(modifier = Modifier.height(CliSpacing.xs))
         Box(
             modifier = Modifier
@@ -773,8 +816,6 @@ private fun WizardFooter(
                     modifier = Modifier.fillMaxSize(),
                     color = colors.dim,
                     enabled = canContinue,
-                    // The skip affordance remains visibly outlined before the current step unlocks;
-                    // only its click is disabled. Applying disabled alpha erased the contour.
                     dimWhenDisabled = false,
                 )
             }
@@ -791,8 +832,8 @@ private data class OnboardingWizardChoices(
     val i2pEnabled: Boolean = false,
     val i2pRelay: Boolean = false,
     val dnsFilterEnabled: Boolean = false,
-    // FoxHole DB defaults: GeoIP and background updates on; the other remote sets opt-in.
     val geoDownload: Boolean = true,
+    val tlsFingerprintDownload: Boolean = true,
     val dnsDownload: Boolean = false,
     val torBridgesDownload: Boolean = false,
     val threatIntelDownload: Boolean = false,
@@ -800,6 +841,7 @@ private data class OnboardingWizardChoices(
 ) {
     fun withoutDownloads(): OnboardingWizardChoices = copy(
         geoDownload = false,
+        tlsFingerprintDownload = false,
         dnsDownload = false,
         torBridgesDownload = false,
         threatIntelDownload = false,
@@ -823,6 +865,7 @@ private val OnboardingWizardChoicesSaver: Saver<OnboardingWizardChoices, Any> =
                 value.threatIntelDownload,
                 value.autoUpdate,
                 value.sentinelEnabled,
+                value.tlsFingerprintDownload,
             )
         },
         restore = { saved ->
@@ -841,6 +884,7 @@ private val OnboardingWizardChoicesSaver: Saver<OnboardingWizardChoices, Any> =
                 threatIntelDownload = saved.booleanAt(10, defaults.threatIntelDownload),
                 autoUpdate = saved.booleanAt(11, defaults.autoUpdate),
                 sentinelEnabled = saved.booleanAt(12, defaults.sentinelEnabled),
+                tlsFingerprintDownload = saved.booleanAt(13, defaults.tlsFingerprintDownload),
             )
         },
     )
@@ -864,6 +908,7 @@ private fun HomeViewModel.startOnboardingDownloads(choices: OnboardingWizardChoi
         torBridges = choices.torBridgesDownload,
         geoIp = choices.geoDownload,
         threatIntel = choices.threatIntelDownload,
+        tlsFingerprints = choices.tlsFingerprintDownload,
     )
 }
 

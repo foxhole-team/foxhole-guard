@@ -404,15 +404,12 @@ internal class HomeIpPendingLoadingPolicyTest {
                 isp = "TOR exit",
                 fetchedAt = 5_000L,
             )
-        // A permitted-but-idle route (settings switch on, no runtime) must NOT resurrect a cached
-        // Tor exit into a map lane — this was the stale "Route: TOR" after Stop / with Tor off.
         assertNull(
             trafficMapTorIpInfoCandidate(
                 connection = ConnectionSnapshot(state = ConnectionState.IDLE),
                 torIpInfo = torIp,
             ),
         )
-        // A live session actually carrying the Tor route draws the lane.
         assertEquals(
             torIp,
             trafficMapTorIpInfoCandidate(
@@ -425,7 +422,6 @@ internal class HomeIpPendingLoadingPolicyTest {
                 torIpInfo = torIp,
             ),
         )
-        // The dedicated Tor-only runtime draws it too.
         assertEquals(
             torIp,
             trafficMapTorIpInfoCandidate(

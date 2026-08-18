@@ -303,15 +303,8 @@ private fun InstalledAppInventoryAudit.normalized(): InstalledAppInventoryAudit 
 
 private fun PrivacyRouteSettings.normalized(): PrivacyRouteSettings =
     copy(
-        // The scope is a stored preference, not a runtime capability, so an empty Tor lane leaves
-        // it alone. Coercing it to whole-device turned removing the last app into a silent switch
-        // to routing the entire device through Tor — the opposite of what was asked — and made
-        // "selected apps" unwritable in the state a fresh install starts in. An empty lane simply
-        // routes nothing: buildSplitPlan yields no Tor packages and the start path still refuses.
+        // Keep the preference before a Tor lane exists; rule generation handles an empty lane.
         scope = scope,
-        // "Block without Tor" is deliberately NOT cleared for an empty Tor lane: clearing made
-        // the toggle unsavable in the state every fresh install starts in. The flag is a stored
-        // preference; buildTorFailClosedBlockRules already returns no rules for an empty lane.
     )
 
 /**

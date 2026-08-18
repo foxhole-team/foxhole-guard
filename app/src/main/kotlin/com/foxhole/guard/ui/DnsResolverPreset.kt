@@ -26,3 +26,13 @@ internal enum class DnsResolverPreset(
 
 internal fun dnsResolverPresetFor(server: String): DnsResolverPreset? =
     DnsResolverPreset.entries.firstOrNull { preset -> preset.matches(server.trim()) }
+
+internal fun defaultDnsServerFor(mode: SecureDnsMode): String =
+    DnsResolverPreset.CLOUDFLARE.hostFor(mode)
+
+internal fun dnsServerHostForGeo(server: String): String? {
+    val trimmed = server.trim()
+    if (trimmed.isEmpty()) return null
+    val withoutScheme = trimmed.substringAfter("://", trimmed)
+    return withoutScheme.substringBefore('/').trim().takeIf(String::isNotBlank)
+}

@@ -5,11 +5,6 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/**
- * Сведение сигналов вотчдога в бейдж: значение шима (Notification/setAppBadge) приоритетно,
- * `(N)`-эвристика заголовка — запасная, а полное молчание сайта сохраняет прежний бейдж
- * (сайт мог просто не догрузиться — сбрасывать непрочитанное нельзя).
- */
 internal class WebAppShimTest {
     @Test
     fun `shim signal wins over the title heuristic`() {

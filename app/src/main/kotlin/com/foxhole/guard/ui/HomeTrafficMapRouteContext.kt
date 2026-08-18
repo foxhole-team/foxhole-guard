@@ -20,9 +20,6 @@ import com.foxhole.core.model.packages
 import com.foxhole.core.runtime.i2pRaisesLocalGuard
 import com.foxhole.core.runtime.shouldPublishRuntimeProxyIpInfoToDashboard
 
-// The traffic-map route context: split-tunnel/Tor projections shared by map states.
-// Split from HomeRouteStateProducer.kt.
-
 internal fun TrafficMapUiState.withTrafficMapRouteContext(
     coreState: HomeUiState,
     serverPings: Map<ProfileOptionLatencyKey, ProfileOptionServerPingState>,
@@ -36,9 +33,6 @@ internal fun TrafficMapUiState.withTrafficMapRouteContext(
         } else {
             copy(vpnRoute = route.copy(protocolBadge = badge))
         }
-    // The exit-arrow latency mirrors the dashboard's "server ping": the live ping of the active
-    // profile's selected protocol option. UDP protocols (Hysteria2, WireGuard) have no TCP server
-    // ping, so the tunnel latency probe fills in — otherwise the map showed no latency at all.
     val serverPing = selectedOptionMetricMs(coreState, serverPings) { state -> state.pingMs }
     val tunnelPing = selectedOptionMetricMs(coreState, tunnelPings) { state -> state.pingMs }
     val latency = serverPing ?: tunnelPing
@@ -61,8 +55,6 @@ internal fun TrafficMapUiState.withTrafficMapRouteContext(
         torRouteActive = tor.torRouteActive,
         firewallActive = tor.firewallActive,
         firewallTransparent = tor.firewallActive && coreState.settings.i2pRaisesLocalGuard(),
-        // Both facts are live: the router confirmed its carrier and the snapshot names its owner.
-        // A stored I2P toggle can no longer draw a success-shaped route lane.
         i2pActive = i2pCarrier != null,
         i2pCarrier = i2pCarrier,
         torAppPackages = appRoute.torApps,
@@ -75,7 +67,6 @@ internal fun TrafficMapUiState.withTrafficMapRouteContext(
     )
 }
 
-/** Projects only live runtime facts; settings are deliberately not part of this decision. */
 internal fun trafficMapI2pCarrier(
     connection: ConnectionSnapshot,
     i2pPhase: I2pNetworkPhase,
@@ -88,9 +79,6 @@ internal fun trafficMapI2pCarrier(
         LOCAL_GUARD_PROFILE_ID -> TrafficMapI2pCarrier.DEVICE
         TOR_ONLY_PROFILE_ID -> TrafficMapI2pCarrier.TOR
         null -> null
-        // The Android carrier belongs to the positive-id VPN runtime even when that profile routes
-        // its egress through Tor. `torActive` describes a hop inside the profile, not ownership of
-        // the carrier TUN; only the standalone TOR_ONLY runtime owns the orange carrier.
         else -> TrafficMapI2pCarrier.VPN.takeIf { profileId > 0L }
     }
 }
@@ -100,9 +88,7 @@ internal data class TrafficMapAppRouteProjection(
     val vpnApps: List<String> = emptyList(),
     val torApps: List<String> = emptyList(),
     val directApps: List<String> = emptyList(),
-    /** The direct side also contains every package not explicitly named by the include split. */
     val directRemainder: Boolean = false,
-    /** Whole captured TUN traffic exits through Tor; explicit direct exceptions still stay out. */
     val torAllApps: Boolean = false,
 ) {
     val directBranch: Boolean
@@ -116,15 +102,6 @@ private data class TrafficMapAssignedPackages(
     val excluded: List<String>,
 )
 
-/**
- * The app membership the map is allowed to claim, projected from the same TUN policy as
- * `RuntimeTunInbound.buildSplitPlan`.
- *
- * The diagram names explicit app rules, not every package implicitly carried by Android's TUN.
- * A TOR-pinned app therefore belongs only to a live Tor lane; while Tor is absent it is omitted
- * instead of being relabelled as a VPN/direct app. The inverse holds for VPN rules in a Tor-only
- * runtime. This keeps the two saved rule classes visually disjoint in every single-route mode.
- */
 internal fun Settings.trafficMapAppRouteProjection(
     torRouteActive: Boolean,
     torOnlyRuntime: Boolean = false,
@@ -178,8 +155,6 @@ private fun Settings.vpnTrafficMapProjection(
         buildable = buildable,
         vpnApps = vpnLanePackages(assigned, included, torSelected, failClosedTor),
         torApps = torSelected,
-        // INCLUDE_ONLY has no explicit Android exclude list because every package outside the
-        // include set is direct by definition; keep the user's E lane visible inside that rest.
         directApps = (if (included.isNotEmpty()) assigned.excluded else excluded)
             .withoutInactiveTorRules(assigned, torRouteActive),
         directRemainder = included.isNotEmpty(),
@@ -266,8 +241,6 @@ private fun List<String>.normalizedRoutePackages(): List<String> =
         .sorted()
         .toList()
 
-// The scheme's proxy branch: a live primary-profile runtime serving as a LOCAL PROXY (no TUN) —
-// device traffic exits directly, proxy-configured clients ride the profile.
 private fun HomeUiState.trafficMapProxyModeActive(): Boolean =
     settings.traffic.mode == com.foxhole.core.model.TrafficMode.PROXY &&
         connection.state in com.foxhole.core.model.ACTIVE_CONNECTION_STATES &&
@@ -301,12 +274,6 @@ private fun HomeUiState.trafficMapTorContext(): TrafficMapTorContext {
         connection.profileId == com.foxhole.core.model.LOCAL_GUARD_PROFILE_ID && activeState
     val torOnlyRuntimeActive =
         connection.profileId == com.foxhole.core.model.TOR_ONLY_PROFILE_ID && activeState
-    // With the Tor route owning the whole tunnel egress (ALL_APPS scope), every tunnel-bound
-    // public probe exits through the Tor circuit — the dashboard "tunnel ping" IS the Tor latency
-    // and must not be shown on the VPN lane. This mirrors the identity split used for IP infos
-    // (shouldPublishRuntimeProxyIpInfoToDashboard): Tor latency is available exactly when the Tor
-    // exit country is. With SELECTED_APPS scope no probe of ours rides Tor, so the lane stays
-    // unlabeled instead of lying with a VPN figure.
     val torOwnsTunnelProbes =
         connection.torActive &&
             activeState &&
@@ -315,9 +282,6 @@ private fun HomeUiState.trafficMapTorContext(): TrafficMapTorContext {
         firewallActive = firewallActive,
         torOnlyRuntimeActive = torOnlyRuntimeActive,
         torOwnsTunnelProbes = torOwnsTunnelProbes,
-        // The map draws the Tor lane only for an actually engaged Tor: the Tor-only runtime or a
-        // live session whose applied config carries the route. The settings switch merely permits
-        // Tor — a permitted-but-idle route must render as an ordinary direct/VPN scheme.
         torRouteActive = torOnlyRuntimeActive || (connection.torActive && activeState),
     )
 }
@@ -336,8 +300,6 @@ private fun HomeUiState.trafficMapProtocolBadge(): String? {
     }
 }
 
-// The Tor/I2P/Statistics cores are permission gates: a disabled core hides its settings entry
-// outright (and, for Tor/I2P, renames the routing row to whatever is left standing).
 internal fun Settings.toSettingsHomeNavUiState(): SettingsHomeNavUiState =
     SettingsHomeNavUiState(
         expertVisible = ui.showExpertSettings,

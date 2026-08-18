@@ -14,7 +14,6 @@ import androidx.compose.ui.text.style.TextAlign
 import com.foxhole.guard.R
 import com.foxhole.guard.ui.cli.components.CliPanel
 
-/** Fail-loud gate for an on-disk database created by a newer app version. */
 @Composable
 internal fun CliDatabaseDowngradeScreen(modifier: Modifier = Modifier) {
     val colors = LocalCliColors.current

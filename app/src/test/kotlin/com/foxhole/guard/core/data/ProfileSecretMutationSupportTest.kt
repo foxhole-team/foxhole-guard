@@ -32,7 +32,6 @@ class ProfileSecretMutationSupportTest {
                     onRollbackFailure = {},
                 )
             } catch (_: IllegalStateException) {
-                // expected
             }
         }
 
@@ -85,7 +84,6 @@ class ProfileSecretMutationSupportTest {
                     onRollbackFailure = {},
                 )
             } catch (_: IllegalStateException) {
-                // expected
             }
         }
 
@@ -113,7 +111,6 @@ class ProfileSecretMutationSupportTest {
                     error("db failed")
                 }
             } catch (_: IllegalStateException) {
-                // expected
             }
         }
 
@@ -142,7 +139,6 @@ class ProfileSecretMutationSupportTest {
                     error("mutation should not run")
                 }
             } catch (_: IllegalStateException) {
-                // expected
             }
         }
 

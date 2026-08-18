@@ -237,7 +237,12 @@ internal open class ProfileImportSmartConfigSupport(
                 )
             reports +=
                 SubscriptionEntryReport(
-                    protocolLabel = protocolDisplayLabel(parsedNode.protocolHint),
+                    protocolLabel =
+                    if (parsedNode.carriesAmneziaObfuscation()) {
+                        AMNEZIAWG_PROTOCOL_LABEL
+                    } else {
+                        protocolDisplayLabel(parsedNode.protocolHint)
+                    },
                     protocolHint = parsedNode.protocolHint,
                     status = SubscriptionEntryStatus.ACCEPTED,
                     sourceLine = headingLine,
@@ -425,7 +430,7 @@ internal open class ProfileImportSmartConfigSupport(
             "vless" -> ProtocolHint.VLESS
             "trojan" -> ProtocolHint.TROJAN
             "shadowsocks", "shadowsocks2022", "ss" -> ProtocolHint.SHADOWSOCKS
-            "wireguard", "wg" -> ProtocolHint.WIREGUARD
+            "wireguard", "wg", "amneziawg", "amnezia", "awg" -> ProtocolHint.WIREGUARD
             "hysteria2", "hy2" -> ProtocolHint.HYSTERIA2
             "vmess" -> ProtocolHint.VMESS
             "outline" -> ProtocolHint.OUTLINE

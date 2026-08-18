@@ -59,7 +59,6 @@ class TrafficMapPeriodRepositoryTest {
                     nowMs = 2_000L,
                 )
 
-        // Runtime down: the last session's aggregates stay on the map.
         assertEquals(10L, retained.periodAggregates(TrafficMapPeriod.SESSION, nowMs = 2_000L)["US"]?.bytes)
 
         val nextSession =

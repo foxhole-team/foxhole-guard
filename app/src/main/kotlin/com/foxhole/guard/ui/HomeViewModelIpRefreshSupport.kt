@@ -18,16 +18,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-// Dashboard IP-info refresh: the manual/silent/reasoned refresh entry points, the geo-enrichment
-// pass, refresh invalidation, and the post-connect refresh scheduling chain.
-
-/**
- * Invalidates identities owned by the physical default network at the handover edge.
- *
- * All legacy bridge writes stay inside this migration adapter. The network observer only decides
- * policy; it must not become another runtime-state writer. A stable connected VPN exit can survive
- * an underlying Wi-Fi/cellular handover, while device/upstream identity never can.
- */
 internal fun HomeViewModel.clearNetworkHandoverIpIdentity(clearDashboardIdentity: Boolean) {
     FoxholeVpnRuntimeBridge.updateDeviceIpInfo(null)
     if (clearDashboardIdentity) {
@@ -51,8 +41,6 @@ internal fun HomeViewModel.refreshIpInfo() {
         fetchMode = ipInfoFetchModeForRefreshReason(IpInfoRefreshReason.MANUAL),
         minimumLoadingDurationMs = HomeViewModel.MANUAL_IP_REFRESH_MIN_LOADING_MS,
         reason = IpInfoRefreshReason.MANUAL,
-        // One swipe renews BOTH identities: once the VPN lane publishes, chase the Tor exit
-        // through the Tor route as well (no-op unless Tor rides over/alongside the VPN).
         onPublished = {
             schedulePostConnectTorRouteRefreshAfterIp(IpInfoRefreshReason.MANUAL)
         },
@@ -81,8 +69,6 @@ internal fun HomeViewModel.startIpInfoRefresh(
     targetOverride: IpInfoRefreshTarget? = null,
     onPublished: (suspend (IpInfo) -> Unit)? = null,
 ) {
-    // Offline geo mode: never run the FULL pass (which queries the online city/ISP geo providers) —
-    // the quick trace probe plus the on-device IP→country database is all the dashboard shows.
     @Suppress("NAME_SHADOWING")
     val fetchMode =
         if (container.settingsRepository.settings.value.connection.geoOfflineMode &&
@@ -215,10 +201,6 @@ internal fun HomeViewModel.startIpInfoRefresh(
                     shouldScheduleTorRouteAfterPrimaryRefresh(reason, publishedInfo) &&
                     ipRefreshCoordinator.isCurrent(refreshToken)
                 ) {
-                    // The ordinary VPN-bound lookup can race the freshly reloaded private runtime
-                    // proxy. Tor identity must still get its own delayed, authenticated probe;
-                    // otherwise a transient ECONNREFUSED here leaves the terminal at
-                    // "Tor connected" for the whole session.
                     schedulePostConnectTorRouteRefreshAfterIp(reason)
                 }
                 container.diagnosticsLogger.record(
@@ -251,12 +233,6 @@ internal fun shouldReportTorProbeStartupFailure(
         failure == TorProbeProxyFailure.INVALID_LOOPBACK_ADDRESS
 }
 
-/**
- * An enrichment pass only fills city/ISP for the address ALREADY on the dashboard — it must never
- * swap the shown identity. When its whoami answer names a different address (the network changed
- * mid-flight, or the request rode another egress), the result is discarded and a silent quick pass
- * re-establishes the current identity instead.
- */
 private fun HomeViewModel.canPublishGeoEnrichmentResult(
     fetchMode: IpInfoFetchMode,
     target: IpInfoRefreshTarget,
@@ -294,13 +270,9 @@ private fun HomeViewModel.maybeScheduleIpInfoGeoEnrichment(
     if (fetchMode != IpInfoFetchMode.ENTRY_QUICK || publishedInfo.hasCompleteDashboardGeoDetails()) {
         return
     }
-    // Offline geo mode shows IP + country only; city/ISP enrichment against the online geo
-    // providers is never scheduled.
     if (container.settingsRepository.settings.value.connection.geoOfflineMode) {
         return
     }
-    // Tor is country-only and the country resolves offline from the local geoip database, so a
-    // Tor-bound online enrichment pass (slow, city-oriented) is never scheduled for the TOR target.
     if (publishedTarget == IpInfoRefreshTarget.TOR) {
         return
     }
@@ -310,9 +282,6 @@ private fun HomeViewModel.maybeScheduleIpInfoGeoEnrichment(
     }
     viewModelScope.launch {
         delay(ENTRY_QUICK_GEO_ENRICHMENT_DELAY_MS)
-        // One shot is not enough right after connect: the tunnel is still settling and a failed
-        // pass would leave the city/provider blank until a manual refresh. Retry with backoff
-        // until the details are complete or the route/exit IP changes under us.
         for (pass in 0 until ENTRY_QUICK_GEO_ENRICHMENT_MAX_PASSES) {
             if (pass > 0) {
                 delay(ENTRY_QUICK_GEO_ENRICHMENT_RETRY_DELAY_MS * pass)
@@ -330,7 +299,6 @@ private fun HomeViewModel.maybeScheduleIpInfoGeoEnrichment(
 private fun IpInfo.hasCompleteDashboardGeoDetails(): Boolean =
     hasDashboardLocationDetails() && hasDashboardProviderDetails()
 
-// One enrichment attempt; false means the route/exit changed (or finished) and retries must stop.
 private suspend fun HomeViewModel.runIpInfoGeoEnrichmentPass(
     publishedTarget: IpInfoRefreshTarget,
     publishedIp: String,
@@ -386,8 +354,6 @@ private suspend fun HomeViewModel.awaitIdleIpInfoRefreshForGeoEnrichment(): Bool
     return ipInfoRefreshJob == null
 }
 
-// Waits out a running enrichment pass (they can take the full geo call timeout) so a retry pass
-// evaluates the settled result instead of racing the in-flight refresh.
 private suspend fun HomeViewModel.awaitCompletedIpInfoRefreshForGeoEnrichment() {
     repeat(ENTRY_QUICK_GEO_ENRICHMENT_COMPLETION_WAIT_ATTEMPTS) {
         if (ipInfoRefreshJob == null) {
@@ -477,9 +443,6 @@ internal fun ipInfoRefreshFailureDiagnosticLabel(
     }
 
 internal fun HomeViewModel.invalidateIpInfoRefreshes(): Long {
-    // A pending foreground refresh sits in its start delay before calling startIpInfoRefresh();
-    // it must be cancelled here too, otherwise it can fetch and publish an IP after an explicit
-    // invalidate and silently overwrite the current network state.
     foregroundRefreshJob?.cancel()
     foregroundRefreshJob = null
     pendingNetworkChangeRefreshJob?.cancel()
@@ -501,8 +464,6 @@ internal fun HomeViewModel.scheduleConnectedIpRefresh(
     showLoading: Boolean = false,
     minimumLoadingDurationMs: Long = 0L,
 ) {
-    // Latency owns a separate bounded handoff. IP publication can accelerate it below, but an IP
-    // request that is coalesced, cancelled or superseded must never strand (or prevent) the probe.
     val latencyRefreshGeneration = scheduleConnectedDashboardLatencyRefresh(reason)
     connectedIpRefreshJob?.cancel()
     connectedIpRefreshJob =
@@ -582,12 +543,6 @@ private suspend fun HomeViewModel.refreshDeviceIdentityForConnectedRoute(expecte
     }
 }
 
-/**
- * A split/"VPN proxy" route needs two independent identities on its map: the VPN exit and the
- * physical device/direct exit. The ordinary post-connect lookup deliberately fetches only the VPN
- * side, so a cold connect must also fill a missing physical identity. Network handovers always
- * refresh it because the previous Wi-Fi/mobile country was invalidated at that edge.
- */
 internal fun shouldRefreshDeviceIdentityForConnectedRoute(
     reason: IpInfoRefreshReason,
 ): Boolean = when (reason) {

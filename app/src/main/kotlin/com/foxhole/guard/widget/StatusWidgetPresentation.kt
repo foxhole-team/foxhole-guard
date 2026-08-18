@@ -1,6 +1,5 @@
 package com.foxhole.guard.widget
 
-import com.foxhole.core.model.AppLockMode
 import com.foxhole.core.model.ConnectionSnapshot
 import com.foxhole.core.model.ConnectionState
 import com.foxhole.core.model.IpInfo
@@ -17,8 +16,9 @@ import com.foxhole.guard.core.settings.activeRoutingModePreset
 import com.foxhole.guard.ui.cli.home.CliActiveRuntimes
 import com.foxhole.guard.ui.cli.home.CliCompactRouteStatus
 import com.foxhole.guard.ui.cli.home.cliCompactRouteStatus
+import com.foxhole.guard.ui.cli.home.cliSecureDnsLabel
+import com.foxhole.guard.ui.defaultDnsServerFor
 
-/** Pure projection consumed by Glance and covered without a launcher/device dependency. */
 internal data class StatusWidgetPresentation(
     val connection: StatusWidgetConnection,
     val primaryActive: Boolean,
@@ -33,6 +33,7 @@ internal data class StatusWidgetPresentation(
     val vpnLatencyMs: Long?,
     val torIdentity: IpInfo?,
     val torLatencyMs: Long?,
+    val dnsServer: String,
 )
 
 internal enum class StatusWidgetConnection {
@@ -57,7 +58,6 @@ internal enum class StatusWidgetComponent { FIREWALL, TOR, I2P, SENTINEL }
 
 internal enum class StatusWidgetControlAction { START, STOP, RESTART }
 
-/** Only fields that can change what the launcher widget presents or which controls it exposes. */
 internal data class StatusWidgetRuntimeKey(
     val state: ConnectionState,
     val profileId: Long?,
@@ -77,7 +77,6 @@ internal fun ConnectionSnapshot.statusWidgetRuntimeKey(): StatusWidgetRuntimeKey
         protocolHint = protocolHint,
     )
 
-/** The launcher controls are a pure projection; local guards never become a primary STOP target. */
 internal fun statusWidgetControlActions(
     connection: StatusWidgetConnection,
     primaryActive: Boolean,
@@ -111,9 +110,6 @@ internal fun statusWidgetPresentation(
     deviceIpInfo: IpInfo? = null,
 ): StatusWidgetPresentation {
     val route = snapshot.widgetRoute()
-    // The launcher widget is also a compact view of the choice made in the app. A live snapshot is
-    // authoritative while a route exists; otherwise the persisted MODE choice is still meaningful
-    // even though the independent connection row correctly says "not connected".
     val mode = route.liveMode ?: settings.configuredWidgetMode()
     val rememberedLatency = settings.rememberedWidgetLatency(snapshot.profileId)
     val runtimes = route.widgetActiveRuntimes(snapshot, settings, i2pConnected)
@@ -132,16 +128,14 @@ internal fun statusWidgetPresentation(
             ?: deviceIpInfo.takeIfConnected(i2pConnected || route.torConnected),
         vpnLatencyMs = rememberedLatency.takeIfConnected(route.vpnConnected),
         torIdentity = resolvedTorIdentity(route, vpnIpInfo, torIpInfo),
-        // FoxCore currently exposes no independent Tor-latency stream. Keep the row honest rather
-        // than presenting the VPN latency as if it had been measured through the Tor circuit.
         torLatencyMs = null,
+        dnsServer = settings.dns.server.trim().takeIf { it.isNotBlank() }
+            ?.let { server -> "${cliSecureDnsLabel(settings.dns.secureMode)} · $server" }
+            ?: "${cliSecureDnsLabel(settings.dns.secureMode)} · ${defaultDnsServerFor(settings.dns.secureMode)}",
     )
 }
 
 private fun ConnectionSnapshot.widgetRoute(): StatusWidgetRoute {
-    // CONNECTING/RECONNECTING/DISCONNECTING still carry the applied session identity. Restricting
-    // this projection to CONNECTED erased mode/scenario for every transition and produced a dash in
-    // the widget even though ConnectionSnapshot already named the active route.
     val runtimePresent = state in WIDGET_ACTIVE_STATES
     val activeProfileId = profileId
     val vpnLive = runtimePresent && activeProfileId != null && activeProfileId > 0L
@@ -261,7 +255,6 @@ private fun resolvedTorIdentity(
         else -> null
     }
 
-/** A standalone firewall TUN is not an active VPN connection and must never disable START. */
 internal fun widgetHasPrimaryConnection(snapshot: ConnectionSnapshot): Boolean =
     snapshot.state in WIDGET_ACTIVE_STATES && snapshot.profileId != LOCAL_GUARD_PROFILE_ID
 
@@ -283,8 +276,7 @@ private fun Settings.torWidgetScope(): StatusWidgetScope =
         PrivacyRouteScope.SELECTED_APPS -> StatusWidgetScope.SELECTED_APPS
     }
 
-private fun Settings.sentinelWidgetActive(): Boolean =
-    anomaly.enabled || (appLock.mode != AppLockMode.OFF && appLock.eventMonitoringEnabled)
+private fun Settings.sentinelWidgetActive(): Boolean = anomaly.enabled
 
 private val WIDGET_ACTIVE_STATES =
     setOf(

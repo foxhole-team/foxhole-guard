@@ -32,8 +32,6 @@ class HomeForegroundIpPolicyTest {
         assertTrue(source.contains("clearExistingIp = false"))
     }
 
-    // The foreground refresh entry point lives in the supervisors support file; the tunables
-    // stay on the HomeViewModel companion, so pin both sources together.
     private fun homeViewModelSource(): String =
         listOf("HomeViewModel.kt", "HomeViewModelSupervisorsSupport.kt").joinToString(separator = "\n") { name ->
             listOf(

@@ -1,24 +1,26 @@
-// Component-updates settings support (the "Component updates" screen): the two master switches,
-// the delete-downloaded-databases action behind the top-bar trash icon, and the once-per-start
-// background availability probe feeding the settings-home blue update dot. Extracted from
-// HomeViewModel by domain, same pattern as the DNS-filter / GeoIP / Tor-bridge support files.
-
 package com.foxhole.guard.ui
 
 import android.app.Application
 import androidx.lifecycle.viewModelScope
 import com.foxhole.core.model.UpdateSourceSettings
 import com.foxhole.core.model.dnsRuleSetFilteringEnabled
+import com.foxhole.guard.BuildConfig
 import com.foxhole.guard.R
+import com.foxhole.guard.applyAppUpdateSchedule
 import com.foxhole.guard.applyDnsFilterUpdateSchedule
 import com.foxhole.guard.applyGeoIpUpdateSchedule
+import com.foxhole.guard.applyThreatIntelUpdateSchedule
+import com.foxhole.guard.applyTlsFingerprintUpdateSchedule
 import com.foxhole.guard.applyTorBridgeUpdateSchedule
 import com.foxhole.guard.core.settings.clearComponentUpdateStamps
 import com.foxhole.guard.core.settings.updateComponentAutoUpdate
 import com.foxhole.guard.core.settings.updateComponentUpdateCheckEnabled
 import com.foxhole.guard.core.settings.updateDnsSettings
 import com.foxhole.guard.core.settings.updateUpdateSources
+import com.foxhole.guard.runtime.AppUpdateBuildSignals
+import com.foxhole.guard.runtime.AppUpdatePolicy
 import com.foxhole.guard.runtime.DnsFilterUpdateAvailability
+import com.foxhole.guard.threatIntelBackgroundUpdateEnabled
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -29,7 +31,6 @@ internal fun HomeViewModel.onComponentUpdateCheckChanged(value: Boolean) {
         container.settingsRepository.updateComponentUpdateCheckEnabled(value)
         applyComponentUpdateSchedules()
         if (!value) {
-            // With checking off nothing may claim "update available" anymore.
             componentGeoIpUpdateAvailableMutable.value = false
             dnsFilterUpdateAvailableMutable.value = false
         }
@@ -43,12 +44,6 @@ internal fun HomeViewModel.onComponentAutoUpdateChanged(value: Boolean) {
     }
 }
 
-/**
- * The update-sources sheet's confirm. The stamps go with it: they describe versions fetched from
- * the previous repository, and against a different one "up to date" would be a claim about data
- * this device has never seen. Clearing them puts every group back into "download required", which
- * is the truth until the new source has answered once.
- */
 internal fun HomeViewModel.onUpdateSourcesChanged(value: UpdateSourceSettings) {
     viewModelScope.launch {
         val previous = container.settingsRepository.settings.value.updateSources
@@ -62,8 +57,6 @@ internal fun HomeViewModel.onUpdateSourcesChanged(value: UpdateSourceSettings) {
     }
 }
 
-// Re-derives every scheduled component refresh from the CURRENT settings: the check master gates
-// them all, the auto flags pick which ones run (12h cadence lives on the work requests).
 private fun HomeViewModel.applyComponentUpdateSchedules() {
     val settings = container.settingsRepository.settings.value
     val permitted = settings.connection.componentUpdateCheckEnabled
@@ -73,10 +66,17 @@ private fun HomeViewModel.applyComponentUpdateSchedules() {
         enabled = permitted && settings.dns.autoUpdateFilters && settings.dns.dnsRuleSetFilteringEnabled(),
     )
     app.applyTorBridgeUpdateSchedule(enabled = permitted && settings.privacyRoute.bridgesAutoUpdate)
+    app.applyThreatIntelUpdateSchedule(enabled = threatIntelBackgroundUpdateEnabled(settings))
+    app.applyTlsFingerprintUpdateSchedule(enabled = permitted && settings.connection.tlsFingerprintAutoUpdate)
+    app.applyAppUpdateSchedule(
+        enabled =
+        AppUpdatePolicy.backgroundCheckAllowed(
+            channel = BuildConfig.UPDATE_CHANNEL,
+            componentUpdateCheckEnabled = permitted,
+        ),
+    )
 }
 
-// The top-bar trash action removes every downloaded override and resets the update stamps. DNS
-// filtering is switched off because production builds no longer carry a bundled rule-set fallback.
 internal fun HomeViewModel.onDeleteDownloadedComponentData() {
     viewModelScope.launch {
         val cleared =
@@ -103,13 +103,9 @@ internal fun HomeViewModel.onDeleteDownloadedComponentData() {
     }
 }
 
-/**
- * Once-per-start availability probe (cheap version manifests only, nothing downloads): runs a
- * while after launch and only under the check master. Auto-update on means the workers install
- * updates themselves — the dot stays dark — so the probe only matters for the manual story.
- */
 internal fun HomeViewModel.superviseComponentUpdateAvailabilityInternal() {
     viewModelScope.launch {
+        raiseFdroidUpdateNoticeInternal()
         delay(COMPONENT_UPDATE_CHECK_STARTUP_DELAY_MS)
         val settings = container.settingsRepository.settings.value
         if (!settings.connection.componentUpdateCheckEnabled) {
@@ -127,8 +123,6 @@ internal fun HomeViewModel.superviseComponentUpdateAvailabilityInternal() {
                             dnsFilterUpdateAvailableMutable.value = true
                         DnsFilterUpdateAvailability.UP_TO_DATE ->
                             dnsFilterUpdateAvailableMutable.value = false
-                        // A failed probe says nothing about whether a previously advertised update
-                        // disappeared; retain the last known state and let an explicit retry settle it.
                         DnsFilterUpdateAvailability.UNKNOWN -> Unit
                     }
                 }
@@ -136,5 +130,11 @@ internal fun HomeViewModel.superviseComponentUpdateAvailabilityInternal() {
     }
 }
 
-// Late enough that cold-start rendering, settings warm-up and the first IP refresh are done.
+internal suspend fun HomeViewModel.raiseFdroidUpdateNoticeInternal() {
+    if (!AppUpdateBuildSignals.fdroidUpdateNoticeRequired()) {
+        return
+    }
+    snackbars.emit(errorBanner(R.string.cli_updates_fdroid_banner))
+}
+
 private const val COMPONENT_UPDATE_CHECK_STARTUP_DELAY_MS = 12_000L

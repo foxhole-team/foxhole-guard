@@ -26,8 +26,6 @@ buildscript {
     }
     dependencies {
         classpath("com.android.tools.build:gradle:9.3.0")
-        // AGP 9.3 bundles built-in Kotlin 2.2.10; declaring a newer KGP on the buildscript
-        // classpath is the official way to raise the built-in compiler for every module.
         classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:2.4.10")
     }
 }
@@ -40,7 +38,7 @@ if (enableSbom.get()) {
 
 allprojects {
     group = "com.foxhole"
-    version = "0.0.1"
+    version = "0.0.2"
 }
 
 val hardenedToolDependencyVersions =
@@ -53,7 +51,6 @@ val hardenedToolDependencyVersions =
 
 allprojects {
     configurations.configureEach {
-        // Covers project, unit-test, lint, and UTP configurations resolved outside buildscript.
         resolutionStrategy.eachDependency {
             val coordinate = "${requested.group}:${requested.name}"
             when {

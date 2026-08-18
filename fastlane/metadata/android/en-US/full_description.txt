@@ -23,7 +23,7 @@ Main features:
 • background services for web-application notifications and security-event monitoring;
 • backup of profiles and settings.
 
-Supported protocols: VLESS, VMess, Hysteria2, WireGuard, AmneziaWG, Trojan, Shadowsocks, Outline, Naive, TUIC, AnyTLS, ShadowTLS v3, SOCKS5, and HTTP CONNECT. Reality and Vision are supported.
+Supported protocols: VLESS, VMess, Hysteria2, WireGuard, AmneziaWG, Trojan, Shadowsocks, Outline, Naive, TUIC, AnyTLS, SOCKS5, and HTTP CONNECT. Reality and Vision are supported.
 
 DNS filters are built from the open AdGuard DNS filter. Downloaded data sets contain filtering data rather than executable code. Before use, the application verifies the signature, size, compatibility, and SHA-256 digest.
 

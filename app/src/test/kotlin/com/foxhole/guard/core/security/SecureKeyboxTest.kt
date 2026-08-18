@@ -66,7 +66,6 @@ class SecureKeyboxTest {
     @Test
     fun `verifyPassword confirms the credential without arming the unlock backoff`() {
         keybox.create(password, dataKey, kdf)
-        // Arm one failed unlock so there is a counter that must NOT move.
         keybox.unlock("wrong".encodeToByteArray())
         val attemptsBefore = keybox.readAttempts().failedAttempts
         assertEquals(1, attemptsBefore)
@@ -74,8 +73,6 @@ class SecureKeyboxTest {
         assertTrue(keybox.verifyPassword(password))
         assertFalse(keybox.verifyPassword("nope".encodeToByteArray()))
 
-        // The action-gate re-confirm runs while already unlocked, so it must neither reset nor
-        // advance the attempt counter (a wrong confirm must stay unthrottled and uncounted).
         assertEquals(attemptsBefore, keybox.readAttempts().failedAttempts)
     }
 
@@ -98,12 +95,9 @@ class SecureKeyboxTest {
             )
         clocked.create(password, dataKey, kdf)
 
-        // One wrong attempt arms the 1s window, anchored at the current wall clock.
         clocked.unlock("wrong".encodeToByteArray())
         assertEquals(SecureKeybox.FIRST_BACKOFF_MS, clocked.remainingBackoffMs())
 
-        // A brand-new instance (process restart) reads the same persisted attempts file and still
-        // owes the remaining delay instead of resetting to zero.
         val restarted =
             SecureKeybox(
                 keyboxFile,
@@ -116,11 +110,9 @@ class SecureKeyboxTest {
         now += 400
         assertEquals(SecureKeybox.FIRST_BACKOFF_MS - 400, restarted.remainingBackoffMs())
 
-        // Once the window elapses nothing is owed.
         now += SecureKeybox.FIRST_BACKOFF_MS
         assertEquals(0L, restarted.remainingBackoffMs())
 
-        // A rolled-back wall clock clamps to the full window rather than granting a bypass.
         now = 0L
         assertEquals(SecureKeybox.FIRST_BACKOFF_MS, restarted.remainingBackoffMs())
     }
@@ -247,8 +239,6 @@ class SecureKeyboxTest {
 
     @Test
     fun `legacy plain-json keybox unlocks and migrates to the wrapped format`() {
-        // A pre-v2 install: the document sits on disk as bare JSON (FakeFileCipher is
-        // an identity passthrough, so create() leaves exactly the legacy layout).
         keybox.create(password, dataKey, kdf, credential = KeyboxDocument.CREDENTIAL_PASSWORD).destroy()
         assertEquals('{'.code.toByte(), keyboxFile.readBytes()[0])
 
@@ -257,9 +247,7 @@ class SecureKeyboxTest {
 
         assertTrue(outcome is KeyboxUnlockOutcome.Success)
         (outcome as KeyboxUnlockOutcome.Success).session.destroy()
-        // The read migrated the file into the cipher format...
         assertFalse(keyboxFile.readBytes()[0] == '{'.code.toByte())
-        // ...the credential kind survived, and the box still opens.
         assertEquals(KeyboxDocument.CREDENTIAL_PASSWORD, wrapped.credentialKindOrNull())
         val again = wrapped.unlock(password)
         assertTrue(again is KeyboxUnlockOutcome.Success)

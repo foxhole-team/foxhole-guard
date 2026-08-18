@@ -9,12 +9,8 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 /**
- * Single owner for guard-daemon hosts and its process-local heartbeat.
- *
- * Hosts are remembered even while monitoring is disabled. This matters when the user enables the
- * guard while an already-running VPN service is hosting it: the heartbeat can start immediately,
- * without restarting the tunnel. Every mutation is synchronized because service callbacks,
- * WorkManager and settings actions can arrive on different threads.
+ * Hosts stay remembered while monitoring is disabled, so enabling the guard under an already-running VPN service starts the heartbeat without restarting the tunnel.
+ * Every mutation is synchronized: service callbacks, WorkManager and settings actions arrive on different threads.
  */
 internal class GuardHostMonitor(
     private val scope: CoroutineScope,
@@ -55,14 +51,12 @@ internal class GuardHostMonitor(
     @Synchronized
     fun hasHostOtherThan(host: String): Boolean = hosts.any { candidate -> candidate != host }
 
-    /** Re-evaluates the setting after enable/disable or a hosting-mode change. */
     @Synchronized
     fun reconcile(): Boolean {
         reconcileLocked()
         return heartbeatJob?.isActive == true
     }
 
-    /** Factory-reset hook: no stale host or coroutine may survive deleted guard state. */
     @Synchronized
     fun clear() {
         hosts.clear()

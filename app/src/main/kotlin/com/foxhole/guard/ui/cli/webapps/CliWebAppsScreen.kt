@@ -50,9 +50,11 @@ import com.foxhole.guard.ui.cli.CliType
 import com.foxhole.guard.ui.cli.LocalCliColors
 import com.foxhole.guard.ui.cli.components.CliBottomSheet
 import com.foxhole.guard.ui.cli.components.CliChip
+import com.foxhole.guard.ui.cli.components.CliChromeTailSpacer
 import com.foxhole.guard.ui.cli.components.CliDropdownOption
 import com.foxhole.guard.ui.cli.components.CliDropdownRow
 import com.foxhole.guard.ui.cli.components.CliElbowLine
+import com.foxhole.guard.ui.cli.components.CliGlassHeaderScreen
 import com.foxhole.guard.ui.cli.components.CliInputRow
 import com.foxhole.guard.ui.cli.components.CliPanel
 import com.foxhole.guard.ui.cli.components.CliScreenHeader
@@ -72,11 +74,6 @@ import com.foxhole.guard.ui.webAppPerAppClearSupported
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-/**
- * The webapps screen: a grid of added apps with unread badges, long-press to rename or delete,
- * and below it the add-by-URL form with a name and icon preview. Tapping an icon opens the
- * full-screen frame.
- */
 @Composable
 internal fun CliWebAppsScreen(
     viewModel: HomeViewModel,
@@ -88,41 +85,46 @@ internal fun CliWebAppsScreen(
     val selected = apps.firstOrNull { app -> app.id == selectedId }
 
     val colors = LocalCliColors.current
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = CliSpacing.md),
-    ) {
-        CliScreenHeader(label = stringResource(R.string.cli_dock_webapps), icon = R.drawable.pix_webapps)
-        CliWebAppAddPanel(viewModel = viewModel, addState = addState)
-        Spacer(modifier = Modifier.height(CliSpacing.sm))
-        // Everything added lives in its own zone below the form: a static dashed border with a
-        // caption, matching the profile import zone.
+    CliGlassHeaderScreen(
+        modifier = modifier,
+        header = {
+            CliScreenHeader(label = stringResource(R.string.cli_dock_webapps), icon = R.drawable.pix_webapps)
+        },
+    ) { topInset ->
         Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .cliDashedBorder(colors.border)
-                .padding(CliSpacing.sm),
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = CliSpacing.md),
         ) {
-            Text(
-                text = stringResource(R.string.cli_webapps_yours),
-                style = CliType.small,
-                color = colors.dim,
-                modifier = Modifier.padding(bottom = CliSpacing.xs),
-            )
-            if (apps.isEmpty()) {
-                CliElbowLine(text = stringResource(R.string.cli_webapps_empty))
-            } else {
-                CliWebAppsGrid(
-                    viewModel = viewModel,
-                    apps = apps,
-                    onOpen = { app -> viewModel.openWebApp(app.id) },
-                    onSelect = { app -> selectedId = if (selectedId == app.id) null else app.id },
+            Spacer(modifier = Modifier.height(topInset))
+            CliWebAppAddPanel(viewModel = viewModel, addState = addState)
+            Spacer(modifier = Modifier.height(CliSpacing.sm))
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .cliDashedBorder(colors.border)
+                    .padding(CliSpacing.sm),
+            ) {
+                Text(
+                    text = stringResource(R.string.cli_webapps_yours),
+                    style = CliType.small,
+                    color = colors.dim,
+                    modifier = Modifier.padding(bottom = CliSpacing.xs),
                 )
+                if (apps.isEmpty()) {
+                    CliElbowLine(text = stringResource(R.string.cli_webapps_empty))
+                } else {
+                    CliWebAppsGrid(
+                        viewModel = viewModel,
+                        apps = apps,
+                        onOpen = { app -> viewModel.openWebApp(app.id) },
+                        onSelect = { app -> selectedId = if (selectedId == app.id) null else app.id },
+                    )
+                }
             }
+            CliChromeTailSpacer()
         }
-        Spacer(modifier = Modifier.height(CliSpacing.sm))
     }
     selected?.let { app ->
         CliWebAppActionsSheet(
@@ -141,7 +143,6 @@ private fun CliWebAppsGrid(
     onSelect: (WebAppEntity) -> Unit,
 ) {
     BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-        // Three to six per row: however many 72dp cells fit, clamped to that range.
         val columns = (maxWidth / 72.dp).toInt().coerceIn(3, 6)
         Column(verticalArrangement = Arrangement.spacedBy(CliSpacing.sm)) {
             apps.chunked(columns).forEach { row ->
@@ -246,7 +247,6 @@ private fun CliWebAppIcon(
     }
 }
 
-/** Bottom action sheet opened by a long press: route, rename, clear data and delete. */
 @Composable
 private fun CliWebAppActionsSheet(
     viewModel: HomeViewModel,
@@ -256,8 +256,6 @@ private fun CliWebAppActionsSheet(
     val colors = LocalCliColors.current
     var renameOpen by rememberSaveable(app.id) { mutableStateOf(false) }
     var renameValue by rememberSaveable(app.id) { mutableStateOf(app.name) }
-    // A WebView with neither profiles nor per-site deletion can only wipe the whole shared
-    // profile, which logs every web app out — that path never runs without this explicit y/n.
     var clearAllConsentOpen by rememberSaveable(app.id) { mutableStateOf(false) }
     CliBottomSheet(
         onDismiss = onDone,

@@ -59,6 +59,7 @@ internal class WebAppsWatchdog(
     private val scope: CoroutineScope,
     private val routeReady: suspend (WebAppRoute) -> Boolean,
     private val proxyController: WebAppProxyController,
+    private val recordDiagnostic: (String) -> Unit = {},
     @Volatile var onBadgeIncreased: (WebAppEntity, Int, WebAppNotificationContent?) -> Unit = { _, _, _ -> },
 ) {
     private val ticker = RuntimeSessionTicker(scope = scope)
@@ -359,9 +360,14 @@ internal class WebAppsWatchdog(
                     parseShimSignal(message.data)?.let { signal ->
                         signal.badge?.let { badge -> shimBadge = badge }
                         signal.notification?.let { notification -> shimNotification = notification }
+                        signal.installError?.let { error ->
+                            recordDiagnostic("web app shim override failed: $error")
+                        }
                     }
                 }
             }
+        } else {
+            recordDiagnostic("web app shim bridge unavailable: WEB_MESSAGE_LISTENER unsupported")
         }
         documentStartScriptInstalled =
             WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT) &&

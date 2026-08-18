@@ -1,5 +1,6 @@
 package com.foxhole.guard.core.settings
 
+import com.foxhole.core.model.AnomalySettings
 import com.foxhole.core.model.AppTunnelLane
 import com.foxhole.core.model.ExpertSettings
 import com.foxhole.core.model.InstalledAppChangeType
@@ -114,6 +115,7 @@ class QuarantineInvariantTest {
             recordInstalledAppChangeIn(
                 current =
                 Settings(
+                    anomaly = AnomalySettings(enabled = true),
                     expert = ExpertSettings(firewallEnabled = true, newAppQuarantineEnabled = true),
                     statistics = StatisticsSettings(enabled = true, appChangesEnabled = true),
                 ),

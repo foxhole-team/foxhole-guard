@@ -1,5 +1,7 @@
 package com.foxhole.guard.ui.cli.profiles
 
+import com.foxhole.core.model.PerAppRoutingMode
+import com.foxhole.core.model.TrafficMode
 import com.foxhole.guard.ui.HomeProtocolMetricsState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -16,8 +18,34 @@ class CliSmartProfileTestActionTest {
 
     @Test
     fun `vpn plus tor asks before entering fail closed vpn protocol test`() {
-        assertTrue(protocolTestRequiresVpnOnlyConfirmation(privacyRouteEnabled = true))
-        assertFalse(protocolTestRequiresVpnOnlyConfirmation(privacyRouteEnabled = false))
+        assertTrue(
+            protocolTestRequiresVpnOnlyConfirmation(
+                privacyRouteEnabled = true,
+                trafficMode = TrafficMode.TUNNEL,
+                perAppRoutingMode = PerAppRoutingMode.FULL_TUNNEL,
+            ),
+        )
+        assertTrue(
+            protocolTestRequiresVpnOnlyConfirmation(
+                privacyRouteEnabled = false,
+                trafficMode = TrafficMode.PROXY,
+                perAppRoutingMode = PerAppRoutingMode.FULL_TUNNEL,
+            ),
+        )
+        assertTrue(
+            protocolTestRequiresVpnOnlyConfirmation(
+                privacyRouteEnabled = false,
+                trafficMode = TrafficMode.TUNNEL,
+                perAppRoutingMode = PerAppRoutingMode.INCLUDE_SELECTED_APPS,
+            ),
+        )
+        assertFalse(
+            protocolTestRequiresVpnOnlyConfirmation(
+                privacyRouteEnabled = false,
+                trafficMode = TrafficMode.TUNNEL,
+                perAppRoutingMode = PerAppRoutingMode.FULL_TUNNEL,
+            ),
+        )
     }
 
     @Test
@@ -51,6 +79,7 @@ class CliSmartProfileTestActionTest {
         assertTrue(russian.contains("<string name=\"cli_prof_stop_test_button\">ЗАВЕРШИТЬ ТЕСТ</string>"))
         assertFalse(source.contains("+ \"…\""))
         assertTrue(source.contains("SmartProfileTestAction.STOP -> viewModel.cancelSmartProfileMetricsRefresh()"))
+        assertTrue(source.contains("viewModel.refreshSmartProfileMetricsInVpnMode(profileId)"))
     }
 
     private fun findFile(relative: String): File =

@@ -1,6 +1,8 @@
 package com.foxhole.guard.ui.cli.components
 
 import androidx.annotation.DrawableRes
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -16,6 +18,8 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -25,6 +29,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -32,27 +37,23 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.foxhole.core.model.VisualStyle
+import com.foxhole.guard.ui.cli.CliMotion
 import com.foxhole.guard.ui.cli.CliSpacing
 import com.foxhole.guard.ui.cli.CliType
 import com.foxhole.guard.ui.cli.LocalCliColors
+import com.foxhole.guard.ui.cli.LocalCliVisualStyle
+import com.foxhole.guard.ui.cli.cliLabelText
+import com.foxhole.guard.ui.cli.cliScaledSp
 
-/**
- * Bracket button: `[ CONNECT ]`. Transparent with a colored border by default; `filled`
- * inverts it (accent background, dark label) for the primary action; `dashed` swaps the
- * outline for a dashed stroke — the sheets' cancel canon. Touch target >= 48dp.
- *
- * 16-bit feedback instead of a Material ripple: a press sinks the whole button by one
- * pixel step while a second 1dp frame steps inside the border.
- *
- * [onLongClick] is opt-in: a button that declares none keeps the plain clickable, so a hold on it
- * stays a hold on a plain button rather than an invisible second action.
- */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 internal fun CliButton(
@@ -67,18 +68,14 @@ internal fun CliButton(
     enabled: Boolean = true,
     dimWhenDisabled: Boolean = true,
     onLongClick: (() -> Unit)? = null,
+    animatedLabel: Boolean = false,
 ) {
     val colors = LocalCliColors.current
     val tint = if (color == Color.Unspecified) colors.accent else color
     val shape = RoundedCornerShape(6.dp)
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()
-    // Pressed-frame shade: the tint stepped hard towards black, no translucency,
-    // so the edge stays a flat sprite-like facet on any palette. The filled button's outer pixel
-    // shadow was removed: on START it read as a stray outline.
     val shade = lerp(tint, Color.Black, SHADE_TOWARD_BLACK)
-    // Outlined buttons flash border and label a bright step on press, with a light fill — discrete,
-    // no fade.
     val pressBright = lerp(tint, Color.White, PRESS_TOWARD_WHITE)
     val emphasis = cliButtonEmphasis(enabled = enabled, dimWhenDisabled = dimWhenDisabled)
     val borderColor =
@@ -87,31 +84,41 @@ internal fun CliButton(
     val fillColor =
         cliButtonFill(filled, pressed, tint)
             .scaledAlpha(emphasis.fillAlpha)
+    val plainPress = LocalCliVisualStyle.current == VisualStyle.PLAIN
+    val pressScale by animateFloatAsState(
+        targetValue = if (plainPress && pressed) PLAIN_PRESS_SCALE else 1f,
+        animationSpec = CliMotion.press(),
+        label = "cliButtonPressScale",
+    )
     Box(
         modifier = modifier
             .defaultMinSize(minHeight = 48.dp)
             .offset {
-                if (pressed) {
+                if (pressed && !plainPress) {
                     IntOffset(PIXEL_STEP.roundToPx(), PIXEL_STEP.roundToPx())
                 } else {
                     IntOffset.Zero
                 }
             }
+            .graphicsLayer {
+                scaleX = pressScale
+                scaleY = pressScale
+            }
+            .cliButtonElevation(filled = filled, pressed = pressed, shape = shape)
             .clip(shape)
             .background(fillColor)
             .then(
-                if (dashed && !filled) {
+                if (dashed && !filled && !plainPress) {
                     Modifier.drawBehind { dashedFrame(borderColor) }
                 } else {
                     Modifier.border(1.dp, borderColor, shape)
                 },
             )
-            .drawBehind { if (pressed) pixelInsetFrame(if (filled) shade else pressBright) }
+            .drawBehind { if (pressed && !plainPress) pixelInsetFrame(if (filled) shade else pressBright) }
             .then(
                 if (onLongClick == null) {
                     Modifier.clickable(
                         interactionSource = interactionSource,
-                        // No ripple mush - the sink offset plus the stepped frame IS the indication.
                         indication = null,
                         enabled = enabled,
                         onClick = onClick,
@@ -126,23 +133,86 @@ internal fun CliButton(
                     )
                 },
             )
-            .padding(horizontal = 14.dp, vertical = CliSpacing.md),
+            .padding(horizontal = 12.dp, vertical = CliSpacing.md),
         contentAlignment = Alignment.Center,
     ) {
-        // The pack icon sits inside the brackets: `[ ⚙ LABEL ]`.
-        val content = if (filled) colors.bg else if (pressed) pressBright else tint
-        Row(
-            modifier = Modifier.alpha(emphasis.contentAlpha),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
+        CliButtonLabelRow(
+            label = label,
+            icon = icon,
+            iconContent = iconContent,
+            content = cliButtonContentColor(
+                filled = filled,
+                pressed = pressed,
+                bg = colors.bg,
+                pressBright = pressBright,
+                tint = tint,
+            ),
+            contentAlpha = emphasis.contentAlpha,
+            animatedLabel = animatedLabel,
+        )
+    }
+}
+
+private fun Modifier.cliButtonElevation(
+    filled: Boolean,
+    pressed: Boolean,
+    shape: RoundedCornerShape,
+): Modifier = if (filled) shadow(if (pressed) 1.dp else 2.dp, shape) else this
+
+private fun cliButtonContentColor(
+    filled: Boolean,
+    pressed: Boolean,
+    bg: Color,
+    pressBright: Color,
+    tint: Color,
+): Color = when {
+    filled -> bg
+    pressed -> pressBright
+    else -> tint
+}
+
+@Composable
+private fun CliButtonLabelRow(
+    label: String,
+    @DrawableRes icon: Int?,
+    iconContent: (@Composable (Color) -> Unit)?,
+    content: Color,
+    contentAlpha: Float,
+    animatedLabel: Boolean,
+) {
+    val bracketed = LocalCliVisualStyle.current == VisualStyle.PIXEL
+    Row(
+        modifier = Modifier.alpha(contentAlpha),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (bracketed) {
             Text(
                 text = "[ ",
                 style = CliType.button,
                 color = content,
                 maxLines = 1,
             )
-            CliButtonLeadingIcon(icon = icon, iconContent = iconContent, tint = content)
-            Text(
+        }
+        CliButtonLeadingIcon(icon = icon, iconContent = iconContent, tint = content)
+        when {
+            animatedLabel -> CliShimmerText(
+                text = if (bracketed) "$label ]" else cliLabelText(label),
+                style = CliType.button,
+                baseColor = content,
+                maxLines = 1,
+            )
+            !bracketed -> BasicText(
+                text = cliLabelText(label),
+                style = CliType.button.copy(color = content),
+                maxLines = 1,
+                autoSize = TextAutoSize.StepBased(
+                    minFontSize = BUTTON_LABEL_MIN_FONT,
+                    maxFontSize = CliType.button.fontSize,
+                    stepSize = BUTTON_LABEL_FONT_STEP,
+                ),
+                modifier = Modifier.weight(1f, fill = false),
+            )
+            else -> Text(
                 text = "$label ]",
                 style = CliType.button,
                 color = content,
@@ -160,7 +230,6 @@ private fun CliButtonLeadingIcon(
 ) {
     when {
         icon != null ->
-            // Pixel glyphs sit above the line centre; without this nudge the icon read as sunken.
             CliPixIcon(
                 id = icon,
                 contentDescription = null,
@@ -175,11 +244,6 @@ private fun CliButtonLeadingIcon(
     Spacer(modifier = Modifier.width(5.dp))
 }
 
-/**
- * Disabled buttons keep their semantic colour and, critically, their outline. Applying alpha to
- * the whole composed button also faded its border into the black CLI background, so an import or
- * save action briefly looked like an unstyled black hole while work was in progress.
- */
 internal data class CliButtonEmphasis(
     val fillAlpha: Float,
     val borderAlpha: Float,
@@ -205,13 +269,6 @@ private fun Color.scaledAlpha(multiplier: Float): Color = copy(alpha = alpha * m
 private const val DISABLED_FILL_ALPHA = 0.58f
 private const val DISABLED_CONTENT_ALPHA = 0.55f
 
-/**
- * Small inline chip in the same bracket style, for quick secondary actions.
- *
- * [contentDescription] is for the chips whose label is a glyph rather than a word (`x`, `<`):
- * screen readers spell those out letter by letter, so a chip that means "close" has to say so.
- * Chips with a real word label leave it null and are read as they are printed.
- */
 @Composable
 internal fun CliChip(
     label: String,
@@ -223,34 +280,44 @@ internal fun CliChip(
     contentDescription: String? = null,
 ) {
     val colors = LocalCliColors.current
-    // Read out of the semantics lambda: inside it `contentDescription` resolves to the
-    // (write-only) semantics property, not to this parameter.
     val description = contentDescription
     val tint = if (color == Color.Unspecified) colors.dim else color
     val shape = RoundedCornerShape(6.dp)
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()
+    val plainPress = LocalCliVisualStyle.current == VisualStyle.PLAIN
+    val chipScale by animateFloatAsState(
+        targetValue = if (plainPress && pressed) PLAIN_PRESS_SCALE else 1f,
+        animationSpec = CliMotion.press(),
+        label = "cliChipPressScale",
+    )
+    val chipFill by animateColorAsState(
+        targetValue = cliChipFill(tint, selected = selected, pressed = pressed),
+        animationSpec = CliMotion.standard(),
+        label = "cliChipFill",
+    )
+    val chipBorder by animateColorAsState(
+        targetValue = if (selected || pressed) tint else colors.border,
+        animationSpec = CliMotion.standard(),
+        label = "cliChipBorder",
+    )
     Box(
-        // 48dp: Android touch-target floor; the visual density is kept by the paddings.
         modifier = modifier
             .defaultMinSize(minHeight = 48.dp)
-            // Chips are lighter than buttons: a 1px sink, no shadow or second frame.
             .offset {
-                if (pressed) {
+                if (pressed && !plainPress) {
                     IntOffset(CHIP_PRESS_STEP.roundToPx(), CHIP_PRESS_STEP.roundToPx())
                 } else {
                     IntOffset.Zero
                 }
             }
+            .graphicsLayer {
+                scaleX = chipScale
+                scaleY = chipScale
+            }
             .clip(shape)
-            .background(
-                when {
-                    selected -> tint.copy(alpha = 0.18f)
-                    pressed -> tint.copy(alpha = 0.12f)
-                    else -> Color.Transparent
-                },
-            )
-            .border(1.dp, if (selected || pressed) tint else colors.border, shape)
+            .background(chipFill)
+            .border(1.dp, chipBorder, shape)
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
@@ -268,13 +335,24 @@ internal fun CliChip(
             .padding(horizontal = 10.dp, vertical = 9.dp),
         contentAlignment = Alignment.Center,
     ) {
+        val labelColor by animateColorAsState(
+            targetValue = if (selected) tint else colors.dim,
+            animationSpec = CliMotion.standard(),
+            label = "cliChipLabel",
+        )
         Text(
-            text = "[$label]",
+            text = if (LocalCliVisualStyle.current == VisualStyle.PIXEL) "[$label]" else cliLabelText(label),
             style = CliType.small,
-            color = if (selected) tint else colors.dim,
+            color = labelColor,
             maxLines = 1,
         )
     }
+}
+
+private fun cliChipFill(tint: Color, selected: Boolean, pressed: Boolean): Color = when {
+    selected -> tint.copy(alpha = 0.18f)
+    pressed -> tint.copy(alpha = 0.12f)
+    else -> Color.Transparent
 }
 
 private fun cliButtonFill(filled: Boolean, pressed: Boolean, tint: Color): Color = when {
@@ -290,10 +368,6 @@ private fun cliButtonBorder(filled: Boolean, pressed: Boolean, tint: Color, brig
         else -> tint.copy(alpha = 0.65f)
     }
 
-/**
- * Dashed 1dp outline for the cancel canon: hard 4dp dashes with 3dp gaps around the button's
- * rounded frame — drawn instead of `border`, same geometry.
- */
 private fun DrawScope.dashedFrame(color: Color) {
     val stroke = 1.dp.toPx()
     drawRoundRect(
@@ -310,10 +384,6 @@ private fun DrawScope.dashedFrame(color: Color) {
     )
 }
 
-/**
- * The second stair of the pressed state: a square-cornered 1dp frame inset one pixel step
- * from the (rounded) outer border - together they read as a stepped, sunken bezel.
- */
 private fun DrawScope.pixelInsetFrame(color: Color) {
     val inset = PIXEL_STEP.toPx()
     drawRect(
@@ -324,22 +394,18 @@ private fun DrawScope.pixelInsetFrame(color: Color) {
     )
 }
 
-/** The pixel unit of the 16-bit effects: shadow depth and press sink. */
 private val PIXEL_STEP = 2.dp
 
-// Press steps: a filled button's shadow goes hard to black, an outlined one's flash to white.
+private const val PLAIN_PRESS_SCALE = 0.97f
+
+private val BUTTON_LABEL_MIN_FONT = cliScaledSp(11f)
+private val BUTTON_LABEL_FONT_STEP = 0.5.sp
+
 private const val SHADE_TOWARD_BLACK = 0.45f
 private const val PRESS_TOWARD_WHITE = 0.30f
 
-/** Chips sink a single pixel - half the button step, matching their smaller type. */
 private val CHIP_PRESS_STEP = 1.dp
 
-/**
- * The shared row/cell click without a Material ripple: indication = null plus a sharp accent tint
- * on press — the same 16-bit response as [CliButton], without borders or offset. Use instead of a
- * bare `clickable {}` in every Cli row. The tint is clipped to [CLI_PRESS_SHAPE]: a raw rectangle
- * inside a rounded panel read as a hard-cut box that ignored the panel's frame.
- */
 @Composable
 internal fun Modifier.cliPressable(
     enabled: Boolean = true,
@@ -361,7 +427,6 @@ internal fun Modifier.cliPressable(
         )
 }
 
-/** [cliPressable] for rows with long-press: combinedClickable without a ripple. */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 internal fun Modifier.cliCombinedPressable(
@@ -384,5 +449,4 @@ internal fun Modifier.cliCombinedPressable(
         )
 }
 
-// Press-tint rounding for rows and cells; matches the panels' soft corners.
 private val CLI_PRESS_SHAPE = RoundedCornerShape(6.dp)

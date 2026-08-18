@@ -17,13 +17,6 @@ import com.foxhole.guard.R
 import com.foxhole.guard.WatchdogNames
 import com.foxhole.guard.withStoredAppLocale
 
-/**
- * REINFORCED-mode host for [WatchdogNames.GUARD]: a lightweight foreground service that keeps
- * the sentinel daemon resident whenever no runtime (VPN/proxy) service is up. Uses a silent,
- * minimum-importance, lock-screen-secret notification so it is as unobtrusive as Android
- * allows for an always-on foreground service. It stops itself once a runtime service
- * re-attaches the daemon.
- */
 class FoxholeGuardService : Service() {
     override fun attachBaseContext(newBase: Context) {
         super.attachBaseContext(newBase.withStoredAppLocale())
@@ -49,9 +42,6 @@ class FoxholeGuardService : Service() {
             stopSelf(startId)
             return START_NOT_STICKY
         }
-        // If a runtime service is already hosting the daemon, this dedicated service is redundant.
-        // Exclude our own host so a repeated START_STICKY/onStart command stays idempotent instead
-        // of mistaking itself for a competing runtime and stopping the guard.
         if (sentinel.hasAttachedHostOtherThan(HOST_NAME)) {
             stopSelf(startId)
             return START_NOT_STICKY
@@ -99,11 +89,6 @@ class FoxholeGuardService : Service() {
         }.isSuccess
     }
 
-    /**
-     * The channel carries the watchdog's name, not a description: this list is where the user has
-     * to recognize which service is holding the always-on notification. What it does stays in the
-     * description, and that one is localized — the name is not.
-     */
     private fun ensureChannel(manager: NotificationManager) {
         val channel =
             NotificationChannel(
@@ -121,10 +106,6 @@ class FoxholeGuardService : Service() {
         const val CHANNEL_ID = WatchdogNames.GUARD_ID
         const val NOTIFICATION_ID = 1003
 
-        /**
-         * Journalled verbatim as the host of every start/stop record, and the journal is read by a
-         * person — so this is the spelled-out name, not the identifier form.
-         */
         const val HOST_NAME = WatchdogNames.GUARD
 
         fun start(context: Context) {

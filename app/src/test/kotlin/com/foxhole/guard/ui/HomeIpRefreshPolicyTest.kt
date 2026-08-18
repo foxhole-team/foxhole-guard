@@ -183,12 +183,44 @@ class HomeIpRefreshPolicyTest {
                 smartAnalysisRunning = true,
             ),
         )
-        assertTrue(
+        assertFalse(
             shouldClearExistingIpForRefresh(
                 reason = IpInfoRefreshReason.NETWORK_CHANGE,
                 clearExistingIp = true,
             ),
         )
+    }
+
+    @Test
+    fun `refresh keeps the shown address until a new one resolves`() {
+        for (reason in listOf(
+            IpInfoRefreshReason.NETWORK_CHANGE,
+            IpInfoRefreshReason.POST_CONNECT,
+            IpInfoRefreshReason.RESTORED_VPN,
+            IpInfoRefreshReason.TOR_ROUTE,
+        )) {
+            assertFalse(
+                "$reason must not clear the shown address",
+                shouldClearExistingIpForRefresh(reason = reason, clearExistingIp = true),
+            )
+        }
+        assertTrue(
+            shouldClearExistingIpForRefresh(
+                reason = IpInfoRefreshReason.MANUAL,
+                clearExistingIp = true,
+            ),
+        )
+        assertFalse(
+            shouldClearExistingIpForRefresh(
+                reason = IpInfoRefreshReason.MANUAL,
+                clearExistingIp = false,
+            ),
+        )
+        val source = uiSourceFile("HomeViewModelIpRefreshSupport.kt").readText()
+        val manualRefresh = source
+            .substringAfter("internal fun HomeViewModel.refreshIpInfo()")
+            .substringBefore("internal fun HomeViewModel.refreshIpInfoSilently()")
+        assertTrue(manualRefresh.contains("clearExistingIp = false"))
     }
 
     @Test
@@ -406,7 +438,7 @@ class HomeIpRefreshPolicyTest {
     }
 
     @Test
-    fun `post connect refresh stays quick even with stale previous route ip`() {
+    fun `post connect refresh hides a stale route ip but keeps a fresh validated identity`() {
         val snapshot =
             ConnectionSnapshot(
                 state = ConnectionState.CONNECTED,
@@ -426,7 +458,7 @@ class HomeIpRefreshPolicyTest {
             )
         val freshRouteIp = previousRouteIp.copy(fetchedAt = 2_000L)
 
-        assertFalse(
+        assertTrue(
             shouldShowDashboardIpRefreshLoading(
                 reason = IpInfoRefreshReason.POST_CONNECT,
                 snapshot = snapshot,
@@ -573,7 +605,6 @@ class HomeIpRefreshPolicyTest {
         assertTrue(
             shouldRefreshTorExitAfterConnect(IpInfoRefreshReason.POST_CONNECT, vpnSnapshot, torSettings),
         )
-        // Tor disabled, Tor-only runtime, and the TOR_ROUTE refresh itself must not re-trigger.
         assertFalse(
             shouldRefreshTorExitAfterConnect(IpInfoRefreshReason.POST_CONNECT, vpnSnapshot, Settings()),
         )
@@ -861,10 +892,6 @@ class HomeIpRefreshPolicyTest {
 
     @Test
     fun `tor exit is published through a single guarded owner`() {
-        // Every non-null write to torIpInfoMutable must go through publishTorRouteExit so the same
-        // guards (Tor visible, distinct from the VPN exit, active operation accepts it, geo retained)
-        // apply to the bridge channel, the TOR_ROUTE refresh, and the Tor-operation completion alike.
-        // Direct assignments are only allowed for clearing the exit (= null) on disconnect/error/off.
         val offendingWrites =
             uiSourceFiles()
                 .flatMap { file -> file.readLines().map { line -> file.name to line.trim() } }
@@ -884,18 +911,15 @@ class HomeIpRefreshPolicyTest {
 
     @Test
     fun `every tor exit writer routes through publishTorRouteExit`() {
-        // The runtime bridge channel collector.
         assertTrue(
             uiSourceFile("HomeViewModelSupervisorsSupport.kt")
                 .readText()
                 .contains("publishTorRouteExit(runtimeTorExit)"),
         )
-        // The TOR_ROUTE dashboard refresh.
         assertTrue(
             uiSourceFile("HomeViewModelDashboardRefreshSupport.kt").readText()
                 .contains("val published = publishTorRouteExit(info)"),
         )
-        // The Tor-operation completion.
         assertTrue(
             uiSourceFile("HomeViewModelTorOperationSupport.kt").readText()
                 .contains("publishTorRouteExit(publishableIpInfo)"),

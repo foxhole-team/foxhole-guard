@@ -24,6 +24,7 @@ import com.foxhole.core.runtime.FoxholeVpnRuntimeBridge
 import com.foxhole.guard.R
 import com.foxhole.guard.ui.HomeViewModel
 import com.foxhole.guard.ui.cli.CliSpacing
+import com.foxhole.guard.ui.cli.LocalCliBottomChromeClearance
 import com.foxhole.guard.ui.cli.LocalCliColors
 import com.foxhole.guard.ui.cli.components.CliConfirmSheet
 import com.foxhole.guard.ui.cli.components.CliDropdownOption
@@ -38,7 +39,6 @@ import com.foxhole.guard.ui.onWebAppsPollIntervalChanged
 import com.foxhole.guard.ui.onWebAppsPushServiceChanged
 import com.foxhole.guard.ui.webAppNotificationsBlocked
 
-/** Web apps settings: the push watchdog with its firewall consent, the interval and the dock. */
 @Composable
 internal fun CliWebAppsSubScreen(
     viewModel: HomeViewModel,
@@ -51,74 +51,73 @@ internal fun CliWebAppsSubScreen(
         modifier =
         modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
             .padding(horizontal = CliSpacing.md),
     ) {
         CliScreenHeader(label = stringResource(R.string.cli_extras_webapps), icon = R.drawable.pix_webapps)
-        CliPanel(
-            title = stringResource(R.string.cli_extras_webapps),
-            icon = R.drawable.pix_link,
-            modifier = Modifier.fillMaxWidth(),
+
+        Column(
+
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(bottom = LocalCliBottomChromeClearance.current),
+
         ) {
-            CliWebAppsPushRows(viewModel = viewModel, settings = settings)
-            if (settings.webApps.pushServiceEnabled) {
-                // Under isolation the watchdog is gated on a raised guard — say plainly that it
-                // is idle. Without isolation it polls on the current network, nothing to explain.
-                val runtimeSnapshot by FoxholeVpnRuntimeBridge.snapshot.collectAsStateWithLifecycle()
-                if (settings.webApps.isolationEnabled && runtimeSnapshot.state != ConnectionState.CONNECTED) {
-                    CliElbowLine(text = stringResource(R.string.cli_webapps_push_idle))
+            CliPanel(
+                title = stringResource(R.string.cli_extras_webapps),
+                icon = R.drawable.pix_link,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                CliWebAppsPushRows(viewModel = viewModel, settings = settings)
+                if (settings.webApps.pushServiceEnabled) {
+                    val runtimeSnapshot by FoxholeVpnRuntimeBridge.snapshot.collectAsStateWithLifecycle()
+                    if (settings.webApps.isolationEnabled && runtimeSnapshot.state != ConnectionState.CONNECTED) {
+                        CliElbowLine(text = stringResource(R.string.cli_webapps_push_idle))
+                    }
+                    var deliveryBlocked by remember { mutableStateOf(false) }
+                    LifecycleResumeEffect(Unit) {
+                        deliveryBlocked = viewModel.webAppNotificationsBlocked()
+                        onPauseOrDispose { }
+                    }
+                    if (deliveryBlocked) {
+                        CliElbowLine(
+                            text = stringResource(R.string.cli_webapps_notifications_disabled),
+                            color = LocalCliColors.current.warn,
+                        )
+                    }
                 }
-                // The user can revoke notifications after enabling push; the watchdog keeps
-                // polling, so say why nothing rings. Re-checked on resume — that is when they
-                // come back from the system settings.
-                var deliveryBlocked by remember { mutableStateOf(false) }
-                LifecycleResumeEffect(Unit) {
-                    deliveryBlocked = viewModel.webAppNotificationsBlocked()
-                    onPauseOrDispose { }
-                }
-                if (deliveryBlocked) {
-                    CliElbowLine(
-                        text = stringResource(R.string.cli_webapps_notifications_disabled),
-                        color = LocalCliColors.current.warn,
+                if (settings.webApps.pushServiceEnabled) {
+                    CliDropdownRow(
+                        label = stringResource(R.string.cli_webapps_interval),
+                        icon = R.drawable.pix_clock,
+                        value = pollIntervalLabel(settings.webApps.pollIntervalMinutes),
+                        options =
+                        WEB_APPS_POLL_OPTIONS.map { minutes ->
+                            CliDropdownOption(id = minutes.toString(), label = pollIntervalLabel(minutes))
+                        },
+                        selectedId = settings.webApps.pollIntervalMinutes.toString(),
+                        onSelect = { id -> id.toIntOrNull()?.let(viewModel::onWebAppsPollIntervalChanged) },
                     )
                 }
-            }
-            if (settings.webApps.pushServiceEnabled) {
-                CliDropdownRow(
-                    label = stringResource(R.string.cli_webapps_interval),
-                    icon = R.drawable.pix_clock,
-                    value = pollIntervalLabel(settings.webApps.pollIntervalMinutes),
-                    options =
-                    WEB_APPS_POLL_OPTIONS.map { minutes ->
-                        CliDropdownOption(id = minutes.toString(), label = pollIntervalLabel(minutes))
-                    },
-                    selectedId = settings.webApps.pollIntervalMinutes.toString(),
-                    onSelect = { id -> id.toIntOrNull()?.let(viewModel::onWebAppsPollIntervalChanged) },
+                CliToggleRow(
+                    label = stringResource(R.string.cli_webapps_isolation),
+                    icon = R.drawable.pix_forbidden,
+                    checked = settings.webApps.isolationEnabled,
+                    infoText = stringResource(R.string.cli_webapps_isolation_note),
+                    onToggle = viewModel::onWebAppsIsolationChanged,
+                )
+                CliToggleRow(
+                    label = stringResource(R.string.cli_webapps_dock),
+                    icon = R.drawable.pix_home,
+                    checked = settings.webApps.dockScreenEnabled,
+                    onToggle = viewModel::onWebAppsDockScreenChanged,
                 )
             }
-            CliToggleRow(
-                label = stringResource(R.string.cli_webapps_isolation),
-                icon = R.drawable.pix_forbidden,
-                checked = settings.webApps.isolationEnabled,
-                note = stringResource(R.string.cli_webapps_isolation_note),
-                onToggle = viewModel::onWebAppsIsolationChanged,
-            )
-            CliToggleRow(
-                label = stringResource(R.string.cli_webapps_dock),
-                icon = R.drawable.pix_home,
-                checked = settings.webApps.dockScreenEnabled,
-                onToggle = viewModel::onWebAppsDockScreenChanged,
-            )
+            Spacer(modifier = Modifier.height(CliSpacing.sm))
         }
-        Spacer(modifier = Modifier.height(CliSpacing.sm))
     }
 }
 
-/**
- * The push service toggle. Enabling it with the firewall down raises the firewall too, so it asks
- * through the same bottom modal the firewall switch itself uses: the firewall canon always asks,
- * with no silent path, and the question always looks the same wherever it is raised from.
- */
 @Composable
 private fun CliWebAppsPushRows(
     viewModel: HomeViewModel,
@@ -129,7 +128,7 @@ private fun CliWebAppsPushRows(
         label = stringResource(R.string.cli_webapps_push),
         icon = R.drawable.pix_info,
         checked = settings.webApps.pushServiceEnabled,
-        note = stringResource(R.string.cli_webapps_push_note),
+        infoText = stringResource(R.string.cli_webapps_push_note),
         onToggle = { enable ->
             if (enable && !settings.expert.firewallEnabled) {
                 consentOpen = true

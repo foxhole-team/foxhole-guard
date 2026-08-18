@@ -13,6 +13,7 @@ import com.foxhole.core.runtime.I2pdProcessManager
 import com.foxhole.core.runtime.I2pdRuntimeInstaller
 import com.foxhole.core.runtime.LanProxyAddressProvider
 import com.foxhole.core.runtime.RuntimeConfigAssembler
+import com.foxhole.core.runtime.RuntimeDnsRuleSetInstallOutcome
 import com.foxhole.core.runtime.RuntimeInstanceStore
 import com.foxhole.core.runtime.RuntimeKillResult
 import com.foxhole.core.runtime.RuntimeSupervisor
@@ -51,24 +52,31 @@ import com.foxhole.guard.core.webapps.WebAppProxyPlan
 import com.foxhole.guard.core.webapps.WebAppsDataCleaner
 import com.foxhole.guard.core.webapps.WebAppsNotifier
 import com.foxhole.guard.core.webapps.WebAppsWatchdog
+import com.foxhole.guard.runtime.AppUpdateApkVerifier
 import com.foxhole.guard.runtime.AppUpdateClient
 import com.foxhole.guard.runtime.AppUpdateRepository
 import com.foxhole.guard.runtime.DnsFilterAssetInstaller
 import com.foxhole.guard.runtime.DnsFilterUpdateClient
 import com.foxhole.guard.runtime.DnsFilterUpdateRepository
 import com.foxhole.guard.runtime.FileThreatIntelStore
+import com.foxhole.guard.runtime.FileTlsFingerprintStore
 import com.foxhole.guard.runtime.FoxholeConnectionController
 import com.foxhole.guard.runtime.GeoIpUpdateClient
 import com.foxhole.guard.runtime.GeoIpUpdateRepository
 import com.foxhole.guard.runtime.QuarantineRuntimeEnforcementTracker
 import com.foxhole.guard.runtime.ThreatIntelUpdateClient
 import com.foxhole.guard.runtime.ThreatIntelUpdateRepository
+import com.foxhole.guard.runtime.TlsFingerprintProvider
+import com.foxhole.guard.runtime.TlsFingerprintUpdateClient
+import com.foxhole.guard.runtime.TlsFingerprintUpdateRepository
 import com.foxhole.guard.runtime.TorBridgeUpdateClient
 import com.foxhole.guard.runtime.TorBridgeUpdateRepository
 import com.foxhole.guard.runtime.enqueueQuarantineRuntimeEnforcement
 import com.foxhole.guard.runtime.foxholeDbBridgesManifestUrl
 import com.foxhole.guard.runtime.foxholeDbGeoIpManifestUrl
 import com.foxhole.guard.runtime.foxholeDbThreatIntelManifestUrl
+import com.foxhole.guard.runtime.foxholeDbTlsFingerprintsManifestUrl
+import com.foxhole.guard.runtime.tlsFingerprintProvider
 import com.foxhole.guard.traffic.AndroidTrafficMapCountryRegistryProvider
 import com.foxhole.guard.traffic.TrafficMapRepository
 import kotlinx.coroutines.CoroutineScope
@@ -145,6 +153,12 @@ internal class FoxholeDataGraphModule(
     private val appContext: Context,
     private val core: FoxholeCoreGraphModule,
     private val security: () -> FoxholeSecurityComponents,
+    private val liveDnsRuleSetInstaller: suspend (
+        name: String,
+        manifest: ByteArray,
+        signature: ByteArray,
+        artifact: ByteArray,
+    ) -> RuntimeDnsRuleSetInstallOutcome,
 ) {
     val profileDatabase: ProfileDatabase by lazy {
         // The DB opens lazily; in password mode every pre-unlock touch is gated, so by the
@@ -241,6 +255,7 @@ internal class FoxholeDataGraphModule(
             core.httpClient,
             resolver = publicRemoteDns::lookup,
             manifestUrl = { foxholeDbBridgesManifestUrl(foxholeDbBase()) },
+            context = appContext,
         )
     }
     val torBridgeUpdateRepository: TorBridgeUpdateRepository by lazy {
@@ -263,6 +278,7 @@ internal class FoxholeDataGraphModule(
             diagnosticsLogger = DiagnosticsLoggerRuntimeDiagnosticsSink(core.diagnosticsLogger),
             installedManifestProvider = { dnsFilterAssetInstaller.installedManifestOrNull() },
             installedRuleSetsProvider = { dnsFilterAssetInstaller.installedRuleSetsOrEmpty() },
+            liveRuleSetInstaller = liveDnsRuleSetInstaller,
         )
     }
     val appUpdateClient: AppUpdateClient by lazy {
@@ -274,11 +290,13 @@ internal class FoxholeDataGraphModule(
         )
     }
     val appUpdateRepository: AppUpdateRepository by lazy {
+        val verifier = AppUpdateApkVerifier(appContext)
         AppUpdateRepository(
             client = appUpdateClient,
             currentVersionCode = BuildConfig.VERSION_CODE.toLong(),
             downloadDirectory = File(appContext.cacheDir, "app-update"),
             diagnosticsLogger = DiagnosticsLoggerRuntimeDiagnosticsSink(core.diagnosticsLogger),
+            apkVerifier = verifier::verify,
         )
     }
 
@@ -309,6 +327,21 @@ internal class FoxholeDataGraphModule(
             store = fileThreatIntelStore,
             diagnosticsLogger = DiagnosticsLoggerRuntimeDiagnosticsSink(core.diagnosticsLogger),
             manifestUrl = { foxholeDbThreatIntelManifestUrl(foxholeDbBase()) },
+        )
+    }
+    val fileTlsFingerprintStore: FileTlsFingerprintStore by lazy { FileTlsFingerprintStore(appContext, core.json) }
+    val tlsFingerprintProvider: TlsFingerprintProvider by lazy {
+        tlsFingerprintProvider(appContext, fileTlsFingerprintStore, core.json)
+    }
+    val tlsFingerprintUpdateClient: TlsFingerprintUpdateClient by lazy {
+        TlsFingerprintUpdateClient(core.httpClient, core.json, resolver = publicRemoteDns::lookup)
+    }
+    val tlsFingerprintUpdateRepository: TlsFingerprintUpdateRepository by lazy {
+        TlsFingerprintUpdateRepository(
+            client = tlsFingerprintUpdateClient,
+            store = fileTlsFingerprintStore,
+            diagnosticsLogger = DiagnosticsLoggerRuntimeDiagnosticsSink(core.diagnosticsLogger),
+            manifestUrl = { foxholeDbTlsFingerprintsManifestUrl(foxholeDbBase()) },
         )
     }
 
@@ -410,6 +443,7 @@ internal class FoxholeRuntimeGraphModule(
                 }
             },
             proxyController = webAppProxyController,
+            recordDiagnostic = { message -> core.diagnosticsLogger.record("web_apps", message) },
             onBadgeIncreased = { app, count, content ->
                 core.webAppsNotifier.notify(app, count, content)
             },

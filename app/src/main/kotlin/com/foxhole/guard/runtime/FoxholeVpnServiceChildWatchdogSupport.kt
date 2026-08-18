@@ -2,6 +2,7 @@ package com.foxhole.guard.runtime
 
 import android.os.SystemClock
 import com.foxhole.core.model.ConnectionState
+import com.foxhole.core.model.Settings
 import com.foxhole.core.model.VpnSession
 import com.foxhole.core.runtime.FoxholeVpnRuntimeBridge
 import com.foxhole.core.runtime.I2pdState
@@ -89,6 +90,9 @@ internal class ChildCasualtyTracker(
 internal fun FoxholeVpnService.startChildProcessWatchdog() {
     stopChildProcessWatchdog()
     container.i2pdManager.setUnexpectedExitListener { onChildUnexpectedExit(CHILD_WATCHDOG_CASUALTY_I2PD) }
+    if (!childWatchdogFallbackPollNeeded(container.settingsRepository.settings.value)) {
+        return
+    }
     val tracker = ChildCasualtyTracker()
     sessionTicker.register(
         id = FoxholeVpnService.TICKER_TASK_CHILD_WATCHDOG,
@@ -106,6 +110,8 @@ internal fun FoxholeVpnService.stopChildProcessWatchdog() {
     container.i2pdManager.setUnexpectedExitListener(null)
     sessionTicker.unregister(FoxholeVpnService.TICKER_TASK_CHILD_WATCHDOG)
 }
+
+internal fun childWatchdogFallbackPollNeeded(settings: Settings): Boolean = settings.i2p.enabled
 
 /**
  * Event path: invoked from a manager's stdout-drain thread the moment a child dies unexpectedly.

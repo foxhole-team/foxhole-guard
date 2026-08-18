@@ -19,9 +19,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
-// Runtime connect/reconnect/reload control: connect entry points, runtime-setting updates that
-// reload or reconnect the live session, and the reload/reconnect pending markers.
-
 internal class RuntimeSettingUpdateBarrier {
     private val lock = Any()
     private var tail: Deferred<Unit> = CompletableDeferred(Unit)
@@ -139,9 +136,6 @@ internal fun HomeViewModel.updateRuntimeSettingAndMaybeReload(
 }
 
 internal suspend fun HomeViewModel.maybeReloadActiveRuntime(): Boolean {
-    // Every declined branch is logged: a setting that should reconfigure a live runtime but
-    // silently doesn't (e.g. Stop TOR leaving the tor process up) is otherwise undiagnosable
-    // from device logs.
     val targetProfileId = activeRuntimeProfileIdForReload()
     val declineReason = runtimeReloadDeclineReason(targetProfileId)
     if (declineReason != null) {
@@ -213,9 +207,6 @@ internal fun HomeViewModel.connect(
 ) {
     viewModelScope.launch {
         runCatching {
-            // Only a real profile (id > 0) becomes the active profile; the negative runtime sentinels
-            // (LOCAL_GUARD, TOR_ONLY) are not profiles, and setting one active corrupts the
-            // active-profile state and spins syncLocalGuard.
             if (
                 profileId > 0L &&
                 controlUiState.value.activeProfile?.id != profileId
@@ -251,8 +242,6 @@ private suspend fun HomeViewModel.waitForRuntimeDisconnect() {
 
 internal fun HomeViewModel.runtimeConnectionFailureMessage(error: Throwable): String {
     val app = getApplication<Application>()
-    // The banner says the same sentence for every unclassified cause, so without this line a
-    // connect that died before the service was even reached left no trace of WHAT died.
     container.diagnosticsLogger.recordFailure("connection", "connect failed: ${diagnosticFailureLabel(error)}")
     return app.userFacingErrorMessage(error, R.string.error_runtime_start_failed)
 }
@@ -299,7 +288,6 @@ internal suspend fun HomeViewModel.emitSuccess(message: String) {
     )
 }
 
-/** A committed VPN/Tor scenario choice, mirrored into the persistent terminal journal. */
 internal suspend fun HomeViewModel.emitRoutingScenarioSelected(labelRes: Int) {
     val app = getApplication<Application>()
     emitSuccess(app.getString(R.string.routing_scenario_selected, app.getString(labelRes)))

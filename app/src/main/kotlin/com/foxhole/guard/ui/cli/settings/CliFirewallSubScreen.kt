@@ -1,5 +1,6 @@
 package com.foxhole.guard.ui.cli.settings
 
+import android.content.Intent
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -37,15 +38,19 @@ import com.foxhole.core.model.InstalledAppOption
 import com.foxhole.core.model.InstalledAppRiskLevel
 import com.foxhole.core.model.InstalledAppRiskSignal
 import com.foxhole.core.model.PendingQuarantineAppDetails
+import com.foxhole.core.model.Settings
 import com.foxhole.guard.R
 import com.foxhole.guard.core.sentinel.labelRes
 import com.foxhole.guard.guardian.enqueuePendingQuarantineAnalysis
 import com.foxhole.guard.ui.HomeViewModel
 import com.foxhole.guard.ui.cli.CliSpacing
 import com.foxhole.guard.ui.cli.CliType
+import com.foxhole.guard.ui.cli.LocalCliBottomChromeClearance
 import com.foxhole.guard.ui.cli.LocalCliColors
+import com.foxhole.guard.ui.cli.components.CliActionRow
 import com.foxhole.guard.ui.cli.components.CliAttentionPixel
 import com.foxhole.guard.ui.cli.components.CliBottomSheet
+import com.foxhole.guard.ui.cli.components.CliCenteredEmptyNote
 import com.foxhole.guard.ui.cli.components.CliChip
 import com.foxhole.guard.ui.cli.components.CliElbowLine
 import com.foxhole.guard.ui.cli.components.CliPanel
@@ -82,34 +87,74 @@ internal fun CliFirewallSubScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
             .padding(horizontal = CliSpacing.md),
     ) {
         CliScreenHeader(label = stringResource(R.string.cli_cfg_firewall), icon = R.drawable.pix_fire)
-        CliPanel(
-            title = stringResource(R.string.cli_firewall_quarantine_title),
-            icon = R.drawable.pix_forbidden,
-            modifier = Modifier.fillMaxWidth(),
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(bottom = LocalCliBottomChromeClearance.current),
         ) {
-            CliToggleRow(
-                label = stringResource(R.string.cli_anomaly_quarantine),
+            CliKillSwitchPanel(viewModel = viewModel, settings = settings)
+            Spacer(modifier = Modifier.height(CliSpacing.sm))
+            CliPanel(
+                title = stringResource(R.string.cli_firewall_quarantine_title),
                 icon = R.drawable.pix_forbidden,
-                checked = settings.expert.newAppQuarantineEnabled,
-                onToggle = viewModel::onNewAppQuarantineChanged,
-                note = stringResource(R.string.cli_anomaly_quarantine_note),
-            )
-            if (!settings.expert.firewallEnabled) {
-                CliElbowLine(text = stringResource(R.string.cli_firewall_quarantine_needs_firewall))
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                CliToggleRow(
+                    label = stringResource(R.string.cli_anomaly_quarantine),
+                    icon = R.drawable.pix_forbidden,
+                    checked = settings.expert.newAppQuarantineEnabled,
+                    onToggle = viewModel::onNewAppQuarantineChanged,
+                    infoText = stringResource(R.string.cli_anomaly_quarantine_note),
+                )
+                if (!settings.expert.firewallEnabled) {
+                    CliElbowLine(text = stringResource(R.string.cli_firewall_quarantine_needs_firewall))
+                }
             }
+            Spacer(modifier = Modifier.height(CliSpacing.sm))
+            CliQuarantineQueue(
+                pendingPackages = pendingPackages,
+                pendingDetails = settings.expert.pendingQuarantineAppDetails,
+                installedApps = appState.installedApps,
+                onResolve = viewModel::onQuarantinedAppResolved,
+            )
+            Spacer(modifier = Modifier.height(CliSpacing.sm))
         }
-        Spacer(modifier = Modifier.height(CliSpacing.sm))
-        CliQuarantineQueue(
-            pendingPackages = pendingPackages,
-            pendingDetails = settings.expert.pendingQuarantineAppDetails,
-            installedApps = appState.installedApps,
-            onResolve = viewModel::onQuarantinedAppResolved,
+    }
+}
+
+@Composable
+private fun CliKillSwitchPanel(
+    viewModel: HomeViewModel,
+    settings: Settings,
+) {
+    val context = LocalContext.current
+    CliPanel(
+        title = stringResource(R.string.cli_firewall_killswitch_title),
+        icon = R.drawable.pix_lock,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        CliToggleRow(
+            label = stringResource(R.string.cli_firewall_killswitch_toggle),
+            icon = R.drawable.pix_lock,
+            checked = settings.expert.killSwitchEnabled,
+            onToggle = viewModel::onKillSwitchEnabledChanged,
+            infoText = stringResource(R.string.cli_firewall_killswitch_info),
         )
-        Spacer(modifier = Modifier.height(CliSpacing.sm))
+        CliElbowLine(text = stringResource(R.string.cli_firewall_killswitch_software))
+        CliElbowLine(text = stringResource(R.string.cli_firewall_killswitch_system))
+        CliActionRow(
+            label = stringResource(R.string.cli_help_killswitch_link),
+            icon = R.drawable.pix_settings,
+            onTap = {
+                runCatching {
+                    context.startActivity(Intent(android.provider.Settings.ACTION_VPN_SETTINGS))
+                }
+            },
+        )
     }
 }
 
@@ -134,7 +179,7 @@ private fun CliQuarantineQueue(
         attentionColor = colors.firewall,
     ) {
         if (items.isEmpty()) {
-            CliElbowLine(text = stringResource(R.string.cli_quarantine_empty))
+            CliCenteredEmptyNote(text = stringResource(R.string.cli_quarantine_empty))
         } else {
             CliQuarantineTableHeader()
             items.forEach { item ->

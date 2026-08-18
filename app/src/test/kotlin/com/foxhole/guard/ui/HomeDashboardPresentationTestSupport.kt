@@ -5,8 +5,6 @@ import com.foxhole.core.model.ProfileProtocolOption
 import com.foxhole.core.model.ProfileSourceType
 import com.foxhole.core.model.ProtocolHint
 
-// Shared profile/state builders of the dashboard presentation suites.
-// Split from HomeDashboardPresentationTest.kt.
 internal open class HomeDashboardPresentationTestSupport {
     protected fun smartProfile(): Profile =
         Profile(

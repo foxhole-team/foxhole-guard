@@ -16,15 +16,6 @@ abstract class VerifyBundledNativeRuntimeInReleaseApkTask : DefaultTask() {
     @get:InputDirectory
     abstract val apkDirectory: DirectoryProperty
 
-    /**
-     * The ABIs this build actually ships.
-     *
-     * Hard-coding the pair here made the gate assert a release shape rather
-     * than verify the one that was built: narrowing `foxhole.abis` turned a
-     * correct build into a gate failure, which trains people to widen the gate
-     * instead of reading it. It has to come from the same value the packaging
-     * uses.
-     */
     @get:Input
     abstract val expectedAbis: SetProperty<String>
 
@@ -119,9 +110,6 @@ val enableAbiSplitApks = providers.gradleProperty("foxhole.splitApks").map(Strin
 val enableReleaseProbe = providers.gradleProperty("foxhole.releaseProbe").map(String::toBoolean).orElse(false).get()
 val enableStrictMode = providers.gradleProperty("foxhole.strictMode").map(String::toBoolean).orElse(false).get()
 val publicApplicationId = "com.foxhole.guard"
-// Whether the real last-uploaded code was actually supplied. Without it the monotonicity check
-// below silently compares against the `1` default and enforces nothing beyond `> 1`; the preflight
-// therefore requires it to be present so the gate is honest (see publicReleasePreflight).
 val lastUploadedVersionCodeProvided =
     providers.gradleProperty("foxhole.lastUploadedVersionCode").isPresent
 val lastUploadedPublicVersionCode =
@@ -176,6 +164,11 @@ val releaseSigningStoreFile =
 val appUpdateChannel =
     providers.gradleProperty("foxhole.updateChannel").orNull?.trim()?.takeIf(String::isNotEmpty) ?: "github"
 
+val appUpdateFloorVersionCode =
+    providers.gradleProperty("foxhole.updateFloorVersionCode").orNull?.trim()?.toLongOrNull() ?: 0L
+val appUpdateSupportedUntilEpochDay =
+    providers.gradleProperty("foxhole.updateSupportedUntilEpochDay").orNull?.trim()?.toLongOrNull() ?: 0L
+
 val foxCoreSourceRoot =
     providers.gradleProperty("foxhole.foxCoreSourceRoot")
         .orElse(providers.environmentVariable("FOXCORE_SOURCE_ROOT"))
@@ -188,6 +181,56 @@ require(foxCoreSourceRoot.resolve("Cargo.toml").isFile) {
     "FoxCore source is missing at ${foxCoreSourceRoot.absolutePath}. " +
         "Set FOXCORE_SOURCE_ROOT or -Pfoxhole.foxCoreSourceRoot=<path>."
 }
+val pinnedFoxCoreRevision =
+    rootProject
+        .file("config/foxcore-revision.txt")
+        .takeIf(File::isFile)
+        ?.readText()
+        ?.trim()
+        ?.takeIf { revision -> revision.matches(Regex("^[0-9a-f]{40}$")) }
+        ?: error("config/foxcore-revision.txt must contain one full Git commit SHA")
+val checkedOutFoxCoreRevision: String? =
+    runCatching {
+        val git =
+            providers.exec {
+                commandLine("git", "-C", foxCoreSourceRoot.absolutePath, "rev-parse", "HEAD")
+                isIgnoreExitValue = true
+            }
+        git.standardOutput.asText
+            .get()
+            .trim()
+            .takeIf { head -> git.result.get().exitValue == 0 && head.matches(Regex("^[0-9a-f]{40}$")) }
+    }.getOrNull()
+val requirePinnedFoxCoreRevision =
+    providers.gradleProperty("foxhole.requirePinnedFoxCore").orNull?.trim()?.toBooleanStrictOrNull()
+        ?: gradle.startParameter.taskNames.any { task -> task.contains("elease") }
+when (checkedOutFoxCoreRevision) {
+    pinnedFoxCoreRevision -> Unit
+    null ->
+        logger.warn(
+            "\n! FoxCore revision unverified: no Git HEAD readable at ${foxCoreSourceRoot.absolutePath}." +
+                "\n! config/foxcore-revision.txt pins $pinnedFoxCoreRevision and nothing here can confirm it.\n",
+        )
+
+    else -> {
+        val banner =
+            buildString {
+                append("\n")
+                append("!".repeat(96)).append("\n")
+                append("! FoxCore revision mismatch — this build would NOT be the pinned core.\n")
+                append("!   pinned  (config/foxcore-revision.txt): $pinnedFoxCoreRevision\n")
+                append("!   checked out (${foxCoreSourceRoot.absolutePath}): $checkedOutFoxCoreRevision\n")
+                append("! Fix with: git -C ${foxCoreSourceRoot.absolutePath} checkout $pinnedFoxCoreRevision\n")
+                append("! or update config/foxcore-revision.txt if the new revision is the one to ship.\n")
+                append("!".repeat(96)).append("\n")
+            }
+        if (requirePinnedFoxCoreRevision) {
+            error(banner)
+        }
+        logger.error(banner)
+    }
+}
+
 val foxCoreAndroidBuildScript = foxCoreSourceRoot.resolve("scripts/android-build.sh")
 val foxCoreVersion =
     Regex("""(?m)^version\s*=\s*"([^"]+)"\s*$""")
@@ -196,18 +239,6 @@ val foxCoreVersion =
         ?.get(1)
         ?: error("FoxCore workspace version is missing")
 val generatedFoxCoreNativeLibs = layout.buildDirectory.dir("generated/foxCoreNativeLibs")
-// What a release ships.
-//
-// The public beta ships **arm64-v8a only**. Not because 32-bit ARM cannot be
-// built — it builds and passes the ELF gate — but because nothing verified it:
-// no live traffic, no protocol matrix, no Tor leg ever ran on a 32-bit device
-// in this cycle. Shipping an ABI whose only evidence is that it compiled is how
-// a first public release earns a review that says "does not connect".
-//
-// Widening it back is a per-invocation property rather than an environment
-// variable: `-Pfoxhole.abis="arm64-v8a armeabi-v7a"` has to be typed on the
-// command line, so it cannot quietly become the shape of a release artifact the
-// way an exported variable can.
 val shippedAndroidAbis =
     (providers.gradleProperty("foxhole.abis").orNull ?: "arm64-v8a")
         .split(" ", ",")
@@ -268,9 +299,9 @@ fun publicReleaseBundleFile(): File {
     return bundles.single()
 }
 
-// libi2pd.so is built from the pinned i2pd submodule rather than committed. Without this a clean
-// checkout would quietly produce an app whose I2P mode is dead; the release native-inventory gate
-// now requires the binary, so a miss fails the build instead of shipping.
+val nativeBootstrapOffline =
+    providers.gradleProperty("foxhole.nativeOffline").orNull?.toBooleanStrictOrNull() ?: gradle.startParameter.isOffline
+
 val prepareBundledI2pd = tasks.register("prepareBundledI2pd") {
     val buildI2pdScript = rootProject.file("scripts/build-i2pd.sh")
     val i2pdLibraries = shippedAndroidAbis.map { abi -> file("src/main/jniLibs/$abi/libi2pd.so") }
@@ -286,6 +317,7 @@ val prepareBundledI2pd = tasks.register("prepareBundledI2pd") {
         val process =
             ProcessBuilder(buildI2pdScript.absolutePath)
                 .directory(rootProject.projectDir)
+                .also { it.environment()["FOXHOLE_NATIVE_OFFLINE"] = if (nativeBootstrapOffline) "1" else "0" }
                 .inheritIO()
                 .start()
         val exitCode = process.waitFor()
@@ -297,8 +329,6 @@ val prepareBundledI2pd = tasks.register("prepareBundledI2pd") {
     }
 }
 
-// The transports are executables Android can only run from nativeLibraryDir, so they cannot be
-// fetched at runtime (W^X) and must be compiled here instead of committed.
 val prepareBundledTorTransports = tasks.register("prepareBundledTorTransports") {
     val buildTransportsScript = rootProject.file("scripts/build-tor-transports.sh")
     val transports =
@@ -321,7 +351,10 @@ val prepareBundledTorTransports = tasks.register("prepareBundledTorTransports") 
         val process =
             ProcessBuilder(buildTransportsScript.absolutePath)
                 .directory(rootProject.projectDir)
-                .also { it.environment()["TOR_TRANSPORT_ABIS"] = shippedAndroidAbis.joinToString(" ") }
+                .also {
+                    it.environment()["TOR_TRANSPORT_ABIS"] = shippedAndroidAbis.joinToString(" ")
+                    it.environment()["FOXHOLE_NATIVE_OFFLINE"] = if (nativeBootstrapOffline) "1" else "0"
+                }
                 .inheritIO()
                 .start()
         val exitCode = process.waitFor()
@@ -387,6 +420,34 @@ val prepareFoxCoreNative = tasks.register("prepareFoxCoreNative") {
     }
 }
 
+val verifyFoxCoreJniSeam = tasks.register("verifyFoxCoreJniSeam") {
+    group = "verification"
+    description = "Compare the shipped FoxCore ELF exports with Java declarations and production Kotlin references."
+    dependsOn(prepareFoxCoreNative)
+
+    val seamScript = rootProject.file("scripts/verify-foxcore-jni-seam.sh")
+    inputs.file(seamScript)
+    inputs.file(rootProject.file("core/runtime/src/main/java/com/foxhole/core/runtime/FoxholeNativeEngine.java"))
+    inputs.files(
+        fileTree(rootProject.file("core/runtime/src/main/kotlin")) { include("**/*.kt") },
+        fileTree(rootProject.file("app/src/main/kotlin")) { include("**/*.kt") },
+    )
+    inputs.dir(generatedFoxCoreNativeLibs)
+
+    doLast {
+        val process =
+            ProcessBuilder(
+                seamScript.absolutePath,
+                generatedFoxCoreNativeLibs.get().asFile.absolutePath,
+                foxCoreSourceRoot.absolutePath,
+            ).directory(rootProject.projectDir)
+                .inheritIO()
+                .start()
+        val exitCode = process.waitFor()
+        check(exitCode == 0) { "FoxCore JNI seam verification failed with exit code $exitCode" }
+    }
+}
+
 val preparePrivacyNativeLibs = tasks.register<Sync>("preparePrivacyNativeLibs") {
     dependsOn(prepareBundledTorTransports)
     from("src/main/assets/tor") {
@@ -421,18 +482,9 @@ val prepareFilteredMainAssets = tasks.register<Sync>("prepareFilteredMainAssets"
         exclude("tor/**/tor/pluggable_transports/conjure-client")
         exclude("tor/**/tor/pluggable_transports/lyrebird")
         exclude("i2pd/**/libi2pd.so")
-        // Arti performs its own directory/certificate handling; the external Tor GeoIP databases
-        // and executable are deliberately not part of the application package.
         exclude("tor/**/data/geoip")
         exclude("tor/**/data/geoip6")
-        // Build-time input of the map preprocessor; the runtime reads only the
-        // *_preprocessed.json (TrafficMapCountryShapes).
         exclude("maps/ne_50m_admin_0_countries.geojson")
-        // Tor assets are per-ABI and the tree carries all four (92 MiB). Only
-        // the shipped ABIs can ever be read — `TorRuntimeInstaller` resolves the
-        // asset path from the device's own ABI — so the rest is dead weight the
-        // user downloads. Filtering here rather than deleting them from the tree
-        // keeps a wider `-Pfoxhole.abis` working without a git operation.
         val shipped = shippedAndroidAbis.toSet()
         exclude { candidate ->
             val segments = candidate.relativePath.segments
@@ -538,16 +590,11 @@ val verifyPublicReleaseNativeInventory = tasks.register("verifyPublicReleaseNati
                 "libdatastore_shared_counter.so",
                 "libfoxhole_native.so",
                 "libi2pd.so",
-                // JNA + libsodium ride in with lazysodium 5.2.0 (the 16KB-page-size fix):
-                // libsodium backs the sealed-journal crypto, libjnidispatch.so is JNA's bridge.
                 "libjnidispatch.so",
                 "liblyrebird.so",
                 "libsodium.so",
                 "libsqlcipher.so",
             )
-        // Every binary the runtime execs or loads. libi2pd.so is built from source by
-        // scripts/build-i2pd.sh (it is deliberately not committed), so without it in this gate a
-        // clean build would ship an app whose I2P mode is silently dead.
         val requiredRuntimeLibraries =
             setOf(
                 "libconjure_client.so",
@@ -704,14 +751,6 @@ val publicReleasePreflight = tasks.register("publicReleasePreflight") {
     }
 }
 
-// The one member of ours FoxCore resolves by NAME through JNI. R8 cannot see that call, so a
-// missing keep rule silently shrinks the method away — and because the dialer refuses a socket it
-// could not protect, the release build then cannot connect at all. It shipped that way once: the
-// bench Pixel recorded `NoSuchMethodError ... protectSocket(I)Z` on v66 release while every debug
-// build, unminified, worked. A keep rule alone is not enough of a guard either: the first attempt
-// at one named the FILE (RuntimeNativeSupport.kt) instead of the type it declares
-// (RuntimeServiceHost), matched nothing, and looked exactly like a fix. So the check reads the
-// shrunk output rather than the rule.
 val verifyReleaseJniSurface = tasks.register("verifyReleaseJniSurface") {
     group = "verification"
     description = "Fail when a member the native runtime calls by name did not survive minification."
@@ -752,6 +791,11 @@ tasks.matching { task -> task.name == "assembleRelease" }.configureEach {
 
 tasks.named("check") {
     dependsOn(verifyReleaseBuildConfigDefaults)
+    dependsOn(verifyFoxCoreJniSeam)
+}
+
+verifyReleaseBuildConfigDefaults.configure {
+    dependsOn(verifyFoxCoreJniSeam)
 }
 
 tasks.matching { task ->
@@ -771,33 +815,29 @@ tasks.matching { task ->
 android {
     namespace = "com.foxhole.guard"
     compileSdk = 37
+    ndkVersion = "29.0.14206865"
 
     defaultConfig {
         applicationId = publicApplicationId
         minSdk = 26
         targetSdk = 37
-        // Android orders updates by this integer, independently of the visible version name.
-        // Release-candidate code 88 is already installed on the physical Pixel. Every subsequent
-        // candidate and the public 0.0.1 artifact must remain an in-place upgrade: rolling the
-        // integer back would require an uninstall and wipe encrypted settings, statistics and
-        // Android special-access grants.
-        versionCode = 89
-        // The public-facing line starts at 0.0.1. The name must never carry
-        // "-dev"/"debug"/"internal" — publicReleasePreflight enforces that.
-        versionName = "0.0.1"
+        versionCode = 90
+        versionName = project.version.toString()
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
         buildConfigField("String", "DEFAULT_IP_INFO_ENDPOINT", "\"https://ipwho.is/\"")
-        // Self-update is for GitHub-installed builds only; F-Droid and Play manage their own
-        // updates. The F-Droid recipe passes -Pfoxhole.updateChannel=fdroid, which makes the
-        // in-app updater inert.
         buildConfigField("String", "UPDATE_CHANNEL", "\"$appUpdateChannel\"")
+        buildConfigField("long", "UPDATE_FLOOR_VERSION_CODE", "${appUpdateFloorVersionCode}L")
+        buildConfigField("long", "UPDATE_SUPPORTED_UNTIL_EPOCH_DAY", "${appUpdateSupportedUntilEpochDay}L")
         buildConfigField("String", "DEFAULT_SUPPORT_BOT_HANDLE", "\"@foxhole_repo_support_bot\"")
         buildConfigField("String", "FOXCORE_SOURCE_VERSION", "\"$foxCoreVersion\"")
         buildConfigField("String", "ARTI_VERSION", "\"$artiVersion\"")
-        // Launcher label; the debug build type overrides it so a side-by-side debug install is
-        // clearly distinguishable from the release "FoxHole Guard".
         manifestPlaceholders["appLabel"] = "@string/app_name"
+    }
+
+    dependenciesInfo {
+        includeInApk = false
+        includeInBundle = false
     }
 
     ksp {
@@ -915,9 +955,7 @@ android {
     }
 
     lint {
-        // Release distribution is intentionally arm64-v8a only.
         disable += "ChromeOsAbiSupport"
-        // Dependency freshness is handled by the release audit/update pass; lint must stay focused on app defects.
         disable += setOf("AndroidGradlePluginVersion", "GradleDependency", "NewerVersionAvailable")
     }
 
@@ -927,9 +965,6 @@ android {
                 isEnable = true
                 reset()
                 include(*shippedAndroidAbis.toTypedArray())
-                // With one shipped ABI, a "universal" output is byte-for-byte identical to the
-                // arm64 split. Publishing that duplicate would only make release verification and
-                // user choice ambiguous.
                 isUniversalApk = false
             }
         }
@@ -951,9 +986,6 @@ android {
 
 androidComponents {
     onVariants { variant ->
-        // Preserve the existing variant/task names while keeping the package-installer permission
-        // physically absent from F-Droid and every unknown managed channel. ManifestFiles is the
-        // AGP variant API for adding a static, high-priority overlay to a selected build.
         if (appUpdateChannel == "github") {
             variant.sources.manifests.addStaticManifestFile("src/githubUpdater/AndroidManifest.xml")
         }
@@ -1110,7 +1142,6 @@ tasks.register<JavaExec>("detektFormat") {
             detektPlugins.files.joinToString(separator = ",") { plugin -> plugin.path },
         )
     }
-    // Auto-correction rewrites sources; findings that cannot be corrected still exit non-zero.
     isIgnoreExitValue = true
 }
 
@@ -1164,24 +1195,6 @@ val verifyDetektBaseline = tasks.register("verifyDetektBaseline") {
     description = "Fail when detekt baseline changes without an intentional threshold update."
 
     val detektBaseline = rootProject.file("config/detekt/baseline.xml")
-    // Road-to-beta cleanup: wildcard imports expanded + detekt formatting auto-corrected dropped
-    // this from 586. The remaining entries are structural debt (LongMethod/LargeClass/ReturnCount…)
-    // burned down by the god-file refactor; this threshold must only ever shrink.
-    //
-    // 2026-07-05: corrected from a stale 71. Pass 1–3 feature work (map/geo, network rules, help
-    // sheets) added findings without a baseline refresh, so the tree actually carried 114 while the
-    // committed baseline still claimed 71 — detekt analysis was silently red. This pass burned the
-    // true count down to 84 (formatting auto-fix, dead-code/param removal, and complexity extraction
-    // in CountryTrafficAggregator/SettingsRepositorySupport/GeoIpUpdateClient) and re-synced the
-    // baseline to reality. Keep shrinking from here.
-    //
-    // 2026-07-05 (pass 4): burned to 0. The remaining god-files were split by responsibility into
-    // per-domain extension files (SettingsRepository → 7 files, HomeViewModelSettingsSupport → 6,
-    // ProfileRepository subscription/secret pipelines extracted, FoxholeProxyService/Controller
-    // health+reconcile support), long composables/methods extracted, and the CyclomaticComplexMethod
-    // / TooManyFunctions / LargeClass thresholds re-tuned in detekt.yml with documented rationale
-    // (flat `when` lookups, cohesive repositories, test catalogs). The baseline is now empty — every
-    // finding is fixed rather than suppressed. This threshold must stay 0.
     val expectedBaselineIssues = 0
     inputs.file(detektBaseline)
 
@@ -1198,17 +1211,8 @@ tasks.named("detekt") {
 }
 
 tasks.named("check") {
-    // Run the actual static analysis under `check`, not just the baseline entry count — otherwise
-    // `./gradlew check` reports a green analysis result without ever executing detekt (the analysis
-    // only ran because CI invokes `:app:detekt` explicitly). `detekt` is finalizedBy
-    // verifyDetektBaseline, so the baseline check still runs too.
+    // Keep `check` from passing without running the analysis task.
     dependsOn("detekt")
-    // Compile the instrumented sources too. `check` builds and runs the unit tests but never
-    // touched androidTest, so a production signature change could break every device test and
-    // nothing said so until somebody physically reached a phone — which is exactly what happened:
-    // a parameter added to buildWebAppWebView left LiveWebAppsAndroidTest uncompilable, and it was
-    // found by a device run, not by the gate. Compiling is deliberate; running them needs a device
-    // and stays a separate, explicit step.
     dependsOn("compileDebugAndroidTestKotlin")
 }
 
@@ -1227,9 +1231,6 @@ val jacocoExcludes =
         "**/*Database_Impl*.*",
     )
 
-// The focused gate below watches com/foxhole/core/network and com/foxhole/core/runtime, which
-// live in their own modules since the core extraction — the report has to fold their classes,
-// sources and test runs in, or those prefixes silently vanish from the XML.
 val jacocoCoreModuleClassDirectories =
     files(
         fileTree(rootDir.resolve("core/network/build/classes/kotlin/main")) {
@@ -1293,8 +1294,6 @@ val jacocoReleaseCriticalClassDirectories =
             include("com/foxhole/guard/core/**", "com/foxhole/core/runtime/**")
             exclude(jacocoExcludes)
         },
-        // com/foxhole/core/runtime classes compile in :core:runtime since the extraction; the
-        // app-local trees above keep the include for the few app-side leftovers.
         fileTree(rootDir.resolve("core/runtime/build/intermediates/built_in_kotlinc/debug/compileDebugKotlin/classes")) {
             include("com/foxhole/core/runtime/**")
             exclude(jacocoExcludes)
@@ -1536,10 +1535,6 @@ dependencies {
     implementation(libs.androidx.security.crypto)
     implementation(libs.sqlcipher.android)
     implementation(libs.androidx.biometric)
-    // lazysodium ships libsodium as an .aar with bundled .so; jna must ride the aar variant
-    // (with the Android natives). lazysodium pulls jna as a plain jar transitively, so exclude
-    // it there and add jna@aar explicitly — otherwise both the jar and aar land and the build
-    // fails on duplicate com.sun.jna classes.
     implementation(libs.lazysodium.android) {
         artifact { type = "aar" }
         exclude(group = "net.java.dev.jna", module = "jna")

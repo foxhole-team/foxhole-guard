@@ -30,9 +30,6 @@ internal fun HomeTorOperationUiState.canAcceptTorIp(ipInfo: IpInfo): Boolean {
 
 internal suspend fun HomeViewModel.publishTorIpInfoFromDashboardRefresh(info: IpInfo): Boolean {
     val published = publishTorRouteExit(info)
-    // Same claim discipline as maybeFinishTorOperation: check the source-of-truth mutable
-    // (the derived UI state lags a frame) and clear before the suspending emit, so the racing
-    // completion path can never also emit — one Tor start produces exactly one connected banner.
     if (published && torOperationMutable.value.active) {
         clearTorOperation()
         emitTorConnectedBanner(info)

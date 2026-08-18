@@ -50,17 +50,11 @@ internal fun HomeViewModel.importProfileRaw(value: String) {
             snackbars.tryEmit(errorBanner(R.string.profile_import_failed))
             return@launch
         }
-        // Every add parks on the confirmation sheet first (type + protocol + domain preview, and
-        // the insecure-TLS consent folded in when the payload carries it). A payload that does
-        // not even parse skips the sheet and lets the ordinary import path surface its own human
-        // error message.
         val preview = container.profileRepository.rawInputImportPreview(boundedValue)
         if (preview != null) {
             val tlsWarning = runCatching {
                 container.profileRepository.rawInputInsecureTlsWarning(boundedValue)
             }.getOrNull()
-            // The same source stored earlier flips the sheet into the duplicate prompt
-            // (already-added, offering cancel or refresh) instead of importing a twin.
             val duplicate = container.profileRepository.findProfileMatchingRawImport(boundedValue)
             val insecureTlsLabels = tlsWarning?.issues?.map { issue -> issue.protocolLabel }.orEmpty()
             val duplicateIsSubscription =
@@ -78,9 +72,6 @@ internal fun HomeViewModel.importProfileRaw(value: String) {
                     duplicateProfileName = duplicate?.name,
                     duplicateIsSubscription = duplicateIsSubscription,
                 )
-            // A subscription's protocols are inside its BODY, which the preview above deliberately
-            // does not fetch — so the sheet opens instantly on a dash and the protocols land in it
-            // a moment later. Only replace the preview if this very sheet is still the one open.
             if (preview.subscription && preview.protocolHints.isEmpty()) {
                 val fetched = container.profileRepository.subscriptionProtocolsPreview(boundedValue)
                 profileImportConfirmationMutable.update { current ->
@@ -113,7 +104,6 @@ internal fun HomeViewModel.importProfileRaw(value: String) {
     }
 }
 
-/** Consent captured in the add-profile sheet: run the import with the TLS decision applied. */
 internal fun HomeViewModel.importRawWithTlsConsentInternal(
     value: String,
     excludeInsecureTlsOptions: Boolean,
@@ -171,11 +161,6 @@ internal fun HomeViewModel.dismissInsecureTlsImportWarning() {
     insecureTlsImportWarningMutable.value = null
 }
 
-/**
- * Refresh on the duplicate-import prompt: subscriptions re-fetch the stored profile (the fox
- * narrates it), plain configs just re-activate the existing profile — either way no twin is
- * created.
- */
 internal fun HomeViewModel.updateDuplicateProfileFromImportInternal(pending: ProfileImportConfirmationState) {
     val profileId = pending.duplicateProfileId ?: return
     viewModelScope.launch {
@@ -246,15 +231,6 @@ private fun InsecureTlsImportWarning.toRefreshUiState(profileId: Long): Insecure
         canExcludeAndApply = canExcludeAndApply,
     )
 
-/**
- * Whether the import never got as far as reading a document.
- *
- * A subscription that could not be fetched says nothing about the link, so it
- * must not be reported as a bad link. The cause chain is the reliable signal —
- * OkHttp raises `IOException` subclasses for connect, DNS and TLS failures —
- * and the message is checked as well because the fetch path re-wraps some of
- * them, which is how a connect timeout reached the user as a parse complaint.
- */
 internal fun isNetworkFailure(
     throwable: Throwable,
     message: String,
@@ -266,10 +242,6 @@ internal fun isNetworkFailure(
     return NETWORK_FAILURE_MARKERS.any { marker -> message.contains(marker, ignoreCase = true) }
 }
 
-/**
- * Bounded because a cause chain can be circular, and a hang while composing an
- * error message is a worse failure than the one being described.
- */
 private const val MAX_CAUSE_DEPTH = 16
 
 private val NETWORK_FAILURE_MARKERS =
@@ -290,7 +262,6 @@ internal fun HomeViewModel.profileImportFailureMessage(
     val app = getApplication<Application>()
     val message = throwable.message.orEmpty()
     val trimmed = rawInput.trim()
-    // Keep subscription-link failures readable instead of surfacing parser internals.
     return when {
         trimmed.startsWith("http://", ignoreCase = true) ||
             message.contains("only https subscriptions are allowed", ignoreCase = true) ->
@@ -307,20 +278,9 @@ internal fun HomeViewModel.profileImportFailureMessage(
         throwable is ProfileImportPayloadTooLargeException ->
             app.getString(R.string.profile_import_too_large)
 
-        // The link was never read, so nothing about it is known to be wrong.
-        //
-        // Found on a phone with no working data: a ten-second connect timeout to
-        // port 443 came out of here as "this does not look like a valid VPN
-        // configuration", which sends the user to re-check a link that is fine
-        // and says nothing about the one thing that is not. Matched on both the
-        // cause chain and the message because the fetch layer re-wraps some of
-        // these before they arrive.
         isNetworkFailure(throwable, message) ->
             app.getString(R.string.profile_import_network_unreachable)
 
-        // Never surface parser internals ("unexpected token...", stack-trace-ish strings) to the
-        // user: anything uncurated collapses into one human sentence; the raw cause still goes to
-        // the diagnostics log.
         else -> app.getString(R.string.profile_import_invalid_config)
     }
 }

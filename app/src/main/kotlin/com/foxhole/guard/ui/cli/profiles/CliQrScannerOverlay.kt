@@ -42,10 +42,12 @@ import com.foxhole.guard.ui.cli.CliCommands
 import com.foxhole.guard.ui.cli.CliSpacing
 import com.foxhole.guard.ui.cli.CliType
 import com.foxhole.guard.ui.cli.LocalCliColors
+import com.foxhole.guard.ui.cli.LocalCliPanelAppearance
 import com.foxhole.guard.ui.cli.components.CliButton
 import com.foxhole.guard.ui.cli.components.CliKeyValue
 import com.foxhole.guard.ui.cli.components.CliPanel
 import com.foxhole.guard.ui.cli.components.cliMarchingBorder
+import com.foxhole.guard.ui.cli.components.cliModalSurfaceColor
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.ResultPoint
 import com.journeyapps.barcodescanner.BarcodeCallback
@@ -80,7 +82,10 @@ internal fun CliQrScannerOverlay(
         properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnClickOutside = false),
     ) {
         Column(
-            modifier = Modifier.fillMaxSize().background(colors.bg).padding(CliSpacing.lg),
+            modifier = Modifier
+                .fillMaxSize()
+                .background(cliModalSurfaceColor(LocalCliPanelAppearance.current, colors.panel))
+                .padding(CliSpacing.lg),
             verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
         ) {
             Text(text = "> ${CliCommands.SCAN_QR}", style = CliType.title, color = colors.accent)
@@ -89,8 +94,7 @@ internal fun CliQrScannerOverlay(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(320.dp)
-                    .background(colors.panel)
-                    // Marching ants in the accent while scanning; a calm ok once caught.
+                    .background(cliModalSurfaceColor(LocalCliPanelAppearance.current, colors.panel))
                     .then(
                         if (payload == null) {
                             Modifier.cliMarchingBorder(colors.accent)
@@ -151,7 +155,6 @@ internal fun CliQrScannerOverlay(
     }
 }
 
-/** The viewfinder's neon corners: four L brackets of 3dp cells, unsmoothed. */
 @Composable
 private fun CliQrReticle(color: Color) {
     Canvas(modifier = Modifier.fillMaxSize().padding(20.dp)) {

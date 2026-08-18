@@ -6,6 +6,7 @@ import com.foxhole.core.model.ConnectionState
 import com.foxhole.core.model.I2pNetworkPhase
 import com.foxhole.core.model.I2pPhaseSnapshot
 import com.foxhole.core.model.IpInfo
+import com.foxhole.core.model.LOCAL_GUARD_PROFILE_ID
 import com.foxhole.core.model.RuntimeTeardownPhase
 import com.foxhole.core.model.TOR_ONLY_PROFILE_ID
 import com.foxhole.core.model.TorNetworkPhase
@@ -37,6 +38,7 @@ class CliTerminalStateTest {
         unknown = "unknown",
         closed = "closed",
         torBesideVpn = "TOR and VPN",
+        torStarting = "starting the Tor module",
         torConnecting = "connecting to the TOR network",
         torCircuits = "tor circuits",
         torConnected = "tor connected",
@@ -56,16 +58,15 @@ class CliTerminalStateTest {
         exitKeyIp = "ip",
         exitKeyGeo = "geo",
         exitKeyIsp = "isp",
-        vpnExitKeyIp = "VPN IP",
-        torExitKeyIp = "TOR IP",
+        stepTunnel = "starting tunnel",
+        torConnectingTitle = "establishing connection — TOR",
+        torEstablished = "connection established — TOR",
         reasonLabels = mapOf(
             AutoConnectReasonCode.HANDSHAKE_TIMEOUT to "handshake timeout",
             AutoConnectReasonCode.DNS_FAILURE to "dns failure",
         ),
     )
 
-    // Не удержанный: этот класс про то, ЧТО печатает терминал, а не про то, когда холодный старт
-    // публикует лог — за это отвечает CliTerminalJournalWiringTest.
     private fun state(retentionHours: Int = 12) =
         CliTerminalState(strings(), retentionHours = { retentionHours }, startsHeld = false)
 
@@ -106,17 +107,43 @@ class CliTerminalStateTest {
         val terminal = state()
         terminal.onBootStage(profilesLoaded = false)
         terminal.onBootStage(profilesLoaded = false)
-        assertEquals(listOf("loading environment"), terminal.lines.map { it.text })
+        assertTrue(terminal.lines.isEmpty())
+        assertEquals("loading environment", terminal.bootProgress?.text)
+        terminal.updateCurrentStatus("connected", CliLineTone.OK)
         terminal.onBootStage(profilesLoaded = true)
         terminal.onBootStage(profilesLoaded = true)
-        assertEquals(listOf("loading environment", "application ready"), terminal.lines.map { it.text })
+        assertEquals(null, terminal.bootProgress)
+        assertEquals(listOf("connected"), terminal.lines.map { it.text })
     }
 
     @Test
     fun `warm entry with loaded profiles prints only the ready line`() {
         val terminal = state()
+        terminal.updateCurrentStatus("disconnected", CliLineTone.DIM)
         terminal.onBootStage(profilesLoaded = true)
-        assertEquals(listOf("application ready"), terminal.lines.map { it.text })
+        assertEquals(listOf("disconnected"), terminal.lines.map { it.text })
+    }
+
+    @Test
+    fun `the current status is shown only on cold start and immediately after clear`() {
+        val terminal = state()
+        terminal.updateCurrentStatus("connected", CliLineTone.OK)
+        terminal.onBootStage(profilesLoaded = true)
+        assertEquals(listOf("connected"), terminal.lines.map { it.text })
+
+        terminal.command(CliCommands.STATUS)
+        assertTrue(terminal.lines.isEmpty())
+        terminal.commitPrompt()
+        assertEquals(listOf(CliCommands.STATUS), terminal.lines.map { it.text })
+
+        terminal.updateCurrentStatus("disconnected", CliLineTone.DIM)
+        terminal.onBootStage(profilesLoaded = true)
+        assertEquals(listOf(CliCommands.STATUS), terminal.lines.map { it.text })
+
+        terminal.clearHistory()
+        assertEquals(listOf("disconnected"), terminal.lines.map { it.text })
+        terminal.command(CliCommands.STATUS)
+        assertTrue(terminal.lines.isEmpty())
     }
 
     @Test
@@ -154,8 +181,6 @@ class CliTerminalStateTest {
         val settledLines = terminal.lines.toList()
         assertNull(terminal.progress)
 
-        // CliHomeNarrationEffects is recreated on each HOME composition and replays the current
-        // StateFlow values. That replay may observe them, but it must not mint a new transition.
         repeat(3) {
             terminal.onConnection(connected)
             terminal.onTorPhase(TorPhaseSnapshot(phase = TorNetworkPhase.OFFLINE))
@@ -192,9 +217,6 @@ class CliTerminalStateTest {
         assertNull(terminal.progress)
     }
 
-    // ---- M3/M5: последовательный рассказ о подключении, формулировки по режиму ----
-
-    /** Прогон команды до конца печати: строки статуса ждут коммита промпта. */
     private fun CliTerminalState.type(text: String) {
         command(text)
         commitPrompt()
@@ -222,7 +244,8 @@ class CliTerminalStateTest {
         terminal.type(CliCommands.startVpn("fox"))
         terminal.onConnection(vpn(ConnectionState.CONNECTING))
         val progressId = terminal.progress?.id
-        assertEquals("connecting", terminal.progress?.text)
+        assertEquals("starting tunnel", terminal.progress?.text)
+        assertEquals("connecting", terminal.progress?.title)
         terminal.onConnection(vpn(ConnectionState.CONNECTED))
         assertEquals(progressId, terminal.progress?.id)
         assertEquals("checking connection", terminal.progress?.text)
@@ -231,14 +254,22 @@ class CliTerminalStateTest {
         assertEquals(
             listOf(
                 "start VPN -p fox",
-                "VPN IP",
                 "connection established",
+                "ip",
+                "geo",
             ),
             terminal.lines.map { it.text },
         )
-        val vpnLine = terminal.lines.single { it.text == "VPN IP" }
-        assertEquals("1.2.3.4 · DE", vpnLine.value)
-        assertEquals("de", vpnLine.flagCountry)
+        assertEquals(listOf(null, null, "1.2.3.4", "DE"), terminal.lines.map { it.value })
+        assertEquals(listOf(false, false, true, true), terminal.lines.map { it.footnote })
+        val ipLine = terminal.lines.single { it.text == "ip" }
+        assertEquals(CliLineTone.DIM, ipLine.tone)
+        assertEquals(CliLineTone.OK, ipLine.valueTone)
+        assertTrue(ipLine.valueLeading)
+        assertFalse(ipLine.typed)
+        val geoLine = terminal.lines.single { it.text == "geo" }
+        assertEquals("de", geoLine.flagCountry)
+        assertEquals(CliLineTone.OK, geoLine.valueTone)
         assertNull(terminal.progress)
     }
 
@@ -251,14 +282,22 @@ class CliTerminalStateTest {
         terminal.drainTorNarration()
 
         assertEquals(
-            listOf("VPN IP", "connection established · VPN", "TOR IP", "connection established"),
+            listOf(
+                "connection established · VPN",
+                "ip",
+                "connection established — TOR",
+                "ip",
+                "geo",
+            ),
             terminal.lines.map { it.text },
         )
-        assertEquals(listOf("1.2.3.4", null, "5.6.7.8 · DE", null), terminal.lines.map { it.value })
+        assertEquals(listOf(null, "1.2.3.4", null, "5.6.7.8", "DE"), terminal.lines.map { it.value })
         assertEquals(
-            listOf(CliLineTone.VPN, CliLineTone.VPN, CliLineTone.TOR, CliLineTone.OK),
+            listOf(CliLineTone.VPN, CliLineTone.VPN, CliLineTone.TOR, CliLineTone.TOR, CliLineTone.TOR),
             terminal.lines.map { it.valueTone },
         )
+        assertEquals(listOf(false, true, false, true, true), terminal.lines.map { it.footnote })
+        assertEquals(listOf(null, null, null, null, "DE"), terminal.lines.map { it.flagCountry })
     }
 
     @Test
@@ -270,7 +309,7 @@ class CliTerminalStateTest {
         terminal.onRouteIpInfo(ipInfo("1.2.3.4"), torInfo())
         terminal.drainTorNarration()
 
-        assertEquals(4, terminal.lines.size)
+        assertEquals(5, terminal.lines.size)
         assertFalse(terminal.blockPending)
     }
 
@@ -285,7 +324,7 @@ class CliTerminalStateTest {
         )
 
         assertEquals(
-            listOf("VPN IP", "connection established"),
+            listOf("connection established", "ip"),
             terminal.lines.map { it.text },
         )
         assertNull(terminal.progress)
@@ -301,7 +340,8 @@ class CliTerminalStateTest {
             null,
         )
 
-        assertEquals(listOf("1.2.3.4", null), terminal.lines.map { it.value })
+        assertEquals(listOf("connection established", "ip"), terminal.lines.map { it.text })
+        assertEquals(listOf(null, "1.2.3.4"), terminal.lines.map { it.value })
         assertFalse(terminal.blockPending)
     }
 
@@ -309,9 +349,11 @@ class CliTerminalStateTest {
     fun `connected tor keeps one live row until confirmed ip and country`() {
         val terminal = state()
         terminal.type(CliCommands.START_TOR)
-        assertEquals("connecting to the TOR network", terminal.progress?.text)
+        assertEquals("starting the Tor module", terminal.progress?.text)
+        assertEquals("establishing connection — TOR", terminal.progress?.title)
         terminal.onTorPhase(torPhase(TorNetworkPhase.CONNECTING))
         val progressId = terminal.progress?.id
+        terminal.advanceTorTo("connecting to the TOR network")
         assertEquals("connecting to the TOR network", terminal.progress?.text)
         terminal.onTorPhase(torPhase(TorNetworkPhase.BUILDING_CIRCUITS))
         assertEquals(progressId, terminal.progress?.id)
@@ -324,7 +366,6 @@ class CliTerminalStateTest {
         terminal.onTorIdentityProbe(torProbe(TorIdentityProbePhase.LOOKING_UP))
         terminal.advanceTorTo("determining TOR IP")
         assertEquals("determining TOR IP", terminal.progress?.text)
-        // An IP without a country is partial display data, not a successful Tor identity.
         terminal.onRouteIpInfo(null, ipInfo("5.6.7.8"))
         assertEquals("determining TOR IP", terminal.progress?.text)
         assertEquals(listOf("start TOR"), terminal.lines.map { it.text })
@@ -336,14 +377,17 @@ class CliTerminalStateTest {
         assertEquals(
             listOf(
                 "start TOR",
-                "TOR IP",
-                "connection established",
+                "connection established — TOR",
+                "ip",
+                "geo",
             ),
             terminal.lines.map { it.text },
         )
-        val torLine = terminal.lines.single { it.text == "TOR IP" }
-        assertEquals("5.6.7.8 · DE", torLine.value)
-        assertEquals("DE", torLine.flagCountry)
+        assertEquals(listOf(null, null, "5.6.7.8", "DE"), terminal.lines.map { it.value })
+        assertEquals(listOf(false, false, true, true), terminal.lines.map { it.footnote })
+        val geoLine = terminal.lines.single { it.text == "geo" }
+        assertEquals("DE", geoLine.flagCountry)
+        assertEquals(CliLineTone.TOR, geoLine.valueTone)
         assertNull(terminal.progress)
     }
 
@@ -365,7 +409,7 @@ class CliTerminalStateTest {
         val terminal = state()
         terminal.command(CliCommands.START_TOR)
         terminal.commitPrompt()
-        assertEquals("connecting to the TOR network", terminal.progress?.text)
+        assertEquals("starting the Tor module", terminal.progress?.text)
 
         terminal.onTorPhase(torPhase(TorNetworkPhase.OFFLINE))
 
@@ -382,10 +426,10 @@ class CliTerminalStateTest {
         terminal.onConnection(vpn(ConnectionState.CONNECTED, tor = true))
         terminal.onTorPhase(torPhase(TorNetworkPhase.CONNECTING))
         terminal.onTorPhase(torPhase(TorNetworkPhase.BUILDING_CIRCUITS))
-        // Пока VPN не получил адрес, Tor не вытесняет его живую строку.
-        assertEquals("checking connection", terminal.progress?.text)
+        assertEquals("starting the Tor module", terminal.progress?.text)
         terminal.onRouteIpInfo(ipInfo("1.2.3.4"), null)
         assertEquals(progressId, terminal.progress?.id)
+        assertEquals("starting the Tor module", terminal.progress?.text)
         terminal.advanceTorTo("tor circuits")
         assertEquals("tor circuits", terminal.progress?.text)
         terminal.onTorPhase(torPhase(TorNetworkPhase.CONNECTED))
@@ -400,15 +444,31 @@ class CliTerminalStateTest {
         assertEquals(
             listOf(
                 "start VPN+TOR -p fox",
-                "VPN IP",
                 "connection established · VPN",
-                "TOR IP",
-                "connection established",
+                "ip",
+                "connection established — TOR",
+                "ip",
+                "geo",
             ),
             terminal.lines.map { it.text },
         )
-        assertEquals(listOf(null, "1.2.3.4", null, "5.6.7.8 · DE", null), terminal.lines.map { it.value })
+        assertEquals(listOf(null, null, "1.2.3.4", null, "5.6.7.8", "DE"), terminal.lines.map { it.value })
         assertNull(terminal.progress)
+    }
+
+    @Test
+    fun `vpn plus tor starts the tor module row as soon as vpn connects`() {
+        val terminal = state()
+        terminal.type(CliCommands.startVpnTor("fox"))
+        terminal.onConnection(vpn(ConnectionState.CONNECTING, tor = true))
+        terminal.onTorPhase(torPhase(TorNetworkPhase.CONNECTING))
+        val progressId = terminal.progress?.id
+
+        terminal.onConnection(vpn(ConnectionState.CONNECTED, tor = true))
+
+        assertEquals(progressId, terminal.progress?.id)
+        assertEquals("starting the Tor module", terminal.progress?.text)
+        assertEquals("establishing connection — TOR", terminal.progress?.title)
     }
 
     @Test
@@ -422,17 +482,18 @@ class CliTerminalStateTest {
 
         terminal.onRouteIpInfo(null, torInfo())
         assertEquals(listOf("start VPN+TOR -p fox"), terminal.lines.map { it.text })
-        assertEquals("checking connection", terminal.progress?.text)
+        assertEquals("starting the Tor module", terminal.progress?.text)
 
         terminal.onRouteIpInfo(ipInfo("1.2.3.4"), torInfo())
         terminal.drainTorNarration()
         assertEquals(
             listOf(
                 "start VPN+TOR -p fox",
-                "VPN IP",
                 "connection established · VPN",
-                "TOR IP",
-                "connection established",
+                "ip",
+                "connection established — TOR",
+                "ip",
+                "geo",
             ),
             terminal.lines.map { it.text },
         )
@@ -443,22 +504,21 @@ class CliTerminalStateTest {
     fun `warm vpn tor and i2p snapshot commits final legs in route order`() {
         val terminal = state()
 
-        // Composition can receive all three already-connected snapshots in its first frame. The
-        // reducer must still preserve the product order and must not leave a stale live row.
         terminal.onConnection(vpn(ConnectionState.CONNECTED, tor = true))
         terminal.onTorPhase(torPhase(TorNetworkPhase.CONNECTED))
         terminal.onI2pPhase(I2pPhaseSnapshot(phase = I2pNetworkPhase.CONNECTED))
-        assertEquals("checking connection", terminal.progress?.text)
+        assertEquals("starting the Tor module", terminal.progress?.text)
 
         terminal.onRouteIpInfo(ipInfo("1.2.3.4"), torInfo())
         terminal.drainTorNarration()
 
         assertEquals(
             listOf(
-                "VPN IP",
                 "connection established · VPN",
-                "TOR IP",
-                "connection established",
+                "ip",
+                "connection established — TOR",
+                "ip",
+                "geo",
                 "connection established · VPN + Tor + I2P",
             ),
             terminal.lines.map { it.text },
@@ -466,22 +526,15 @@ class CliTerminalStateTest {
         assertNull(terminal.progress)
     }
 
-    /**
-     * «Весь трафик через TOR внутри VPN» стартует VPN-first: первая сессия собирается без
-     * tor-маршрута, поэтому мост отдаёт OFFLINE, а когда отложенный hot reload доезжает —
-     * сразу CONNECTED. Фазы CONNECTING не бывает вовсе, и раньше вся нога печаталась в никуда:
-     * пользователь видел только последнюю строку.
-     */
     @Test
     fun `a deferred tor route still uses one row after the vpn identity`() {
         val terminal = state()
         terminal.type(CliCommands.startVpnTor("fox"))
         terminal.onConnection(vpn(ConnectionState.CONNECTING, tor = true))
         terminal.onConnection(vpn(ConnectionState.CONNECTED, tor = true))
-        // Мост: torActive=false → OFFLINE, затем отложенный апгрейд → CONNECTED, минуя CONNECTING.
         terminal.onTorPhase(torPhase(TorNetworkPhase.OFFLINE))
         terminal.onTorPhase(torPhase(TorNetworkPhase.CONNECTED))
-        assertEquals("checking connection", terminal.progress?.text)
+        assertEquals("starting the Tor module", terminal.progress?.text)
         terminal.onRouteIpInfo(ipInfo("1.2.3.4"), null)
         terminal.advanceTorTo("tor connected")
         assertEquals("tor connected", terminal.progress?.text)
@@ -491,8 +544,8 @@ class CliTerminalStateTest {
         assertEquals(
             listOf(
                 "start VPN+TOR -p fox",
-                "VPN IP",
                 "connection established · VPN",
+                "ip",
             ),
             terminal.lines.map { it.text },
         )
@@ -508,24 +561,20 @@ class CliTerminalStateTest {
         val progressId = terminal.progress?.id
         terminal.onTorPhase(torPhase(TorNetworkPhase.OFFLINE))
 
-        // Tunnel validation publishes this while the first (VPN-only) deferred session still
-        // reports CONNECTING. It belongs to the generation and must survive CONNECTED's newer
-        // lastChangeAt instead of leaving the terminal at "checking connection" forever.
         terminal.onRouteIpInfo(ipInfo("1.2.3.4"), null)
-        assertEquals("connecting", terminal.progress?.text)
+        assertEquals("starting tunnel", terminal.progress?.text)
         terminal.onConnection(
             vpn(ConnectionState.CONNECTED, tor = false).copy(lastChangeAt = 2_000L),
         )
 
         assertEquals(progressId, terminal.progress?.id)
-        assertEquals("connecting to the TOR network", terminal.progress?.text)
+        assertEquals("starting the Tor module", terminal.progress?.text)
+        assertEquals("establishing connection — TOR", terminal.progress?.title)
         assertEquals(
-            listOf("start VPN+TOR -p fox", "VPN IP", "connection established · VPN"),
+            listOf("start VPN+TOR -p fox", "connection established · VPN", "ip"),
             terminal.lines.map { it.text },
         )
 
-        // A restored/legacy bridge may coalesce the short RECONNECTING edge. The single live row
-        // still catches up in order and remains until the independently confirmed Tor identity.
         terminal.onTorPhase(torPhase(TorNetworkPhase.CONNECTED))
         terminal.advanceTorTo("tor circuits")
         terminal.advanceTorTo("tor connected")
@@ -538,10 +587,11 @@ class CliTerminalStateTest {
         assertEquals(
             listOf(
                 "start VPN+TOR -p fox",
-                "VPN IP",
                 "connection established · VPN",
-                "TOR IP",
-                "connection established",
+                "ip",
+                "connection established — TOR",
+                "ip",
+                "geo",
             ),
             terminal.lines.map { it.text },
         )
@@ -560,7 +610,7 @@ class CliTerminalStateTest {
                 terminal.onTorPhase(torPhase(TorNetworkPhase.CONNECTING))
                 assertEquals(
                     "VPN must remain first for $trafficMode before=$identityBeforeConnected",
-                    "connecting",
+                    "starting tunnel",
                     terminal.progress?.text,
                 )
 
@@ -582,13 +632,18 @@ class CliTerminalStateTest {
                     "$trafficMode before=$identityBeforeConnected must not leave a spinner",
                     terminal.progress,
                 )
-                assertEquals(1, terminal.lines.count { it.text == "VPN IP" })
-                assertEquals(1, terminal.lines.count { it.text == "TOR IP" })
-                assertTrue(
-                    terminal.lines.indexOfFirst { it.text == "VPN IP" } <
-                        terminal.lines.indexOfFirst { it.text == "TOR IP" },
+                assertEquals(
+                    "$trafficMode before=$identityBeforeConnected must commit both legs in route order",
+                    listOf(
+                        "start VPN+TOR -p fox",
+                        "connection established · VPN",
+                        "ip",
+                        "connection established — TOR",
+                        "ip",
+                        "geo",
+                    ),
+                    terminal.lines.map { it.text },
                 )
-                assertEquals("connection established", terminal.lines.last().text)
             }
         }
     }
@@ -609,9 +664,6 @@ class CliTerminalStateTest {
             val settledLines = terminal.lines.toList()
             assertNull(terminal.progress)
 
-            // Pixel ordering: both route identities have already committed, then a service hot
-            // apply validates a replacement on the same Android tunnel. It remains CONNECTED and
-            // only carries an ownership marker; this must be presentation-read-only.
             terminal.onConnection(
                 connected.copy(
                     inPlaceRuntimeReload = true,
@@ -639,7 +691,7 @@ class CliTerminalStateTest {
             terminal.onConnection(connected)
             terminal.onRouteIpInfo(ipInfo("1.2.3.4"), null)
             assertNull(terminal.progress)
-            assertEquals(1, terminal.lines.count { it.text == "VPN IP" })
+            assertEquals(1, terminal.lines.count { it.text == "ip" && it.value == "1.2.3.4" })
 
             terminal.onConnection(connected.copy(inPlaceRuntimeReload = true))
             terminal.onTorPhase(torPhase(TorNetworkPhase.CONNECTING))
@@ -650,8 +702,16 @@ class CliTerminalStateTest {
             terminal.drainTorNarration()
 
             assertNull("$trafficMode must finish the Tor leg", terminal.progress)
-            assertEquals("$trafficMode must retain one VPN identity", 1, terminal.lines.count { it.text == "VPN IP" })
-            assertEquals("$trafficMode must append one Tor identity", 1, terminal.lines.count { it.text == "TOR IP" })
+            assertEquals(
+                "$trafficMode must retain one VPN identity",
+                1,
+                terminal.lines.count { it.text == "ip" && it.value == "1.2.3.4" },
+            )
+            assertEquals(
+                "$trafficMode must append one Tor identity",
+                1,
+                terminal.lines.count { it.text == "connection established — TOR" },
+            )
             assertFalse(terminal.lines.any { it.text == "reconnecting" })
         }
     }
@@ -708,17 +768,16 @@ class CliTerminalStateTest {
         terminal.onTorPhase(torPhase(TorNetworkPhase.CONNECTED))
         terminal.onTorIdentityProbe(torProbe(TorIdentityProbePhase.LOOKING_UP, generation = 9L))
         terminal.onRouteIpInfo(null, torInfo())
-        assertEquals("connecting", terminal.progress?.text)
+        assertEquals("starting tunnel", terminal.progress?.text)
 
         terminal.onConnection(vpn(ConnectionState.CONNECTED, tor = true))
         terminal.onRouteIpInfo(ipInfo("1.2.3.4"), torInfo())
         terminal.drainTorNarration()
 
         assertNull(terminal.progress)
-        assertTrue(
-            terminal.lines.indexOfFirst { it.text == "VPN IP" } <
-                terminal.lines.indexOfFirst { it.text == "TOR IP" },
-        )
+        val vpnIndex = terminal.lines.indexOfFirst { it.text == "connection established · VPN" }
+        val torIndex = terminal.lines.indexOfFirst { it.text == "connection established — TOR" }
+        assertTrue(vpnIndex >= 0 && torIndex >= 0 && vpnIndex < torIndex)
     }
 
     @Test
@@ -756,7 +815,7 @@ class CliTerminalStateTest {
         terminal.advanceTorTo("determining TOR IP")
         assertEquals("determining TOR IP", terminal.progress?.text)
         assertEquals(
-            listOf("start VPN+TOR -p fox", "VPN IP", "connection established · VPN"),
+            listOf("start VPN+TOR -p fox", "connection established · VPN", "ip"),
             terminal.lines.map { it.text },
         )
     }
@@ -780,7 +839,7 @@ class CliTerminalStateTest {
         assertTrue(firstProgressId != secondProgressId)
         terminal.advanceTorTo("determining TOR IP")
         assertEquals("determining TOR IP", terminal.progress?.text)
-        assertEquals(1, terminal.lines.count { it.text == "TOR IP" })
+        assertEquals(1, terminal.lines.count { it.text == "connection established — TOR" })
     }
 
     @Test
@@ -796,19 +855,19 @@ class CliTerminalStateTest {
         terminal.onTorIdentityProbe(torProbe(TorIdentityProbePhase.LOOKING_UP))
         terminal.advanceTorTo("determining TOR IP")
         assertEquals("determining TOR IP", terminal.progress?.text)
-        assertEquals(0, terminal.lines.count { it.text == "TOR IP" })
+        assertEquals(0, terminal.lines.count { it.text == "connection established — TOR" })
         terminal.onRouteIpInfo(null, torInfo())
         terminal.onRouteIpInfo(null, torInfo())
         terminal.drainTorNarration()
         assertNull(terminal.progress)
-        assertEquals(1, terminal.lines.count { it.text == "TOR IP" })
+        assertEquals(1, terminal.lines.count { it.text == "connection established — TOR" })
 
         terminal.onTorPhase(torPhase(TorNetworkPhase.OFFLINE))
         terminal.onTorPhase(torPhase(TorNetworkPhase.CONNECTING))
         assertEquals("connecting to the TOR network", terminal.progress?.text)
         terminal.type(CliCommands.STOP)
         assertNull(terminal.progress)
-        assertEquals(1, terminal.lines.count { it.text == "TOR IP" })
+        assertEquals(1, terminal.lines.count { it.text == "connection established — TOR" })
     }
 
     @Test
@@ -851,6 +910,25 @@ class CliTerminalStateTest {
     }
 
     @Test
+    fun `firewall handoff clears vpn disconnect progress without claiming a vpn connection`() {
+        val terminal = state()
+
+        terminal.onConnection(
+            vpn(ConnectionState.DISCONNECTING).copy(
+                teardownPhase = RuntimeTeardownPhase.ANDROID_TUNNEL,
+            ),
+        )
+        assertEquals("disconnecting android tunnel", terminal.progress?.text)
+
+        terminal.onConnection(
+            vpn(ConnectionState.CONNECTED).copy(profileId = LOCAL_GUARD_PROFILE_ID),
+        )
+
+        assertNull(terminal.progress)
+        assertFalse(terminal.lines.any { line -> line.text.startsWith("connection established") })
+    }
+
+    @Test
     fun `bounded tor identity failure ends the row and rejects a late result`() {
         val terminal = state()
         terminal.type(CliCommands.START_TOR)
@@ -863,8 +941,8 @@ class CliTerminalStateTest {
 
         assertNull(terminal.progress)
         assertEquals(listOf("start TOR", "tor ip failed"), terminal.lines.map { it.text })
-        assertEquals(0, terminal.lines.count { it.text == "TOR IP" })
-        assertEquals(0, terminal.lines.count { it.text == "connection established" })
+        assertEquals(0, terminal.lines.count { it.text == "connection established — TOR" })
+        assertEquals(0, terminal.lines.count { it.footnote })
     }
 
     @Test
@@ -884,8 +962,8 @@ class CliTerminalStateTest {
         assertEquals(
             listOf(
                 "start VPN+TOR -p fox",
-                "VPN IP",
                 "connection established · VPN",
+                "ip",
                 "tor ip failed",
                 "connection established · VPN + I2P",
             ),
@@ -914,8 +992,8 @@ class CliTerminalStateTest {
         terminal.onRouteIpInfo(null, torInfo())
         terminal.drainTorNarration()
 
-        assertEquals(1, terminal.lines.count { it.text == "TOR IP" })
-        assertEquals(1, terminal.lines.count { it.text == "connection established" })
+        assertEquals(1, terminal.lines.count { it.text == "connection established — TOR" })
+        assertEquals(1, terminal.lines.count { it.text == "ip" })
     }
 
     @Test
@@ -925,7 +1003,7 @@ class CliTerminalStateTest {
         terminal.onConnection(vpn(ConnectionState.ERROR).copy(message = "boom"))
 
         assertNull(terminal.progress)
-        assertEquals(0, terminal.lines.count { it.text == "TOR IP" })
+        assertEquals(0, terminal.lines.count { it.text == "connection established — TOR" })
     }
 
     @Test
@@ -940,8 +1018,8 @@ class CliTerminalStateTest {
         assertEquals(
             listOf(
                 "start VPN -p fox",
-                "VPN IP",
                 "connection established",
+                "ip",
                 "mode VPN+TOR",
             ),
             terminal.lines.map { it.text },
@@ -972,7 +1050,6 @@ class CliTerminalStateTest {
         terminal.type(CliCommands.startVpn("fox"))
         terminal.onConnection(vpn(ConnectionState.CONNECTED))
         terminal.onRouteIpInfo(ipInfo("1.2.3.4"), null)
-        // Bypass-маршрут: канон `mode TOR` ставит bypassVpnTunnel=true поверх живого туннеля.
         terminal.type(CliCommands.MODE_TOR)
         assertNull(terminal.progress)
         terminal.onTorPhase(torPhase(TorNetworkPhase.CONNECTING))
@@ -980,20 +1057,19 @@ class CliTerminalStateTest {
         assertEquals(
             listOf(
                 "start VPN -p fox",
-                "VPN IP",
                 "connection established",
+                "ip",
                 "mode TOR",
             ),
             terminal.lines.map { it.text },
         )
         assertEquals("connecting to the TOR network", terminal.progress?.text)
+        assertEquals("establishing connection — TOR", terminal.progress?.title)
     }
 
     @Test
     fun `profile name containing tor is not read as a tor order`() {
         val terminal = state()
-        // «victoria» содержит подстроку tor: заказ маршрута обязан читать только
-        // целевой токен после start/mode, а не всю команду.
         terminal.type(CliCommands.startVpn("victoria"))
         assertNull(terminal.progress)
         terminal.onConnection(vpn(ConnectionState.CONNECTED))
@@ -1002,8 +1078,8 @@ class CliTerminalStateTest {
         assertEquals(
             listOf(
                 "start VPN -p victoria",
-                "VPN IP",
                 "connection established",
+                "ip",
             ),
             terminal.lines.map { it.text },
         )
@@ -1022,8 +1098,6 @@ class CliTerminalStateTest {
         assertTrue(terminal.lines.isEmpty())
     }
 
-    // ---- Причины разрыва: локализованный код вместо сырого текста исключения ----
-
     @Test
     fun `error prints the localized reason, not the raw exception text`() {
         val terminal = state()
@@ -1040,8 +1114,11 @@ class CliTerminalStateTest {
     fun `error without a reason code prints unknown plus the raw tail as a dim step`() {
         val terminal = state()
         terminal.onConnection(vpn(ConnectionState.ERROR).copy(message = "boom"))
-        assertEquals(listOf("error: unknown", "  boom"), terminal.lines.map { it.text })
-        assertEquals(CliLineTone.DIM, terminal.lines.last().tone)
+        assertEquals(listOf("error: unknown", "boom"), terminal.lines.map { it.text })
+        val tail = terminal.lines.last()
+        assertEquals(CliLineTone.DIM, tail.tone)
+        assertTrue(tail.footnote)
+        assertFalse(tail.typed)
     }
 
     @Test
@@ -1055,6 +1132,7 @@ class CliTerminalStateTest {
         )
         assertTrue(terminal.lines.isEmpty())
         assertEquals("reconnecting · dns failure", terminal.progress?.text)
+        assertEquals("connecting", terminal.progress?.title)
     }
 
     @Test
@@ -1156,9 +1234,6 @@ class CliTerminalStateTest {
     fun `explicit start owns a delayed connection and is never echoed as an autostart`() {
         val terminal = state()
         terminal.type(CliCommands.startVpn("fox"))
-        // Regression for subscription refresh + I2P handoff taking longer than the former 6 s
-        // duplicate-suppression window. The command's wall-clock timestamp is only journal data;
-        // making it arbitrarily old must not change ownership of the pending START transaction.
         terminal.javaClass
             .getDeclaredField("lastUserCommandAtMs")
             .apply { isAccessible = true }
@@ -1170,7 +1245,7 @@ class CliTerminalStateTest {
             1,
             terminal.lines.count { line -> line.prompt && line.text == CliCommands.startVpn("fox") },
         )
-        assertEquals("connecting", terminal.progress?.text)
+        assertEquals("starting tunnel", terminal.progress?.text)
     }
 
     @Test
@@ -1187,7 +1262,6 @@ class CliTerminalStateTest {
         val terminal = state()
         terminal.command(CliCommands.startVpn("fox"), output = "queued")
         Thread.sleep(CLOCK_STEP_MS)
-        // Arrives while the command is still typing, so it carries an earlier source time.
         terminal.onConnection(vpn(ConnectionState.CONNECTING))
         Thread.sleep(CLOCK_STEP_MS)
         terminal.commitPrompt()
@@ -1198,7 +1272,8 @@ class CliTerminalStateTest {
             listOf("start VPN -p fox", "queued"),
             terminal.lines.map { it.text },
         )
-        assertEquals("connecting", terminal.progress?.text)
+        assertEquals("starting tunnel", terminal.progress?.text)
+        assertEquals("connecting", terminal.progress?.title)
     }
 
     @Test
@@ -1207,7 +1282,6 @@ class CliTerminalStateTest {
         terminal.note("old")
         Thread.sleep(5L)
         terminal.note("new")
-        // Cutoff == now: the strictly-older first line is gone, the fresh one stays.
         assertEquals(listOf("new"), terminal.lines.map { it.text })
     }
 
@@ -1218,8 +1292,6 @@ class CliTerminalStateTest {
         assertEquals(120, terminal.lines.size)
         assertEquals("line 149", terminal.lines.last().text)
     }
-
-    // ---- Блочный вывод команды (`status`): построчно, ключ + значение ----
 
     @Test
     fun `a block prints one key-value row per drain, in order`() {
@@ -1235,7 +1307,6 @@ class CliTerminalStateTest {
                 CliTerminalRow(key = "rest", value = "direct", tone = CliLineTone.DIM),
             ),
         )
-        // Очередь есть, но в лог сама по себе ничего не роняет — печатает только панель.
         assertTrue(terminal.blockPending)
         assertTrue(terminal.lines.isEmpty())
 
@@ -1255,6 +1326,49 @@ class CliTerminalStateTest {
     }
 
     @Test
+    fun `a drained row carries its column shape and its typing claim onto the line`() {
+        val terminal = state()
+        terminal.emitBlock(
+            cliInfoNoticeRows(event = "event", description = "description", kind = "info: event"),
+        )
+
+        assertTrue(terminal.drainBlockRow())
+        assertTrue(terminal.drainBlockRow())
+
+        val columns = terminal.lines.first()
+        assertTrue(columns.valueLeading)
+        assertFalse("a printed row never types: a wrapping row re-measures on every character", columns.typed)
+        val kind = terminal.lines.last()
+        assertFalse(kind.valueLeading)
+        assertTrue(kind.typed)
+    }
+
+    @Test
+    fun `an inline block carries its wrapping layout onto every drained row`() {
+        val terminal = state()
+        terminal.emitBlock(
+            rows = listOf(
+                CliTerminalRow(key = "VPN", value = "a long provider description"),
+                CliTerminalRow(key = "DNS", value = "1.1.1.1"),
+            ),
+            inlineValues = true,
+        )
+
+        assertTrue(terminal.drainBlockRow())
+        assertTrue(terminal.drainBlockRow())
+
+        assertTrue(terminal.lines.all(CliTerminalLine::inlineValue))
+    }
+
+    @Test
+    fun `narration still types itself out`() {
+        val terminal = state()
+        terminal.note("tunnel up", CliLineTone.OK)
+
+        assertTrue(terminal.lines.single().typed)
+    }
+
+    @Test
     fun `an empty block queues nothing`() {
         val terminal = state()
         terminal.emitBlock(emptyList())
@@ -1267,8 +1381,6 @@ class CliTerminalStateTest {
         val terminal = state()
         terminal.command(CliCommands.STATUS)
         terminal.emitBlock(listOf(CliTerminalRow(key = "route", value = "no active route")))
-        // Даже если панель тикнет очередь раньше коммита, строка придерживается вместе со
-        // статусными: сначала команда, потом её ответ.
         assertTrue(terminal.drainBlockRow())
         assertTrue(terminal.lines.isEmpty())
 
@@ -1285,8 +1397,6 @@ class CliTerminalStateTest {
         assertEquals("row 150", terminal.lines.last().text)
     }
 
-    // Wall-clock steps: the log stamps lines with System.currentTimeMillis(), so the ordering
-    // scenario needs real time to pass between the command and its commit.
     private companion object {
         const val CLOCK_STEP_MS = 5L
     }

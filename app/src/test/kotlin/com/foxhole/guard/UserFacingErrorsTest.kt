@@ -97,10 +97,6 @@ class UserFacingErrorsTest {
 
     @Test
     fun `no runtime or ui sink falls back to the missing-core message`() {
-        // error_runtime_missing answers exactly one question — is the core linked into this build.
-        // As a catch-all fallback it reported every unclassified failure that way, which is how a
-        // connect refused over a tunnel a Tor stop had not released yet reached the user as
-        // "this build has no native library". Its only sink is classifyUserFacingError now.
         val source =
             listOf(
                 sourceDirectory("runtime"),

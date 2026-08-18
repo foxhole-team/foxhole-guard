@@ -7,9 +7,6 @@ import com.foxhole.core.model.TrafficMapPeriod
 import kotlinx.coroutines.flow.map
 import java.util.Locale
 
-// The mutable per-country/app/host accumulators behind the traffic-map aggregates.
-// Split from TrafficMapAggregation.kt.
-
 data class TrafficMapCountryCoordinate(
     val countryCode: String,
     val label: String,
@@ -143,15 +140,8 @@ internal data class TrafficMapConnectionAccumulator(
     val sessionBytesByCountry: Map<String, Long> = emptyMap(),
     val sessionConnectionIdsByCountry: Map<String, Set<String>> = emptyMap(),
     val periodBuckets: List<TrafficMapPeriodBucket> = emptyList(),
-    // Whether the aggregates belong to a live session. False means the map is showing the
-    // retained snapshot of the LAST session; the next unavailable -> available transition
-    // starts a fresh accumulator (in-memory only, does not survive process death).
     val sessionActive: Boolean = false,
 ) {
-    // The live aggregate is pure over samplesById, but each 3s batch used to rescan the retained
-    // window (up to 512 samples) 3-4 times: previous-codes lookup, next-codes lookup, the
-    // destination-tracking collector and the UI bundle. The accumulator is rebuilt per batch, so a
-    // per-instance memo can never go stale; benign race — recompute yields the identical map.
     @Volatile
     private var cachedCountryAggregates: Map<String, TrafficMapAggregate>? = null
 
@@ -160,11 +150,8 @@ internal data class TrafficMapConnectionAccumulator(
         nowMs: Long = System.currentTimeMillis(),
     ): TrafficMapConnectionAccumulator {
         if (!batch.runtimeAvailable) {
-            // Runtime went down: keep the last session's aggregates on the map. Only the
-            // "new country" pulse is dropped — nothing is appearing anymore.
             return copy(newCountryCodes = emptySet(), sessionActive = false)
         }
-        // unavailable -> available: a new session starts over from a clean accumulator.
         val base = if (sessionActive) this else TrafficMapConnectionAccumulator(sessionActive = true)
         return base.updatedWith(
             samples = batch.samples,
@@ -214,7 +201,6 @@ internal data class TrafficMapConnectionAccumulator(
                 connectionIdsByCountry = connectionIdsByCountry,
                 newCountryCodes = newCountryCodes,
             )
-        // copy() keeps sessionActive: session bookkeeping belongs to updatedForBatch.
         return copy(
             samplesById = next,
             lastSampleAtMs = nowMs,
@@ -230,7 +216,6 @@ internal data class TrafficMapConnectionAccumulator(
             ?: aggregateTrafficMapSamples(samplesById.values.toList())
                 .also { aggregates -> cachedCountryAggregates = aggregates }
 
-    /** Monotonic per-session totals for Sentinel windows; unlike live samples, closed flows stay. */
     fun sessionCountryBytes(): Map<String, Long> = sessionBytesByCountry
 
     fun periodAggregates(
@@ -259,18 +244,12 @@ internal data class TrafficMapConnectionAccumulator(
             .toSet()
 }
 
-/** One batch of samples reconciled against the retained ones: the seam inside `updatedWith`. */
 private class FoldedTrafficMapSamples(
     val samplesById: LinkedHashMap<String, TrafficMapConnectionSample>,
     val sampleDeltas: List<TrafficMapConnectionSample>,
     val connectionIdsByCountry: Map<String, Set<String>>,
 )
 
-/**
- * Merges a batch into the retained samples: per-connection byte deltas (a shrinking counter means
- * the flow restarted), the country buckets those deltas belong to, and the oldest-first eviction
- * once the retention window is full. A live sample never regresses to a smaller total.
- */
 private fun List<TrafficMapConnectionSample>.foldIntoTrafficMapSamples(
     previousSamples: LinkedHashMap<String, TrafficMapConnectionSample>,
     replaceLiveSamples: Boolean,
@@ -308,7 +287,6 @@ private fun List<TrafficMapConnectionSample>.foldIntoTrafficMapSamples(
     )
 }
 
-/** Appends the batch's period bucket (only when it carries bytes) and re-prunes the window. */
 private fun List<TrafficMapPeriodBucket>.withTrafficMapPeriodBucket(
     nowMs: Long,
     deltaBytesByCountry: Map<String, Long>,

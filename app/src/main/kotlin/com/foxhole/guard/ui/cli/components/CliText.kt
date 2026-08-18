@@ -1,6 +1,9 @@
 package com.foxhole.guard.ui.cli.components
 
 import androidx.annotation.DrawableRes
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.basicMarquee
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -12,8 +15,10 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -21,17 +26,17 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.foxhole.core.model.VisualStyle
 import com.foxhole.guard.R
+import com.foxhole.guard.ui.cli.CliIconSize
 import com.foxhole.guard.ui.cli.CliSpacing
 import com.foxhole.guard.ui.cli.CliType
 import com.foxhole.guard.ui.cli.LocalCliColors
+import com.foxhole.guard.ui.cli.LocalCliVisualStyle
+import com.foxhole.guard.ui.cli.cliLabelText
+import com.foxhole.guard.ui.cli.cliRowTextStyle
 
-/** `key ......... value` row: dim key at the start, colored value at the end; [icon] —
- * an optional pixel glyph before the key; [valueLeading] an optional graphic before the value,
- * such as the geo flag, and [valueTrailing] an optional disclosure glyph after it, in the row's
- * shared grammar. Values swap with no flash or motion:
- * live rows (traffic, uptime) tick every second, and any change highlight became a
- * permanent blink there. */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 internal fun CliKeyValue(
     key: String,
@@ -43,11 +48,11 @@ internal fun CliKeyValue(
     valueLeading: (@Composable () -> Unit)? = null,
     valueTrailing: (@Composable () -> Unit)? = null,
     valueContent: (@Composable () -> Unit)? = null,
+    animateValue: Boolean = false,
+    valueMaxLines: Int = 1,
 ) {
     val colors = LocalCliColors.current
     Row(
-        // The trailing value can swap between body text and the canonical 16dp spinner. Reserve
-        // that slot height on every frame so connect/refresh cannot move neighbouring rows.
         modifier = modifier
             .fillMaxWidth()
             .defaultMinSize(minHeight = cliSpinnerSlotSize),
@@ -68,16 +73,17 @@ internal fun CliKeyValue(
                 Spacer(modifier = Modifier.width(6.dp))
             }
             Text(
-                text = key,
-                style = CliType.body,
+                text = cliKeyLabelText(key),
+                style = cliRowTextStyle(),
                 color = colors.dim,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        // Flag and value are a single child of the SpaceBetween row, or the distribution would
-        // drag the graphic into the middle, away from its value.
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            modifier = Modifier.weight(1f, fill = false),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             if (valueContent != null) {
                 valueContent()
             } else {
@@ -88,14 +94,27 @@ internal fun CliKeyValue(
                 val resolvedValueColor =
                     if (valueColor == Color.Unspecified) colors.fg else valueColor
                 Text(
-                    text = value,
-                    style = CliType.body,
+                    text = rememberCliTypedText(cliLabelText(value), enabled = animateValue),
+                    style = cliRowTextStyle(),
                     color = resolvedValueColor,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
+                    textAlign = TextAlign.End,
+                    maxLines = valueMaxLines,
+                    overflow = if (valueMaxLines == 1) TextOverflow.Clip else TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .weight(1f, fill = false)
+                        .then(
+                            if (valueMaxLines == 1) {
+                                Modifier.basicMarquee(
+                                    iterations = Int.MAX_VALUE,
+                                    initialDelayMillis = VALUE_MARQUEE_DELAY_MS,
+                                    repeatDelayMillis = VALUE_MARQUEE_REPEAT_MS,
+                                )
+                            } else {
+                                Modifier
+                            },
+                        ),
                 )
                 if (valueTrailing != null) {
-                    Spacer(modifier = Modifier.width(CliSpacing.xs))
                     valueTrailing()
                 }
             }
@@ -103,7 +122,14 @@ internal fun CliKeyValue(
     }
 }
 
-/** Informational sub-row. Every note carries the same `pix_info`; its tone can still warn/fail. */
+@Composable
+@ReadOnlyComposable
+private fun cliKeyLabelText(key: String): String {
+    if (LocalCliVisualStyle.current != VisualStyle.PLAIN) return key
+    val capital = key.replaceFirstChar { char -> char.uppercaseChar() }
+    return if (capital.isEmpty() || capital.endsWith(":")) capital else "$capital:"
+}
+
 @Composable
 internal fun CliElbowLine(
     text: String,
@@ -119,7 +145,6 @@ internal fun CliElbowLine(
     )
 }
 
-/** Blue info note separated by a horizontal pixel stitch, never a boxed/dashed outline. */
 @Composable
 internal fun CliInfoNote(
     text: String,
@@ -132,39 +157,124 @@ internal fun CliInfoNote(
     }
 }
 
-/**
- * Centred passive notice used where the note itself is a distinct, non-interactive section.
- * [outerVerticalPadding] belongs outside the contour so dense screens may opt out explicitly;
- * loader and progress geometry never inherits it because those components do not use this note.
- */
 @Composable
 internal fun CliDashedInfoNote(
     text: String,
     modifier: Modifier = Modifier,
+    @DrawableRes icon: Int = R.drawable.pix_info,
     outerVerticalPadding: Dp = CliSpacing.xs,
+    centered: Boolean = false,
+    centeredIconLeading: Boolean = false,
+    centeredIconFirstLine: Boolean = false,
+    color: Color = Color.Unspecified,
+) {
+    val colors = LocalCliColors.current
+    val noteColor = if (color == Color.Unspecified) colors.note else color
+    val frame = if (LocalCliVisualStyle.current == VisualStyle.PLAIN) {
+        Modifier.border(1.dp, noteColor.copy(alpha = 0.6f), RoundedCornerShape(8.dp))
+    } else {
+        Modifier.cliDashedBorder(noteColor)
+    }
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = outerVerticalPadding)
+            .then(frame)
+            .padding(horizontal = CliSpacing.md, vertical = CliSpacing.md),
+    ) {
+        if (centered) {
+            CliCenteredInfoBlock(
+                text = text,
+                color = noteColor,
+                icon = icon,
+                iconLeading = centeredIconLeading,
+                iconFirstLine = centeredIconFirstLine,
+            )
+        } else {
+            Row(verticalAlignment = Alignment.Top) {
+                CliPixIcon(
+                    id = icon,
+                    contentDescription = null,
+                    size = CliIconSize.note,
+                    tint = noteColor,
+                    modifier = Modifier.offset(y = 1.dp),
+                )
+                Spacer(modifier = Modifier.width(CliSpacing.sm))
+                Text(
+                    text = cliLabelText(text),
+                    style = CliType.small,
+                    color = noteColor,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+internal fun CliCenteredEmptyNote(
+    text: String,
+    modifier: Modifier = Modifier,
+    color: Color = Color.Unspecified,
 ) {
     val colors = LocalCliColors.current
     Column(
         modifier = modifier
             .fillMaxWidth()
-            // Keep passive info contours visually separate from the rows above and below. This
-            // lives here so every info block gets the same air without touching loader geometry.
-            .padding(vertical = outerVerticalPadding)
-            .cliDashedBorder(colors.note)
-            .padding(horizontal = CliSpacing.md, vertical = CliSpacing.sm),
+            .padding(vertical = CLI_INFO_LINE_VERTICAL_PADDING),
+    ) {
+        CliCenteredInfoBlock(
+            text = text,
+            color = if (color == Color.Unspecified) colors.note else color,
+        )
+    }
+}
+
+@Composable
+private fun CliCenteredInfoBlock(
+    text: String,
+    color: Color,
+    @DrawableRes icon: Int = R.drawable.pix_info,
+    iconLeading: Boolean = false,
+    iconFirstLine: Boolean = false,
+) {
+    if (iconLeading) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = if (iconFirstLine) Alignment.Top else Alignment.CenterVertically,
+        ) {
+            CliPixIcon(
+                id = icon,
+                contentDescription = null,
+                size = CliIconSize.note,
+                tint = color,
+                modifier = if (iconFirstLine) Modifier.offset(y = 1.dp) else Modifier,
+            )
+            Spacer(modifier = Modifier.width(CliSpacing.sm))
+            Text(
+                text = cliLabelText(text),
+                style = CliType.small,
+                color = color,
+                textAlign = TextAlign.Center,
+            )
+        }
+        return
+    }
+    Column(
+        modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         CliPixIcon(
-            id = R.drawable.pix_info,
+            id = icon,
             contentDescription = null,
-            size = 18.dp,
-            tint = colors.note,
+            size = CliIconSize.note,
+            tint = color,
         )
         Spacer(modifier = Modifier.height(CliSpacing.xs))
         Text(
-            text = text,
+            text = cliLabelText(text),
             style = CliType.small,
-            color = colors.note,
+            color = color,
             textAlign = TextAlign.Center,
         )
     }
@@ -177,17 +287,21 @@ private fun CliInfoLine(
     maxLines: Int,
     modifier: Modifier = Modifier,
 ) {
-    Row(modifier = modifier, verticalAlignment = Alignment.Top) {
+    val plain = LocalCliVisualStyle.current == VisualStyle.PLAIN
+    Row(
+        modifier = modifier.padding(vertical = CLI_INFO_LINE_VERTICAL_PADDING),
+        verticalAlignment = Alignment.Top,
+    ) {
         CliPixIcon(
             id = R.drawable.pix_info,
             contentDescription = null,
-            size = 12.dp,
+            size = CliIconSize.glyph,
             tint = color,
-            modifier = Modifier.offset(y = (-1).dp),
+            modifier = Modifier.offset(y = if (plain) 2.dp else (-1).dp),
         )
         Spacer(modifier = Modifier.width(CliSpacing.xs))
         Text(
-            text = text,
+            text = cliLabelText(text),
             style = CliType.small,
             color = color,
             maxLines = maxLines,
@@ -195,3 +309,8 @@ private fun CliInfoLine(
         )
     }
 }
+
+internal val CLI_INFO_LINE_VERTICAL_PADDING = 3.dp
+
+private const val VALUE_MARQUEE_DELAY_MS = 1200
+private const val VALUE_MARQUEE_REPEAT_MS = 2400

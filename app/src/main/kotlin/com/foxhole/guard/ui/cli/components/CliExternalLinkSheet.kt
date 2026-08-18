@@ -12,11 +12,6 @@ import com.foxhole.guard.ui.cli.CliSpacing
 import com.foxhole.guard.ui.cli.CliType
 import com.foxhole.guard.ui.cli.LocalCliColors
 
-/**
- * The one gate for leaving the app: every external URL opens through this sheet, which prints
- * the address itself — the user confirms the destination, not a label. Buttons follow the
- * sheet-wide [CliSheetActionsRow] palette.
- */
 @Composable
 internal fun CliExternalLinkSheet(
     url: String,
@@ -50,7 +45,6 @@ internal fun CliExternalLinkSheet(
                     label = stringResource(R.string.cli_common_yes_confirm),
                     onClick = {
                         onDismiss()
-                        // No browser is a legal device state; a crash would punish the confirm.
                         runCatching { uriHandler.openUri(url) }
                     },
                 ),

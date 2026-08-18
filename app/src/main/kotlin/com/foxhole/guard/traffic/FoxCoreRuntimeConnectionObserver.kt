@@ -25,13 +25,6 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 
-/**
- * Polls FoxCore's bounded traffic-map snapshot.
- *
- * Native owns the sampling data and returns one internally consistent document containing flows,
- * routes, per-app totals, lane totals and DNS counters. The UI never opens a second command socket
- * and never observes a mixture of generations.
- */
 @OptIn(ExperimentalCoroutinesApi::class)
 internal class FoxCoreRuntimeConnectionObserver(
     private val runtimeProvider: () -> FoxholeRuntime,
@@ -109,13 +102,6 @@ internal data class RuntimeConnectionSnapshot(
     val droppedTrafficEvents: Long = 0L,
 )
 
-/**
- * FoxCore's authoritative cumulative byte counters for one routed lane.
- *
- * Unlike [RuntimeConnectionRecord], these totals retain traffic after a short flow closes and are
- * not affected by the bounded list of live rows. That makes them the only lossless source for the
- * Tor/I2P statistics lanes.
- */
 internal data class RuntimeLaneTraffic(
     val lane: String,
     val bytesTx: Long,
@@ -169,15 +155,6 @@ internal sealed interface RuntimeAuditEvent {
         val attempts: Int,
     ) : RuntimeAuditEvent
 
-    /**
-     * Live flows cut on request — the enforcement half of blocking an app, which a policy reload
-     * deliberately does not do.
-     *
-     * [target] is the revocation kind (`all`, `lane`, `uid`, `package`, `outbound`, `flow`) and
-     * [scope] the identifier inside it, absent for `all`. [count] of zero is not a non-event: the
-     * core publishes the request itself, because "we cut this app off and it had nothing open" and
-     * "we never asked" are different facts and only the journal can tell them apart afterwards.
-     */
     data class FlowsRevoked(
         val target: String,
         val scope: String?,
@@ -391,11 +368,7 @@ private fun JsonObject.toRuntimeAuditEvent(): RuntimeAuditEvent? =
             } else {
                 RuntimeAuditEvent.FlowsRevoked(
                     target = target,
-                    // Absent for a device-wide `all`, and left null rather than defaulted so the
-                    // journal cannot print a scope the core never named.
                     scope = string("scope")?.trim()?.takeIf(String::isNotBlank),
-                    // A missing count reads as zero, never as "unknown, assume some": the count is
-                    // evidence, and an invented one is worse than none.
                     count = int("count")?.coerceAtLeast(0) ?: 0,
                 )
             }
@@ -439,17 +412,11 @@ private fun JsonObject.toRuntimeConnectionRecord(includeProcessInfo: Boolean): R
     )
 }
 
-/**
- * Who a flow belongs to, as far as the runtime is willing to say. A shared UID never resolves to
- * one package: the candidates are reported instead and [packages] stays empty, so nothing
- * downstream can accuse an arbitrary member of the UID.
- */
 private data class RuntimeProcessAttribution(
     val packages: List<String>,
     val sharedUidCandidates: List<String>,
 ) {
     companion object {
-        /** Process info is off (or not consented to): the record carries no attribution at all. */
         val Withheld = RuntimeProcessAttribution(packages = emptyList(), sharedUidCandidates = emptyList())
     }
 }

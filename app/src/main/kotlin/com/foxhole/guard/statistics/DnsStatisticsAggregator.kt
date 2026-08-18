@@ -13,8 +13,6 @@ fun dnsProtectionSummary(
     val blocked = trafficWindows.sumOf(TrafficWindow::blockedDns).coerceAtLeast(0)
     val allowed = trafficWindows.sumOf(TrafficWindow::allowedDns).coerceAtLeast(0)
     val categories = enabledDnsProtectionCategories(dnsSettings)
-    // Real per-category counts exist once the per-category rule sets are installed; before that
-    // (or for windows recorded on the legacy merged list) fall back to the even synthetic split.
     val realCategoryRows = realDnsBlockedByCategory(trafficWindows, categories)
     val categoryRows = realCategoryRows ?: splitDnsBlockedByCategory(blocked, categories)
     val categoryQuality =
@@ -25,8 +23,6 @@ fun dnsProtectionSummary(
         }
     val domainRows = dnsProtectionDomainRows(trafficWindows)
     val totalAppBytes = appRows.sumOf(AppTrafficRow::totalBytes).coerceAtLeast(1L)
-    // Real per-app counts (blocked domains joined to the requesting app's DNS queries) take
-    // precedence; the byte-share estimate only remains for ranges without measured data.
     val realAppRows = realDnsBlockedByApp(trafficWindows, appRows, blocked, categoryRows)
     val appDnsRows =
         if (realAppRows != null) {
@@ -79,11 +75,6 @@ fun dnsProtectionSummary(
     )
 }
 
-/**
- * Real per-app block rows summed from the windows' measured app attribution. Returns null when no
- * window carries per-app data (process info or sniffed domains unavailable) so the caller can fall
- * back to the labeled byte-share estimate.
- */
 fun realDnsBlockedByApp(
     trafficWindows: List<TrafficWindow>,
     appRows: List<AppTrafficRow>,
@@ -106,7 +97,6 @@ fun realDnsBlockedByApp(
     return totals.entries
         .map { (packageName, blockedCount) ->
             val traffic = trafficByPackage[packageName]
-            // With measured data the ratio reads as "this app's share of all blocked queries".
             val blockShare = (blockedCount.toFloat() / blockedTotal.coerceAtLeast(1).toFloat()).coerceIn(0f, 1f)
             DnsProtectionAppRow(
                 packageName = packageName,
@@ -125,11 +115,6 @@ fun realDnsBlockedByApp(
         .sortedByDescending(DnsProtectionAppRow::estimatedBlockedQueries)
 }
 
-/**
- * Sums the measured per-category block counts recorded by the per-category rule-set tags. Returns
- * null when no window in the range carries category data (legacy merged rule set) — the caller
- * then falls back to the synthetic split.
- */
 fun realDnsBlockedByCategory(
     trafficWindows: List<TrafficWindow>,
     categories: List<DnsProtectionCategory>,

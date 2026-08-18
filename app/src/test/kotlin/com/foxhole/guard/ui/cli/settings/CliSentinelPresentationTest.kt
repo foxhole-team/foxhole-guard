@@ -35,11 +35,7 @@ class CliSentinelPresentationTest {
     }
 
     @Test
-    fun `Sentinel presentation caps app icons and visible detection rows`() {
-        val strip = sentinelAppIconStrip((1..9).map { index -> "app.$index" })
-
-        assertEquals((1..6).map { index -> "app.$index" }, strip.packages)
-        assertEquals(3, strip.extraCount)
+    fun `Sentinel presentation caps visible detection rows`() {
         assertEquals(0, sentinelVisibleDetectionRowCount(-1))
         assertEquals(4, sentinelVisibleDetectionRowCount(4))
         assertEquals(10, sentinelVisibleDetectionRowCount(42))

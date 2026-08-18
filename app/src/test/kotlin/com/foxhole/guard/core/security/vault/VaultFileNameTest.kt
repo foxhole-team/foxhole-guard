@@ -5,7 +5,6 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** Имена файлов vault: обратимый base64url без паддинга, безопасный для ФС при любых ключах. */
 internal class VaultFileNameTest {
     @Test
     fun `round trip survives arbitrary keys`() {

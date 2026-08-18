@@ -60,10 +60,6 @@ class ProfileInsecureTlsSupportTest {
 
     @Test
     fun `detector flags every spelling the strict importer rejects`() {
-        // The importer's strict TLS gate (ProfileImportCoreSupport.isInsecureTlsSettingKey)
-        // recognizes the same spellings case-insensitively and canonicalizes them in relaxed output,
-        // so the broad predicate on that output exactly reconstructs "would a strict parse have
-        // thrown?" — the refresh consent gate relies on this alignment (no separate narrow predicate).
         assertTrue("""{"outbounds":[{"tls":{"allowInsecure":true}}]}""".requiresInsecureTls(json))
         assertTrue("""{"outbounds":[{"tls":{"allow_insecure":true}}]}""".requiresInsecureTls(json))
         assertTrue("""{"outbounds":[{"tls":{"Insecure":true}}]}""".requiresInsecureTls(json))

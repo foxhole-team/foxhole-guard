@@ -23,21 +23,8 @@ import com.foxhole.guard.R
 import com.foxhole.guard.ui.HomeRouteUiState
 import java.util.Locale
 
-// Icons, not names: at 13sp a launcher icon is the width of two letters, so a lane fits six of
-// them where it fitted three truncated labels. Past that the tail collapses into "+N".
 private const val MAX_LANE_ICONS = 6
 
-/**
- * The short `status` answer, printed line by line into the same log as everything else.
- *
- * Strictly current state, in the order the user reads it: which MODE is running and in which
- * SCENARIO, then the routing rules that are actually in force, then the modules — firewall, I2P,
- * DNS filtering. Encryption and anomalies belong to the long-press block and are deliberately
- * absent here.
- *
- * Everything is read from runtime state. A per-app mode saved in settings with nothing running is
- * a preference, not a route, and printing it as one is the defect this block keeps failing at.
- */
 @Composable
 internal fun cliStatusRows(
     home: HomeRouteUiState,
@@ -51,10 +38,6 @@ internal fun cliStatusRows(
         cliStatusInfoRows(home = home, runtimes = runtimes)
 }
 
-/**
- * The routes that actually carry traffic. The local guard is deliberately absent: it is a filter,
- * not a route, so a firewall-only device reports every flag here as false — «no connection».
- */
 internal data class CliActiveRuntimes(
     val vpn: Boolean,
     val proxy: Boolean,
@@ -72,8 +55,6 @@ internal fun activeRuntimes(
 ): CliActiveRuntimes {
     val connection = home.connection
     val settings = home.settings
-    // A profile runtime — the sentinel ids are the firewall and the standalone TOR session, and
-    // neither is a VPN/proxy egress.
     val profileLive =
         connection.state == ConnectionState.CONNECTED &&
             connection.profileId?.let { it > 0L } == true
@@ -87,18 +68,11 @@ internal fun activeRuntimes(
         vpn = profileLive,
         proxy = profileLive && connection.trafficMode == TrafficMode.PROXY,
         tor = tor,
-        // bypassVpnTunnel: TOR dials out NEXT to the tunnel instead of through it.
         torBesideVpn = tor && profileLive && settings.privacyRoute.bypassVpnTunnel,
         i2p = settings.i2p.enabled && settings.i2p.engaged,
     )
 }
 
-/**
- * Operating mode first, then the scenario under it — the hierarchy the readme describes.
- *
- * One scenario row per live leg, because VPN and TOR answer for themselves: with both up the rows
- * name which leg they are about, and with one there is nothing to disambiguate.
- */
 @Composable
 internal fun cliStatusModeRows(
     home: HomeRouteUiState,
@@ -127,8 +101,6 @@ internal fun cliStatusModeRows(
             tone = CliLineTone.INFO,
         )
     }
-    // The Tor leg keeps its own canon label as the qualifier, because it also says HOW it is
-    // attached — inside the tunnel, beside it, or alone — and the scenario cannot express that.
     val torRow = torScenario?.let { scenario ->
         CliTerminalRow(
             key = if (bothLegs) {
@@ -169,24 +141,8 @@ private fun cliScenarioLabel(scenario: CliStatusScenario): String =
     }
 
 /**
- * Is the device-local proxy surface — the loopback SOCKS/HTTP listener with its own credentials —
- * genuinely accepting connections?
- *
- * This reads the traffic mode and nothing else, on purpose. `RuntimeConfigAssembler.assembleProxy`
- * is the ONLY path that emits the user's own local inbound (`includeLocalProxy = true`);
- * `assembleTunnel` passes `false`, so in a tunnel session the single loopback inbound is the app's
- * internal `foxhole-runtime` HTTP proxy, not the user's surface. And `assembleProxy` runs only for
- * [TrafficMode.PROXY], which `Settings.normalized()` migrates to TUNNEL unconditionally — schema 19
- * retired the proxy-only service. So this is false in every reachable configuration today, and that
- * is the correct answer: nothing is listening.
- *
- * Deliberately NOT `activeProxySurface()` / `localSurfaces.*.enabled`. Those are stored preferences,
- * and lighting the label from them would render a toggle as state — the same defect the LAN proxy
- * carried until it grew a real `nativeStartLanProxy` status.
- *
- * THE SEAM: when the core gains named loopback inbounds, publish their state the way the LAN leg
- * does (the runtime bridge's `lanProxyStatus` fed from `native.lanProxyStatus`) and pass that
- * snapshot's `serving` in here instead of the traffic mode.
+ * Reads the traffic mode only: assembleProxy is the sole path emitting the user's local inbound and runs only for TrafficMode.PROXY, which Settings.normalized() migrates to TUNNEL, so nothing is listening.
+ * Stored preferences must never light this label; publish a real loopback status when the core gains one.
  */
 internal fun cliLocalProxySurfaceServing(connection: ConnectionSnapshot): Boolean =
     connection.state == ConnectionState.CONNECTED &&
@@ -195,25 +151,6 @@ internal fun cliLocalProxySurfaceServing(connection: ConnectionSnapshot): Boolea
         connection.profileId != LOCAL_GUARD_PROFILE_ID &&
         connection.profileId != TOR_ONLY_PROFILE_ID
 
-/**
- * TOR alone / beside the tunnel / inside it — the canon labels of the status line.
- *
- * The inside-the-tunnel case is scope-aware on purpose. After the split→proxy rename, "PROXY"
- * names the per-app mode, so one shared string called a whole-device tunnel a proxy — the exact
- * opposite of what it is. Whole-device and per-app must never share a label here.
- */
-/**
- * What the VPN lane row is allowed to claim.
- *
- * [PER_APP] — the include set is what the tunnel carries, so list it. [WHOLE_DEVICE] — the tunnel
- * carries everything it is given: FULL_TUNNEL, and exclude mode, where the pins are exceptions
- * rather than members. [INERT] — the same with nothing running: no route, so no claim at all.
- *
- * Exclude mode used to report PER_APP and print its pins under "in VPN". Those are the apps the
- * runtime hands the tun builder as *excluded* (`RuntimeTunInbound`): the row named the one lane
- * they are not in. Whatever is really kept out is listed by the excluded row, from the same
- * function the runtime uses.
- */
 internal enum class CliVpnLaneScope { PER_APP, WHOLE_DEVICE, INERT }
 
 internal fun vpnLaneScope(
@@ -227,21 +164,15 @@ internal fun vpnLaneScope(
         -> if (vpnLive) CliVpnLaneScope.WHOLE_DEVICE else CliVpnLaneScope.INERT
     }
 
-/** «These apps → TOR, those → VPN, rest → direct»: the per-lane pins plus the fall-through. */
 @Composable
 internal fun statusRouteRows(
     home: HomeRouteUiState,
     runtimes: CliActiveRuntimes,
 ): List<CliTerminalRow> {
-    // No route, no rules: with nothing running the lanes shape a configuration, not traffic.
     if (!cliRouteRulesInForce(runtimes)) return emptyList()
     val settings = home.settings
     val assignments = settings.expert.appAssignments
-    // With the module off the lane shapes nothing: the pins stay saved, no circuit exists to carry
-    // them, and printing them here would advertise a rule that is not in force — the same defect
-    // the VPN lane had in whole-device mode.
     val torModule = cliTorLaneVisible(settings)
-    // Whole-device TOR names the device instead of listing every package on it.
     val wholeDeviceTor = runtimes.tor && settings.privacyRoute.scope == PrivacyRouteScope.ALL_APPS
     val torRow = when {
         !torModule -> null
@@ -256,14 +187,6 @@ internal fun statusRouteRows(
             tone = CliLineTone.TOR,
         )
     }
-    // The VPN lane is the ONE lane a whole-device tunnel really ignores: with FULL_TUNNEL the
-    // assembler's vpnIncludedPackages() is empty and the exclude set never sees the selection, so
-    // the core routes everything the same way whatever is pinned here. Listing pinned apps in that
-    // mode claimed a rule that is not in force — say what actually happens, in the same "whole
-    // device" shape the Tor lane already uses for its ALL_APPS scope.
-    //
-    // The other lanes stay: TOR and EXCLUDE shape the config in every mode (tor route rules /
-    // tun bypass). Hiding those would be the same lie in the opposite direction.
     val vpnScope = vpnLaneScope(settings = settings, vpnLive = runtimes.vpn)
     val vpnRow = when (vpnScope) {
         CliVpnLaneScope.WHOLE_DEVICE -> CliTerminalRow(
@@ -271,7 +194,6 @@ internal fun statusRouteRows(
             value = stringResource(R.string.cli_home_status_lane_all),
             tone = CliLineTone.VPN,
         )
-        // Nothing is carrying traffic, so the pins are not in force either.
         CliVpnLaneScope.INERT -> null
         CliVpnLaneScope.PER_APP -> statusLaneRow(
             labelRes = R.string.cli_home_status_lane_vpn,
@@ -279,15 +201,11 @@ internal fun statusRouteRows(
             tone = CliLineTone.VPN,
         )
     }
-    // Not the EXCLUDE lane but everything really kept out: in exclude mode the selection is out
-    // too, and that is the half the pins-under-"in VPN" row used to claim the opposite of.
     val excludeRow = statusLaneRow(
         labelRes = R.string.cli_home_status_lane_exclude,
         packages = settings.expert.tunnelKeptOutPackages().toSet(),
         tone = CliLineTone.DIM,
     )
-    // "rest" only means something when something was pinned away from the default: a whole-device
-    // lane has already said where everything goes.
     val wholeDevice = wholeDeviceTor || vpnScope == CliVpnLaneScope.WHOLE_DEVICE
     val restRow = if (wholeDevice) null else statusRestRow(home = home, runtimes = runtimes)
     val rulesRow = statusRulesRow(preset = home.activePreset)
@@ -297,16 +215,8 @@ internal fun statusRouteRows(
 private fun Map<String, AppTunnelLane>.lane(lane: AppTunnelLane): Set<String> =
     filterValues { it == lane }.keys
 
-/**
- * May the TOR lane be printed at all?
- *
- * Only while its module is on. The pins survive the switch — they are a saved preference — but with
- * no circuit to carry them they shape nothing, and a row about them would advertise a route that
- * does not exist.
- */
 internal fun cliTorLaneVisible(settings: Settings): Boolean = settings.privacyRoute.permitted
 
-/** An empty lane prints nothing: silence is honester than four consecutive "—" rows. */
 @Composable
 private fun statusLaneRow(
     @StringRes labelRes: Int,
@@ -324,10 +234,6 @@ private fun statusLaneRow(
     )
 }
 
-/**
- * Where every app the user did NOT pin ends up. Include-mode tunnels the pinned apps only, so the
- * rest stay direct; full/exclude tunnelling hands them to the live VPN or proxy.
- */
 @Composable
 private fun statusRestRow(
     home: HomeRouteUiState,
@@ -348,16 +254,17 @@ private fun statusRestRow(
     )
 }
 
-/** The live domain rules of the active preset, folded into one `vpn N · direct N · block N`. */
 @Composable
 private fun statusRulesRow(preset: RoutingPreset?): CliTerminalRow? {
     val rules = preset?.rules.orEmpty().filter { it.enabled }
     if (rules.isEmpty()) return null
     val viaVpn = rules.count { it.action == RoutingRuleAction.PROXY }
+    val viaTor = rules.count { it.action == RoutingRuleAction.TOR }
     val direct = rules.count { it.action == RoutingRuleAction.DIRECT }
     val blocked = rules.count { it.action == RoutingRuleAction.BLOCK }
     val summary = listOfNotNull(
         stringResource(R.string.cli_home_status_rules_vpn, viaVpn).takeIf { viaVpn > 0 },
+        stringResource(R.string.cli_home_status_rules_tor, viaTor).takeIf { viaTor > 0 },
         stringResource(R.string.cli_home_status_rules_direct, direct).takeIf { direct > 0 },
         stringResource(R.string.cli_home_status_rules_block, blocked).takeIf { blocked > 0 },
     ).joinToString(" · ")
@@ -368,11 +275,6 @@ private fun statusRulesRow(preset: RoutingPreset?): CliTerminalRow? {
     )
 }
 
-/**
- * The components, briefly: the firewall (with whatever it is blocking), I2P and DNS filtering.
- * These three are reported whenever they are switched on, with or without a route — they are not
- * routes themselves and a device can run nothing but them.
- */
 @Composable
 internal fun cliStatusModuleRows(
     home: HomeRouteUiState,
@@ -389,12 +291,8 @@ internal fun cliStatusModuleRows(
                 } else {
                     stringResource(R.string.cli_home_status_filter_pending)
                 },
-                // Reads as a live component rather than a footnote: with no VPN or TOR the firewall
-                // is the only thing running, and a dim line there looked like nothing was on.
                 tone = if (live) CliLineTone.FIREWALL else CliLineTone.WARN,
             ),
-            // Blocking is armed by its own switch: normalization clears it for an empty lane, so a
-            // stale assignment map must not advertise a firewall rule the core is not applying.
             statusLaneRow(
                 labelRes = R.string.cli_home_status_lane_block,
                 packages = settings.expert.appAssignments
@@ -410,14 +308,6 @@ internal fun cliStatusModuleRows(
     return firewallRows + listOfNotNull(statusI2pRow(home = home), statusDnsFilterRow(settings = settings))
 }
 
-/**
- * I2P is an overlay network with no exit ip, so the value carries only the router phase. Shown
- * whenever the component is switched on, including while it is not engaged — a component the user
- * turned on has a state worth reporting even when that state is "off".
- *
- * Readiness uses the shared [networkUp] predicate: the CONNECTED phase is unreachable in
- * production, and comparing against it kept the panel forever "starting".
- */
 @Composable
 private fun statusI2pRow(home: HomeRouteUiState): CliTerminalRow? {
     val i2p = home.settings.i2p
@@ -425,8 +315,6 @@ private fun statusI2pRow(home: HomeRouteUiState): CliTerminalRow? {
     val engaged = i2p.engaged
     val ready = engaged && home.i2pPhase.phase.networkUp
     return CliTerminalRow(
-        // `-R` marks the relay: the router is also forwarding other people's transit traffic, which
-        // costs bandwidth and battery, so it has to be visible wherever I2P is reported.
         key = stringResource(R.string.cli_st_i2p) + if (i2p.relayTransitTraffic) I2P_RELAY_SUFFIX else "",
         value = when {
             ready -> stringResource(R.string.cli_home_status_i2p_ready)
@@ -441,8 +329,6 @@ private fun statusI2pRow(home: HomeRouteUiState): CliTerminalRow? {
     )
 }
 
-/** DNS filtering in one line — printed only while it is on: an off filter is not a module state
- * worth a row in the short readout. */
 @Composable
 private fun statusDnsFilterRow(settings: Settings): CliTerminalRow? {
     val categories = settings.dns.enabledDnsFilterCategories().size
@@ -455,52 +341,73 @@ private fun statusDnsFilterRow(settings: Settings): CliTerminalRow? {
     )
 }
 
-/**
- * Informational notes at the tail of the status: facts worth knowing that are neither a route nor
- * a module state. Today: the tunnel resolves through the configured provider because the VPN
- * profile advertises no resolver of its own (same condition as the connect-time banner in
- * [com.foxhole.guard.ui.observeDnsNoticesInternal]).
- */
 @Composable
 internal fun cliStatusInfoRows(
     home: HomeRouteUiState,
     runtimes: CliActiveRuntimes,
     includePendingPackages: Boolean = false,
 ): List<CliTerminalRow> {
-    val providerInfo = providerDnsFallbackInfo(home = home, runtimes = runtimes)?.let { info ->
-        CliTerminalRow(
-            key = stringResource(R.string.cli_home_status_info),
-            value = info,
-            tone = CliLineTone.INFO,
+    val providerEvent = stringResource(R.string.cli_home_status_info_event_provider_dns)
+    val firewallEvent = stringResource(R.string.cli_home_status_info_event_firewall)
+    val providerRows = providerDnsFallbackServer(home = home, runtimes = runtimes)?.let { server ->
+        listOf(
+            CliTerminalRow(
+                key = providerEvent,
+                value = stringResource(R.string.cli_home_status_info_value_provider_dns, server),
+                tone = CliLineTone.INFO,
+                keyTone = CliLineTone.INFO,
+                inlineValue = true,
+            ),
         )
-    }
+    }.orEmpty()
     val pending = home.settings.expert.pendingQuarantinePackages
         .map(String::trim)
         .filter(String::isNotBlank)
         .distinct()
-    val pendingCount = pending.takeIf(List<String>::isNotEmpty)?.let { packages ->
-        CliTerminalRow(
-            key = stringResource(R.string.cli_home_status_info),
-            value = pluralStringResource(
-                R.plurals.cli_firewall_action_required_status,
+    val pendingRows = pending.takeIf(List<String>::isNotEmpty)?.let { packages ->
+        cliInfoNoticeRows(
+            event = firewallEvent,
+            description = pluralStringResource(
+                R.plurals.cli_home_status_info_value_apps,
                 packages.size,
                 packages.size,
             ),
-            tone = CliLineTone.INFO,
+            kind = stringResource(R.string.cli_home_status_info_kind, firewallEvent),
         )
-    }
+    }.orEmpty()
     val pendingPackages = pending.takeIf { packages -> includePendingPackages && packages.isNotEmpty() }?.let { packages ->
         CliTerminalRow(
-            key = stringResource(
-                R.string.cli_firewall_action_required_packages,
-                compactPendingPackages(packages),
-            ),
+            key = stringResource(R.string.cli_home_status_info_event_pending_apps),
+            value = compactPendingPackages(packages),
             keyTone = CliLineTone.INFO,
             tone = CliLineTone.INFO,
+            valueLeading = true,
+            inlineValue = true,
         )
     }
-    return listOfNotNull(providerInfo, pendingCount, pendingPackages)
+    return providerRows + pendingRows + listOfNotNull(pendingPackages)
 }
+
+internal fun cliInfoNoticeRows(
+    event: String,
+    description: String,
+    kind: String,
+): List<CliTerminalRow> = listOf(
+    CliTerminalRow(
+        key = event,
+        value = description,
+        tone = CliLineTone.INFO,
+        keyTone = CliLineTone.INFO,
+        valueLeading = true,
+        inlineValue = true,
+    ),
+    CliTerminalRow(
+        key = kind,
+        tone = CliLineTone.INFO,
+        keyTone = CliLineTone.INFO,
+        typed = true,
+    ),
+)
 
 internal fun compactPendingPackages(packages: List<String>): String {
     val normalized = packages.map(String::trim).filter(String::isNotBlank).distinct()
@@ -509,23 +416,18 @@ internal fun compactPendingPackages(packages: List<String>): String {
     return visible.joinToString(" · ") + if (rest > 0) " · +$rest" else ""
 }
 
-@Composable
-private fun providerDnsFallbackInfo(
+private fun providerDnsFallbackServer(
     home: HomeRouteUiState,
     runtimes: CliActiveRuntimes,
 ): String? {
     val settings = home.settings
-    // Все четыре условия — про одно: провайдерский DNS обещан, но этот протокол его не отдаёт.
-    // Одно выражение вместо лестницы выходов: порядок тот же, а читается как один вопрос.
     val fallbackShown = runtimes.vpn &&
         settings.dns.useVpnProviderDns &&
         home.connection.trafficMode == TrafficMode.TUNNEL &&
         home.connection.protocolHint in com.foxhole.guard.ui.PROVIDER_DNS_INCAPABLE_PROTOCOLS
     if (!fallbackShown) return null
-    val server = settings.dns.server.trim().takeIf { it.isNotBlank() } ?: return null
-    return stringResource(R.string.cli_home_status_info_provider_dns, server)
+    return settings.dns.server.trim().takeIf { it.isNotBlank() }
 }
 
-// Shown after the I2P label when transit relaying is on.
 private const val I2P_RELAY_SUFFIX = " -R"
 private const val MAX_PENDING_STATUS_PACKAGES = 3

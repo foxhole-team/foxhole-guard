@@ -27,14 +27,6 @@ import com.foxhole.guard.ui.confirmSwitchProtocolWhileConnected
 import com.foxhole.guard.ui.dismissTorTransitionPrompt
 import com.foxhole.guard.ui.onEnableDirectTorQuickStart
 
-/**
- * The shared yes/no confirm modal for every [TorTransitionPrompt]. It rises from the bottom as the
- * shared [CliBottomSheet], where a swipe or the scrim cancels, rather than wedging a panel into the
- * home layout.
- * The answers are the sheet-wide [CliSheetActionsRow]: full-width buttons, dashed err cancel,
- * filled ok confirm(s). Both the home and the profiles screen render this sheet from
- * `home.torTransitionPrompt`, so a switch confirmed from either surface looks identical.
- */
 @Composable
 internal fun CliTorPromptPanel(
     viewModel: HomeViewModel,
@@ -42,10 +34,12 @@ internal fun CliTorPromptPanel(
     onLiveModeSwitchConfirmed: (RoutingModePreset) -> Unit = {},
 ) {
     val colors = LocalCliColors.current
+    val secondsLeft = (prompt as? TorTransitionPrompt.LiveModeSwitch)?.secondsLeft
     CliBottomSheet(
         onDismiss = viewModel::dismissTorTransitionPrompt,
         title = stringResource(promptTitleRes(prompt)),
         icon = R.drawable.pix_tor,
+        trailing = secondsLeft?.let { seconds -> { CliTorPromptCountdown(seconds) } },
     ) {
         Text(text = torPromptQuestion(prompt), style = CliType.body, color = colors.fg)
         Spacer(modifier = Modifier.height(CliSpacing.sm))
@@ -58,6 +52,16 @@ internal fun CliTorPromptPanel(
             ),
         )
     }
+}
+
+@Composable
+private fun CliTorPromptCountdown(secondsLeft: Int) {
+    Text(
+        text = "$secondsLeft ${stringResource(R.string.cli_uptime_seconds_short)}",
+        style = CliType.small,
+        color = LocalCliColors.current.warn,
+        maxLines = 1,
+    )
 }
 
 private fun promptTitleRes(prompt: TorTransitionPrompt): Int = when (prompt) {
@@ -86,15 +90,14 @@ private fun torPromptQuestion(prompt: TorTransitionPrompt): String = when (promp
     is TorTransitionPrompt.LiveModeSwitch ->
         when (prompt.kind) {
             LiveModeSwitchKind.ATTACH_TOR ->
-                stringResource(R.string.cli_home_torprompt_attach_tor, prompt.secondsLeft)
+                stringResource(R.string.cli_home_torprompt_attach_tor)
             LiveModeSwitchKind.DETACH_TOR ->
-                stringResource(R.string.cli_home_torprompt_detach_tor, prompt.secondsLeft)
+                stringResource(R.string.cli_home_torprompt_detach_tor)
             LiveModeSwitchKind.TOR_STOPS_VPN ->
-                stringResource(R.string.cli_home_torprompt_tor_stops_vpn, prompt.secondsLeft)
+                stringResource(R.string.cli_home_torprompt_tor_stops_vpn)
         }
 }
 
-/** The confirm option(s) of a prompt; the UDP-unsupported notice has none — cancel only. */
 @Composable
 private fun torPromptActions(
     viewModel: HomeViewModel,

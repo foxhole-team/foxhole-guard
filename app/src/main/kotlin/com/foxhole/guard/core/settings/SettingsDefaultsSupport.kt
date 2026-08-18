@@ -111,7 +111,9 @@ internal fun RoutingRuleAction.coerceSiteRoutingAction(): RoutingRuleAction =
         RoutingRuleAction.PROXY,
         RoutingRuleAction.DIRECT,
         -> this
-        RoutingRuleAction.BLOCK -> RoutingRuleAction.PROXY
+        RoutingRuleAction.BLOCK,
+        RoutingRuleAction.TOR,
+        -> RoutingRuleAction.PROXY
     }
 
 internal fun selectedPackagesRoutingMode(

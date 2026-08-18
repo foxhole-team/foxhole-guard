@@ -255,6 +255,7 @@ class I2pdProcessManagerLifecycleTest {
         directory: File,
         launch: () -> Process,
         localPortAccepts: (Int) -> Boolean = { false },
+        clientTunnels: Int = I2PD_MIN_CLIENT_TUNNELS,
     ): I2pdProcessManager {
         val nextPort = AtomicInteger(21_000)
         return I2pdProcessManager(
@@ -270,6 +271,7 @@ class I2pdProcessManagerLifecycleTest {
                 processLauncher = RuntimeChildProcessLauncher { _, _ -> launch() },
                 allocateLoopbackPort = nextPort::incrementAndGet,
                 localPortAccepts = localPortAccepts,
+                clientTunnelCount = { clientTunnels },
                 generateWebConsolePassword = { "test-password" },
             ),
         )
