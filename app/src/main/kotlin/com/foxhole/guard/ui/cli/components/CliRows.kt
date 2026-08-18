@@ -1,41 +1,113 @@
 package com.foxhole.guard.ui.cli.components
 
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.foxhole.core.model.VisualStyle
 import com.foxhole.guard.R
+import com.foxhole.guard.ui.cli.CliIconSize
 import com.foxhole.guard.ui.cli.CliSpacing
-import com.foxhole.guard.ui.cli.CliType
 import com.foxhole.guard.ui.cli.LocalCliColors
+import com.foxhole.guard.ui.cli.LocalCliVisualStyle
+import com.foxhole.guard.ui.cli.cliLabelText
+import com.foxhole.guard.ui.cli.cliRowTextStyle
 
 /**
- * Interactive setting rows of the CLI idiom. The affordance contract: a row is tappable
- * only when it carries a glyph - `[x]`/`[ ]` toggle, `value ▸` select trigger (`▾` when
- * expanded), pointer-cursor radio option, trailing `▸` action (the arrows are 16x16
- * pixel-pack icons). Plain text never reacts to taps. All rows keep the >= 48dp
- * touch-target floor while staying one text line tall visually.
+ * Toggle state marker: modern renders a native-feel switch (palette-aware in dark and
+ * light), retro keeps the `[x]` checkbox inside a fixed slot so on/off never nudges the row.
  */
+@Composable
+internal fun CliCheckGlyph(
+    checked: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val colors = LocalCliColors.current
+    if (LocalCliVisualStyle.current == VisualStyle.PLAIN) {
+        Switch(
+            checked = checked,
+            onCheckedChange = null,
+            modifier = modifier
+                .scale(PLAIN_SWITCH_SCALE)
+                .height(PLAIN_SWITCH_SLOT_HEIGHT),
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = colors.bg,
+                checkedTrackColor = colors.accent,
+                checkedBorderColor = colors.accent,
+                uncheckedThumbColor = colors.dim,
+                uncheckedTrackColor = colors.panelAlt,
+                uncheckedBorderColor = colors.border,
+            ),
+        )
+        return
+    }
+    val style = cliRowTextStyle()
+    val measurer = rememberTextMeasurer()
+    val density = LocalDensity.current
+    val slotWidth = remember(measurer, density, style) {
+        with(density) { measurer.measure(CHECKBOX_SAMPLE, style).size.width.toDp() }
+    }
+    Box(modifier = modifier.width(slotWidth), contentAlignment = Alignment.CenterEnd) {
+        Text(
+            text = if (checked) "[x]" else "[ ]",
+            style = style,
+            color = if (checked) colors.accent else colors.faint,
+            maxLines = 1,
+        )
+    }
+}
+
+internal val ROW_VALUE_GLYPH_GAP = 6.dp
+
+internal val CLI_DISCLOSURE_GLYPH_SIZE = CliIconSize.glyph
 
 /**
- * The shared disclosure arrow of select triggers and collapsible captions - a right/down
- * pointer from the pixel pack, slightly smaller than the neighbouring text and anchored
- * at the far right so it reads as an affordance without pulling the value out of
- * alignment. Color contract: accent while interactive, dim when disabled.
+ * The rim a profile table reserves on both sides: the trailing disclosure glyph plus its gap,
+ * mirrored on the leading side where the flag sits. One constant for both rims is what keeps
+ * the table from reading skewed - a wider leading slot pushed every column right of centre.
  */
+internal val CLI_PROFILE_TABLE_RIM = CLI_DISCLOSURE_GLYPH_SIZE + ROW_VALUE_GLYPH_GAP
+
+private const val CHECKBOX_SAMPLE = "[x]"
+private const val PLAIN_SWITCH_SCALE = 0.8f
+private val PLAIN_SWITCH_SLOT_HEIGHT = 28.dp
+
 @Composable
 internal fun CliDisclosureGlyph(
     expanded: Boolean,
@@ -45,18 +117,14 @@ internal fun CliDisclosureGlyph(
     CliPixIcon(
         id = if (expanded) R.drawable.pix_arrow_down else R.drawable.pix_arrow_right,
         contentDescription = null,
-        size = 12.dp,
+        size = CLI_DISCLOSURE_GLYPH_SIZE,
         tint = color,
         modifier = modifier,
     )
 }
 
-/**
- * `label ............ [x]` - instant toggle, no confirmation. An optional leading [icon] puts the
- * row in the same `glyph + word` grammar as [CliActionRow], the sheet titles and the screen
- * headers; module rows use it so a component reads as a thing rather than as a preference.
- */
 @Composable
+@Suppress("LongParameterList")
 internal fun CliToggleRow(
     label: String,
     checked: Boolean,
@@ -64,10 +132,18 @@ internal fun CliToggleRow(
     modifier: Modifier = Modifier,
     note: String? = null,
     noteColor: Color = Color.Unspecified,
+    infoText: String? = null,
     enabled: Boolean = true,
     icon: Int? = null,
 ) {
     val colors = LocalCliColors.current
+    var infoOpen by rememberSaveable(label) { mutableStateOf(false) }
+    if (infoOpen && infoText != null) {
+        CliInfoSheet(
+            text = infoText,
+            onDismiss = { infoOpen = false },
+        )
+    }
     Column(modifier = modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier
@@ -83,30 +159,25 @@ internal fun CliToggleRow(
                 modifier = Modifier.weight(1f, fill = false),
             ) {
                 if (icon != null) {
-                    // Toggle-state colour law: a disabled option is neutral grey, an active
-                    // option is green. It is intentionally distinct from the orange navigation
-                    // affordance used by action/dropdown rows.
                     CliPixIcon(
                         id = icon,
                         contentDescription = null,
-                        tint = if (checked) colors.ok else colors.dim,
+                        tint = if (checked) colors.accent else colors.dim,
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                 }
                 Text(
-                    text = label,
-                    style = CliType.body,
+                    text = cliLabelText(label),
+                    style = cliRowTextStyle(),
                     color = if (checked) colors.fg else colors.dim,
-                    maxLines = 1,
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
+                if (infoText != null) {
+                    CliRowInfoGlyph(onTap = { infoOpen = true })
+                }
             }
-            Text(
-                text = if (checked) "[x]" else "[ ]",
-                style = CliType.body,
-                color = if (checked) colors.ok else colors.faint,
-                maxLines = 1,
-            )
+            CliCheckGlyph(checked = checked)
         }
         note?.let {
             CliElbowLine(
@@ -118,7 +189,14 @@ internal fun CliToggleRow(
     }
 }
 
-/** `label ....... value ▸` select trigger; the glyph flips to `▾` while expanded. */
+@Composable
+internal fun CliRowInfoGlyph(onTap: () -> Unit) {
+    CliHeaderHelpButton(
+        contentDescription = stringResource(R.string.cli_common_information),
+        onClick = onTap,
+    )
+}
+
 @Composable
 internal fun CliSelectRow(
     label: String,
@@ -153,22 +231,22 @@ internal fun CliSelectRow(
                 Spacer(modifier = Modifier.width(6.dp))
             }
             Text(
-                text = label,
-                style = CliType.body,
+                text = cliLabelText(label),
+                style = cliRowTextStyle(),
                 color = colors.dim,
-                maxLines = 1,
+                maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                text = value,
-                style = CliType.body,
+                text = cliLabelText(value),
+                style = cliRowTextStyle(),
                 color = if (valueColor == Color.Unspecified) colors.fg else valueColor,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            Spacer(modifier = Modifier.width(6.dp))
+            Spacer(modifier = Modifier.width(ROW_VALUE_GLYPH_GAP))
             CliDisclosureGlyph(
                 expanded = expanded,
                 color = if (enabled) colors.accent else colors.dim,
@@ -177,7 +255,6 @@ internal fun CliSelectRow(
     }
 }
 
-/** Indented `● option · detail` radio row inside an expanded select. */
 @Composable
 internal fun CliOptionRow(
     text: String,
@@ -199,8 +276,8 @@ internal fun CliOptionRow(
     ) {
         CliMenuCursor(selected = selected, tint = colors.ok)
         Text(
-            text = text,
-            style = CliType.body,
+            text = cliLabelText(text),
+            style = cliRowTextStyle(),
             color = if (selected) colors.fg else colors.dim,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -208,7 +285,7 @@ internal fun CliOptionRow(
         detail?.let {
             Text(
                 text = " · $it",
-                style = CliType.body,
+                style = cliRowTextStyle(),
                 color = colors.faint,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -217,10 +294,6 @@ internal fun CliOptionRow(
     }
 }
 
-/**
- * `label ....... value ▸` one-shot action row (opens a flow or a sub-screen). [attention]
- * blinks the warn pixel after the label — "this destination wants an action" (pending update).
- */
 @Composable
 internal fun CliActionRow(
     label: String,
@@ -235,7 +308,11 @@ internal fun CliActionRow(
     labelColor: Color = Color.Unspecified,
 ) {
     val colors = LocalCliColors.current
-    val resolvedActionColor = if (actionColor == Color.Unspecified) colors.accent else actionColor
+    val resolvedActionColor = when {
+        actionColor != Color.Unspecified -> actionColor
+        icon == R.drawable.pix_trash -> colors.err
+        else -> colors.accent
+    }
     val resolvedLabelColor = when {
         labelColor != Color.Unspecified -> labelColor
         actionColor != Color.Unspecified -> resolvedActionColor
@@ -259,10 +336,10 @@ internal fun CliActionRow(
                 Spacer(modifier = Modifier.width(6.dp))
             }
             Text(
-                text = label,
-                style = CliType.body,
+                text = cliLabelText(label),
+                style = cliRowTextStyle(),
                 color = resolvedLabelColor,
-                maxLines = 1,
+                maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
             if (attention) {
@@ -275,12 +352,13 @@ internal fun CliActionRow(
         Row(verticalAlignment = Alignment.CenterVertically) {
             value?.let {
                 Text(
-                    text = "$it ",
-                    style = CliType.body,
+                    text = cliLabelText(it),
+                    style = cliRowTextStyle(),
                     color = colors.dim,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
+                Spacer(modifier = Modifier.width(ROW_VALUE_GLYPH_GAP))
             }
             CliPixIcon(
                 id = R.drawable.pix_arrow_right,
@@ -292,15 +370,6 @@ internal fun CliActionRow(
     }
 }
 
-/**
- * A destructive action row: the label of what it erases, and on tap the shared bottom confirm
- * modal — never a system dialog and never an inline y/n. The host keeps one armed key per group,
- * so tapping another row re-arms it and only one sheet can ever be up.
- *
- * The row itself stays put while the sheet is open: the question is asked over the screen, not by
- * replacing the row that asked it, so the list under the finger never reflows. [note] is printed
- * both under the row and inside the sheet, because it must be read *before* the confirm.
- */
 @Composable
 internal fun CliDestructiveRow(
     key: String,
@@ -329,9 +398,61 @@ internal fun CliDestructiveRow(
 }
 
 /**
- * The menu cursor slot: an arrow on the selected item and an empty slot of the same width on the
- * rest, so menu columns do not drift. Replaces three copy-pastes.
+ * Active-row marker for profile tables: a breathing green dot that sits inside the name cell,
+ * so it offsets the active name by about one space instead of owning a column of its own.
  */
+@Composable
+internal fun CliActiveDot(active: Boolean, modifier: Modifier = Modifier) {
+    val colors = LocalCliColors.current
+    Box(
+        modifier = modifier.width(CLI_ACTIVE_DOT_SLOT_WIDTH),
+        contentAlignment = Alignment.CenterStart,
+    ) {
+        if (active) {
+            val transition = rememberInfiniteTransition(label = "cliActiveDot")
+            val pulse = transition.animateFloat(
+                initialValue = 0f,
+                targetValue = 1f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(durationMillis = ACTIVE_DOT_PULSE_MS, easing = LinearEasing),
+                    repeatMode = RepeatMode.Reverse,
+                ),
+                label = "cliActiveDotPulse",
+            )
+            Box(
+                modifier = Modifier
+                    .size(ACTIVE_DOT_SIZE)
+                    .graphicsLayer {
+                        alpha = ACTIVE_DOT_MIN_ALPHA + ACTIVE_DOT_ALPHA_SPAN * pulse.value
+                    }
+                    .clip(CircleShape)
+                    .background(colors.vpn),
+            )
+        }
+    }
+}
+
+private val ACTIVE_DOT_SIZE = 8.dp
+
+internal val CLI_ACTIVE_DOT_SLOT_WIDTH = ACTIVE_DOT_SIZE + 2.dp
+private const val ACTIVE_DOT_PULSE_MS = 900
+private const val ACTIVE_DOT_MIN_ALPHA = 0.45f
+private const val ACTIVE_DOT_ALPHA_SPAN = 0.55f
+
+@Composable
+internal fun CliColumnRule(modifier: Modifier = Modifier) {
+    val colors = LocalCliColors.current
+    Box(
+        modifier = modifier
+            .padding(horizontal = 6.dp)
+            .width(1.dp)
+            .height(COLUMN_RULE_HEIGHT)
+            .background(colors.border.copy(alpha = 0.6f)),
+    )
+}
+
+private val COLUMN_RULE_HEIGHT = 14.dp
+
 @Composable
 internal fun CliMenuCursor(selected: Boolean, tint: Color = Color.Unspecified) {
     val colors = LocalCliColors.current

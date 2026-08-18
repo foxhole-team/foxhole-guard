@@ -13,6 +13,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.content.getSystemService
 import com.foxhole.core.model.AnomalyEvent
 import com.foxhole.core.model.AnomalySeverity
+import com.foxhole.core.model.AnomalyType
 import com.foxhole.guard.R
 import com.foxhole.guard.withStoredAppLocale
 
@@ -49,6 +50,11 @@ class AnomalyNotifier(
             NotificationManagerCompat.from(appContext).notify(NOTIFICATION_ID_BASE + event.type.ordinal, notification)
             true
         }.getOrDefault(false)
+    }
+
+    fun cancelAll() {
+        val manager = NotificationManagerCompat.from(appContext)
+        AnomalyType.entries.forEach { type -> manager.cancel(NOTIFICATION_ID_BASE + type.ordinal) }
     }
 
     private fun AnomalyEvent.notificationTitleRes(): Int =

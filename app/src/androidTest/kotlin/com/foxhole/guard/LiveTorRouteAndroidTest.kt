@@ -18,37 +18,18 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeoutOrNull
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 
-/**
- * Live Tor-over-VPN on hardware: does the traffic actually go through Tor.
- *
- * The gap this fills is specific. `TorRuntimeInstallerDeviceTest` checks that a
- * Tor configuration translates and that Arti's state directory can be created —
- * neither of which requires a single byte to reach the Tor network. Tor
- * bootstrap, routing and stop have never been exercised on a device, and they
- * are three of the unchecked boxes in the beta checklist.
- *
- * **The assertion that matters is the exit address, not the state.** A tunnel
- * that reports `Ready` while the packets went out over the plain VPN is the
- * failure mode worth testing for: it looks correct from every screen the user
- * has. So the test records the exit address without Tor, turns Tor on, and
- * requires the address to change. Equal addresses fail the test even though
- * every status in the app would read healthy.
- *
- * Manual, like the other live gates here: it needs a real subscription and a
- * working network, and it is skipped unless
- * `-Pandroid.testInstrumentationRunnerArguments.foxhole.liveTor=1` is passed.
- */
 @RunWith(AndroidJUnit4::class)
 internal class LiveTorRouteAndroidTest : ProfileRuntimeSessionAndroidTestSupport() {
     @Test
     fun manualTorOverVpnChangesTheExitAddressAndStopsCleanly() {
-        if (InstrumentationRegistry.getArguments().getString("foxhole.liveTor") != "1") {
-            Log.d(TEST_TAG, "live tor route skipped")
-            return
-        }
+        assumeTrue(
+            "live tor route skipped: pass -e foxhole.liveTor 1 to run it",
+            InstrumentationRegistry.getArguments().getString("foxhole.liveTor") == "1",
+        )
         runBlocking {
             val app = ApplicationProvider.getApplicationContext<FoxholeApplication>()
             val subscription = smartSubscriptionInput()
@@ -78,9 +59,6 @@ internal class LiveTorRouteAndroidTest : ProfileRuntimeSessionAndroidTestSupport
                 assertTrue("the subscription exposed no connectable option", target != null)
                 val optionId = target?.optionId
 
-                // Leg one: the VPN exit, with Tor off. This is the address the
-                // Tor leg has to differ from, and taking it first is what makes
-                // the comparison mean anything.
                 app.container.connectionController.connect(profile.id, protocolOptionId = optionId)
                 val vpnState = waitForTerminalState(app)
                 assertTrue("the plain VPN leg did not connect: $vpnState", vpnState.name == "CONNECTED")
@@ -89,10 +67,6 @@ internal class LiveTorRouteAndroidTest : ProfileRuntimeSessionAndroidTestSupport
                 assertTrue("no exit address without Tor", vpnExit.isNotBlank())
                 disconnectAndWaitForIdle(app)
 
-                // Leg two: the same profile with Tor over it, and fail-closed if
-                // Tor does not come up — otherwise a bootstrap failure would
-                // quietly answer this test with the plain VPN address and the
-                // comparison below would be measuring nothing.
                 settings.updatePrivacyRoutePermitted(true)
                 settings.updatePrivacyRouteMode(PrivacyRouteMode.TOR_OVER_VPN)
                 settings.updatePrivacyRouteScope(PrivacyRouteScope.ALL_APPS)
@@ -103,10 +77,6 @@ internal class LiveTorRouteAndroidTest : ProfileRuntimeSessionAndroidTestSupport
                 val torState = waitForTerminalState(app)
                 assertTrue("the Tor leg did not connect: $torState", torState.name == "CONNECTED")
 
-                // Every distinct state is logged, not just the terminal one.
-                // A run that ends in `null` otherwise cannot say whether Tor
-                // was bootstrapping slowly or never started at all, and those
-                // are different defects.
                 var seen = ""
                 val ready =
                     withTimeoutOrNull(TOR_BOOTSTRAP_BUDGET_MS) {
@@ -125,18 +95,6 @@ internal class LiveTorRouteAndroidTest : ProfileRuntimeSessionAndroidTestSupport
                         @Suppress("UNREACHABLE_CODE")
                         null
                     }
-                // Asserted on movement, not on Ready. The published state used to
-                // be pinned to `Off` for the life of the process — nothing fed it
-                // — so this line was a bare log. It is fed now, and leaving `Off`
-                // is the claim worth failing on: it proves the pipeline reports a
-                // route the runtime really engaged.
-                //
-                // `Ready` is deliberately NOT the gate. It waits for the exit
-                // address the runtime observes for the Tor route, and that probe
-                // is a best-effort background refresh; requiring it inside a fixed
-                // budget tests the probe's schedule rather than Tor. What Tor
-                // actually did is asserted below, on the address itself — which is
-                // what this test was written to measure.
                 Log.d(TEST_TAG, "liveTor state=$ready lastSeen=$seen")
                 assertNotEquals(
                     "the Tor state never left Off, so nothing reported the route the runtime engaged",
@@ -147,8 +105,6 @@ internal class LiveTorRouteAndroidTest : ProfileRuntimeSessionAndroidTestSupport
                 val torExit = runVpnBoundIpRefresh(app)
                 Log.d(TEST_TAG, "liveTor torExit=$torExit vpnExit=$vpnExit")
                 assertTrue("no exit address with Tor on", torExit.isNotBlank())
-                // The whole point. Same address means the packets did not go
-                // through Tor, whatever the status says.
                 assertNotEquals(
                     "the exit address did not change with Tor on: traffic bypassed it",
                     vpnExit,
@@ -165,7 +121,6 @@ internal class LiveTorRouteAndroidTest : ProfileRuntimeSessionAndroidTestSupport
     }
 
     private companion object {
-        /** Arti over a proxied VPN leg, on a phone. Generous on purpose. */
         const val TOR_BOOTSTRAP_BUDGET_MS = 180_000L
     }
 }

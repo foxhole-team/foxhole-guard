@@ -1,6 +1,7 @@
 package com.foxhole.core.runtime
 
 import com.foxhole.core.model.ThreatIntelDocument
+import com.foxhole.guard.runtime.FOXHOLE_DB_MAX_MANIFEST_AGE_SECONDS
 import com.foxhole.guard.runtime.ThreatIntelManifest
 import com.foxhole.guard.runtime.ThreatIntelManifestArtifact
 import com.foxhole.guard.runtime.ThreatIntelManifestCompatibility
@@ -135,6 +136,35 @@ class ThreatIntelUpdateClientTest {
                 assertEquals(ThreatIntelUpdateStatus.FAILED, result.status)
                 assertEquals(false, result.retryable)
             }
+        }
+
+    @Test
+    fun `refuses a correctly signed feed older than the device staleness bound`() =
+        runBlocking {
+            val stale =
+                updateWithSignedManifest(
+                    manifestTransform = {
+                        copy(
+                            generatedAt =
+                            Instant.now().minusSeconds(FOXHOLE_DB_MAX_MANIFEST_AGE_SECONDS + 60L).toString(),
+                        )
+                    },
+                )
+
+            assertEquals(ThreatIntelUpdateStatus.FAILED, stale.status)
+            assertEquals(false, stale.retryable)
+            assertEquals(true, stale.reason.orEmpty().contains("stale"))
+
+            val justInside =
+                updateWithSignedManifest(
+                    manifestTransform = {
+                        copy(
+                            generatedAt =
+                            Instant.now().minusSeconds(FOXHOLE_DB_MAX_MANIFEST_AGE_SECONDS - 3600L).toString(),
+                        )
+                    },
+                )
+            assertEquals(ThreatIntelUpdateStatus.UPDATED, justInside.status)
         }
 
     @Test

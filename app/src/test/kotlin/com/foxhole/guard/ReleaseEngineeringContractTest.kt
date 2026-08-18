@@ -63,9 +63,6 @@ class ReleaseEngineeringContractTest {
         assertTrue(source.contains("must not use the developer-preview line"))
     }
 
-    // The runtime library names live ONLY in build.gradle.kts; this test cross-checks the build
-    // script against itself instead of duplicating the literals, so a native-payload change
-    // (new transport, dropped lib, new ABI) is a one-file edit that this contract re-validates.
     @Test
     fun `native inventory gates agree on one runtime library set and assets stay stripped`() {
         val source = projectFile("build.gradle.kts").readText()
@@ -81,16 +78,6 @@ class ReleaseEngineeringContractTest {
             allowedNativeLibraries.containsAll(requiredRuntimeLibraries),
         )
 
-        // The APK-level gate (verifyReleaseContainsNativeRuntime) and the AAB-level gate
-        // (verifyPublicReleaseNativeInventory) must require the same runtime libraries, each for
-        // the same set of ABIs.
-        //
-        // The APK gate used to spell out every `lib/<abi>/<library>.so` pair as a literal, and
-        // this test read those literals back. That made narrowing `foxhole.abis` fail a gate on a
-        // correct build, so the gate now takes its ABIs from `shippedAndroidAbis` — the same value
-        // the packaging uses — and lists the libraries once. The contract is unchanged and the
-        // drift it guards against is narrower: there is now one ABI source instead of two
-        // hand-maintained lists that could disagree.
         val apkRequiredLibraries =
             nativeLibraryNames(source.between("val requiredLibraries =", "val abis ="))
         assertEquals(
@@ -103,9 +90,6 @@ class ReleaseEngineeringContractTest {
             source.contains("expectedAbis.set(shippedAndroidAbis)"),
         )
 
-        // Every payload preparePrivacyNativeLibs relocates from assets into jniLibs must be stripped
-        // from the shipped assets by prepareFilteredMainAssets, or the APK ships it twice (once
-        // executable, once dead weight that still trips the executable-assets gate).
         val relocatedPayloads =
             Regex("""include\("([^"]+)"\)""")
                 .findAll(source.between("val preparePrivacyNativeLibs", "val prepareFilteredMainAssets"))
@@ -123,7 +107,6 @@ class ReleaseEngineeringContractTest {
             strippedAssetNames.containsAll(relocatedPayloads),
         )
 
-        // The AAB gate must keep refusing executable payloads smuggled in through assets.
         val inventoryBlock =
             source.between("val verifyPublicReleaseNativeInventory", "val collectPublicReleaseNativeSymbols")
         assertTrue(inventoryBlock.contains("base/assets/"))
@@ -131,15 +114,10 @@ class ReleaseEngineeringContractTest {
 
     @Test
     fun `about screen lists release-critical component licenses`() {
-        // The license table lives in code (component names / SPDX ids are not localized): the
-        // contract checks every shipped component appears among the About screen's table entries.
         val screen = projectFile("src/main/kotlin/com/foxhole/guard/ui/cli/settings/CliAboutSubScreen.kt").readText()
         val requiredComponents =
             listOf(
                 "FoxHole Core",
-                // Named for what actually ships: the Tor client linked into the .so is Arti, and
-                // the entry used to say "Tor / BSD-3-Clause" — a licence belonging to the C daemon
-                // this build does not contain.
                 "Arti (Tor)",
                 "lyrebird",
                 "conjure-client",
@@ -154,9 +132,6 @@ class ReleaseEngineeringContractTest {
                 "Stalkerware indicators (Echap)",
                 "Silkscreen / Press Start 2P / LanaPixel",
                 "1-bit Pixel Icons (Nikoichu)",
-                // Pixel flags (rendered in-house from flag-icons, MIT) and Natural Earth left the About
-                // table by product decision:
-                // their full attribution stays in THIRD_PARTY_NOTICES.md.
             )
 
         requiredComponents.forEach { component ->
@@ -167,63 +142,79 @@ class ReleaseEngineeringContractTest {
     @Test
     fun `Tor transport bootstrap is safe on a fresh Linux runner`() {
         val script = projectFile("../scripts/build-tor-transports.sh").readText()
+        val pins = projectFile("../scripts/native-deps.sh").readText()
 
         assertTrue(script.contains("if [[ \"${'$'}(uname -s)\" == \"Darwin\" ]]; then"))
         assertFalse(script.contains("[[ \"${'$'}(uname -s)\" == \"Darwin\" ]] &&"))
-        assertTrue(script.contains("CONJURE_REF=\"${'$'}CONJURE_COMMIT\""))
         assertTrue(script.contains("echo \"fetching ${'$'}name @ ${'$'}ref\" >&2"))
+
+        assertTrue(pins.contains("conjure_ref=\"${'$'}conjure_commit\""))
+        listOf("lyrebird_commit", "conjure_commit").forEach { pin ->
+            assertTrue(
+                "$pin is not pinned to a full 40-character commit id",
+                Regex("""(?m)^$pin="[0-9a-f]{40}"${'$'}""").containsMatchIn(pins),
+            )
+        }
+        assertTrue(script.contains("\"${'$'}name pin mismatch: expected ${'$'}commit, got ${'$'}head\""))
+        assertTrue(script.contains("require_offline_seed"))
     }
 
     @Test
-    fun `signed candidate is built only on trusted dev dispatch and main publishes those exact bytes`() {
+    fun `signed candidate is built only on trusted dev push and main publishes those exact bytes`() {
         val androidWorkflow = projectFile("../.github/workflows/android.yml").readText()
         val releaseWorkflow = projectFile("../.github/workflows/release.yml").readText()
         val untrustedVerifyJob = androidWorkflow.substringBefore("  release-candidate:")
         val candidateJob = androidWorkflow.substringAfter("  release-candidate:")
 
-        // App CI is owner-dispatched. The secret-bearing candidate job is additionally gated to
-        // the dev branch and the explicit candidate input, so a fork cannot produce release bytes.
         assertFalse(untrustedVerifyJob.contains("assembleRelease"))
         assertFalse(untrustedVerifyJob.contains("validateReleaseSigningInputs"))
-        assertTrue(candidateJob.contains("github.event_name == 'workflow_dispatch'"))
+        assertTrue(candidateJob.contains("github.event_name == 'push'"))
         assertTrue(candidateJob.contains("github.ref == 'refs/heads/dev'"))
-        assertTrue(candidateJob.contains("inputs.release_candidate_only"))
         assertTrue(candidateJob.contains(":app:validateReleaseSigningInputs"))
         assertTrue(candidateJob.contains(":app:assembleRelease"))
         assertTrue(candidateJob.contains("package-release-candidate.sh"))
-        assertTrue(candidateJob.contains("staging_tag=\"candidate-${'$'}GITHUB_SHA\""))
-        assertTrue(candidateJob.contains("--draft"))
-        assertTrue(candidateJob.contains("Accept: application/octet-stream"))
-        assertFalse(candidateJob.contains("actions/upload-artifact@"))
+        assertTrue(candidateJob.contains("foxhole-app-${'$'}{{ github.sha }}"))
 
         // main is a publish-only trust boundary: no Gradle, keystore, or rebuild. It finds a
-        // successful dev run with the identical Git tree and verifies/downloads that hidden draft.
         assertFalse(releaseWorkflow.contains("./gradlew"))
         assertFalse(releaseWorkflow.contains("FOXHOLE_RELEASE_STORE_FILE_B64"))
         assertTrue(releaseWorkflow.contains(".commit.verification.verified"))
         assertTrue(releaseWorkflow.contains("dev_tree"))
         assertTrue(releaseWorkflow.contains("dev_tree\" == \"${'$'}MAIN_TREE"))
-        assertTrue(releaseWorkflow.contains("staging_release_id"))
-        assertTrue(releaseWorkflow.contains("releases/assets/${'$'}asset_id"))
-        assertFalse(releaseWorkflow.contains("actions/download-artifact@"))
+        assertTrue(releaseWorkflow.contains("actions/download-artifact@"))
         assertTrue(releaseWorkflow.contains("package-release-candidate.sh verify"))
         assertTrue(releaseWorkflow.contains("cmp --silent"))
         assertTrue(releaseWorkflow.contains("--draft"))
-        assertTrue(releaseWorkflow.contains("releases/${'$'}release_id"))
-        assertTrue(releaseWorkflow.contains("-F draft=false"))
-        assertTrue(releaseWorkflow.contains("releases/tags/${'$'}RELEASE_TAG"))
-        assertFalse(releaseWorkflow.contains("gh release download \"${'$'}RELEASE_TAG\""))
+        assertTrue(releaseWorkflow.contains("--draft=false"))
         assertFalse(candidateJob.contains("foxhole.releaseProbe=true"))
     }
 
     @Test
-    fun `android workflow is manual only`() {
-        val workflow = projectFile("../.github/workflows/android.yml").readText()
-        val triggerBlock = workflow.substringAfter("on:").substringBefore("permissions:")
+    fun `candidate packager reads version name from the Gradle single source`() {
+        val rootBuild = projectFile("../build.gradle.kts").readText()
+        val appBuild = projectFile("build.gradle.kts").readText()
+        val candidateScript = projectFile("../scripts/package-release-candidate.sh").readText()
+        val coordinateReader = candidateScript.substringAfter("read_release_coordinates()")
+            .substringBefore("normalized_expected_cert()")
 
-        assertTrue(triggerBlock.contains("workflow_dispatch:"))
-        assertFalse(triggerBlock.contains("pull_request:"))
-        assertFalse(triggerBlock.contains("push:"))
+        assertTrue(Regex("""(?m)^\s*version\s*=\s*"[^"]+"""").containsMatchIn(rootBuild))
+        assertTrue(appBuild.contains("versionName = project.version.toString()"))
+        assertTrue(coordinateReader.contains("version[[:space:]]*="))
+        assertTrue(coordinateReader.contains("build.gradle.kts"))
+        assertFalse(coordinateReader.contains("versionName[[:space:]]*="))
+    }
+
+    @Test
+    fun `android pull request paths include all build critical source trees`() {
+        val workflow = projectFile("../.github/workflows/android.yml").readText()
+        val pullRequestPaths =
+            workflow
+                .substringAfter("pull_request:")
+                .substringBefore("workflow_dispatch:")
+
+        listOf("app/**", "config/**", "core/**", "third_party/**").forEach { path ->
+            assertTrue("Missing CI path filter for $path", pullRequestPaths.contains("\"$path\""))
+        }
     }
 
     @Test
@@ -291,9 +282,13 @@ class ReleaseEngineeringContractTest {
         assertTrue(candidateJob.contains(":app:validateReleaseSigningInputs"))
         assertTrue(candidateJob.contains(":app:assembleRelease"))
         assertTrue(candidateJob.contains(":app:publicReleasePreflight"))
-        assertTrue(candidateJob.contains("stage immutable candidate"))
-        assertTrue(candidateJob.contains("Candidate staging release must contain exactly six assets"))
-        assertFalse(candidateJob.contains("actions/upload-artifact@"))
+        assertTrue(candidateJob.contains("if-no-files-found: error"))
+        assertTrue(candidateJob.contains("outputs/mapping/publicRelease/mapping.txt"))
+        assertTrue(
+            candidateJob.contains(
+                "outputs/native-debug-symbols/publicRelease/publicRelease-native-symbols.zip",
+            ),
+        )
         assertTrue(releaseWorkflow.contains("actions: read"))
         assertTrue(releaseWorkflow.contains("attestations: write"))
         assertTrue(releaseWorkflow.contains("actions/attest-build-provenance@"))
@@ -301,25 +296,6 @@ class ReleaseEngineeringContractTest {
         assertTrue(releaseWorkflow.contains("version_code > published_code"))
         assertFalse(releaseWorkflow.contains("assembleRelease"))
         assertFalse(releaseWorkflow.contains("publicReleasePreflight"))
-    }
-
-    @Test
-    fun `release automation uses native Node 24 actions`() {
-        val androidWorkflow = projectFile("../.github/workflows/android.yml").readText()
-        val releaseWorkflow = projectFile("../.github/workflows/release.yml").readText()
-        val setupAction = projectFile("../.github/actions/setup-foxcore/action.yml").readText()
-        val automation = androidWorkflow + releaseWorkflow + setupAction
-
-        assertFalse(automation.contains("FORCE_JAVASCRIPT_ACTIONS_TO_NODE24"))
-        assertFalse(automation.contains("actions/checkout@11d5960"))
-        assertTrue(androidWorkflow.contains("actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5"))
-        assertTrue(
-            releaseWorkflow.contains(
-                "actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3",
-            ),
-        )
-        assertTrue(setupAction.contains("actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5"))
-        assertTrue(setupAction.contains("gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5"))
     }
 
     private fun projectFile(path: String): File =

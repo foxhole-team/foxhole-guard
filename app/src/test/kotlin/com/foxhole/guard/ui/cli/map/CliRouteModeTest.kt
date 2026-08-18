@@ -27,10 +27,6 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/**
- * Схема маршрута, статус и терминал обязаны описывать один применённый рантайм. Сохранённый выбор
- * не становится живой линией до `torActive`, а старая линия не исчезает раньше успешного reload.
- */
 class CliRouteModeTest {
     private fun settings(
         trafficMode: TrafficMode = TrafficMode.TUNNEL,
@@ -81,8 +77,6 @@ class CliRouteModeTest {
 
     @Test
     fun `tor lane appears only after the reconnect applies it`() {
-        // Рантайм ещё несёт старый конфиг (torActive=false) и уже переподключается: карта не должна
-        // выдавать выбранную настройку за применённый маршрут.
         val reconnecting = connection(state = ConnectionState.RECONNECTING, torActive = false)
         assertEquals(
             CliRouteScenario.VPN_ONLY,
@@ -92,7 +86,6 @@ class CliRouteModeTest {
 
     @Test
     fun `tor lane stays until the applied runtime removes it`() {
-        // Обратный случай: настройка уже OFF, а применённый конфиг всё ещё с Tor.
         val stillTorRuntime = connection(state = ConnectionState.CONNECTED, torActive = true)
         assertEquals(
             CliRouteScenario.TOR_IN_VPN_CHAIN,
@@ -181,7 +174,6 @@ class CliRouteModeTest {
 
     @Test
     fun `tor beside a proxy profile keeps the proxy chain on the scheme`() {
-        // Раньше proxy+tor схлопывался в TOR_ONLY и прокси-цепочка исчезала со схемы.
         assertEquals(
             CliRouteScenario.PROXY_TOR,
             scenario(
@@ -200,7 +192,7 @@ class CliRouteModeTest {
         val routeNodes = mode.routeNodeRoles().single()
 
         assertEquals(listOf(CliRouteNodeRole.VPN, CliRouteNodeRole.TOR), routeNodes)
-        assertEquals(3, 1 + routeNodes.size) // one shared device node
+        assertEquals(3, 1 + routeNodes.size)
         assertFalse(CliRouteNodeRole.INTERNET in routeNodes)
     }
 
@@ -246,11 +238,8 @@ class CliRouteModeTest {
         )
     }
 
-    // --- Атрибуция гео хопов: чей exit-IP носит VPN-узел ---
-
     @Test
     fun `tor over vpn on all apps hands the tunnel exit identity to tor`() {
-        // Через Tor уходит всё, включая зонды рантайма, — exit-IP описывает Tor-цепочку, не VPN.
         val mode =
             cliRouteMode(
                 settings(torMode = PrivacyRouteMode.TOR_OVER_VPN, torScope = PrivacyRouteScope.ALL_APPS),
@@ -261,7 +250,6 @@ class CliRouteModeTest {
 
     @Test
     fun `tor scoped to selected apps leaves the exit identity with the vpn server`() {
-        // Зонды рантайма идут обычным VPN-выходом, значит exit-IP — честная страна VPN-сервера.
         val mode =
             cliRouteMode(
                 settings(
@@ -455,7 +443,6 @@ class CliRouteModeTest {
                     d = listOf("e", "t", "v"),
                     torAll = true,
                 ),
-                // RuntimeRouteConfig refuses INCLUDE_ONLY×Tor-ALL; the map must not claim success.
                 projectionCase(
                     PerAppRoutingMode.INCLUDE_SELECTED_APPS,
                     true,

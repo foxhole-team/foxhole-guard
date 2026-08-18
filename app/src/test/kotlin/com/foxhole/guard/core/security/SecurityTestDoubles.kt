@@ -5,11 +5,6 @@ import java.io.File
 import java.security.MessageDigest
 import java.security.SecureRandom
 
-/**
- * Deterministic JVM stand-in for libsodium: SHA-256-based KDF and a toy sealed box
- * that still enforces the keypair relationship, so wrong-key opens fail like the
- * real primitive. Never used in production code.
- */
 internal class FakeGuardCrypto : GuardCrypto {
     var argon2Invocations = 0
         private set
@@ -89,11 +84,6 @@ internal class FakeGuardCrypto : GuardCrypto {
     }
 }
 
-/**
- * Obfuscating FileCipher stand-in whose output never starts with '{' (a version-byte
- * prefix plus XOR), so the keybox legacy-JSON detection sees a "wrapped" file exactly
- * like with the real Keystore cipher.
- */
 internal class XorFileCipher : FileCipher {
     override fun readBytes(file: File): ByteArray {
         val raw = file.readBytes()
@@ -120,7 +110,6 @@ internal class XorFileCipher : FileCipher {
     }
 }
 
-/** Plaintext FileCipher stand-in for the Keystore-backed cipher (JVM tests only). */
 internal class FakeFileCipher : FileCipher {
     override fun readBytes(file: File): ByteArray = file.readBytes()
 

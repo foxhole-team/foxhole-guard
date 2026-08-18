@@ -107,8 +107,6 @@ class ProtocolOptionSelectionTest {
 
     @Test
     fun `explicit runtime override still resolves the requested option`() {
-        // Identity wins for an explicit request (a probe, or a reconnect onto the running option):
-        // substituting another protocol would connect through something the caller never asked for.
         val secret =
             StoredProfileSecret(
                 protocolOptions = listOf(option("vless", enabled = false), option("hysteria")),
@@ -163,7 +161,6 @@ class ProtocolOptionSelectionTest {
             listOf(false, true, true),
             update.secret.protocolOptions.map(StoredProfileProtocolOption::enabled),
         )
-        // The re-pointed selection resolves cleanly for the runtime.
         assertEquals("hysteria", update.secret.selectedStoredProtocolOptionForRuntime()?.id)
     }
 

@@ -16,9 +16,6 @@ import kotlinx.coroutines.flow.map
 import java.util.Locale
 import kotlin.math.sqrt
 
-// Pure aggregation/geometry helpers for the traffic map: edge building, country visuals,
-// sample batching, period buckets, and the snapshot/window aggregate math.
-
 @Suppress("CyclomaticComplexMethod")
 internal fun buildTrafficMapEdges(
     origin: TrafficMapCountryCoordinate?,
@@ -159,8 +156,6 @@ internal data class TrafficMapRouteAggregate(
     val connections: Int,
 )
 
-// Session aggregate of the DNS resolver egress: latest known resolver country plus the summed
-// per-connection totals, so the resolver node always shows on the map while DNS flows.
 internal data class TrafficMapDnsResolverAggregate(
     val countryCode: String? = null,
     val bytesByConnectionId: LinkedHashMap<String, Long> = linkedMapOf(),
@@ -206,8 +201,6 @@ internal data class TrafficMapDestinationSnapshot(
     val newCountryCodes: Set<String>,
 )
 
-// Floors the snapshot totals at the session tunnel counters: per-country samples undercount the
-// tunnel (DNS, unresolved destinations, transport overhead), while the widget shows the counters.
 internal fun TrafficMapDestinationSnapshot.withSessionTunnelFloor(
     sessionTunnelBytes: Long,
 ): TrafficMapDestinationSnapshot =

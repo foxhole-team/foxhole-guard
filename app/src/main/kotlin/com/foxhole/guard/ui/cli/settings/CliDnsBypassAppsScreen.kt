@@ -1,6 +1,7 @@
 package com.foxhole.guard.ui.cli.settings
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -8,7 +9,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -23,8 +23,8 @@ import com.foxhole.core.model.InstalledAppOption
 import com.foxhole.guard.R
 import com.foxhole.guard.ui.HomeViewModel
 import com.foxhole.guard.ui.cli.CliSpacing
-import com.foxhole.guard.ui.cli.CliType
-import com.foxhole.guard.ui.cli.LocalCliColors
+import com.foxhole.guard.ui.cli.LocalCliBottomChromeClearance
+import com.foxhole.guard.ui.cli.components.CliCheckGlyph
 import com.foxhole.guard.ui.cli.components.CliInputRow
 import com.foxhole.guard.ui.cli.components.CliLoadingRow
 import com.foxhole.guard.ui.cli.components.CliPanel
@@ -32,17 +32,11 @@ import com.foxhole.guard.ui.cli.components.CliScreenHeader
 import com.foxhole.guard.ui.loadInstalledApps
 import com.foxhole.guard.ui.onDnsBypassPackagesChanged
 
-/**
- * Per-app DNS bypass picker: apps ticked here keep their own resolver (no DNS filtering /
- * interception). Independent of the routing lanes — an app can ride the VPN lane and still
- * bypass DNS. Tapping a row toggles its membership in [DnsSettings.appBypassPackages].
- */
 @Composable
 internal fun CliDnsBypassAppsScreen(
     viewModel: HomeViewModel,
     modifier: Modifier = Modifier,
 ) {
-    val colors = LocalCliColors.current
     val settingsState by viewModel.settingsRouteState.collectAsStateWithLifecycle()
     val appState by viewModel.appPickerRouteState.collectAsStateWithLifecycle()
     LaunchedEffect(Unit) { viewModel.loadInstalledApps() }
@@ -82,18 +76,15 @@ internal fun CliDnsBypassAppsScreen(
             CliLoadingRow(text = stringResource(R.string.cli_common_loading))
             return
         }
-        LazyColumn(modifier = Modifier.fillMaxWidth().weight(1f)) {
+        LazyColumn(
+            modifier = Modifier.fillMaxWidth().weight(1f),
+            contentPadding = PaddingValues(bottom = LocalCliBottomChromeClearance.current),
+        ) {
             items(visible, key = InstalledAppOption::packageName) { app ->
                 val enabled = app.packageName in bypass
                 CliInstalledAppRow(
                     app = app,
-                    trailing = {
-                        Text(
-                            text = if (enabled) "[x]" else "[ ]",
-                            style = CliType.body,
-                            color = if (enabled) colors.ok else colors.accent,
-                        )
-                    },
+                    trailing = { CliCheckGlyph(checked = enabled) },
                     onTap = {
                         val next =
                             if (enabled) bypass - app.packageName else bypass + app.packageName

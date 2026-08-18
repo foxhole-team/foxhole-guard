@@ -22,18 +22,12 @@ import com.foxhole.guard.R
 import com.foxhole.guard.ui.cli.CliSpacing
 import com.foxhole.guard.ui.cli.CliType
 import com.foxhole.guard.ui.cli.LocalCliColors
+import com.foxhole.guard.ui.cli.LocalCliPanelAppearance
 import com.foxhole.guard.ui.cli.components.CliButton
-import com.foxhole.guard.ui.cli.components.CliElbowLine
 import com.foxhole.guard.ui.cli.components.CliScreenHeader
+import com.foxhole.guard.ui.cli.components.CliTopBarHelpButton
+import com.foxhole.guard.ui.cli.components.cliModalSurfaceColor
 
-/**
- * Full-height escape hatch for configuration formats that do not fit the structured form.
- *
- * The current normalized configuration is shown as ordinary text, but Save accepts every local
- * VPN configuration format supported by the importer (including share links and WireGuard text).
- * Parsing and persistence are one action in the view model, so this screen never reports success
- * for a draft that was only copied back into the form.
- */
 @Composable
 internal fun CliManualProfileEditor(
     initialText: String,
@@ -46,16 +40,13 @@ internal fun CliManualProfileEditor(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(colors.bg)
+            .background(cliModalSurfaceColor(LocalCliPanelAppearance.current, colors.panel))
             .padding(CliSpacing.md),
     ) {
         CliScreenHeader(
             label = stringResource(R.string.cli_prof_edit_manual_title),
             icon = R.drawable.pix_edit,
-        )
-        CliElbowLine(
-            text = stringResource(R.string.cli_prof_edit_manual_hint),
-            color = colors.note,
+            trailing = { CliTopBarHelpButton(bodyRes = R.string.cli_prof_edit_manual_hint) },
         )
         BasicTextField(
             value = text,
@@ -69,28 +60,30 @@ internal fun CliManualProfileEditor(
                 .padding(CliSpacing.sm)
                 .verticalScroll(rememberScrollState()),
         )
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(top = CliSpacing.sm),
-            horizontalArrangement = Arrangement.spacedBy(CliSpacing.sm),
-        ) {
-            CliButton(
-                label = stringResource(R.string.cli_common_no_cancel),
-                color = colors.err,
-                dashed = true,
-                enabled = !busy,
-                dimWhenDisabled = false,
-                onClick = onCancel,
-                modifier = Modifier.weight(1f),
-            )
-            CliButton(
-                label = stringResource(R.string.cli_prof_config_save),
-                color = colors.ok,
-                iconContent = { tint -> CliDisketteIcon(tint = tint) },
-                enabled = !busy && text.isNotBlank(),
-                dimWhenDisabled = false,
-                onClick = { onSave(text) },
-                modifier = Modifier.weight(1f),
-            )
+        CliEditorControlTypography {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = CliSpacing.sm),
+                horizontalArrangement = Arrangement.spacedBy(CliSpacing.sm),
+            ) {
+                CliButton(
+                    label = stringResource(R.string.cli_common_no_cancel),
+                    color = colors.err,
+                    dashed = true,
+                    enabled = !busy,
+                    dimWhenDisabled = false,
+                    onClick = onCancel,
+                    modifier = Modifier.weight(1f),
+                )
+                CliButton(
+                    label = stringResource(R.string.cli_prof_config_save_action),
+                    color = colors.ok,
+                    iconContent = { tint -> CliDisketteIcon(tint = tint) },
+                    enabled = !busy && text.isNotBlank(),
+                    dimWhenDisabled = false,
+                    onClick = { onSave(text) },
+                    modifier = Modifier.weight(1f),
+                )
+            }
         }
     }
 }

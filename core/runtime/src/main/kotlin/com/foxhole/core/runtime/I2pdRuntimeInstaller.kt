@@ -14,13 +14,7 @@ data class I2pdRuntimePaths(
 
 internal class I2pdRuntimeUnavailableException(message: String) : IllegalStateException(message)
 
-/**
- * Prepares the i2pd runtime layout: locates the packaged `libi2pd.so` executable (shipped as a
- * jniLib exactly like `libTor.so`, since Android only executes from nativeLibraryDir), creates the
- * private data directory, and copies the bundled reseed certificates when present. The generated
- * i2pd.conf is written per-start by [I2pdProcessManager] because it carries the freshly allocated
- * loopback ports.
- */
+/** Prepares the packaged i2pd executable, private data, reseed certificates, and runtime paths. */
 class I2pdRuntimeInstaller(
     context: Context,
     private val diagnosticsLogger: RuntimeDiagnosticsSink? = null,

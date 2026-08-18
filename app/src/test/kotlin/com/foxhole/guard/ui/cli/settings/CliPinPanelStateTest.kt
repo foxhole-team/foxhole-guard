@@ -12,8 +12,6 @@ class CliPinPanelStateTest {
 
     @Test
     fun `enable flow starts at the new pin`() {
-        // Согласие на шифрование спрашивается модалкой ДО панели (CliEncryptionConsentSheet),
-        // поэтому панель открывается сразу на вводе ключа.
         assertEquals(CliPinStep.NEW, CliPinPanelState(CliPinFlow.ENABLE).step)
     }
 

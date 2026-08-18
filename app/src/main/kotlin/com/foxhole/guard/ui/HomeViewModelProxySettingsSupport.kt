@@ -31,9 +31,6 @@ import com.foxhole.guard.refreshLocalizedNotificationChannels
 import kotlinx.coroutines.launch
 import android.provider.Settings as AndroidSettings
 
-// Proxy surface, local auth, reset-to-defaults and local-data clearing handlers for HomeViewModel.
-// Extracted from HomeViewModelSettingsSupport (file split by domain); extension functions only.
-
 internal fun HomeViewModel.onSiteRoutingActionSelected(value: RoutingRuleAction) {
     updateRuntimeSettingAndMaybeReload {
         container.settingsRepository.updateSiteRoutingAction(value)
@@ -55,8 +52,6 @@ internal fun HomeViewModel.onCopyLanProxyPassword() {
     val clipboard = app.getSystemService(android.content.ClipboardManager::class.java) ?: return
     val clip =
         android.content.ClipData.newPlainText("FoxHole LAN proxy", password).apply {
-            // Marks the clip sensitive so the system clipboard preview masks the password
-            // (honored from API 33; a harmless extra below).
             description.extras =
                 android.os.PersistableBundle().apply {
                     putBoolean("android.content.extra.IS_SENSITIVE", true)
@@ -160,10 +155,6 @@ internal fun HomeViewModel.resetUsageTrackingInternal() {
     }
 }
 
-/**
- * Wipes every persisted I2P counter: the hourly buckets behind the 24h/7d/30d rows and the lifetime
- * aggregate behind "all time". Scoped to I2P alone — it touches nothing the other clear actions own.
- */
 internal fun HomeViewModel.clearI2pTrafficStatisticsInternal() {
     viewModelScope.launch {
         container.i2pTrafficRepository.clear()
@@ -280,8 +271,6 @@ private fun HomeViewModel.journalHistoryCleared(scope: String) {
     if (!securityComponents.isPasswordProtectionActive()) {
         return
     }
-    // Record the clear in the tamper-evident guard journal BEFORE deleting, so a coerced
-    // wipe leaves a sealed trace the deletion itself cannot remove.
     securityComponents.journalEvent(
         com.foxhole.guard.guardian.GuardEvent(
             type = com.foxhole.guard.guardian.GuardEventType.HISTORY_CLEARED,

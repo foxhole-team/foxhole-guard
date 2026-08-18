@@ -36,9 +36,7 @@ data class I2pSettings(
     // so an enabled core runs; the window toggle flips this to pause the router without revoking the
     // permission, so the quick-access pill stays and the router resumes on the next toggle.
     val engaged: Boolean = true,
-    // Legacy serialized preference retained for settings compatibility. The final architecture
-    // always raises the transparent carrier TUN when I2P is engaged without a profile.
-    val allowOutsideTunnel: Boolean = false,
+    val allowOutsideTunnel: Boolean = true,
     // Keep an engaged I2P router available when its VPN carrier disconnects by moving it to the
     // transparent firewall carrier. Default true preserves the established behaviour for settings
     // documents written before this explicit user preference existed.

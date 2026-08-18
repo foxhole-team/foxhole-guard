@@ -26,13 +26,29 @@ fun storedWebAppRoute(value: String?): WebAppRoute =
 // WebView has no real Web Push, so the "push service" polls sites with an invisible WebView, and it
 // runs only behind a raised guard: pushServiceEnabled is valid only with the firewall on, an
 // invariant held by Settings.normalized().
-// The widget defaults apply until a given widgetId has its own per-widget config.
+@Serializable
+@Immutable
+data class WidgetKindAppearance(
+    val blackBackground: Boolean = true,
+    val alphaPercent: Int = 100,
+    val outline: Boolean = true,
+)
+
 @Serializable
 @Immutable
 data class WidgetDefaultsSettings(
     val blackBackground: Boolean = true,
     val alphaPercent: Int = 100,
-)
+    val status: WidgetKindAppearance? = null,
+    val webApps: WidgetKindAppearance? = null,
+    val foxAnimationEnabled: Boolean = true,
+) {
+    fun statusAppearance(): WidgetKindAppearance =
+        status ?: WidgetKindAppearance(blackBackground = blackBackground, alphaPercent = alphaPercent)
+
+    fun webAppsAppearance(): WidgetKindAppearance =
+        webApps ?: WidgetKindAppearance(blackBackground = blackBackground, alphaPercent = alphaPercent)
+}
 
 @Serializable
 @Immutable

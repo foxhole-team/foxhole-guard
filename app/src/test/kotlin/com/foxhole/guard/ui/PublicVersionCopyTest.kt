@@ -17,13 +17,6 @@ class PublicVersionCopyTest {
 
     @Test
     fun `public surfaces name the version this build actually is`() {
-        // This used to demand the literal string "public beta 1.0" on every public surface, and it
-        // kept demanding it for three version bumps: the build had been 1.1.0-beta3 (versionCode
-        // 66) since the dev line closed, while README, the F-Droid metadata and the changelog all
-        // still announced 1.0 — and the test enforced the mismatch instead of catching it.
-        // The READMEs deliberately carry a release badge instead of a literal, so they cannot go
-        // stale and are not listed here. What remains is the set that must name one exact build:
-        // the F-Droid metadata and the changelog the store shows for it.
         val publicSurfaceFiles =
             listOf(
                 "metadata/com.foxhole.guard.yml",
@@ -31,8 +24,6 @@ class PublicVersionCopyTest {
                 "fastlane/metadata/android/ru-RU/changelogs/default.txt",
             )
 
-        // Unit tests run on the debug variant, whose versionNameSuffix is "-Debug"; the public
-        // surfaces name the release version, so the suffix has to come off before comparing.
         val releaseVersionName =
             BuildConfig.VERSION_NAME
                 .removeSuffix("-Debug")

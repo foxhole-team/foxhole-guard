@@ -5,8 +5,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 
-// After the runtime disconnects the map must keep showing the LAST session's aggregates;
-// only the next unavailable -> available transition starts the accumulator over.
 class TrafficMapAccumulatorsLastSessionTest {
     @Test
     fun `unavailable batch keeps last session aggregates on the map`() {
@@ -122,8 +120,6 @@ class TrafficMapAccumulatorsLastSessionTest {
 
     @Test
     fun `zero session tunnel floor outside a session keeps the retained snapshot`() {
-        // Out of session the tunnel counter provider reads 0; the floor must stay a floor
-        // (only ever raising totals) so the retained last-session snapshot is never zeroed.
         val snapshot =
             trafficMapDestinationSnapshotFromAggregates(
                 aggregates = mapOf(

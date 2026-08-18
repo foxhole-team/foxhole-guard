@@ -16,7 +16,6 @@ class InstalledAppChangeReceiverTest {
                 timeoutMs = 1_000L,
                 finish = { finished += 1 },
             ) {
-                // Success path.
             }
 
             assertEquals(1, finished)
@@ -93,6 +92,22 @@ class InstalledAppChangeReceiverTest {
             preflightBody.indexOf("recordInstalledAppChange(") <
                 preflightBody.indexOf("applyQuarantineToActiveRuntime()"),
         )
+    }
+
+    @Test
+    fun `install monitoring is part of the Sentinel master while quarantine stays independent`() {
+        val source = receiverSource().readText()
+        val relevance =
+            source
+                .substringAfter("private fun Settings.packageChangeRelevance")
+                .substringBefore("private suspend fun FoxholeApplication.preparePackageInventoryChange")
+
+        assertTrue(
+            relevance.contains(
+                "monitoringEnabled = anomaly.enabled && statistics.enabled && statistics.appChangesEnabled",
+            ),
+        )
+        assertTrue(relevance.contains("val quarantineEnabled = expert.newAppQuarantineEnabled"))
     }
 
     @Test

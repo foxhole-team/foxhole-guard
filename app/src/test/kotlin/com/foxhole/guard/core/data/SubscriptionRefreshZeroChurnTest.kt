@@ -11,10 +11,6 @@ import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-// Phase 4a acceptance: refreshing an unchanged subscription must not rewrite or re-encrypt any
-// profile secret. Deterministic importer tags make the refreshed secret reproduce the stored one
-// byte-for-byte; the prepare step then keeps the stored secretRef, stages no write, and the
-// still-live ref never reaches the cleanup list.
 class SubscriptionRefreshZeroChurnTest {
     private val json =
         Json {

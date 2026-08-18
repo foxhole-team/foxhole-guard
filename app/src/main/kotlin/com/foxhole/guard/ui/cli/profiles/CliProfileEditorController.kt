@@ -12,20 +12,10 @@ import com.foxhole.guard.ui.removeProfileProtocolOption
 import com.foxhole.guard.ui.saveManualProfileConfig
 import com.foxhole.guard.ui.saveProfileEditorChanges
 import com.foxhole.guard.ui.saveProfileProtocolConfigs
-import com.foxhole.guard.ui.setSmartProfileProtocolEnabled
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonObject
 
-/**
- * The editing session behind [CliProfileEditorScreen]: the parsed configs of every protocol, which
- * card is open, and the one-at-a-time gate around the suspending actions.
- *
- * Two kinds of change meet here. Field edits stay local until [save] submits all changed protocols
- * as one validated repository action. Structural changes (add/remove a protocol) flush the pending
- * field edits first and then re-read everything ([reloadKey]) — the editor never shows a config the
- * store does not have.
- */
 @Stable
 internal class CliProfileEditorController(
     private val viewModel: HomeViewModel,
@@ -64,7 +54,7 @@ internal class CliProfileEditorController(
         ref: CliEditorProtocolRef,
         outbound: JsonObject,
     ) {
-        slots = slots?.withOutboundAt(ref, outbound)
+        slots = slots?.withEntryAt(ref, outbound)
     }
 
     fun toggleExpanded(ref: CliEditorProtocolRef) {
@@ -75,7 +65,6 @@ internal class CliProfileEditorController(
         }
     }
 
-    /** Opens the full-screen text editor for the selected protocol, or for the first protocol. */
     fun openManualEditor() {
         val target = expanded ?: slots.orEmpty().protocolRefs().firstOrNull() ?: return
         expanded = target
@@ -109,27 +98,15 @@ internal class CliProfileEditorController(
             }
         }
 
-    fun toggleEnabled(
-        optionId: String,
-        enabled: Boolean,
-    ) {
-        viewModel.setSmartProfileProtocolEnabled(profileId, optionId, enabled)
-    }
-
-    /**
-     * Removing a protocol means one of two things: a config that carries several proxy outbounds
-     * just loses one (local, saved with the rest), while a one-outbound protocol option leaves the
-     * profile for good. The last protocol of a profile is refused either way.
-     */
     fun deleteProtocol(ref: CliEditorProtocolRef) =
         runExclusive {
             val current = slots.orEmpty()
             val slot = current.getOrNull(ref.slotIndex) ?: return@runExclusive
             when {
-                slot.root.cliProxyOutboundIndices().size > 1 -> {
+                slot.protocolEntryCount() > 1 -> {
                     expanded = null
                     rawEditor = null
-                    slots = current.withSlot(ref.slotIndex) { it.withoutOutbound(ref.outboundIndex) }
+                    slots = current.withSlot(ref.slotIndex) { it.withoutEntry(ref) }
                 }
                 slot.optionId != null && current.size > 1 -> removeOption(slot.optionId)
                 else -> viewModel.emitError(messages.lastProtocol)

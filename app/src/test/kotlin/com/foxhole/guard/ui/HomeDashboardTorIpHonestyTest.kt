@@ -12,12 +12,6 @@ import com.foxhole.guard.runtime.FoxholeVpnService
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
-/**
- * The dashboard "current IP" must reflect the runtime that is actually serving, never a stale Tor
- * exit left over from a previous mode. Regression guard for: enabling the firewall while Tor was
- * running kept the dashboard pinned on the Tor exit IP because the choice keyed on the persisted
- * privacyRoute setting instead of the applied runtime's torActive flag.
- */
 internal class HomeDashboardTorIpHonestyTest {
     private val torExit =
         IpInfo(
@@ -48,8 +42,6 @@ internal class HomeDashboardTorIpHonestyTest {
 
     @Test
     fun `firewall runtime never shows a lingering tor exit ip`() {
-        // privacyRoute is still enabled in settings (the user only toggled the firewall on), a Tor
-        // exit IP is still cached, and the guard is active — the old code showed the Tor IP here.
         val state =
             HomeRouteUiState(
                 settings =

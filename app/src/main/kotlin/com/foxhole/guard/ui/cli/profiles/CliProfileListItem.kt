@@ -1,12 +1,20 @@
 package com.foxhole.guard.ui.cli.profiles
 
 import androidx.annotation.DrawableRes
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -17,6 +25,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -26,24 +35,34 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.foxhole.core.model.Profile
+import com.foxhole.core.model.VisualStyle
 import com.foxhole.core.profile.exportableProfileChoices
 import com.foxhole.guard.R
 import com.foxhole.guard.ui.HomeViewModel
 import com.foxhole.guard.ui.ProfilesExportSelectionState
 import com.foxhole.guard.ui.ProfilesRouteUiState
 import com.foxhole.guard.ui.SmartProfileExportSelectionState
+import com.foxhole.guard.ui.cli.CliMotion
 import com.foxhole.guard.ui.cli.CliSpacing
 import com.foxhole.guard.ui.cli.CliType
 import com.foxhole.guard.ui.cli.LocalCliColors
+import com.foxhole.guard.ui.cli.LocalCliVisualStyle
+import com.foxhole.guard.ui.cli.cliLabelText
+import com.foxhole.guard.ui.cli.cliMetricSp
+import com.foxhole.guard.ui.cli.components.CLI_PROFILE_TABLE_RIM
+import com.foxhole.guard.ui.cli.components.CliActiveDot
+import com.foxhole.guard.ui.cli.components.CliColumnRule
 import com.foxhole.guard.ui.cli.components.CliConfirmSheet
 import com.foxhole.guard.ui.cli.components.CliDisclosureGlyph
 import com.foxhole.guard.ui.cli.components.CliFlagIcon
 import com.foxhole.guard.ui.cli.components.CliInputRow
 import com.foxhole.guard.ui.cli.components.CliPixIcon
+import com.foxhole.guard.ui.cli.components.cliAccentSweepBorder
 import com.foxhole.guard.ui.cli.components.cliCombinedPressable
 import com.foxhole.guard.ui.cli.components.cliMarchingBorder
 import com.foxhole.guard.ui.cli.components.cliPressable
@@ -78,7 +97,6 @@ internal fun CliProfileListItem(
         actions.changePendingDelete(null)
         actions.changeSelection(selection.toggledProfile(profile))
     }
-    // saveable: rotation must not silently close the editor — that discards unsaved edits.
     var editorOpen by rememberSaveable(profile.id) { mutableStateOf(false) }
     var detailOpen by rememberSaveable(profile.id) { mutableStateOf(false) }
     Column {
@@ -112,7 +130,6 @@ internal fun CliProfileListItem(
                 actions.changePendingDelete(null)
                 viewModel.deleteProfile(profile.id)
             },
-            onDeleteCancel = { actions.changePendingDelete(null) },
             onRenameSubmit = { name ->
                 actions.changePendingDelete(null)
                 viewModel.renameProfile(profile.id, name)
@@ -124,13 +141,6 @@ internal fun CliProfileListItem(
             onSelectForExport = {
                 actions.changePendingDelete(null)
                 actions.changeSelection(selection.selectedForExport(profile, expandSmart = true))
-            },
-            onShare = {
-                // Share: select only this profile for export, replacing the set.
-                actions.changePendingDelete(null)
-                actions.changeSelection(
-                    ProfilesExportSelectionState().selectedForExport(profile, expandSmart = true),
-                )
             },
         )
         if (exportExpanded && exportChoices.size > 1) {
@@ -150,23 +160,18 @@ internal fun CliProfileListItem(
                 isActive = profile.id == state.activeProfileId,
                 onActivate = {
                     detailOpen = false
-                    // A live profile switch is confirmed (B2) before it reconnects; idle activates.
                     viewModel.onActivateProfileRequested(profile.id)
                 },
                 onDismiss = { detailOpen = false },
             )
         }
         if (editorOpen) {
-            // Long-press -> edit opens the structural editor; manual config text stays on its own
-            // full-height surface.
             CliProfileEditorScreen(
                 viewModel = viewModel,
                 profile = profile,
                 onDismiss = { editorOpen = false },
             )
         }
-        // C1: the smart-profile protocol table lives in a bottom sheet, driven by expandedSmartId
-        // and opened by a whole-row tap (P1/item 1). Only smart profiles reach here.
         if (expandedSmartId == profile.id && isSmart) {
             CliSmartProfileSheet(
                 viewModel = viewModel,
@@ -195,7 +200,6 @@ private fun handleProfileRowTap(
         }
         selectionMode -> toggleSelection()
         pendingDeleteId != null -> actions.changePendingDelete(null)
-        // Smart profiles raise the management sheet; a regular profile raises its detail sheet.
         isSmart -> actions.changeExpandedSmart(profile.id)
         else -> openDetail()
     }
@@ -208,10 +212,8 @@ private fun handleProfileRowLongPress(
     toggleSelection: () -> Unit,
 ) {
     if (selectionMode) {
-        // In selection mode long-press keeps its old checkbox behaviour.
         toggleSelection()
     } else {
-        // Outside selection mode long-press opens the profile action row.
         actions.changePendingDelete(profileId)
     }
 }
@@ -246,10 +248,15 @@ private fun CliSmartExportChoiceRows(
     onToggle: (String) -> Unit,
 ) {
     val colors = LocalCliColors.current
+    val actionEdge = if (LocalCliVisualStyle.current == VisualStyle.PLAIN) {
+        Modifier.cliAccentSweepBorder(colors.accent)
+    } else {
+        Modifier.cliMarchingBorder(colors.accent)
+    }
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 28.dp, end = CliSpacing.xs, bottom = CliSpacing.xs),
+            .padding(start = CLI_PROFILE_TABLE_RIM, end = CliSpacing.xs, bottom = CliSpacing.xs),
     ) {
         choices.forEach { choice ->
             val selected = choice.selectionKey in selectedKeys
@@ -257,6 +264,7 @@ private fun CliSmartExportChoiceRows(
                 modifier = Modifier
                     .fillMaxWidth()
                     .defaultMinSize(minHeight = 38.dp)
+                    .then(actionEdge)
                     .cliPressable(onClick = { onToggle(choice.selectionKey) }),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -290,44 +298,50 @@ private fun CliProfileRow(
     onTap: () -> Unit,
     onLongPress: () -> Unit,
     onDeleteConfirm: () -> Unit,
-    onDeleteCancel: () -> Unit,
     onRenameSubmit: (String) -> Unit,
     onOpenEditor: () -> Unit,
     onSelectForExport: () -> Unit,
-    onShare: () -> Unit,
 ) {
     val colors = LocalCliColors.current
     val selected =
         selectionState != null && selectionState != SmartProfileExportSelectionState.NONE
+    val selectedEdge = if (selected) {
+        if (LocalCliVisualStyle.current == VisualStyle.PLAIN) {
+            Modifier.cliAccentSweepBorder(colors.accent, radius = 4.dp)
+        } else {
+            Modifier
+        }
+    } else {
+        Modifier
+    }
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .defaultMinSize(minHeight = 48.dp)
                 .selectedProfileDecoration(selected, colors.accent)
+                .then(selectedEdge)
                 .cliCombinedPressable(onClick = onTap, onLongClick = onLongPress),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            ProfileTableLeading(
+            ProfileTableLeadingCell(profile = profile, active = active)
+            ProfileTableNameCell(
                 profile = profile,
                 active = active,
                 selected = selected,
                 selectionState = selectionState,
+                modifier = Modifier.weight(PROFILE_TABLE_NAME_WEIGHT),
             )
+            CliColumnRule()
             Text(
-                text = profile.name,
-                style = CliType.body,
-                color = if (active) colors.fg else colors.dim,
+                text = profile.subscriptionExpiresAt?.let(::formatExpiryDate) ?: "—",
+                style = CliType.small,
+                color = if (profile.subscriptionExpiresAt == null) colors.faint else colors.warn,
                 maxLines = 1,
-                overflow = TextOverflow.Clip,
-                modifier = Modifier
-                    .weight(PROFILE_TABLE_NAME_WEIGHT)
-                    .basicMarquee(
-                        iterations = Int.MAX_VALUE,
-                        initialDelayMillis = PROFILE_TABLE_MARQUEE_DELAY_MS,
-                        repeatDelayMillis = PROFILE_TABLE_MARQUEE_REPEAT_MS,
-                    ),
+                textAlign = TextAlign.End,
+                modifier = Modifier.weight(PROFILE_TABLE_EXPIRY_WEIGHT),
             )
+            CliColumnRule()
             Text(
                 text = profileTableProtocolLabel(profile),
                 style = CliType.small,
@@ -337,112 +351,128 @@ private fun CliProfileRow(
                 textAlign = TextAlign.End,
                 modifier = Modifier.weight(PROFILE_TABLE_PROTOCOL_WEIGHT),
             )
-            Text(
-                text = profile.subscriptionExpiresAt?.let(::formatExpiryDate) ?: "—",
-                style = CliType.small,
-                color = if (profile.subscriptionExpiresAt == null) colors.faint else colors.warn,
-                maxLines = 1,
-                textAlign = TextAlign.End,
-                modifier = Modifier.weight(PROFILE_TABLE_EXPIRY_WEIGHT),
-            )
-            // A smart profile is marked with the canonical disclosure arrow; tapping it opens
-            // the protocol table without replacing the three stable columns above.
-            if (profile.protocolOptions.size > 1) {
-                Spacer(modifier = Modifier.width(6.dp))
-                CliDisclosureGlyph(expanded = smartExpanded, color = colors.accent)
-            } else {
-                Spacer(modifier = Modifier.width(PROFILE_TABLE_DISCLOSURE_WIDTH))
+            Box(
+                modifier = Modifier.width(CLI_PROFILE_TABLE_RIM),
+                contentAlignment = Alignment.CenterEnd,
+            ) {
+                if (profile.protocolOptions.size > 1) {
+                    CliDisclosureGlyph(expanded = smartExpanded, color = colors.accent)
+                }
             }
         }
-        // Long-press reveals the action row: rename inline, edit, delete, select, share.
-        if (deleteArmed) {
+        AnimatedVisibility(
+            visible = deleteArmed,
+            enter = expandVertically(animationSpec = CliMotion.enter()) +
+                fadeIn(animationSpec = CliMotion.enter()),
+            exit = shrinkVertically(animationSpec = CliMotion.exit()) +
+                fadeOut(animationSpec = CliMotion.exit()),
+        ) {
             CliProfileActionsRow(
                 profileName = profile.name,
                 onRenameSubmit = onRenameSubmit,
                 onOpenEditor = onOpenEditor,
                 onDeleteConfirm = onDeleteConfirm,
                 onSelectForExport = onSelectForExport,
-                onShare = onShare,
-                onDismiss = onDeleteCancel,
             )
         }
     }
 }
 
 @Composable
-private fun ProfileTableLeading(
+private fun ProfileTableLeadingCell(profile: Profile, active: Boolean) {
+    Box(
+        modifier = Modifier.width(CLI_PROFILE_TABLE_RIM),
+        contentAlignment = Alignment.CenterStart,
+    ) {
+        if (active) {
+            CliActiveDot(active = true)
+            return@Box
+        }
+        profileCountryCode(
+            profile.protocolOptions.firstOrNull { it.isSelected }?.displayName,
+            profile.name,
+        )?.let { country -> CliFlagIcon(countryCode = country, style = CliType.small) }
+    }
+}
+
+@Composable
+private fun ProfileTableNameCell(
     profile: Profile,
     active: Boolean,
     selected: Boolean,
     selectionState: SmartProfileExportSelectionState?,
+    modifier: Modifier = Modifier,
 ) {
     val colors = LocalCliColors.current
-    Row(
-        modifier = Modifier.width(PROFILE_TABLE_LEADING_WIDTH),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(
-            modifier = Modifier.width(PROFILE_TABLE_CURSOR_WIDTH),
-            contentAlignment = Alignment.CenterStart,
-        ) {
-            if (selectionState == null) {
-                if (active) {
-                    CliPixIcon(
-                        id = R.drawable.pix_arrow_right,
-                        contentDescription = null,
-                        size = 12.dp,
-                        tint = profileSelectionColor(selectionState, active, selected, colors),
-                    )
-                }
-            } else {
-                Text(
-                    text = profileSelectionMarker(selectionState, active).trimEnd(),
-                    style = CliType.body,
-                    color = profileSelectionColor(selectionState, active, selected, colors),
-                )
-            }
+    Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
+        if (selectionState != null) {
+            Text(
+                text = profileSelectionMarker(selectionState, active).trimEnd(),
+                style = CliType.body,
+                color = profileSelectionColor(selectionState, active, selected, colors),
+                maxLines = 1,
+            )
+            Spacer(modifier = Modifier.width(PROFILE_TABLE_MARKER_GAP))
         }
-        Box(
-            modifier = Modifier.width(PROFILE_TABLE_FLAG_WIDTH),
-            contentAlignment = Alignment.Center,
-        ) {
-            profileCountryCode(
-                profile.protocolOptions.firstOrNull { it.isSelected }?.displayName,
-                profile.name,
-            )?.let { country -> CliFlagIcon(countryCode = country) }
-        }
+        Text(
+            text = profile.name,
+            style = CliType.body,
+            color = if (active) colors.fg else colors.dim,
+            maxLines = 1,
+            overflow = TextOverflow.Clip,
+            modifier = Modifier
+                .weight(1f)
+                .basicMarquee(
+                    iterations = Int.MAX_VALUE,
+                    initialDelayMillis = PROFILE_TABLE_MARQUEE_DELAY_MS,
+                    repeatDelayMillis = PROFILE_TABLE_MARQUEE_REPEAT_MS,
+                ),
+        )
     }
 }
 
-/** Header shared by the profile list's fixed name / protocol / expiry columns. */
 @Composable
 internal fun CliProfileTableHeader() {
     val colors = LocalCliColors.current
+    val style = cliProfileTableHeaderStyle()
     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Spacer(modifier = Modifier.width(PROFILE_TABLE_LEADING_WIDTH))
+        Spacer(modifier = Modifier.width(CLI_PROFILE_TABLE_RIM))
         Text(
             text = stringResource(R.string.cli_home_key_profile),
-            style = CliType.small,
+            style = style,
             color = colors.faint,
             modifier = Modifier.weight(PROFILE_TABLE_NAME_WEIGHT),
         )
-        Text(
-            text = stringResource(R.string.cli_home_key_protocol),
-            style = CliType.small,
-            color = colors.faint,
-            textAlign = TextAlign.End,
-            modifier = Modifier.weight(PROFILE_TABLE_PROTOCOL_WEIGHT),
-        )
+        CliColumnRule()
         Text(
             text = stringResource(R.string.cli_prof_facts_expiry),
-            style = CliType.small,
+            style = style,
             color = colors.faint,
             textAlign = TextAlign.End,
             modifier = Modifier.weight(PROFILE_TABLE_EXPIRY_WEIGHT),
         )
-        Spacer(modifier = Modifier.width(PROFILE_TABLE_DISCLOSURE_WIDTH + 6.dp))
+        CliColumnRule()
+        Text(
+            text = stringResource(R.string.cli_home_key_protocol),
+            style = style,
+            color = colors.faint,
+            textAlign = TextAlign.End,
+            modifier = Modifier.weight(PROFILE_TABLE_PROTOCOL_WEIGHT),
+        )
+        Spacer(modifier = Modifier.width(CLI_PROFILE_TABLE_RIM))
     }
 }
+
+@Composable
+@ReadOnlyComposable
+internal fun cliProfileTableHeaderStyle(): TextStyle =
+    CliType.small.copy(
+        fontSize = cliMetricSp(PROFILE_TABLE_HEADER_SP),
+        lineHeight = cliMetricSp(PROFILE_TABLE_HEADER_LINE_SP),
+    )
+
+private const val PROFILE_TABLE_HEADER_SP = 12f
+private const val PROFILE_TABLE_HEADER_LINE_SP = 15f
 
 internal fun profileTableProtocolLabel(profile: Profile): String {
     val selected = profile.protocolOptions.firstOrNull { it.id == profile.selectedProtocolOptionId }
@@ -452,8 +482,6 @@ internal fun profileTableProtocolLabel(profile: Profile): String {
 
 private enum class CliProfileActionStage { MENU, RENAME, DELETE }
 
-// The action row stays on screen while the delete question is up: the modal is the only thing
-// that changes, so the chips do not shuffle under the finger that opened them.
 private val CliProfileActionStage.showsMenu: Boolean
     get() = this != CliProfileActionStage.RENAME
 
@@ -464,73 +492,91 @@ private fun CliProfileActionsRow(
     onOpenEditor: () -> Unit,
     onDeleteConfirm: () -> Unit,
     onSelectForExport: () -> Unit,
-    onShare: () -> Unit,
-    onDismiss: () -> Unit,
 ) {
     val colors = LocalCliColors.current
+    val actionEdge = if (LocalCliVisualStyle.current == VisualStyle.PLAIN) {
+        Modifier.cliAccentSweepBorder(colors.accent)
+    } else {
+        Modifier.cliMarchingBorder(colors.accent)
+    }
     var stage by remember(profileName) { mutableStateOf(CliProfileActionStage.MENU) }
     var nameText by remember(profileName) { mutableStateOf(profileName) }
-    // A SECTION, not a chip strip: the marching-ants frame of the home profile selector marks
-    // the live area, pushing the next profile down. Actions are pure glyphs, centred — the
-    // colour code carries the words (destructive red, editor blue).
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(top = 2.dp, bottom = 6.dp)
-            .cliMarchingBorder(colors.accent)
+            .then(actionEdge)
             .padding(CliSpacing.xs),
     ) {
-        if (stage.showsMenu) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                CliProfileActionGlyph(
-                    icon = R.drawable.pix_edit,
-                    contentDescription = stringResource(R.string.cli_prof_act_rename),
-                    tint = colors.fg,
-                    onClick = { stage = CliProfileActionStage.RENAME },
-                )
-                CliProfileActionGlyph(
-                    icon = R.drawable.pix_settings,
-                    contentDescription = stringResource(R.string.cli_prof_act_edit),
-                    tint = colors.info,
-                    onClick = onOpenEditor,
-                )
-                CliProfileActionGlyph(
-                    icon = R.drawable.pix_export,
-                    contentDescription = stringResource(R.string.cli_prof_act_share),
-                    tint = colors.accent,
-                    onClick = onShare,
-                )
-                CliProfileActionGlyph(
-                    icon = R.drawable.pix_check,
-                    contentDescription = stringResource(R.string.cli_prof_act_select),
-                    tint = colors.ok,
-                    onClick = onSelectForExport,
-                )
-                CliProfileActionGlyph(
-                    icon = R.drawable.pix_trash,
-                    contentDescription = stringResource(R.string.cli_prof_act_delete),
-                    tint = colors.err,
-                    onClick = { stage = CliProfileActionStage.DELETE },
-                )
-                CliProfileActionGlyph(
-                    icon = R.drawable.pix_cross,
-                    contentDescription = stringResource(R.string.cli_common_no_cancel),
-                    tint = colors.err,
-                    onClick = onDismiss,
+        AnimatedContent(
+            targetState = stage.showsMenu,
+            transitionSpec = {
+                (
+                    fadeIn(animationSpec = CliMotion.enter()) +
+                        expandVertically(animationSpec = CliMotion.enter())
+                    ) togetherWith
+                    (
+                        fadeOut(animationSpec = CliMotion.exit()) +
+                            shrinkVertically(animationSpec = CliMotion.exit())
+                        )
+            },
+            label = "profileActionStage",
+        ) { menuShown ->
+            if (menuShown) {
+                BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                    val compact = maxWidth / PROFILE_ACTION_COUNT < PROFILE_ACTION_COMPACT_ITEM_WIDTH
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterHorizontally),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        CliProfileActionGlyph(
+                            icon = R.drawable.pix_check,
+                            contentDescription = stringResource(R.string.cli_prof_act_select),
+                            label = stringResource(R.string.cli_prof_act_select),
+                            tint = colors.ok,
+                            onClick = onSelectForExport,
+                            compact = compact,
+                            modifier = Modifier.weight(1f),
+                        )
+                        CliProfileActionGlyph(
+                            icon = R.drawable.pix_edit,
+                            contentDescription = stringResource(R.string.cli_prof_act_rename),
+                            label = stringResource(R.string.cli_prof_act_rename),
+                            tint = colors.fg,
+                            onClick = { stage = CliProfileActionStage.RENAME },
+                            compact = compact,
+                            modifier = Modifier.weight(1f),
+                        )
+                        CliProfileActionGlyph(
+                            icon = R.drawable.pix_settings,
+                            contentDescription = stringResource(R.string.cli_prof_act_edit),
+                            label = stringResource(R.string.cli_prof_act_edit),
+                            tint = colors.info,
+                            onClick = onOpenEditor,
+                            compact = compact,
+                            modifier = Modifier.weight(1f),
+                        )
+                        CliProfileActionGlyph(
+                            icon = R.drawable.pix_trash,
+                            contentDescription = stringResource(R.string.cli_prof_act_delete),
+                            label = stringResource(R.string.cli_prof_act_delete),
+                            tint = colors.err,
+                            onClick = { stage = CliProfileActionStage.DELETE },
+                            compact = compact,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                }
+            } else {
+                CliInputRow(
+                    prompt = stringResource(R.string.cli_prof_rename_prompt),
+                    value = nameText,
+                    onValueChange = { nameText = it },
+                    onSubmit = { onRenameSubmit(nameText) },
+                    autoFocus = true,
                 )
             }
-        } else {
-            CliInputRow(
-                prompt = stringResource(R.string.cli_prof_rename_prompt),
-                value = nameText,
-                onValueChange = { nameText = it },
-                onSubmit = { onRenameSubmit(nameText) },
-                autoFocus = true,
-            )
         }
     }
     if (stage == CliProfileActionStage.DELETE) {
@@ -544,26 +590,58 @@ private fun CliProfileActionsRow(
     }
 }
 
-/** One glyph action of the profile section: a 48dp target around a 16dp pixel icon. */
 @Composable
+@Suppress("LongParameterList")
 private fun CliProfileActionGlyph(
     @DrawableRes icon: Int,
     contentDescription: String,
+    label: String,
     tint: Color,
     onClick: () -> Unit,
+    compact: Boolean = false,
+    modifier: Modifier = Modifier,
 ) {
     Box(
-        modifier = Modifier
-            .size(48.dp)
+        modifier = modifier
+            .defaultMinSize(
+                minHeight = if (compact) PROFILE_ACTION_GLYPH_HEIGHT_COMPACT else PROFILE_ACTION_GLYPH_HEIGHT,
+            )
             .cliPressable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        CliPixIcon(id = icon, contentDescription = contentDescription, tint = tint)
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            CliPixIcon(
+                id = icon,
+                contentDescription = contentDescription,
+                tint = tint,
+                size = if (compact) 16.dp else 20.dp,
+            )
+            Text(
+                text = cliLabelText(label),
+                style = CliType.small.copy(
+                    fontSize = cliMetricSp(if (compact) PROFILE_ACTION_LABEL_COMPACT_SP else PROFILE_ACTION_LABEL_SP),
+                    lineHeight = cliMetricSp(
+                        if (compact) PROFILE_ACTION_LABEL_COMPACT_LINE_SP else PROFILE_ACTION_LABEL_LINE_SP,
+                    ),
+                ),
+                color = tint,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
     }
 }
 
-// Export selection is a rectangular pixel frame: a crisp 1dp dimmed-accent border over a light
-// fill, matching the panel frames — no rounding, no half-tones.
+private val PROFILE_ACTION_GLYPH_HEIGHT = 56.dp
+private val PROFILE_ACTION_GLYPH_HEIGHT_COMPACT = 48.dp
+private const val PROFILE_ACTION_LABEL_SP = 11f
+private const val PROFILE_ACTION_LABEL_LINE_SP = 13f
+private const val PROFILE_ACTION_LABEL_COMPACT_SP = 10f
+private const val PROFILE_ACTION_LABEL_COMPACT_LINE_SP = 12f
+private const val PROFILE_ACTION_COUNT = 4
+
+private val PROFILE_ACTION_COMPACT_ITEM_WIDTH = 76.dp
+
 private fun Modifier.selectedProfileDecoration(
     selected: Boolean,
     accent: Color,
@@ -580,7 +658,6 @@ private fun profileSelectionMarker(
     selectionState: SmartProfileExportSelectionState?,
     active: Boolean,
 ): String = when (selectionState) {
-    // The null branch is dead for text (CliProfileRow draws the cursor); kept to exhaust the when.
     null -> if (active) "> " else "  "
     SmartProfileExportSelectionState.ALL -> "[x] "
     SmartProfileExportSelectionState.PARTIAL -> "[~] "
@@ -604,7 +681,5 @@ private const val PROFILE_TABLE_PROTOCOL_WEIGHT = 0.25f
 private const val PROFILE_TABLE_EXPIRY_WEIGHT = 0.32f
 private const val PROFILE_TABLE_MARQUEE_DELAY_MS = 1_200
 private const val PROFILE_TABLE_MARQUEE_REPEAT_MS = 1_000
-private val PROFILE_TABLE_CURSOR_WIDTH = 20.dp
-private val PROFILE_TABLE_FLAG_WIDTH = 24.dp
-private val PROFILE_TABLE_LEADING_WIDTH = PROFILE_TABLE_CURSOR_WIDTH + PROFILE_TABLE_FLAG_WIDTH
-private val PROFILE_TABLE_DISCLOSURE_WIDTH = 12.dp
+
+private val PROFILE_TABLE_MARKER_GAP = 2.dp

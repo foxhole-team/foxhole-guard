@@ -30,6 +30,7 @@ import com.foxhole.guard.ui.HomeViewModel
 import com.foxhole.guard.ui.clearProfilesAndSecretsLocalData
 import com.foxhole.guard.ui.cli.CliSpacing
 import com.foxhole.guard.ui.cli.CliType
+import com.foxhole.guard.ui.cli.LocalCliBottomChromeClearance
 import com.foxhole.guard.ui.cli.LocalCliColors
 import com.foxhole.guard.ui.cli.components.CliActionRow
 import com.foxhole.guard.ui.cli.components.CliBottomSheet
@@ -47,11 +48,6 @@ import com.foxhole.guard.ui.parseBackup
 import com.foxhole.guard.ui.resetApplicationSettingsToDefaults
 import com.foxhole.guard.ui.restoreBackup
 
-/**
- * Backup + destructive local-data actions. Export/import ride SAF; every destructive action sits
- * behind the shared bottom confirm modal. Restore carries a short preview (what the file holds)
- * into that modal, so the facts and the decision are in the same place.
- */
 @Composable
 internal fun CliDataSubScreen(
     viewModel: HomeViewModel,
@@ -59,9 +55,6 @@ internal fun CliDataSubScreen(
 ) {
     var includeProfiles by rememberSaveable { mutableStateOf(true) }
     var includeSettings by rememberSaveable { mutableStateOf(true) }
-    // A parsed preview document does not fit in a Bundle, so recreation keeps the source uri and
-    // re-reads the file. Without this, rotation silently lost the preview and forced a second trip
-    // through SAF.
     var pendingRestoreUri by rememberSaveable { mutableStateOf<Uri?>(null) }
     var pendingRestore by remember { mutableStateOf<BackupDocument?>(null) }
     var pendingRestorePassword by remember { mutableStateOf<CharArray?>(null) }
@@ -135,35 +128,44 @@ internal fun CliDataSubScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
             .padding(horizontal = CliSpacing.md),
     ) {
         CliScreenHeader(label = stringResource(R.string.cli_cfg_more_data), icon = R.drawable.pix_export)
-        CliDataBackupPanel(
-            includeProfiles = includeProfiles,
-            includeSettings = includeSettings,
-            pendingRestore = pendingRestore,
-            onIncludeProfiles = { includeProfiles = it },
-            onIncludeSettings = { includeSettings = it },
-            onExport = { showExportPassword = true },
-            onImport = { importLauncher.launch(arrayOf("application/octet-stream", "application/json", "*/*")) },
-            onRestore = { document ->
-                viewModel.restoreBackup(document)
-                pendingRestore = null
-                pendingRestoreUri = null
-            },
-            onDismissRestore = {
-                pendingRestore = null
-                pendingRestoreUri = null
-            },
-        )
-        Spacer(modifier = Modifier.height(CliSpacing.sm))
-        CliDataClearPanel(
-            viewModel = viewModel,
-            confirmAction = confirmAction,
-            onArm = { confirmAction = it },
-        )
-        Spacer(modifier = Modifier.height(CliSpacing.sm))
+
+        Column(
+
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(bottom = LocalCliBottomChromeClearance.current),
+
+        ) {
+            CliDataBackupPanel(
+                includeProfiles = includeProfiles,
+                includeSettings = includeSettings,
+                pendingRestore = pendingRestore,
+                onIncludeProfiles = { includeProfiles = it },
+                onIncludeSettings = { includeSettings = it },
+                onExport = { showExportPassword = true },
+                onImport = { importLauncher.launch(arrayOf("application/octet-stream", "application/json", "*/*")) },
+                onRestore = { document ->
+                    viewModel.restoreBackup(document)
+                    pendingRestore = null
+                    pendingRestoreUri = null
+                },
+                onDismissRestore = {
+                    pendingRestore = null
+                    pendingRestoreUri = null
+                },
+            )
+            Spacer(modifier = Modifier.height(CliSpacing.sm))
+            CliDataClearPanel(
+                viewModel = viewModel,
+                confirmAction = confirmAction,
+                onArm = { confirmAction = it },
+            )
+            Spacer(modifier = Modifier.height(CliSpacing.sm))
+        }
     }
 }
 
@@ -183,6 +185,7 @@ private fun CliDataBackupPanel(
         title = stringResource(R.string.cli_data_backup_title),
         icon = R.drawable.pix_export,
         modifier = Modifier.fillMaxWidth(),
+        infoText = stringResource(R.string.cli_data_encrypted_backup_note),
     ) {
         CliToggleRow(
             label = stringResource(R.string.cli_data_include_profiles),
@@ -201,11 +204,6 @@ private fun CliDataBackupPanel(
             icon = R.drawable.pix_export,
             enabled = includeProfiles || includeSettings,
             onTap = onExport,
-        )
-        Text(
-            text = stringResource(R.string.cli_data_encrypted_backup_note),
-            style = CliType.small,
-            color = LocalCliColors.current.warn,
         )
         CliActionRow(
             label = stringResource(R.string.cli_data_import),
@@ -268,7 +266,6 @@ private fun CliDataClearPanel(
     }
 }
 
-/** Password never enters rememberSaveable: Android state snapshots must not retain it. */
 @Composable
 private fun CliBackupPasswordSheet(
     exporting: Boolean,

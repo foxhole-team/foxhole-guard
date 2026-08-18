@@ -9,13 +9,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/**
- * The LAN proxy leg is published on the phone's Wi-Fi address, so authentication is mandatory
- * (stage2 §8): an anonymous inbound relays the owner's VPN/Tor for every device on that network.
- * Normalization is the storage-side half of the invariant — whatever a stale payload or a leftover
- * setter writes, the flag comes back on and a blank password is replaced by a generated one. The
- * runtime-side half (never raise the LAN inbound without a password) lives in :core:runtime.
- */
 internal class LanProxyAuthNormalizationTest {
     @Test
     fun `stored lan auth flag is forced back on`() {

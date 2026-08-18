@@ -29,6 +29,32 @@ class CliVisualPolishContractTest {
     }
 
     @Test
+    fun `terminal event glyphs align with the first text line`() {
+        val terminal = cli("home/CliHomeTerminal.kt")
+        val leadSlot = terminal
+            .substringAfter("private fun CliTerminalLeadSlot(")
+            .substringBefore("private fun RowScope.CliTerminalFootnoteBody(")
+
+        assertTrue(leadSlot.contains("contentAlignment = Alignment.TopStart"))
+        assertTrue(
+            leadSlot.contains(
+                "val modernStyle = LocalCliVisualStyle.current == VisualStyle.PLAIN",
+            ),
+        )
+        assertTrue(leadSlot.contains("if (modernStyle && !promptMarker) 2.dp else 0.dp"))
+        assertTrue(leadSlot.contains(".padding(top = firstLineOffset)"))
+        assertFalse(leadSlot.contains("VisualStyle.PLAIN) 1.dp"))
+        assertEquals(3, Regex("CliTerminalLeadSlot\\(").findAll(terminal).count())
+        assertTrue(terminal.contains("icon = cliTerminalLineIcon(line)"))
+        assertTrue(terminal.contains("icon = cliLineToneIcon(progress.titleTone, prompt = false)"))
+        assertTrue(
+            terminal.contains(
+                "if (isCliWelcomeLine(line.text)) R.drawable.ic_qs_tile else cliLineToneIcon",
+            ),
+        )
+    }
+
+    @Test
     fun `terminal timestamps use one fixed grid with inset lighter brackets`() {
         val terminal = cli("home/CliHomeTerminal.kt")
         val timestamp = terminal
@@ -42,7 +68,7 @@ class CliVisualPolishContractTest {
         assertTrue(timestamp.contains("lerp(colors.dim, colors.fg, TIMESTAMP_BRACKET_LIGHTEN)"))
         assertEquals(2, Regex("Modifier\\.width\\(metrics\\.bracketSlotWidth\\)").findAll(timestamp).count())
         assertTrue(timestamp.contains("Modifier.width(metrics.timeSlotWidth)"))
-        assertEquals(3, Regex("CliTerminalTimestamp\\(").findAll(terminal).count())
+        assertEquals(4, Regex("CliTerminalTimestamp\\(").findAll(terminal).count())
     }
 
     @Test
@@ -66,17 +92,63 @@ class CliVisualPolishContractTest {
     }
 
     @Test
-    fun `home profile facts replace values immediately without typewriter motion`() {
+    fun `tor first run offers scenario auto switching behind the row info glyph`() {
+        val tor = cli("settings/CliTorSubScreen.kt")
+        val firstRun = tor.substringAfter("if (!privacyRoute.permitted) {").substringBefore("}")
+        assertTrue(firstRun.contains("R.string.cli_cfg_atomic_connection"))
+        assertTrue(firstRun.contains("checked = state.settings.connection.atomicConnection"))
+        assertTrue(firstRun.contains("onToggle = viewModel::onAtomicConnectionChanged"))
+        assertTrue(firstRun.contains("infoText = stringResource(R.string.cli_cfg_atomic_connection_note)"))
+        assertFalse(
+            "the explanation belongs behind the glyph, not in the section body",
+            firstRun.contains("note = stringResource"),
+        )
+
+        val english = resource("values/strings.xml")
+        val russian = resource("values-ru/strings.xml")
+        assertTrue(english.contains("every operating-mode or VPN/Tor scenario switch asks for confirmation"))
+        assertTrue(russian.contains("требует подтверждения"))
+    }
+
+    @Test
+    fun `insecure import is gated on an explicit default-off consent`() {
+        val dialogs = cli("profiles/CliProfileDialogs.kt")
+        assertTrue(
+            dialogs.contains(
+                "var insecureTlsConsent by remember(confirmation.rawInput) { mutableStateOf(false) }",
+            ),
+        )
+        assertTrue(
+            dialogs.contains(
+                "enabled = confirmation.canConfirm && (!confirmation.insecureTls || insecureTlsConsent)",
+            ),
+        )
+        assertTrue(dialogs.contains("R.string.cli_prof_import_insecure_consent"))
+        assertEquals(
+            2,
+            dialogs.split("(!confirmation.insecureTls || insecureTlsConsent)").size - 1,
+        )
+
+        val english = resource("values/strings.xml")
+        val russian = resource("values-ru/strings.xml")
+        assertTrue(english.contains("certificate verification is disabled for this server"))
+        assertTrue(russian.contains("проверка сертификата отключена"))
+        assertFalse(english.contains(">insecure-tls:"))
+        assertFalse(russian.contains(">insecure-tls:"))
+    }
+
+    @Test
+    fun `only route identity values type in and every other row replaces immediately`() {
         val keyValue = cli("components/CliText.kt")
         val typewriter = cli("components/CliTypewriterText.kt")
         val facts = cli("home/CliHomeFacts.kt")
         val identity = cli("home/CliRouteIdentityRows.kt")
         val buttons = cli("home/CliHomeButtons.kt")
 
-        assertFalse(keyValue.contains("animateValue"))
+        assertTrue(keyValue.contains("animateValue: Boolean = false"))
+        assertTrue(identity.contains("animateValue = true"))
         assertFalse(typewriter.contains("deleteAllOnChange"))
         assertFalse(facts.contains("animateValue"))
-        assertFalse(identity.contains("animateValue"))
         assertFalse(
             buttons.substringAfter("internal fun CliProfileProtocolFact").contains("animateValue"),
         )
@@ -92,6 +164,7 @@ class CliVisualPolishContractTest {
         assertTrue(selector.contains("R.string.cli_home_key_protocol"))
         assertTrue(selector.contains(".basicMarquee("))
         assertTrue(selector.contains("quickSelectorProtocolLabel(profile)"))
+        assertTrue(cli("profiles/CliProtocolDropdown.kt").contains("textAlign = TextAlign.Center"))
         assertTrue(profiles.contains("itemsIndexed(state.profiles"))
         assertTrue(profiles.contains("if (index > 0) CliRowDivider()"))
     }
@@ -136,6 +209,12 @@ class CliVisualPolishContractTest {
         assertTrue(terminal.contains(".onSizeChanged { size ->"))
         assertTrue(terminal.contains("onOutputHeightChanged()"))
         assertTrue(terminal.contains("TERMINAL_PROMPT_VISUAL_OFFSET"))
+        assertTrue(terminal.contains("TERMINAL_PROMPT_VISUAL_OFFSET_MODERN = 7.dp"))
+        assertTrue(terminal.contains("TERMINAL_PROMPT_MARKER_OFFSET_MODERN = 1.dp"))
+        assertTrue(terminal.contains("if (plainStyle) TERMINAL_PROMPT_MARKER_OFFSET_MODERN else 0.dp"))
+        assertTrue(terminal.contains("TERMINAL_PROMPT_CURSOR_OFFSET_MODERN = 1.dp"))
+        assertTrue(terminal.contains("if (plainStyle) TERMINAL_PROMPT_CURSOR_OFFSET_MODERN else 0.dp"))
+        assertFalse(terminal.contains("Text(text = \"fhg > \""))
     }
 
     @Test
@@ -149,12 +228,13 @@ class CliVisualPolishContractTest {
         assertTrue(homeBrand.contains("color = colors.info"))
         val connectedStatus = terminal
             .substringAfter("val line = buildAnnotatedString")
-            .substringBefore("// The status is a fixed single line")
+            .substringBefore("CliStatusDot(")
         assertTrue(connectedStatus.contains("SpanStyle(color = colors.info)"))
         assertFalse(connectedStatus.contains("SpanStyle(color = colors.ok)"))
         assertTrue(terminal.contains("CliStatusDot("))
         assertTrue(terminal.contains("fontSize = statusStyle.fontSize"))
-        assertTrue(terminal.contains("pulsing = home.connection.isRouteTransition()"))
+        assertTrue(terminal.contains("pulsing = false"))
+        assertTrue(terminal.contains("CliShimmerText("))
         assertTrue(terminal.contains("Modifier.offset(y = STATUS_DOT_VERTICAL_OFFSET * statusScale)"))
         assertTrue(terminal.contains("STATUS_DOT_VERTICAL_OFFSET = (-2).dp"))
         assertTrue(terminal.contains("PIXEL_CAP_HEIGHT_RATIO"))
@@ -176,7 +256,9 @@ class CliVisualPolishContractTest {
 
         assertTrue(sparkline.contains("Row(modifier = modifier.fillMaxWidth())"))
         assertTrue(sparkline.contains("Canvas(modifier = Modifier.fillMaxWidth().height(SPARKLINE_HEIGHT))"))
-        assertTrue(sparkline.contains("val slotX = index * (slotWidth + gap)"))
+        assertTrue(sparkline.contains("val slotX = cliStatsSlotLeftPx(index, size.width, bucketCount, gap)"))
+        assertTrue(sparkline.contains("cliStatsSlotCenterPx(index, rowWidth.toFloat(), axis.bucketCount, gapPx)"))
+        assertFalse(sparkline.contains("index * (slotWidth + gap)"))
     }
 
     @Test
@@ -196,7 +278,7 @@ class CliVisualPolishContractTest {
 
         assertTrue(text.contains("private fun CliInfoLine("))
         assertTrue(text.contains("id = R.drawable.pix_info"))
-        assertTrue(text.contains("Modifier.offset(y = (-1).dp)"))
+        assertTrue(text.contains("Modifier.offset(y = if (plain) 2.dp else (-1).dp)"))
         assertTrue(text.contains("CliInfoLine("))
         assertFalse(text.contains("text = \"⎿ "))
         assertTrue(help.contains("iconGlyph = \"?\""))
@@ -213,19 +295,31 @@ class CliVisualPolishContractTest {
     }
 
     @Test
-    fun `terminal clear keeps version and connection readiness in both locales`() {
+    fun `terminal clear keeps version and the current connection state`() {
         val state = cli("home/CliTerminalState.kt")
-        val english = resource("values/strings.xml")
-        val russian = resource("values-ru/strings.xml")
 
         val clear = state.substringAfter("fun clearHistory()").substringBefore("fun onConnection")
         assertTrue(clear.contains("welcomeVersionName?.let"))
-        assertTrue(clear.contains("append(\"✻ FoxHole Guard · \$versionName\""))
-        assertTrue(clear.contains("append(strings.bootReady, CliLineTone.OK)"))
-        assertTrue(english.contains(">ready to connect</string>"))
-        assertTrue(russian.contains(">готово к подключению</string>"))
-        assertFalse(english.contains("application ready to start"))
-        assertFalse(russian.contains("приложение готово к запуску"))
+        assertTrue(clear.contains("append(welcomeLine(versionName), CliLineTone.ACCENT)"))
+        assertTrue(state.contains("WELCOME_LINE_PREFIX = \"FoxHole Guard "))
+        assertTrue(state.contains("private fun welcomeLine(versionName: String)"))
+        assertTrue(state.contains("\${WELCOME_LINE_PREFIX}v\$versionName"))
+        assertTrue(cli("home/CliHomeTerminal.kt").contains("R.drawable.ic_qs_tile"))
+        assertTrue(clear.contains("showCurrentStatusNotice()"))
+        assertTrue(state.contains("text = currentStatusText"))
+        assertFalse(clear.contains("append(strings.bootReady"))
+    }
+
+    @Test
+    fun `cold start uses the theme specific live progress row`() {
+        val state = cli("home/CliTerminalState.kt")
+        val terminal = cli("home/CliHomeTerminal.kt")
+
+        assertTrue(state.contains("var bootProgress: CliTerminalProgress?"))
+        assertTrue(state.contains("bootProgress =\n                CliTerminalProgress("))
+        assertTrue(terminal.contains("terminal.bootProgress ?: terminal.progress"))
+        assertTrue(terminal.contains("LocalCliVisualStyle.current == VisualStyle.PLAIN"))
+        assertTrue(terminal.contains("PROGRESS_SPINNER_FRAMES[frame]"))
     }
 
     @Test
@@ -239,8 +333,7 @@ class CliVisualPolishContractTest {
             ).first(File::isFile).readText()
 
         assertEquals(4, Regex("CliAboutDashedBlock\\(").findAll(about).count())
-        assertEquals(1, Regex("\\.cliDashedBorder\\(colors\\.border\\)").findAll(about).count())
-        assertTrue(about.contains("horizontalAlignment = Alignment.CenterHorizontally"))
+        assertTrue(about.contains("infoText = infoText"))
         assertTrue(about.contains("private fun CliAboutAnimatedFox()"))
         assertTrue(about.contains("FOX_STATUS_ANIMATION_FRAMES[frameIndex]"))
         assertTrue(about.contains("delay(FOX_STATUS_FRAME_DURATION_MS)"))
@@ -292,12 +385,14 @@ class CliVisualPolishContractTest {
         assertTrue(icon >= 0)
         assertTrue(brand > icon)
         assertTrue(title > brand)
-        assertTrue(contextHelp.contains("text = \"?\""))
         assertTrue(contextHelp.contains("requiredSize(CliContextHelpButtonSize)"))
-        assertTrue(contextHelp.contains(".border(HELP_CIRCLE_STROKE, colors.accent, CircleShape)"))
-        assertTrue(contextHelp.contains("HELP_CIRCLE_SIZE = 16.dp"))
+        assertTrue(contextHelp.contains("id = R.drawable.pix_info"))
+        assertTrue(contextHelp.contains("size = iconSize"))
+        assertTrue(contextHelp.contains("CliModernTopBarHelpIconSize = 20.dp"))
+        assertTrue(contextHelp.contains("CliContextHelpButtonSize = CliHeaderControlSlotHeight"))
         assertTrue(contextHelp.contains("contentDescription = helpDescription"))
-        assertTrue(contextHelp.contains("CliQuickStartItems(body = stringResource(bodyRes), framed = false)"))
+        assertTrue(contextHelp.contains("CliDashedInfoNote("))
+        assertTrue(contextHelp.contains("centeredIconFirstLine = true"))
     }
 
     @Test
@@ -315,9 +410,40 @@ class CliVisualPolishContractTest {
         assertTrue(lanes.contains("AppTunnelLane.VPN -> colors.vpn"))
         assertTrue(lanes.contains("AppTunnelLane.BLOCK -> colors.err"))
         assertTrue(lanes.contains("AppTunnelLane.EXCLUDE -> colors.dim"))
-        assertTrue(lanes.contains("CliDashedInfoNote(text = stringResource(R.string.cli_route_apps_empty))"))
+        assertTrue(
+            lanes.contains(
+                "centeredIconLeading = true",
+            ),
+        )
+        assertTrue(lanes.contains("centeredIconFirstLine = true"))
+        val sites = cli("settings/CliRoutingSiteRulesSection.kt")
+        assertTrue(sites.contains("centeredIconFirstLine = true"))
         assertTrue(note.contains("id = R.drawable.pix_info"))
-        assertTrue(note.contains("horizontalAlignment = Alignment.CenterHorizontally"))
+        val dashed = note
+            .substringAfter("internal fun CliDashedInfoNote(")
+            .substringBefore("private fun CliInfoLine(")
+        assertTrue(dashed.contains("if (centered)"))
+        assertTrue(dashed.contains("iconLeading = centeredIconLeading"))
+        assertTrue(dashed.contains("iconFirstLine = centeredIconFirstLine"))
+        assertTrue(dashed.contains("horizontalArrangement = Arrangement.Center"))
+        assertTrue(dashed.contains("if (iconFirstLine) Alignment.Top else Alignment.CenterVertically"))
+        assertTrue(dashed.contains("Row(verticalAlignment = Alignment.Top)"))
+    }
+
+    @Test
+    fun `site rules keep remove at the bottom of the shared dropdown`() {
+        val sites = cli("settings/CliRoutingSiteRulesSection.kt")
+        val row = sites
+            .substringAfter("private fun CliSiteRuleRow(")
+            .substringBefore("private fun siteRuleTokens(")
+
+        assertTrue(row.contains("options = siteLaneOptions(colors) + CliDropdownOption("))
+        assertTrue(row.contains("id = SITE_OPT_REMOVE"))
+        assertTrue(row.contains("R.string.cli_route_remove"))
+        assertTrue(row.contains("R.drawable.pix_cross"))
+        assertTrue(row.contains("if (id == SITE_OPT_REMOVE) onRemove()"))
+        assertFalse(row.contains("Text(text = \"[x]\""))
+        assertFalse(row.contains("defaultMinSize"))
     }
 
     @Test
@@ -355,7 +481,7 @@ class CliVisualPolishContractTest {
     fun `first run wizard keeps chrome fixed and uses safe FoxHole DB defaults`() {
         val wizard = cli("onboarding/CliOnboardingWizard.kt")
         assertTrue(wizard.indexOf("WizardHeader()") < wizard.indexOf("AnimatedContent("))
-        assertTrue(wizard.contains("transitionSpec = { cliSlide(forward = targetState > initialState) }"))
+        assertTrue(wizard.contains("cliPanelSwap(forward = targetState > initialState, plain = plainStyle)"))
         assertTrue(wizard.contains("Box(modifier = modifier, contentAlignment = Alignment.TopStart)"))
         assertTrue(wizard.contains("modifier = Modifier.fillMaxSize().clipToBounds()"))
         assertFalse(wizard.contains("slideInVertically"))
@@ -431,14 +557,18 @@ class CliVisualPolishContractTest {
     @Test
     fun `profile share keeps full width qr over equal file and clipboard buttons at 320dp`() {
         val transfer = cli("profiles/CliProfileTransfer.kt")
-        val exportBlock = transfer
-            .substringAfter("// Share mirrors import at narrow widths")
+        val buttons = transfer
+            .substringAfter("private fun CliProfileTransferButtons(")
             .substringBefore("private fun CliProfileTransferOverlays")
+        val exportBlock =
+            buttons.substringAfterLast("Column(verticalArrangement = Arrangement.spacedBy(CliSpacing.sm)) {")
         val qrRow = exportBlock.substringBefore("Row(")
 
         assertTrue(qrRow.contains("cli_prof_exp_qr"))
-        assertTrue(qrRow.contains("enabled = !busy && selectedKeyCount == 1"))
-        assertTrue(qrRow.contains("dimWhenDisabled = false"))
+        assertTrue(buttons.contains("val qrReady = selectedKeyCount == 1"))
+        assertTrue(qrRow.contains("R.string.cli_prof_exp_qr_pick_one"))
+        assertTrue(qrRow.contains("enabled = !busy && qrReady"))
+        assertFalse(qrRow.contains("dimWhenDisabled = false"))
         assertTrue(qrRow.contains("modifier = Modifier.fillMaxWidth()"))
         assertEquals(2, Regex("modifier = Modifier\\.weight\\(1f\\)").findAll(exportBlock).count())
         assertTrue(exportBlock.contains("cli_prof_exp_file"))
@@ -463,21 +593,20 @@ class CliVisualPolishContractTest {
 
         assertEquals(1, Regex("cliDashedBorder\\(").findAll(controls).count())
         assertTrue(controls.contains("if (exportMode) colors.info else colors.border"))
-        assertTrue(controls.contains("if (exportMode) R.string.cli_prof_export_hint"))
-        assertTrue(controls.contains("horizontalArrangement = Arrangement.Center"))
-        assertTrue(controls.contains("R.drawable.pix_info"))
+        assertFalse(controls.contains("R.drawable.pix_info"))
+        assertFalse(controls.contains("cli_prof_export_hint"))
         assertFalse(transfer.contains("rememberInfiniteTransition"))
 
         val english = resource("values/strings.xml")
         val russian = resource("values-ru/strings.xml")
-        assertTrue(english.contains(">to export a VPN profile use the buttons below</string>"))
-        assertTrue(russian.contains(">для экспорта профиля VPN воспользуйтесь кнопками ниже</string>"))
+        assertTrue(english.contains(">select one VPN profile</string>"))
+        assertTrue(russian.contains(">Выберите один профиль впн</string>"))
     }
 
     @Test
     fun `map app strip shares the centred arrow anchor without moving the lane`() {
         val route = cli("map/CliRouteScheme.kt")
-        val lane = route.substringAfter("private fun CliRouteLane(").substringBefore("/** One canonical")
+        val lane = route.substringAfter("private fun CliRouteLane(").substringBefore("private fun CliRouteAppStrip(")
         val arrow = route.substringAfter("private fun CliRouteArrow(").substringBefore("private fun cliRouteLanes")
 
         assertTrue(lane.contains("index == lane.appSegmentIndex"))
@@ -491,7 +620,7 @@ class CliVisualPolishContractTest {
         assertTrue(route.contains("val torSegment = CliRouteSegmentModel(colors.tor, detail ="))
         val splitLane = route
             .substringAfter("private fun CliRouteParts.splitLanes")
-            .substringBefore("// The direct branch")
+            .substringBefore("private fun CliRouteParts.directBranchLane(")
         assertTrue(splitLane.contains("appSegmentIndex = 1"))
         val proxyTorLane = route
             .substringAfter("private fun CliRouteParts.proxyTorLanes")
@@ -519,7 +648,6 @@ class CliVisualPolishContractTest {
                 .count()
         assertEquals(4, rootSectionSpacers)
 
-        // Expanded panels own their quiet row stitches; the root itself still has no global rule.
         assertTrue(settings.contains("CliRowDivider()"))
         val module = cli("settings/CliModuleBlock.kt")
         assertFalse(module.contains("cliDashedBorder"))
@@ -527,7 +655,7 @@ class CliVisualPolishContractTest {
         assertTrue(module.contains("CliModuleSettingsConnector(color = settingsActionColor)"))
         assertTrue(module.contains("PathEffect.dashPathEffect("))
         assertTrue(module.contains("actionColor = settingsActionColor"))
-        assertTrue(module.contains("if (checked) colors.ok else colors.accent"))
+        assertTrue(module.contains("val settingsActionColor = colors.accent"))
         assertTrue(module.contains("labelColor = colors.dim"))
     }
 
@@ -538,7 +666,7 @@ class CliVisualPolishContractTest {
         val route = cli("map/CliRouteScheme.kt")
 
         assertTrue(pixelMap.contains("lerp(colors.panel, colors.info, 0.10f)"))
-        assertTrue(pixelMap.contains("lerp(colors.panel, colors.info, 0.22f)"))
+        assertTrue(pixelMap.contains("lerp(colors.panel, colors.info, if (plain) 0.45f else 0.22f)"))
         assertTrue(pixelMap.contains("if (blinkOn) colors.info else colors.info.copy(alpha = 0.35f)"))
         assertTrue(pixelMap.contains("drawMarkerHalo(cell, colors.info"))
         assertFalse(pixelMap.contains("lerp(colors.panel, colors.vpn"))
@@ -590,6 +718,147 @@ class CliVisualPolishContractTest {
         assertTrue(russian.contains("\\nДетект новых приложений"))
     }
 
+    @Test
+    fun `the dock pill is derived from the item padding so the bar height stays adjustable`() {
+        val dock = cli("components/CliHintBar.kt")
+
+        assertTrue(dock.contains("private val MODERN_DOCK_DROP_TOP =\n"))
+        assertTrue(dock.contains("MODERN_DOCK_ITEM_PADDING - (MODERN_DOCK_DROP_HEIGHT - MODERN_DOCK_ICON_SIZE) / 2"))
+        assertTrue(
+            dock.contains(
+                "MODERN_DOCK_ITEM_PADDING_COMPACT - (MODERN_DOCK_DROP_HEIGHT_COMPACT - MODERN_DOCK_ICON_SIZE_COMPACT) / 2",
+            ),
+        )
+        assertTrue(dock.contains("if (compact) MODERN_DOCK_ITEM_PADDING_COMPACT else MODERN_DOCK_ITEM_PADDING"))
+        assertTrue(dock.contains("if (compact) MODERN_DOCK_ICON_SIZE_COMPACT else MODERN_DOCK_ICON_SIZE"))
+        val minHeight = Regex("""MODERN_DOCK_MIN_HEIGHT = (\d+)\.dp""").find(dock)!!.groupValues[1].toInt()
+        assertTrue("dock below the 48dp touch floor", minHeight >= 48)
+        val compactMinHeight =
+            Regex("""MODERN_DOCK_MIN_HEIGHT_COMPACT = (\d+)\.dp""").find(dock)!!.groupValues[1].toInt()
+        assertTrue("compact dock below the 48dp touch floor", compactMinHeight >= 48)
+    }
+
+    @Test
+    fun `every more-settings row is separated by the shared divider`() {
+        val settings = cli("settings/CliSettingsScreen.kt")
+        val more = settings
+            .substringAfter("private fun CliMoreSection(")
+            .substringBefore("private fun CliTerminalClearRows(")
+
+        val rows = Regex("""CliActionRow\(""").findAll(more).count()
+        val dividers = Regex("""CliRowDivider\(\)""").findAll(more).count()
+        assertEquals(4, rows)
+        assertEquals("every adjacent pair needs one divider", rows - 1, dividers)
+    }
+
+    @Test
+    fun `the terminal flag stays on the single right aligned value row`() {
+        val terminal = cli("home/CliHomeTerminal.kt")
+        val columns = terminal
+            .substringAfter("private fun RowScope.CliTerminalKeyValueColumns(")
+            .substringBefore("private fun RowScope.CliTerminalValueText(")
+        val valueText = terminal
+            .substringAfter("private fun RowScope.CliTerminalValueText(")
+            .substringBefore("private fun CliTerminalAppIcon(")
+
+        assertTrue(columns.contains("FLAGGED_VALUE_COLUMN_WEIGHT"))
+        assertTrue(valueText.contains("horizontalArrangement = Arrangement.End"))
+        assertTrue(valueText.contains("maxLines = 1"))
+        assertTrue(valueText.contains("softWrap = false"))
+        assertTrue(valueText.contains("CliFlagIcon(countryCode = country, style = CliType.small)"))
+        assertFalse(valueText.contains("appendInlineContent(VALUE_FLAG_SLOT"))
+    }
+
+    @Test
+    fun `profile action glyphs share the row and carry no cancel button`() {
+        val profiles = cli("profiles/CliProfileListItem.kt")
+        val actions = profiles
+            .substringAfter("private fun CliProfileActionsRow(")
+            .substringBefore("private fun CliProfileActionGlyph(")
+
+        val glyphs = Regex("""CliProfileActionGlyph\(""").findAll(actions).count()
+        assertEquals(4, glyphs)
+        assertEquals(
+            "each glyph takes an equal share",
+            glyphs,
+            Regex("""Modifier\.weight\(1f\)""").findAll(actions).count(),
+        )
+        assertFalse("cancel is carried by tapping away, not by a sixth glyph", actions.contains("pix_cross"))
+        assertFalse(actions.contains("cli_common_no_cancel"))
+    }
+
+    @Test
+    fun `one shared clock drives the text sweep, the route arrows and the accent edge`() {
+        val shimmer = cli("components/CliShimmerText.kt")
+        val frame = cli("components/CliModalFrame.kt")
+        val route = cli("map/CliRouteScheme.kt")
+        val clock = cli("components/CliMotionClock.kt")
+
+        assertTrue(shimmer.contains("internal const val CLI_SHIMMER_CYCLE_MS"))
+        assertTrue(clock.contains("internal fun cliMotionPhase("))
+        assertTrue(clock.contains("cycleMs: Int = CLI_SHIMMER_CYCLE_MS"))
+        assertTrue(clock.contains("withInfiniteAnimationFrameNanos"))
+        listOf(shimmer, frame, route).forEach { source ->
+            assertTrue("every continuous animation reads the shared clock", source.contains("cliMotionPhase()"))
+            assertFalse(
+                "a private transition is a second clock and a second phase",
+                source.contains("rememberInfiniteTransition"),
+            )
+        }
+        assertFalse("a second sweep duration is a second animation", frame.contains("ACCENT_SWEEP_DURATION_MS"))
+    }
+
+    @Test
+    fun `typed text shares one character cadence`() {
+        val clock = cli("components/CliMotionClock.kt")
+        val shimmer = cli("components/CliShimmerText.kt")
+        val typewriter = cli("components/CliTypewriterText.kt")
+
+        assertTrue(clock.contains("internal const val CLI_TYPE_STEP_MS"))
+        assertTrue(clock.contains("internal const val CLI_ERASE_STEP_MS"))
+        listOf(shimmer, typewriter).forEach { source ->
+            assertTrue(source.contains("delay(CLI_TYPE_STEP_MS)"))
+            assertTrue(source.contains("delay(CLI_ERASE_STEP_MS)"))
+        }
+        assertFalse("the shimmer typed at its own speed", shimmer.contains("TYPE_STEP_MS = "))
+        assertFalse("the typewriter typed at its own speed", typewriter.contains("TYPE_CHAR_DELAY_MS"))
+    }
+
+    @Test
+    fun `panel headers give the title every pixel the trailing controls leave`() {
+        val panel = cli("components/CliPanel.kt")
+
+        assertFalse(panel.contains("Spacer(modifier = Modifier.weight(1f))"))
+        assertTrue(panel.contains("private fun CliPanelTitleGroup("))
+        val plainHeader = panel
+            .substringAfter("internal fun CliPanel(")
+            .substringBefore("private fun CliPanelCollapsibleHeader(")
+        val collapsibleHeader = panel
+            .substringAfter("private fun CliPanelCollapsibleHeader(")
+            .substringBefore("private fun CliPanelTitleGroup(")
+        assertTrue(plainHeader.contains("CliPanelTitleGroup("))
+        assertTrue(collapsibleHeader.contains("CliPanelTitleGroup("))
+    }
+
+    @Test
+    fun `every value entry modal opens under an icon`() {
+        val callSites = listOf(
+            "components/CliRetentionRow.kt",
+            "settings/CliLanProxySubScreen.kt",
+            "settings/CliRoutingSiteRulesSection.kt",
+            "settings/CliSettingsDnsSection.kt",
+            "settings/CliSettingsScreen.kt",
+        ).flatMap { path ->
+            cli(path).split("CliInputModal(").drop(1).map { path to it.take(SHEET_HEADER_SCAN_CHARS) }
+        }
+
+        assertEquals(7, callSites.size)
+        callSites.forEach { (path, head) ->
+            assertTrue("CliInputModal in $path opens without an icon", head.contains("icon = R.drawable."))
+        }
+        assertTrue(cli("components/CliInputModal.kt").contains("@DrawableRes icon: Int? = null"))
+    }
+
     private fun cli(relative: String): String =
         listOf(
             File("src/main/kotlin/com/foxhole/guard/ui/cli", relative),
@@ -603,4 +872,8 @@ class CliVisualPolishContractTest {
             File("app/src/main/res", relative),
             File("../app/src/main/res", relative),
         ).first(File::isFile).readText()
+
+    private companion object {
+        const val SHEET_HEADER_SCAN_CHARS = 220
+    }
 }

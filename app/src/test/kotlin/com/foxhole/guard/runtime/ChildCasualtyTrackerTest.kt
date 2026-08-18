@@ -9,7 +9,6 @@ class ChildCasualtyTrackerTest {
     @Test
     fun `killed child that never ran this session is ignored`() {
         val tracker = ChildCasualtyTracker()
-        // Stale KILLED snapshot from a previous session (fail-closed teardown leaves KILLED).
         repeat(5) {
             assertNull(tracker.observe(I2pdState.KILLED))
         }
@@ -27,7 +26,6 @@ class ChildCasualtyTrackerTest {
     fun `deliberate restart bouncing through killed does not trip the watchdog`() {
         val tracker = ChildCasualtyTracker()
         assertNull(tracker.observe(I2pdState.RUNNING))
-        // destroyForcibly parks the snapshot on KILLED for one tick, then the restart takes over.
         assertNull(tracker.observe(I2pdState.KILLED))
         assertNull(tracker.observe(I2pdState.STARTING))
         assertNull(tracker.observe(I2pdState.RUNNING))
@@ -39,7 +37,6 @@ class ChildCasualtyTrackerTest {
         tracker.observe(I2pdState.RUNNING)
         tracker.observe(I2pdState.KILLED)
         assertEquals("i2pd", tracker.observe(I2pdState.KILLED))
-        // The next KILLED tick starts a fresh confirmation window rather than re-firing at once.
         assertNull(tracker.observe(I2pdState.KILLED))
         assertEquals("i2pd", tracker.observe(I2pdState.KILLED))
     }

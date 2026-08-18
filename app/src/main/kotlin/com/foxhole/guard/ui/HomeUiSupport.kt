@@ -72,10 +72,6 @@ internal fun isTrafficMapRuntimeAvailable(
     val connected = connection.state == ConnectionState.CONNECTED
     val localGuardConnected = connected && connection.profileId == FoxholeVpnService.LOCAL_GUARD_PROFILE_ID
     val tunnelConnected = connected && connection.profileId != FoxholeVpnService.LOCAL_GUARD_PROFILE_ID
-    // Like the tunnel path, the guard path needs only the map itself: the connection pipeline is
-    // keyed on ui.trafficMapEnabled (destinationCountryTrackingRuntimeEnabled), so the old extra
-    // gate on Statistics → country traffic left a default-settings firewall stuck on the standby
-    // screen while its connection samples were already flowing.
     val localGuardAvailable =
         settings.localGuardModeOrNull() != null &&
             (activeVpnNetworkAvailable || localGuardConnected)
@@ -202,11 +198,6 @@ internal fun shouldShowTrafficMapLegendLoading(
     explicitLoading ||
         connectionState in setOf(ConnectionState.CONNECTING, ConnectionState.RECONNECTING)
 
-/**
- * A session may report only its protocol HINT (no option id). Resolve the running option back to
- * the profile's option when the mapping is UNAMBIGUOUS — otherwise the smart-profile carousel
- * could never cancel the Restart offer by cycling back to the protocol that is actually running.
- */
 internal fun runningOptionIdFromProtocolHint(
     activeProfile: Profile?,
     connection: ConnectionSnapshot,
@@ -282,19 +273,9 @@ internal fun shouldUseTorRouteIpRefreshAfterRuntimeReload(
     when {
         snapshot.state != ConnectionState.CONNECTED -> false
         snapshot.profileId == FoxholeVpnService.TOR_ONLY_PROFILE_ID -> true
-        // Tor is active in any placement (over the VPN tunnel or alongside it via bypass). In both
-        // cases the dashboard VPN IP must stay the VPN exit, while the Tor exit has to be fetched
-        // through the Tor route so the map can show the Tor segment instead of mislabeling Tor
-        // destinations as VPN. The previous `!bypassVpnTunnel` guard skipped the bypass case, so the
-        // Tor exit was never surfaced and everything read as VPN traffic on the map.
         else -> settings.privacyRoute.enabled
     }
 
-// After an ordinary VPN connect (or VPN restore) — and on a MANUAL dashboard refresh — the primary
-// refresh fetches the VPN exit for the dashboard. When Tor is also active over/alongside that VPN,
-// the Tor exit still has to be fetched separately so the network card's TOR identity and the map's
-// Tor segment renew too: one swipe refreshes BOTH identities. Tor-only runtimes already refresh via
-// the TOR_ROUTE reason, so they are excluded here.
 internal fun shouldRefreshTorExitAfterConnect(
     reason: IpInfoRefreshReason,
     snapshot: ConnectionSnapshot,
@@ -355,6 +336,7 @@ internal fun shouldClearExistingIpForRefresh(
             IpInfoRefreshReason.POST_CONNECT,
             IpInfoRefreshReason.RESTORED_VPN,
             IpInfoRefreshReason.TOR_ROUTE,
+            IpInfoRefreshReason.NETWORK_CHANGE,
         )
 
 internal fun shouldShowDashboardIpRefreshLoading(
@@ -366,7 +348,7 @@ internal fun shouldShowDashboardIpRefreshLoading(
         IpInfoRefreshReason.MANUAL -> true
         IpInfoRefreshReason.NETWORK_CHANGE -> false
         IpInfoRefreshReason.POST_CONNECT ->
-            shouldShowMissingConnectedRouteIpLoading(snapshot, currentIpInfo)
+            shouldShowStaleConnectedRouteIpLoading(snapshot, currentIpInfo)
         IpInfoRefreshReason.RESTORED_VPN,
         IpInfoRefreshReason.FOREGROUND,
         IpInfoRefreshReason.POST_UPDATE,
@@ -374,22 +356,21 @@ internal fun shouldShowDashboardIpRefreshLoading(
         IpInfoRefreshReason.TOR_ROUTE -> currentIpInfo == null || !currentIpInfo.hasTorRouteLocationDetails()
     }
 
-private fun shouldShowMissingConnectedRouteIpLoading(
+private fun shouldShowStaleConnectedRouteIpLoading(
     snapshot: ConnectionSnapshot,
     currentIpInfo: IpInfo?,
 ): Boolean =
-    currentIpInfo == null &&
-        snapshot.state == ConnectionState.CONNECTED &&
+    snapshot.state == ConnectionState.CONNECTED &&
         snapshot.trafficMode == TrafficMode.TUNNEL &&
         snapshot.profileId != null &&
         snapshot.profileId != FoxholeVpnService.LOCAL_GUARD_PROFILE_ID &&
-        snapshot.profileId != FoxholeVpnService.TOR_ONLY_PROFILE_ID
+        snapshot.profileId != FoxholeVpnService.TOR_ONLY_PROFILE_ID &&
+        (currentIpInfo == null || currentIpInfo.fetchedAt < snapshot.lastChangeAt)
 
 internal fun IpInfo.hasDashboardLocationDetails(): Boolean =
     countryName?.isNotBlank() == true &&
         city?.isNotBlank() == true
 
-// Tor exits are complete with just a country (offline geoip); no city is ever resolved for Tor.
 internal fun IpInfo.hasTorRouteLocationDetails(): Boolean = countryName?.isNotBlank() == true
 
 internal fun IpInfo.hasDashboardProviderDetails(): Boolean =
@@ -481,8 +462,6 @@ internal fun resolveHomeDashboardProfileActionPresentation(
             connection.profileId == activeProfile.id
     val subscriptionProfile = activeProfile?.sourceType == ProfileSourceType.SUBSCRIPTION_URL
     return when {
-        // When Tor also rides this VPN, the Restart button must offer the VPN/Tor choice, so force
-        // the plain RESTART kind instead of the subscription refresh-config flow.
         connectedToActiveProfile && torRouteActive ->
             HomeDashboardProfileActionPresentation(
                 labelRes = R.string.reconnect,

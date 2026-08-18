@@ -101,6 +101,7 @@ class ThreatIntelUpdateClient(
     private val publicKeyPem: String = FOXHOLE_THREAT_INTEL_MANIFEST_PUBLIC_KEY_PEM,
     private val currentVersionName: String = BuildConfig.VERSION_NAME,
     private val resolver: RemoteHostResolver? = null,
+    private val now: () -> Instant = Instant::now,
 ) {
     suspend fun update(
         manifestUrl: String,
@@ -234,12 +235,7 @@ class ThreatIntelUpdateClient(
         ) {
             "app version is too old for threat intel feed"
         }
-        runCatching { Instant.parse(generatedAt) }
-            .getOrElse { throw IllegalArgumentException("invalid generated_at") }
-            .also { generatedAtInstant ->
-                val futureLimit = Instant.now().plusSeconds(MAX_GENERATED_AT_FUTURE_SKEW_SECONDS)
-                require(!generatedAtInstant.isAfter(futureLimit)) { "manifest generated_at is in the future" }
-            }
+        requireFreshFoxholeDbManifest(generatedAt, "threat intel", now())
     }
 
     private fun ByteArray.requireValidArtifact(artifact: ThreatIntelManifestArtifact): ThreatIntelDocument {
@@ -295,8 +291,7 @@ class ThreatIntelUpdateClient(
         const val MIN_DOCUMENT_BYTES = 2L
         const val MAX_DOCUMENT_BYTES = 4L * 1024L * 1024L
         const val MAX_MANIFEST_BYTES = 64L * 1024L
-        const val MAX_SIGNATURE_BYTES = 8L * 1024L
-        const val MAX_GENERATED_AT_FUTURE_SKEW_SECONDS = 24L * 60L * 60L
+        const val MAX_SIGNATURE_BYTES = MAX_FOXHOLE_DB_SIGNATURE_BYTES
         const val THREAT_INTEL_CONNECT_TIMEOUT_MS = 10_000L
         const val THREAT_INTEL_READ_TIMEOUT_MS = 30_000L
         const val THREAT_INTEL_CALL_TIMEOUT_MS = 45_000L

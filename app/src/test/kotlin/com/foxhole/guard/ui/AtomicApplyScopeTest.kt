@@ -12,13 +12,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
 
-/**
- * The atomic-scenario-application switch and what it is allowed to govern.
- *
- * On (the default) every operating-mode and VPN/Tor scenario change lands without asking. Off
- * holds both kinds behind a confirmation, while per-app and per-domain rules are always atomic and
- * never consult this flag.
- */
 class AtomicApplyScopeTest {
 
     @Test
@@ -29,7 +22,6 @@ class AtomicApplyScopeTest {
     @Test
     fun `reconnect on drop is on by default and is a separate flag`() {
         assertTrue(ConnectionSettings().autoReconnect)
-        // Turning one off leaves the other alone: they were split apart deliberately.
         assertTrue(ConnectionSettings(autoReconnect = false).atomicConnection)
         assertTrue(ConnectionSettings(atomicConnection = false).autoReconnect)
     }
@@ -99,10 +91,6 @@ class AtomicApplyScopeTest {
         }
     }
 
-    /**
-     * The non-negotiable, pinned where it can actually regress: the lane / block / site-rule
-     * handlers must not read the flag, and the routing-mode entry point must.
-     */
     @Test
     fun `no rule path reads the atomic scenario flag`() {
         val appRouting =
@@ -147,7 +135,6 @@ class AtomicApplyScopeTest {
                 .substringBefore("private fun HomeViewModel.startLiveModeSwitchPrompt")
                 .contains("requiresApplyConfirmation(AtomicApplyScope.MODE"),
         )
-        // Lane, block and app-set handlers plus site-rule / preset writers never read this flag.
         listOf(
             "onSelectedPackagesChanged",
             "onAppLaneChanged",

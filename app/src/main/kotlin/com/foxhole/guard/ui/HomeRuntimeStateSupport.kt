@@ -73,11 +73,6 @@ internal fun primaryVisibleIpOrNull(ipInfo: IpInfo): String? =
         .filterNot { candidate -> candidate.substringBefore('%').contains(':') }
         .firstOrNull(String::isPublicInternetAddress)
 
-/**
- * A Tor identity is displayable only when both parts of the promise are present: a public exit
- * address and a real ISO-3166 alpha-2 country. Keeping this gate shared prevents the terminal,
- * status rows and route scheme from independently turning a partial/stale probe into success.
- */
 internal fun IpInfo.confirmedTorIdentityOrNull(): IpInfo? {
     if (primaryVisibleIpOrNull(this) == null) return null
     val country = countryCode?.trim()?.uppercase(Locale.US)

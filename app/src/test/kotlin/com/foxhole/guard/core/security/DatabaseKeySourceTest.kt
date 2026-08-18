@@ -77,14 +77,12 @@ class DatabaseKeySourceTest {
                 crypto = crypto,
             )
 
-        // Enable: wrap the same dataKey into a keybox, drop the Keystore copy.
         val session = keybox.create("pw".encodeToByteArray(), dataKey, GuardKdfParams(memKib = 1024, ops = 1))
         keyboxPresent = true
         keystore.delete()
         assertTrue(keystoreAliasDeleted)
         assertFalse(keystore.exists())
 
-        // Disable: unlock the keybox, write the identical dataKey back to the Keystore file.
         val reopened = keybox.unlock("pw".encodeToByteArray())
         assertTrue(reopened is KeyboxUnlockOutcome.Success)
         keystore.writeBack((reopened as KeyboxUnlockOutcome.Success).session.dataKey)

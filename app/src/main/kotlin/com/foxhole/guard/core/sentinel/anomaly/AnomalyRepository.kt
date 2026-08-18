@@ -81,14 +81,15 @@ class AnomalyRepository(
             emitAll(
                 settingsRepository.settings
                     .flatMapLatest { settings ->
-                        val cutoff = nowProvider() - settings.anomaly.historyRetention.retentionHours * HOUR_MS
-                        dao.observeAnomalyEvents(
-                            cutoff = cutoff,
-                            // The old country-list heuristic did not measure Tor/I2P routing.
-                            // Keep its rows for schema compatibility, but never present them as
-                            // current FoxHole Sentinel findings.
-                            excludedType = AnomalyType.TOR_OR_I2P_ROUTE_MISMATCH.name,
-                        ).map { entities -> entities.map(AnomalyEventEntity::toDomain) }
+                        if (!settings.anomaly.enabled) {
+                            flowOf(emptyList())
+                        } else {
+                            val cutoff = nowProvider() - settings.anomaly.historyRetention.retentionHours * HOUR_MS
+                            dao.observeAnomalyEvents(
+                                cutoff = cutoff,
+                                excludedType = AnomalyType.TOR_OR_I2P_ROUTE_MISMATCH.name,
+                            ).map { entities -> entities.map(AnomalyEventEntity::toDomain) }
+                        }
                     },
             )
         }.flowOn(Dispatchers.IO)
@@ -198,6 +199,14 @@ class AnomalyRepository(
         if (!sentinelTrafficWindowCollectionEnabled(settings)) {
             return@withLock
         }
+        val retainedAppWindows =
+            appWindows
+                .takeIf { appTrafficLocalStorageAllowed(settings) }
+                .orEmpty()
+        if (!settings.anomaly.enabled) {
+            persistStatisticsTrafficWindow(window, retainedAppWindows, settings)
+            return@withLock
+        }
         val hourBucket = anomalyHourBucket(window.startedAtMs)
         val history =
             dao.recentTrafficWindows(
@@ -207,10 +216,6 @@ class AnomalyRepository(
                 hourBucket = hourBucket,
                 limit = HISTORY_LIMIT,
             ).map(TrafficWindowEntity::toDomain)
-        val retainedAppWindows =
-            appWindows
-                .takeIf { appTrafficLocalStorageAllowed(settings) }
-                .orEmpty()
         val appHistories =
             batchedAppHistories(retainedAppWindows)
         // Exclude the window under evaluation from its historical context.
@@ -254,6 +259,18 @@ class AnomalyRepository(
         updateSeenDestinationCountries(seenCountries, window)
         refreshAppNetworkPresence(retainedAppWindows, presenceByPackage)
         dao.upsertAnomalyCounter(AnomalyCounterEntity(COUNTER_TRAFFIC_WINDOWS, observedWindowCount + 1))
+        cleanupExpired(settings)
+    }
+
+    private suspend fun persistStatisticsTrafficWindow(
+        window: TrafficWindow,
+        appWindows: List<AppTrafficWindow>,
+        settings: Settings,
+    ) {
+        dao.insertTrafficWindow(TrafficWindowEntity.from(window))
+        if (appWindows.isNotEmpty()) {
+            dao.insertAppTrafficWindows(appWindows.map(AppTrafficWindowEntity::from))
+        }
         cleanupExpired(settings)
     }
 
@@ -361,20 +378,15 @@ class AnomalyRepository(
         return appWindows
             .groupBy { appWindow -> appWindow.networkType.name to anomalyHourBucket(appWindow.startedAtMs) }
             .flatMap { (bucket, bucketWindows) ->
-                val packageNames = bucketWindows.map(AppTrafficWindow::packageName).distinct()
-                dao.recentAppTrafficWindowsForPackages(
-                    packageNames = packageNames,
-                    networkType = bucket.first,
-                    hourBucket = bucket.second,
-                    limit = HISTORY_LIMIT,
-                )
-                    .groupBy(AppTrafficWindowEntity::packageName)
-                    .map { (packageName, entities) ->
-                        packageName to
-                            entities
-                                .take(HISTORY_LIMIT)
-                                .map(AppTrafficWindowEntity::toDomain)
-                    }
+                bucketWindows.map(AppTrafficWindow::packageName).distinct().map { packageName ->
+                    packageName to
+                        dao.recentAppTrafficWindows(
+                            packageName = packageName,
+                            networkType = bucket.first,
+                            hourBucket = bucket.second,
+                            limit = HISTORY_LIMIT,
+                        ).map(AppTrafficWindowEntity::toDomain)
+                }
             }
             .toMap()
     }
@@ -383,15 +395,16 @@ class AnomalyRepository(
         if (windows.isEmpty()) {
             return
         }
-        if (!appTrafficLocalStorageAllowed(settingsRepository.current())) {
+        val settings = settingsRepository.current()
+        if (!appTrafficLocalStorageAllowed(settings)) {
             return
         }
         recordMutex.withLock {
             dao.insertAppTrafficWindows(windows.map(AppTrafficWindowEntity::from))
-            // Every ingestion path must update presence to prevent false dormancy alarms.
-            refreshAppNetworkPresence(windows, loadAppNetworkPresence(windows))
-            // Keep retention inside the ingestion lock.
-            cleanupExpired(settingsRepository.current())
+            if (settings.anomaly.enabled) {
+                refreshAppNetworkPresence(windows, loadAppNetworkPresence(windows))
+            }
+            cleanupExpired(settings)
         }
     }
 

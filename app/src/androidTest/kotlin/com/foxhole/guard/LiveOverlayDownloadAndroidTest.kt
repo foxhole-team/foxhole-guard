@@ -29,6 +29,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.BufferedInputStream
@@ -42,37 +43,14 @@ import java.net.URI
 import java.net.URL
 import java.security.MessageDigest
 
-/**
- * Live overlay downloads on hardware: a real file, pulled through Tor and through I2P,
- * checked byte for byte.
- *
- * **What each leg asserts is the payload, not the route indicator.** The Tor leg does not
- * trust `torActive` or the phase field: it first makes the Tor Project's own check endpoint
- * answer `"IsTor":true` over the same socket path the download will use, and then requires
- * the downloaded bytes to have the same length and the same SHA-256 as the copy fetched
- * directly, off the tunnel, moments earlier. A route that reports itself as Tor while the
- * bytes leave beside it fails on the check; a route that carries the bytes but mangles or
- * truncates them fails on the digest. Neither failure is visible from any screen in the app,
- * which is why the test is written against the two observables instead of the status.
- *
- * The I2P leg needs no such comparison, and could not make one: an eepsite is unreachable by
- * any path other than I2P, so a `200` with a non-empty body from a `.i2p` host through the
- * router's own authenticated SOCKS proxy *is* the proof that the router carried it. Integrity
- * there is the server's `Content-Length` against the bytes actually received, plus the SHA-256
- * compared against `foxhole.i2pDownloadSha256` when the operator supplies one.
- *
- * Both legs are manual gates: they need a working network and minutes of overlay bootstrap.
- * Pass `-Pandroid.testInstrumentationRunnerArguments.foxhole.liveTorDownload=1` and/or
- * `...foxhole.liveI2pDownload=1`.
- */
 @RunWith(AndroidJUnit4::class)
 internal class LiveOverlayDownloadAndroidTest : ProfileRuntimeSessionAndroidTestSupport() {
     @Test
     fun manualTorDownloadDeliversTheFileByteForByte() {
-        if (InstrumentationRegistry.getArguments().getString("foxhole.liveTorDownload") != "1") {
-            Log.d(TEST_TAG, "live tor download skipped")
-            return
-        }
+        assumeTrue(
+            "live tor download skipped: pass -e foxhole.liveTorDownload 1 to run it",
+            InstrumentationRegistry.getArguments().getString("foxhole.liveTorDownload") == "1",
+        )
         runBlocking {
             val app = ApplicationProvider.getApplicationContext<FoxholeApplication>()
             shell("pm grant ${app.packageName} android.permission.POST_NOTIFICATIONS")
@@ -87,9 +65,6 @@ internal class LiveOverlayDownloadAndroidTest : ProfileRuntimeSessionAndroidTest
                 resetRelevantSettings(app)
                 baselineRuntimeSettings(app)
 
-                // Leg one: the same file off the tunnel. Taken first and on purpose — without
-                // it the Tor leg could only claim "some bytes arrived", and a proxy that serves
-                // a captive-portal page or a truncated body would pass.
                 val direct =
                     withContext(Dispatchers.IO) {
                         overlayHttpGet(url = sourceUrl, timeoutMs = DIRECT_FETCH_TIMEOUT_MS)
@@ -99,18 +74,11 @@ internal class LiveOverlayDownloadAndroidTest : ProfileRuntimeSessionAndroidTest
                 val expectedDigest = direct.body.sha256Hex()
                 Log.d(TEST_TAG, "liveTorDownload direct bytes=${direct.body.size} sha256=$expectedDigest")
 
-                // Web apps ON keeps THIS process inside the Tor-only TUN. It is not a
-                // convenience flag: torOnlyTunInbound() excludes the app's own package from the
-                // tunnel unless web apps are enabled, and an excluded test process would
-                // download over the plain network and still see a green Tor status.
+                // Web apps keep this test process inside the Tor-only tunnel.
                 settings.updateWebAppsEnabled(true)
                 settings.updatePrivacyRoutePermitted(true)
                 settings.updatePrivacyRouteMode(PrivacyRouteMode.TOR_OVER_VPN)
                 settings.updatePrivacyRouteScope(PrivacyRouteScope.ALL_APPS)
-                // Tor WITHOUT a VPN profile is the bypass-the-tunnel shape: with bypass off the
-                // app reads the configuration as "VPN + TOR", demands a profile it does not have,
-                // and ends the session with an error. Measured on the bench Pixel:
-                // `session ended … reason=VPN + TOR needs a VPN profile`.
                 settings.updatePrivacyRouteBypassVpnTunnel(true)
 
                 app.container.connectionController.connectTorOnly()
@@ -158,17 +126,12 @@ internal class LiveOverlayDownloadAndroidTest : ProfileRuntimeSessionAndroidTest
 
     @Test
     fun manualI2pDownloadDeliversTheFileWithItsDeclaredLength() {
-        if (InstrumentationRegistry.getArguments().getString("foxhole.liveI2pDownload") != "1") {
-            Log.d(TEST_TAG, "live i2p download skipped")
-            return
-        }
+        assumeTrue(
+            "live i2p download skipped: pass -e foxhole.liveI2pDownload 1 to run it",
+            InstrumentationRegistry.getArguments().getString("foxhole.liveI2pDownload") == "1",
+        )
         val target = InstrumentationRegistry.getArguments().getString("foxhole.i2pDownloadUrl")?.trim()
         if (target.isNullOrEmpty()) {
-            // Deliberately not defaulted to a public eepsite name. The app ships i2pd with every
-            // remote addressbook subscription disabled (I2pdConf.kt buildI2pdConfLines), so a
-            // `name.i2p` host cannot resolve unless the user added it; only `*.b32.i2p` works out
-            // of the box. A baked-in default would make this test fail for a product decision
-            // rather than for a defect.
             assertTrue(
                 "foxhole.i2pDownloadUrl is required for the live I2P download gate: pass a " +
                     "http://<base32>.b32.i2p/... URL (plain .i2p names need an addressbook entry)",
@@ -250,13 +213,6 @@ internal class LiveOverlayDownloadAndroidTest : ProfileRuntimeSessionAndroidTest
         }
     }
 
-    /**
-     * check.torproject.org, over the VPN network the runtime just published, until it says yes.
-     *
-     * Retried rather than asked once: Arti is still bootstrapping when the tunnel reports
-     * CONNECTED, and a single early "not Tor" would be a timing artefact rather than a routing
-     * defect. A budget that expires is a real failure — nothing after it could mean anything.
-     */
     private suspend fun awaitTorExitConfirmation(network: Network): Boolean =
         waitUntil(timeoutMs = TOR_EXIT_CONFIRMATION_BUDGET_MS) {
             val body =
@@ -294,11 +250,6 @@ internal class LiveOverlayDownloadAndroidTest : ProfileRuntimeSessionAndroidTest
             ?: DEFAULT_DOWNLOAD_URL
 
     private companion object {
-        /**
-         * An RFC, because an RFC is immutable by policy: the same bytes today and in a year, from
-         * a public host nobody in this project owns. It is also RFC 7686 — the `.onion` special-use
-         * name registration — which is the one file in the world that belongs in this test.
-         */
         const val DEFAULT_DOWNLOAD_URL = "https://www.rfc-editor.org/rfc/rfc7686.txt"
         const val DIRECT_FETCH_TIMEOUT_MS = 30_000
         const val OVERLAY_FETCH_TIMEOUT_MS = 120_000
@@ -311,14 +262,6 @@ internal class LiveOverlayDownloadAndroidTest : ProfileRuntimeSessionAndroidTest
     }
 }
 
-// ---------------------------------------------------------------------------
-// Overlay HTTP helpers, shared by the live I2P / onion-share / download suites.
-//
-// Written against raw sockets and HttpURLConnection rather than the app's OkHttp stack on
-// purpose: every bounded fetch in the product enforces a public-HTTPS SSRF policy, which
-// rejects both `.onion` and `.i2p` by design. A test that had to disable that policy would be
-// testing a path the product does not have.
-// ---------------------------------------------------------------------------
 
 internal class OverlayHttpResponse(
     val statusCode: Int,
@@ -326,11 +269,6 @@ internal class OverlayHttpResponse(
     val body: ByteArray,
 )
 
-/**
- * A plain GET, optionally pinned to [network] so the request uses that network's sockets AND
- * its DNS. The DNS half is what makes a `.onion` host resolvable at all: the runtime answers
- * those lookups from its fake-IP range and restores the name when the flow reaches the core.
- */
 internal fun overlayHttpGet(
     url: String,
     timeoutMs: Int,
@@ -361,13 +299,6 @@ internal fun overlayHttpGet(
     }
 }
 
-/**
- * A GET through the router's own authenticated SOCKS5 proxy.
- *
- * The handshake is written out by hand because the credentials are minted per i2pd start and
- * live in [I2pdSocksProxyEndpoint]; `java.net.Proxy` can only take them from the process-wide
- * [java.net.Authenticator], which is global state a test must not install.
- */
 internal fun i2pSocksHttpGet(
     endpoint: I2pdSocksProxyEndpoint,
     url: String,
@@ -485,11 +416,6 @@ private fun writeOverlayHttpRequest(
     output.flush()
 }
 
-/**
- * Status line, headers, then the body — `Content-Length`, `chunked` or read-until-close, in
- * that order of preference. Hand-rolled because the response arrives on a socket that has
- * already been steered through an overlay, so no URL-level client can be pointed at it.
- */
 private fun readOverlayHttpResponse(input: InputStream): OverlayHttpResponse {
     val statusLine = readHeaderLine(input) ?: error("the overlay returned an empty response")
     val statusCode =

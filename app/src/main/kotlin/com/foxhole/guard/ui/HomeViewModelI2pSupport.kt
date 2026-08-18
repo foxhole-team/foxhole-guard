@@ -17,22 +17,16 @@ import com.foxhole.guard.core.settings.updateI2pTransitTunnelsLimit
 import com.foxhole.guard.core.settings.upsertI2pAddressBookEntry
 import kotlinx.coroutines.launch
 
-// Independent I2P (i2pd) toggle support. The change alters the assembled runtime config (adds/drops
-// the .i2p outbound + fakeip routing), so a live runtime reloads; idle applies on the next connect.
-// With "allow outside tunnel" on, i2p also raises/drops the firewall guard as its routing surface
-// (see Settings.i2pRaisesLocalGuard), so re-sync the guard too.
 internal fun HomeViewModel.onI2pEnabledChanged(value: Boolean) {
     updateRuntimeSettingAndMaybeReload {
         container.settingsRepository.updateI2pEnabled(value)
+        if (value) container.settingsRepository.updateI2pEngaged(false)
     }
     viewModelScope.launch {
         syncLocalGuardWithPermissionRequest()
     }
 }
 
-// Dashboard/window pause: flips runtime engagement only, leaving the persisted permission (and its
-// quick-access pill) in place. With atomic application off, both directions wait behind the shared
-// current→future sheet. Returns true only when this call applied immediately.
 internal fun HomeViewModel.onI2pEngagedChanged(value: Boolean): Boolean {
     val settings = container.settingsRepository.settings.value
     val current = settings.i2p.enabled && settings.i2p.engaged
@@ -49,29 +43,29 @@ internal fun HomeViewModel.onI2pEngagedChanged(value: Boolean): Boolean {
     return true
 }
 
-/** Confirmation lands here directly so it cannot raise the same sheet a second time. */
 internal fun HomeViewModel.applyI2pEngagement(value: Boolean) {
+    val insideRunningSession = value && controlUiState.value.connection.isPrimaryConnectionRuntime()
     updateRuntimeSettingAndMaybeReload {
         container.settingsRepository.updateI2pEngaged(value)
     }
     viewModelScope.launch {
+        if (insideRunningSession) {
+            snackbars.tryEmit(infoBanner(R.string.cli_i2p_start_in_session))
+        }
         syncLocalGuardWithPermissionRequest()
     }
 }
 
-/**
- * True while the i2pd router is actually up. Every I2P option below is a START-ONLY i2pd field, so
- * changing one under a live router means tearing that router down — which is exactly what the
- * settings screen asks about first.
- */
+internal fun HomeViewModel.disengageI2pForDisconnect() {
+    if (!container.settingsRepository.settings.value.i2p.engaged) return
+    viewModelScope.launch {
+        container.settingsRepository.updateI2pEngaged(false)
+    }
+}
+
 internal fun HomeViewModel.i2pRouterLive(): Boolean =
     container.connectionController.i2pPhase.value.phase != I2pNetworkPhase.OFFLINE
 
-/**
- * The shared I2P settings-change path. The edit is ALWAYS persisted; [restartNow] only decides
- * whether the running router is rebuilt at once or on its next start. With no router running there
- * is nothing to restart, so the change simply lands and says so in green.
- */
 internal fun HomeViewModel.applyI2pSettingChangeInternal(
     restartNow: Boolean,
     update: suspend () -> Unit,
@@ -95,9 +89,6 @@ internal fun HomeViewModel.applyI2pSettingChangeInternal(
     }
 }
 
-// Every start-only I2P field now travels the shared path: the screen asks "restart now?" whenever
-// the router is live and answers through [applyI2pSettingChangeInternal]; with the router idle the
-// change simply lands.
 internal fun HomeViewModel.onI2pAllowOutsideTunnelChanged(
     value: Boolean,
     restartNow: Boolean = true,
@@ -105,7 +96,6 @@ internal fun HomeViewModel.onI2pAllowOutsideTunnelChanged(
     container.settingsRepository.updateI2pAllowOutsideTunnel(value)
 }
 
-/** Future carrier policy only: changing it must not restart an already running I2P router. */
 internal fun HomeViewModel.onI2pAutoReconnectChanged(value: Boolean) {
     viewModelScope.launch {
         container.settingsRepository.updateI2pAutoReconnectAfterVpnDisconnect(value)
@@ -140,8 +130,6 @@ internal fun HomeViewModel.onI2pTransitTunnelsLimitSelected(
     container.settingsRepository.updateI2pTransitTunnelsLimit(value)
 }
 
-// Addressbook edits are part of the runtime fingerprint (settings.i2p is serialized wholesale), so
-// a live runtime reloads and the session factory restarts i2pd with a regenerated hosts.txt.
 internal fun HomeViewModel.onI2pAddressBookEntrySaved(
     originalHost: String?,
     entry: I2pAddressBookEntry,

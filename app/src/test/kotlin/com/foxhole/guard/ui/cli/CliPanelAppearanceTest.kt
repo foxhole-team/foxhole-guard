@@ -19,7 +19,7 @@ class CliPanelAppearanceTest {
             listOf(ThemeMode.SYSTEM, ThemeMode.DARK, ThemeMode.LIGHT),
             ThemeMode.entries.toList(),
         )
-        assertEquals(PanelAppearance.STANDARD, UiSettings().panelAppearance)
+        assertEquals(PanelAppearance.AUTO, UiSettings().panelAppearance)
     }
 
     @Test
@@ -49,6 +49,10 @@ class CliPanelAppearanceTest {
             standardFill,
             cliMapLandFillColor(PanelAppearance.STANDARD, standardFill),
         )
+        assertEquals(
+            standardFill,
+            cliMapLandFillColor(PanelAppearance.LIGHT, standardFill),
+        )
         assertNull(cliMapLandFillColor(PanelAppearance.DARK, standardFill))
 
         val cache = source("main/kotlin/com/foxhole/guard/ui/cli/map/CliMapLandCache.kt")
@@ -70,7 +74,7 @@ class CliPanelAppearanceTest {
     }
 
     @Test
-    fun `application settings expose the two persisted appearance options in both locales`() {
+    fun `application settings expose the persisted palette and visual options in both locales`() {
         val settings = source("main/kotlin/com/foxhole/guard/ui/cli/settings/CliSettingsScreen.kt")
         val activity = source("main/kotlin/com/foxhole/guard/ui/cli/CliMainActivity.kt")
         val english = source("main/res/values/strings.xml")
@@ -79,13 +83,35 @@ class CliPanelAppearanceTest {
         assertTrue(settings.contains("PanelAppearance.entries.map"))
         assertTrue(settings.contains("settings.ui.panelAppearance.name"))
         assertTrue(settings.contains("viewModel.onPanelAppearanceSelected"))
-        assertTrue(activity.contains("CliTheme(panelAppearance = panelAppearance)"))
-        assertTrue(english.contains(">Appearance style</string>"))
+        assertTrue(settings.contains("VisualStyle.entries.map"))
+        assertTrue(settings.contains("settings.ui.visualStyle.name"))
+        assertTrue(settings.contains("viewModel.onVisualStyleSelected"))
+        assertTrue(settings.contains("AccentColor.entries.map"))
+        assertTrue(settings.contains("settings.ui.accentColor.name"))
+        assertTrue(settings.contains("viewModel.onAccentColorSelected"))
+        assertTrue(activity.contains("panelAppearance = panelAppearance"))
+        assertTrue(activity.contains("visualStyle = visualStyle"))
+        assertTrue(activity.contains("accentColor = accentColor"))
+        assertTrue(activity.contains("cliResolvedPanelAppearance(panelAppearance)"))
+        assertTrue(english.contains(">Color palette</string>"))
+        assertTrue(english.contains(">Auto</string>"))
         assertTrue(english.contains(">Standard</string>"))
         assertTrue(english.contains(">Dark</string>"))
-        assertTrue(russian.contains(">Тема оформления</string>"))
+        assertTrue(english.contains(">Light</string>"))
+        assertTrue(english.contains(">Style</string>"))
+        assertTrue(english.contains(">Retro</string>"))
+        assertTrue(english.contains(">Modern</string>"))
+        assertTrue(english.contains(">Accent color</string>"))
+        assertTrue(russian.contains(">Цветовая палитра</string>"))
+        assertTrue(russian.contains(">Авто</string>"))
         assertTrue(russian.contains(">Стандартная</string>"))
         assertTrue(russian.contains(">Тёмная</string>"))
+        assertTrue(russian.contains(">Светлая</string>"))
+        assertTrue(russian.contains(">Выбор стиля</string>"))
+        assertTrue(russian.contains(">Ретро</string>"))
+        assertTrue(russian.contains(">Модерн</string>"))
+        assertTrue(russian.contains(">Цветовой акцент</string>"))
+        assertTrue(russian.contains(">Салатовый</string>"))
     }
 
     private fun source(relative: String): String =

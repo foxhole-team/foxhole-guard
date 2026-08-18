@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Build once on dev, publish the exact same signed bytes from main. This script owns the
-# candidate's names and manifest so the two workflows cannot silently drift.
 
 usage() {
   cat >&2 <<'USAGE'
@@ -56,8 +54,8 @@ read_release_coordinates() {
       app/build.gradle.kts | head -n 1
   )"
   VERSION_NAME="$(
-    sed -nE 's/^[[:space:]]*versionName[[:space:]]*=[[:space:]]*"([^"]+)".*$/\1/p' \
-      app/build.gradle.kts | head -n 1
+    sed -nE 's/^[[:space:]]*version[[:space:]]*=[[:space:]]*"([^"]+)".*$/\1/p' \
+      build.gradle.kts | head -n 1
   )"
   CORE_REVISION="$(tr -d '[:space:]' < config/foxcore-revision.txt)"
 

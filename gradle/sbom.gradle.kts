@@ -57,11 +57,6 @@ subprojects {
     }
 }
 
-// Gradle 9.5 computes the aggregate's dependencies before the plugin's lazy per-project task
-// creation when the sbom runs in one invocation with the app bundle/preflight tasks: the
-// subprojects' cyclonedxDirectBom configurations get locked ("consumed as a variant") and the
-// late task creation that adds their artifact then fails. Realizing the direct tasks at
-// configuration time puts the artifact registration before any resolution can lock it.
 allprojects {
     afterEvaluate {
         tasks.findByName("cyclonedxDirectBom")

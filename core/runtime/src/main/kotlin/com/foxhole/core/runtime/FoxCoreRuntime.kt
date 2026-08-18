@@ -183,7 +183,7 @@ internal class FoxCoreRuntime internal constructor(
                         val translated = nativeEngine.translate(session, current.policyRevision)
                         val nextFingerprint =
                             translated?.let { config ->
-                                nativeEngine.immutableFingerprint(config.engineConfigJson)
+                                nativeEngine.immutableFingerprint(config)
                             }
                         when {
                             translated == null || nextFingerprint == null ->
@@ -654,7 +654,7 @@ internal class FoxCoreRuntime internal constructor(
 
     override fun runtimeTrafficMapJson(): String? =
         active?.let { current ->
-            runCatching { native.connections(current.handle) }.getOrNull()
+            runCatching { native.trafficMap(current.handle) }.getOrNull()
         }
 
     override fun drainRuntimeTrafficEventsJson(max: Int): String? =
@@ -669,6 +669,45 @@ internal class FoxCoreRuntime internal constructor(
             runCatching { native.drainEvents(current.handle, max.coerceIn(1, MAX_EVENT_BATCH)) }
                 .getOrNull()
         }
+
+    override suspend fun installDnsRuleSet(
+        name: String,
+        manifest: ByteArray,
+        signature: ByteArray,
+        artifact: ByteArray,
+    ): RuntimeDnsRuleSetInstallOutcome {
+        val target =
+            transitionMutex.withLock {
+                active
+                    ?.takeIf { state == RuntimeState.RUNNING && pendingTransition == null }
+                    ?.let { current -> DnsRuleSetInstallTarget(current.handle, generation) }
+            }
+        return installDnsRuleSetGenerationSafe(
+            target = target,
+            install = { handle ->
+                native.installDnsRuleSet(handle, name, manifest, signature, artifact)
+            },
+            commit = { installedTarget, revision ->
+                transitionMutex.withLock {
+                    synchronized(stateLock) {
+                        val current =
+                            active.forDnsRuleSetCommit(
+                                target = installedTarget,
+                                currentGeneration = generation,
+                                currentState = state,
+                                transitionPending = pendingTransition != null,
+                            )
+                        if (current == null) {
+                            false
+                        } else {
+                            active = current.copy(policyRevision = revision)
+                            true
+                        }
+                    }
+                }
+            },
+        )
+    }
 
     private fun publish(
         next: ActiveFoxCoreSession,
@@ -927,4 +966,41 @@ private sealed interface NativeTransitionPreparation<out Value> {
     data class Ready<Value>(val value: Value) : NativeTransitionPreparation<Value>
 
     data class Failed(val failure: Result<Unit>) : NativeTransitionPreparation<Nothing>
+}
+
+internal data class DnsRuleSetInstallTarget(
+    val handle: Long,
+    val generation: Long,
+)
+
+private fun ActiveFoxCoreSession?.forDnsRuleSetCommit(
+    target: DnsRuleSetInstallTarget,
+    currentGeneration: Long,
+    currentState: RuntimeState,
+    transitionPending: Boolean,
+): ActiveFoxCoreSession? {
+    val current = this ?: return null
+    if (current.handle != target.handle) return null
+    if (currentGeneration != target.generation) return null
+    if (currentState != RuntimeState.RUNNING) return null
+    if (transitionPending) return null
+    return current
+}
+
+internal suspend fun installDnsRuleSetGenerationSafe(
+    target: DnsRuleSetInstallTarget?,
+    install: (handle: Long) -> Long,
+    commit: suspend (target: DnsRuleSetInstallTarget, revision: Long) -> Boolean,
+): RuntimeDnsRuleSetInstallOutcome {
+    target ?: return RuntimeDnsRuleSetInstallOutcome.Deferred
+    val revision =
+        runCatching { install(target.handle) }
+            .getOrNull()
+            ?.takeIf { value -> value > 0L }
+            ?: return RuntimeDnsRuleSetInstallOutcome.Rejected
+    return if (commit(target, revision)) {
+        RuntimeDnsRuleSetInstallOutcome.Installed(revision)
+    } else {
+        RuntimeDnsRuleSetInstallOutcome.Superseded
+    }
 }

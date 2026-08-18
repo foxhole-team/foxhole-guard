@@ -4,7 +4,6 @@ import androidx.compose.runtime.Immutable
 import com.foxhole.core.model.DiagnosticEntry
 import com.foxhole.core.model.DiagnosticSeverity
 
-/** Visual severity only; journal bytes and export sanitization stay outside this presentation model. */
 internal enum class CliJournalRowTone {
     NORMAL,
     INFO,
@@ -14,13 +13,13 @@ internal enum class CliJournalRowTone {
     DIM,
 }
 
-/** One stable three-column row shared by the application, network and security journals. */
 @Immutable
 internal data class CliJournalRow(
     val timestamp: Long,
     val eventType: String,
     val description: List<String>,
     val tone: CliJournalRowTone = CliJournalRowTone.NORMAL,
+    val flagCountry: String? = null,
 )
 
 internal data class CliFormattedDiagnosticMessage(
@@ -28,10 +27,6 @@ internal data class CliFormattedDiagnosticMessage(
     val details: List<String>,
 )
 
-/**
- * Diagnostics are persisted as a safe compact line. Structured fields become independent table
- * values on screen without changing the persisted or exported payload.
- */
 internal fun formatDiagnosticMessage(message: String): CliFormattedDiagnosticMessage {
     val fields = message.journalFields(splitBullets = false)
     return CliFormattedDiagnosticMessage(
@@ -54,10 +49,6 @@ internal fun diagnosticJournalRow(entry: DiagnosticEntry): CliJournalRow {
     )
 }
 
-/**
- * The raw network formatter writes `App connection: key=value • ...`. Put the prefix in the
- * event-type column and every raw field (including endpoint and port) in the description column.
- */
 internal fun networkJournalRow(entry: DiagnosticEntry): CliJournalRow {
     val fields = entry.message.journalFields(splitBullets = true)
     val first = fields.firstOrNull().orEmpty()
@@ -78,8 +69,14 @@ internal fun networkJournalRow(entry: DiagnosticEntry): CliJournalRow {
         } else {
             CliJournalRowTone.INFO
         },
+        flagCountry = networkJournalCountryCode(entry.message),
     )
 }
+
+internal fun networkJournalCountryCode(message: String): String? =
+    JOURNAL_COUNTRY_CODE.find(message)?.groupValues?.get(1)?.lowercase()
+
+private val JOURNAL_COUNTRY_CODE = Regex("""country=[^\n]*?\(([A-Za-z]{2})\)""")
 
 internal fun journalRow(
     timestamp: Long,

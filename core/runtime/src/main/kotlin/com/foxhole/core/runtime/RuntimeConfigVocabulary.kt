@@ -21,7 +21,9 @@ internal fun RoutingRule.runtimeAction(siteRoutingAction: RoutingRuleAction): Ro
             RoutingRuleAction.PROXY,
             RoutingRuleAction.DIRECT,
             -> siteRoutingAction
-            RoutingRuleAction.BLOCK -> RoutingRuleAction.PROXY
+            RoutingRuleAction.BLOCK,
+            RoutingRuleAction.TOR,
+            -> RoutingRuleAction.PROXY
         }
     } else {
         action
@@ -72,6 +74,12 @@ internal const val LOCAL_GUARD_INET6_CAPTURE_ROUTE = "::/0"
 internal const val MOBILE_TCP_KEEP_ALIVE = "30s"
 
 internal const val MOBILE_TCP_KEEP_ALIVE_INTERVAL = "15s"
+
+internal const val ROUTE_NETWORK_TCP = "tcp"
+
+internal const val ROUTE_NETWORK_UDP = "udp"
+
+internal val TCP_UDP_NETWORKS = listOf(ROUTE_NETWORK_TCP, ROUTE_NETWORK_UDP)
 
 internal const val SITE_KEYWORD_PREFIX = "kw:"
 

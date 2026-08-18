@@ -26,6 +26,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -88,7 +89,13 @@ class WidgetConfigActivity : ComponentActivity() {
             return
         }
         setContent {
-            CliTheme {
+            val settings by (application as FoxholeApplication)
+                .appGraph.settingsRepository.settings.collectAsState()
+            CliTheme(
+                panelAppearance = settings.ui.panelAppearance,
+                visualStyle = settings.ui.visualStyle,
+                accentColor = settings.ui.accentColor,
+            ) {
                 WidgetConfigScreen(
                     previewKind = provider.previewKind(),
                     loadInitial = { loadInitial(appWidgetId) },
@@ -112,14 +119,26 @@ class WidgetConfigActivity : ComponentActivity() {
     }
 
     private suspend fun loadInitial(appWidgetId: Int): WidgetInstanceAppearance {
-        // The form starts from app-settings defaults, with per-widget state layered over them.
+        val settings =
+            (application as FoxholeApplication).appGraph.settingsRepository.settings.value
         val defaults =
-            (application as FoxholeApplication).appGraph.settingsRepository.settings.value.widgets
+            when (configuredProvider(appWidgetId)) {
+                ConfigurableWidgetProvider.WEB_APPS ->
+                    settings.widgets.webAppsAppearanceForWidget(
+                        context = this,
+                        panelAppearance = settings.ui.panelAppearance,
+                    )
+                else ->
+                    settings.widgets.statusAppearanceForWidget(
+                        context = this,
+                        panelAppearance = settings.ui.panelAppearance,
+                    )
+            }
         val fallback =
             WidgetInstanceAppearance(
                 isBlack = defaults.blackBackground,
                 alphaPercent = defaults.alphaPercent.coerceIn(0, 100),
-                outlined = true,
+                outlined = defaults.outline,
             )
         val glanceId =
             runCatching { GlanceAppWidgetManager(this).getGlanceIdBy(appWidgetId) }.getOrNull()
@@ -132,7 +151,7 @@ class WidgetConfigActivity : ComponentActivity() {
             isBlack = prefs[WIDGET_BG_BLACK_KEY] ?: defaults.blackBackground,
             alphaPercent =
             (prefs[WIDGET_ALPHA_KEY] ?: defaults.alphaPercent).coerceIn(0, 100),
-            outlined = prefs[WIDGET_OUTLINE_KEY] ?: true,
+            outlined = prefs[WIDGET_OUTLINE_KEY] ?: defaults.outline,
         )
     }
 

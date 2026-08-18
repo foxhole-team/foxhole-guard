@@ -18,6 +18,7 @@ import com.foxhole.guard.R
 import com.foxhole.guard.core.data.getSession
 import com.foxhole.guard.core.data.getTorOnlySession
 import com.foxhole.guard.core.diagnostics.DiagnosticsLoggerRuntimeDiagnosticsSink
+import com.foxhole.guard.core.sentinel.anomaly.sentinelTrafficWindowCollectionEnabled
 import com.foxhole.guard.diagnosticFailureLabel
 import com.foxhole.guard.userFacingErrorMessage
 import kotlinx.coroutines.CancellationException
@@ -127,6 +128,7 @@ private suspend fun FoxholeVpnService.reloadRuntime(
         scope.launch(Dispatchers.IO) { syncTorProbeProxy() }
         FoxholeVpnRuntimeBridge.requestImmediateTrafficSample()
         revokeBlockedAppFlows()
+        reregisterGatedSessionTasks()
         updateNotification()
         scheduleValidation(
             session = session,
@@ -143,6 +145,71 @@ private suspend fun FoxholeVpnService.reloadRuntime(
         )
     }
 }
+
+internal fun FoxholeVpnService.reregisterGatedSessionTasks() {
+    val settings = container.settingsRepository.settings.value
+    restartGatedSessionTask(
+        id = FoxholeVpnService.TICKER_TASK_CHILD_WATCHDOG,
+        gateOpen = childWatchdogFallbackPollNeeded(settings),
+    ) { startChildProcessWatchdog() }
+    restartGatedSessionTask(
+        id = FoxholeVpnService.TICKER_TASK_LAN_PROXY,
+        gateOpen = proxySurfaceTickerNeeded(settings),
+    ) { startLanProxyUpdates() }
+    val taskScope =
+        reloadedSessionTaskScope(
+            trafficJobRegistered = sessionTicker.isRegistered(FoxholeVpnService.TICKER_TASK_TRAFFIC),
+            dnsGuardActive = activeLocalGuardMode == LocalGuardMode.DNS,
+        )
+    when (taskScope) {
+        ReloadedSessionTaskScope.TUNNEL_TELEMETRY -> {
+            restartGatedSessionTask(
+                id = FoxholeVpnService.TICKER_TASK_I2P_TRAFFIC,
+                gateOpen = i2pTrafficSamplingPossible(settings),
+            ) { startI2pTrafficStatsUpdates() }
+            restartGatedSessionTask(
+                id = FoxholeVpnService.TICKER_TASK_APP_TRAFFIC,
+                gateOpen = appTrafficStatsRuntimeEnabled(settings),
+            ) { startAppTrafficStatsUpdates() }
+        }
+        ReloadedSessionTaskScope.DNS_GUARD_WINDOW ->
+            restartGatedSessionTask(
+                id = FoxholeVpnService.TICKER_TASK_DNS_GUARD_WINDOW,
+                gateOpen = sentinelTrafficWindowCollectionEnabled(settings),
+            ) { startDnsGuardWindowUpdates() }
+        ReloadedSessionTaskScope.WATCHDOG_ONLY -> Unit
+    }
+}
+
+private fun FoxholeVpnService.restartGatedSessionTask(
+    id: String,
+    gateOpen: Boolean,
+    start: () -> Unit,
+) {
+    if (!gatedSessionTaskNeedsRestart(registered = sessionTicker.isRegistered(id), gateOpen = gateOpen)) {
+        return
+    }
+    start()
+    container.diagnosticsLogger.record(
+        "connection",
+        "session task re-evaluated after reload id=$id enabled=$gateOpen",
+    )
+}
+
+internal enum class ReloadedSessionTaskScope { TUNNEL_TELEMETRY, DNS_GUARD_WINDOW, WATCHDOG_ONLY }
+
+internal fun reloadedSessionTaskScope(
+    trafficJobRegistered: Boolean,
+    dnsGuardActive: Boolean,
+): ReloadedSessionTaskScope =
+    when {
+        trafficJobRegistered -> ReloadedSessionTaskScope.TUNNEL_TELEMETRY
+        dnsGuardActive -> ReloadedSessionTaskScope.DNS_GUARD_WINDOW
+        else -> ReloadedSessionTaskScope.WATCHDOG_ONLY
+    }
+
+internal fun gatedSessionTaskNeedsRestart(registered: Boolean, gateOpen: Boolean): Boolean =
+    registered != gateOpen
 
 internal fun runtimeReloadPendingSnapshot(
     snapshot: ConnectionSnapshot,
@@ -422,6 +489,7 @@ private suspend fun FoxholeVpnService.reloadLocalGuardRuntime(
         // stayed a no-op until a restart. Re-derive them from the settings we just applied
         // (start... cancels the previous jobs, so this is idempotent when nothing changed).
         startRuntimeConnectionStatsUpdates(settings)
+        reregisterGatedSessionTasks()
         FoxholeVpnRuntimeBridge.requestImmediateTrafficSample()
         updateNotification()
         container.diagnosticsLogger.record("connection", "local guard reloaded mode=${mode.name.lowercase()}")

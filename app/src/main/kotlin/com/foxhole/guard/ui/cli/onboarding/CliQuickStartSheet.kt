@@ -18,14 +18,6 @@ import com.foxhole.guard.ui.cli.components.CliBottomSheet
 import com.foxhole.guard.ui.cli.components.CliButton
 import kotlinx.coroutines.launch
 
-/**
- * The quick start, shown exactly once directly after the wizard and before the beta notice.
- *
- * The gate needs no hydration guard, unlike the wizard's: it reads
- * `onboardingCompleted && !quickStartShown`, which is false on the pre-hydration defaults (the fast
- * UI store mirrors dashboard flags only, never these), so it cannot flash before stored settings
- * arrive. Dismissing writes the flag; the beta notice gate then becomes eligible.
- */
 @Composable
 internal fun CliQuickStartSheet(viewModel: HomeViewModel) {
     val settings by viewModel.container.settingsRepository.settings.collectAsStateWithLifecycle()
@@ -40,7 +32,6 @@ internal fun CliQuickStartSheet(viewModel: HomeViewModel) {
     )
 }
 
-/** The sheet itself, free of the view model so the layout can be composed on its own. */
 @Composable
 internal fun CliQuickStartSheetContent(onDismiss: () -> Unit) {
     val colors = LocalCliColors.current
@@ -49,15 +40,9 @@ internal fun CliQuickStartSheetContent(onDismiss: () -> Unit) {
         onDismiss = onDismiss,
         title = stringResource(R.string.cli_help_start_title),
         icon = R.drawable.pix_power,
-        // The body owns vertical scrolling. Letting ModalBottomSheet consume the same fast upward
-        // fling can bounce between its full-height anchor and the inner scroll indefinitely.
         sheetGesturesEnabled = false,
-        // The finish button rides the sheet's pinned footer: the reading passages scroll under it,
-        // so the only way out of first-run stays on screen however long the text is. The height cap
-        // and the scroll around the passages now belong to CliBottomSheet.
         footer = {
             Spacer(modifier = Modifier.height(CliSpacing.md))
-            // Sheet palette: the single confirming action is the filled ok button, full width.
             CliButton(
                 label = stringResource(R.string.cli_wizard_finish),
                 filled = true,

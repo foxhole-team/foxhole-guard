@@ -5,16 +5,6 @@ import org.junit.Assert.assertFalse
 import org.junit.Test
 import java.io.File
 
-/**
- * Structural replacement for the retired RuntimeControlPlaneOwnershipContractTest source pins.
- *
- * The protected invariant is ownership, not spelling: the VPN and proxy services share ONE
- * application-scoped native control plane (a single RuntimeSupervisor + RuntimeInstanceStore pair
- * constructed by the app graph), services only borrow it (never close or reset it wholesale), and
- * every service-dispatched runtime command is fenced by a per-service command owner so closing the
- * owner cancels its queued work. These rules survive renames and reflows of the supervisor
- * internals; only renaming the two owner seam types themselves requires touching this file.
- */
 class RuntimeControlPlaneOwnershipArchTest {
     @Test
     fun `vpn and proxy services share one application scoped native control plane`() {
@@ -109,8 +99,6 @@ class RuntimeControlPlaneOwnershipArchTest {
     }
 
     private fun constructionSites(typeName: String): List<ConstructionSite> {
-        // Negative lookbehind skips the declaration itself (`class RuntimeSupervisor(...)`);
-        // `\b` skips longer identifiers (FakeRuntimeSupervisor) and suffixed ones (…SupervisorTest).
         val pattern = Regex("""(?<!class )\b$typeName\s*[({]""")
         return mainKotlinFiles().flatMap { file ->
             val text = file.readText()
@@ -176,8 +164,6 @@ class RuntimeControlPlaneOwnershipArchTest {
 
     private fun appMainKotlinFiles(): List<File> = kotlinFilesUnder("app/src/main/kotlin")
 
-    // The control plane spans both roots: the seam types live in :core:runtime, the single
-    // construction site lives in the app graph, and the services borrow from it.
     private fun mainKotlinFiles(): List<File> =
         kotlinFilesUnder("app/src/main/kotlin") + kotlinFilesUnder("core/runtime/src/main/kotlin")
 

@@ -26,12 +26,6 @@ import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
 
-// Manual backup/restore: assembles the backup document, writes/reads it through SAF, and replays
-// a restore through the ordinary settings/profile pipelines. Extension functions only (see the
-// HomeViewModel file-split convention).
-
-// The encrypted ciphertext is capped at 20 MiB, but base64 expands it by roughly one third. Keep
-// the outer SAF read cap large enough for every backup this build can successfully export.
 internal const val MAX_BACKUP_FILE_BYTES = MAX_ENCRYPTED_BACKUP_FILE_BYTES
 
 internal suspend fun HomeViewModel.prepareBackupDocumentInternal(
@@ -86,7 +80,6 @@ internal fun HomeViewModel.exportBackup(
     }
 }
 
-/** Parses the picked file; failures land as a banner and return null so the screen stays put. */
 internal suspend fun HomeViewModel.parseBackup(
     uri: Uri,
     password: CharArray,
@@ -164,8 +157,6 @@ internal fun HomeViewModel.restoreBackup(document: BackupDocument) {
                         val restoredProfiles = container.profileRepository.restoreBackupProfiles(document)
                         document.settings?.let { backupSettings ->
                             val currentSettings = container.settingsRepository.current()
-                            // Capture the destination's installed-app identity set BEFORE publishing
-                            // imported quarantine=true. The one settings write stays atomic.
                             val quarantineBaseline =
                                 if (
                                     backupSettings.expert.newAppQuarantineEnabled &&
@@ -188,7 +179,6 @@ internal fun HomeViewModel.restoreBackup(document: BackupDocument) {
                     rollback = ::rollbackBackupRestore,
                 )
             if (document.settings != null) {
-                // Runtime reconciliation begins only after the persisted transaction commits.
                 syncLocalGuardWithPermissionRequest()
             }
             val restored = profileResults.count { it.restored }
@@ -246,7 +236,6 @@ internal inline fun <T> backupReadOrNull(block: () -> T): T? =
         null
     }
 
-/** Reads at most MAX+1 bytes, so an oversized provider cannot force an unbounded allocation. */
 internal fun InputStream.readBackupUtf8Capped(maxBytes: Int = MAX_BACKUP_FILE_BYTES): String {
     require(maxBytes > 0)
     val output = ByteArrayOutputStream(minOf(maxBytes, BACKUP_READ_BUFFER_BYTES))

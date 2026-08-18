@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -31,15 +30,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.foxhole.guard.R
@@ -49,12 +44,14 @@ import com.foxhole.guard.ui.ProfilesExportSelectionState
 import com.foxhole.guard.ui.cli.CliSpacing
 import com.foxhole.guard.ui.cli.CliType
 import com.foxhole.guard.ui.cli.LocalCliColors
+import com.foxhole.guard.ui.cli.LocalCliPanelAppearance
 import com.foxhole.guard.ui.cli.components.CliButton
 import com.foxhole.guard.ui.cli.components.CliChip
 import com.foxhole.guard.ui.cli.components.CliElbowLine
 import com.foxhole.guard.ui.cli.components.CliPanel
 import com.foxhole.guard.ui.cli.components.CliSpinner
 import com.foxhole.guard.ui.cli.components.cliDashedBorder
+import com.foxhole.guard.ui.cli.components.cliModalSurfaceColor
 import com.foxhole.guard.ui.emitInfo
 import com.foxhole.guard.ui.importProfileRaw
 import com.foxhole.guard.ui.isReady
@@ -70,11 +67,6 @@ private data class CliQrExport(
     val text: String,
 )
 
-/**
- * The canonical two-row transfer block. QR is the full-width primary action; file and clipboard
- * share the secondary row. Export keeps QR visible for multi-config payloads but disables it,
- * because one QR code deliberately carries exactly one configuration.
- */
 @Composable
 internal fun CliProfileTransferRow(
     viewModel: HomeViewModel,
@@ -168,9 +160,6 @@ private fun rememberCliImportLauncher(
     }
 }
 
-// No pending snapshot: the launcher callback rebuilds the export from the *current* selection,
-// which is saveable and survives process death. A snapshot in remember died with the composition,
-// so rotating with the SAF picker open silently swallowed the export — no file, no message.
 private suspend fun resolveExportsForSaf(
     viewModel: HomeViewModel,
     selection: ProfilesExportSelectionState,
@@ -266,8 +255,6 @@ private fun handleFileTransfer(
         launchers.importFile()
         return
     }
-    // The resolved exports only pick the picker (single file vs directory) and its suggested name —
-    // the payload itself is re-resolved in the launcher callback, so nothing is carried across it.
     runExport { exports ->
         val export = exports.singleOrNull()
         when {
@@ -325,8 +312,6 @@ private fun CliProfileTransferControls(
     buttonColor: Color,
     actions: CliTransferActions,
 ) {
-    // Import and export occupy the exact same dashed geometry. Selection changes copy and tone,
-    // never layout, so the VPN profile panel cannot jump while the buttons switch purpose.
     val colors = LocalCliColors.current
     Column(
         modifier = Modifier
@@ -334,29 +319,6 @@ private fun CliProfileTransferControls(
             .cliDashedBorder(if (exportMode) colors.info else colors.border)
             .padding(CliSpacing.sm),
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = CliSpacing.xs),
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Image(
-                painter = painterResource(R.drawable.pix_info),
-                contentDescription = null,
-                colorFilter = ColorFilter.tint(if (exportMode) colors.info else colors.dim),
-                modifier = Modifier.size(12.dp),
-            )
-            Spacer(modifier = Modifier.width(CliSpacing.xs))
-            Text(
-                text = stringResource(
-                    if (exportMode) R.string.cli_prof_export_hint else R.string.cli_prof_import_hint,
-                ),
-                style = CliType.small,
-                color = if (exportMode) colors.info else colors.dim,
-                textAlign = TextAlign.Center,
-            )
-        }
         CliProfileTransferButtons(
             exportMode = exportMode,
             selectedKeyCount = selectedKeyCount,
@@ -377,8 +339,6 @@ private fun CliProfileTransferButtons(
 ) {
     val directionIcon = if (exportMode) R.drawable.pix_export else R.drawable.pix_import
     if (!exportMode) {
-        // Camera is the primary import path. File and clipboard remain equal secondary actions;
-        // this two-row shape keeps both labels readable at 320dp without shrinking the canon.
         Column(verticalArrangement = Arrangement.spacedBy(CliSpacing.sm)) {
             CliButton(
                 label = stringResource(R.string.cli_prof_imp_qr),
@@ -413,18 +373,15 @@ private fun CliProfileTransferButtons(
         return
     }
 
-    // Share mirrors import at narrow widths: one readable primary row and two equal secondary
-    // actions. Multi-profile/config payloads keep the QR affordance visible but unavailable.
+    val qrReady = selectedKeyCount == 1
     Column(verticalArrangement = Arrangement.spacedBy(CliSpacing.sm)) {
         CliButton(
-            label = stringResource(R.string.cli_prof_exp_qr),
+            label = stringResource(
+                if (qrReady) R.string.cli_prof_exp_qr else R.string.cli_prof_exp_qr_pick_one,
+            ),
             icon = R.drawable.pix_qr,
-            color = buttonColor,
-            enabled = !busy && selectedKeyCount == 1,
-            // Resolving the export briefly disables the action. Keep the blue frame stable while
-            // it is busy (and when a multi-config selection makes QR unavailable) so the transfer
-            // block does not flash as though the button disappeared.
-            dimWhenDisabled = false,
+            color = if (qrReady) buttonColor else LocalCliColors.current.faint,
+            enabled = !busy && qrReady,
             onClick = actions.qr,
             modifier = Modifier.fillMaxWidth(),
         )
@@ -476,7 +433,6 @@ private val PROFILE_IMPORT_MIME_TYPES = arrayOf(
     "application/octet-stream",
 )
 
-/** Overlay panel with the QR bitmap of a single config; oversized payloads get an err line. */
 @Composable
 private fun CliQrExportOverlay(
     export: CliQrExport,
@@ -501,13 +457,17 @@ private fun CliQrExportOverlay(
         ),
     ) {
         Box(
-            modifier = Modifier.fillMaxSize().padding(CliSpacing.lg),
+            modifier = Modifier
+                .fillMaxSize()
+                .background(cliModalSurfaceColor(LocalCliPanelAppearance.current, colors.panel))
+                .padding(CliSpacing.lg),
             contentAlignment = Alignment.Center,
         ) {
             CliPanel(
                 icon = R.drawable.pix_qr,
                 title = stringResource(R.string.cli_prof_exp_qr_title),
                 titleColor = colors.accent,
+                background = cliModalSurfaceColor(LocalCliPanelAppearance.current, Color.Unspecified),
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Text(
@@ -527,7 +487,6 @@ private fun CliQrExportOverlay(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .aspectRatio(1f)
-                                // White quiet zone regardless of theme: scanners need it.
                                 .background(Color.White)
                                 .padding(CliSpacing.md),
                         )

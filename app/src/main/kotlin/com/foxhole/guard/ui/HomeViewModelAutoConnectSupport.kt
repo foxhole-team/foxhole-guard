@@ -23,9 +23,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
-// Reconnect entry points and the Smart Start auto-connect engine: candidate probes,
-// outcome recording, disconnect stabilization, and the auto-connect UI state.
-
 internal fun HomeViewModel.requestReconnect(profileId: Long) {
     controlUiState.value.profiles.firstOrNull { profile -> profile.id == profileId }?.let { profile ->
         if (maybePromptStartTcpVpnWhileTorOnlyActive(profile, null)) {
@@ -112,7 +109,6 @@ internal suspend fun HomeViewModel.probeAutoConnectCandidate(
         statusMessage = getApplication<Application>().getString(R.string.notification_status_analysis),
         isSmartStartConnection = true,
         previousVpnNetworkHandle = previousVpnNetworkHandle,
-        // The metrics session refreshes the subscription once before it snapshots candidates.
         subscriptionRefreshPrepared = true,
         protocolTestTrafficFreeze = protocolTestTrafficFreeze,
         replaceActiveTunnel = replaceActiveTunnel,

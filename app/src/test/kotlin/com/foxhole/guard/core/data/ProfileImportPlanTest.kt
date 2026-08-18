@@ -2,6 +2,8 @@ package com.foxhole.guard.core.data
 
 import com.foxhole.core.importer.ProfileImportParser
 import com.foxhole.core.model.ProfileSourceType
+import com.foxhole.core.model.SubscriptionEntryReport
+import com.foxhole.core.model.SubscriptionEntryStatus
 import com.foxhole.core.network.testRemoteHostResolver
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
@@ -34,6 +36,50 @@ class ProfileImportPlanTest {
             listOf("Foxhole smart direct", "Foxhole smart tor i2p"),
             multi.parsed.profiles.map { it.displayName },
         )
+    }
+
+    @Test
+    fun `a grpc and fingerprint subscription reaches the confirm sheet with every node`() {
+        val uuid = "11111111-2222-3333-4444-555555555555"
+        val payload =
+            buildString {
+                for (index in 1..10) {
+                    append(
+                        "vless://$uuid@198.51.100.$index:443?encryption=none&security=tls" +
+                            "&sni=n$index.example.net&fp=chrome&type=grpc&serviceName=fox$index" +
+                            "&mode=gun#grpc-$index\n",
+                    )
+                }
+                for (index in 1..2) {
+                    append(
+                        "vless://$uuid@198.51.100.2$index:443?encryption=none&security=tls" +
+                            "&sni=t$index.example.net&type=tcp#tcp-$index\n",
+                    )
+                }
+                for (index in 1..3) {
+                    append(
+                        "hysteria2://import-secret@198.51.100.3$index:443" +
+                            "?sni=h$index.example.net&fp=chrome#hy2-fp-$index\n",
+                    )
+                }
+                for (index in 1..2) {
+                    append(
+                        "hysteria2://import-secret@198.51.100.4$index:443" +
+                            "?sni=p$index.example.net#hy2-$index\n",
+                    )
+                }
+            }
+
+        val parsed = parser.parseSubscriptionProfiles(payload, "provider")
+
+        assertEquals(17, parsed.nodesCount)
+        assertEquals(
+            emptyList<SubscriptionEntryReport>(),
+            parsed.entryReports.filter { report -> report.status != SubscriptionEntryStatus.ACCEPTED },
+        )
+        val grpcConfig = parsed.profiles.first().normalizedConfigJson
+        assertTrue(grpcConfig, grpcConfig.contains("\"service_name\""))
+        assertTrue(grpcConfig, grpcConfig.contains("fox1"))
     }
 
     @Test

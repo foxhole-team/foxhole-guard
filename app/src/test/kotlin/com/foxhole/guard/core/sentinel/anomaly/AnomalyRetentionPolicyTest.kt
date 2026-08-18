@@ -37,7 +37,6 @@ class AnomalyRetentionPolicyTest {
                 settings = StatisticsSettings(retention = StatisticsRetention.MONTH)
             ),
         )
-        // The legacy 3-month tier coarsens to the policy's Month preset.
         assertEquals(
             NOW_MS - 31L * DAY_MS,
             statisticsRetentionCutoff(

@@ -101,18 +101,15 @@ internal fun effectiveTunnelTunStack(
         TunStack.GVISOR -> TunStack.GVISOR
     }
 
-/**
- * Packages the fail-closed Tor lane rejects outright, which therefore may not appear in any split
- * rule: two SPECIFIC rules disagreeing on one package is a config the core refuses
- * (policy_unrepresentable). In EXCLUDE mode the selected apps ARE the excluded set, so a Tor-lane
- * app otherwise lands under both the reject rule and the direct-route rule.
- */
+// Reject rules and split rules must not name the same package; FoxCore refuses that policy.
 private fun failClosedTorPackages(
     settings: Settings,
     privacyRouteActive: Boolean,
 ): Set<String> =
-    if (!privacyRouteActive && settings.privacyRoute.blockAppsWhenTorUnavailable) {
-        normalizedRuntimePackages(settings.expert.torLanePackages()).toSet()
+    if (settings.privacyRoute.blockAppsWhenTorUnavailable) {
+        settings.expert
+            .failClosedBlockPackages(torLaneCarried = privacyRouteActive, vpnLaneCarried = true)
+            .toSet()
     } else {
         emptySet()
     }
@@ -262,10 +259,20 @@ internal fun torOnlyTunInbound(
             } else {
                 emptyList()
             }
+        val failClosedVpnPackages =
+            if (settings.privacyRoute.scope == PrivacyRouteScope.SELECTED_APPS &&
+                settings.privacyRoute.blockAppsWhenTorUnavailable
+            ) {
+                settings.expert.vpnLanePackages()
+            } else {
+                emptyList()
+            }
         val includePackages =
             if (settings.privacyRoute.scope == PrivacyRouteScope.SELECTED_APPS) {
                 normalizedRuntimePackages(
-                    torPackages + listOfNotNull(selfPackageName.takeIf { settings.webApps.enabled }),
+                    torPackages +
+                        failClosedVpnPackages +
+                        listOfNotNull(selfPackageName.takeIf { settings.webApps.enabled }),
                 )
             } else {
                 emptyList()

@@ -1,10 +1,12 @@
 package com.foxhole.guard.ui.cli.profiles
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -14,26 +16,22 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
 import com.foxhole.guard.R
 import com.foxhole.guard.ui.cli.CliSpacing
 import com.foxhole.guard.ui.cli.CliType
 import com.foxhole.guard.ui.cli.LocalCliColors
-import com.foxhole.guard.ui.cli.components.CliChip
 import com.foxhole.guard.ui.cli.components.CliConfirmSheet
 import com.foxhole.guard.ui.cli.components.CliElbowLine
 import com.foxhole.guard.ui.cli.components.CliInputRow
 import com.foxhole.guard.ui.cli.components.CliOptionRow
 import com.foxhole.guard.ui.cli.components.CliPanel
+import com.foxhole.guard.ui.cli.components.CliPixIcon
 import com.foxhole.guard.ui.cli.components.CliSelectRow
 import com.foxhole.guard.ui.cli.components.CliToggleRow
+import com.foxhole.guard.ui.cli.components.cliPressable
 import kotlinx.serialization.json.JsonObject
 
-/**
- * One protocol of the profile as a collapsible terminal panel: `type · tag` caption, the on/off and
- * delete chips, then the field form grouped common → auth → transport → tls. Only the fields the
- * outbound's own `type` can carry are rendered ([cliProtoFields]); a type without a form — and any
- * key the form does not model — stays reachable through the full-screen manual editor.
- */
 @Composable
 internal fun CliProfileEditorProtocolCard(
     outbound: JsonObject,
@@ -44,25 +42,21 @@ internal fun CliProfileEditorProtocolCard(
     onOutboundChange: (JsonObject) -> Unit,
     onDelete: () -> Unit,
     modifier: Modifier = Modifier,
-    canToggleEnabled: Boolean = false,
-    onToggleEnabled: () -> Unit = {},
 ) {
     val colors = LocalCliColors.current
-    val type = outbound.cliOutboundType()
+    val type = outbound.cliEditorProtocolType()
     CliPanel(
         icon = R.drawable.pix_shield,
         modifier = modifier.fillMaxWidth(),
         title = "$type · ${outbound.cliOutboundTag().ifBlank { slotLabel }}",
         titleColor = if (enabled) colors.accent else colors.faint,
+        accentBorderColor = colors.accent,
         collapsible = true,
         expanded = expanded,
         onToggleExpanded = onToggleExpanded,
     ) {
         CliProtocolCardActions(
-            enabled = enabled,
             label = outbound.cliOutboundTag().ifBlank { slotLabel },
-            canToggleEnabled = canToggleEnabled,
-            onToggleEnabled = onToggleEnabled,
             onDelete = onDelete,
         )
         if (type in CLI_STRUCTURED_OUTBOUND_TYPES) {
@@ -73,12 +67,16 @@ internal fun CliProfileEditorProtocolCard(
     }
 }
 
+private fun JsonObject.cliEditorProtocolType(): String =
+    if (cliOutboundType() == CLI_WIREGUARD_TYPE && "amnezia" in this) {
+        CLI_AMNEZIA_WIREGUARD_TYPE
+    } else {
+        cliOutboundType()
+    }
+
 @Composable
 private fun CliProtocolCardActions(
-    enabled: Boolean,
     label: String,
-    canToggleEnabled: Boolean,
-    onToggleEnabled: () -> Unit,
     onDelete: () -> Unit,
 ) {
     val colors = LocalCliColors.current
@@ -87,22 +85,19 @@ private fun CliProtocolCardActions(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(CliSpacing.sm, Alignment.End),
     ) {
-        if (canToggleEnabled) {
-            CliChip(
-                label = stringResource(if (enabled) R.string.cli_prof_proto_on else R.string.cli_prof_proto_off),
-                color = if (enabled) colors.ok else colors.dim,
-                selected = enabled,
-                onClick = onToggleEnabled,
+        Box(
+            modifier = Modifier
+                .size(CARD_DELETE_TAP_SIZE)
+                .cliPressable(onClick = { confirmDelete = true }),
+            contentAlignment = Alignment.Center,
+        ) {
+            CliPixIcon(
+                id = R.drawable.pix_trash,
+                contentDescription = stringResource(R.string.cli_prof_edit_delete),
+                tint = colors.err,
             )
         }
-        CliChip(
-            label = stringResource(R.string.cli_prof_edit_delete),
-            color = colors.err,
-            onClick = { confirmDelete = true },
-        )
     }
-    // Dropping a protocol is destructive and irreversible from here, so it asks in the shared
-    // bottom modal rather than swapping the delete chip for a pair of y/n chips under the finger.
     if (confirmDelete) {
         CliConfirmSheet(
             title = stringResource(R.string.cli_prof_edit_delete),
@@ -219,8 +214,6 @@ private fun CliProtoChoiceRow(
     }
 }
 
-// Reading the current transport type needs a field descriptor; the catalog's own transport-type
-// entry is not exported, so this probe mirrors its path.
 private val cliTransportTypeProbe =
     CliProtoField(
         label = "transport.type",
@@ -230,3 +223,5 @@ private val cliTransportTypeProbe =
     )
 
 private const val CLI_UNSET_CHOICE = "—"
+
+private val CARD_DELETE_TAP_SIZE = 44.dp

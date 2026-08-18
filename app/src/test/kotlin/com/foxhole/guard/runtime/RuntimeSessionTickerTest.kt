@@ -15,9 +15,6 @@ import java.util.Collections
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 
-// Zero-dependency (no kotlinx-coroutines-test): real dispatchers + latches with a small interval,
-// matching the repo's runtime-test style. Assertions are latch/occurrence based, not wall-clock
-// counts, so they stay deterministic under CI jitter.
 class RuntimeSessionTickerTest {
     private val interval = 40L
     private val awaitMs = 4_000L
@@ -48,7 +45,6 @@ class RuntimeSessionTickerTest {
     fun `fireImmediately runs the task without waiting an interval`() =
         runBlocking {
             val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-            // A long interval: only fireImmediately can make this fire promptly.
             val ticker = ticker(scope)
             val fired = CompletableDeferred<Unit>()
 
@@ -120,7 +116,6 @@ class RuntimeSessionTickerTest {
             val bAtUnregister = bFires.get()
             val aAtUnregister = aFires.get()
 
-            // Let several more intervals pass: `a` advances, `b` is frozen.
             val aAdvanced = CompletableDeferred<Unit>()
             ticker.register("a_probe", fireImmediately = false, intervalMs = { interval * 4 }) {
                 aAdvanced.complete(Unit)
@@ -139,9 +134,7 @@ class RuntimeSessionTickerTest {
             val ticker = ticker(scope)
             val slowFired = AtomicInteger(0)
 
-            // Loop parks on a 60s deadline...
             ticker.register("slow", fireImmediately = false, intervalMs = { 60_000L }) { slowFired.incrementAndGet() }
-            // ...then a fast task must still fire promptly, well under 60s (proves the wake signal).
             val fastFired = CompletableDeferred<Unit>()
             ticker.register("fast", fireImmediately = false, intervalMs = { interval }) { fastFired.complete(Unit) }
 
@@ -155,9 +148,6 @@ class RuntimeSessionTickerTest {
         runBlocking {
             val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
             val ticker = ticker(scope)
-            // Registered with a huge interval; the first (immediate) run shrinks it. Only an
-            // interval read AFTER the action can make the second run happen promptly — this is
-            // the health-probe backoff contract (probe result decides the next cadence).
             val currentInterval = AtomicLong(60_000L)
             val fires = AtomicInteger(0)
             val secondFire = CompletableDeferred<Unit>()
@@ -241,8 +231,6 @@ class RuntimeSessionTickerTest {
             val fires = AtomicInteger(0)
             val reachedThree = CompletableDeferred<Unit>()
 
-            // Action runs 3x longer than its interval: without the completion re-arm it would pile
-            // up concurrent runs.
             ticker.register(
                 id = "overlappy",
                 fireImmediately = true,

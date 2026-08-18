@@ -47,9 +47,6 @@ import com.foxhole.guard.runtime.FoxholeVpnService
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-// Security, dashboard-card and local-guard related settings handlers for HomeViewModel.
-// Extracted from HomeViewModelSettingsSupport (file split by domain); extension functions only.
-
 internal fun HomeViewModel.onNetworkRulesChanged(value: NetworkRulesSettings) {
     viewModelScope.launch {
         container.settingsRepository.updateNetworkRulesSettings(value)
@@ -187,12 +184,6 @@ internal fun HomeViewModel.onMonochromeTorThemeChanged(value: Boolean) {
     }
 }
 
-/**
- * The routing-settings "Enable Tor core" switch is a pure permission — it never launches a
- * runtime and never arms the route. Granting it only persists the flag (the core stays off until
- * the dashboard controls / Tor window start it); revoking it fully stops whatever Tor is engaged
- * (a forbidden core must not keep running) and disables every Tor control in the UI.
- */
 internal fun HomeViewModel.onTorRoutePermittedChanged(value: Boolean) {
     if (!value) {
         onPrivacyRouteModeSelected(PrivacyRouteMode.OFF)
@@ -239,8 +230,6 @@ internal fun HomeViewModel.onTrafficMapSectionOrderChanged(value: List<com.foxho
 }
 
 internal fun HomeViewModel.onClearTrafficMapHistory() {
-    // Live aggregates drop immediately; the persisted watermark keeps the cut across restarts.
-    // Journals and statistics stay untouched — the map just stops reading anything older.
     container.trafficMapRepository.clearTrafficMapHistory()
     viewModelScope.launch {
         container.settingsRepository.updateTrafficMapHistoryClearedAt(System.currentTimeMillis())
@@ -250,27 +239,11 @@ internal fun HomeViewModel.onClearTrafficMapHistory() {
 internal fun HomeViewModel.onFirewallEnabledChangedInternal(value: Boolean) {
     viewModelScope.launch {
         container.settingsRepository.updateFirewallEnabled(value)
-        // Enabling the firewall reveals its quick-access pill; disabling it must NOT hide the pill —
-        // the pill's visibility is owned by the settings show-flag so the user can re-arm from it.
         if (value) {
             container.settingsRepository.updateShowFirewallStatus(true)
         }
         if (value) {
-            // Arming the firewall arms autostart with it. A firewall that stops at the next reboot
-            // is not a firewall, and the boot receiver ALREADY restores the guard in that case
-            // (bootRestorePlan starts the local guard even with autostart off) — so the switch was
-            // reporting "off" while the behaviour was "on". Turning the flag on makes the screen
-            // agree with the device instead of the other way round.
-            //
-            // One direction only: turning the firewall OFF leaves autostart alone, because by then
-            // it may be carrying a VPN profile's restore, which is a promise the firewall never
-            // made and must not revoke. Note this does widen boot restore to the profile as well —
-            // that is the owner's decision, taken knowingly.
             container.settingsRepository.updateAutoStartOnBoot(true)
-            // The firewall advertises the traffic map as one of its features, but the map only
-            // lights up when map + country-traffic stats + activity logging are on. Enabling the
-            // firewall now switches those on together so the map actually populates in firewall-only
-            // mode (previously it stayed on the "waiting" placeholder until each was toggled by hand).
             applyTrafficMapSupportSettings()
         }
         if (value || container.settingsRepository.current().dns.replaceSystemDns) {
@@ -283,11 +256,6 @@ internal fun HomeViewModel.onFirewallEnabledChangedInternal(value: Boolean) {
     }
 }
 
-// NOTE: must NOT be named enableTrafficMapSupportSettings — that collides with the public member
-// HomeViewModel.enableTrafficMapSupportSettings() (which re-enters enableTrafficMapSupportSettings).
-// A Kotlin member outranks a same-named extension, so the callers below would recurse into an
-// unbounded coroutine spawn (startForegroundService flood -> main-thread ANR) instead of flipping
-// these four settings.
 internal suspend fun HomeViewModel.applyTrafficMapSupportSettings() {
     container.settingsRepository.updateTrafficMapEnabled(true)
     container.settingsRepository.updateStatisticsEnabled(true)
@@ -314,8 +282,6 @@ internal fun HomeViewModel.onDnsReplaceSystemDnsChanged(value: Boolean) {
 internal fun HomeViewModel.onNetworkActivityLoggingChanged(value: Boolean) {
     viewModelScope.launch {
         container.settingsRepository.updateNetworkActivityLogging(value)
-        // The journal flag controls how raw on-device diagnostics are: turning it off masks live
-        // rows again, while turning it on affects new records.
         container.diagnosticsLogger.applyLiveDiagnosticsPrivacySetting()
         container.connectionController.syncLocalGuard()
         emitInfo(

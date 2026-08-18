@@ -71,8 +71,11 @@ internal class FoxCoreNativeEngineOperations(
                 )
             }
 
-    fun immutableFingerprint(engineConfigJson: String): String? =
-        starter.immutableEngineFingerprint(engineConfigJson)
+    fun immutableFingerprint(translated: FoxCoreSessionConfig): String? =
+        starter.immutableEngineFingerprint(
+            configJson = translated.engineConfigJson,
+            dnsRuleSetBootstrap = translated.dnsRuleSetBootstrap,
+        )
 
     fun reloadPolicy(
         current: ActiveFoxCoreSession,

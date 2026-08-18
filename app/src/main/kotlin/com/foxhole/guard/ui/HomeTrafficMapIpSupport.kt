@@ -7,9 +7,6 @@ import com.foxhole.core.model.IpInfo
 import com.foxhole.core.model.TrafficMode
 import com.foxhole.guard.runtime.FoxholeVpnService
 
-// Traffic-map IP identity candidates: which fetched IpInfo may appear as the map's origin, VPN
-// route and Tor exit nodes. Extracted from HomeDashboardRouteIpSupport (file split by domain).
-
 internal fun trafficMapOriginIpInfoCandidate(
     connection: ConnectionSnapshot,
     deviceIpInfo: IpInfo?,
@@ -34,10 +31,6 @@ internal fun trafficMapTorIpInfoCandidate(
     connection: ConnectionSnapshot,
     torIpInfo: IpInfo?,
 ): IpInfo? {
-    // Tor counts as active for the map only when it is actually engaged: a live session whose
-    // applied config carries the Tor route, or the dedicated Tor-only runtime. The settings switch
-    // is permission, not engagement — a permitted-but-idle route must not draw a Tor lane, and a
-    // cached exit IP left over from a stopped session must never resurrect one after Stop.
     val routeTorActive =
         connection.state in ACTIVE_CONNECTION_STATES &&
             (
@@ -85,10 +78,6 @@ private fun ConnectionSnapshot.shouldRejectTrafficMapOriginAsRouteIp(
         deviceIp == routeIp
 }
 
-// A CONNECTED profile runtime in EITHER mode: the tunnel's exit IS the dashboard identity, and a
-// local-proxy runtime publishes its exit the same way (PROXY geo refresh). Excluding PROXY here
-// left the proxy scheme's "Internet" node without the exit flag/country and the map without the
-// server route point whenever the profile ran as a local proxy.
 private fun ConnectionSnapshot.isActiveTrafficMapRouteTunnel(): Boolean =
     state == ConnectionState.CONNECTED &&
         (trafficMode == TrafficMode.TUNNEL || trafficMode == TrafficMode.PROXY) &&

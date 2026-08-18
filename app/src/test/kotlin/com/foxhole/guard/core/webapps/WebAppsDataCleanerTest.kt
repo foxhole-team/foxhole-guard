@@ -4,10 +4,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 
-/**
- * Сайт для нативной очистки данных: хост конфигурного https-URL и ничего кроме него — мусор и
- * не-https не превращаются в очистку чужого сайта.
- */
 internal class WebAppsDataCleanerTest {
     @Test
     fun `https url yields its host`() {

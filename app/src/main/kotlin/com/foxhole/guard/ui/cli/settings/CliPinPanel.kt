@@ -41,16 +41,6 @@ import com.foxhole.guard.ui.enableAppLockPassword
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-/**
- * Inline terminal panel driving the three PIN flows over the coordinator-backed VM
- * extensions (Argon2 off-thread, key migration). The system number pad types into a
- * hidden field rendered as `pin > ● ● ● ▁ ▁ ▁`; six digits auto-advance the step.
- * The unlock-screen crypto/backoff stays untouched - this panel only sets up keys.
- *
- * The panel starts at a key entry, never at a question: turning encryption on or off is confirmed
- * before this panel opens, in [CliEncryptionConsentSheet]. The companion switches decided there
- * ride in as [eventMonitoring] / [appJournal].
- */
 @Composable
 internal fun CliPinPanel(
     viewModel: HomeViewModel,
@@ -128,15 +118,6 @@ internal fun CliPinPanel(
     }
 }
 
-/**
- * The encryption on/off confirmation, as the shared bottom modal. Both directions ask here and
- * nowhere else — switching app-data encryption on or off is not an answer to be given by a chip
- * that unfolded under the finger, and asking in the same place both ways is what makes the pair
- * read as one switch rather than two unrelated flows.
- *
- * Turning it ON also offers the two companions the password unlocks (tamper monitoring and the
- * app journal); they are part of the same decision, so they live inside the modal.
- */
 @Composable
 internal fun CliEncryptionConsentSheet(
     flow: CliPinFlow,
@@ -185,7 +166,6 @@ internal enum class CliPinStep { CURRENT, NEW, CONFIRM, WORKING, DONE }
 private const val PIN_LENGTH = 6
 private const val DONE_CLOSE_DELAY_MS = 900L
 
-/** Snapshot-state machine of the panel; transitions stay testable outside composition. */
 internal class CliPinPanelState(private val flow: CliPinFlow) {
     var step by mutableStateOf(
         if (flow == CliPinFlow.ENABLE) CliPinStep.NEW else CliPinStep.CURRENT,
@@ -214,7 +194,6 @@ internal class CliPinPanelState(private val flow: CliPinFlow) {
         }
     }
 
-    /** Returns true when the flow finished and the panel should close. */
     fun applyResult(result: PasswordSetupResult): Boolean = when (result) {
         PasswordSetupResult.Success -> {
             step = CliPinStep.DONE
@@ -285,7 +264,6 @@ private fun PinEntryBody(
         }
     }
     Box {
-        // The invisible field owns the input; the cells below are its rendering.
         BasicTextField(
             value = pin,
             onValueChange = { raw -> onPin(raw.filter(Char::isDigit).take(PIN_LENGTH)) },
@@ -311,7 +289,6 @@ private fun PinEntryBody(
         color = if (errorRes != null) colors.err else colors.dim,
     )
     Spacer(modifier = Modifier.height(CliSpacing.xs))
-    // Trailing edge: the row's only control sits where every other row keeps its control.
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
         CliChip(label = stringResource(R.string.cli_common_no_cancel), onClick = onCancel)
     }

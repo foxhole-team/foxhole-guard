@@ -16,6 +16,9 @@ class FoxholeDbSigningKeyContractTest {
         val canonical = decodePem(FOXHOLE_DB_MANIFEST_PUBLIC_KEY_PEM)
 
         assertArrayEquals(canonical, decodePem(FOXHOLE_DNS_MANIFEST_PUBLIC_KEY_PEM))
+        assertArrayEquals(canonical, decodePem(FOXHOLE_THREAT_INTEL_MANIFEST_PUBLIC_KEY_PEM))
+        assertArrayEquals(canonical, decodePem(FOXHOLE_TLS_FINGERPRINT_MANIFEST_PUBLIC_KEY_PEM))
+        assertArrayEquals(canonical, FOXHOLE_DB_MANIFEST_PUBLIC_KEY_DER)
         assertArrayEquals(
             canonical,
             Base64.getDecoder().decode(DnsFilterAssetInstaller.FOXCORE_DNS_UPDATE_PUBLIC_KEY_BASE64),

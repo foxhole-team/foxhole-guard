@@ -7,7 +7,6 @@ internal data class CliBlockedAppRow(
     val attempts: Int,
 )
 
-/** Blocked attempts in the trailing day, grouped for the compact terminal panel. */
 internal fun cliBlockedAppRows(
     events: List<NetworkActivityEvent>,
     blockedPackages: Collection<String>,

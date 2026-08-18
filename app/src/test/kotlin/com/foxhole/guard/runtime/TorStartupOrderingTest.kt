@@ -99,8 +99,6 @@ class TorStartupOrderingTest {
             ),
         )
         assertFalse(deferredBarrier.contains("refreshValidatedTunnelIpInfoBestEffort"))
-        // The upgrade reacts to the validation event itself — no timers in the ordering path, and
-        // a failed VPN start never schedules a tor-only fallback (a failure starts nothing).
         assertFalse(orderingSource.contains("delay("))
         listOf(connectSource, validationSource, orderingSource).forEach { source ->
             assertFalse(source.contains("maybeScheduleTorOnlyFallbackAfterVpnFailure"))

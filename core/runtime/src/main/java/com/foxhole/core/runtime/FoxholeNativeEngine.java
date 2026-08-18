@@ -46,6 +46,7 @@ public final class FoxholeNativeEngine {
     public static final int RELOAD_NO_ATTRIBUTION = -6;
     public static final int RELOAD_REVISION_CONFLICT = -7;
     public static final int RELOAD_PACKET_TUNNEL_REJECTS_FAKE_IP = -8;
+    public static final int RELOAD_PACKET_TUNNEL_REJECTS_PRIMARY_DNS = -9;
 
     static {
         System.loadLibrary("foxhole_native");
@@ -67,6 +68,10 @@ public final class FoxholeNativeEngine {
     public static native int nativeAbiVersion();
 
     public static native String nativeCapabilities();
+
+    public static native String nativeImportLink(String link);
+
+    public static native String nativeImportSubscription(String body);
 
     /**
      * Starts FoxCore over a detached TUN descriptor and pins every protected socket and bootstrap
@@ -110,9 +115,19 @@ public final class FoxholeNativeEngine {
             byte[] signature,
             byte[] artifact);
 
+    public static native int nativeInstallTlsFingerprintTables(byte[] document);
+
+    public static native void nativeClearTlsFingerprintTables();
+
+    public static final int TLS_FINGERPRINT_TABLES_UNREADABLE = -1;
+    public static final int TLS_FINGERPRINT_TABLES_REFUSED = -2;
+    public static final int TLS_FINGERPRINT_TABLES_PANICKED = -3;
+
     public static native int nativeStop(long handle);
 
     public static native String nativeStats(long handle);
+
+    public static native String nativeTrafficMap(long handle);
 
     public static native String nativeConnections(long handle);
 
@@ -234,6 +249,8 @@ public final class FoxholeNativeEngine {
                 return "revision_conflict";
             case RELOAD_PACKET_TUNNEL_REJECTS_FAKE_IP:
                 return "packet_tunnel_rejects_fake_ip";
+            case RELOAD_PACKET_TUNNEL_REJECTS_PRIMARY_DNS:
+                return "packet_tunnel_rejects_primary_dns";
             default:
                 return "unknown_code=" + value;
         }

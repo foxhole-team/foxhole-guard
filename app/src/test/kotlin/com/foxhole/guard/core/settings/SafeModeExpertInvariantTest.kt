@@ -20,23 +20,14 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/**
- * Structural guard for [disarmedBySafeMode].
- *
- * Safe mode used to be four hand-written positive whitelists that had already drifted apart from
- * each other, and any [ExpertSettings] field added after they were written was silently reset on
- * the next normalization — with no test failing. This test makes that impossible: every field of
- * the serialized shape must be classified below, so adding one to the model fails here until
- * somebody decides whether safe mode disarms it.
- */
 internal class SafeModeExpertInvariantTest {
-    /** Survives safe mode: identity, consent, the firewall block lane, journal policy. */
     private val preserved =
         setOf(
             "unlockedAt",
             "warningAcknowledgedAt",
             "blockScreenshots",
             "firewallEnabled",
+            "killSwitchEnabled",
             "newAppQuarantineEnabled",
             "systemDnsProtectionEnabled",
             "networkActivityLogging",
@@ -51,7 +42,6 @@ internal class SafeModeExpertInvariantTest {
             "blockAppsAlways",
         )
 
-    /** Reset to its default: every routing lane and every locally published surface. */
     private val disarmed =
         setOf(
             "sniff",
@@ -64,7 +54,6 @@ internal class SafeModeExpertInvariantTest {
             "rawLiveDiagnostics",
         )
 
-    /** Neither kept verbatim nor reset — filtered down to the BLOCK lane. */
     private val transformed = setOf("appAssignments")
 
     private val json = Json { encodeDefaults = true }
@@ -123,16 +112,13 @@ internal class SafeModeExpertInvariantTest {
         assertEquals(policy, result.diagnosticsRetentionPolicy)
     }
 
-    /**
-     * Every field moved away from its default, so a field that is wrongly reset shows up as a
-     * mismatch instead of coincidentally matching the default.
-     */
     private fun fullyNonDefault(): ExpertSettings =
         ExpertSettings(
             unlockedAt = 111L,
             warningAcknowledgedAt = 222L,
             blockScreenshots = true,
             firewallEnabled = true,
+            killSwitchEnabled = true,
             newAppQuarantineEnabled = true,
             systemDnsProtectionEnabled = true,
             networkActivityLogging = false,

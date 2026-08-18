@@ -11,9 +11,6 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-// The export is machine-readable, so the locale is pinned explicitly: ofPattern would otherwise take
-// the system one and the format would drift the moment a textual field (MMM/EEE) appeared. java.time
-// digits are locale-independent — this guards the format, it does not fix digit shapes.
 private val journalTimestampFormatter: DateTimeFormatter =
     DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
         .withLocale(Locale.ROOT)
@@ -27,13 +24,6 @@ private val journalDelimitedIdentityRegex =
         """(?i)(?<![\w-])(packages?|package|endpoint|city|profile|session)(\s*=\s*)[^•·\r\n]*""",
     )
 
-/**
- * APP and SECURITY are diagnostic surfaces, so their SAF exports keep the same sanitizer as the
- * support archive. NET is different: it is an explicit, opt-in network-activity journal whose
- * purpose is to show the actual destination and port. Its formatter is deliberately separate so
- * a future diagnostic hardening cannot silently turn the user's own connection export back into
- * `[ip]`/`[host]` placeholders.
- */
 internal fun formatSanitizedJournalExport(
     title: String,
     entries: List<DiagnosticEntry>,
@@ -72,17 +62,11 @@ internal fun formatNetworkJournalExport(
         }
     }
 
-/** Keep one event per line without redacting the network identity the user asked to export. */
 private fun String.singleLineForJournalExport(): String =
     replace('\r', ' ')
         .replace('\n', ' ')
         .trim()
 
-/**
- * Structured journal fields can contain spaces (country/city names, several packages). The core
- * sanitizer intentionally treats ordinary key/value logs token-by-token, so close those
- * journal-specific tails first and then apply the general URL/profile/IP/secret sanitizer.
- */
 private fun sanitizeJournalMessage(message: String): String {
     val withoutGeo = message.replace(journalGeoSegmentRegex, "country=[redacted]")
     val withoutDelimitedIdentities =

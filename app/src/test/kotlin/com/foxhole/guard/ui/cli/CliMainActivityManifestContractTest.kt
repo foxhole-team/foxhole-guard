@@ -5,15 +5,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
 
-/**
- * История терминала — это журнал сессии (причины реконнектов, цепочки Tor), и живёт она в
- * композиции: `CliApp` держит `CliTerminalState` в обычном `remember`. Любое пересоздание
- * активности стирает журнал до загрузочных строк, а поворот экрана — самый частый его повод:
- * человек лёг с телефоном, и лога нет.
- *
- * Пока состояние не сохраняемое, ориентация активности — часть контракта, а не оформление,
- * поэтому она прибита здесь.
- */
 class CliMainActivityManifestContractTest {
 
     @Test
@@ -27,11 +18,6 @@ class CliMainActivityManifestContractTest {
         )
     }
 
-    /**
-     * Именно `userPortrait`: жёсткий `portrait` игнорирует принудительную ориентацию, выставленную
-     * системными настройками доступности, а `sensorPortrait`/`fullSensor` возвращают поворот и
-     * вместе с ним потерю журнала.
-     */
     @Test
     fun `the fixed orientation still honours a user-forced orientation`() {
         val orientation = Regex("""android:screenOrientation="([^"]+)"""")

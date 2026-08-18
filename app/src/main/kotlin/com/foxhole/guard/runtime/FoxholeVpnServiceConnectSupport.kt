@@ -9,6 +9,7 @@ import com.foxhole.core.model.Settings
 import com.foxhole.core.model.TrafficMode
 import com.foxhole.core.model.VpnSession
 import com.foxhole.core.runtime.FoxholeVpnRuntimeBridge
+import com.foxhole.core.runtime.I2pTunnelTransition
 import com.foxhole.core.runtime.PrivateDnsSettings
 import com.foxhole.core.runtime.PrivateDnsState
 import com.foxhole.core.runtime.RuntimeHealthMetrics
@@ -167,6 +168,7 @@ private suspend fun FoxholeVpnService.handleRuntimeStartResult(
         requestTcpRuntimeNetworkReset(tcpReadinessTarget)
         when (trafficMode) {
             TrafficMode.TUNNEL -> {
+                applyI2pCarrierPlan(I2pTunnelTransition.TUNNEL_UP)
                 container.diagnosticsLogger.record(
                     "connection",
                     "runtime started, tunnel validation waits for interface handoff",
@@ -291,9 +293,6 @@ internal fun isI2pCarrierConfirmationCurrent(
         expectedRuntimeFingerprint != null &&
         expectedRuntimeFingerprint == appliedRuntimeFingerprint
 
-// The SOCKS listener is up within seconds of the child starting; this only has to outlast a cold
-// start on a slow device. Sized like TOR_VALIDATION_READY_TIMEOUT_MS's role for Tor — generous
-// because nothing waits on it, and a timeout only journals "i2pd proxy wait failed".
 internal const val I2PD_READY_TIMEOUT_MS = 60_000L
 
 // Builds the session for connect(); null means the failure was already published via fail().
@@ -402,6 +401,7 @@ internal suspend fun FoxholeVpnService.connect(
             torOnlyConnect = torOnlyConnect,
             trafficMode = trafficMode,
         )
+    applyI2pCarrierPlan(I2pTunnelTransition.TUNNEL_STARTING, settings)
     // The old worker must release FoxCore's process lease before the new start. Its master TUN
     // stays open until Android installs the replacement, so traffic is blocked during the handoff.
     val handover =

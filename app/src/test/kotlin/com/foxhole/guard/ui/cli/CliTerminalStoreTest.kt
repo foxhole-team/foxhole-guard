@@ -10,13 +10,6 @@ import org.junit.Test
 import java.io.File
 import java.nio.file.Files
 
-/**
- * Ретенция терминала — обещание: сколько указано в настройках, столько журнал главного экрана и
- * живёт. До этой правки история жила только в композиции и стиралась на любом пересоздании
- * активности; теперь она на диске, и убрать строку может только истечение срока или очистка.
- *
- * Ключевой сценарий владельца — первый тест: записали, сдвинули время за срок, перечитали.
- */
 class CliTerminalStoreTest {
 
     @Test
@@ -30,14 +23,12 @@ class CliTerminalStoreTest {
             retentionHours = 6,
         )
 
-        // Другой экземпляр = следующий запуск процесса: история читается с диска.
         val afterRestart = CliTerminalStore(file = file, fileCipher = ReversingTestFileCipher)
         assertEquals(
             listOf("reconnect: handshake timeout"),
             afterRestart.load(nowMs = nowMs + HOUR, retentionHours = 6, limit = 120).map { it.text },
         )
 
-        // Сдвинули время за срок — строки нет, и это видно новому читателю тоже.
         val expired = CliTerminalStore(file = file, fileCipher = ReversingTestFileCipher)
         assertEquals(
             emptyList<String>(),
@@ -51,7 +42,6 @@ class CliTerminalStoreTest {
         val store = CliTerminalStore(file = file, fileCipher = ReversingTestFileCipher)
         store.append(listOf(line(timestampMs = 1L * HOUR, text = "old")), nowMs = 1L * HOUR, retentionHours = 6)
 
-        // Новая строка спустя восемь часов: старая уже вне окна и не должна пережить запись.
         store.append(listOf(line(timestampMs = 9L * HOUR, text = "new")), nowMs = 9L * HOUR, retentionHours = 6)
 
         val reread = CliTerminalStore(file = file, fileCipher = ReversingTestFileCipher)
@@ -59,7 +49,6 @@ class CliTerminalStoreTest {
             listOf("new"),
             reread.load(nowMs = 9L * HOUR, retentionHours = 6, limit = 120).map { it.text },
         )
-        // И это была запись, а не только фильтр на чтении: расширенное окно её не воскрешает.
         assertEquals(
             listOf("new"),
             CliTerminalStore(file = file, fileCipher = ReversingTestFileCipher)
@@ -101,6 +90,9 @@ class CliTerminalStoreTest {
             value = "10.0.0.1",
             valueTone = CliLineTone.OK,
             packages = listOf("org.example.app"),
+            valueLeading = true,
+            inlineValue = true,
+            typed = false,
             id = 42L,
         )
         CliTerminalStore(file = file, fileCipher = ReversingTestFileCipher)
@@ -110,8 +102,6 @@ class CliTerminalStoreTest {
             .load(nowMs = 5L * HOUR, retentionHours = 24, limit = 120)
             .single()
 
-        // id намеренно не переживает перезапуск: это ключ LazyColumn, его выдаёт живой
-        // CliTerminalState, и восстановленный старый ключ столкнулся бы с новыми.
         assertEquals(original.copy(id = 0L), restored)
     }
 
@@ -129,7 +119,6 @@ class CliTerminalStoreTest {
             .load(nowMs = 2L * HOUR, retentionHours = 24, limit = 3)
 
         assertEquals(listOf("line 8", "line 9", "line 10"), window.map { it.text })
-        // Экранное окно не обрезает файл: следующий читатель по-прежнему видит всё.
         assertEquals(
             10,
             CliTerminalStore(file = file, fileCipher = ReversingTestFileCipher)
@@ -174,7 +163,6 @@ class CliTerminalStoreTest {
         val nowMs = 1_000L * HOUR
         val store = CliTerminalStore(file = file, fileCipher = ReversingTestFileCipher)
 
-        // Верхняя граница (720 ч) и запредельный запрос ведут себя одинаково: строка на месте.
         store.append(listOf(line(timestampMs = nowMs, text = "line")), nowMs = nowMs, retentionHours = 999_999)
 
         assertEquals(
@@ -191,7 +179,6 @@ class CliTerminalStoreTest {
     private fun journalFile(): File =
         File(Files.createTempDirectory("foxhole-cli-terminal").toFile(), "terminal.jsonl.enc")
 
-    /** Not encryption — just proof the store never reads the bytes it wrote without the cipher. */
     private object ReversingTestFileCipher : FileCipher {
         override fun readBytes(file: File): ByteArray = file.readBytes().reversedArray()
 
@@ -201,7 +188,6 @@ class CliTerminalStoreTest {
         }
     }
 
-    /** A keystore key that no longer decrypts this file: what a keystore reset leaves behind. */
     private object FailingReadTestFileCipher : FileCipher {
         override fun readBytes(file: File): ByteArray = error("cannot decrypt ${file.name}")
 

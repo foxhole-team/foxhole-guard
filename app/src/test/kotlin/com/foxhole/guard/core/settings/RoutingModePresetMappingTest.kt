@@ -48,8 +48,6 @@ class RoutingModePresetMappingTest {
         val result = applyRoutingModePresetTo(base, RoutingModePreset.VPN, PrivacyRouteScope.ALL_APPS)
 
         assertEquals(TrafficMode.TUNNEL, result.traffic.mode)
-        // The mode button owns the Tor dimension only: a split configured in routing settings
-        // survives it untouched.
         assertEquals(PerAppRoutingMode.INCLUDE_SELECTED_APPS, result.expert.perAppRoutingMode)
         assertEquals(PrivacyRouteMode.OFF, result.privacyRoute.mode)
         assertEquals(selection, result.expert.tunnelSelectedPackages())
@@ -68,8 +66,6 @@ class RoutingModePresetMappingTest {
 
         val result = applyRoutingModePresetTo(deviceWide, RoutingModePreset.VPN_TOR, PrivacyRouteScope.SELECTED_APPS)
 
-        // The VPN stays on the whole device; narrowing it to the Tor selection dropped every other
-        // app out of the tunnel.
         assertEquals(PerAppRoutingMode.FULL_TUNNEL, result.expert.perAppRoutingMode)
         assertEquals(PrivacyRouteScope.SELECTED_APPS, result.privacyRoute.scope)
         assertEquals(selection, result.expert.packages(AppTunnelLane.TOR))
@@ -93,7 +89,6 @@ class RoutingModePresetMappingTest {
         assertEquals(PrivacyRouteMode.TOR_OVER_VPN, result.privacyRoute.mode)
         assertTrue(result.privacyRoute.bypassVpnTunnel)
         assertEquals(PrivacyRouteScope.SELECTED_APPS, result.privacyRoute.scope)
-        // Lane membership is the Apps screen's data: a mode never repaints it.
         assertEquals(selection, result.expert.packages(AppTunnelLane.VPN))
         assertEquals(emptyList<String>(), result.expert.packages(AppTunnelLane.TOR))
         assertEquals(PerAppRoutingMode.INCLUDE_SELECTED_APPS, result.expert.perAppRoutingMode)

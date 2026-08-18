@@ -7,6 +7,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import java.security.SecureRandom
 
 internal data class FoxCoreTlsPlan(
     val tls: JsonObject,
@@ -123,11 +124,11 @@ private fun translateRealityTls(
             ?.asFoxCoreObject("$path.utls")
             ?: rejectFoxCoreConfig(FoxCoreConfigRejection.UNSUPPORTED_SECURITY, "$path.utls")
     utls.requireOnlyKeys(setOf("enabled", "fingerprint"), "$path.utls")
-    if (utls.optionalBoolean("enabled", "$path.utls") != true ||
-        utls.requiredString("fingerprint", "$path.utls").lowercase() != "chrome"
-    ) {
+    if (utls.optionalBoolean("enabled", "$path.utls") != true) {
         rejectFoxCoreConfig(FoxCoreConfigRejection.UNSUPPORTED_SECURITY, "$path.utls")
     }
+    val fingerprint =
+        realityHelloProfile(utls.requiredString("fingerprint", "$path.utls"), "$path.utls")
     return FoxCoreTlsPlan(
         tls = buildJsonObject { put("enabled", false) },
         reality =
@@ -135,11 +136,53 @@ private fun translateRealityTls(
             put("server_name", source.requiredString("server_name", path))
             put("public_key", reality.requiredString("public_key", "$path.reality"))
             reality.optionalString("short_id", "$path.reality")?.let { put("short_id", it) }
-            put("fingerprint", "chrome")
+            put("fingerprint", fingerprint)
             reality.optionalString("spider_x", "$path.reality")?.let { put("spider_x", it) }
         },
     )
 }
+
+private fun realityHelloProfile(
+    requested: String,
+    path: String,
+): String =
+    when (val name = requested.trim().lowercase()) {
+        RANDOM_HELLO_PROFILE -> randomModernHelloProfile
+        else ->
+            REALITY_HELLO_PROFILES[name]
+                ?: rejectFoxCoreConfig(FoxCoreConfigRejection.UNSUPPORTED_SECURITY, path)
+    }
+
+private const val RANDOM_HELLO_PROFILE = "random"
+
+// Bare aliases track the current shipped table; unknown names fail instead of becoming Chrome.
+private val REALITY_HELLO_PROFILES =
+    mapOf(
+        "chrome" to "chrome_151",
+        "chrome_151" to "chrome_151",
+        "chrome_133" to "chrome_133",
+        "chrome_131" to "chrome_131",
+        "edge" to "edge_85",
+        "edge_85" to "edge_85",
+        "safari" to "safari_26_3",
+        "safari_26_3" to "safari_26_3",
+        "ios" to "ios_14",
+        "ios_14" to "ios_14",
+        "qq" to "qq_11_1",
+        "qq_11_1" to "qq_11_1",
+        "firefox" to "firefox_153",
+        "firefox_153" to "firefox_153",
+        "firefox_148" to "firefox_148",
+        "randomized" to "randomized",
+    )
+
+// Choose once per process so one client does not change browser identity between requests.
+private val randomModernHelloProfile: String by lazy {
+    RANDOM_MODERN_HELLO_PROFILES[SecureRandom().nextInt(RANDOM_MODERN_HELLO_PROFILES.size)]
+}
+
+private val RANDOM_MODERN_HELLO_PROFILES =
+    listOf("chrome_151", "firefox_153", "edge_85", "safari_26_3", "ios_14")
 
 private fun validateDisabledOptionalSecurity(
     source: JsonObject,

@@ -260,7 +260,6 @@ class TrafficMapRepositoryStateTest {
         assertEquals("US", state.originCountryCode)
         assertEquals("DE", state.destinations.single().countryCode)
         assertEquals(1, state.edges.size)
-        // A resolved city on a large country anchors the device dot to the city, not the centroid.
         val newYork = requireNotNull(TrafficMapCityAnchors.resolve(countryCode = "US", city = "New York"))
         assertEquals(newYork.lat, state.edges.single().fromLat, 0.0)
         assertEquals(newYork.lon, state.edges.single().fromLon, 0.0)
@@ -599,8 +598,6 @@ class TrafficMapRepositoryStateTest {
                 destinations = emptyList(),
             )
         val country = TrafficMapRepository.TrafficMapCountryCoordinates.getValue("US")
-        // Device and VPN both resolved "New York": they anchor to the same city point; the Tor
-        // exit is country-only by design and stays on the canonical country coordinate.
         val newYork = requireNotNull(TrafficMapCityAnchors.resolve(countryCode = "US", city = "New York"))
 
         assertEquals("US", state.vpnRoute?.countryCode)
@@ -643,8 +640,6 @@ class TrafficMapRepositoryStateTest {
 
     @Test
     fun `runtime connection sample excludes non-tunneled direct and blocked outbounds`() {
-        // Split-tunnel "direct" apps and blocked flows bypass the VPN and must never be drawn as
-        // VPN traffic on the map, even when they carry bytes and resolve to a country.
         listOf("direct", "DIRECT", "block").forEach { nonTunneled ->
             assertEquals(
                 null,

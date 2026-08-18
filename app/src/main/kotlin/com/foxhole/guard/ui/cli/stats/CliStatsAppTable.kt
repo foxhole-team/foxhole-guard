@@ -29,7 +29,6 @@ import com.foxhole.guard.ui.cli.components.CliPanel
 import com.foxhole.guard.ui.cli.components.CliRowDivider
 import com.foxhole.guard.ui.cli.settings.rememberCliAppIcon
 
-/** Group (5): the same fixed app / received / sent / total table grammar as other statistics. */
 @Composable
 internal fun CliStatsAppPanel(state: StatisticsRouteUiState) {
     val rows = remember(state.statisticsDashboard.appRows) {

@@ -2,6 +2,7 @@ package com.foxhole.guard.widget
 
 import android.content.Context
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.glance.ColorFilter
@@ -23,10 +24,26 @@ import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
 import com.foxhole.guard.R
+import com.foxhole.guard.ui.cli.components.cliLinIconRes
 
 internal val WIDGET_FRAME_INSET = 4.dp
 
-/** Keeps the launcher crop outside the visible pixel corners and is shared by both widgets. */
+internal val LocalWidgetPlainIcons = staticCompositionLocalOf { false }
+
+@Composable
+internal fun widgetGlyph(id: Int): Int =
+    if (LocalWidgetPlainIcons.current) {
+        when (id) {
+            R.drawable.widget_refresh_spinner_90,
+            R.drawable.widget_refresh_spinner_180,
+            R.drawable.widget_refresh_spinner_270,
+            -> R.drawable.lin_update
+            else -> cliLinIconRes(id)
+        }
+    } else {
+        id
+    }
+
 @Composable
 internal fun WidgetPixelFrame(
     background: WidgetBackground,
@@ -45,7 +62,6 @@ internal fun WidgetPixelFrame(
     }
 }
 
-/** Canonical Quick Settings silhouette; Glance supplies the black/white background inversion. */
 @Composable
 internal fun WidgetBrandHeader(
     context: Context,

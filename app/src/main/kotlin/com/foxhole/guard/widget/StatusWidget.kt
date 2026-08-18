@@ -3,6 +3,7 @@ package com.foxhole.guard.widget
 import android.content.Context
 import android.content.Intent
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.graphics.Color
@@ -16,6 +17,7 @@ import androidx.glance.GlanceModifier
 import androidx.glance.Image
 import androidx.glance.ImageProvider
 import androidx.glance.LocalSize
+import androidx.glance.action.actionStartActivity
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
@@ -40,47 +42,56 @@ import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
 import com.foxhole.core.model.IpInfo
+import com.foxhole.core.model.VisualStyle
 import com.foxhole.core.model.networkUp
 import com.foxhole.guard.FoxholeApplication
 import com.foxhole.guard.R
+import com.foxhole.guard.ui.cli.CliMainActivity
 
-/** Connection control and live facts. One launcher row stays useful; two rows expose the table. */
 class StatusWidget : GlanceAppWidget() {
     override val sizeMode: SizeMode = SizeMode.Exact
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val graph = (context.applicationContext as FoxholeApplication).appGraph
         val connection = graph.connectionController
-        val defaults = graph.settingsRepository.settings.value.widgets
         provideContent {
             val prefs = currentState<Preferences>()
-            val background = widgetBackground(prefs, defaults)
-            val outlined = widgetOutlineEnabled(prefs)
             val snapshot by connection.snapshot.collectAsState()
             val settings by graph.settingsRepository.settings.collectAsState()
+            val defaults =
+                settings.widgets.statusAppearanceForWidget(
+                    context = context,
+                    panelAppearance = settings.ui.panelAppearance,
+                )
+            val background = widgetBackground(prefs, defaults)
+            val outlined = widgetOutlineEnabled(prefs, defaults)
             val vpnIpInfo by connection.ipInfo.collectAsState()
             val torIpInfo by connection.torRouteIpInfo.collectAsState()
             val deviceIpInfo by connection.deviceIpInfo.collectAsState()
             val i2pPhase by connection.i2pPhase.collectAsState()
             val refreshPhase by StatusWidgetRefreshState.phase.collectAsState()
             val refreshFrame by StatusWidgetRefreshState.frame.collectAsState()
-            StatusWidgetContent(
-                context = context,
-                presentation =
-                statusWidgetPresentation(
-                    snapshot = snapshot,
-                    settings = settings,
-                    vpnIpInfo = vpnIpInfo,
-                    torIpInfo = torIpInfo,
-                    i2pConnected = i2pPhase.phase.networkUp,
-                    deviceIpInfo = deviceIpInfo,
-                ),
-                background = background,
-                outlined = outlined,
-                expanded = LocalSize.current.height >= STATUS_WIDGET_EXPANDED_HEIGHT,
-                refreshPhase = refreshPhase,
-                refreshFrame = refreshFrame,
-            )
+            CompositionLocalProvider(
+                LocalWidgetPlainIcons provides (settings.ui.visualStyle == VisualStyle.PLAIN),
+            ) {
+                StatusWidgetContent(
+                    context = context,
+                    presentation =
+                    statusWidgetPresentation(
+                        snapshot = snapshot,
+                        settings = settings,
+                        vpnIpInfo = vpnIpInfo,
+                        torIpInfo = torIpInfo,
+                        i2pConnected = i2pPhase.phase.networkUp,
+                        deviceIpInfo = deviceIpInfo,
+                    ),
+                    background = background,
+                    outlined = outlined,
+                    expanded = LocalSize.current.height >= STATUS_WIDGET_EXPANDED_HEIGHT,
+                    refreshPhase = refreshPhase,
+                    refreshFrame = refreshFrame,
+                )
+            }
         }
     }
 }
@@ -104,15 +115,11 @@ private fun StatusWidgetContent(
             modifier =
             GlanceModifier
                 .fillMaxSize()
-                // The 4dp frame inset belongs to the stroke. Content starts farther in so the
-                // bottom controls never touch the contour, even after a launcher resize/crop.
-                .padding(horizontal = 12.dp, vertical = 8.dp),
+                .padding(horizontal = 12.dp, vertical = 8.dp)
+                .clickable(actionStartActivity<CliMainActivity>()),
         ) {
             StatusWidgetHeader(context, background, refreshPhase, refreshFrame)
             Spacer(modifier = GlanceModifier.height(2.dp))
-            // Glance RemoteViews containers accept at most ten direct children. Keep the body in
-            // one weighted slot so its fact rows cannot push the always-present controls past that
-            // limit or below the launcher's crop during a resize.
             Box(
                 modifier = GlanceModifier.fillMaxWidth().defaultWeight(),
                 contentAlignment = Alignment.TopStart,
@@ -156,11 +163,13 @@ private fun StatusWidgetHeader(
                 Image(
                     provider =
                     ImageProvider(
-                        if (refreshPhase == StatusWidgetRefreshPhase.LOADING) {
-                            statusWidgetRefreshSpinnerFrame(refreshFrame)
-                        } else {
-                            R.drawable.widget_refresh_pixel
-                        },
+                        widgetGlyph(
+                            if (refreshPhase == StatusWidgetRefreshPhase.LOADING) {
+                                statusWidgetRefreshSpinnerFrame(refreshFrame)
+                            } else {
+                                R.drawable.widget_refresh_pixel
+                            },
+                        ),
                     ),
                     contentDescription = context.getString(R.string.widget_status_refresh),
                     colorFilter = ColorFilter.tint(ColorProvider(background.icon)),
@@ -227,6 +236,12 @@ private fun StatusWidgetFacts(
         background = background,
     )
     StatusFactRow(
+        icon = R.drawable.pix_dns,
+        label = context.getString(R.string.widget_status_dns),
+        value = presentation.dnsServer,
+        background = background,
+    )
+    StatusFactRow(
         icon = R.drawable.pix_link,
         label = context.getString(R.string.widget_status_scenario),
         value = presentation.routeText(context),
@@ -280,7 +295,7 @@ private fun StatusFactRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Image(
-            provider = ImageProvider(icon),
+            provider = ImageProvider(widgetGlyph(icon)),
             contentDescription = null,
             colorFilter = ColorFilter.tint(ColorProvider(background.secondaryText)),
             modifier = GlanceModifier.size(10.dp),
@@ -303,7 +318,7 @@ private fun StatusComponentsRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Image(
-            provider = ImageProvider(R.drawable.pix_settings),
+            provider = ImageProvider(widgetGlyph(R.drawable.pix_settings)),
             contentDescription = null,
             colorFilter = ColorFilter.tint(ColorProvider(background.secondaryText)),
             modifier = GlanceModifier.size(10.dp),
@@ -321,7 +336,7 @@ private fun StatusComponentsRow(
             components.forEachIndexed { index, component ->
                 if (index > 0) Spacer(modifier = GlanceModifier.width(3.dp))
                 Image(
-                    provider = ImageProvider(component.icon),
+                    provider = ImageProvider(widgetGlyph(component.icon)),
                     contentDescription = component.text(context),
                     colorFilter = ColorFilter.tint(ColorProvider(component.color)),
                     modifier = GlanceModifier.size(9.dp),
@@ -523,10 +538,8 @@ private fun widgetTextStyle(color: Color, fontSize: Int): TextStyle =
         fontFamily = FontFamily.Monospace,
     )
 
-// 8 TOR+VPN fact rows (96dp) + 24dp header + 2dp gap + 24dp controls + 16dp padding.
-// Below this height the compact summary is complete instead of showing a clipped partial table.
 internal val STATUS_WIDGET_EXPANDED_HEIGHT = 162.dp
-private val STATUS_WIDGET_CONTROL_HEIGHT = 24.dp
+private val STATUS_WIDGET_CONTROL_HEIGHT = 32.dp
 private const val WIDGET_DASH = "—"
 
 internal fun statusWidgetRefreshSpinnerFrame(frame: Int): Int =

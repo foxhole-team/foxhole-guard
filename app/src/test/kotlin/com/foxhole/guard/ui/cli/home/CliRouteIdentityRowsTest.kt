@@ -14,6 +14,7 @@ import com.foxhole.core.model.TOR_ONLY_PROFILE_ID
 import com.foxhole.core.model.TorNetworkPhase
 import com.foxhole.core.model.TorPhaseSnapshot
 import com.foxhole.core.model.TrafficMode
+import com.foxhole.core.model.VisualStyle
 import com.foxhole.guard.ui.HomeRouteUiState
 import com.foxhole.guard.ui.TorIdentityProbePhase
 import org.junit.Assert.assertEquals
@@ -23,6 +24,143 @@ import org.junit.Test
 import java.io.File
 
 class CliRouteIdentityRowsTest {
+    @Test
+    fun `identity dns and latency loading share the right aligned value slot`() {
+        val rows = source("home/CliRouteIdentityRows.kt")
+        val facts = source("home/CliHomeFacts.kt")
+        val identity = rows
+            .substringAfter("private fun CliRouteIdentityRow(")
+            .substringBefore("internal fun cliRightAlignedLoadingContent")
+        val dns = facts
+            .substringAfter("private fun CliDnsServerFact")
+            .substringBefore("internal fun cliDnsIdentityValue")
+        val latency = facts
+            .substringAfter("val latencyMs = cliHomeLatencyMs(home, connected)")
+            .substringBefore("CliSpeedFact(")
+
+        listOf(identity, dns, latency).forEach { loadingRow ->
+            assertTrue(loadingRow.contains("CliKeyValue("))
+            assertTrue(loadingRow.contains("cliRightAlignedLoadingContent("))
+            assertTrue(loadingRow.contains("CliRightAlignedRefreshTrailing("))
+        }
+        assertTrue(identity.contains("value = if (loading) \"\" else value"))
+        assertTrue(identity.contains("valueMaxLines = IDENTITY_VALUE_MAX_LINES"))
+        assertTrue(dns.contains("value = if (loading) \"\" else value"))
+        assertTrue(latency.contains("latencyLoading -> \"\""))
+        assertTrue(cliRightAlignedLoadingUsesText(loading = true, style = VisualStyle.PLAIN))
+        assertFalse(cliRightAlignedLoadingUsesText(loading = true, style = VisualStyle.PIXEL))
+        assertFalse(cliRightAlignedLoadingUsesText(loading = false, style = VisualStyle.PLAIN))
+
+        assertTrue(rows.contains("targetState = loading,"))
+        assertTrue(rows.contains("contentAlignment = Alignment.CenterEnd"))
+        assertTrue(rows.contains("CliSpinner()"))
+        assertTrue(rows.contains("Spacer(modifier = Modifier.width(CliSpacing.xs))"))
+        assertTrue(rows.contains("plainLoadingIndicator = false"))
+        assertTrue(rows.contains("loading = identityLoading || torLoading"))
+        assertTrue(rows.contains("if (loading || !countryCode.isNullOrBlank())"))
+    }
+
+    @Test
+    fun `the whole facts panel opens profiles on tap and refreshes only on hold`() {
+        val screen = source("home/CliHomeScreen.kt")
+        val facts = source("home/CliHomeFacts.kt")
+        val rows = source("home/CliRouteIdentityRows.kt")
+        val networkBlock = facts
+            .substringAfter("val identityLoading = cliHomeIdentityLoading(home)")
+            .substringBefore("val latencyMs = cliHomeLatencyMs(home, connected)")
+        val dns = facts
+            .substringAfter("private fun CliDnsServerFact")
+            .substringBefore("internal fun cliDnsIdentityValue")
+        val refresh = File("src/main/kotlin/com/foxhole/guard/ui/HomeViewModelIpRefreshSupport.kt").readText()
+        val manualRefresh = refresh
+            .substringAfter("internal fun HomeViewModel.refreshIpInfo()")
+            .substringBefore("internal fun HomeViewModel.refreshIpInfoSilently()")
+
+        assertTrue(screen.contains("viewModel.refreshIpInfo()"))
+        assertFalse(networkBlock.contains("cliCombinedPressable"))
+        assertTrue(facts.contains("onLongClick = onProfileHold"))
+        assertTrue(facts.contains("onClick = onProfileTap"))
+        assertTrue(networkBlock.contains("CliRouteIdentityFacts("))
+        assertTrue(networkBlock.contains("CliDnsServerFact("))
+        assertFalse(rows.contains("onRefresh"))
+        assertFalse(rows.contains("cliCombinedPressable"))
+        assertFalse(dns.contains("onRefresh"))
+        assertFalse(dns.contains("cliCombinedPressable"))
+        assertTrue(facts.contains("home.ipInfoLoading ||"))
+        assertTrue(manualRefresh.contains("showLoading = true"))
+        assertTrue(manualRefresh.contains("minimumLoadingDurationMs = HomeViewModel.MANUAL_IP_REFRESH_MIN_LOADING_MS"))
+        assertTrue(rows.contains("value = if (loading) \"\" else value"))
+        assertTrue(rows.contains("loading = identityLoading || torLoading"))
+    }
+
+    @Test
+    fun `identity rows reuse the shared key value edge alignment`() {
+        val rows = source("home/CliRouteIdentityRows.kt")
+        val identity = rows
+            .substringAfter("private fun CliRouteIdentityRow(")
+            .substringBefore("internal fun cliRightAlignedLoadingContent")
+
+        assertTrue(identity.contains("CliKeyValue("))
+        assertTrue(rows.contains("private fun CliRouteIdentityRow("))
+        assertFalse(rows.contains("basicMarquee"))
+    }
+
+    @Test
+    fun `the longest realistic identity is never truncated away`() {
+        val longest = cliRouteIdentityValue(
+            ipInfo(
+                ip = "2001:0db8:85a3:0000:0000:8a2e:0370:7334",
+                countryCode = "nl",
+                city = "'s-Hertogenbosch",
+            ),
+        )
+
+        assertEquals("2001:0db8:85a3:0000:0000:8a2e:0370:7334 · 's-Hertogenbosch · NL", longest)
+        assertEquals(
+            "NL",
+            cliRouteIdentityCountryLabel(
+                ipInfo(
+                    ip = "2001:0db8:85a3:0000:0000:8a2e:0370:7334",
+                    countryCode = "nl",
+                    city = "'s-Hertogenbosch",
+                ),
+            ),
+        )
+        val rows = source("home/CliRouteIdentityRows.kt")
+        assertTrue(rows.contains("valueMaxLines = IDENTITY_VALUE_MAX_LINES"))
+        assertTrue(rows.contains("IDENTITY_VALUE_MAX_LINES = 2"))
+    }
+
+    @Test
+    fun `the status section renders one notch below the shared ladder`() {
+        val facts = source("home/CliHomeFacts.kt")
+
+        assertTrue(facts.contains("LocalCliType provides LocalCliType.current.steppedDown()"))
+        assertTrue(
+            facts.contains(
+                "LocalCliMetricScale provides LocalCliMetricScale.current * CLI_MODERN_METRIC_SCALE",
+            ),
+        )
+        assertFalse(Regex("""fontSize = \d+(\.\d+)?\.sp""").containsMatchIn(facts))
+    }
+
+    @Test
+    fun `identity values are typed in rather than snapped`() {
+        val rows = source("home/CliRouteIdentityRows.kt")
+        assertEquals(2, rows.split("animateValue = true").size - 1)
+
+        val typewriter = source("components/CliTypewriterText.kt")
+        assertTrue(typewriter.contains("internal fun rememberCliTypedText("))
+        assertTrue(typewriter.contains("LaunchedEffect(text, enabled)"))
+        assertTrue(typewriter.contains("displayed.commonPrefixWith(text).length"))
+
+        val rowComponent = source("components/CliText.kt")
+        assertTrue(rowComponent.contains("animateValue: Boolean = false"))
+        assertTrue(
+            rowComponent.contains("rememberCliTypedText(cliLabelText(value), enabled = animateValue)"),
+        )
+    }
+
     @Test
     fun `vpn and tor identities stay separate in a combined route`() {
         val vpn = ipInfo(ip = "198.51.100.10", countryCode = "us", city = "New York")
@@ -40,8 +178,9 @@ class CliRouteIdentityRowsTest {
             ),
             identities,
         )
-        assertEquals("US · New York · 198.51.100.10", cliRouteIdentityValue(vpn))
-        assertEquals("DE · 203.0.113.20", cliRouteIdentityValue(tor, includeCity = false))
+        assertEquals("198.51.100.10 · New York · US", cliRouteIdentityValue(vpn))
+        assertEquals("US", cliRouteIdentityCountryLabel(vpn))
+        assertEquals("203.0.113.20 · DE", cliRouteIdentityValue(tor, includeCity = false))
     }
 
     @Test
@@ -50,9 +189,9 @@ class CliRouteIdentityRowsTest {
     }
 
     @Test
-    fun `dns identity keeps protocol country and address order`() {
-        assertEquals("DoH · US · 1.1.1.1", cliDnsIdentityValue("DoH", "us", "1.1.1.1"))
-        assertEquals("DoT · dns.example", cliDnsIdentityValue("DoT", null, "dns.example"))
+    fun `dns identity keeps address protocol and country order`() {
+        assertEquals("1.1.1.1 · DoH · US", cliDnsIdentityValue("DoH", "us", "1.1.1.1"))
+        assertEquals("dns.example · DoT", cliDnsIdentityValue("DoT", null, "dns.example"))
     }
 
     @Test
@@ -185,7 +324,33 @@ class CliRouteIdentityRowsTest {
     }
 
     @Test
-    fun `tor only and combined routes share real phase loading while settings alone stay static`() {
+    fun `vpn plus tor exposes the tor spinner before the tor runtime starts`() {
+        val starting =
+            HomeRouteUiState(
+                connection = route(ConnectionState.CONNECTING, TrafficMode.TUNNEL, torActive = false),
+                settings = Settings(
+                    privacyRoute = PrivacyRouteSettings(mode = PrivacyRouteMode.TOR_OVER_VPN),
+                ),
+                torPhase = TorPhaseSnapshot(phase = TorNetworkPhase.OFFLINE),
+            )
+
+        val facts =
+            cliRouteIdentityFactStates(
+                home = starting,
+                runtimes = activeRuntimes(starting, torOnlyLive = false),
+                identityLoading = true,
+                torIdentityProbePhase = TorIdentityProbePhase.IDLE,
+            )
+
+        assertEquals(
+            listOf(CliRouteIdentityKind.VPN, CliRouteIdentityKind.TOR),
+            facts.map { it.identity.kind },
+        )
+        assertTrue(facts.single { it.identity.kind == CliRouteIdentityKind.TOR }.loading)
+    }
+
+    @Test
+    fun `tor only starts loading before its phase and configured idle mode stays static`() {
         val torOnly =
             HomeRouteUiState(
                 connection =
@@ -193,13 +358,13 @@ class CliRouteIdentityRowsTest {
                     state = ConnectionState.CONNECTING,
                     profileId = TOR_ONLY_PROFILE_ID,
                 ),
-                torPhase = TorPhaseSnapshot(phase = TorNetworkPhase.BUILDING_CIRCUITS),
+                torPhase = TorPhaseSnapshot(phase = TorNetworkPhase.OFFLINE),
             )
         val torOnlyFacts =
             cliRouteIdentityFactStates(
                 home = torOnly,
                 runtimes = activeRuntimes(torOnly, torOnlyLive = false),
-                identityLoading = false,
+                identityLoading = true,
                 torIdentityProbePhase = TorIdentityProbePhase.IDLE,
             )
         assertEquals(listOf(CliRouteIdentityKind.TOR), torOnlyFacts.map { it.identity.kind })
@@ -208,7 +373,10 @@ class CliRouteIdentityRowsTest {
         val configuredOnly =
             HomeRouteUiState(
                 settings = Settings(
-                    privacyRoute = PrivacyRouteSettings(mode = PrivacyRouteMode.TOR_OVER_VPN),
+                    privacyRoute = PrivacyRouteSettings(
+                        mode = PrivacyRouteMode.TOR_OVER_VPN,
+                        permitted = true,
+                    ),
                 ),
             )
         val configuredFacts =
@@ -220,6 +388,55 @@ class CliRouteIdentityRowsTest {
             )
         assertFalse(configuredFacts.single().live)
         assertFalse(configuredFacts.single().loading)
+    }
+
+    @Test
+    fun `permitted tor module keeps its identity row across vpn tor and combined modes`() {
+        val vpnMode =
+            HomeRouteUiState(
+                settings = Settings(
+                    privacyRoute = PrivacyRouteSettings(
+                        mode = PrivacyRouteMode.OFF,
+                        permitted = true,
+                    ),
+                ),
+            )
+        val torMode =
+            vpnMode.copy(
+                connection = ConnectionSnapshot(
+                    state = ConnectionState.CONNECTING,
+                    profileId = TOR_ONLY_PROFILE_ID,
+                ),
+            )
+        val combinedMode =
+            vpnMode.copy(
+                connection = route(ConnectionState.CONNECTING, TrafficMode.TUNNEL, torActive = false),
+                settings = Settings(
+                    privacyRoute = PrivacyRouteSettings(
+                        mode = PrivacyRouteMode.TOR_OVER_VPN,
+                        permitted = true,
+                    ),
+                ),
+            )
+
+        val kindsByMode =
+            listOf(vpnMode, torMode, combinedMode).map { home ->
+                cliRouteIdentityFactStates(
+                    home = home,
+                    runtimes = activeRuntimes(home, torOnlyLive = false),
+                    identityLoading = false,
+                    torIdentityProbePhase = TorIdentityProbePhase.IDLE,
+                ).map { fact -> fact.identity.kind }
+            }
+
+        assertEquals(
+            listOf(
+                listOf(CliRouteIdentityKind.TOR),
+                listOf(CliRouteIdentityKind.TOR),
+                listOf(CliRouteIdentityKind.VPN, CliRouteIdentityKind.TOR),
+            ),
+            kindsByMode,
+        )
     }
 
     @Test
@@ -382,7 +599,7 @@ class CliRouteIdentityRowsTest {
         val keyValueBlock =
             keyValue
                 .substringAfter("internal fun CliKeyValue(")
-                .substringBefore("/** Informational sub-row")
+                .substringBefore("internal fun CliElbowLine(")
 
         assertFalse(identity.contains("CliRouteIdentitySizingGhost"))
         assertFalse(identity.contains("CLI_ROUTE_IDENTITY_RESERVED_ROW_COUNT"))

@@ -320,8 +320,6 @@ internal class SettingsRepositoryPersistencePolicyTest : SettingsRepositoryTestS
                 ),
             )
 
-        // The fresher wifi-home scoped wireguard memory is intentionally ignored: UI readers show
-        // the latest global memory only, so a per-network snapshot can never shadow it.
         assertEquals(
             mapOf("trojan" to 170L),
             preference.rememberedSmartStartLatencyByOptionId(now = now),
@@ -449,15 +447,9 @@ internal class SettingsRepositoryPersistencePolicyTest : SettingsRepositoryTestS
                 ),
             )
 
-        // The wifi-home scoped shadowsocks failure no longer leaks into the UI-facing down set:
-        // only the latest global memory decides what the icons show.
         assertEquals(
             mapOf(7L to setOf("wireguard")),
             settings.rememberedSmartProfileDownOptionIdsByProfileId(now = now),
         )
     }
-
-    // SettingsRepository was split by domain into SettingsRepository*.kt extension files (setters
-    // like updateAppTrafficStatsEnabled now live in SettingsRepositoryInstalledApps.kt). These
-    // source-inspection tests must see the whole facade, so concatenate every file in the package.
 }

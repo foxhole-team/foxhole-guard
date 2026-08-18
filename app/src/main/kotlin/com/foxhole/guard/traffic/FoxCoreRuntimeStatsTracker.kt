@@ -47,9 +47,6 @@ internal class FoxCoreRuntimeStatsTracker(
                         torTrafficTotals.clear()
                         i2pTrafficTotals.clear()
                         laneTrafficCursor.advanceWithoutRecording(snapshot)
-                        // Still advance the cursor: the counters kept running while stats were
-                        // off, so the next enabled snapshot must not report the whole gap as one
-                        // delta.
                         dnsVerdictCursor.advanceWithoutRecording(snapshot)
                         return@collect
                     }
@@ -62,8 +59,6 @@ internal class FoxCoreRuntimeStatsTracker(
                         TorTrafficStats.record(rxDelta = tor.bytesRx, txDelta = tor.bytesTx)
                         I2pTrafficStats.record(rxDelta = i2p.bytesRx, txDelta = i2p.bytesTx)
                     } else {
-                        // Compatibility fallback for an older native snapshot without top-level
-                        // lane totals. Current FoxCore always takes the authoritative branch.
                         recordLaneTraffic(
                             snapshot = snapshot,
                             laneTotals = torTrafficTotals,
@@ -94,11 +89,6 @@ internal class FoxCoreRuntimeStatsTracker(
                 }
         }
 
-    /**
-     * The audit half of a snapshot: one journal line per event, the two queue-drop notices, and
-     * the single callback that hands the batch (with both drop counters) to the caller. Kept in
-     * this order — the journal is written before anything downstream can react to the batch.
-     */
     private fun recordAuditEvents(
         snapshot: RuntimeConnectionSnapshot,
         onRuntimeAuditEvents: (List<RuntimeAuditEvent>, Long, Long) -> Unit,
@@ -195,14 +185,6 @@ internal class FoxCoreRuntimeStatsTracker(
         }
     }
 
-    /**
-     * Per-lane byte accounting: FoxCore's actual route for each flow feeds that lane's
-     * counters with per-snapshot deltas, so the UI can show the Tor and I2P shares while a VPN runs
-     * alongside them — the tunnel totals cannot split the lanes apart.
-     *
-     * Tor and I2P are matched on the typed lane recorded by the Rust data plane, not inferred from
-     * a proxy type or an implementation-specific tag.
-     */
     private fun recordLaneTraffic(
         snapshot: RuntimeConnectionSnapshot,
         laneTotals: MutableMap<String, RuntimeConnectionTrafficTotals>,
@@ -228,8 +210,6 @@ internal class FoxCoreRuntimeStatsTracker(
             txDelta += current.bytesTx.deltaFrom(previous?.bytesTx)
         }
         laneTotals.keys.retainAll(activeIds)
-        // Record zero deltas too: snapshots are the sampling clock. Without the zero sample a
-        // lane keeps displaying its last non-zero rate forever after traffic becomes idle.
         record(rxDelta, txDelta)
     }
 
@@ -250,9 +230,6 @@ internal class FoxCoreRuntimeStatsTracker(
         snapshot.connections.take(MAX_TRACKED_CONNECTIONS).forEach { connection ->
             val connectionId = connection.connectionId
             if (connection.outboundType.equals(DNS_OUTBOUND_TYPE, ignoreCase = true)) {
-                // DNS connections carry the queried domain (sniffed host) and the requesting app
-                // (process info); remembering the pair lets a later block log line for the same
-                // domain be attributed to the app that asked.
                 val queriedDomain = connection.domain?.takeIf(String::isNotBlank)
                 if (queriedDomain != null && connection.packageNames.isNotEmpty()) {
                     DnsRuntimeStats.recordDnsQueryObservation(
@@ -298,14 +275,9 @@ internal class FoxCoreRuntimeStatsTracker(
             )
         val previousTotals = trafficTotals[connection.connectionId]
         trafficTotals[connection.connectionId] = currentTotals
-        // Tunnel-side per-app accounting: the platform's NetworkStats never attributes tunneled
-        // per-app traffic (the tun ident is the VPN network type), so these connection deltas are
-        // the only real per-app numbers while the VPN is up.
         if (shouldRecordTunnelAppTraffic) {
             val rxDelta = currentTotals.bytesRx.deltaFrom(previousTotals?.bytesRx)
             val txDelta = currentTotals.bytesTx.deltaFrom(previousTotals?.bytesTx)
-            // Shared-UID rows deliberately have no exact package. Guessing one would accuse an
-            // arbitrary package; only exact attribution reaches this branch.
             connection.packageNames.firstOrNull()?.let { packageName ->
                 TunnelAppTrafficStats.add(packageName, rxDelta = rxDelta, txDelta = txDelta)
             }
@@ -337,13 +309,6 @@ internal data class RuntimeLaneTrafficDelta(
     val bytesRx: Long = 0L,
 )
 
-/**
- * Converts FoxCore's cumulative per-lane counters into exact per-snapshot deltas.
- *
- * The counters survive flow closure, while [RuntimeConnectionSnapshot.generation] fences a native
- * restart. A new generation contributes its current totals once; a counter that unexpectedly went
- * backwards is treated the same way instead of producing a negative delta.
- */
 internal class RuntimeLaneTrafficCursor {
     private var generation = 0L
     private var previous = emptyMap<String, RuntimeLaneTraffic>()
@@ -389,14 +354,6 @@ internal class RuntimeLaneTrafficCursor {
 private fun Map<String, RuntimeLaneTrafficDelta>.deltaFor(lane: String): RuntimeLaneTrafficDelta =
     get(lane) ?: RuntimeLaneTrafficDelta()
 
-/**
- * Where the DNS verdict counters stood at the previous snapshot. They are cumulative within one
- * runtime generation, so a new generation (or a counter that went backwards) is reported as a
- * fresh total instead of a negative delta — see [cumulativeCounterDelta].
- *
- * A snapshot observed while statistics are off still advances the cursor without recording, so
- * re-enabling them cannot report the whole idle gap as one delta.
- */
 private class RuntimeDnsVerdictCursor {
     private var generation = 0L
     private var previousBlocked = 0L

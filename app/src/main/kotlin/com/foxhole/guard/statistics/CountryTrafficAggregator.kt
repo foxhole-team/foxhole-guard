@@ -6,13 +6,8 @@ import java.util.Locale
 
 const val MAX_COUNTRY_SERIES = 5
 
-/** The synthetic "everything past the top N" row; the UI maps it to a localized label. */
 const val OTHER_COUNTRY_CODE = "OTHER"
 
-/**
- * The FULL sorted country list for the range (no overflow collapse) — the "show all" sheet reads
- * this as-is; the dashboard card collapses it via [collapseCountryOverflow].
- */
 fun countryTrafficRows(
     trafficWindows: List<TrafficWindow>,
     liveDestinations: List<TrafficMapPoint>,
@@ -20,8 +15,6 @@ fun countryTrafficRows(
     val bytesByCountry = linkedMapOf<String, Long>()
     val sessionsByCountry = linkedMapOf<String, Int>()
     accumulateWindowCountryTraffic(trafficWindows, bytesByCountry, sessionsByCountry)
-    // Recorded windows are the trusted source; only when none exist do we fall back to the live
-    // in-flight destinations, and that fallback is flagged as partial-quality data.
     val sourceQuality =
         if (bytesByCountry.isEmpty() && liveDestinations.isNotEmpty()) {
             ChartDataQuality.PARTIAL
@@ -89,7 +82,6 @@ private fun buildSortedCountryRows(
                 .thenBy { row -> row.countryCode },
         )
 
-/** Top-[maxCountries] rows plus one aggregated "Other" tail for the dashboard card. */
 fun collapseCountryOverflow(
     rows: List<CountryTrafficUiRow>,
     maxCountries: Int = MAX_COUNTRY_SERIES,

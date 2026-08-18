@@ -19,14 +19,6 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-/**
- * App-level default-network observer. The runtime services (VPN/proxy/firewall) register their own
- * network callbacks, but only while a runtime is active; when idle there is nothing watching the
- * network, so switching between cellular and Wi-Fi — or hopping between Wi-Fi access points — did
- * not refresh the dashboard network card or the traffic-map origin. This watches the process
- * default network directly and triggers a device-IP + map refresh on every change (new network,
- * lost network, or a link-properties/IP change on the same network), independent of the runtime.
- */
 @OptIn(FlowPreview::class)
 internal fun HomeViewModel.observeDefaultNetworkChangesInternal() {
     val connectivityManager =
@@ -43,7 +35,6 @@ internal fun HomeViewModel.observeDefaultNetworkChangesInternal() {
                         trySend(Unit)
                     }
 
-                    // Same network, changed IP/routes (e.g. roaming between Wi-Fi access points).
                     override fun onLinkPropertiesChanged(
                         network: Network,
                         linkProperties: LinkProperties,
@@ -53,8 +44,6 @@ internal fun HomeViewModel.observeDefaultNetworkChangesInternal() {
                 }
             runCatching { connectivityManager.registerDefaultNetworkCallback(callback) }
                 .onFailure { error ->
-                    // Registration can fail (e.g. TooManyRequestsException). Losing the idle
-                    // refresh is cosmetic; never let the error escape and kill the ViewModel scope.
                     container.diagnosticsLogger.recordFailure(
                         "network",
                         "default network callback registration failed: ${error::class.simpleName}",
@@ -66,11 +55,6 @@ internal fun HomeViewModel.observeDefaultNetworkChangesInternal() {
             .onEach {
                 container.ipInfoRepository.markDefaultNetworkChanged()
                 invalidateIpInfoRefreshes()
-                // The device/upstream identity belongs to the physical network, so its country and
-                // city become invalid at the edge, before the debounce. Keep only a connected VPN
-                // exit whose route session has not changed; smart analysis keeps its explicit
-                // dashboard pin. Repository epoch + coordinator token reject the old network's
-                // late answer after this point.
                 val snapshot = container.connectionController.snapshot.value
                 clearNetworkHandoverIpIdentity(
                     clearDashboardIdentity = shouldClearDashboardIdentityOnUnderlyingHandover(
@@ -85,8 +69,6 @@ internal fun HomeViewModel.observeDefaultNetworkChangesInternal() {
                 torIpInfoMutable.value = null
                 withContext(Dispatchers.IO) { container.ipInfoRepository.evictStaleConnections() }
             }
-            // A cellular<->Wi-Fi switch or an AP hop emits a burst of callbacks; coalesce so the
-            // refresh runs once the new network has settled instead of firing several times.
             .debounce(DEFAULT_NETWORK_CHANGE_REFRESH_DEBOUNCE_MS)
             .collect {
                 refreshDashboardAfterDefaultNetworkChange()
@@ -95,10 +77,6 @@ internal fun HomeViewModel.observeDefaultNetworkChangesInternal() {
 }
 
 private fun HomeViewModel.refreshDashboardAfterDefaultNetworkChange() {
-    // A refresh already in flight predates the change — its answer describes the OLD network, and
-    // dropping the event here left that stale identity latched on the dashboard until a manual
-    // swipe. Lower-priority refreshes are superseded by the coordinator below; only MANUAL and
-    // TOR_ROUTE outrank NETWORK_CHANGE, so for those the event re-fires once they settle.
     val activeJob = ipInfoRefreshJob?.takeUnless { job -> job.isCompleted }
     val activeReason = activeIpInfoRefreshReason
     val outranksNetworkChange =
@@ -115,11 +93,6 @@ private fun HomeViewModel.refreshDashboardAfterDefaultNetworkChange() {
     }
     val state = container.connectionController.snapshot.value.state
     if (shouldUseConnectedIpRefreshAfterDefaultNetworkChange(state)) {
-        // The runtime callback normally advances upstreamNetworkRevision first. This process-level
-        // callback is the fallback for Android handovers where that edge is coalesced or arrives
-        // before the service callback: the coordinator folds an already-running same-generation
-        // refresh, so keeping both triggers is safe and never leaves the old Wi-Fi/mobile identity
-        // latched indefinitely.
         scheduleConnectedIpRefresh(
             reason = IpInfoRefreshReason.NETWORK_CHANGE,
             clearExistingIp = false,
@@ -127,9 +100,6 @@ private fun HomeViewModel.refreshDashboardAfterDefaultNetworkChange() {
             minimumLoadingDurationMs = if (dashboardVisible) HomeViewModel.AUTO_IP_REFRESH_MIN_LOADING_MS else 0L,
         )
     } else {
-        // Idle (no runtime): the shown IP is the device IP and the map origin — run a VISIBLE
-        // skeleton refresh (same stable window as the manual swipe refresh) so a Wi-Fi hop or a
-        // cellular<->Wi-Fi switch reads as an intentional update of the card and the map origin.
         startIpInfoRefresh(
             reportFailures = false,
             showLoading = dashboardVisible,

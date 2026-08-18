@@ -153,21 +153,18 @@ internal class SettingsRepositoryTest : SettingsRepositoryTestSupport() {
             source.substringAfter("fun SettingsRepository.updateDnsSettings")
                 .substringBefore("fun SettingsRepository.updateDnsReplaceSystemDns")
 
-        // Without intercept the DNS filter is inert at the DNS layer (only sniff-reject fires, the
-        // block counters stay empty). Enabling the filter must auto-arm intercept in the same
-        // transaction, scoped to the off->on transition so the user can still turn it back off after.
         assertTrue(updateBlock.contains("value.filteringEnabled && !current.dns.filteringEnabled"))
         assertTrue(updateBlock.contains("interceptDnsRequests = true"))
     }
 
     @Test
-    fun `tor bridges default on with auto transport, auto-update and foxhole source off`() {
+    fun `tor bridges default on with auto transport, auto-update off and the signed source`() {
         val privacyRoute = PrivacyRouteSettings()
 
         assertTrue(privacyRoute.bridgesEnabled)
         assertEquals(TorBridgeTransport.AUTO, privacyRoute.bridgeTransport)
         assertFalse(privacyRoute.bridgesAutoUpdate)
-        assertFalse(privacyRoute.bridgesUseFoxholeSource)
+        assertTrue(privacyRoute.bridgesUseFoxholeSource)
     }
 
     @Test
@@ -233,7 +230,6 @@ internal class SettingsRepositoryTest : SettingsRepositoryTestSupport() {
             source.substringAfter("fun SettingsRepository.updateAppTrafficStatsEnabled")
                 .substringBefore("fun SettingsRepository.recordInstalledAppInventory")
 
-        // The switch itself is the consent boundary; AppOps observation must not mutate it later.
         assertTrue(updateBlock.contains("appTrafficUsageAccessConsent = value"))
         assertFalse(updateBlock.contains("current.appTrafficUsageAccessConsent"))
     }
@@ -466,7 +462,6 @@ internal class SettingsRepositoryTest : SettingsRepositoryTestSupport() {
 
     @Test
     fun `subscription auto refresh defaults on`() {
-        // Ships ON: stale v2raytun subscription profiles are the top "my VPN stopped working".
         assertTrue(Settings().connection.autoRefreshSubscriptions)
         assertEquals(SubscriptionRefreshInterval.HOURS_6, Settings().connection.subscriptionRefreshInterval)
     }
@@ -525,8 +520,7 @@ internal class SettingsRepositoryTest : SettingsRepositoryTestSupport() {
         assertEquals(original.connection, reset.connection)
         assertEquals(1234L, reset.expert.unlockedAt)
         assertTrue(reset.expert.blockScreenshots)
-        // Ф-ГБ: the connections journal defaults to ON — reset lands on the default, not off.
-        assertTrue(reset.expert.networkActivityLogging)
+        assertFalse(reset.expert.networkActivityLogging)
         assertFalse(reset.expert.rawLiveDiagnostics)
         assertFalse(reset.expert.allowInsecureTls)
         assertTrue(reset.expert.sniff)

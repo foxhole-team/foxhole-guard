@@ -64,7 +64,6 @@ class DnsStatisticsAggregatorTest {
             dnsProtectionSummary(
                 trafficWindows =
                 listOf(
-                    // A pre-migration window with uncategorized blocks plus a categorized one.
                     window(blockedDns = 6),
                     window(
                         blockedDns = 4,
@@ -109,7 +108,6 @@ class DnsStatisticsAggregatorTest {
         assertEquals("com.example.app", top.packageName)
         assertEquals("Example", top.label)
         assertEquals(7, top.estimatedBlockedQueries)
-        // Unknown-to-traffic apps still surface with their package name as the label.
         assertEquals("com.other.app", summary.appRows[1].label)
     }
 

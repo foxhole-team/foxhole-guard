@@ -6,16 +6,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Structural replacement for the retired FoxholeVpnServiceLifecycleSafetyTest source pins.
- *
- * Two lifecycle invariants survive from that test, restated so they hold across renames and
- * reflows of the service/support files:
- *  - onRevoke must synchronously invalidate the in-flight runtime transition BEFORE scheduling
- *    the KILL-priority teardown (permission loss may never lose the race against START/SWITCH
- *    work that is still queued).
- *  - Runtime wake locks are owned by the Android service instance that needs them; the historic
- *    global self-retaining registry (a WeakHashMap keyed by the service, holding a wake lock
- *    whose callback references the service) leaked the service and kept the lock held forever.
+ * onRevoke must invalidate the in-flight runtime transition synchronously before scheduling the KILL teardown, so permission loss cannot lose the race against queued START/SWITCH work.
+ * Runtime wake locks belong to the owning service instance; the historic global registry leaked the service and held the lock forever.
  */
 class ServiceLifecycleSafetyArchTest {
     @Test

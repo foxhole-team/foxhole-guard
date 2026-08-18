@@ -4,11 +4,6 @@ import com.foxhole.core.model.IpInfo
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 
-/**
- * Dashboard IP-refresh state: the loading/reason flows, the Tor-exit identity stream, the refresh
- * coordinator and every refresh job plus the foreground-refresh bookkeeping. HomeViewModel exposes
- * same-named aliases so the Support-file call sites read unchanged.
- */
 internal class HomeIpRefreshState {
     val ipInfoLoadingMutable = MutableStateFlow(false)
     val ipInfoRefreshReasonMutable = MutableStateFlow<IpInfoRefreshReason?>(null)

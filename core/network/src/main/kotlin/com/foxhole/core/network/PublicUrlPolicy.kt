@@ -138,13 +138,14 @@ private fun ByteArray.isPrivateOrReservedIpv4(): Boolean {
     }
     val first = this[0].toUByte().toInt()
     val second = this[1].toUByte().toInt()
+    val third = this[2].toUByte().toInt()
     return first == 0 ||
         first == 10 ||
         first == 127 ||
         (first == 100 && second in 64..127) ||
         (first == 169 && second == 254) ||
         (first == 172 && second in 16..31) ||
-        (first == 192 && second == 0) ||
+        (first == 192 && second == 0 && (third == 0 || third == 2)) ||
         (first == 192 && second == 168) ||
         (first == 198 && second in 18..19) ||
         first >= 224

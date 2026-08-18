@@ -8,6 +8,7 @@ import android.net.Network
 import android.os.SystemClock
 import androidx.lifecycle.viewModelScope
 import com.foxhole.core.model.ACTIVE_CONNECTION_STATES
+import com.foxhole.core.model.Settings
 import com.foxhole.core.network.NetworkFingerprint
 import com.foxhole.core.network.isCellularOrMetered
 import com.foxhole.core.network.scopedByNetworkRules
@@ -19,6 +20,8 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 internal fun HomeViewModel.currentNetworkFingerprintForSmartRules(): NetworkFingerprint? {
@@ -64,20 +67,28 @@ internal fun HomeViewModel.currentNetworkProfileOverride(state: HomeUiState = co
     }
 }
 
-// Network-change reactions use the explicit per-transport auto-connect choice or recommend a switch.
-
-/**
- * Watches the default network while the app process lives and reacts to changes per the network
- * rules: auto-connect switches to the explicitly configured profile/protocol; otherwise the user
- * gets an in-app banner while the UI is visible or a system notification. The first (baseline)
- * fingerprint after registration is swallowed so app launch never triggers a surprise VPN start.
- */
 @OptIn(FlowPreview::class)
 internal fun HomeViewModel.startNetworkRulesWatchInternal() {
     val connectivityManager =
         getApplication<Application>().getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
             ?: return
     viewModelScope.launch {
+        container.settingsRepository.settings
+            .map { settings -> networkRulesWatchNeeded(settings) }
+            .distinctUntilChanged()
+            .collectLatest { needed ->
+                if (!needed) return@collectLatest
+                observeNetworkTransitions(connectivityManager)
+            }
+    }
+}
+
+internal fun networkRulesWatchNeeded(settings: Settings): Boolean =
+    settings.networkRules.wifiRulesEnabled || settings.networkRules.cellularRulesEnabled
+
+@OptIn(FlowPreview::class)
+private suspend fun HomeViewModel.observeNetworkTransitions(connectivityManager: ConnectivityManager) {
+    run {
         callbackFlow {
             val callback =
                 object : ConnectivityManager.NetworkCallback() {
@@ -93,8 +104,6 @@ internal fun HomeViewModel.startNetworkRulesWatchInternal() {
                 .onFailure { close(it) }
             awaitClose { runCatching { connectivityManager.unregisterNetworkCallback(callback) } }
         }
-            // Network switches flap (cell drops while wifi validates); let the dust settle so one
-            // physical change produces one evaluation on the network that actually won.
             .debounce(NETWORK_RULES_CHANGE_DEBOUNCE_MS)
             .collectLatest {
                 evaluateNetworkRuleSwitchInternal()
@@ -120,8 +129,6 @@ private fun HomeViewModel.evaluateNetworkRuleSwitchInternal() {
     recommendNetworkRuleProfileSwitch(override, fingerprint.transport)
 }
 
-// Dedupes evaluations per (network, override) pair and refuses to fight a runtime the user chose;
-// null means this network change must not produce a switch or a recommendation.
 private fun HomeViewModel.networkRuleOverrideToApply(
     state: HomeUiState,
     fingerprint: NetworkFingerprint,
@@ -137,8 +144,6 @@ private fun HomeViewModel.networkRuleOverrideToApply(
         return null
     }
     val connection = state.connection
-    // Never fight the special runtimes: a live Tor-only or local-guard session is the user's
-    // explicit choice, a background profile swap must not tear it down.
     val specialRuntimeActive =
         connection.profileId == FoxholeVpnService.TOR_ONLY_PROFILE_ID ||
             connection.profileId == FoxholeVpnService.LOCAL_GUARD_PROFILE_ID
@@ -186,22 +191,16 @@ private fun HomeViewModel.recommendNetworkRuleProfileSwitch(
     }
 }
 
-/** Confirm action of the in-app recommendation banner. */
 internal fun HomeViewModel.onNetworkRuleProfileSwitchAccepted() {
     val override = pendingNetworkRuleOverride ?: return
     pendingNetworkRuleOverride = null
     requestManualConnectPermissionOrConnect(override.profile.id, override.protocolOptionId)
 }
 
-/**
- * Dismiss/expiry of the in-app recommendation banner. Without this the offer stayed armed forever
- * and a much later "accept" (from the notification path) would apply a long-stale recommendation.
- */
 internal fun HomeViewModel.onNetworkRuleProfileSwitchDismissed() {
     pendingNetworkRuleOverride = null
 }
 
-/** Confirm action of the system recommendation notification (arrives as an activity intent). */
 internal fun HomeViewModel.applyNetworkRuleSwitchIntent(intent: Intent?) {
     if (intent?.action != NetworkRuleRecommendationNotifier.ACTION_APPLY_NETWORK_RULE) {
         return

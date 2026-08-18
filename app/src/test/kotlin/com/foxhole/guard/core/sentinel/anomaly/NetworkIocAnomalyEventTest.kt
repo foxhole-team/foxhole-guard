@@ -60,7 +60,6 @@ class NetworkIocAnomalyEventTest {
         assertEquals(AnomalySeverity.ACTIVITY_LOG, event.severity)
         assertEquals(NETWORK_IOC_SHARED_INFRASTRUCTURE_SCORE, event.score)
         assertEquals("SHARED_INFRASTRUCTURE", event.evidence["threat_kind"])
-        // The sentence has to say what the feed said, not what the loudest kind would have said.
         assertTrue(event.reason.contains("shared infrastructure"))
     }
 

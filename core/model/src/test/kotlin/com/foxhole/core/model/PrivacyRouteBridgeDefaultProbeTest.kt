@@ -20,7 +20,7 @@ class PrivacyRouteBridgeDefaultProbeTest {
         assertTrue(decoded.privacyRoute.bridgesEnabled)
         assertEquals(TorBridgeTransport.AUTO, decoded.privacyRoute.bridgeTransport)
         assertFalse(decoded.privacyRoute.bridgesAutoUpdate)
-        assertFalse(decoded.privacyRoute.bridgesUseFoxholeSource)
+        assertTrue(decoded.privacyRoute.bridgesUseFoxholeSource)
         assertNull(decoded.privacyRoute.bridgesUpdatedAt)
         assertNull(decoded.privacyRoute.bridgesLastUpdateSuccess)
     }
@@ -31,7 +31,12 @@ class PrivacyRouteBridgeDefaultProbeTest {
         assertTrue(settings.bridgesEnabled)
         assertEquals(TorBridgeTransport.AUTO, settings.bridgeTransport)
         assertFalse(settings.bridgesAutoUpdate)
-        assertFalse(settings.bridgesUseFoxholeSource)
+    }
+
+    @Test
+    fun `default settings prefer the signed bridge source`() {
+        assertTrue(PrivacyRouteSettings().bridgesUseFoxholeSource)
+        assertTrue(Settings().privacyRoute.bridgesUseFoxholeSource)
     }
 
     @Test

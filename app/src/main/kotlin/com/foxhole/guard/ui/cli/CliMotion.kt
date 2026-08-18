@@ -1,39 +1,63 @@
 package com.foxhole.guard.ui.cli
 
 import androidx.compose.animation.ContentTransform
-import androidx.compose.animation.core.Easing
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.VisibilityThreshold
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
 import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
+import androidx.compose.ui.unit.IntOffset
 
 /**
- * The one motion law: a fast horizontal slide quantised into hard steps, the same trick as the
- * map's marching dashes but full-screen. No fade or blur — the old screen leaves, the new arrives,
- * both whole.
+ * The one motion law: a smooth horizontal slide on a critically damped spring. Both surfaces
+ * still move whole — no fade or blur, the terminal canon holds — but the slide itself renders
+ * at the display's native frame rate. The previous law quantised the same slide into eight
+ * hard steps to mimic frame redraws; on real hardware that read as dropped frames rather
+ * than intent, so the quantisation is gone.
+ *
+ * A spring rather than a clock so that rapid dock taps retarget the running slide mid-flight
+ * instead of restarting it: interruption is the case tab navigation actually lives in.
+ * No bounce — an overshooting full-width surface exposes a gap of raw background at its
+ * trailing edge.
  */
-private const val MOTION_DURATION_MS = 120
+private val CliSlideSpring = spring<IntOffset>(
+    dampingRatio = Spring.DampingRatioNoBouncy,
+    stiffness = Spring.StiffnessMediumLow,
+    visibilityThreshold = IntOffset.VisibilityThreshold,
+)
 
-// Eight discrete positions over 120ms, so the motion reads as frame redraws rather than a smooth
-// drift. f=1 quantises to 1, so the final position is always exact.
-internal fun cliSnapFraction(fraction: Float): Float =
-    (fraction.coerceIn(0f, 1f) * MOTION_STEPS).toInt().toFloat() / MOTION_STEPS
-
-internal val CliSnapEasing: Easing = Easing(::cliSnapFraction)
-
-private const val MOTION_STEPS = 8
-
-/**
- * Push/pop slide for [androidx.compose.animation.AnimatedContent]: with [forward] the new content
- * enters from the right, otherwise from the left.
- */
 internal fun cliSlide(forward: Boolean): ContentTransform {
     val direction = if (forward) 1 else -1
     return slideInHorizontally(
-        animationSpec = tween(MOTION_DURATION_MS, easing = CliSnapEasing),
+        animationSpec = CliSlideSpring,
         initialOffsetX = { full -> full * direction },
     ) togetherWith slideOutHorizontally(
-        animationSpec = tween(MOTION_DURATION_MS, easing = CliSnapEasing),
+        animationSpec = CliSlideSpring,
         targetOffsetX = { full -> -full * direction },
     )
 }
+
+private const val GENTLE_RISE_FRACTION = 12
+private const val GENTLE_SCALE_FROM = 0.97f
+
+private val CliGentleRiseSpring = spring<IntOffset>(
+    dampingRatio = Spring.DampingRatioLowBouncy,
+    stiffness = Spring.StiffnessMediumLow,
+    visibilityThreshold = IntOffset.VisibilityThreshold,
+)
+
+internal fun cliPanelSwap(forward: Boolean, plain: Boolean): ContentTransform =
+    if (plain) {
+        (
+            fadeIn(CliMotion.enter()) +
+                slideInVertically(CliGentleRiseSpring) { full -> full / GENTLE_RISE_FRACTION } +
+                scaleIn(initialScale = GENTLE_SCALE_FROM, animationSpec = CliMotion.enter())
+            ) togetherWith fadeOut(CliMotion.exit())
+    } else {
+        cliSlide(forward)
+    }

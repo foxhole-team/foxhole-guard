@@ -7,6 +7,7 @@ import com.foxhole.core.network.requirePublicHttpsUrl
 import com.foxhole.core.runtime.GeoIpDatabaseMetadata
 import com.foxhole.core.runtime.GeoIpDatabaseStore
 import com.foxhole.core.runtime.network.PublicRemoteDns
+import com.foxhole.guard.BuildConfig
 import com.foxhole.guard.core.data.withBoundedRemoteFetchTimeouts
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -23,6 +24,7 @@ import java.io.InputStream
 import java.io.OutputStream
 import java.security.DigestInputStream
 import java.security.MessageDigest
+import java.time.Instant
 
 /**
  * Downloads the IP→country database from the FoxHole DB geo group (upstream: ip-location-db's
@@ -36,6 +38,28 @@ enum class GeoIpUpdateStatus {
     UP_TO_DATE,
     FAILED,
 }
+
+internal enum class GeoIpInstallDecision {
+    INSTALL,
+    UP_TO_DATE,
+    ROLLBACK,
+}
+
+internal fun geoIpInstallDecision(
+    incomingGeneratedAt: Instant,
+    incomingVersion: String,
+    installedGeneratedAt: Instant?,
+    installedVersion: String?,
+): GeoIpInstallDecision =
+    when {
+        installedGeneratedAt != null && incomingGeneratedAt.isBefore(installedGeneratedAt) ->
+            GeoIpInstallDecision.ROLLBACK
+
+        incomingGeneratedAt == installedGeneratedAt || incomingVersion == installedVersion ->
+            GeoIpInstallDecision.UP_TO_DATE
+
+        else -> GeoIpInstallDecision.INSTALL
+    }
 
 data class GeoIpUpdateResult(
     val status: GeoIpUpdateStatus,
@@ -51,6 +75,7 @@ private data class FoxholeGeoIpManifest(
     @SerialName("generated_at") val generatedAt: String,
     val version: String,
     val artifacts: List<FoxholeGeoIpArtifact>,
+    val compatibility: FoxholeGeoIpCompatibility,
 )
 
 @Serializable
@@ -58,6 +83,11 @@ private data class FoxholeGeoIpArtifact(
     val file: String,
     val size: Long,
     val sha256: String,
+)
+
+@Serializable
+private data class FoxholeGeoIpCompatibility(
+    @SerialName("min_app_version") val minAppVersion: String,
 )
 
 class GeoIpUpdateClient(
@@ -68,8 +98,12 @@ class GeoIpUpdateClient(
     // Read per call — see TorBridgeUpdateClient: the configured repository may change under a
     // client that is already built.
     private val manifestUrl: () -> String = { FOXHOLE_GEOIP_MANIFEST_URL },
+    private val currentVersionName: String = BuildConfig.VERSION_NAME,
+    private val now: () -> Instant = Instant::now,
 ) {
     private val appContext = context.applicationContext
+
+    private val installedStamp = File(appContext.filesDir, INSTALLED_STAMP_FILE)
 
     /**
      * Check-only version probe (the same verified manifest read the full update starts with):
@@ -80,9 +114,17 @@ class GeoIpUpdateClient(
         withContext(Dispatchers.IO) {
             runCatching {
                 val manifest = guardedClient().fetchVerifiedManifest()
-                manifest.version.isNotBlank() && manifest.version != store.readMetadata()?.version
+                manifest.version.isNotBlank() && manifest.decide(store) == GeoIpInstallDecision.INSTALL
             }.getOrNull()
         }
+
+    private fun FoxholeGeoIpManifest.decide(store: GeoIpDatabaseStore): GeoIpInstallDecision =
+        geoIpInstallDecision(
+            incomingGeneratedAt = Instant.parse(generatedAt),
+            incomingVersion = version,
+            installedGeneratedAt = installedGeneratedAt(),
+            installedVersion = store.readMetadata()?.version,
+        )
 
     suspend fun update(
         store: GeoIpDatabaseStore,
@@ -94,9 +136,17 @@ class GeoIpUpdateClient(
                 val client = guardedClient()
                 onPhase(RemoteUpdatePhase.CHECKING)
                 val manifest = client.fetchVerifiedManifest()
-                val installedVersion = store.readMetadata()?.version
-                if (installedVersion == manifest.version) {
-                    return@runCatching GeoIpUpdateResult(status = GeoIpUpdateStatus.UP_TO_DATE)
+                when (manifest.decide(store)) {
+                    GeoIpInstallDecision.UP_TO_DATE ->
+                        return@runCatching GeoIpUpdateResult(status = GeoIpUpdateStatus.UP_TO_DATE)
+
+                    GeoIpInstallDecision.ROLLBACK ->
+                        error(
+                            "geoip manifest is older than the installed one " +
+                                "(incoming=${manifest.generatedAt} installed=${installedGeneratedAt()})",
+                        )
+
+                    GeoIpInstallDecision.INSTALL -> Unit
                 }
                 val manifestUrl = manifestUrl().asPublicHttpsUrl()
                 val ipv4 = manifest.artifactNamed(EXPECTED_IPV4_FILE)
@@ -129,6 +179,7 @@ class GeoIpUpdateClient(
                         ipv4File.delete()
                         ipv6File.delete()
                     }
+                recordInstalledGeneratedAt(manifest.generatedAt)
                 GeoIpUpdateResult(status = GeoIpUpdateStatus.UPDATED, metadata = metadata)
             }.getOrElse { error ->
                 GeoIpUpdateResult(
@@ -155,8 +206,30 @@ class GeoIpUpdateClient(
         require(name == EXPECTED_MANIFEST_NAME) { "unexpected geoip manifest name" }
         require(format == EXPECTED_ARTIFACT_FORMAT) { "unexpected geoip artifact format" }
         require(version.isNotBlank()) { "empty geoip source version" }
+        require(compareAppVersions(currentVersionName, compatibility.minAppVersion) >= 0) {
+            "app version is too old for the geoip feed"
+        }
+        requireFreshFoxholeDbManifest(generatedAt, "geoip", now())
         artifactNamed(EXPECTED_IPV4_FILE)
         artifactNamed(EXPECTED_IPV6_FILE)
+    }
+
+    private fun installedGeneratedAt(): Instant? =
+        installedStamp
+            .takeIf(File::isFile)
+            ?.let { file -> runCatching(file::readText).getOrNull() }
+            ?.trim()
+            ?.takeIf(String::isNotEmpty)
+            ?.let { stamp -> runCatching { Instant.parse(stamp) }.getOrNull() }
+
+    private fun recordInstalledGeneratedAt(generatedAt: String) {
+        runCatching {
+            val temporary = File(appContext.filesDir, "$INSTALLED_STAMP_FILE.tmp")
+            temporary.writeText(generatedAt)
+            if (!temporary.renameTo(installedStamp)) {
+                temporary.delete()
+            }
+        }
     }
 
     private fun FoxholeGeoIpManifest.artifactNamed(file: String): FoxholeGeoIpArtifact {
@@ -316,7 +389,8 @@ class GeoIpUpdateClient(
         private const val EXPECTED_ARTIFACT_FORMAT = "dbip-country-csv"
         private const val EXPECTED_IPV4_FILE = "dbip-country-ipv4.csv"
         private const val EXPECTED_IPV6_FILE = "dbip-country-ipv6.csv"
-        private const val MAX_SIGNATURE_BYTES = 8L * 1024L
+        private const val INSTALLED_STAMP_FILE = "geoip-manifest.generated-at"
+        private const val MAX_SIGNATURE_BYTES = MAX_FOXHOLE_DB_SIGNATURE_BYTES
         private const val MAX_PACKAGE_BYTES = 64L * 1024L
         private const val MAX_DATABASE_BYTES = 64L * 1024L * 1024L
         private const val MIN_DATABASE_BYTES = 1024L * 1024L

@@ -2,6 +2,7 @@ package com.foxhole.guard.ui.cli.profiles
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -39,13 +40,14 @@ import com.foxhole.guard.ui.ProfilesRouteUiState
 import com.foxhole.guard.ui.cli.CliSpacing
 import com.foxhole.guard.ui.cli.CliType
 import com.foxhole.guard.ui.cli.LocalCliColors
-import com.foxhole.guard.ui.cli.components.CliContextHelpButton
+import com.foxhole.guard.ui.cli.components.CliChromeTailSpacer
 import com.foxhole.guard.ui.cli.components.CliFlagIcon
 import com.foxhole.guard.ui.cli.components.CliKeyValue
 import com.foxhole.guard.ui.cli.components.CliPanel
 import com.foxhole.guard.ui.cli.components.CliPixIcon
 import com.foxhole.guard.ui.cli.components.CliRowDivider
 import com.foxhole.guard.ui.cli.components.CliScreenHeader
+import com.foxhole.guard.ui.cli.components.CliTopBarHelpButton
 import com.foxhole.guard.ui.cli.components.cliPressable
 import com.foxhole.guard.ui.cli.home.CliTerminalState
 import com.foxhole.guard.ui.cli.home.CliTorPromptPanel
@@ -57,14 +59,6 @@ import com.foxhole.guard.ui.pruneTo
 import com.foxhole.guard.ui.requests
 import kotlinx.coroutines.launch
 
-/**
- * Profiles: tap selects, long-press marks rows for export (long-press an already marked
- * row to arm the inline delete y/n line). While a selection is alive the symmetric
- * file/qr/clipboard row flips from import to blinking export actions; system back or
- * unmarking the last row leaves the mode. Smart-profile protocol management (the chip) opens
- * [CliSmartProfileSheet]; switching the active profile/protocol on a live tunnel confirms via the
- * shared [CliTorPromptPanel] (B2/B3).
- */
 @Composable
 internal fun CliProfilesScreen(
     viewModel: HomeViewModel,
@@ -74,24 +68,17 @@ internal fun CliProfilesScreen(
     val state by viewModel.profilesRouteState.collectAsStateWithLifecycle()
     val home by viewModel.homeRouteState.collectAsStateWithLifecycle()
     val importConfirmation by viewModel.profileImportConfirmation.collectAsStateWithLifecycle()
-    // saveable, paired with selection below: rotation must not disarm a delete or fold an open
-    // smart sheet.
     var pendingDeleteId by rememberSaveable { mutableStateOf<Long?>(null) }
     var expandedSmartId by rememberSaveable { mutableStateOf<Long?>(null) }
-    // Export selection survives process death: ids/keys ride the existing saver from the
-    // classic export sheet.
     var selection by rememberSaveable(stateSaver = ProfilesExportSelectionStateSaver) {
         mutableStateOf(ProfilesExportSelectionState())
     }
     val selectionMode = selection.isReady()
 
-    // A vanished profile id must not keep the confirm line armed or a stale selection.
     LaunchedEffect(state.profiles) {
         if (pendingDeleteId != null && state.profiles.none { it.id == pendingDeleteId }) {
             pendingDeleteId = null
         }
-        // Write only on a real change: the effect restarts on every list emit, and an
-        // unconditional assignment would recompose selection subscribers for nothing.
         val pruned = selection.pruneTo(state.profiles)
         if (pruned != selection) {
             selection = pruned
@@ -138,8 +125,6 @@ private fun CliProfilesBody(
     modifier: Modifier,
 ) {
     val selectedCount = selection.selectedKeyCount().takeIf { selection.isReady() } ?: 0
-    // Template add is always one tap from the top: pick a protocol template, continue into the
-    // empty editor of the created profile. Links/files/QR keep their own import row below.
     var templateAddOpen by rememberSaveable { mutableStateOf(false) }
     var templateBusy by remember { mutableStateOf(false) }
     var templateEditorProfile by remember { mutableStateOf<com.foxhole.core.model.Profile?>(null) }
@@ -147,8 +132,6 @@ private fun CliProfilesBody(
     Column(
         modifier = modifier
             .fillMaxSize()
-            // Blank/background taps dismiss the one contextual action strip. Child controls keep
-            // their own gesture and explicitly clear it below, so their intended action still runs.
             .pointerInput(pendingDeleteId) {
                 if (pendingDeleteId != null) {
                     detectTapGestures { actions.changePendingDelete(null) }
@@ -161,14 +144,17 @@ private fun CliProfilesBody(
             icon = R.drawable.pix_profiles,
             suffix = selectedCount.takeIf { it > 0 }?.let { stringResource(R.string.cli_prof_sel_count, it) },
             trailing = {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy((-12).dp),
+                ) {
                     CliProfileAddButton(
                         onClick = {
                             actions.changePendingDelete(null)
                             templateAddOpen = true
                         },
                     )
-                    CliContextHelpButton(
+                    CliTopBarHelpButton(
                         bodyRes = R.string.cli_help_editor_body,
                         onOpen = { actions.changePendingDelete(null) },
                     )
@@ -177,9 +163,6 @@ private fun CliProfilesBody(
         )
         if (templateAddOpen) {
             CliProfileTemplateSheet(
-                // Its own title, not the import dialog's: this sheet creates a blank profile, it
-                // does not import one, and the two used to share a caption that asked a question
-                // about a payload there is none of here.
                 title = stringResource(R.string.cli_prof_create_title),
                 busy = templateBusy,
                 onDismiss = { templateAddOpen = false },
@@ -203,9 +186,6 @@ private fun CliProfilesBody(
                 viewModel = viewModel,
                 profile = created,
                 onDismiss = { templateEditorProfile = null },
-                // The protocol template was chosen one step earlier. A second "add protocol"
-                // inside a brand-new profile duplicated that choice and made a simple creation
-                // flow look like a smart-profile builder.
                 allowAddProtocol = false,
             )
         }
@@ -213,8 +193,6 @@ private fun CliProfilesBody(
             CliActiveProfileFactsPanel(home = home)
             Spacer(modifier = Modifier.height(CliSpacing.sm))
         }
-        // The import confirmation is a modal now, so it takes no room in the column and needs no
-        // divider of its own.
         importConfirmation?.let { confirmation ->
             CliImportConfirmPanel(viewModel = viewModel, confirmation = confirmation)
         }
@@ -228,7 +206,6 @@ private fun CliProfilesBody(
             modifier = Modifier.fillMaxWidth().weight(1f),
         )
         Spacer(modifier = Modifier.height(CliSpacing.sm))
-        // Switch confirmation is the shared bottom sheet and does not move the layout.
         home.torTransitionPrompt?.let { prompt ->
             CliTorPromptPanel(
                 viewModel = viewModel,
@@ -244,15 +221,10 @@ private fun CliProfilesBody(
             onSelectionCleared = { actions.changeSelection(ProfilesExportSelectionState()) },
             onInteraction = { actions.changePendingDelete(null) },
         )
-        Spacer(modifier = Modifier.height(CliSpacing.sm))
+        CliChromeTailSpacer()
     }
 }
 
-/**
- * Facts about the active profile: profile and protocol, kind (subscription or config) and, when a
- * subscription has one, its expiry. This replaced the old status line — the profiles screen
- * describes the profile, not the connection.
- */
 @Composable
 private fun CliActiveProfileFactsPanel(home: HomeRouteUiState) {
     val colors = LocalCliColors.current
@@ -275,7 +247,6 @@ private fun CliActiveProfileFactsPanel(home: HomeRouteUiState) {
             valueColor = colors.info,
             icon = R.drawable.pix_shield,
         )
-        // Geo inferred from the node/profile name; the row appears only when the name revealed it.
         profileCountryCode(activeProtocol, profile.name)?.let { country ->
             CliKeyValue(
                 key = stringResource(R.string.cli_prof_facts_geo),
@@ -348,13 +319,10 @@ private fun CliProfilesEmptyState(state: ProfilesRouteUiState) {
     )
 }
 
-/** The header's always-there plus: manual profile add, one tap from anywhere on the tab. */
 @Composable
 private fun CliProfileAddButton(onClick: () -> Unit) {
     val colors = LocalCliColors.current
     Box(
-        // requiredSize: the 48dp target overlaps the fixed header slot without inflating the row
-        // (the statistics gear law).
         modifier = Modifier
             .requiredSize(48.dp)
             .cliPressable(onClick = onClick),
@@ -374,6 +342,5 @@ internal data class CliProfilesActions(
     val changeExpandedSmart: (Long?) -> Unit,
 )
 
-// Shared between the header suffix count (this file) and the transfer row (CliProfileTransfer.kt).
 internal fun ProfilesExportSelectionState.selectedKeyCount(): Int =
     requests().sumOf { request -> request.selectionKeys.size }

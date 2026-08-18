@@ -4,13 +4,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 import java.io.File
 
-/**
- * The app ships exactly two string catalogues: `values/` is the English default and `values-ru/` is
- * the Russian translation. Nothing enforced that they stay in step — lint's `UnusedResources` is not
- * raised to an error and a missing translation only shows up as English text leaking into a Russian
- * screen at runtime. Every UI pass in this project has drifted them apart at least once, so the
- * parity is pinned here instead.
- */
 class StringResourceParityTest {
     private val stringName = Regex("""<string\s+[^>]*name="([^"]+)"""")
     private val stringEntry =

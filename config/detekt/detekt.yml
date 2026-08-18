@@ -16,10 +16,8 @@ naming:
 
 exceptions:
   TooGenericExceptionCaught:
-    # Every flagged site is a deliberate resilience boundary (profile import, reconnect,
-    # metrics refresh, secret mutation) using the canonical coroutine pattern: rethrow
-    # CancellationException first, then convert anything else into a surfaced UI error
-    # instead of crashing the VPN runtime.
+    # Flagged sites are resilience boundaries that rethrow CancellationException first, then
+    # surface anything else as a UI error instead of crashing the VPN runtime.
     active: false
 
 style:
@@ -30,54 +28,42 @@ style:
   ReturnCount:
     active: true
     max: 4
-    # Leading guard clauses (early validation/short-circuit returns) read more clearly than a
-    # single nested exit, so they are not counted toward the limit.
     excludeGuardClauses: true
 
 complexity:
   CyclomaticComplexMethod:
     active: true
-    # A function whose whole body is one flat `when` mapping (enum/state -> value or composable)
-    # reads like a lookup table: branch count there measures data size, not logic complexity.
+    # A flat `when` lookup measures data size, not logic complexity.
     ignoreSingleWhenExpression: true
   LongMethod:
     active: true
     threshold: 120
-    # Test bodies are linear scenario scripts (arrange/act/assert with big literals); their
-    # length is data volume, not branching complexity worth splitting.
+    # Test length is data volume, not branching complexity.
     excludes: ['**/src/test/**']
   LargeClass:
     active: true
-    # Same rationale as LongMethod: a test class is a flat catalog of scenarios.
     excludes: ['**/src/test/**']
   LongParameterList:
     active: true
-    # Compose entry points and the Home*/*Support composables thread UI state plus a handful of
-    # event callbacks explicitly (no ambient DI/ViewModel injection into @Composable), which lands
-    # legitimately in the low-to-mid teens; 16 keeps that idiom clean while still flagging genuine
-    # callback-soup. See the RuntimeCommandTarget cleanup in TODO for the one non-Compose outlier.
+    # Composables thread UI state and callbacks explicitly (no ambient DI into @Composable),
+    # which legitimately reaches the low-to-mid teens.
     functionThreshold: 16
     constructorThreshold: 16
   TooManyFunctions:
     active: true
     thresholdInFiles: 40
-    # Detekt's default of 11 flags every cohesive repository/service; 25 is where a class in
-    # this codebase historically started needing a split (see *Support.kt extractions).
     thresholdInClasses: 25
-    # Interface = contract surface; counting its members punishes explicitness.
     thresholdInInterfaces: 25
     thresholdInObjects: 25
-    # Overridden members are imposed by the framework/contract (Service callbacks, host
-    # interfaces), not a cohesion choice of the class.
+    # Overridden members are imposed by the framework, not a cohesion choice.
     ignoreOverridden: true
-    # Room DAOs are declarative query catalogs; splitting them scatters one table's queries.
     ignoreAnnotated: ['Dao']
 
 formatting:
   active: true
   android: true
-  # Correction only happens when the CLI also passes --auto-correct (the detektFormat task);
-  # the verification `detekt` task never passes it, so this stays read-only there.
+  # Only applied when the CLI also passes --auto-correct (detektFormat); the verification
+  # `detekt` task never does, so it stays read-only there.
   autoCorrect: true
   MaximumLineLength:
     active: false

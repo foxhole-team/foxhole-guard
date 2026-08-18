@@ -66,7 +66,6 @@ internal object StatusWidgetRefreshState {
     }
 }
 
-/** All commands reuse the service contract. STOP never suppresses the firewall/local guard. */
 class StatusWidgetCommandReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val action = intent.action ?: return

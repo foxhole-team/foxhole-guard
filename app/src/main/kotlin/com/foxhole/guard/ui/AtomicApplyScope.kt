@@ -5,27 +5,17 @@ import com.foxhole.core.model.PrivacyRouteScope
 import com.foxhole.core.model.RoutingModePreset
 import com.foxhole.core.model.Settings
 
-/**
- * What a settings change is allowed to do behind the user's back.
- *
- * The "atomic scenario application" switch governs both operating [MODE] and [SCENARIO] choices.
- * Per-app and per-domain [RULES] — routing lanes, BLOCK, EXCLUDE, website rules — are always
- * applied atomically and are deliberately not user-configurable, so no rule path may consult the
- * switch.
- */
 internal enum class AtomicApplyScope {
     MODE,
     SCENARIO,
     RULES,
 }
 
-/** True when a change of [scope] must be confirmed before it is applied. See [AtomicApplyScope]. */
 internal fun requiresApplyConfirmation(
     scope: AtomicApplyScope,
     atomicConnection: Boolean,
 ): Boolean = scope != AtomicApplyScope.RULES && !atomicConnection
 
-/** Every scenario choice exposed by the routing screen; Home VPN/Tor operating modes are separate. */
 internal enum class VpnRoutingScenario {
     WHOLE_DEVICE,
     SELECTED_INCLUDE,
@@ -33,7 +23,6 @@ internal enum class VpnRoutingScenario {
     PROXY_SERVER,
 }
 
-/** A typed, dismissible mode/scenario change parked behind the shared bottom confirmation sheet. */
 internal sealed interface PendingRoutingScenarioChange {
     data class OperatingMode(
         val current: RoutingModePreset,

@@ -12,8 +12,6 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Test
 
-// Legacy stores carried two parallel per-app lists; the lane model folds them into one
-// `appAssignments` map at the JSON boundary, exactly once, before decoding.
 class LegacyAppAssignmentsMigrationTest {
     private val json = Json { ignoreUnknownKeys = true }
 

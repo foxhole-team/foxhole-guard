@@ -15,7 +15,7 @@ import java.util.concurrent.TimeUnit
 
 class CliTorBridgeAndDnsPromptTest {
     @Test
-    fun `all FoxHole DB surfaces use segmented pixel progress`() {
+    fun `FoxHole DB progress is inline on modern actions and pixel segmented in retro`() {
         assertEquals(1, FoxholeUpdatePhase.CHECKING.foxholeUpdateStage())
         assertEquals(2, FoxholeUpdatePhase.DOWNLOADING.foxholeUpdateStage())
         assertEquals(3, FoxholeUpdatePhase.VERIFYING.foxholeUpdateStage())
@@ -30,9 +30,13 @@ class CliTorBridgeAndDnsPromptTest {
 
         assertTrue(wizard.contains("color = if (verified) colors.ok else colors.accent"))
         assertTrue(dns.contains("CliFoxholeUpdateProgress(phase = refreshPhase)"))
-        assertTrue(updates.contains("CliFoxholeUpdateProgress(phase = phase)"))
+        assertFalse(updates.contains("CliFoxholeUpdateProgress(phase = phase)"))
+        assertTrue(updates.contains("foxholeRefreshButtonLabel"))
+        assertTrue(updates.contains("animatedLabel = refreshRunning"))
+        assertTrue(updates.contains("R.string.cli_updates_progress"))
         assertTrue(sheet.contains("CliFoxholeUpdateProgress(phase = phase)"))
         assertTrue(pixel.contains("repeat(safeTotal)"))
+        assertTrue(pixel.contains("CliShimmerText("))
         assertFalse(wizard.contains("LinearProgressIndicator"))
         assertFalse(pixel.contains("LinearProgressIndicator"))
     }
@@ -58,7 +62,6 @@ class CliTorBridgeAndDnsPromptTest {
         assertFalse(torBridgeRefreshRequired(fresh.copy(permitted = false), NOW_MS))
         assertFalse(torBridgeRefreshRequired(fresh.copy(bridgesEnabled = false), NOW_MS))
 
-        // A real refresh remains visible even when the previous successful check is still fresh.
         assertTrue(torBridgeRefreshActionVisible(fresh, FoxholeUpdatePhase.CHECKING, NOW_MS))
         assertFalse(
             torBridgeRefreshActionVisible(
@@ -123,7 +126,6 @@ class CliTorBridgeAndDnsPromptTest {
             torBridgeStageProgress(FoxholeUpdatePhase.VERIFYING, verifiedSuccess = false),
         )
 
-        // A terminal updater phase can precede Settings persistence; it remains at verification.
         assertEquals(3, torBridgeStageProgress(FoxholeUpdatePhase.DONE, verifiedSuccess = false))
         assertEquals(3, torBridgeStageProgress(FoxholeUpdatePhase.NO_UPDATE, verifiedSuccess = false))
         assertEquals(4, torBridgeStageProgress(FoxholeUpdatePhase.DONE, verifiedSuccess = true))
@@ -144,7 +146,6 @@ class CliTorBridgeAndDnsPromptTest {
             }
         }
 
-        // OFF -> tap ON -> cancel: persistence remains OFF, so the next tap asks again.
         request(requestedEnabled = true)
         assertEquals(1, promptCount)
         assertFalse(enabled)
@@ -152,13 +153,11 @@ class CliTorBridgeAndDnsPromptTest {
         assertEquals(2, promptCount)
         assertFalse(enabled)
 
-        // Successful confirmation persists ON. Turning OFF is immediate and asks nothing.
         enabled = true
         request(requestedEnabled = false)
         assertFalse(enabled)
         assertEquals(2, promptCount)
 
-        // A later OFF -> ON edge is a new consent event, not a remembered one-time decision.
         request(requestedEnabled = true)
         assertEquals(3, promptCount)
         assertFalse(enabled)
@@ -174,7 +173,6 @@ class CliTorBridgeAndDnsPromptTest {
 
         assertTrue(torScreen.contains("CliBottomSheet("))
         assertTrue(torScreen.contains("CliStageProgress("))
-        // The lambda records the persistence baseline before invoking the existing update API.
         assertTrue(torScreen.contains("viewModel.onTorBridgeManualRefresh()"))
         assertTrue(torScreen.contains("torBridgeVerifiedSuccess(phase, privacyRoute, baseline)"))
         assertFalse(torScreen.contains("CliFoxholeDbUpdateSheet("))

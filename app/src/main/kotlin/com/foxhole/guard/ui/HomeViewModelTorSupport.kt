@@ -45,11 +45,6 @@ internal fun HomeViewModel.onSelectActiveProtocolOptionRequested(optionId: Strin
     }
 }
 
-/**
- * The TOR switch controls the runtime, not just the persisted mode: enabling with a live VPN
- * hot-reloads Tor into/beside it, with no VPN starts the standalone Tor-only runtime (with
- * consent); disabling fully stops whatever Tor is engaged. Every entry point reuses these paths.
- */
 internal fun HomeViewModel.onTorRuntimeToggledInternal(enabled: Boolean) {
     if (!enabled) {
         onPrivacyRouteModeSelected(PrivacyRouteMode.OFF)
@@ -70,8 +65,6 @@ internal fun HomeViewModel.onTorRuntimeToggledInternal(enabled: Boolean) {
         !settings.privacyRoute.bypassVpnTunnel &&
         activeProtocolIsUdp
     ) {
-        // A live UDP tunnel cannot carry Tor inside it — offer to run Tor beside the VPN instead.
-        // All-apps scope cannot ride beside a tunnel either, so guide to the scope setting first.
         if (settings.privacyRoute.scope == PrivacyRouteScope.ALL_APPS) {
             snackbars.tryEmit(errorBanner(R.string.privacy_route_all_apps_requires_no_vpn))
         } else {
@@ -88,15 +81,11 @@ internal fun HomeViewModel.onTorRuntimeToggledInternal(enabled: Boolean) {
     }
 }
 
-// Hard refusals for enabling Tor, mirrored from the quick-access modal so every entry point
-// agrees; true means a banner was raised and the toggle must not proceed.
 private fun HomeViewModel.refusesTorEnable(
     snapshot: com.foxhole.core.model.ConnectionSnapshot,
     settings: com.foxhole.core.model.Settings,
 ): Boolean {
     if (!settings.privacyRoute.permitted) {
-        // The controls are hidden/disabled without the permission, but guard the path anyway
-        // (stale UI state, races) — a forbidden core must never start.
         snackbars.tryEmit(errorBanner(R.string.privacy_route_core_forbidden))
         return true
     }
@@ -105,8 +94,6 @@ private fun HomeViewModel.refusesTorEnable(
         settings.traffic.mode == com.foxhole.core.model.TrafficMode.PROXY &&
         !settings.privacyRoute.bypassVpnTunnel
     ) {
-        // Proxy mode has no tunnel to carry Tor: the dashboard button must refuse exactly like the
-        // modal does, not hot-reload a config that silently cannot include the Tor route.
         snackbars.tryEmit(errorBanner(R.string.privacy_route_proxy_mode_requires_bypass))
         return true
     }
@@ -115,18 +102,12 @@ private fun HomeViewModel.refusesTorEnable(
         settings.privacyRoute.bypassVpnTunnel &&
         settings.privacyRoute.scope == PrivacyRouteScope.ALL_APPS
     ) {
-        // All-apps Tor beside a live VPN would raise a second device-wide tunnel next to the VPN's:
-        // refuse and point at the scope setting — only selected apps may ride beside the tunnel.
         snackbars.tryEmit(errorBanner(R.string.privacy_route_all_apps_requires_no_vpn))
         return true
     }
     return false
 }
 
-/**
- * Confirm for [TorTransitionPrompt.StartTorBesideUdpVpn]: flip placement to bypass and start Tor
- * via the ordinary hot-reload — the UDP tunnel keeps running untouched.
- */
 internal fun HomeViewModel.confirmStartTorBesideUdpVpn() {
     torTransitionPromptMutable.value = null
     viewModelScope.launch {
@@ -135,11 +116,6 @@ internal fun HomeViewModel.confirmStartTorBesideUdpVpn() {
     }
 }
 
-/**
- * Tor placed inside the tunnel (bypass off) with a saved VPN profile but no running VPN: the
- * start would silently fall back to direct-from-device Tor, contradicting the chosen placement —
- * warn instead. With bypass on, device-route Tor is exactly what the user configured.
- */
 private fun HomeViewModel.shouldWarnStartTorFromDeviceWithoutVpn(): Boolean =
     !container.settingsRepository.settings.value.privacyRoute.bypassVpnTunnel &&
         controlUiState.value.activeProfile != null
@@ -162,8 +138,6 @@ internal fun HomeViewModel.onEnableDirectTorQuickStart() {
     markTorOperation(HomeTorOperationKind.CONNECTING)
     val snapshot = container.connectionController.snapshot.value
     if (snapshot.isActivePrimaryVpnProfileRuntime()) {
-        // All-traffic TOR over an active VPN would raise a second nested tunnel (and crashes);
-        // with a VPN up, only selected apps may ride through TOR.
         if (privacyRoute.scope == PrivacyRouteScope.ALL_APPS) {
             clearTorOperation()
             snackbars.tryEmit(errorBanner(R.string.privacy_route_all_apps_requires_no_vpn))
@@ -171,7 +145,6 @@ internal fun HomeViewModel.onEnableDirectTorQuickStart() {
         }
         updateRuntimeSettingAndMaybeReload {
             container.diagnosticsLogger.record("tor", "tor quick start hot-reload active vpn runtime")
-            // Never touch bypassVpnTunnel: that toggle is owned by the user in routing settings.
             container.settingsRepository.updatePrivacyRouteMode(PrivacyRouteMode.TOR_OVER_VPN)
         }
         return
@@ -179,7 +152,6 @@ internal fun HomeViewModel.onEnableDirectTorQuickStart() {
     viewModelScope.launch {
         runCatching {
             container.diagnosticsLogger.record("tor", "tor quick start standalone tor-only runtime")
-            // Keep bypassVpnTunnel exactly as the user configured it; quick start only arms the route.
             container.settingsRepository.updatePrivacyRouteMode(PrivacyRouteMode.TOR_OVER_VPN)
             if (privacyRoute.scope == PrivacyRouteScope.ALL_APPS) {
                 snackbars.tryEmit(infoBanner(R.string.privacy_route_all_apps_start_warning))
@@ -207,9 +179,6 @@ internal fun shouldPromptDisableTorForUdpProtocol(
     switchingToUdp: Boolean,
 ): Boolean = torEnabledOrRuntimeActive && switchingToUdp
 
-// A protocol switch on the live profile must surface the Reconnect affordance: nothing
-// dispatches a hot reload for a protocol change (the old informational flag silently timed out —
-// the tunnel kept the old protocol, no Restart ever appeared). Cycling back clears it.
 internal fun shouldRequireReconnectAfterProtocolSwitch(
     runningOptionId: String?,
     selectedOptionId: String,
@@ -228,8 +197,6 @@ internal fun HomeViewModel.selectProtocolOptionAndMaybeReconnect(
                 markProfileReconnectPromptWindow()
             }
             if (controlUiState.value.activeProfile?.id == profileId && controlUiState.value.connection.state in ACTIVE_CONNECTION_STATES) {
-                // Same hint-fallback as isProfileReconnectRequired: sessions without an option id
-                // must still let the carousel cancel the Restart by cycling back.
                 val runningOptionId =
                     controlUiState.value.connection.protocolOptionId
                         ?: runningOptionIdFromProtocolHint(
@@ -254,18 +221,11 @@ internal fun HomeViewModel.selectProtocolOptionAndMaybeReconnect(
                 }
                 clearProfileLatencyRefresh()
             } else if (updated.isActive) {
-                // Not connected: probe the new protocol right away so the latency pill and icon
-                // color track the selection instead of the previous option's stale value.
                 scheduleActiveProfileLatencyRefresh(
                     showLoading = false,
                     refreshImmediately = true,
                 )
             } else {
-                // The quick selector exposes options of every smart profile, not only the active
-                // one. Persisting an option in an inactive profile and then closing the selector
-                // left the dashboard on the old profile, so the tap appeared to do nothing. Route
-                // the chosen smart profile through the same safe selection path as a single
-                // profile: idle remembers it; a live different profile raises the switch sheet.
                 onQuickSelectorSingleProfileSelected(profileId)
             }
         }.onFailure {
@@ -279,8 +239,6 @@ internal fun HomeViewModel.selectProtocolOptionAndMaybeReconnect(
     }
 }
 
-// Same contract as the route-mode dropdown: an unused reconnect offer expires and the dropdown
-// returns to the protocol that actually runs, not a selection the runtime never applied.
 private fun HomeViewModel.scheduleProtocolSwitchRevert(
     profileId: Long,
     baselineOptionId: String?,
@@ -330,9 +288,6 @@ internal fun HomeViewModel.confirmDisableTorForUdpProtocol(
         container.settingsRepository.updatePrivacyRouteMode(PrivacyRouteMode.OFF)
         clearTorOperation()
         torIpInfoMutable.value = null
-        // selectProfileProtocolOption throws on an unknown/unselectable option; unwrapped, that
-        // throw in viewModelScope took the app down. Surface the usual error banner and leave
-        // the tunnel alone instead of reconnecting onto nothing.
         val selected =
             runCatching {
                 container.profileRepository.selectProfileProtocolOption(
@@ -380,21 +335,11 @@ internal fun HomeViewModel.confirmKeepTorOnDeviceAndStartVpn(
 }
 
 internal fun HomeViewModel.dismissTorTransitionPrompt() {
-    // Also stops a live mode-switch countdown so "no" (or a timeout supersede) reverts immediately.
     liveModeSwitchCountdownJob?.cancel()
     liveModeSwitchCountdownJob = null
     torTransitionPromptMutable.value = null
 }
 
-/**
- * MODE-button entry point. With atomic application off, every accepted mode change is parked in
- * the shared current→future sheet. Otherwise, a Tor-involving live change keeps its safety
- * countdown; idle, tor-only and Tor-neutral changes apply directly.
- * See [liveModeSwitchKind].
- *
- * The explicit result keeps terminal narration honest: a parked confirmation is not an applied
- * mode and must not print a command until the user confirms it.
- */
 internal enum class ConnectModeSwitchRequestResult {
     REJECTED,
     APPLIED,
@@ -414,8 +359,6 @@ internal fun HomeViewModel.onConnectModeSwitchRequested(
     }
     if (
         target == com.foxhole.core.model.RoutingModePreset.VPN_TOR &&
-        // VPN_TOR always writes Tor inside the VPN, even if the current route has Tor beside it.
-        // Judge the target placement, not the setting we are about to replace.
         shouldBlockTorOverUdpVpnEnable(bypassVpnTunnel = false)
     ) {
         refuseUdpVpnTorModeSwitch(snapshot)
@@ -455,7 +398,6 @@ private fun HomeViewModel.requestOrApplyLiveOperatingModeChange(
     }
     val kind = liveModeSwitchKind(current, target)
     return if (kind == null) {
-        // Tor-neutral reshape (split↔split) on a live tunnel: hot-reload straight through.
         if (onRoutingModePresetSelected(target, scope)) {
             ConnectModeSwitchRequestResult.APPLIED
         } else {
@@ -467,7 +409,6 @@ private fun HomeViewModel.requestOrApplyLiveOperatingModeChange(
     }
 }
 
-/** Idle mode changes use the same atomic-application preference as live ones. */
 private fun HomeViewModel.requestOrApplyOperatingModeChange(
     target: com.foxhole.core.model.RoutingModePreset,
     scope: PrivacyRouteScope,
@@ -482,8 +423,6 @@ private fun HomeViewModel.requestOrApplyOperatingModeChange(
             )
         return ConnectModeSwitchRequestResult.DEFERRED
     }
-    // Keep the same confirmed-transition dispatcher for idle and standalone-Tor ownership. The
-    // latter must do a typed stop -> IDLE -> start, never fall through to the reload sentinel.
     applyConfirmedConnectModeSwitch(target, scope)
     return ConnectModeSwitchRequestResult.APPLIED
 }
@@ -509,19 +448,16 @@ private fun HomeViewModel.startLiveModeSwitchPrompt(
                 secondsLeft -= 1
                 val current = torTransitionPromptMutable.value
                 if (current !is TorTransitionPrompt.LiveModeSwitch || current.kind != kind || current.target != target) {
-                    // Superseded by another prompt or dismissed: stop ticking, touch nothing.
                     return@launch
                 }
                 torTransitionPromptMutable.value = current.copy(secondsLeft = secondsLeft)
             }
-            // Timed out: drop the modal, apply nothing — the settings were never changed.
             if (torTransitionPromptMutable.value is TorTransitionPrompt.LiveModeSwitch) {
                 torTransitionPromptMutable.value = null
             }
         }
 }
 
-/** Confirm for a [TorTransitionPrompt.LiveModeSwitch]: apply the requested mode change. */
 internal fun HomeViewModel.confirmLiveModeSwitch(prompt: TorTransitionPrompt.LiveModeSwitch) {
     liveModeSwitchCountdownJob?.cancel()
     liveModeSwitchCountdownJob = null
@@ -529,7 +465,6 @@ internal fun HomeViewModel.confirmLiveModeSwitch(prompt: TorTransitionPrompt.Liv
     applyConfirmedConnectModeSwitch(prompt.target, prompt.scope, prompt.kind)
 }
 
-/** Applies a mode change after either the atomic-off sheet or the live-switch countdown. */
 internal fun HomeViewModel.applyConfirmedConnectModeSwitch(
     target: com.foxhole.core.model.RoutingModePreset,
     scope: PrivacyRouteScope,
@@ -538,9 +473,6 @@ internal fun HomeViewModel.applyConfirmedConnectModeSwitch(
     val snapshot = container.connectionController.snapshot.value
     val current = container.settingsRepository.settings.value.activeRoutingModePreset()
     if (isTorOnlyRuntimeActive(snapshot) && target != com.foxhole.core.model.RoutingModePreset.TOR) {
-        // A standalone Tor session has different runtime ownership from a VPN-backed preset. It
-        // cannot be reshaped through ACTION_RELOAD: stop it completely, then persist/start the
-        // confirmed target. Until IDLE, settings and UI remain on the actually running Tor mode.
         viewModelScope.launch {
             container.connectionController.disconnectTorOnly(userInitiated = false)
             if (awaitConfirmedModeHandoffIdle()) {
@@ -577,17 +509,11 @@ private fun HomeViewModel.applyConfirmedConnectModeSwitch(
     kind: LiveModeSwitchKind,
 ) {
     when (kind) {
-        // Attach/detach Tor on the running tunnel: seamless hot reload, tunnel stays up.
         LiveModeSwitchKind.ATTACH_TOR,
         LiveModeSwitchKind.DETACH_TOR,
         -> onRoutingModePresetSelected(target, scope)
-        // Pure Tor: stop the VPN first, then bring up the standalone Tor-only runtime. Starting
-        // without the teardown reaches `onEnableDirectTorQuickStart` while the tunnel is still up,
-        // which refuses all-apps Tor beside a VPN — the prompt promised the opposite.
         LiveModeSwitchKind.TOR_STOPS_VPN ->
             viewModelScope.launch {
-                // This is one runtime handoff, not a user Stop. An intermediate local guard would
-                // take the Android VPN slot and prevent the Tor-only runtime from starting.
                 container.connectionController.disconnect(
                     suppressLocalGuard = true,
                     userInitiated = false,
@@ -617,8 +543,6 @@ internal fun HomeViewModel.maybePromptStartTcpVpnWhileTorOnlyActive(
 ): Boolean {
     val snapshot = container.connectionController.snapshot.value
     val targetProtocolHint = profile.protocolOptionOrDefault(protocolOptionId)?.protocolHint ?: profile.protocolHint
-    // The user already chose "Tor beside the tunnel" (bypass): starting the VPN keeps Tor on the
-    // device route without re-asking, so the split Start-VPN button switches seamlessly.
     val bypassAlreadyChosen = container.settingsRepository.settings.value.privacyRoute.bypassVpnTunnel
     val shouldPrompt = isTorOnlyRuntimeActive(snapshot) && !targetProtocolHint.isUdpTransport() && !bypassAlreadyChosen
     if (shouldPrompt) {

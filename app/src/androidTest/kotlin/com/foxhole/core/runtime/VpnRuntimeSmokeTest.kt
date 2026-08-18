@@ -212,16 +212,6 @@ class VpnRuntimeSmokeTest {
             }
         }
 
-    /**
-     * The map has to LIGHT UP for a live tunnel — that is the regression this guards: the state
-     * builder used to call the geoip resolver inside the map's own flow, and the first lookup
-     * parses the whole range table behind a lock, so every map emission (availability included)
-     * queued behind a multi-second parse and the card stayed on standby over a connected tunnel.
-     *
-     * The live profile is staged by the host test runner. Raw `direct` engine documents are not a
-     * public profile format anymore, so this test cannot silently replace a real protocol tunnel
-     * with a bypass-only fixture.
-     */
     @Test
     fun trafficMapRemainsAvailableWhileLiveTunnelCarriesTraffic() =
         runBlocking {
@@ -229,9 +219,6 @@ class VpnRuntimeSmokeTest {
             val container = context.appGraph
             val profile = prepareLiveVpnSmoke(context)
             val viewModel = HomeViewModel(context)
-            // The map state is shared Eagerly, so its StateFlow VALUE is the source of truth here.
-            // Reading it through a collector coroutine would make the assertion depend on that
-            // coroutine getting scheduled, turning a dispatch stall into a "map unavailable" fail.
             fun trafficMapState() = viewModel.trafficMapUiState.value
 
             try {
@@ -253,7 +240,6 @@ class VpnRuntimeSmokeTest {
                     delay(TRAFFIC_MAP_TCP_PROBE_INTERVAL_MS)
                 }
 
-                // The map keeps publishing while traffic flows (the flow is not wedged).
                 assertTrue(
                     "traffic map stopped being available while tunnel traffic flowed. " +
                         "state=${trafficMapState()} diagnostics=${diagnosticSummary(container.diagnosticsLogger)}",
@@ -441,9 +427,6 @@ class VpnRuntimeSmokeTest {
         return false
     }
 
-    // VALIDATED, not merely present: a phone with a SIM that is out of service still advertises a
-    // cellular network with INTERNET capability, and the Wi-Fi -> LTE smoke then "switched" onto a
-    // transport that carries no packets at all and failed on DNS instead of skipping.
     private fun hasNonVpnInternetTransport(
         context: FoxholeApplication,
         transport: Int,
@@ -479,13 +462,6 @@ class VpnRuntimeSmokeTest {
     private fun FoxholeApplication.connectivityManager(): ConnectivityManager =
         getSystemService(ConnectivityManager::class.java)
 
-    // What this asserts is RESOLUTION: ping prints "PING host (a.b.c.d)" once the name resolved,
-    // and that line is the DNS fact. An ICMP echo REPLY is a different claim — the tunnel's direct
-    // outbound and the upstream both get a say, and a freshly attached cellular upstream routinely
-    // drops the echo while DNS and TCP are perfectly healthy (tunnel reachability is already
-    // asserted by the vpn-bound validation probe and the IP refresh). A failed resolution prints
-    // nothing to stdout ("unknown host" goes to stderr, which the shell helper does not capture),
-    // so an empty result is a failure too.
     private fun assertDeviceDnsResolution(phase: String) {
         var pingGoogle = ""
         val deadline = System.currentTimeMillis() + DNS_PING_RETRY_TIMEOUT_MS
@@ -597,8 +573,6 @@ class VpnRuntimeSmokeTest {
         private const val TRAFFIC_MAP_TCP_PROBE_INTERVAL_MS = 1_000L
         private const val TRAFFIC_MAP_TCP_PROBE_COMMAND =
             "sh -c 'printf \"HEAD / HTTP/1.0\\r\\nHost: 1.1.1.1\\r\\n\\r\\n\" | nc -w 5 1.1.1.1 80 >/dev/null 2>&1'"
-        // "PING google.com (142.250.74.174) 56(84) bytes of data" — the parenthesised address is
-        // ping telling us the name resolved.
         private val DNS_RESOLVED_ADDRESS_PATTERN: Pattern =
             Pattern.compile("""PING\s+\S+\s+\(([0-9a-fA-F:.]+)\)""")
     }

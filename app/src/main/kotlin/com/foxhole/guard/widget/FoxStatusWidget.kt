@@ -51,10 +51,13 @@ class FoxStatusWidget : GlanceAppWidget() {
         )
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
-        val connection = (context.applicationContext as FoxholeApplication).appGraph.connectionController
+        val graph = (context.applicationContext as FoxholeApplication).appGraph
+        val connection = graph.connectionController
         provideContent {
             val preferences = currentState<Preferences>()
-            val animationEnabled = preferences[FOX_STATUS_ANIMATION_KEY] ?: true
+            val settings by graph.settingsRepository.settings.collectAsState()
+            val animationEnabled =
+                preferences[FOX_STATUS_ANIMATION_KEY] ?: settings.widgets.foxAnimationEnabled
             val snapshot by connection.snapshot.collectAsState()
             val connected = widgetHasPrimaryConnection(snapshot)
             val animatedFrame by FoxStatusWidgetAnimation.frame.collectAsState()
@@ -122,17 +125,20 @@ internal object FoxStatusWidgetAnimation {
             .getGlanceIds(FoxStatusWidget::class.java)
             .filter { id -> animationEnabled(context, id) }
 
-    private suspend fun animationEnabled(context: Context, id: GlanceId): Boolean =
-        try {
+    private suspend fun animationEnabled(context: Context, id: GlanceId): Boolean {
+        val settingsDefault =
+            (context.applicationContext as FoxholeApplication)
+                .appGraph.settingsRepository.settings.value.widgets.foxAnimationEnabled
+        return try {
             getAppWidgetState(context, PreferencesGlanceStateDefinition, id)[FOX_STATUS_ANIMATION_KEY]
-                ?: true
+                ?: settingsDefault
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: Exception) {
-            // A launcher may remove an id between discovery and state lookup. The following update
-            // will reconcile it; default-on preserves the documented preference for live ids.
-            true
+            // Launcher ids can disappear between discovery and state lookup.
+            settingsDefault
         }
+    }
 }
 
 internal fun foxStatusFrame(

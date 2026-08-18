@@ -51,7 +51,7 @@ class I2pAddressValidationTest {
 
     @Test
     fun `destination charset accepts i2p base64 and rejects standard base64 extras`() {
-        val body = "Ab0".repeat(171) // 513 chars
+        val body = "Ab0".repeat(171)
         assertNull(i2pDestinationValidationErrorRes("$body-~="))
         assertEquals(R.string.i2p_address_destination_invalid, i2pDestinationValidationErrorRes("$body+/="))
         assertEquals(R.string.i2p_address_destination_invalid, i2pDestinationValidationErrorRes("$body a="))

@@ -37,8 +37,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.foxhole.core.model.AnomalyEvent
 import com.foxhole.core.model.AnomalySeverity
@@ -64,16 +64,21 @@ import com.foxhole.guard.ui.cli.CliFormat
 import com.foxhole.guard.ui.cli.CliSpacing
 import com.foxhole.guard.ui.cli.CliType
 import com.foxhole.guard.ui.cli.LocalCliColors
+import com.foxhole.guard.ui.cli.cliScaledDp
+import com.foxhole.guard.ui.cli.cliScaledSp
 import com.foxhole.guard.ui.cli.cliSlide
 import com.foxhole.guard.ui.cli.components.CliBottomSheet
 import com.foxhole.guard.ui.cli.components.CliButton
 import com.foxhole.guard.ui.cli.components.CliChip
+import com.foxhole.guard.ui.cli.components.CliChromeTailSpacer
+import com.foxhole.guard.ui.cli.components.CliFlagIcon
 import com.foxhole.guard.ui.cli.components.CliLoadingRow
 import com.foxhole.guard.ui.cli.components.CliPanel
 import com.foxhole.guard.ui.cli.components.CliPixIcon
 import com.foxhole.guard.ui.cli.components.CliRetentionRow
 import com.foxhole.guard.ui.cli.components.CliRowDivider
 import com.foxhole.guard.ui.cli.components.CliScreenHeader
+import com.foxhole.guard.ui.cli.components.CliSectionPreloader
 import com.foxhole.guard.ui.cli.components.CliSheetAction
 import com.foxhole.guard.ui.cli.components.CliSheetActionTone
 import com.foxhole.guard.ui.cli.components.CliSheetActionsRow
@@ -109,19 +114,11 @@ internal const val CLI_LOGS_DOCK_TAG = "cli_logs_dock"
 internal const val CLI_LOGS_ACTIONS_BUTTON_TAG = "cli_logs_actions_button"
 internal const val CLI_LOGS_ACTIONS_SHEET_TAG = "cli_logs_actions_sheet"
 
-/**
- * Restore by enum name with an APP fallback: a session saved on a retired tab must land on
- * APP, not crash the restore.
- */
 private val CliLogTabSaver = Saver<CliLogTab, String>(
     save = { it.name },
     restore = { saved -> CliLogTab.entries.firstOrNull { it.name == saved } ?: CliLogTab.APP },
 )
 
-/**
- * The three journals (hosted under cfg → application → journals): the app journal, the network
- * connections journal (with its enable toggle) and the merged security journal.
- */
 @Composable
 internal fun CliLogsScreen(
     viewModel: HomeViewModel,
@@ -137,7 +134,6 @@ internal fun CliLogsScreen(
             .testTag(CLI_LOGS_SCREEN_TAG)
             .padding(horizontal = CliSpacing.md),
     ) {
-        // No cli_dock_* name of its own — the header reuses the cfg entry label the user tapped.
         CliScreenHeader(
             label = stringResource(R.string.cli_cfg_more_journals),
             icon = R.drawable.pix_journal,
@@ -145,9 +141,12 @@ internal fun CliLogsScreen(
                 CliLogsActionsButton(onClick = { actionsOpen = true })
             },
         )
+        if (!state.settingsHydrated) {
+            CliSectionPreloader(text = stringResource(R.string.cli_common_loading_settings))
+            return
+        }
         when (tab) {
             CliLogTab.APP -> {
-                // Without the NETWORK_ACTIVITY_TAG filter the activity tag floods the app journal.
                 CliJournalLayout(
                     tab = tab,
                     onTabSelected = { tab = it },
@@ -195,11 +194,10 @@ internal fun CliLogsScreen(
                 onDismissActions = { actionsOpen = false },
             )
         }
-        Spacer(modifier = Modifier.height(CliSpacing.sm))
+        CliChromeTailSpacer()
     }
 }
 
-/** Shared fixed-screen composition: scrolling journal content, then the fixed tab dock. */
 @Composable
 private fun androidx.compose.foundation.layout.ColumnScope.CliJournalLayout(
     tab: CliLogTab,
@@ -218,12 +216,9 @@ private fun androidx.compose.foundation.layout.ColumnScope.CliJournalLayout(
         tab = tab,
         onTabSelected = onTabSelected,
     )
-    // Kept composed while closed: the SAF launcher and an in-flight archive export must survive
-    // the sheet closing after an action is selected.
     actions()
 }
 
-/** Journal selection stays reachable while the content above scrolls independently. */
 @Composable
 private fun CliJournalDock(
     tab: CliLogTab,
@@ -248,13 +243,6 @@ private fun CliJournalDock(
     }
 }
 
-/**
- * Clear/save actions for the selected journal, opened only from the header gear. Every tab passes
- * the exact visible entries through SAF; APP/SECURITY are sanitized while the explicitly enabled
- * NET journal preserves its real destination and port. No share target or FileProvider permission
- * is required. The security journal's destructive action stays disabled:
- * it merges sealed evidence with two other stores and has no honest single-journal clear operation.
- */
 @Composable
 private fun CliJournalActionsSheet(
     open: Boolean,
@@ -269,8 +257,6 @@ private fun CliJournalActionsSheet(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    // Resolved in composition: LocalContext resources inside the launcher callback are a lint
-    // error and read whatever configuration is current when the picker returns.
     val savedMessage = stringResource(R.string.cli_logs_save_ok)
     val saveFailedMessage = stringResource(R.string.cli_logs_save_failed)
     var exporting by remember { mutableStateOf(false) }
@@ -278,9 +264,6 @@ private fun CliJournalActionsSheet(
     LaunchedEffect(open) {
         if (!open) page = CliJournalActionsPage.ACTIONS
     }
-    // No pending snapshot: the launcher callback sees the CURRENT exportEntries/exportTitle
-    // (rememberLauncherForActivityResult keeps the lambda fresh) and the export survives process
-    // death while the system picker is open — a remember-snapshot died there.
     val documentLauncher =
         rememberLauncherForActivityResult(
             ActivityResultContracts.CreateDocument("text/plain"),
@@ -297,8 +280,6 @@ private fun CliJournalActionsSheet(
                                 formatNetworkJournalExport(exportTitle, exportEntries)
                         }
                     }
-                    // The write can fail (no space, revoked uri) — without checking, "save"
-                    // stayed silent on success and failure alike.
                     val written = writeJournalExport(context.contentResolver, uri, payload)
                     exporting = false
                     if (written) {
@@ -337,9 +318,6 @@ private fun CliJournalActionsSheet(
                                 saveEnabled = !exporting && exportEntries.isNotEmpty(),
                                 onClear = { page = CliJournalActionsPage.CONFIRM_CLEAR },
                                 onSave = {
-                                    // Keep the action sheet and both peer buttons composed while
-                                    // the system picker is in front. Removing the sheet made SAVE
-                                    // visibly disappear on tap and after a cancelled picker.
                                     exporting = true
                                     runCatching { documentLauncher.launch(exportFileName) }
                                         .onFailure {
@@ -364,7 +342,6 @@ private fun CliJournalActionsSheet(
     }
 }
 
-/** Two peer actions on one row; cancel remains a separate full-width escape below them. */
 @Composable
 private fun CliJournalPrimaryActions(
     clearEnabled: Boolean,
@@ -409,7 +386,6 @@ private fun CliJournalPrimaryActions(
     }
 }
 
-/** The same sheet flips to this destructive confirmation instead of stacking another modal. */
 @Composable
 private fun CliJournalClearConfirmation(
     onBack: () -> Unit,
@@ -436,7 +412,6 @@ private fun CliJournalClearConfirmation(
     }
 }
 
-/** Header gear — the only entry into actions for the currently selected journal. */
 @Composable
 private fun CliLogsActionsButton(onClick: () -> Unit) {
     val colors = LocalCliColors.current
@@ -458,17 +433,12 @@ private fun CliLogsActionsButton(onClick: () -> Unit) {
 
 private val LOG_ACTIONS_BUTTON_SIZE = 48.dp
 
-/** Grouped-mode wrapper — the name keeps the androidTest and APP-tab contract. */
 @Composable
 internal fun androidx.compose.foundation.layout.ColumnScope.CliGroupedDiagnosticList(
     entries: List<DiagnosticEntry>,
     emptyText: String,
 ) = CliDiagnosticList(entries = entries, emptyText = emptyText, grouped = true)
 
-/**
- * One table for APP and NET. Grouped APP data keeps related event types together, but every row
- * still has the same fixed time/type/description columns as NET and SECURITY.
- */
 @Composable
 private fun androidx.compose.foundation.layout.ColumnScope.CliDiagnosticList(
     entries: List<DiagnosticEntry>,
@@ -488,11 +458,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.CliDiagnosticList(
     }
     val ordered = remember(entries, grouped) {
         if (grouped) {
-            entries
-                .groupBy(DiagnosticEntry::tag)
-                .entries
-                .sortedByDescending { (_, values) -> values.maxOf(DiagnosticEntry::timestamp) }
-                .flatMap { (_, values) -> values.asReversed() }
+            entries.sortedByDescending(DiagnosticEntry::timestamp)
         } else {
             entries.asReversed()
         }
@@ -505,7 +471,6 @@ private fun androidx.compose.foundation.layout.ColumnScope.CliDiagnosticList(
     CliJournalTable(rows = rows)
 }
 
-/** Shared journal table: stable left-aligned columns and a separator between every event. */
 @Composable
 private fun androidx.compose.foundation.layout.ColumnScope.CliJournalTable(rows: List<CliJournalRow>) {
     LazyColumn(
@@ -518,8 +483,6 @@ private fun androidx.compose.foundation.layout.ColumnScope.CliJournalTable(rows:
             CliJournalTableHeader()
             CliRowDivider()
         }
-        // The index must be part of the key: timestamp+payload is not unique, and repeated
-        // diagnostics in one millisecond previously crashed LazyColumn with duplicate keys.
         itemsIndexed(
             rows,
             key = { index, row -> "journal:$index:${row.timestamp}:${row.eventType}" },
@@ -545,14 +508,17 @@ private fun CliJournalTableHeader() {
             modifier = Modifier.width(JOURNAL_TIMESTAMP_WIDTH),
         )
         Spacer(modifier = Modifier.width(JOURNAL_COLUMN_GAP))
-        Text(
-            text = stringResource(R.string.cli_logs_column_event_type),
-            style = CliType.small,
-            color = colors.dim,
-            textAlign = TextAlign.Start,
-            maxLines = 2,
-            modifier = Modifier.width(JOURNAL_EVENT_TYPE_WIDTH),
-        )
+        Row(modifier = Modifier.width(JOURNAL_EVENT_TYPE_WIDTH)) {
+            Spacer(modifier = Modifier.width(JOURNAL_GLYPH_SIZE + JOURNAL_GLYPH_GAP))
+            Text(
+                text = stringResource(R.string.cli_logs_column_event_type),
+                style = CliType.small,
+                color = colors.dim,
+                textAlign = TextAlign.Start,
+                maxLines = 2,
+                modifier = Modifier.weight(1f),
+            )
+        }
         Spacer(modifier = Modifier.width(JOURNAL_COLUMN_GAP))
         Text(
             text = stringResource(R.string.cli_logs_column_description),
@@ -568,39 +534,71 @@ private fun CliJournalTableHeader() {
 @Composable
 private fun CliJournalTableRow(row: CliJournalRow) {
     val colors = LocalCliColors.current
+    val toneColor = journalToneColor(row.tone, row.eventType, colors)
     Row(modifier = Modifier.fillMaxWidth().padding(vertical = CliSpacing.xs)) {
         CliJournalTimestamp(row.timestamp)
         Spacer(modifier = Modifier.width(JOURNAL_COLUMN_GAP))
-        Text(
-            text = row.eventType,
-            style = CliType.small,
-            color = journalToneColor(row.tone, row.eventType, colors),
-            textAlign = TextAlign.Start,
-            maxLines = 3,
+        Row(
             modifier = Modifier.width(JOURNAL_EVENT_TYPE_WIDTH),
-        )
+            verticalAlignment = Alignment.Top,
+        ) {
+            CliPixIcon(
+                id = journalToneIcon(row.tone),
+                contentDescription = null,
+                size = JOURNAL_GLYPH_SIZE,
+                tint = toneColor,
+            )
+            Spacer(modifier = Modifier.width(JOURNAL_GLYPH_GAP))
+            Text(
+                text = row.eventType,
+                style = CliType.small,
+                color = toneColor,
+                textAlign = TextAlign.Start,
+                maxLines = 3,
+                modifier = Modifier.weight(1f),
+            )
+        }
         Spacer(modifier = Modifier.width(JOURNAL_COLUMN_GAP))
         Column(modifier = Modifier.weight(1f)) {
             row.description.forEachIndexed { index, field ->
-                Text(
-                    text = field,
-                    style = CliType.small,
-                    color = if (index == 0 && row.tone == CliJournalRowTone.ERROR) {
-                        colors.err
-                    } else {
-                        if (index == 0) colors.fg else colors.dim
-                    },
-                    maxLines = if (index == 0) 3 else 2,
-                )
+                if (index == 0 && row.flagCountry != null) {
+                    Row(verticalAlignment = Alignment.Top) {
+                        CliFlagIcon(countryCode = row.flagCountry, style = CliType.small)
+                        Spacer(modifier = Modifier.width(JOURNAL_GLYPH_GAP))
+                        CliJournalDescriptionLine(field = field, index = index, row = row)
+                    }
+                } else {
+                    CliJournalDescriptionLine(field = field, index = index, row = row)
+                }
             }
         }
     }
 }
 
-/**
- * Network connections journal: always a tab, never gated on statistics. While logging is off
- * the tab still lists whatever the runtime already produced, under a dim hint.
- */
+@Composable
+private fun CliJournalDescriptionLine(field: String, index: Int, row: CliJournalRow) {
+    val colors = LocalCliColors.current
+    Text(
+        text = field,
+        style = CliType.small,
+        color = when {
+            index == 0 && row.tone == CliJournalRowTone.ERROR -> colors.err
+            index == 0 -> colors.fg
+            else -> colors.dim
+        },
+        maxLines = if (index == 0) 3 else 2,
+        overflow = TextOverflow.Ellipsis,
+    )
+}
+
+private fun journalToneIcon(tone: CliJournalRowTone): Int = when (tone) {
+    CliJournalRowTone.ERROR -> R.drawable.pix_forbidden
+    CliJournalRowTone.WARNING -> R.drawable.pix_info
+    CliJournalRowTone.SUCCESS -> R.drawable.pix_check
+    CliJournalRowTone.INFO -> R.drawable.pix_link
+    CliJournalRowTone.NORMAL, CliJournalRowTone.DIM -> R.drawable.pix_journal
+}
+
 @Composable
 private fun androidx.compose.foundation.layout.ColumnScope.CliNetworkLog(
     viewModel: HomeViewModel,
@@ -615,9 +613,6 @@ private fun androidx.compose.foundation.layout.ColumnScope.CliNetworkLog(
     val context = LocalContext.current
     val appContext = remember(context) { context.applicationContext }
     val countryResolver = remember(appContext) { TorGeoIpCountryResolver(appContext) }
-    // The connections journal is raw by design (exports keep their own sanitizer). The
-    // diagnosticEntries key is narrowed to the empty-events fallback case — otherwise every
-    // unrelated diagnostic emit re-ran the whole journal (package resolves + geoip).
     val fallbackEntries = state.diagnosticEntries.takeIf { state.networkActivityEvents.isEmpty() }.orEmpty()
     val formatted by produceState<List<DiagnosticEntry>>(
         emptyList(),
@@ -626,8 +621,6 @@ private fun androidx.compose.foundation.layout.ColumnScope.CliNetworkLog(
         state.ipInfo,
     ) {
         value = withContext(Dispatchers.Default) {
-            // The structured event table is gated on statistics settings that default OFF; the
-            // runtime journals the same connections as "activity" entries — fall back to those.
             networkActivityDiagnosticEntries(
                 events = state.networkActivityEvents,
                 context = appContext as Context,
@@ -671,7 +664,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.CliNetworkLog(
                             label = stringResource(R.string.cli_logs_network_journal),
                             checked = enabled,
                             onToggle = viewModel::onNetworkActivityLoggingChanged,
-                            note = stringResource(R.string.cli_logs_network_journal_note),
+                            infoText = stringResource(R.string.cli_logs_network_journal_note),
                         )
                         CliRetentionRow(
                             label = stringResource(R.string.cli_logs_retention),
@@ -693,7 +686,6 @@ private fun androidx.compose.foundation.layout.ColumnScope.CliNetworkLog(
     )
 }
 
-/** One security-journal line; wraps the three sources so they merge chronologically. */
 private sealed interface SecJournalItem {
     val timestamp: Long
 
@@ -710,12 +702,6 @@ private sealed interface SecJournalItem {
     }
 }
 
-/**
- * Merged security journal: sealed guard chain + app-install changes + anomaly history, newest
- * first. Reading the guard chain IS a verify pass (a clean run re-anchors the checkpoint): one
- * pass per tab visit plus the manual recheck chip — no auto-refresh loops. Null report = guard
- * keys unavailable (locked); the other two sources still render.
- */
 @Composable
 private fun androidx.compose.foundation.layout.ColumnScope.CliSecurityLog(
     viewModel: HomeViewModel,
@@ -726,15 +712,11 @@ private fun androidx.compose.foundation.layout.ColumnScope.CliSecurityLog(
 ) {
     val colors = LocalCliColors.current
     val state by viewModel.diagnosticsRouteState.collectAsStateWithLifecycle()
-    // Anomaly history rides the statistics route only; the diagnostics route does not carry it.
     val statsState by viewModel.statisticsRouteState.collectAsStateWithLifecycle()
     var refreshToken by remember { mutableIntStateOf(0) }
     var checking by remember { mutableStateOf(true) }
     var checkFailed by remember { mutableStateOf(false) }
     var report by remember { mutableStateOf<GuardJournalReport?>(null) }
-    // One-shot per tab visit plus manual recheck: continuously walking the sealed chain wastes
-    // idle work. runCatching is mandatory: verifyGuardJournal() reads files the sentinel rotates
-    // in parallel and has try/finally with NO catch — a thrown exception killed the recomposer.
     LaunchedEffect(refreshToken) {
         checking = true
         val result = runCatching { viewModel.loadGuardJournalReport() }
@@ -891,7 +873,6 @@ private fun SecJournalItem.toJournalRow(context: Context): CliJournalRow =
             )
     }
 
-/** Integrity summary of the guard chain (or its checking/locked state) + the recheck chip. */
 @Composable
 private fun CliSecurityHeader(
     report: GuardJournalReport?,
@@ -914,16 +895,12 @@ private fun CliSecurityHeader(
                     text = stringResource(R.string.cli_journal_checking),
                     small = true,
                 )
-                // A failed check is NOT "no keys": the user needs a reason to hit recheck,
-                // not an eternal "verifying…".
                 failed -> Text(
                     text = stringResource(R.string.cli_journal_check_failed),
                     style = CliType.small,
                     color = colors.err,
                     maxLines = 2,
                 )
-                // Not "the journal is empty": only the sealed guard chain needs the PIN session,
-                // while the app-change and anomaly rows below come from sources that do not.
                 report == null -> Text(
                     text = stringResource(R.string.cli_journal_locked),
                     style = CliType.small,
@@ -966,7 +943,6 @@ private fun CliSecurityHeader(
     }
 }
 
-/** `[+]`/`[-]`/`[~]` for package events and a language-neutral marker otherwise. */
 private fun guardEntryTag(event: GuardEvent?): String {
     event ?: return "[?]"
     return when (event.type) {
@@ -1038,13 +1014,12 @@ private fun journalToneColor(
         CliJournalRowTone.DIM -> colors.dim
     }
 
-/** Fixed-width clock glyphs keep both brackets on one vertical line for every timestamp. */
 @Composable
 private fun CliJournalTimestamp(timestamp: Long) {
     val colors = LocalCliColors.current
     Text(
         text = "[${CliFormat.clock(timestamp)}]",
-        style = CliType.title.copy(fontSize = 7.sp, lineHeight = CliType.small.lineHeight),
+        style = CliType.title.copy(fontSize = cliScaledSp(7f), lineHeight = CliType.small.lineHeight),
         color = colors.faint,
         maxLines = 1,
         textAlign = TextAlign.Start,
@@ -1052,6 +1027,8 @@ private fun CliJournalTimestamp(timestamp: Long) {
     )
 }
 
-private val JOURNAL_TIMESTAMP_WIDTH = 72.dp
-private val JOURNAL_EVENT_TYPE_WIDTH = 80.dp
+private val JOURNAL_GLYPH_SIZE = 12.dp
+private val JOURNAL_GLYPH_GAP = 4.dp
+private val JOURNAL_TIMESTAMP_WIDTH = cliScaledDp(72f)
+private val JOURNAL_EVENT_TYPE_WIDTH = cliScaledDp(80f)
 private val JOURNAL_COLUMN_GAP = 6.dp

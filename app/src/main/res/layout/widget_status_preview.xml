@@ -1,5 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Static picker preview of the status-table geometry rendered by StatusWidget. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
@@ -30,7 +29,7 @@
             android:layout_marginStart="4dp"
             android:layout_weight="1"
             android:fontFamily="@font/lanapixel"
-            android:text="FoxHole Guard"
+            android:text="@string/app_name"
             android:textColor="@color/cli_accent"
             android:textSize="12sp" />
 
@@ -56,9 +55,17 @@
         android:gravity="center_vertical"
         android:orientation="horizontal">
 
+        <ImageView
+            android:layout_width="10dp"
+            android:layout_height="10dp"
+            android:importantForAccessibility="no"
+            android:src="@drawable/pix_status"
+            app:tint="@color/cli_dim" />
+
         <TextView
             android:layout_width="0dp"
             android:layout_height="wrap_content"
+            android:layout_marginStart="3dp"
             android:layout_weight="1"
             android:fontFamily="@font/lanapixel"
             android:text="@string/widget_status_state"
@@ -69,42 +76,257 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:fontFamily="@font/lanapixel"
-            android:text="@string/widget_status_connected"
-            android:textColor="@color/cli_ok"
+            android:text="@string/widget_status_disconnected"
+            android:textColor="@color/cli_err"
+            android:textSize="11sp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <ImageView
+            android:layout_width="10dp"
+            android:layout_height="10dp"
+            android:importantForAccessibility="no"
+            android:src="@drawable/pix_profiles"
+            app:tint="@color/cli_dim" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="3dp"
+            android:layout_weight="1"
+            android:fontFamily="@font/lanapixel"
+            android:text="@string/widget_status_vpn_profile"
+            android:textColor="@color/cli_dim"
+            android:textSize="11sp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:fontFamily="@font/lanapixel"
+            android:text="—"
+            android:textColor="@color/cli_fg"
+            android:textSize="11sp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <ImageView
+            android:layout_width="10dp"
+            android:layout_height="10dp"
+            android:importantForAccessibility="no"
+            android:src="@drawable/pix_shield"
+            app:tint="@color/cli_dim" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="3dp"
+            android:layout_weight="1"
+            android:fontFamily="@font/lanapixel"
+            android:text="@string/widget_status_vpn_protocol"
+            android:textColor="@color/cli_dim"
+            android:textSize="11sp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:fontFamily="@font/lanapixel"
+            android:text="—"
+            android:textColor="@color/cli_fg"
+            android:textSize="11sp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <ImageView
+            android:layout_width="10dp"
+            android:layout_height="10dp"
+            android:importantForAccessibility="no"
+            android:src="@drawable/pix_dns"
+            app:tint="@color/cli_dim" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="3dp"
+            android:layout_weight="1"
+            android:fontFamily="@font/lanapixel"
+            android:text="@string/widget_status_dns"
+            android:textColor="@color/cli_dim"
+            android:textSize="11sp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:fontFamily="@font/lanapixel"
+            android:text="—"
+            android:textColor="@color/cli_fg"
+            android:textSize="11sp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <ImageView
+            android:layout_width="10dp"
+            android:layout_height="10dp"
+            android:importantForAccessibility="no"
+            android:src="@drawable/pix_link"
+            app:tint="@color/cli_dim" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="3dp"
+            android:layout_weight="1"
+            android:fontFamily="@font/lanapixel"
+            android:text="@string/widget_status_scenario"
+            android:textColor="@color/cli_dim"
+            android:textSize="11sp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:fontFamily="@font/lanapixel"
+            android:text="—"
+            android:textColor="@color/cli_fg"
+            android:textSize="11sp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <ImageView
+            android:layout_width="10dp"
+            android:layout_height="10dp"
+            android:importantForAccessibility="no"
+            android:src="@drawable/pix_settings"
+            app:tint="@color/cli_dim" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="3dp"
+            android:layout_weight="1"
+            android:fontFamily="@font/lanapixel"
+            android:text="@string/widget_status_components"
+            android:textColor="@color/cli_dim"
+            android:textSize="11sp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:fontFamily="@font/lanapixel"
+            android:text="—"
+            android:textColor="@color/cli_fg"
+            android:textSize="11sp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <ImageView
+            android:layout_width="10dp"
+            android:layout_height="10dp"
+            android:importantForAccessibility="no"
+            android:src="@drawable/pix_map"
+            app:tint="@color/cli_dim" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="3dp"
+            android:layout_weight="1"
+            android:fontFamily="@font/lanapixel"
+            android:text="@string/widget_status_ip_geo"
+            android:textColor="@color/cli_dim"
+            android:textSize="11sp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:fontFamily="@font/lanapixel"
+            android:text="—"
+            android:textColor="@color/cli_fg"
+            android:textSize="11sp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <ImageView
+            android:layout_width="10dp"
+            android:layout_height="10dp"
+            android:importantForAccessibility="no"
+            android:src="@drawable/pix_clock"
+            app:tint="@color/cli_dim" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="3dp"
+            android:layout_weight="1"
+            android:fontFamily="@font/lanapixel"
+            android:text="@string/widget_status_latency"
+            android:textColor="@color/cli_dim"
+            android:textSize="11sp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:fontFamily="@font/lanapixel"
+            android:text="—"
+            android:textColor="@color/cli_fg"
             android:textSize="11sp" />
     </LinearLayout>
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="22dp"
-        android:layout_marginTop="2dp"
+        android:layout_marginTop="4dp"
         android:orientation="horizontal">
 
         <TextView
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:layout_weight="1"
-            android:background="@drawable/widget_stop_button"
+            android:background="@drawable/widget_start_button"
             android:fontFamily="@font/lanapixel"
             android:gravity="center"
-            android:text="@string/widget_status_stop"
-            android:textColor="@color/cli_err"
-            android:textSize="11sp" />
-
-        <!-- RemoteViews rejects android.widget.Space in launcher previews. -->
-        <TextView
-            android:layout_width="4dp"
-            android:layout_height="match_parent" />
-
-        <TextView
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:background="@drawable/widget_restart_button"
-            android:fontFamily="@font/lanapixel"
-            android:gravity="center"
-            android:text="@string/widget_status_restart"
-            android:textColor="@color/cli_accent"
+            android:text="@string/widget_status_start"
+            android:textColor="@color/cli_ok"
             android:textSize="11sp" />
     </LinearLayout>
 </LinearLayout>

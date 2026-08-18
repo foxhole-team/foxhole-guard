@@ -12,15 +12,6 @@ import com.foxhole.guard.runtime.RuntimeDnsNotice
 import com.foxhole.guard.runtime.RuntimeDnsNoticeBus
 import kotlinx.coroutines.launch
 
-/**
- * In-app DNS notices:
- *  - the runtime bus (system-DNS substitution alerts from [com.foxhole.guard.runtime.SystemDnsChangeMonitor],
- *    which already posted the system notification) surfaces as a banner while the UI is open;
- *  - a fresh tunnel connect on a profile that advertises NO resolver of its own (only WireGuard
- *    endpoints can push one) tells the user that DNS runs through the configured provider —
- *    Cloudflare by default — instead of a provider resolver. The fallback itself has always been
- *    automatic in the assembled config; this makes it visible.
- */
 internal fun HomeViewModel.observeDnsNoticesInternal() {
     viewModelScope.launch {
         RuntimeDnsNoticeBus.notices.collect { notice ->
@@ -58,7 +49,7 @@ internal fun HomeViewModel.observeDnsNoticesInternal() {
     }
 }
 
-@Suppress("ReturnCount") // Several distinct eligibility guards early-exit before the notice emits.
+@Suppress("ReturnCount")
 private fun HomeViewModel.maybeEmitProviderDnsFallbackNotice(snapshot: ConnectionSnapshot) {
     val settings = container.settingsRepository.settings.value
     if (!settings.dns.useVpnProviderDns) {
@@ -73,9 +64,6 @@ private fun HomeViewModel.maybeEmitProviderDnsFallbackNotice(snapshot: Connectio
     ) {
         return
     }
-    // Only protocols that can never advertise a provider resolver: WireGuard configs may push one
-    // (the assembler honours it), and a custom normalized config could embed a WireGuard endpoint,
-    // so both stay silent rather than claim a fallback that did not happen.
     if (snapshot.protocolHint !in PROVIDER_DNS_INCAPABLE_PROTOCOLS) {
         return
     }

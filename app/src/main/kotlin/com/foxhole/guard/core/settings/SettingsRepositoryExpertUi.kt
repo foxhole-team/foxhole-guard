@@ -111,6 +111,9 @@ internal fun updateFirewallEnabledIn(
         ),
     )
 
+suspend fun SettingsRepository.updateKillSwitchEnabled(value: Boolean) =
+    update { it.copy(expert = it.expert.copy(killSwitchEnabled = value)) }
+
 suspend fun SettingsRepository.updateNetworkActivityLogging(value: Boolean) =
     update { it.copy(expert = it.expert.copy(networkActivityLogging = value)) }
 

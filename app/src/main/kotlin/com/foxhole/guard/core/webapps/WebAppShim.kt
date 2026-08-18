@@ -15,23 +15,88 @@ private const val WEB_APP_SHIM_TEMPLATE = """
 (function() {
   if (window.__fhgShim) return; window.__fhgShim = true;
   var count = __FHG_INITIAL_BADGE__;
-  function post(title, body) {
-    try {
-      window.__fhgBridge.postMessage(JSON.stringify({
-        badge: count,
-        title: typeof title === 'string' ? title : null,
-        body: typeof body === 'string' ? body : null
-      }));
-    } catch (e) {}
+  var bridged = __FHG_BRIDGED__;
+  var queue = [];
+  var flushTimer = null;
+  var flushAttempts = 0;
+  var tags = {};
+
+  function bridge() {
+    var target = window.__fhgBridge;
+    return target && typeof target.postMessage === 'function' ? target : null;
   }
+  function flush() {
+    var target = bridge();
+    if (!target) { return false; }
+    while (queue.length) {
+      var payload = queue[0];
+      try {
+        target.postMessage(payload);
+      } catch (e) {
+        return false;
+      }
+      queue.shift();
+    }
+    return true;
+  }
+  function scheduleFlush() {
+    if (flushTimer !== null || flushAttempts >= 20) { return; }
+    flushTimer = setTimeout(function() {
+      flushTimer = null;
+      flushAttempts++;
+      if (!flush()) { scheduleFlush(); }
+    }, Math.min(2000, 50 * (flushAttempts + 1)));
+  }
+  function send(payload) {
+    if (!bridged) { return; }
+    if (queue.length >= 32) { queue.shift(); }
+    queue.push(JSON.stringify(payload));
+    if (!flush()) { scheduleFlush(); }
+  }
+  function post(title, body) {
+    send({
+      badge: count,
+      title: typeof title === 'string' ? title : null,
+      body: typeof body === 'string' ? body : null
+    });
+  }
+  function report(stage, error) {
+    send({ error: stage + ': ' + ((error && error.message) || error || 'failed') });
+  }
+  function bump(tag) {
+    var key = typeof tag === 'string' && tag ? tag : null;
+    if (key !== null && tags[key]) { return; }
+    if (key !== null) { tags[key] = true; }
+    count = Math.min(9999, count + 1);
+  }
+
+  try {
+    document.addEventListener('DOMContentLoaded', flush);
+    document.addEventListener('visibilitychange', flush);
+    window.addEventListener('pageshow', flush);
+  } catch (e) {
+    scheduleFlush();
+  }
+
   try {
     var N = function(title, opts) {
-      count = Math.min(9999, count + 1);
+      var tag = opts && typeof opts.tag === 'string' ? opts.tag : null;
+      bump(tag);
       this.title = String(title || '');
       this.body = opts && typeof opts.body === 'string' ? opts.body : '';
+      this.tag = tag;
+      this.onclick = null;
+      this.onclose = null;
       post(this.title, this.body);
     };
-    N.prototype.close = function() {};
+    N.prototype.close = function() {
+      if (this.tag && tags[this.tag]) { delete tags[this.tag]; }
+      count = Math.max(0, count - 1);
+      if (typeof this.onclose === 'function') {
+        try { this.onclose(); } catch (e) { report('notification_onclose', e); }
+      }
+      post();
+    };
     N.prototype.addEventListener = function() {};
     N.prototype.removeEventListener = function() {};
     N.requestPermission = function(callback) {
@@ -39,31 +104,51 @@ private const val WEB_APP_SHIM_TEMPLATE = """
       return Promise.resolve('granted');
     };
     Object.defineProperty(N, 'permission', { get: function() { return 'granted'; } });
+    Object.defineProperty(N, 'maxActions', { get: function() { return 0; } });
     Object.defineProperty(window, 'Notification', { value: N, configurable: false });
-  } catch (e) {}
+  } catch (e) {
+    report('notification_override', e);
+  }
   try {
     navigator.setAppBadge = function(n) {
-      count = (typeof n === 'number' && isFinite(n)) ? n : 0; post(); return Promise.resolve();
+      if (typeof n === 'number' && isFinite(n) && n >= 0) {
+        count = Math.min(9999, Math.floor(n));
+      } else {
+        count = Math.max(count, 1);
+      }
+      post();
+      return Promise.resolve();
     };
-    navigator.clearAppBadge = function() { count = 0; post(); return Promise.resolve(); };
-  } catch (e) {}
+    navigator.clearAppBadge = function() {
+      count = 0; tags = {}; post(); return Promise.resolve();
+    };
+  } catch (e) {
+    report('badge_override', e);
+  }
   try {
     if (window.ServiceWorkerRegistration) {
       ServiceWorkerRegistration.prototype.showNotification = function(title, opts) {
-        count = Math.min(9999, count + 1);
+        bump(opts && typeof opts.tag === 'string' ? opts.tag : null);
         post(String(title || ''), opts && typeof opts.body === 'string' ? opts.body : '');
         return Promise.resolve();
       };
+      ServiceWorkerRegistration.prototype.getNotifications = function() {
+        return Promise.resolve([]);
+      };
     }
-  } catch (e) {}
+  } catch (e) {
+    report('service_worker_override', e);
+  }
 })();
 """
 
-internal fun webAppShimJs(initialBadge: Int): String =
-    WEB_APP_SHIM_TEMPLATE.replace(
-        "__FHG_INITIAL_BADGE__",
-        initialBadge.coerceIn(0, WEB_APP_BADGE_MAX).toString(),
-    )
+internal fun webAppShimJs(
+    initialBadge: Int,
+    bridged: Boolean = true,
+): String =
+    WEB_APP_SHIM_TEMPLATE
+        .replace("__FHG_INITIAL_BADGE__", initialBadge.coerceIn(0, WEB_APP_BADGE_MAX).toString())
+        .replace("__FHG_BRIDGED__", bridged.toString())
 
 /** Name of the bridge object addWebMessageListener publishes to the page. */
 internal const val WEB_APP_SHIM_BRIDGE_NAME = "__fhgBridge"
@@ -77,6 +162,7 @@ internal data class WebAppNotificationContent(
 internal data class WebAppShimSignal(
     val badge: Int?,
     val notification: WebAppNotificationContent?,
+    val installError: String? = null,
 )
 
 internal fun parseShimSignal(message: String?): WebAppShimSignal? {
@@ -85,14 +171,13 @@ internal fun parseShimSignal(message: String?): WebAppShimSignal? {
     val badge = objectValue["badge"]?.jsonPrimitive?.intOrNull
     val title = objectValue["title"]?.jsonPrimitive?.contentOrNull?.normalizedNotificationText()
     val body = objectValue["body"]?.jsonPrimitive?.contentOrNull?.normalizedNotificationText()
+    val installError = objectValue["error"]?.jsonPrimitive?.contentOrNull?.normalizedNotificationText()
     val notification = WebAppNotificationContent(title = title, body = body).takeIf {
         it.title != null || it.body != null
     }
-    if (badge == null && notification == null) return null
-    return WebAppShimSignal(badge = badge, notification = notification)
+    if (badge == null && notification == null && installError == null) return null
+    return WebAppShimSignal(badge = badge, notification = notification, installError = installError)
 }
-
-internal fun parseShimBadgeMessage(message: String?): Int? = parseShimSignal(message)?.badge
 
 internal fun computeBadge(shimCount: Int?, title: String?, previous: Int): Int {
     if (shimCount != null) {

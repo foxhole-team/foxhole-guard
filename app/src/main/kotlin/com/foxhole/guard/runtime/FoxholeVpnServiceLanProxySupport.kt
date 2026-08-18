@@ -20,13 +20,60 @@ import com.foxhole.core.runtime.TorProbeProxyUnavailableException
 import com.foxhole.core.runtime.updateLanProxyStatus
 import com.foxhole.core.runtime.updateLocalProxyStatus
 import kotlinx.coroutines.Dispatchers
+import java.util.WeakHashMap
 
 // The LAN proxy's Android half: it decides WHETHER the surface may be published (network, session,
 // credentials, carrier protocol) and hands the core a request; the core decides whether the bind
 // succeeds and reports the state back. Nothing here writes a status — the runtime publishes what
 // the core said, so the screen can never show a Ready the core never gave.
 
+internal sealed interface ProxySurfaceAsk {
+    data object Live : ProxySurfaceAsk
+
+    data class Released(
+        val reason: LanProxyUnavailableReason? = null,
+    ) : ProxySurfaceAsk
+}
+
+internal class ProxySurfaceSyncLatch {
+    @Volatile
+    private var lastCompleted: ProxySurfaceAsk? = null
+
+    fun shouldSync(ask: ProxySurfaceAsk): Boolean = ask is ProxySurfaceAsk.Live || lastCompleted != ask
+
+    fun recordSynced(ask: ProxySurfaceAsk) {
+        lastCompleted = ask
+    }
+
+    fun reset() {
+        lastCompleted = null
+    }
+}
+
+private class ProxySurfaceSyncState {
+    val lan = ProxySurfaceSyncLatch()
+    val local = ProxySurfaceSyncLatch()
+    val torProbe = ProxySurfaceSyncLatch()
+
+    fun reset() {
+        lan.reset()
+        local.reset()
+        torProbe.reset()
+    }
+}
+
+private val proxySurfaceSyncStates = WeakHashMap<FoxholeVpnService, ProxySurfaceSyncState>()
+
+private fun FoxholeVpnService.proxySurfaceSyncState(): ProxySurfaceSyncState =
+    synchronized(proxySurfaceSyncStates) {
+        proxySurfaceSyncStates.getOrPut(this) { ProxySurfaceSyncState() }
+    }
+
 internal fun FoxholeVpnService.startLanProxyUpdates() {
+    stopLanProxyUpdates()
+    if (!proxySurfaceTickerNeeded(container.settingsRepository.settings.value)) {
+        return
+    }
     sessionTicker.register(
         id = FoxholeVpnService.TICKER_TASK_LAN_PROXY,
         fireImmediately = true,
@@ -45,9 +92,9 @@ internal fun FoxholeVpnService.startLanProxyUpdates() {
  * knows which port it bound, so the screen is fed from the core's answer rather than from the
  * settings that asked for it.
  *
- * The scenario is entered by the traffic mode rather than by a switch of its own — «прокси сервер»
- * in the VPN connection control — so the listener follows the mode: it comes up with the session
- * and goes down when the mode changes back.
+ * The scenario is entered by the traffic mode rather than by a switch of its own — the proxy server
+ * entry in the VPN connection control — so the listener follows the mode: it comes up with the
+ * session and goes down when the mode changes back.
  */
 internal fun FoxholeVpnService.syncLocalProxy() {
     val settings = container.settingsRepository.settings.value
@@ -63,7 +110,13 @@ internal fun FoxholeVpnService.syncLocalProxy() {
             upstream = LocalProxyUpstream.PROFILE,
         )
     }
+    val latch = proxySurfaceSyncState().local
+    val ask = if (request == null) ProxySurfaceAsk.Released() else ProxySurfaceAsk.Live
+    if (!latch.shouldSync(ask)) {
+        return
+    }
     val status = runCatching { runtime.syncLocalProxy(request) }.getOrNull() ?: return
+    latch.recordSynced(ask)
     FoxholeVpnRuntimeBridge.updateLocalProxyStatus(status)
 }
 
@@ -82,7 +135,13 @@ internal fun FoxholeVpnService.syncTorProbeProxy() {
                 runtimeGeneration = runtimeSupervisor.currentGeneration(),
             )
         }
+    val latch = proxySurfaceSyncState().torProbe
+    val ask = if (owner == null) ProxySurfaceAsk.Released() else ProxySurfaceAsk.Live
+    if (!latch.shouldSync(ask)) {
+        return
+    }
     val result = runtime.syncTorProbeProxy(owner)
+    latch.recordSynced(ask)
     val failure = (result.exceptionOrNull() as? TorProbeProxyUnavailableException)?.failure
     when {
         owner == null -> lastTorProbeFailure = null
@@ -117,6 +176,7 @@ internal fun FoxholeVpnService.stopLanProxyUpdates() {
         .onFailure { container.diagnosticsLogger.recordFailure("tor", "Tor IP probe teardown failed") }
     lastTorProbeFailure = null
     FoxholeVpnRuntimeBridge.updateLocalProxyStatus(LocalProxyStatusSnapshot())
+    proxySurfaceSyncState().reset()
 }
 
 /**
@@ -124,10 +184,25 @@ internal fun FoxholeVpnService.stopLanProxyUpdates() {
  *
  * Runs on the session ticker, so it is also the re-arm path: a Wi-Fi change produces a new binding
  * and the next pass rebinds on it, while a network the core refuses keeps reporting why.
+ *
+ * A pass that asks for nothing and would say exactly what the previous pass already said is dropped
+ * before the core is touched. Turning the surface on is still honoured on the very next pass — a
+ * live request never takes that path.
  */
 internal fun FoxholeVpnService.syncLanProxy() {
     val settings = container.settingsRepository.settings.value
-    val status = requestedLanProxyStatus(settings)
+    val plan = lanProxyPlan(settings)
+    val latch = proxySurfaceSyncState().lan
+    if (!latch.shouldSync(plan.ask)) {
+        return
+    }
+    val status =
+        if (plan.request != null) {
+            runtime.syncLanProxy(request = plan.request)
+        } else {
+            runtime.syncLanProxy(request = null, blocked = plan.blocked)
+        }
+    latch.recordSynced(plan.ask)
     FoxholeVpnRuntimeBridge.updateLanProxyStatus(status)
     lastLanProxyReason
         .takeIf { it != status.reason }
@@ -135,17 +210,29 @@ internal fun FoxholeVpnService.syncLanProxy() {
     lastLanProxyReason = status.reason
 }
 
-private fun FoxholeVpnService.requestedLanProxyStatus(settings: Settings): LanProxyStatusSnapshot {
+private data class LanProxyPlan(
+    val request: LanProxyRequest? = null,
+    val blocked: LanProxyUnavailableReason? = null,
+) {
+    val ask: ProxySurfaceAsk
+        get() = if (request != null) ProxySurfaceAsk.Live else ProxySurfaceAsk.Released(blocked)
+}
+
+private fun FoxholeVpnService.lanProxyPlan(settings: Settings): LanProxyPlan {
     val lan = settings.expert.localSurfaces
+    if (!lan.allowLanAccess) {
+        return LanProxyPlan()
+    }
     val blocked = lanProxyBlockedReason(settings)
+    if (blocked != null) {
+        return LanProxyPlan(blocked = blocked)
+    }
     val binding = container.lanProxyAddressProvider.currentLanBinding()
     val request = binding?.let { current -> lan.lanProxyRequest(FoxholeVpnRuntimeBridge.snapshot.value, current) }
     return when {
-        !lan.allowLanAccess -> runtime.syncLanProxy(request = null)
-        blocked != null -> runtime.syncLanProxy(request = null, blocked = blocked)
-        binding == null -> runtime.syncLanProxy(request = null, blocked = LanProxyUnavailableReason.NO_WIFI)
-        request == null -> runtime.syncLanProxy(request = null, blocked = LanProxyUnavailableReason.NO_CREDENTIALS)
-        else -> runtime.syncLanProxy(request = request)
+        binding == null -> LanProxyPlan(blocked = LanProxyUnavailableReason.NO_WIFI)
+        request == null -> LanProxyPlan(blocked = LanProxyUnavailableReason.NO_CREDENTIALS)
+        else -> LanProxyPlan(request = request)
     }
 }
 
@@ -218,3 +305,8 @@ private fun LocalSurfaceSettings.lanProxyUpstream(snapshot: ConnectionSnapshot):
 // Mirrors SettingsRepository.DEFAULT_PROXY_LOGIN: the login the settings layer writes for an empty
 // field, repeated here so a half-filled form cannot produce a different user on the wire.
 private const val LAN_PROXY_DEFAULT_USERNAME = "foxhole"
+
+internal fun proxySurfaceTickerNeeded(settings: Settings): Boolean {
+    val surfaces = settings.expert.localSurfaces
+    return surfaces.allowLanAccess || surfaces.http.enabled || settings.privacyRoute.enabled
+}

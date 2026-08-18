@@ -89,22 +89,54 @@ class I2pdConfTest {
     }
 
     @Test
+    fun `every generated key is one i2pd registers`() {
+        val emitted =
+            i2pdConfKeys(
+                buildI2pdConfLines(
+                    httpProxyPort = 14444,
+                    socksPort = 14447,
+                    relayTransitTraffic = true,
+                    transitBandwidth = "P",
+                    transitTunnelsLimit = 500,
+                    webConsolePort = 17070,
+                    webConsolePassword = "cafebabe",
+                ),
+            )
+        val registered =
+            setOf(
+                "daemon", "log", "loglevel", "ipv4", "ipv6", "notransit", "bandwidth",
+                "httpproxy.enabled", "httpproxy.address", "httpproxy.port",
+                "httpproxy.addresshelper", "httpproxy.outproxy",
+                "socksproxy.enabled", "socksproxy.address", "socksproxy.port",
+                "sam.enabled", "bob.enabled", "i2cp.enabled", "i2pcontrol.enabled",
+                "http.enabled", "http.address", "http.port", "http.auth", "http.user", "http.pass",
+                "upnp.enabled", "ntcp2.enabled", "ssu2.enabled",
+                "limits.transittunnels",
+                "addressbook.defaulturl", "addressbook.subscriptions",
+            )
+        val unknown = emitted.filterNot(registered::contains)
+        assertEquals("i2pd would exit(EXIT_FAILURE) on these keys", emptyList<String>(), unknown)
+        assertTrue("the socks credentials are not an i2pd option", emitted.none { it.endsWith("username") })
+        assertTrue("the socks credentials are not an i2pd option", emitted.none { it.endsWith("password") })
+    }
+
+    @Test
     fun `templates the loopback proxy ports and disables extra surfaces`() {
         val conf =
             buildI2pdConfLines(
                 httpProxyPort = 14444,
                 socksPort = 14447,
-                socksUsername = "foxhole",
-                socksPassword = "cafebabe",
             )
         val text = conf.joinToString("\n")
         assertTrue(text.contains("[httpproxy]"))
         val httpProxyIndex = conf.indexOf("[httpproxy]")
-        assertEquals("enabled = false", conf[httpProxyIndex + 1])
+        assertEquals("enabled = true", conf[httpProxyIndex + 1])
+        assertEquals("address = 127.0.0.1", conf[httpProxyIndex + 2])
+        assertEquals("port = 14444", conf[httpProxyIndex + 3])
+        assertTrue("jump services are the point of preferring it", text.contains("addresshelper = true"))
+        assertTrue(text.contains("outproxy ="))
         assertTrue(text.contains("[socksproxy]"))
         assertTrue(text.contains("port = 14447"))
-        assertTrue(text.contains("username = foxhole"))
-        assertTrue(text.contains("password = cafebabe"))
         assertTrue(text.contains("address = 127.0.0.1"))
         // Every remote-control / management surface stays disabled.
         listOf("[sam]", "[bob]", "[i2cp]", "[i2pcontrol]", "[http]", "[upnp]").forEach { section ->
@@ -161,5 +193,12 @@ class I2pdConfTest {
         assertTrue("[addressbook] present", idx >= 0)
         assertTrue(conf.contains("defaulturl ="))
         assertTrue(conf.contains("subscriptions ="))
+    }
+
+    @Test
+    fun `a fatal i2pd startup line reaches the journal`() {
+        assertTrue(isJournalWorthyI2pdLine("unrecognised option 'socksproxy.username'"))
+        assertTrue(isJournalWorthyI2pdLine("missing/unreadable config file: /data/x/i2pd.conf"))
+        assertTrue(!isJournalWorthyI2pdLine("Streaming: Received MSG_CLOSE"))
     }
 }

@@ -19,7 +19,6 @@ class ProfileRepositoryActiveProfileTest {
             try {
                 dao.setActiveProfileIfPresent(404L)
             } catch (_: IllegalStateException) {
-                // expected
             }
 
             assertFalse(dao.clearActiveCalled)

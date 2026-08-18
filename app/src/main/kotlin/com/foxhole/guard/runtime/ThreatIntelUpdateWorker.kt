@@ -5,6 +5,7 @@ import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.foxhole.guard.FoxholeApplication
 import com.foxhole.guard.FoxholeThreatIntelUpdateDependencies
+import com.foxhole.guard.threatIntelBackgroundUpdateEnabled
 
 /**
  * Periodic refresh of the signed SENTINEL threat-intel feed, mirroring [DnsFilterUpdateWorker]. A
@@ -17,6 +18,9 @@ class ThreatIntelUpdateWorker(
 ) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
         val dependencies: FoxholeThreatIntelUpdateDependencies = (applicationContext as FoxholeApplication).appGraph
+        if (!threatIntelBackgroundUpdateEnabled(dependencies.settingsRepository.current())) {
+            return Result.success()
+        }
         val result = dependencies.threatIntelUpdateRepository.refreshNow()
         return when {
             result.status != ThreatIntelUpdateStatus.FAILED -> Result.success()

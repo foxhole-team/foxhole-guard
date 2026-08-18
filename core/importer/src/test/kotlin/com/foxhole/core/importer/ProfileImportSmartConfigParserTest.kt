@@ -14,7 +14,7 @@ import java.nio.file.Path
 
 internal class ProfileImportSmartConfigParserTest : ProfileImportParserTestSupport() {
     @Test
-    fun `keeps wireguard and shadowsocks while reporting mtproto and amnezia as ignored`() {
+    fun `keeps wireguard shadowsocks and amneziawg while reporting mtproto as ignored`() {
         val parsed =
             parser.parseSubscriptionProfiles(
                 """
@@ -38,13 +38,19 @@ internal class ProfileImportSmartConfigParserTest : ProfileImportParserTestSuppo
                 # === MTProto / profile_0 ===
                 mtproto://unsupported@mtproto.example.com:443
 
-                # === AmneziaWG / profile_0 ===
+                # === AmneziaWG / profile_1 ===
                 [Interface]
                 PrivateKey = amnezia-private-key
                 Address = 10.81.0.2/32
                 Jc = 4
                 Jmin = 40
                 Jmax = 70
+                S1 = 15
+                S2 = 20
+                H1 = 10-19
+                H2 = 20-29
+                H3 = 30-39
+                H4 = 40-49
 
                 [Peer]
                 PublicKey = amnezia-public-key
@@ -54,21 +60,54 @@ internal class ProfileImportSmartConfigParserTest : ProfileImportParserTestSuppo
                 "remote",
             )
 
-        val profile = parsed.profiles.single()
+        assertEquals(2, parsed.profiles.size)
+        val profile = parsed.profiles[0]
+        val amneziaProfile = parsed.profiles[1]
 
         assertEquals(
             listOf(ProtocolHint.VLESS, ProtocolHint.SHADOWSOCKS, ProtocolHint.WIREGUARD),
             profile.protocolOptions.map { option -> option.protocolHint },
         )
+        assertEquals(ProtocolHint.WIREGUARD, amneziaProfile.protocolHint)
         assertEquals(
             listOf(
                 "VLESS" to SubscriptionEntryStatus.ACCEPTED,
                 "SHADOWSOCKS" to SubscriptionEntryStatus.ACCEPTED,
                 "WIREGUARD" to SubscriptionEntryStatus.ACCEPTED,
                 "MTPROTO" to SubscriptionEntryStatus.IGNORED_UNSUPPORTED,
-                "AMNEZIAWG" to SubscriptionEntryStatus.IGNORED_UNSUPPORTED,
+                "AMNEZIAWG" to SubscriptionEntryStatus.ACCEPTED,
             ),
             parsed.entryReports.map { report -> report.protocolLabel to report.status },
+        )
+    }
+
+    @Test
+    fun `an incomplete amneziawg block refuses the whole smart config document`() {
+        val error =
+            runCatching {
+                parser.parseSubscriptionProfiles(
+                    """
+                    # === AmneziaWG / profile_0 ===
+                    [Interface]
+                    PrivateKey = amnezia-private-key
+                    Address = 10.81.0.2/32
+                    Jc = 4
+                    Jmin = 40
+                    Jmax = 70
+
+                    [Peer]
+                    PublicKey = amnezia-public-key
+                    AllowedIPs = 0.0.0.0/0
+                    Endpoint = awg.example.com:51820
+                    """.trimIndent(),
+                    "remote",
+                )
+            }.exceptionOrNull()
+
+        assertTrue("an incomplete block must not import", error is IllegalArgumentException)
+        assertTrue(
+            error?.message.orEmpty(),
+            error?.message.orEmpty().contains("missing: s1, s2, h1, h2, h3, h4"),
         )
     }
 
@@ -115,7 +154,7 @@ internal class ProfileImportSmartConfigParserTest : ProfileImportParserTestSuppo
             directProfile.protocolOptions.map { it.displayName },
         )
 
-        assertEquals("Foxhole smart tor i2p", torProfile.displayName)
+        assertEquals("Foxhole smart tor+i2p", torProfile.displayName)
         assertEquals(ProtocolHint.VLESS, torProfile.protocolHint)
         assertEquals(6, torProfile.protocolOptions.size)
         assertEquals("vless", torProfile.selectedProtocolOptionId)

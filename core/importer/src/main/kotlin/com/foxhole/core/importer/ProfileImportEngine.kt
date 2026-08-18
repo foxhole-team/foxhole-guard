@@ -14,6 +14,7 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -40,6 +41,7 @@ internal class ProfileImportEngine(
         allowPrivateOutboundHosts: Boolean = false,
         allowInsecureTls: Boolean = false,
     ): ProfileImportStrategyResult {
+        requireBoundedImportPayload(input)
         val trimmed = normalizeInput(input)
         require(trimmed.isNotBlank()) { "empty input" }
         val context =
@@ -247,7 +249,8 @@ internal class ProfileImportEngine(
         allowPrivateOutboundHosts: Boolean = false,
         allowInsecureTls: Boolean = false,
     ): ProfileSubscriptionContentStrategyResult {
-        val trimmed = rawContent.trim()
+        requireBoundedImportPayload(rawContent)
+        val trimmed = normalizeInput(rawContent)
         require(trimmed.isNotBlank()) { "subscription is empty" }
         val context =
             SubscriptionContentStrategyContext(
@@ -261,7 +264,12 @@ internal class ProfileImportEngine(
                 return ProfileSubscriptionContentStrategyResult(strategyId = strategy.id, parsed = parsed)
             }
         }
-        throw IllegalArgumentException("unsupported subscription payload")
+        throw IllegalArgumentException(unsupportedSubscriptionPayloadMessage(trimmed))
+    }
+
+    internal fun unsupportedSubscriptionPayloadMessage(raw: String): String {
+        val format = detectSubscriptionPayloadFormat(raw, ::decodeSubscriptionCandidate)
+        return "unsupported subscription payload: ${format.describe()}"
     }
 
     private val subscriptionContentStrategies: List<SubscriptionContentImportStrategy> =
@@ -336,6 +344,7 @@ internal class ProfileImportEngine(
         allowInsecureTls: Boolean = false,
         groupCompatibleSingleServerMultiProtocol: Boolean = false,
     ): ParsedSubscriptionImport {
+        requireBoundedImportPayload(rawContent)
         val trimmed = normalizeInput(rawContent)
         require(trimmed.isNotBlank()) { "subscription is empty" }
 
@@ -391,7 +400,7 @@ internal class ProfileImportEngine(
             }
         }
 
-        throw IllegalArgumentException("unsupported subscription payload")
+        throw IllegalArgumentException(unsupportedSubscriptionPayloadMessage(trimmed))
     }
 
     private fun parseSubscriptionPayloadImport(
@@ -423,7 +432,9 @@ internal class ProfileImportEngine(
         if (!includeNodeLines) {
             return null
         }
-        val parsedLines = parseNodeLines(raw, allowPrivateOutboundHosts, allowInsecureTls)
+        val parsedLines =
+            parseSip008NodeLines(raw, allowPrivateOutboundHosts)
+                ?: parseNodeLines(raw, allowPrivateOutboundHosts, allowInsecureTls)
         val nodes = deduplicateNodeIdentities(parsedLines.nodes)
         if (nodes.isEmpty()) {
             return null
@@ -458,7 +469,9 @@ internal class ProfileImportEngine(
         if (!includeNodeLines) {
             return null
         }
-        val parsedLines = parseNodeLines(raw, allowPrivateOutboundHosts, allowInsecureTls)
+        val parsedLines =
+            parseSip008NodeLines(raw, allowPrivateOutboundHosts)
+                ?: parseNodeLines(raw, allowPrivateOutboundHosts, allowInsecureTls)
         val nodes = deduplicateNodeIdentities(parsedLines.nodes)
         if (nodes.isEmpty()) {
             return null
@@ -500,7 +513,7 @@ internal class ProfileImportEngine(
                 usedIds[baseId] = count
                 StoredProfileProtocolOption(
                     id = if (count == 1) baseId else "${baseId}_$count",
-                    displayName = protocolDisplayLabel(node.protocolHint),
+                    displayName = subscriptionOptionDisplayName(node),
                     protocolHint = node.protocolHint,
                     normalizedConfigJson = buildConfigFromNodes(
                         listOf(node),
@@ -527,6 +540,30 @@ internal class ProfileImportEngine(
             ),
             subscriptionExpiresAt = nodes.mapNotNull(ProxyNode::subscriptionExpiresAt).minOrNull(),
         )
+    }
+
+    private fun parseSip008NodeLines(
+        raw: String,
+        allowPrivateOutboundHosts: Boolean,
+    ): ParsedNodeLines? {
+        if (!looksLikeJson(raw.trim())) {
+            return null
+        }
+        val document = runCatching { json.parseToJsonElement(raw).jsonObject }.getOrNull() ?: return null
+        return parseSip008Servers(document, allowPrivateOutboundHosts)
+            ?.let { sip008 -> ParsedNodeLines(nodes = sip008.nodes, reports = sip008.reports) }
+    }
+
+    internal fun subscriptionOptionDisplayName(node: ProxyNode): String {
+        val host =
+            (node.outbound ?: node.endpoint)
+                ?.get("server")
+                ?.jsonPrimitive
+                ?.contentOrNull
+        return node.displayName
+            .trim()
+            .takeIf { name -> name.isNotBlank() && !name.equals(host, ignoreCase = true) }
+            ?: protocolDisplayLabel(node.protocolHint)
     }
 
     @Suppress("CyclomaticComplexMethod")

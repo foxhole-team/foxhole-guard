@@ -4,11 +4,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 
-/**
- * «Своё значение» ретенции терминала: вводится в часах или в днях, и ни ноль, ни пустое поле, ни
- * огромное число не должны дать значение, с которым журнал ведёт себя странно. Ноль опаснее всего:
- * из ретенции считается граница отсечения, и нулевой срок стирал бы строку в момент записи.
- */
 class CliTerminalRetentionInputTest {
 
     @Test
@@ -32,8 +27,6 @@ class CliTerminalRetentionInputTest {
 
     @Test
     fun `an entry above the ceiling clamps instead of overflowing`() {
-        // 999 дней — самое большое, что помещается в поле; в часах это далеко за Int-границу
-        // ретенции, и клампиться должно к потолку, а не переполняться в отрицательное.
         assertEquals(CliTerminalPrefs.MAX_HOURS, CliTerminalPrefs.hoursFromInput("999", CliRetentionUnit.DAYS))
         assertEquals(CliTerminalPrefs.MAX_HOURS, CliTerminalPrefs.hoursFromInput("999", CliRetentionUnit.HOURS))
         assertEquals(CliTerminalPrefs.MAX_HOURS, CliTerminalPrefs.hoursFromInput("999999999999", CliRetentionUnit.DAYS))

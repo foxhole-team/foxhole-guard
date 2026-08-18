@@ -1,40 +1,34 @@
 package com.foxhole.guard.ui.cli.settings
 
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
 import com.foxhole.core.model.RoutingPreset
 import com.foxhole.core.model.RoutingRule
 import com.foxhole.guard.R
 import com.foxhole.guard.ui.HomeViewModel
-import com.foxhole.guard.ui.cli.CliType
+import com.foxhole.guard.ui.cli.CliColors
 import com.foxhole.guard.ui.cli.LocalCliColors
 import com.foxhole.guard.ui.cli.components.CliButton
+import com.foxhole.guard.ui.cli.components.CliDashedInfoNote
 import com.foxhole.guard.ui.cli.components.CliDropdownOption
 import com.foxhole.guard.ui.cli.components.CliDropdownRow
 import com.foxhole.guard.ui.cli.components.CliElbowLine
 import com.foxhole.guard.ui.cli.components.CliInputModal
 import com.foxhole.guard.ui.cli.components.CliPanel
 import com.foxhole.guard.ui.cli.components.CliRowDivider
-import com.foxhole.guard.ui.cli.components.cliPressable
 import com.foxhole.guard.ui.deleteRule
 import com.foxhole.guard.ui.normalizedSiteMaskToken
 import com.foxhole.guard.ui.saveSiteRule
 import com.foxhole.guard.ui.siteMaskValidationErrorRes
 
-/** Encrypted domain rules applied by the runtime and hot-reloaded into the active TUN. */
 @Composable
 internal fun CliSiteRulesSection(
     viewModel: HomeViewModel,
@@ -62,22 +56,16 @@ internal fun CliSiteRulesSection(
     CliPanel(
         icon = R.drawable.pix_link,
         title = stringResource(R.string.cli_route_sites_title),
+        infoText = stringResource(R.string.cli_route_sites_note) + "\n" +
+            stringResource(R.string.cli_route_sites_formats),
         modifier = modifier.fillMaxWidth(),
     ) {
-        Text(
-            text = stringResource(R.string.cli_route_sites_note),
-            style = CliType.small,
-            color = colors.dim,
-        )
-        CliElbowLine(
-            text = stringResource(R.string.cli_route_sites_formats),
-            color = colors.note,
-        )
         if (rules.isEmpty()) {
-            Text(
+            CliDashedInfoNote(
                 text = stringResource(R.string.cli_route_sites_empty),
-                style = CliType.small,
-                color = colors.dim,
+                centered = true,
+                centeredIconLeading = true,
+                centeredIconFirstLine = true,
             )
         }
         rules.forEachIndexed { index, rule ->
@@ -104,20 +92,19 @@ internal fun CliSiteRulesSection(
         if (addOpen) {
             CliInputModal(
                 title = stringResource(R.string.cli_input_domain_title),
+                icon = R.drawable.pix_globe,
                 prompt = "add",
                 value = newDomain,
-                // The lane belongs to the domain being added, so it is asked for here. Left in the
-                // section it read as a stray setting — with no rules there was nothing above it for
-                // it to qualify.
                 belowInput = {
                     CliDropdownRow(
                         label = stringResource(R.string.cli_route_sites_lane),
-                        value = siteLaneLabel(newLane),
-                        options = CliSiteLane.entries.map { lane ->
-                            CliDropdownOption(id = lane.name, label = siteLaneLabel(lane), icon = siteLaneIcon(lane))
-                        },
+                        value = siteLaneSelectedLabel(newLane),
+                        options = siteLaneOptions(colors),
                         selectedId = newLane.name,
                         onSelect = { id -> newLane = CliSiteLane.valueOf(id) },
+                        note = siteLaneNote(newLane),
+                        valueColor = siteLaneColor(newLane, colors),
+                        showSelectedOptionIcon = true,
                     )
                 },
                 onValueChange = { raw ->
@@ -151,7 +138,6 @@ internal fun CliSiteRulesSection(
     }
 }
 
-/** A rule row: the lane dropdown plus a delete cross. */
 @Composable
 private fun CliSiteRuleRow(
     rule: RoutingRule,
@@ -159,42 +145,78 @@ private fun CliSiteRuleRow(
     onRemove: () -> Unit,
 ) {
     val colors = LocalCliColors.current
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        CliDropdownRow(
-            label = siteRuleTokens(rule).joinToString(", "),
-            value = siteLaneLabel(CliSiteLane.from(rule.action)),
-            options = CliSiteLane.entries.map { lane ->
-                CliDropdownOption(id = lane.name, label = siteLaneLabel(lane), icon = siteLaneIcon(lane))
-            },
-            selectedId = CliSiteLane.from(rule.action).name,
-            onSelect = { id -> onLaneSelect(CliSiteLane.valueOf(id)) },
-            modifier = Modifier.weight(1f),
-        )
-        Box(
-            modifier = Modifier
-                .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
-                .cliPressable(onClick = onRemove),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(text = "[x]", style = CliType.body, color = colors.err)
-        }
-    }
+    val lane = CliSiteLane.from(rule.action)
+    CliDropdownRow(
+        label = siteRuleTokens(rule).joinToString(", "),
+        value = siteLaneSelectedLabel(lane),
+        options = siteLaneOptions(colors) + CliDropdownOption(
+            id = SITE_OPT_REMOVE,
+            label = stringResource(R.string.cli_route_remove),
+            icon = R.drawable.pix_cross,
+        ),
+        selectedId = lane.name,
+        onSelect = { id ->
+            if (id == SITE_OPT_REMOVE) onRemove() else onLaneSelect(CliSiteLane.valueOf(id))
+        },
+        note = siteLaneNote(lane),
+        labelColor = colors.fg,
+        valueColor = siteLaneColor(lane, colors),
+        showSelectedOptionIcon = true,
+    )
 }
 
 private fun siteRuleTokens(rule: RoutingRule): List<String> =
     rule.matchDomains + rule.matchIpCidrs.map { cidr -> "cidr:$cidr" }
 
-// Technical lane names, identical in every locale, like the lane labels in the app list above.
-private fun siteLaneLabel(lane: CliSiteLane): String = lane.name.lowercase()
+@Composable
+private fun siteLaneOptions(colors: CliColors): List<CliDropdownOption> {
+    val labels = CliSiteLane.entries.map { lane -> lane to siteLaneActionLabel(lane) }
+    return labels.map { (lane, label) ->
+        CliDropdownOption(
+            id = lane.name,
+            label = label,
+            icon = siteLaneIcon(lane),
+            iconTint = siteLaneColor(lane, colors),
+        )
+    }
+}
+
+@Composable
+private fun siteLaneSelectedLabel(lane: CliSiteLane): String = when (lane) {
+    CliSiteLane.TOR -> "tor"
+    CliSiteLane.VPN -> "vpn"
+    CliSiteLane.DIRECT -> stringResource(R.string.cli_route_lane_excluded)
+    CliSiteLane.BLOCK -> stringResource(R.string.cli_route_lane_blocked)
+}
+
+@Composable
+private fun siteLaneActionLabel(lane: CliSiteLane): String = when (lane) {
+    CliSiteLane.TOR -> "tor"
+    CliSiteLane.VPN -> "vpn"
+    CliSiteLane.DIRECT -> stringResource(R.string.cli_route_lane_exclude)
+    CliSiteLane.BLOCK -> stringResource(R.string.cli_route_lane_block)
+}
+
+@Composable
+private fun siteLaneNote(lane: CliSiteLane): String? =
+    stringResource(R.string.cli_route_sites_lane_tor_note).takeIf { lane == CliSiteLane.TOR }
 
 private fun siteLaneIcon(lane: CliSiteLane): Int = when (lane) {
+    CliSiteLane.TOR -> R.drawable.pix_tor
     CliSiteLane.VPN -> R.drawable.pix_shield
     CliSiteLane.DIRECT -> R.drawable.pix_globe
     CliSiteLane.BLOCK -> R.drawable.pix_forbidden
 }
 
-// Domain input ceiling: the DNS name length limit, like MAX_SERVER_LENGTH in the dns section.
+private fun siteLaneColor(
+    lane: CliSiteLane,
+    colors: CliColors,
+): Color = when (lane) {
+    CliSiteLane.TOR -> colors.tor
+    CliSiteLane.VPN -> colors.vpn
+    CliSiteLane.DIRECT -> colors.dim
+    CliSiteLane.BLOCK -> colors.err
+}
+
 private const val MAX_DOMAIN_INPUT = 253
+private const val SITE_OPT_REMOVE = "remove"

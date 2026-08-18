@@ -8,25 +8,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Где связки «фаервол → автозапуск» НЕТ, и почему её там нет намеренно.
- *
- * Владелец решил: включение фаервола включает и тумблер автозапуска. Сделано это в обработчике
- * переключателя (HomeViewModelSecuritySettingsSupport.onFirewallEnabledChangedInternal) — то есть
- * в момент, когда пользователь его нажал, — а НЕ в нормализации, и этот тест закрепляет разницу.
- *
- * Разница существенная. Нормализация выполняется на каждой загрузке настроек: связка там означала
- * бы, что состояние «фаервол включён, автозапуск выключен» недостижимо в принципе — пользователь
- * выключает автозапуск, а следующая загрузка молча включает его обратно. Настройка, которую нельзя
- * выключить, хуже отсутствующей: она врёт. Поэтому связка одноразовая, при нажатии, и после неё
- * автозапуск остаётся обычным тумблером.
- *
- * Обратной связки нет тоже намеренно: выключение фаервола не трогает автозапуск, потому что к тому
- * моменту он может нести восстановление VPN-профиля — обещание, которого фаервол не давал и
- * отзывать не вправе.
- *
- * Отдельно: автоподъём фаервола после перезагрузки работал и до связки, через ветку плана загрузки
- * (BootReceiverTest: «boot restore starts local guard when auto start is disabled»). Именно поэтому
- * тумблер и показывал «выкл» при включённом по факту поведении — связка это расхождение убирает.
+ * Enabling the firewall enables autostart in the toggle handler only, never in normalization: normalization runs on every load and would make 'firewall on, autostart off' unreachable.
+ * Disabling the firewall deliberately leaves autostart alone, since it may already carry a VPN profile restore.
  */
 internal class FirewallAutoStartCouplingTest {
     @Test

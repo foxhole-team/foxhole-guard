@@ -7,13 +7,6 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
-/**
- * The install-monitoring daemon. It is a single in-process component (no extra process)
- * that is refcount-attached by whatever is currently keeping the app resident: the VPN
- * / proxy service in ECONOMY, or the dedicated guard service in REINFORCED. While
- * attached it listens for package changes and emits a heartbeat; the periodic worker
- * drives reconciliation and blackout detection when nothing is attached.
- */
 class GuardSentinel internal constructor(
     context: Context,
     private val clock: GuardClock,
@@ -63,27 +56,15 @@ class GuardSentinel internal constructor(
 
     fun hasAttachedHostOtherThan(host: String): Boolean = hostMonitor.hasHostOtherThan(host)
 
-    /** Applies the latest monitoring setting and returns whether the heartbeat is running. */
     fun reconcileActivation(): Boolean = hostMonitor.reconcile()
 
-    /** Clears process-local ownership after a factory reset. */
     fun clearHosts() = hostMonitor.clear()
 
-    /** Diff the live package list against the last snapshot; journal anything missed. */
     suspend fun reconcileInventory() =
         inventoryMutex.withLock {
             reconcileInventoryLocked(excludedPackageName = null)
         }
 
-    /**
-     * Establishes the enable-time inventory without turning already-present packages into
-     * installation events.
-     *
-     * Monitoring deliberately retains its sealed journal while it is off, but its package cursor
-     * has a different lifetime: an app installed during that pause predates the next opt-in. The
-     * activation path calls this before it flips the setting. Using the same mutex as broadcasts
-     * and reconciliation keeps the baseline from racing an already-running sentinel owner.
-     */
     suspend fun refreshInventoryBaselineForActivation() =
         inventoryMutex.withLock {
             val installedApps = inspector.snapshotInstalledApps().getOrThrow()
@@ -101,10 +82,6 @@ class GuardSentinel internal constructor(
             return
         }
         val previous = inventoryStore.read()
-        // getOrThrow, not getOrElse(emptyList()): a PackageManager failure means the inventory is
-        // unknown. Throwing aborts the pass before a single event or snapshot is written, and the
-        // WorkManager tick that drives it retries; assuming an empty device would have journalled a
-        // removal for every installed app and then persisted that fiction as the new baseline.
         val installedApps = inspector.snapshotInstalledApps().getOrThrow()
         check(installedApps.isNotEmpty()) { "guard inventory query returned no packages" }
         val current =
@@ -115,9 +92,6 @@ class GuardSentinel internal constructor(
         val events =
             guardInventoryEventsToJournal(previous, current, excludedPackageName)
                 .map(::enrichReconciled)
-        // Apply the protection decision before advancing either journal or snapshot. The callback
-        // is idempotent; if a later write fails, WorkManager retries the same diff without ever
-        // admitting a package merely because its inventory was observed.
         onReconciledPackageEvents(events)
         val recorded = events.all(journal)
         check(recorded) { "guard inventory journal unavailable" }
@@ -130,16 +104,8 @@ class GuardSentinel internal constructor(
         }
     }
 
-    /**
-     * Flags a suspected monitoring blackout when the elapsed gap since the last journal
-     * record exceeds twice the heartbeat interval. Reported as SUSPECTED, corroborated
-     * by the boot count, because Doze can legitimately delay the worker.
-     */
     @Synchronized
     fun detectBlackout() {
-        // The previous implementation used the package-inventory timestamp. That timestamp says
-        // when apps were scanned, not when monitoring last ran, so a healthy resident heartbeat
-        // could still be reported as a blackout when WorkManager was delayed by Doze.
         val last = lastJournalRecordAt() ?: inventoryStore.read().capturedAt
         val nowWall = clock.wallClockMs()
         guardBlackoutGapMs(
@@ -157,12 +123,6 @@ class GuardSentinel internal constructor(
         }
     }
 
-    /**
-     * Records one package change coming from the always-on manifest receiver (which fires
-     * even while the app is locked or its process was dead). Enriches installs/updates with
-     * installer + signer, then refreshes the inventory snapshot so reconciliation does not
-     * re-report the same change.
-     */
     suspend fun recordPackageChange(
         type: GuardEventType,
         packageName: String,
@@ -170,11 +130,6 @@ class GuardSentinel internal constructor(
         if (!isActive()) {
             return@withLock
         }
-        // One APK update fans out into ACTION_PACKAGE_REMOVED(replacing), ACTION_PACKAGE_ADDED
-        // (replacing) and ACTION_PACKAGE_REPLACED, and the receiver maps two of those onto
-        // PACKAGE_REPLACED. Re-describing the package and comparing it against the snapshot the
-        // previous broadcast already absorbed makes the second delivery a no-op, whichever of them
-        // arrives first, instead of a second journal record for the same install.
         val event =
             guardPackageChangeEventOrNull(
                 type = type,
@@ -184,13 +139,9 @@ class GuardSentinel internal constructor(
                 installer = if (type == GuardEventType.PACKAGE_REMOVED) null else inspector.installerOf(packageName),
             )
         val recordedDirectly = event != null && journal(event)
-        // Reconciliation must still catch unrelated changes missed by broadcasts, but suppress
-        // the package we just wrote directly. Previously it emitted the same install/remove a
-        // second time from the stale inventory snapshot.
         reconcileInventoryLocked(excludedPackageName = packageName.takeIf { recordedDirectly })
     }
 
-    /** PackageManager's view of the package right now; null once it is gone. */
     private fun liveInventoryAppOrNull(
         type: GuardEventType,
         packageName: String,
@@ -218,17 +169,8 @@ class GuardSentinel internal constructor(
 }
 
 /**
- * Whether a package broadcast is news, and what to journal for it.
- *
- * One APK update fans out into several broadcasts, and the receiver maps more than one of them onto
- * the same [GuardEventType]. Deciding against the stored inventory rather than against the
- * broadcast makes the second delivery a no-op whichever order they arrive in: the first one writes
- * the record and refreshes the snapshot, the second one finds the snapshot already describing this
- * exact version, uid and signer and returns null.
- *
- * A change that *is* news is re-evaluated from [live] — the point of an update event is the new
- * signer and version, so it must never be copied from the entry the update replaced. Deliberately
- * pure: this decides, the caller journals.
+ * One APK update fans out into several broadcasts that map onto the same event type: deciding against the stored inventory rather than the broadcast makes the second delivery a no-op in either arrival order.
+ * A change that is news is re-read from the live package, never copied from the entry the update replaced.
  */
 internal fun guardPackageChangeEventOrNull(
     type: GuardEventType,
@@ -239,14 +181,9 @@ internal fun guardPackageChangeEventOrNull(
 ): GuardEvent? {
     val known = previous.apps.firstOrNull { app -> app.packageName == packageName }
     if (type == GuardEventType.PACKAGE_REMOVED) {
-        // Nothing to remove: either the removal was already absorbed, or the package was never in
-        // the inventory. A record here would be a removal the device cannot corroborate.
         return known?.let { GuardEvent(type = type, packageName = packageName) }
     }
     if (live == null) {
-        // PackageManager could not describe a package it just told us about. The broadcast is still
-        // evidence that something changed, so the event is kept — without invented facts — and the
-        // reconciliation pass fills in the description once the query works again.
         return GuardEvent(type = type, packageName = packageName, installer = installer)
     }
     if (known != null && known.sameInstallationAs(live)) {
@@ -263,11 +200,6 @@ internal fun guardPackageChangeEventOrNull(
     )
 }
 
-/**
- * The identity-bearing fields only. `firstInstallTime` is excluded on purpose: it survives an
- * update unchanged, so including it would not help, and it is rewritten by a restore — which is a
- * change worth reporting, and reporting it is what the version and signer already do.
- */
 private fun GuardInventoryApp.sameInstallationAs(other: GuardInventoryApp): Boolean =
     versionCode == other.versionCode &&
         uid == other.uid &&

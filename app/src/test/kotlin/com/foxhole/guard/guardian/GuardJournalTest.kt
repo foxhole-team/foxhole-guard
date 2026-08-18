@@ -92,7 +92,6 @@ class GuardJournalTest {
 
         assertEquals(GuardJournalStatus.OK, report.status)
         assertTrue(report.anomalies.isEmpty())
-        // GENESIS is auto-prepended before the first explicit event.
         assertEquals(4, report.entries.size)
         assertEquals(GuardEventType.GENESIS, report.entries[0].event?.type)
         assertEquals(GuardEventType.PACKAGE_ADDED, report.entries[2].event?.type)
@@ -164,14 +163,10 @@ class GuardJournalTest {
 
     @Test
     fun `a record torn mid-write is never appended onto, even behind a cached head`() {
-        // fsync makes this rare but not impossible: the process can die between the write and the
-        // sync, or another writer can damage the file the in-memory head still believes in.
         val journal = journal()
         journal.append(GuardEvent(type = GuardEventType.HEARTBEAT, detail = "before"))
         directory.listFiles()!!.single().appendText("{\"seq\":2,\"prevHa")
 
-        // Same instance: the head is still cached, so only a check against the bytes on disk can
-        // catch the damage.
         assertTrue(journal.append(GuardEvent(type = GuardEventType.HEARTBEAT, detail = "after")))
 
         val report = verify()
@@ -185,17 +180,11 @@ class GuardJournalTest {
 
     @Test
     fun `a torn fragment under a reused rotated name is repaired instead of glued onto`() {
-        // Rotated names are derived from the seq they start at, so a crash during the first write
-        // into a fresh file leaves a fragment under exactly the name the next append picks again.
         val journal = journal(maxFileBytes = 10L)
         journal.append(GuardEvent(type = GuardEventType.HEARTBEAT, detail = "before"))
         val reusedName = File(directory, GuardJournal.fileNameFor(2))
         reusedName.writeText("{\"seq\":2,\"prevHa")
 
-        // Same size limit as the writer that rotated into this name: that is what makes the next
-        // append pick it again, which is the whole point of the case. A writer that rotates
-        // somewhere else leaves the fragment alone on purpose — it is evidence (see the
-        // crash-truncated-tail tests above).
         assertTrue(
             journal(maxFileBytes = 10L)
                 .append(GuardEvent(type = GuardEventType.HEARTBEAT, detail = "after")),
@@ -216,8 +205,6 @@ class GuardJournalTest {
         val journal = journal(maxFileBytes = 10L)
         journal.append(GuardEvent(type = GuardEventType.HEARTBEAT, detail = "before"))
         val reusedName = File(directory, GuardJournal.fileNameFor(2))
-        // A complete line that no verifier can parse is tampering, not a torn write: append-only
-        // writing can only ever damage the last, newline-less fragment.
         reusedName.writeText("this line was planted\n")
 
         assertTrue(journal().append(GuardEvent(type = GuardEventType.HEARTBEAT, detail = "after")))
@@ -256,7 +243,6 @@ class GuardJournalTest {
         val head = verify()
         val checkpoint = KeyboxCheckpoint(seq = head.headSeq!!, headHash = head.headHash!!)
 
-        // Attacker wipes everything and fabricates a fresh-looking chain of the same length.
         directory.listFiles()!!.forEach(File::delete)
         val forged = journal()
         repeat(4) {
@@ -298,7 +284,6 @@ class GuardJournalTest {
         val head = verify()
         val verifiedHeadSeq = checkNotNull(head.headSeq)
         checkpointSeq = verifiedHeadSeq
-        // The next append triggers pruning of files older than the checkpoint.
         journal.append(GuardEvent(type = GuardEventType.HEARTBEAT))
 
         val remaining = directory.listFiles()!!.size

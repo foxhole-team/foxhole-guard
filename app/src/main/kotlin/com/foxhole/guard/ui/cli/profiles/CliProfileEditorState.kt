@@ -15,12 +15,6 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
 
-/**
- * One editable unit of a profile: the full normalized config behind a protocol option (or, on a
- * profile that never got options, the profile's single resolved config). The whole config tree is
- * kept as the parsed [root] and edited in place — dns/route/inbounds/experimental and any unknown
- * key ride along untouched, and only [dirty] slots are written back on save.
- */
 internal data class CliEditorSlot(
     val optionId: String?,
     val label: String,
@@ -29,20 +23,22 @@ internal data class CliEditorSlot(
     val dirty: Boolean = false,
 )
 
-/** A protocol card of the editor: one proxy outbound inside one slot. */
 internal data class CliEditorProtocolRef(
     val slotIndex: Int,
-    val outboundIndex: Int,
+    val entryIndex: Int,
+    val endpoint: Boolean = false,
 )
 
 internal val cliEditorJson = Json { prettyPrint = true }
 private val cliEditorCompactJson = Json { prettyPrint = false }
 
-/** Outbound types that are plumbing rather than a protocol the user picked. */
 private val CLI_INFRA_OUTBOUND_TYPES = setOf("selector", "urltest", "direct", "block", "dns")
 
 internal fun JsonObject.cliOutbounds(): List<JsonObject> =
     this["outbounds"]?.jsonArray.orEmpty().map { it.jsonObject }
+
+internal fun JsonObject.cliEndpoints(): List<JsonObject> =
+    this["endpoints"]?.jsonArray.orEmpty().map { it.jsonObject }
 
 internal fun JsonObject.cliProxyOutboundIndices(): List<Int> =
     cliOutbounds()
@@ -56,35 +52,38 @@ internal fun JsonObject.cliOutboundType(): String =
 internal fun JsonObject.cliOutboundTag(): String =
     (this["tag"] as? JsonPrimitive)?.contentOrNull.orEmpty()
 
-internal fun CliEditorSlot.outboundAt(index: Int): JsonObject = root.cliOutbounds()[index]
+internal fun CliEditorSlot.entryAt(ref: CliEditorProtocolRef): JsonObject =
+    if (ref.endpoint) root.cliEndpoints()[ref.entryIndex] else root.cliOutbounds()[ref.entryIndex]
 
-internal fun CliEditorSlot.withOutbound(
-    index: Int,
-    outbound: JsonObject,
+internal fun CliEditorSlot.protocolEntryCount(): Int =
+    root.cliProxyOutboundIndices().size + root.cliEndpoints().size
+
+internal fun CliEditorSlot.withEntry(
+    ref: CliEditorProtocolRef,
+    entry: JsonObject,
 ): CliEditorSlot {
-    val current = root.cliOutbounds()
-    if (current.getOrNull(index) == outbound) {
+    val current = if (ref.endpoint) root.cliEndpoints() else root.cliOutbounds()
+    if (current.getOrNull(ref.entryIndex) == entry) {
         return this
     }
-    val updated = current.toMutableList().apply { this[index] = outbound }
-    return copy(root = root.withOutbounds(updated), dirty = true)
+    val updated = current.toMutableList().apply { this[ref.entryIndex] = entry }
+    val root = if (ref.endpoint) root.withEndpoints(updated) else root.withOutbounds(updated)
+    return copy(root = root, dirty = true)
 }
 
-/**
- * Drops one proxy outbound from this slot's config and un-references its tag from every group
- * outbound (`selector`/`urltest`), re-pointing a `default` that named it — otherwise validation would
- * refuse the config for a dangling tag.
- */
-internal fun CliEditorSlot.withoutOutbound(index: Int): CliEditorSlot {
+internal fun CliEditorSlot.withoutEntry(ref: CliEditorProtocolRef): CliEditorSlot {
+    val removedTag = entryAt(ref).cliOutboundTag()
     val outbounds = root.cliOutbounds()
-    val removedTag = outbounds[index].cliOutboundTag()
-    val remaining = outbounds.filterIndexed { position, _ -> position != index }
+    val endpoints = root.cliEndpoints()
+    val remainingOutbounds =
+        if (ref.endpoint) outbounds else outbounds.filterIndexed { position, _ -> position != ref.entryIndex }
+    val remainingEndpoints =
+        if (ref.endpoint) endpoints.filterIndexed { position, _ -> position != ref.entryIndex } else endpoints
     val fallbackTag =
-        remaining
-            .firstOrNull { it.cliOutboundType() !in CLI_INFRA_OUTBOUND_TYPES }
-            ?.cliOutboundTag()
-    val repaired = remaining.map { outbound -> outbound.withoutGroupMember(removedTag, fallbackTag) }
-    return copy(root = root.withOutbounds(repaired), dirty = true)
+        remainingOutbounds.firstOrNull { it.cliOutboundType() !in CLI_INFRA_OUTBOUND_TYPES }?.cliOutboundTag()
+            ?: remainingEndpoints.firstOrNull()?.cliOutboundTag()
+    val repaired = remainingOutbounds.map { outbound -> outbound.withoutGroupMember(removedTag, fallbackTag) }
+    return copy(root = root.withOutbounds(repaired).withEndpoints(remainingEndpoints), dirty = true)
 }
 
 internal fun CliEditorSlot.serialized(): String =
@@ -92,6 +91,9 @@ internal fun CliEditorSlot.serialized(): String =
 
 private fun JsonObject.withOutbounds(outbounds: List<JsonObject>): JsonObject =
     JsonObject(this + ("outbounds" to JsonArray(outbounds)))
+
+private fun JsonObject.withEndpoints(endpoints: List<JsonObject>): JsonObject =
+    JsonObject(if (endpoints.isEmpty()) this - "endpoints" else this + ("endpoints" to JsonArray(endpoints)))
 
 private fun JsonObject.withoutGroupMember(
     removedTag: String,
@@ -108,11 +110,6 @@ private fun JsonObject.withoutGroupMember(
     }
 }
 
-/**
- * Reads every protocol of [profile] through the repository's own resolved-config path, so the forms
- * show exactly what the runtime would start. Slots whose config cannot be read are skipped rather
- * than failing the whole editor; an empty result means the profile has nothing editable.
- */
 internal suspend fun loadCliEditorSlots(
     viewModel: HomeViewModel,
     profile: Profile,
@@ -134,10 +131,10 @@ internal fun List<CliEditorSlot>.withSlot(
     transform: (CliEditorSlot) -> CliEditorSlot,
 ): List<CliEditorSlot> = mapIndexed { position, slot -> if (position == index) transform(slot) else slot }
 
-internal fun List<CliEditorSlot>.withOutboundAt(
+internal fun List<CliEditorSlot>.withEntryAt(
     ref: CliEditorProtocolRef,
-    outbound: JsonObject,
-): List<CliEditorSlot> = withSlot(ref.slotIndex) { slot -> slot.withOutbound(ref.outboundIndex, outbound) }
+    entry: JsonObject,
+): List<CliEditorSlot> = withSlot(ref.slotIndex) { slot -> slot.withEntry(ref, entry) }
 
 internal fun CliEditorSlot.prettyConfigText(): String =
     cliEditorJson.encodeToString(JsonObject.serializer(), root)
@@ -154,29 +151,52 @@ internal fun cliProfileEditorHasChanges(
 
 internal fun List<CliEditorSlot>.protocolRefs(): List<CliEditorProtocolRef> =
     flatMapIndexed { slotIndex, slot ->
-        slot.root.cliProxyOutboundIndices().map { CliEditorProtocolRef(slotIndex, it) }
+        slot.root.cliProxyOutboundIndices().map { CliEditorProtocolRef(slotIndex, it) } +
+            slot.root.cliEndpoints().indices.map { CliEditorProtocolRef(slotIndex, it, endpoint = true) }
     }
 
-/** A minimal outbound of [type] — the starting point of the "blank protocol" add. */
 internal fun cliBlankOutbound(type: String): JsonObject =
-    buildJsonObject {
-        put("type", type)
-        put("tag", type)
-        put("server", "")
-        put("server_port", DEFAULT_NEW_PROTOCOL_PORT)
+    if (type == CLI_WIREGUARD_TYPE || type == CLI_AMNEZIA_WIREGUARD_TYPE) {
+        cliBlankWireGuardEndpoint(amnezia = type == CLI_AMNEZIA_WIREGUARD_TYPE)
+    } else {
+        buildJsonObject {
+            put("type", type)
+            put("tag", type)
+            put("server", "")
+            put("server_port", DEFAULT_NEW_PROTOCOL_PORT)
+        }
     }
 
-/**
- * The config a newly added protocol starts from: [template]'s infrastructure (log/dns/route/inbounds
- * plus the direct/block/selector outbounds) with its proxy outbounds replaced by [outbound], so the
- * new protocol inherits the profile's routing instead of a guessed default. `endpoints` (WireGuard)
- * is dropped because it belongs to the template's own protocol.
- */
+/** Builds the packet-tunnel shape required by the runtime translator. */
+private fun cliBlankWireGuardEndpoint(amnezia: Boolean): JsonObject =
+    buildJsonObject {
+        put("type", CLI_WIREGUARD_TYPE)
+        put("tag", CLI_WIREGUARD_TYPE)
+        put("private_key", "")
+        put("address", JsonArray(DEFAULT_WIREGUARD_ADDRESSES.map(::JsonPrimitive)))
+        put(
+            "peers",
+            JsonArray(
+                listOf(
+                    buildJsonObject {
+                        put("address", "")
+                        put("port", DEFAULT_WIREGUARD_PORT)
+                        put("public_key", "")
+                        put("allowed_ips", JsonArray(DEFAULT_WIREGUARD_ALLOWED_IPS.map(::JsonPrimitive)))
+                    },
+                ),
+            ),
+        )
+        if (amnezia) put("amnezia", buildJsonObject {})
+    }
+
+/** Keeps shared infrastructure while replacing protocol-owned endpoints. */
 internal fun cliNewProtocolConfig(
     template: JsonObject,
     outbound: JsonObject,
 ): JsonObject {
     val tag = outbound.cliOutboundTag().ifBlank { outbound.cliOutboundType() }
+    val packetTunnel = outbound.cliOutboundType() == CLI_WIREGUARD_TYPE
     val templateOutbounds = template.cliOutbounds()
     val infra =
         templateOutbounds.filter { item ->
@@ -194,7 +214,11 @@ internal fun cliNewProtocolConfig(
                 ("default" to JsonPrimitive(tag)) +
                 ("outbounds" to JsonArray(listOf(JsonPrimitive(tag)))),
         )
-    return JsonObject((template - "endpoints") + ("outbounds" to JsonArray(listOf(outbound) + infra + rebuiltGroup)))
+    val outbounds = if (packetTunnel) infra + rebuiltGroup else listOf(outbound) + infra + rebuiltGroup
+    val rebuilt = (template - "endpoints") + ("outbounds" to JsonArray(outbounds))
+    return JsonObject(
+        if (packetTunnel) rebuilt + ("endpoints" to JsonArray(listOf(outbound))) else rebuilt,
+    )
 }
 
 internal fun cliProtocolHintForType(type: String): ProtocolHint =
@@ -208,9 +232,13 @@ internal fun cliProtocolHintForType(type: String): ProtocolHint =
         "anytls" -> ProtocolHint.ANYTLS
         "naive" -> ProtocolHint.NAIVE
         "wireguard" -> ProtocolHint.WIREGUARD
+        "amneziawg" -> ProtocolHint.WIREGUARD
         else -> ProtocolHint.CUSTOM_CONFIG
     }
 
 private fun JsonObject.isGroupOutbound(): Boolean = cliOutboundType() in setOf("selector", "urltest")
 
 private const val DEFAULT_NEW_PROTOCOL_PORT = 443
+private const val DEFAULT_WIREGUARD_PORT = 51820
+private val DEFAULT_WIREGUARD_ADDRESSES = listOf("10.0.0.2/32")
+private val DEFAULT_WIREGUARD_ALLOWED_IPS = listOf("0.0.0.0/0", "::/0")

@@ -59,8 +59,6 @@ class TunnelRuntimeProxyIpRefreshPolicyTest {
 
     @Test
     fun `tor over vpn all apps runtime proxy ip does not replace dashboard vpn ip`() {
-        // All traffic (including the app's own probes) egresses through Tor: the observed exit is
-        // the Tor exit and must never be shown as the VPN identity.
         val settings =
             Settings(
                 privacyRoute = PrivacyRouteSettings(
@@ -81,9 +79,6 @@ class TunnelRuntimeProxyIpRefreshPolicyTest {
 
     @Test
     fun `tor over vpn selected apps keeps publishing the vpn identity to the dashboard`() {
-        // Only the chosen packages ride Tor; the app's own probes observe the plain VPN egress, so
-        // the network card keeps showing the VPN server identity (and the probe result must never
-        // be routed into the Tor exit channel).
         val settings =
             Settings(
                 privacyRoute = PrivacyRouteSettings(

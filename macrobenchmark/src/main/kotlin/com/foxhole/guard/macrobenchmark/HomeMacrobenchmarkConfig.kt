@@ -9,8 +9,6 @@ internal const val MAIN_ACTIVITY_CLASS_NAME = "com.foxhole.guard.ui.cli.CliMainA
 private const val SHORT_ITERATIONS = 3
 private const val RELEASE_ITERATIONS = 10
 private const val BENCHMARK_ITERATIONS_ARGUMENT = "foxhole.benchmarkIterations"
-// Six equal CLI dock slots: Home is first and Settings is last. These ratios are only the
-// semantics-unavailable fallback, but they still need to target the actual navigation items.
 internal const val DASHBOARD_NAV_X_RATIO = 0.09f
 internal const val SETTINGS_NAV_X_RATIO = 0.91f
 internal const val BOTTOM_NAV_Y_RATIO = 0.955f

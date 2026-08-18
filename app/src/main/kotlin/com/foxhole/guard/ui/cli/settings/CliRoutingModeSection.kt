@@ -3,13 +3,16 @@ package com.foxhole.guard.ui.cli.settings
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import com.foxhole.core.model.AppTunnelLane
 import com.foxhole.core.model.PerAppRoutingMode
 import com.foxhole.core.model.PrivacyRouteScope
 import com.foxhole.core.model.ProxySurfaceMode
 import com.foxhole.core.model.Settings
-import com.foxhole.core.model.torScopeRunnable
+import com.foxhole.core.model.packages
+import com.foxhole.core.model.tunnelSelectedPackages
 import com.foxhole.guard.R
 import com.foxhole.guard.ui.HomeViewModel
 import com.foxhole.guard.ui.VpnRoutingScenario
@@ -17,10 +20,10 @@ import com.foxhole.guard.ui.cli.CliSpacing
 import com.foxhole.guard.ui.cli.LocalCliColors
 import com.foxhole.guard.ui.cli.components.CliDropdownOption
 import com.foxhole.guard.ui.cli.components.CliDropdownRow
-import com.foxhole.guard.ui.cli.components.CliElbowLine
 import com.foxhole.guard.ui.cli.components.CliInputRow
 import com.foxhole.guard.ui.cli.components.CliPanel
 import com.foxhole.guard.ui.cli.components.CliRowDivider
+import com.foxhole.guard.ui.cli.components.CliSecretRow
 import com.foxhole.guard.ui.cli.components.CliToggleRow
 import com.foxhole.guard.ui.onHttpSurfaceChanged
 import com.foxhole.guard.ui.onLocalProxyAuthChanged
@@ -31,43 +34,34 @@ import com.foxhole.guard.ui.onProxySurfaceModeSelected
 import com.foxhole.guard.ui.onSocksSurfaceChanged
 import com.foxhole.guard.ui.onVpnRoutingScenarioSelected
 
-/**
- * The three answers to "what does the VPN do for this device".
- *
- * The first two ride the FoxCore TUN and differ only in who is captured. The third has no tun at
- * all: the core runs as a proxy on loopback and serves the apps that point at it — Android sharing
- * the connection with itself rather than the tunnel swallowing it.
- */
 private enum class CliVpnConn { WHOLE_DEVICE, SELECTED_APPS, PROXY_SERVER }
 
-/**
- * The "app traffic routing" window: two ordered sections inside one CLI panel —
- * 1. VPN connection (whole device / selected apps / local proxy server) with the include/exclude
- *    sub-choice, a link-styled note whose text tracks the picked mode, and — for the proxy — its
- *    surface, port and authentication;
- * 2. Tor (whole device / selected apps) plus the fail-closed "block without Tor" guard.
- */
+internal enum class CliMissingAppsTarget { VPN, TOR }
+
 @Composable
 internal fun CliVpnModeSection(
     viewModel: HomeViewModel,
     settings: Settings,
+    onMissingAppsRejected: (CliMissingAppsTarget) -> Unit,
 ) {
     val colors = LocalCliColors.current
-    // The scenario is the loopback listener being up, NOT TrafficMode.PROXY: that mode meant a
-    // session with no tun and was retired with the proxy-only service (settings normalisation still
-    // migrates a stored value back). What the owner asked for is a tunnel that also serves this
-    // phone at 127.0.0.1, and that is exactly a named loopback inbound beside the tun.
     val conn = when {
         settings.expert.localSurfaces.http.enabled -> CliVpnConn.PROXY_SERVER
         settings.expert.perAppRoutingMode == PerAppRoutingMode.FULL_TUNNEL -> CliVpnConn.WHOLE_DEVICE
         else -> CliVpnConn.SELECTED_APPS
     }
+    val noAppsSelected = remember(settings.expert.appAssignments) {
+        settings.expert.tunnelSelectedPackages().none(String::isNotBlank)
+    }
+    val noTorAppsSelected = remember(settings.expert.appAssignments) {
+        settings.expert.packages(AppTunnelLane.TOR).none(String::isNotBlank)
+    }
     CliPanel(
         icon = R.drawable.pix_globe,
         title = stringResource(R.string.cli_route_apps_traffic_title),
         modifier = Modifier.fillMaxWidth(),
+        infoText = stringResource(R.string.cli_help_routing_body),
     ) {
-        // Section 1 — VPN connection: whole device / selected apps / proxy server.
         CliDropdownRow(
             label = stringResource(R.string.cli_route_vpn_conn),
             icon = R.drawable.pix_shield,
@@ -81,28 +75,25 @@ internal fun CliVpnModeSection(
                 )
             },
             selectedId = conn.name,
-            onSelect = { id -> applyVpnConn(viewModel, CliVpnConn.valueOf(id), settings) },
+            onSelect = { id ->
+                val candidate = CliVpnConn.valueOf(id)
+                if (vpnConnNeedsApps(candidate) && noAppsSelected) {
+                    onMissingAppsRejected(CliMissingAppsTarget.VPN)
+                } else {
+                    applyVpnConn(viewModel, candidate, settings)
+                }
+            },
             showSelectedOptionIcon = true,
+            infoText = stringResource(vpnConnNote(conn, settings)),
         )
-        // Selected apps: pick the split direction; the note below explains it and re-reads on change.
         if (conn == CliVpnConn.SELECTED_APPS) {
             CliSplitControls(viewModel, settings)
         }
-        // Link-styled explanatory line — its text tracks the connection and split direction. It sits
-        // directly under the control it explains: below the proxy block it read as a note about the
-        // proxy, which is not what it says.
-        CliElbowLine(text = stringResource(vpnConnNote(conn, settings)), color = colors.note)
-        // Only the device-local proxy lives here. Sharing the tunnel with the Wi-Fi is a different
-        // surface with its own screen (extras → proxy server): this one publishes nothing outside
-        // the phone.
         if (conn == CliVpnConn.PROXY_SERVER) {
             CliLocalProxyControls(viewModel, settings)
         }
 
-        // The quiet stitch between the two managements: VPN above, Tor below — the panel is one,
-        // but the axes are independent and the eye needs the boundary.
         CliRowDivider(modifier = Modifier.padding(vertical = CliSpacing.xs))
-        // Section 2 — Tor: whole device or selected apps, plus the fail-closed "block without Tor" guard.
         CliDropdownRow(
             label = stringResource(R.string.cli_route_tor_conn),
             icon = R.drawable.pix_tor,
@@ -120,26 +111,28 @@ internal fun CliVpnModeSection(
                 )
             },
             selectedId = settings.privacyRoute.scope.name,
-            onSelect = { id -> viewModel.onPrivacyRouteScopeSelected(PrivacyRouteScope.valueOf(id)) },
+            onSelect = { id ->
+                val candidate = PrivacyRouteScope.valueOf(id)
+                if (candidate == PrivacyRouteScope.SELECTED_APPS && noTorAppsSelected) {
+                    onMissingAppsRejected(CliMissingAppsTarget.TOR)
+                } else {
+                    viewModel.onPrivacyRouteScopeSelected(candidate)
+                }
+            },
             showSelectedOptionIcon = true,
         )
-        // Selected-apps Tor with an empty TOR lane can carry nothing yet — surface inline the same
-        // "choose apps first" guard the Home terminal prints, so the routing screen explains itself.
-        if (!settings.torScopeRunnable()) {
-            CliElbowLine(
-                text = stringResource(R.string.privacy_route_select_apps_first),
-                color = colors.note,
-            )
-        }
+        CliRowDivider(modifier = Modifier.padding(vertical = CliSpacing.xs))
         CliToggleRow(
             label = stringResource(R.string.cli_route_tor_block_without),
             icon = R.drawable.pix_forbidden,
             checked = settings.privacyRoute.blockAppsWhenTorUnavailable,
             onToggle = { value -> viewModel.onPrivacyRouteBlockAppsWhenTorUnavailableChanged(value) },
-            note = stringResource(R.string.cli_route_tor_block_without_note),
+            infoText = stringResource(R.string.cli_route_tor_block_without_note),
         )
     }
 }
+
+private fun vpnConnNeedsApps(conn: CliVpnConn): Boolean = conn != CliVpnConn.WHOLE_DEVICE
 
 private fun vpnConnLabel(conn: CliVpnConn): Int = when (conn) {
     CliVpnConn.WHOLE_DEVICE -> R.string.cli_route_vpn_whole_device
@@ -153,10 +146,6 @@ private fun vpnConnIcon(conn: CliVpnConn): Int = when (conn) {
     CliVpnConn.PROXY_SERVER -> R.drawable.pix_device
 }
 
-/**
- * The explanatory note under the VPN connection dropdown. Whole device tunnels everything (no
- * exceptions); selected apps reads include- or exclude-first from the split direction.
- */
 private fun vpnConnNote(
     conn: CliVpnConn,
     settings: Settings,
@@ -176,13 +165,6 @@ private fun applyVpnConn(
     conn: CliVpnConn,
     settings: Settings,
 ) {
-    // VPN reach and the Tor lane are independent axes, so this control writes only the VPN one.
-    // Going through RoutingModePreset.VPN forced privacyRoute to OFF, which made "VPN over the
-    // whole device + Tor for selected apps" impossible to express: picking the VPN reach silently
-    // switched Tor off.
-    // One typed action owns both the local listener and the underlying tunnel reach. This prevents
-    // the UI/runtime from observing "proxy already disabled, old scenario still active" and lets
-    // the atomic-application switch gate every scenario through the same bottom sheet.
     val scenario =
         when (conn) {
             CliVpnConn.PROXY_SERVER -> VpnRoutingScenario.PROXY_SERVER
@@ -202,15 +184,6 @@ private fun torScopeLabel(scope: PrivacyRouteScope): Int = when (scope) {
     PrivacyRouteScope.SELECTED_APPS -> R.string.cli_route_tor_apps
 }
 
-/**
- * The device-local proxy: which surface it speaks, on which port, and whether it asks for
- * credentials.
- *
- * This is the scenario where the VPN serves Android itself instead of capturing it — apps that know
- * the address use it, everything else keeps going out as before. Authentication is a real switch
- * here, unlike on the LAN surface: this listener is on loopback, reachable only from this device,
- * so an anonymous one is a choice about the apps on the phone rather than about the Wi-Fi.
- */
 @Composable
 private fun CliLocalProxyControls(
     viewModel: HomeViewModel,
@@ -248,7 +221,7 @@ private fun CliLocalProxyControls(
         icon = R.drawable.pix_lock,
         checked = surfaces.auth.enabled,
         onToggle = viewModel::onLocalProxyAuthEnabledChanged,
-        note = stringResource(R.string.cli_route_proxy_auth_note),
+        infoText = stringResource(R.string.cli_route_proxy_auth_note),
     )
     if (surfaces.auth.enabled) {
         CliInputRow(
@@ -258,10 +231,10 @@ private fun CliLocalProxyControls(
                 viewModel.onLocalProxyAuthChanged(surfaces.auth.copy(username = value.take(64)))
             },
         )
-        CliInputRow(
+        CliSecretRow(
             prompt = "pass",
             value = surfaces.auth.password,
-            password = true,
+            clipboardLabel = stringResource(R.string.cli_route_proxy_auth),
             onValueChange = { value ->
                 viewModel.onLocalProxyAuthChanged(surfaces.auth.copy(password = value.take(128)))
             },

@@ -46,13 +46,19 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import com.foxhole.core.model.VisualStyle
 import com.foxhole.guard.R
 import com.foxhole.guard.ui.cli.CliSpacing
 import com.foxhole.guard.ui.cli.CliType
+import com.foxhole.guard.ui.cli.LocalCliBottomChromeClearance
 import com.foxhole.guard.ui.cli.LocalCliColors
 import com.foxhole.guard.ui.cli.LocalCliPanelAppearance
+import com.foxhole.guard.ui.cli.LocalCliVisualStyle
 import com.foxhole.guard.ui.cli.cliCaptionSpanStyle
+import com.foxhole.guard.ui.cli.cliCaptionTextStyle
+import com.foxhole.guard.ui.cli.cliLabelText
+import com.foxhole.guard.ui.cli.cliRowTextStyle
+import com.foxhole.guard.ui.cli.cliScaledSp
 import com.foxhole.guard.ui.cli.components.CliActionRow
 import com.foxhole.guard.ui.cli.components.CliPixIcon
 import com.foxhole.guard.ui.cli.components.CliRowDivider
@@ -62,15 +68,6 @@ import com.foxhole.guard.ui.cli.components.cliPanelBackground
 import com.foxhole.guard.ui.cli.components.cliPressable
 import com.foxhole.guard.ui.cli.onboarding.CliQuickStartItems
 
-/**
- * Help as a deck of cards: each topic has its own glyph, a title plate, a double border with
- * corner pips and an expanding body. Static content with no view model — the set of expanded cards
- * is the entire state.
- *
- * Everything starts closed. Opening the first card on entry filled the screen with the longest
- * text in the app before the user had chosen a topic, so the deck — the whole point of the screen —
- * was pushed under the fold and help opened on an answer nobody had asked for.
- */
 @Composable
 internal fun CliHelpSubScreen(
     modifier: Modifier = Modifier,
@@ -81,28 +78,33 @@ internal fun CliHelpSubScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
             .padding(horizontal = CliSpacing.md),
     ) {
         CliScreenHeader(label = stringResource(R.string.cli_cfg_more_help), iconGlyph = "?")
-        HELP_SECTIONS.forEach { section ->
-            CliHelpCard(
-                section = section,
-                expanded = section.key in expandedKeys,
-                onToggle = {
-                    expandedKeys = if (section.key in expandedKeys) {
-                        expandedKeys - section.key
-                    } else {
-                        expandedKeys + section.key
-                    }
-                },
-            )
-            Spacer(modifier = Modifier.height(CliSpacing.sm))
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(bottom = LocalCliBottomChromeClearance.current),
+        ) {
+            HELP_SECTIONS.forEach { section ->
+                CliHelpCard(
+                    section = section,
+                    expanded = section.key in expandedKeys,
+                    onToggle = {
+                        expandedKeys = if (section.key in expandedKeys) {
+                            expandedKeys - section.key
+                        } else {
+                            expandedKeys + section.key
+                        }
+                    },
+                )
+                Spacer(modifier = Modifier.height(CliSpacing.sm))
+            }
         }
     }
 }
 
-/** One card: icon and title plate, text body, border with corner pips. */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun CliHelpCard(
@@ -113,7 +115,9 @@ private fun CliHelpCard(
     val colors = LocalCliColors.current
     val appearance = LocalCliPanelAppearance.current
     val context = LocalContext.current
-    val shape = RoundedCornerShape(2.dp)
+    val plain = LocalCliVisualStyle.current == VisualStyle.PLAIN
+    val shape = if (plain) RoundedCornerShape(8.dp) else RoundedCornerShape(2.dp)
+    val frameWidth = if (plain) 1.dp else 2.dp
     val cardBackground = cliPanelBackground(Color.Unspecified, colors.panel, appearance)
     val titleBackground = cliPanelBackground(Color.Unspecified, colors.panelAlt, appearance)
     Box(modifier = Modifier.fillMaxWidth()) {
@@ -122,7 +126,7 @@ private fun CliHelpCard(
                 .fillMaxWidth()
                 .clip(shape)
                 .background(cardBackground)
-                .border(2.dp, if (expanded) colors.accentDim else colors.border, shape),
+                .border(frameWidth, if (expanded) colors.accentDim else colors.border, shape),
         ) {
             Row(
                 modifier = Modifier
@@ -143,17 +147,15 @@ private fun CliHelpCard(
                 Text(
                     text = buildAnnotatedString {
                         withStyle(cliCaptionSpanStyle(stringResource(section.titleRes))) {
-                            append(stringResource(section.titleRes))
+                            append(cliLabelText(stringResource(section.titleRes)))
                         }
                     },
-                    style = CliType.small,
+                    style = cliCaptionTextStyle(),
                     color = if (expanded) colors.fg else colors.dim,
                     maxLines = 1,
                     overflow = TextOverflow.Clip,
                     modifier = Modifier
                         .weight(1f)
-                        // basicMarquee is inert when the title fits; only an actually clipped
-                        // localized heading moves, after a readable pause.
                         .basicMarquee(
                             iterations = Int.MAX_VALUE,
                             initialDelayMillis = HELP_MARQUEE_INITIAL_DELAY_MS,
@@ -179,8 +181,6 @@ private fun CliHelpCard(
                     } else {
                         CliHelpBody(body = body, icon = section.icon)
                     }
-                    // Kill switch is an Android feature (VPN lockdown), so the card links straight
-                    // to system VPN settings rather than offering an in-app setting.
                     if (section.key == HELP_KEY_KILLSWITCH) {
                         CliActionRow(
                             label = stringResource(R.string.cli_help_killswitch_link),
@@ -195,17 +195,12 @@ private fun CliHelpCard(
                 }
             }
         }
-        // Corner pips over the border: the deck's card corners.
-        CliHelpCardPips(expanded = expanded)
+        if (!plain) {
+            CliHelpCardPips(expanded = expanded)
+        }
     }
 }
 
-/**
- * Help body text with terminal-style structure: blank lines split paragraphs, and a line
- * opening with a short `term — definition` gets its term set in the accent color, so
- * glossary blocks (modes, journals) read as aligned definition lists rather than prose.
- * The relaxed line height is local to help: these are the longest reading passages in the app.
- */
 @Composable
 private fun CliHelpBody(
     body: String,
@@ -213,7 +208,10 @@ private fun CliHelpBody(
 ) {
     val colors = LocalCliColors.current
     Column(verticalArrangement = Arrangement.spacedBy(CliSpacing.sm)) {
-        body.split("\n\n").forEach { paragraph ->
+        body.split("\n\n").forEachIndexed { paragraphIndex, paragraph ->
+            if (paragraphIndex > 0) {
+                CliRowDivider()
+            }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.Top,
@@ -238,7 +236,7 @@ private fun CliHelpBody(
                             }
                         }
                     },
-                    style = CliType.body.copy(lineHeight = 22.sp),
+                    style = cliRowTextStyle().copy(lineHeight = cliScaledSp(22f)),
                     color = colors.fg,
                     modifier = Modifier.weight(1f),
                 )
@@ -247,10 +245,6 @@ private fun CliHelpBody(
     }
 }
 
-/**
- * The leading term of a `term — definition` line, or null. Bounded length plus the
- * no-punctuation guard keep mid-sentence em dashes («нажми START — терминал…») unstyled.
- */
 private fun helpGlossaryTerm(line: String): String? {
     val dash = line.indexOf(" — ")
     if (dash <= 0 || dash > HELP_TERM_MAX_CHARS) return null
@@ -261,7 +255,6 @@ private fun helpGlossaryTerm(line: String): String? {
 
 private const val HELP_TERM_MAX_CHARS = 28
 
-// Punctuation that proves the dash was mid-sentence rather than a glossary separator.
 private const val HELP_TERM_STOP_CHARS = ".,:;"
 
 @Composable
@@ -290,8 +283,6 @@ private class CliHelpSection(
     @DrawableRes val icon: Int,
 )
 
-// Full feature coverage apart from I2P, whose surface is frozen. Ordered from first run towards
-// subtler matters, with related topics adjacent.
 private val HELP_SECTIONS = listOf(
     CliHelpSection(
         HELP_KEY_QUICK_START,

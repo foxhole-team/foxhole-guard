@@ -108,6 +108,20 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
             .build()
     }
     internal val container: FoxholeRuntimeDependencies by lazy { (applicationContext as FoxholeApplication).appGraph }
+
+    private fun installTlsFingerprintTables() {
+        val result =
+            TlsFingerprintTableInstaller(
+                (applicationContext as FoxholeApplication).appGraph.tlsFingerprintProvider,
+            ).install()
+        container.diagnosticsLogger.record(
+            "connection",
+            "tls fingerprint tables: replaced=${result.profilesReplaced} " +
+                "source=${if (result.downloaded) "downloaded" else "built-in"}" +
+                result.reason?.let { reason -> " reason=$reason" }.orEmpty(),
+        )
+    }
+
     internal val runtimeInstanceStore
         get() = container.runtimeInstanceStore
     internal val runtime: FoxholeRuntime
@@ -166,10 +180,11 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
             runtimeSupervisor.setActiveLocalGuardMode(value)
         }
 
-    /** Last LAN proxy refusal that reached the journal, so a steady state is not logged every pass. */
+    @Volatile
     internal var lastLanProxyReason: LanProxyUnavailableReason? = null
 
     /** Same dedupe for the private Tor identity probe; never contains its address or credentials. */
+    @Volatile
     internal var lastTorProbeFailure: TorProbeProxyFailure? = null
 
     @Volatile
@@ -244,7 +259,11 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
 
     @Volatile
     internal var consecutiveNotificationHealthFailures = 0
+
+    @Volatile
     internal var defaultNetworkAvailable = true
+
+    @Volatile
     internal var lastDefaultNetworkSummary: String? = null
 
     @Volatile
@@ -283,6 +302,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
     override fun onCreate() {
         super.onCreate()
         FoxholeConnectionServiceContract.markServiceCreated()
+        installTlsFingerprintTables()
         claimForegroundSlotEarly(notificationManager)
         startTorNotificationPhaseMonitoring()
         startI2pNotificationPhaseMonitoring()
@@ -697,6 +717,8 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         // accuracy: a slow pass records exactly the same bytes as a fast one, at two statements
         // per pass plus one loopback console read.
         internal const val I2P_TRAFFIC_SAMPLE_INTERVAL_MS = 5_000L
+        internal const val I2P_TRAFFIC_SAMPLE_WARMUP_MS = 60_000L
+        internal const val I2P_TRAFFIC_SAMPLE_STEADY_INTERVAL_MS = 60_000L
 
         // Slow on purpose: the pass exists to re-arm after a Wi-Fi change and to keep the screen
         // honest, not to poll a listener that either bound or did not. Everything faster would put

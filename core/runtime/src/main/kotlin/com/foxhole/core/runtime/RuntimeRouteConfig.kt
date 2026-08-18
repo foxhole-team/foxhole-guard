@@ -83,8 +83,13 @@ internal fun patchRoute(
             ?.takeIf { it.enabled }
             ?.rules
             ?.filter { it.enabled }
-            ?.map { rule -> toRouteRule(rule, expert.siteRoutingAction) }
-            .orEmpty()
+            ?.flatMap { rule ->
+                toRouteRules(
+                    rule = rule,
+                    siteRoutingAction = expert.siteRoutingAction,
+                    torOutboundTag = TOR_OVER_VPN_OUTBOUND_TAG.takeIf { privacyRouteActive },
+                )
+            }.orEmpty()
     val appRules = buildAppRouteRules(expert)
     val privacyRouteRules =
         if (privacyRouteActive) {
@@ -95,7 +100,12 @@ internal fun patchRoute(
         } else {
             emptyList()
         }
-    val torFailClosedRules = buildTorFailClosedBlockRules(settings, privacyRouteActive)
+    val torFailClosedRules =
+        buildFailClosedBlockRules(
+            settings = settings,
+            torLaneCarried = privacyRouteActive,
+            vpnLaneCarried = true,
+        )
     val combinedRules =
         buildJsonArray {
             if (protocolTestTrafficFreeze) {
@@ -244,11 +254,21 @@ internal fun patchTorOnlyRoute(
             ?.takeIf { it.enabled }
             ?.rules
             ?.filter { it.enabled }
-            ?.map { rule -> toRouteRule(rule, expert.siteRoutingAction) }
-            .orEmpty()
+            ?.flatMap { rule ->
+                toRouteRules(
+                    rule = rule,
+                    siteRoutingAction = expert.siteRoutingAction,
+                    torOutboundTag = "proxy",
+                )
+            }.orEmpty()
     val combinedRules =
         buildJsonArray {
             buildAppRouteRules(expert).forEach(::add)
+            buildFailClosedBlockRules(
+                settings = settings,
+                torLaneCarried = true,
+                vpnLaneCarried = settings.privacyRoute.scope == PrivacyRouteScope.ALL_APPS,
+            ).forEach(::add)
             add(runtimeProxyRouteRule("proxy"))
             if (expert.sniff) {
                 add(sniffRule())
@@ -452,8 +472,13 @@ internal fun patchProxyRoute(
             ?.takeIf { it.enabled }
             ?.rules
             ?.filter { it.enabled }
-            ?.map { rule -> toRouteRule(rule, expert.siteRoutingAction) }
-            .orEmpty()
+            ?.flatMap { rule ->
+                toRouteRules(
+                    rule = rule,
+                    siteRoutingAction = expert.siteRoutingAction,
+                    torOutboundTag = null,
+                )
+            }.orEmpty()
     val appRules = buildAppRouteRules(expert)
     val combinedRules =
         buildJsonArray {
@@ -581,26 +606,27 @@ internal fun buildAppRouteRules(expert: ExpertSettings): List<JsonObject> =
         }
     }
 
-/**
- * Fail-closed rule for the Tor lane: when the Tor route is NOT engaged but the user asked to block
- * Tor apps without Tor, the Tor-lane packages are rejected outright instead of leaking to the plain
- * VPN/direct path. Emitted before the split/preset rules so nothing downstream can re-route them.
- */
-internal fun buildTorFailClosedBlockRules(
+// Reject each uncarried pinned lane before later split rules can route it elsewhere.
+internal fun buildFailClosedBlockRules(
     settings: Settings,
-    privacyRouteActive: Boolean,
+    torLaneCarried: Boolean,
+    vpnLaneCarried: Boolean,
 ): List<JsonObject> {
-    if (privacyRouteActive || !settings.privacyRoute.blockAppsWhenTorUnavailable) {
+    if (!settings.privacyRoute.blockAppsWhenTorUnavailable) {
         return emptyList()
     }
-    val torPackages = settings.expert.torLanePackages()
-    if (torPackages.isEmpty()) {
+    val blockedPackages =
+        settings.expert.failClosedBlockPackages(
+            torLaneCarried = torLaneCarried,
+            vpnLaneCarried = vpnLaneCarried,
+        )
+    if (blockedPackages.isEmpty()) {
         return emptyList()
     }
     return listOf(
         buildJsonObject {
             putJsonArray("package_name") {
-                torPackages.forEach { add(JsonPrimitive(it)) }
+                blockedPackages.forEach { add(JsonPrimitive(it)) }
             }
             put("action", "reject")
             put("method", "default")
@@ -655,10 +681,31 @@ internal fun packageRouteRule(
 
 internal fun tunnelFinalOutbound(source: JsonObject): String = source["final"]?.jsonPrimitive?.contentOrNull ?: "proxy"
 
-@Suppress("CyclomaticComplexMethod")
-internal fun toRouteRule(
+internal fun toRouteRules(
     rule: RoutingRule,
     siteRoutingAction: RoutingRuleAction,
+    torOutboundTag: String?,
+): List<JsonObject> {
+    val action = rule.runtimeAction(siteRoutingAction)
+    if (action != RoutingRuleAction.TOR) {
+        return listOf(toRouteRule(rule, action.outboundTag))
+    }
+    val blockRule = toRouteRule(rule, RoutingRuleAction.BLOCK.outboundTag)
+    val torTag = torOutboundTag ?: return listOf(blockRule)
+    val networks = rule.matchNetworks.map(String::lowercase).ifEmpty { TCP_UDP_NETWORKS }
+    return buildList {
+        if (ROUTE_NETWORK_TCP in networks) add(toRouteRule(rule, torTag, forcedNetwork = ROUTE_NETWORK_TCP))
+        if (ROUTE_NETWORK_UDP in networks) {
+            add(toRouteRule(rule, RoutingRuleAction.BLOCK.outboundTag, forcedNetwork = ROUTE_NETWORK_UDP))
+        }
+    }.ifEmpty { listOf(blockRule) }
+}
+
+@Suppress("CyclomaticComplexMethod")
+private fun toRouteRule(
+    rule: RoutingRule,
+    outboundTag: String,
+    forcedNetwork: String? = null,
 ): JsonObject =
     buildJsonObject {
         if (rule.matchDomains.isNotEmpty()) {
@@ -732,13 +779,14 @@ internal fun toRouteRule(
                 rule.matchProtocols.forEach { add(JsonPrimitive(it)) }
             }
         }
-        if (rule.matchNetworks.isNotEmpty()) {
+        val networks = forcedNetwork?.let(::listOf) ?: rule.matchNetworks
+        if (networks.isNotEmpty()) {
             putJsonArray("network") {
-                rule.matchNetworks.forEach { add(JsonPrimitive(it)) }
+                networks.forEach { add(JsonPrimitive(it)) }
             }
         }
         put("action", "route")
-        put("outbound", rule.runtimeAction(siteRoutingAction).outboundTag)
+        put("outbound", outboundTag)
     }
 
 internal fun normalizeRoutePorts(matchPorts: List<String>): NormalizedRoutePort {

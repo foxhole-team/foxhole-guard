@@ -111,3 +111,36 @@ internal fun revokeOutcomeForCode(code: Int): RevokeOutcome =
         code == FoxholeNativeEngine.REVOKE_NOT_RUNNING -> RevokeOutcome.NotRunning
         else -> RevokeOutcome.Refused(code)
     }
+
+enum class FailClosedEvent {
+    TUNNEL_STARTING,
+
+    TUNNEL_UP,
+
+    TUNNEL_LOST,
+
+    POLICY_RELOAD_REFUSED,
+
+    RUNTIME_STOPPING,
+}
+
+fun killSwitchRevokeTarget(
+    armed: Boolean,
+    event: FailClosedEvent,
+): RevokeTarget? {
+    if (!armed) {
+        return null
+    }
+    return when (event) {
+        FailClosedEvent.TUNNEL_LOST, FailClosedEvent.RUNTIME_STOPPING -> RevokeTarget.All
+        FailClosedEvent.TUNNEL_STARTING,
+        FailClosedEvent.TUNNEL_UP,
+        FailClosedEvent.POLICY_RELOAD_REFUSED,
+        -> null
+    }
+}
+
+fun FoxholeRuntime.applyKillSwitch(
+    armed: Boolean,
+    event: FailClosedEvent,
+): RevokeOutcome? = killSwitchRevokeTarget(armed, event)?.let(::revokeFlows)

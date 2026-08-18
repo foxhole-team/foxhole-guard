@@ -11,19 +11,6 @@ import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/**
- * Safe mode is ON for every fresh install, and [Settings.normalized] used to answer that by
- * replacing the WHOLE traffic block with `TrafficSettings()`. Tun stack, MTU, prefer-ipv6 and domain
- * strategy therefore never reached the disk on a pristine install: the transform applied the new
- * value, normalization reverted it, and `SettingsRepository.update` dropped the write because the
- * normalized result equalled the current one. Nothing in the suite covered those four setters.
- *
- * Each case here is the whole write path a user triggers from the settings screen: apply the pure
- * transform, normalize (what update() does before comparing), assert the settings actually changed
- * (what update() gates the disk write on) and assert the value still reads back after a storage
- * round-trip. Safe mode must stay ON throughout — these four fields are ordinary tunnel tuning, so
- * touching them is not a reason to disarm the expert lanes.
- */
 internal class TrafficSettingsSafeModeTest : SettingsRepositoryTestSupport() {
     private val pristine = Settings().normalized()
 
@@ -104,8 +91,6 @@ internal class TrafficSettingsSafeModeTest : SettingsRepositoryTestSupport() {
 
     @Test
     fun `safe mode still pins the traffic mode to tunnel`() {
-        // The one traffic field safe mode does own: proxy mode is an expert lane, so a stored PROXY
-        // value with safe mode still on is coerced back — exactly as before the fix.
         val forced = pristine.copy(traffic = pristine.traffic.copy(mode = TrafficMode.PROXY)).normalized()
 
         assertEquals(TrafficMode.TUNNEL, forced.traffic.mode)
@@ -133,7 +118,6 @@ internal class TrafficSettingsSafeModeTest : SettingsRepositoryTestSupport() {
         assertEquals(1400, reread(unlocked).traffic.mtu)
     }
 
-    /** The storage round-trip: encrypted payload out, payload back in, normalized on load. */
     private fun reread(value: Settings): Settings =
         json.decodeFromString<Settings>(json.encodeToString(value)).normalized()
 }

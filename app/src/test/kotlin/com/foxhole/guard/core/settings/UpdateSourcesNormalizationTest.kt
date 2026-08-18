@@ -5,14 +5,6 @@ import com.foxhole.core.model.UpdateSourceSettings
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
-/**
- * The two redirectable update channels.
- *
- * What is being defended: a value that reaches disk must be an endpoint this app can actually read,
- * because a half-parsed one becomes a silent update source — the screen would report a repository
- * while every fetch quietly failed, or worse, succeeded against something unintended. Anything that
- * does not normalise to such an endpoint becomes blank, and blank means the built-in source.
- */
 internal class UpdateSourcesNormalizationTest {
 
     @Test
@@ -29,7 +21,6 @@ internal class UpdateSourcesNormalizationTest {
         assertEquals("https://someone.github.io/foxhole-db", sources.databaseBaseUrl)
     }
 
-    /** A mirror hosted anywhere else is fine — the signature check, not the host, is the gate. */
     @Test
     fun `a plain https base is kept without its trailing slash`() {
         val sources = normalize(databaseBaseUrl = "https://mirror.example.org/foxhole-db/")
@@ -61,16 +52,11 @@ internal class UpdateSourcesNormalizationTest {
         assertEquals(url, normalize(appReleasesUrl = url).appReleasesUrl)
     }
 
-    /**
-     * A release feed this app can read has one shape. Guessing it from an arbitrary host would
-     * invent an endpoint that never answers, and the updates screen would report it as configured.
-     */
     @Test
     fun `a host that is not a release feed is refused`() {
         assertEquals("", normalize(appReleasesUrl = "https://example.org/releases").appReleasesUrl)
     }
 
-    /** A credential with nowhere to go is a secret kept for no reason. */
     @Test
     fun `the token is dropped together with the repository it belonged to`() {
         val sources = normalize(appReleasesUrl = "", appReleasesToken = "ghp_secret")
@@ -88,7 +74,6 @@ internal class UpdateSourcesNormalizationTest {
         assertEquals("ghp_secret", sources.appReleasesToken)
     }
 
-    /** Storage normalises on every read, so a stored value must be a fixed point of it. */
     @Test
     fun `normalising twice changes nothing`() {
         val once = Settings(

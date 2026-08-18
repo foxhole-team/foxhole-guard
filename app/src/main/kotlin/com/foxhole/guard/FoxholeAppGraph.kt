@@ -4,6 +4,7 @@ import android.content.Context
 import com.foxhole.core.runtime.I2pdManager
 import com.foxhole.core.runtime.LanProxyAddressProvider
 import com.foxhole.core.runtime.RuntimeConfigAssembler
+import com.foxhole.core.runtime.RuntimeDnsRuleSetInstallOutcome
 import com.foxhole.core.runtime.RuntimeInstanceStore
 import com.foxhole.core.runtime.RuntimeSupervisor
 import com.foxhole.core.runtime.network.IpInfoRepository
@@ -29,6 +30,8 @@ import com.foxhole.guard.runtime.DnsFilterUpdateRepository
 import com.foxhole.guard.runtime.FoxholeConnectionController
 import com.foxhole.guard.runtime.GeoIpUpdateRepository
 import com.foxhole.guard.runtime.ThreatIntelUpdateRepository
+import com.foxhole.guard.runtime.TlsFingerprintProvider
+import com.foxhole.guard.runtime.TlsFingerprintUpdateRepository
 import com.foxhole.guard.runtime.TorBridgeUpdateRepository
 import com.foxhole.guard.traffic.TrafficMapRepository
 
@@ -47,6 +50,7 @@ interface FoxholeHomeDependencies {
     val geoIpUpdateRepository: GeoIpUpdateRepository
     val torBridgeUpdateRepository: TorBridgeUpdateRepository
     val threatIntelUpdateRepository: ThreatIntelUpdateRepository
+    val tlsFingerprintUpdateRepository: TlsFingerprintUpdateRepository
     val routingRepository: RoutingRepository
     val connectionController: FoxholeConnectionController
     val diagnosticsLogger: DiagnosticsLogger
@@ -99,6 +103,11 @@ interface FoxholeDnsFilterUpdateDependencies {
     val dnsFilterUpdateRepository: DnsFilterUpdateRepository
 }
 
+interface FoxholeAppUpdateDependencies {
+    val settingsRepository: SettingsRepository
+    val appUpdateRepository: AppUpdateRepository
+}
+
 interface FoxholeGeoIpUpdateDependencies {
     val settingsRepository: SettingsRepository
     val geoIpUpdateRepository: GeoIpUpdateRepository
@@ -110,7 +119,13 @@ interface FoxholeTorBridgeUpdateDependencies {
 }
 
 interface FoxholeThreatIntelUpdateDependencies {
+    val settingsRepository: SettingsRepository
     val threatIntelUpdateRepository: ThreatIntelUpdateRepository
+}
+
+interface FoxholeTlsFingerprintUpdateDependencies {
+    val settingsRepository: SettingsRepository
+    val tlsFingerprintUpdateRepository: TlsFingerprintUpdateRepository
 }
 
 interface FoxholeDiagnosticsDependencies {
@@ -136,9 +151,11 @@ class FoxholeAppGraph(
     FoxholeTileDependencies,
     FoxholeRefreshWorkerDependencies,
     FoxholeDnsFilterUpdateDependencies,
+    FoxholeAppUpdateDependencies,
     FoxholeGeoIpUpdateDependencies,
     FoxholeTorBridgeUpdateDependencies,
     FoxholeThreatIntelUpdateDependencies,
+    FoxholeTlsFingerprintUpdateDependencies,
     FoxholeDiagnosticsDependencies,
     FoxholeProfileMaintenanceDependencies,
     FoxholeSecurityDependencies {
@@ -151,8 +168,20 @@ class FoxholeAppGraph(
             recordSecurityDiagnostic = { message -> coreModule.diagnosticsLogger.record("security", message) },
         )
     }
-    private val dataModule = FoxholeDataGraphModule(appContext, coreModule) { securityComponents }
-    private val runtimeModule = FoxholeRuntimeGraphModule(appContext, coreModule, dataModule)
+    private val dataModule: FoxholeDataGraphModule =
+        FoxholeDataGraphModule(
+            appContext = appContext,
+            core = coreModule,
+            security = { securityComponents },
+            liveDnsRuleSetInstaller = { name, manifest, signature, artifact ->
+                runtimeModule.runtimeInstanceStore
+                    .current()
+                    ?.installDnsRuleSet(name, manifest, signature, artifact)
+                    ?: RuntimeDnsRuleSetInstallOutcome.Deferred
+            },
+        )
+    private val runtimeModule: FoxholeRuntimeGraphModule =
+        FoxholeRuntimeGraphModule(appContext, coreModule, dataModule)
 
     override val settingsRepository: SettingsRepository by lazy { coreModule.settingsRepository }
     override val diagnosticsLogger: DiagnosticsLogger by lazy { coreModule.diagnosticsLogger }
@@ -182,6 +211,10 @@ class FoxholeAppGraph(
     override val geoIpUpdateRepository: GeoIpUpdateRepository by lazy { dataModule.geoIpUpdateRepository }
     override val torBridgeUpdateRepository: TorBridgeUpdateRepository by lazy { dataModule.torBridgeUpdateRepository }
     override val threatIntelUpdateRepository: ThreatIntelUpdateRepository by lazy { dataModule.threatIntelUpdateRepository }
+    override val tlsFingerprintUpdateRepository: TlsFingerprintUpdateRepository by lazy {
+        dataModule.tlsFingerprintUpdateRepository
+    }
+    val tlsFingerprintProvider: TlsFingerprintProvider by lazy { dataModule.tlsFingerprintProvider }
     override val i2pdManager: I2pdManager by lazy { dataModule.i2pdManager }
     override val runtimeInstanceStore: RuntimeInstanceStore by lazy { runtimeModule.runtimeInstanceStore }
     override val runtimeSupervisor: RuntimeSupervisor by lazy { runtimeModule.runtimeSupervisor }

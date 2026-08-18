@@ -43,8 +43,6 @@ class ProtocolSwitchReconnectTest {
             viewModelSource
                 .substringAfter("internal fun markProfileReconnectPromptWindow()")
                 .substringBefore("internal fun startPendingProfileReconnectPromptIfNeeded()")
-        // When the countdown fill runs out unused, the RECONNECT offer must not stay latched:
-        // the requirement flag is cleared so homePrimaryAction() falls back to STOP.
         assertTrue(promptTimeoutBlock.contains("clearRuntimeReconnectRequired()"))
         assertTrue(promptTimeoutBlock.contains("delay(PROFILE_RECONNECT_PROMPT_WINDOW_MS)"))
     }

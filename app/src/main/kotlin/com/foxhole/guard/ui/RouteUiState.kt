@@ -90,7 +90,6 @@ data class HomeRouteUiState(
     val torOperation: HomeTorOperationUiState = HomeTorOperationUiState(),
     val torPhase: TorPhaseSnapshot = TorPhaseSnapshot(),
     val i2pPhase: I2pPhaseSnapshot = I2pPhaseSnapshot(),
-    /** What the core says the LAN proxy is doing — not what the settings switch was set to. */
     val lanProxy: LanProxyStatusSnapshot = LanProxyStatusSnapshot(),
     val torTransitionPrompt: TorTransitionPrompt? = null,
     val profileReconnectPromptUntilElapsedMs: Long = 0L,
@@ -164,8 +163,6 @@ data class TrafficSettingsRouteUiState(
 @Immutable
 data class StatisticsRouteUiState(
     val settings: Settings = Settings(),
-    // False while [settings] still carries the pre-hydration bootstrap defaults: the screen must
-    // show the preloader instead of concluding "statistics disabled" from a default value.
     val settingsHydrated: Boolean = false,
     val profiles: List<Profile> = emptyList(),
     val activeProfile: Profile? = null,
@@ -177,22 +174,13 @@ data class StatisticsRouteUiState(
     val networkActivityEvents: List<NetworkActivityEvent> = emptyList(),
     val trafficWindows: List<TrafficWindow> = emptyList(),
     val protocolMetricEvents: List<ProtocolMetricEvent> = emptyList(),
-    // Persisted I2P accounting (hourly buckets + the lifetime aggregate), delivered by a late
-    // combine so a recorded sample never re-runs the heavy dashboard build. I2P has no per-app
-    // attribution — no VpnMode.I2P, no I2P AppTunnelLane — so its own store is the only thing that
-    // can answer "how much I2P traffic in the last week"; TOR needs no such field, its bytes come
-    // from the per-app windows the summary already slices by window.
     val i2pTrafficHistory: I2pTrafficHistory = I2pTrafficHistory(),
     val statisticsDashboard: StatisticsDashboardUiState = StatisticsDashboardUiState(),
 )
 
 @Immutable
 data class StatisticsDashboardUiState(
-    // False until the visible-route producer has actually built this snapshot; the screen shows the
-    // fade-in preloader instead of empty cards while heavy aggregation runs off the main thread.
     val ready: Boolean = false,
-    // 0 for the not-ready placeholder: a live default clock made every default instance unequal,
-    // breaking dedupe. Real snapshots carry the builder's bucketed clock.
     val nowMs: Long = 0L,
     val statistics: StatisticsUiState = emptyStatisticsUiState(),
     val appRows: List<AppTrafficRow> = emptyList(),
@@ -240,7 +228,6 @@ data class RoutingRouteUiState(
 @Immutable
 data class DiagnosticsRouteUiState(
     val settings: Settings = Settings(),
-    // Same contract as the statistics route: default-settings frames must not render as state.
     val settingsHydrated: Boolean = false,
     val activeProfile: Profile? = null,
     val ipInfo: IpInfo? = null,
@@ -248,10 +235,6 @@ data class DiagnosticsRouteUiState(
     val networkActivityEvents: List<NetworkActivityEvent> = emptyList(),
 )
 
-/**
- * Per-option protocol metric inputs of the dashboard route model, bundled so the route-state
- * builder hands them over as one value instead of a wall of parallel parameters.
- */
 @Immutable
 internal data class HomeRouteProtocolMetricsInputs(
     val selectedProtocolLatencyMs: Long? = null,
@@ -366,9 +349,6 @@ internal fun HomeUiState.toSettingsRouteUiState(
         profiles = profiles,
         activeProfile = activeProfile,
         traffic = if (includeLiveTraffic) traffic else TrafficSnapshot(),
-        // ipInfo rides the live-traffic gate too: none of the settings screens read it, and an
-        // ungated copy re-emitted this state (recomposing the whole settings/Tor screen) on
-        // every IP refresh while connected.
         ipInfo = if (includeLiveTraffic) ipInfo else null,
         installedApps = if (includeInstalledApps) installedApps else emptyList(),
         diagnosticEntries = if (includeActivityState) diagnosticEntries else emptyList(),

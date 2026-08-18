@@ -468,10 +468,6 @@ class LiveLocalFirewallGuardRuntimeTest {
             return true
         }
         if (contains("geo refresh failed", ignoreCase = true)) {
-            // A handover invalidates the request that was bound to the retired Android Network.
-            // Every cycle above already requires a fresh refresh to succeed on the replacement
-            // network, so this exact fenced cancellation is evidence of correct ownership rather
-            // than a connectivity failure.
             return !contains("default network changed during IP info request", ignoreCase = true)
         }
         if (!contains("UnknownHostException", ignoreCase = true)) {

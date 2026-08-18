@@ -100,11 +100,11 @@ fun Settings.i2pRuntimeActive(): Boolean = i2p.enabled && i2p.engaged
  * that is already on. The transparent guard is a tunnel the user did not ask for that deliberately
  * applies no rules — no blocking, no DNS filtering — so the answer decides whether they are told.
  */
-fun Settings.i2pWouldRaiseTransparentGuard(): Boolean = !expert.firewallEnabled
+fun Settings.i2pWouldRaiseTransparentGuard(): Boolean =
+    i2p.allowOutsideTunnel && !expert.firewallEnabled
 
-/** Whether i2p (without a VPN profile) is the thing keeping the firewall guard up. */
 fun Settings.i2pRaisesLocalGuard(): Boolean =
-    i2pRuntimeActive() && !expert.firewallEnabled
+    i2pRuntimeActive() && i2p.allowOutsideTunnel && !expert.firewallEnabled
 
 private fun Settings.localFirewallGuardRequired(): Boolean {
     if (!expert.firewallEnabled) {

@@ -23,7 +23,6 @@ from typing import List, Tuple
 SRC = "app/src/main/assets/maps/ne_50m_admin_0_countries.geojson"
 OUT = "app/src/main/assets/maps/ne_50m_admin_0_countries_preprocessed.json"
 
-# Mirror TrafficMapCountryShapes.kt visual constants.
 MIN_RING_POINTS = 3
 MIN_RELATIVE_RING_AREA = 0.02
 MIN_ABSOLUTE_RING_AREA = 0.5

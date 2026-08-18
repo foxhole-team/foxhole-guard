@@ -12,6 +12,7 @@ class FoxholeDbDownloadProgressContractTest {
             "GeoIpUpdateClient.kt",
             "TorBridgeUpdateClient.kt",
             "ThreatIntelUpdateClient.kt",
+            "TlsFingerprintUpdateClient.kt",
         ).forEach { name ->
             val source = runtimeSource(name)
             val download = source.indexOf("RemoteUpdatePhase.DOWNLOADING")

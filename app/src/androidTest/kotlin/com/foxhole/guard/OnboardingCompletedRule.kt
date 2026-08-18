@@ -7,19 +7,8 @@ import org.junit.rules.TestRule
 import org.junit.runners.model.Statement
 
 /**
- * Marks first-run onboarding as done, before the activity under test is created.
- *
- * The connected-test runner reinstalls the app for every spec, so each UI test starts on a
- * genuinely fresh profile — and a fresh profile opens the first-run wizard, not the dock. Any test
- * that waits for a normal screen therefore waits forever, which is exactly how two suites here
- * failed with nothing wrong in the product.
- *
- * Ordering matters: chain this OUTSIDE the compose rule (`RuleChain.outerRule(this).around(compose)`),
- * because the compose rule launches the activity as it evaluates and a `@Before` would be too late.
- *
- * Deliberately a settings write rather than three clicks through the wizard: driving its screens
- * would make every unrelated UI test depend on the wizard's copy and layout, so a change there
- * would break suites that have nothing to do with it. The wizard has its own tests.
+ * The connected-test runner reinstalls per spec, so a fresh profile opens the first-run wizard and any test waiting for a normal screen waits forever.
+ * Chain outside the compose rule (RuleChain.outerRule(this).around(compose)): the compose rule launches the activity as it evaluates, so a @Before is too late.
  */
 fun onboardingCompletedRule(): TestRule =
     TestRule { base, _ ->

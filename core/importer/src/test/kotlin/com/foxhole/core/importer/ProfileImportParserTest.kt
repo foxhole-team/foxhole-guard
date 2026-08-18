@@ -8,6 +8,8 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -589,7 +591,7 @@ internal class ProfileImportParserTest : ProfileImportParserTestSupport() {
             listOf(ProtocolHint.HYSTERIA2, ProtocolHint.VLESS),
             profile.protocolOptions.map { option -> option.protocolHint },
         )
-        assertEquals(listOf("HYSTERIA2", "VLESS"), profile.protocolOptions.map { option -> option.displayName })
+        assertEquals(listOf("hy2", "vless"), profile.protocolOptions.map { option -> option.displayName })
     }
 
     @Test
@@ -620,7 +622,120 @@ internal class ProfileImportParserTest : ProfileImportParserTestSupport() {
     }
 
     @Test
-    fun `full share subscription accepts core protocols and ignores only mtproto and amnezia`() {
+    fun `an implemented utls fingerprint survives import under its own name`() {
+        val requestedNames =
+            listOf(
+                "qq",
+                "firefox",
+                "firefox_153",
+                "firefox_148",
+                "edge",
+                "safari",
+                "ios",
+                "chrome_151",
+                "chrome_131",
+                "randomized",
+            )
+        for (requested in requestedNames) {
+            val parsed =
+                parser.parseUserInput(
+                    "vless://11111111-1111-1111-1111-111111111111@example.com:443" +
+                        "?encryption=none&security=reality&type=tcp&fp=$requested&sni=edge.example.com" +
+                        "&pbk=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA01&sid=0000000000000001#vless",
+                )
+
+            val root = json.parseToJsonElement(parsed.normalizedConfigJson!!).jsonObject
+            val tls = root["outbounds"]!!.jsonArray.first().jsonObject["tls"]!!.jsonObject
+            assertEquals(
+                requested,
+                tls["utls"]!!.jsonObject["fingerprint"]!!.jsonPrimitive.content,
+            )
+        }
+    }
+
+    @Test
+    fun `a parrot with no table is substituted and named`() {
+        val parsed =
+            parser.parseUserInput(
+                "vless://11111111-1111-1111-1111-111111111111@example.com:443" +
+                    "?encryption=none&security=tls&type=tcp&fp=hellogolang&sni=edge.example.com#vless",
+            )
+
+        val root = json.parseToJsonElement(parsed.normalizedConfigJson!!).jsonObject
+        val tls = root["outbounds"]!!.jsonArray.first().jsonObject["tls"]!!.jsonObject
+        assertEquals("chrome", tls["utls"]!!.jsonObject["fingerprint"]!!.jsonPrimitive.content)
+        assertEquals("hellogolang", unsupportedUtlsFingerprint("hellogolang"))
+    }
+
+    @Test
+    fun `reality refuses a parrot that cannot carry it`() {
+        val impossible =
+            mapOf(
+                "360" to "no key_share",
+                "android" to "no key_share",
+            )
+        for ((requested, reason) in impossible) {
+            val failure =
+                assertThrows(IllegalArgumentException::class.java) {
+                    parser.parseUserInput(
+                        "vless://11111111-1111-1111-1111-111111111111@example.com:443" +
+                            "?encryption=none&security=reality&type=tcp&fp=$requested&sni=edge.example.com" +
+                            "&pbk=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA01&sid=0000000000000001#vless",
+                    )
+                }
+            assertTrue(failure.message.orEmpty(), failure.message.orEmpty().contains("fp=$requested"))
+            assertTrue(failure.message.orEmpty(), failure.message.orEmpty().contains(reason))
+        }
+    }
+
+    @Test
+    fun `only an unimplemented fingerprint is reported as swapped`() {
+        assertEquals("hellogolang", unsupportedUtlsFingerprint("hellogolang"))
+        assertEquals("360", unsupportedUtlsFingerprint("360"))
+        assertNull(unsupportedUtlsFingerprint("qq"))
+        assertNull(unsupportedUtlsFingerprint("Firefox"))
+        assertNull(unsupportedUtlsFingerprint("chrome"))
+        assertNull(unsupportedUtlsFingerprint("CHROME"))
+        assertNull(unsupportedUtlsFingerprint("auto"))
+        assertNull(unsupportedUtlsFingerprint(""))
+        assertNull(unsupportedUtlsFingerprint(null))
+    }
+
+    @Test
+    fun `one insecure entry refuses the whole subscription until the caller opts in`() {
+        val body =
+            """
+            vless://11111111-1111-1111-1111-111111111111@bundle.example.com:443?encryption=none&security=none&type=tcp#vless
+            trojan://secret@bundle.example.com:443?security=tls&sni=bundle.example.com&allowInsecure=1#trojan
+            hy2://secret@bundle.example.com:443?insecure=0#hy2
+            """.trimIndent()
+
+        val refused =
+            runCatching {
+                parser.parseSubscriptionProfiles(
+                    body,
+                    "remote",
+                    allowInsecureTls = false,
+                    groupCompatibleSingleServerMultiProtocol = true,
+                )
+            }
+        assertTrue("insecure entry must refuse the import", refused.isFailure)
+
+        val allowed =
+            parser.parseSubscriptionProfiles(
+                body,
+                "remote",
+                allowInsecureTls = true,
+                groupCompatibleSingleServerMultiProtocol = true,
+            )
+        assertEquals(
+            3,
+            allowed.entryReports.count { report -> report.status == SubscriptionEntryStatus.ACCEPTED },
+        )
+    }
+
+    @Test
+    fun `full share subscription accepts core protocols and ignores only mtproto`() {
         val parsed =
             parser.parseSubscriptionProfiles(
                 """
@@ -633,12 +748,12 @@ internal class ProfileImportParserTest : ProfileImportParserTestSupport() {
                 ss://aes-256-gcm:outline-password@outline-two.example.com:8448/?outline=1#outline-two
                 tg://proxy?server=mtproto.example.com&port=443&secret=unsupported
                 wireguard://wireguard-private-key%3D@wg.example.com:51820?publickey=wireguard-public-key%3D&address=10.80.0.2%2F32&allowed_ips=0.0.0.0%2F0&keepalive=25&dns=1.1.1.1%2C8.8.8.8&mtu=1280#wireguard
-                awg://amnezia-private-key%3D@awg.example.com:51821?publickey=amnezia-public-key%3D&address=10.81.0.2%2F32&allowed_ips=0.0.0.0%2F0&keepalive=25&dns=1.1.1.1&mtu=1280#amnezia
+                awg://amnezia-private-key%3D@awg.example.com:51821?publickey=amnezia-public-key%3D&address=10.81.0.2%2F32&allowed_ips=0.0.0.0%2F0&keepalive=25&dns=1.1.1.1&mtu=1280&jc=4&jmin=40&jmax=70&s1=15&s2=20&h1=10-19&h2=20-29&h3=30-39&h4=40-49#amnezia
                 """.trimIndent(),
                 "remote",
             )
 
-        assertEquals(8, parsed.profiles.size)
+        assertEquals(9, parsed.profiles.size)
         assertEquals(
             listOf(
                 "VLESS" to SubscriptionEntryStatus.ACCEPTED,
@@ -650,13 +765,17 @@ internal class ProfileImportParserTest : ProfileImportParserTestSupport() {
                 "OUTLINE" to SubscriptionEntryStatus.ACCEPTED,
                 "MTPROTO" to SubscriptionEntryStatus.IGNORED_UNSUPPORTED,
                 "WIREGUARD" to SubscriptionEntryStatus.ACCEPTED,
-                "AMNEZIAWG" to SubscriptionEntryStatus.IGNORED_UNSUPPORTED,
+                "AMNEZIAWG" to SubscriptionEntryStatus.ACCEPTED,
             ),
             parsed.entryReports.map { report -> report.protocolLabel to report.status },
         )
         assertEquals(
             ProtocolHint.WIREGUARD,
             parsed.profiles.single { profile -> profile.displayName == "wireguard" }.protocolHint,
+        )
+        assertEquals(
+            ProtocolHint.WIREGUARD,
+            parsed.profiles.single { profile -> profile.displayName == "amnezia" }.protocolHint,
         )
     }
 

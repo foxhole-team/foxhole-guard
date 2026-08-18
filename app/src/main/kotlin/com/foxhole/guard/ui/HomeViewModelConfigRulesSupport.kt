@@ -13,9 +13,6 @@ import com.foxhole.guard.userFacingErrorMessage
 import kotlinx.coroutines.launch
 import java.io.File
 
-// Resolved-config access, routing-preset text import, site-rule editing, and the
-// diagnostics-archive export.
-
 internal fun HomeViewModel.importPresetText(
     raw: String,
     source: RoutingPresetSource,
@@ -165,6 +162,7 @@ private fun HomeViewModel.siteRuleName(
     val prefix =
         when (action) {
             RoutingRuleAction.BLOCK -> "Foxhole blocked site"
+            RoutingRuleAction.TOR -> "Foxhole tor site"
             RoutingRuleAction.PROXY,
             RoutingRuleAction.DIRECT,
             -> "Foxhole selected site"
@@ -188,9 +186,6 @@ internal fun HomeViewModel.exportDiagnostics(file: File = createDiagnosticsArchi
         putExtra(Intent.EXTRA_STREAM, uri)
         putExtra(Intent.EXTRA_SUBJECT, subject)
         putExtra(Intent.EXTRA_TEXT, getApplication<Application>().getString(R.string.export_diagnostics_share_text))
-        // EXTRA_STREAM alone does not consistently propagate the temporary URI permission to
-        // every target on current Android. ClipData makes the grant explicit for Telegram and any
-        // other app the user chooses from the system share sheet.
         clipData = ClipData.newRawUri(subject, uri)
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     }

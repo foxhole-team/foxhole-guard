@@ -6,12 +6,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 
-/**
- * `flows_revoked` is the enforcement half of blocking an app: a policy reload leaves open flows
- * alone, so without this call "blocked" only takes effect when the app's sockets happen to close.
- * The core publishes the request whether or not it cut anything, and the app parsed the other seven
- * variants while dropping this one — cutting an app off the network left no journal entry at all.
- */
 class RuntimeFlowsRevokedJournalTest {
     @Test
     fun `a package revocation parses with its target, scope and count`() {

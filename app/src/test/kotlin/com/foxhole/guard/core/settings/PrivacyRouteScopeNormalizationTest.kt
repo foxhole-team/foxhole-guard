@@ -10,18 +10,10 @@ import com.foxhole.core.model.Settings
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
-/**
- * The Tor scope is a stored preference, not a runtime capability. Normalization used to coerce
- * «selected apps» back to whole-device whenever the Tor lane happened to be empty, which made the
- * pair unreachable in a split — every write was silently reverted — and turned removing the last
- * app into a switch that put the entire device through Tor.
- */
 class PrivacyRouteScopeNormalizationTest {
 
     private val base =
         Settings(
-            // Safe mode legitimately strips every expert setting, so it is off here: the subject is
-            // the scope's own normalization, not the safe-mode reset.
             connection = ConnectionSettings(safeModeEnabled = false),
             privacyRoute =
             PrivacyRouteSettings(

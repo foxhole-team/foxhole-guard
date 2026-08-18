@@ -12,23 +12,18 @@ import com.foxhole.guard.core.settings.updateSuppressProfileSwipeReconnectConfir
 import com.foxhole.guard.core.settings.updateSuppressTrafficClearConfirm
 import kotlinx.coroutines.launch
 
-// UI-preference toggles, traffic-counter resets and the section-visibility hooks of the home
-// view-model: extensions on the class — split from HomeViewModel.kt.
-// "Don't show again" checkbox on the profile-card swipe-refresh confirmation.
 internal fun HomeViewModel.onSuppressProfileSwipeReconnectConfirmChanged(value: Boolean) {
     viewModelScope.launch {
         container.settingsRepository.updateSuppressProfileSwipeReconnectConfirm(value)
     }
 }
 
-// "Don't show again" checkbox on the traffic-widget swipe-clear confirmation.
 internal fun HomeViewModel.onSuppressTrafficClearConfirmChanged(value: Boolean) {
     viewModelScope.launch {
         container.settingsRepository.updateSuppressTrafficClearConfirm(value)
     }
 }
 
-// "Don't show again" checkbox on the firewall-enable warnings (settings + dashboard window).
 internal fun HomeViewModel.onSuppressFirewallEnableWarningChanged(value: Boolean) {
     viewModelScope.launch {
         container.settingsRepository.updateSuppressFirewallEnableWarning(value)
@@ -54,31 +49,21 @@ internal fun HomeViewModel.onLayoutEditingEnabledChanged(value: Boolean) {
 }
 
 internal fun HomeViewModel.resetUsageTracking() {
-    // The clear is already confirmed by the time this runs (the traffic widget's sheet, or
-    // the user's opt-out).
     resetUsageTrackingInternal()
     trafficChartRecorder.clearLanePair(TRAFFIC_CHART_LANE_TOTAL_RX, TRAFFIC_CHART_LANE_TOTAL_TX)
 }
 
-// The traffic widget's TOR page clears only its own lane counters (and its chart trace).
 internal fun HomeViewModel.resetTorTraffic() {
     TorTrafficStats.reset()
     trafficChartRecorder.clearLanePair(TRAFFIC_CHART_LANE_TOR_RX, TRAFFIC_CHART_LANE_TOR_TX)
 }
 
-// The traffic widget's I2P page mirrors the TOR clear for the i2p lane.
 internal fun HomeViewModel.resetI2pTraffic() {
     I2pTrafficStats.reset()
     trafficChartRecorder.clearLanePair(TRAFFIC_CHART_LANE_I2P_RX, TRAFFIC_CHART_LANE_I2P_TX)
 }
 
-/**
- * The statistics screen's I2P clear: the PERSISTED counters behind the section's four periods.
- * Deliberately not the same action as [resetI2pTraffic] above — that one only zeroes the live
- * session widget and leaves the history untouched.
- */
 internal fun HomeViewModel.clearI2pTrafficStatistics() {
-    // Already confirmed inline by the destructive row that calls it.
     clearI2pTrafficStatisticsInternal()
 }
 
@@ -100,10 +85,6 @@ internal fun HomeViewModel.onDashboardUiVisibilityChanged(visible: Boolean) {
     dashboardVisible = visible
     if (visible) {
         startPendingProfileReconnectPromptIfNeeded()
-        // A dock/navigation return is a read-only view event. Local-guard reconciliation belongs
-        // to process foreground, settings warm-up and explicit setting changes; doing it here made
-        // every HOME re-entry capable of dispatching START_LOCAL_GUARD/reload and disturbing a
-        // healthy route. The stale dashboard refresh below only reads route identity/metrics.
         val connectionState = container.connectionController.snapshot.value.state
         if (connectionState == ConnectionState.CONNECTED && !autoConnectUiStateMutable.value.running) {
             scheduleForegroundDashboardRefreshIfStale()
@@ -117,8 +98,6 @@ internal fun HomeViewModel.onDashboardUiVisibilityChanged(visible: Boolean) {
     }
 }
 
-// The profiles screen hosts the protocol-management window whose remembered metrics must stay
-// live while a protocol is connected, so the connected-metrics refresh loop runs there too.
 internal fun HomeViewModel.onProfilesUiVisibilityChanged(visible: Boolean) {
     if (profilesUiVisible == visible) {
         return

@@ -4,11 +4,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 
-/**
- * Чистые парсеры web apps: метаданные сайта (manifest/иконки/имя) из HTML без DOM-библиотек и
- * `(N)`-эвристика заголовка для вотчдога. Регексы обязаны переживать реальную вёрстку: атрибуты
- * в любом порядке, одинарные/двойные кавычки, относительные href.
- */
 internal class WebAppMetadataTest {
     private val base = "https://app.example.com/inbox/"
 
@@ -109,7 +104,6 @@ internal class WebAppMetadataTest {
         assertEquals(12, parseTitleBadge("chat (12)"))
         assertEquals(0, parseTitleBadge("(0) quiet"))
         assertNull(parseTitleBadge("no badge here"))
-        // A large suffix is almost certainly a year or content counter, not a badge.
         assertNull(parseTitleBadge("meeting notes (2026)"))
         assertNull(parseTitleBadge(null))
     }
@@ -122,7 +116,6 @@ internal class WebAppMetadataTest {
         assertEquals(expected, normalizeWebAppInputUrl("web.telegram.org"))
         assertEquals(expected, normalizeWebAppInputUrl("  https://web.telegram.org  "))
         assertEquals("https://web.telegram.org/k/", normalizeWebAppInputUrl("https://web.telegram.org/k/"))
-        // Uppercase scheme and host are still the same app.
         assertEquals(expected, normalizeWebAppInputUrl("HTTPS://WEB.TELEGRAM.ORG"))
     }
 }

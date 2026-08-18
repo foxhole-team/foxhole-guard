@@ -78,14 +78,30 @@ enum class ThemeMode {
     LIGHT,
 }
 
-/**
- * Panel treatment only; independent from [ThemeMode], which remains the system/dark/light
- * colour-source setting. DARK keeps the CLI palette and removes the default panel fill.
- */
+// Panel rendering is independent of ThemeMode, which remains the system/dark/light source.
 @Serializable
 enum class PanelAppearance {
+    AUTO,
     STANDARD,
     DARK,
+    LIGHT,
+}
+
+@Serializable
+enum class VisualStyle {
+    PIXEL,
+    PLAIN,
+}
+
+@Serializable
+enum class AccentColor {
+    AUTO,
+    ORANGE,
+    GREEN,
+    LIME,
+    BLUE,
+    PINK,
+    CYAN,
 }
 
 @Serializable
@@ -282,6 +298,14 @@ enum class RoutingRuleAction(val outboundTag: String) {
     PROXY("proxy"),
     DIRECT("direct"),
     BLOCK("block"),
+
+    TOR("tor-over-vpn"),
+    ;
+
+    companion object {
+        fun fromStoredName(value: String): RoutingRuleAction =
+            entries.firstOrNull { entry -> entry.name == value } ?: PROXY
+    }
 }
 
 // The traffic widget's body: the classic text stat blocks or the live chart.

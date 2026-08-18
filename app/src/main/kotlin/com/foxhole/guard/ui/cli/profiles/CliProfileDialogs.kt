@@ -7,6 +7,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import com.foxhole.core.model.Profile
@@ -24,20 +28,12 @@ import com.foxhole.guard.ui.cli.components.CliElbowLine
 import com.foxhole.guard.ui.cli.components.CliFlagIcon
 import com.foxhole.guard.ui.cli.components.CliKeyValue
 import com.foxhole.guard.ui.cli.components.CliLoadingRow
+import com.foxhole.guard.ui.cli.components.CliToggleRow
 import com.foxhole.guard.ui.confirmProfileImport
 import com.foxhole.guard.ui.confirmProfileImportDuplicateUpdate
 import com.foxhole.guard.ui.confirmProfileImportExcludingInsecureTls
 import com.foxhole.guard.ui.dismissProfileImportConfirmation
 
-/**
- * The import confirmation, as a bottom modal rather than a panel wedged above the profile list:
- * this is a yes/no about data that is about to be written, so it obeys the same law as every other
- * confirmation — it rises over the screen, and a swipe or the scrim means no.
- *
- * It keeps its own button row instead of [CliConfirmSheet] because the answer is not always
- * binary: a duplicate offers "update", and a payload carrying insecure TLS offers a second, safer
- * "add without them" beside the plain add.
- */
 @Composable
 internal fun CliImportConfirmPanel(
     viewModel: HomeViewModel,
@@ -79,6 +75,7 @@ internal fun CliImportConfirmPanel(
                 color = colors.warn,
             )
         }
+        var insecureTlsConsent by remember(confirmation.rawInput) { mutableStateOf(false) }
         if (confirmation.insecureTls) {
             CliElbowLine(
                 text = stringResource(
@@ -86,6 +83,12 @@ internal fun CliImportConfirmPanel(
                     confirmation.insecureTlsProtocolLabels.joinToString(","),
                 ),
                 color = colors.err,
+            )
+            CliToggleRow(
+                label = stringResource(R.string.cli_prof_import_insecure_consent),
+                checked = insecureTlsConsent,
+                onToggle = { insecureTlsConsent = it },
+                enabled = confirmation.canConfirm,
             )
         }
         when {
@@ -103,7 +106,7 @@ internal fun CliImportConfirmPanel(
                 label = stringResource(R.string.cli_prof_import_yes_update),
                 color = colors.ok,
                 filled = true,
-                enabled = confirmation.canConfirm,
+                enabled = confirmation.canConfirm && (!confirmation.insecureTls || insecureTlsConsent),
                 onClick = { viewModel.confirmProfileImportDuplicateUpdate() },
                 modifier = Modifier.fillMaxWidth(),
             )
@@ -112,7 +115,7 @@ internal fun CliImportConfirmPanel(
                 label = stringResource(R.string.cli_prof_import_yes_add),
                 color = colors.ok,
                 filled = true,
-                enabled = confirmation.canConfirm,
+                enabled = confirmation.canConfirm && (!confirmation.insecureTls || insecureTlsConsent),
                 onClick = { viewModel.confirmProfileImport() },
                 modifier = Modifier.fillMaxWidth(),
             )
@@ -138,25 +141,12 @@ internal fun CliImportConfirmPanel(
     }
 }
 
-// ISO date (yyyy-MM-dd) for the subscription-expiry row; the exact time is not useful here.
-// Shared by the profile list and the detail sheet: the one place expiry dates are formatted.
 internal fun formatExpiryDate(epochMs: Long): String =
     java.time.Instant.ofEpochMilli(epochMs)
         .atZone(java.time.ZoneId.systemDefault())
         .toLocalDate()
         .toString()
 
-/**
- * The profile detail sheet: every fact laid out as a `key ....... value` table, the selected
- * option's live metrics, and a highlighted TEST button that probes the protocols. [onActivate]
- * makes it the current profile (a live switch is confirmed upstream via B2); the sheet slides up
- * from the bottom edge on a plain tap of the row, sharing the look of every other panel via
- * [CliBottomSheet] with the profile name as its caption.
- *
- * The body deliberately has no scroll of its own: the content is short enough for compact screens.
- * The sheet rule is that a short body does not scroll, so drag-to-dismiss owns the whole gesture,
- * while a long one scrolls and M3 nested scroll arbitrates the drag.
- */
 @Composable
 internal fun CliProfileDetailSheet(
     viewModel: HomeViewModel,
@@ -176,7 +166,6 @@ internal fun CliProfileDetailSheet(
             valueColor = colors.fg,
             icon = R.drawable.pix_shield,
         )
-        // Geo from the node name; shown only when the name revealed it.
         profileCountryCode(selected?.displayName, profile.name)?.let { country ->
             CliKeyValue(
                 key = stringResource(R.string.cli_prof_detail_geo),
@@ -234,7 +223,6 @@ internal fun CliProfileDetailSheet(
                 icon = R.drawable.pix_forbidden,
             )
         }
-        // The selected option's last measured connect · ping · latency.
         val optionId = profile.selectedProtocolOptionId
         if (optionId != null) {
             val connect = state.smartProfileConnectDurationsByProfileId[profile.id]?.get(optionId)
@@ -251,14 +239,12 @@ internal fun CliProfileDetailSheet(
 
         Spacer(modifier = Modifier.height(CliSpacing.md))
         Row(horizontalArrangement = Arrangement.spacedBy(CliSpacing.sm)) {
-            // The highlighted primary action — the TEST button.
             CliSmartTestButton(
                 viewModel = viewModel,
                 profileId = profile.id,
                 testing = testing,
                 modifier = Modifier.weight(1f),
             )
-            // Sheet palette: the confirming action is filled ok, cancel below is dashed err.
             CliButton(
                 label = stringResource(R.string.cli_prof_detail_activate),
                 filled = true,

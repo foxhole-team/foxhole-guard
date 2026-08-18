@@ -42,7 +42,6 @@ class SettingsStorageSupportTest {
                 sanitizePayload = { payload ->
                     payload.replace("BROKEN_THEME", "SYSTEM")
                 },
-                // Canonical form differs from the on-disk BROKEN_THEME bytes → must rewrite.
                 encodeCanonical = { """{"ui":{"themeMode":"SYSTEM"}}""" },
                 rewriteCanonical = {
                     rewritten = true
@@ -83,7 +82,6 @@ class SettingsStorageSupportTest {
         val result =
             readEncryptedSettingsResult(
                 settingsFile = settingsFile,
-                // A pre-normalization / older-schema payload the decoder migrates on read.
                 readPayload = { """{"ui":{},"legacyField":true}""" },
                 decodePayload = { Settings() },
                 sanitizePayload = { it },

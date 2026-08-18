@@ -17,7 +17,6 @@ import android.graphics.Canvas as AndroidCanvas
 import android.graphics.Paint as AndroidPaint
 import android.graphics.Path as AndroidPath
 
-/** Small LRU for the fixed-resolution terminal land layer. */
 internal object CliMapLandCache {
     private const val MAX_ENTRIES = 3
     private val lock = Any()
@@ -29,6 +28,7 @@ internal object CliMapLandCache {
         fillColor: Color?,
         boundaryColor: Color,
         pointStride: Int,
+        antiAlias: Boolean = false,
     ): ImageBitmap = withContext(Dispatchers.Default) {
         val key = CliMapLandKey(
             width = canvasSize.width.coerceAtLeast(1),
@@ -38,6 +38,7 @@ internal object CliMapLandCache {
             shapesIdentity = System.identityHashCode(shapes),
             shapeCount = shapes.size,
             pointStride = pointStride.coerceAtLeast(1),
+            antiAlias = antiAlias,
         )
         synchronized(lock) { bitmaps[key] } ?: renderLand(shapes, key).also { rendered ->
             synchronized(lock) {
@@ -69,7 +70,7 @@ private fun renderLand(shapes: List<TrafficMapCountryShape>, key: CliMapLandKey)
             AndroidPaint().apply {
                 style = AndroidPaint.Style.FILL
                 color = fillColor
-                isAntiAlias = false
+                isAntiAlias = key.antiAlias
             }
         )
     }
@@ -79,7 +80,7 @@ private fun renderLand(shapes: List<TrafficMapCountryShape>, key: CliMapLandKey)
             style = AndroidPaint.Style.STROKE
             strokeWidth = 1f
             color = key.boundaryColor
-            isAntiAlias = false
+            isAntiAlias = key.antiAlias
         }
     )
     return bitmap.asImageBitmap()
@@ -117,6 +118,7 @@ private data class CliMapLandKey(
     val shapesIdentity: Int,
     val shapeCount: Int,
     val pointStride: Int,
+    val antiAlias: Boolean = false,
 )
 
 private const val MIN_LAT = -55.0

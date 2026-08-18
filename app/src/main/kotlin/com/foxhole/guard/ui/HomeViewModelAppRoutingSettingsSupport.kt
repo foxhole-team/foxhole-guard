@@ -11,7 +11,6 @@ import com.foxhole.core.model.PrivacyRouteScope
 import com.foxhole.core.model.TrafficMode
 import com.foxhole.core.model.blockedLanePackages
 import com.foxhole.core.model.isUdpTransport
-import com.foxhole.core.model.packages
 import com.foxhole.core.model.torScopeRunnable
 import com.foxhole.core.model.tunnelSelectedPackages
 import com.foxhole.guard.R
@@ -38,9 +37,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
-// Per-app routing, privacy-route (Tor) and blocked-apps settings handlers for HomeViewModel.
-// Extracted from HomeViewModelSettingsSupport (file split by domain); extension functions only.
-
 internal fun HomeViewModel.onPerAppRoutingModeSelected(value: PerAppRoutingMode) {
     onVpnRoutingScenarioSelected(
         when (value) {
@@ -51,7 +47,6 @@ internal fun HomeViewModel.onPerAppRoutingModeSelected(value: PerAppRoutingMode)
     )
 }
 
-/** Settings-screen scenario entry point; Home operating-mode actions deliberately bypass it. */
 internal fun HomeViewModel.onVpnRoutingScenarioSelected(value: VpnRoutingScenario) {
     val settings = container.settingsRepository.settings.value
     if (currentVpnRoutingScenario(settings) == value) {
@@ -62,8 +57,6 @@ internal fun HomeViewModel.onVpnRoutingScenarioSelected(value: VpnRoutingScenari
         targetMode != PerAppRoutingMode.FULL_TUNNEL &&
         settings.expert.tunnelSelectedPackages().none(String::isNotBlank)
     ) {
-        // Enabling the split with no picked apps: answer with the guidance banner instead of a
-        // restart prompt (there is nothing to apply yet); the switch simply stays off.
         snackbars.tryEmit(warningBanner(R.string.split_tunnel_requires_apps))
         return
     }
@@ -78,14 +71,12 @@ internal fun HomeViewModel.onVpnRoutingScenarioSelected(value: VpnRoutingScenari
     applyRoutingScenarioChange(change)
 }
 
-/** Confirm for the atomic-application-off sheet: apply the parked mode/scenario as one action. */
 internal fun HomeViewModel.confirmPendingRoutingScenario() {
     val change = pendingRoutingScenarioConfirmationMutable.value ?: return
     pendingRoutingScenarioConfirmationMutable.value = null
     applyRoutingScenarioChange(change)
 }
 
-/** Cancel: drop the parked change; the dropdown re-reads the unchanged setting. */
 internal fun HomeViewModel.dismissPendingRoutingScenario() {
     pendingRoutingScenarioConfirmationMutable.value = null
 }
@@ -117,19 +108,12 @@ private fun HomeViewModel.applyVpnRoutingScenario(value: VpnRoutingScenario) {
             ),
         )
     if (activeRuntime && routingChange == RoutingChangeAction.FULL_SWITCH) {
-        // The live runtime serves the OTHER traffic mode (e.g. a PROXY runtime while the user
-        // picks Split, which implies TUNNEL): a hot reload would assemble a config the running
-        // service cannot host (the proxy runtime has no tun), and that reload failure used to
-        // tear the whole VPN down. Route through the restart prompt instead — the pair applies
-        // when the user confirms the restart, and the dropdown reverts if the offer expires.
         updateRouteModeSettingAndPromptRestart {
             container.settingsRepository.updateVpnRoutingScenario(targetMode, localHttpProxyEnabled)
             emitRoutingScenarioSelected(value.terminalLabelRes())
         }
         return
     }
-    // Same-mode changes — enabling/disabling the split or moving between include/exclude on a
-    // live tunnel — apply seamlessly through the hot-reload path below; no manual off/on needed.
     updateAppRoutingSettingAndPromptReconnect {
         container.settingsRepository.updateVpnRoutingScenario(targetMode, localHttpProxyEnabled)
         emitRoutingScenarioSelected(value.terminalLabelRes())
@@ -154,10 +138,6 @@ internal fun HomeViewModel.onSelectedPackagesChanged(value: List<String>) {
     }
 }
 
-/**
- * The new Apps screen's per-app dropdown: pin [packageName] to [lane], or remove it from every
- * lane when [lane] is null. A live tunnel hot-reloads the new membership (matrix R5).
- */
 internal fun HomeViewModel.onAppLaneChanged(
     packageName: String,
     lane: com.foxhole.core.model.AppTunnelLane?,
@@ -168,12 +148,6 @@ internal fun HomeViewModel.onAppLaneChanged(
     }
 }
 
-/**
- * The app picker's confirm: the ticked packages go to [lane], the ones the user un-ticked leave
- * every lane, both in one settings transaction (see [applyAppLaneEdits]). One transaction is the
- * point — the runtime never sees a half-applied membership, and the lane derivations (firewall
- * arming, split mode, safe-mode exit) are taken once from the final set.
- */
 internal fun HomeViewModel.onAppLaneEditsApplied(
     added: List<String>,
     lane: com.foxhole.core.model.AppTunnelLane,
@@ -214,10 +188,6 @@ internal fun HomeViewModel.onPrivacyRouteModeSelected(value: PrivacyRouteMode) {
         return
     }
     val snapshot = container.connectionController.snapshot.value
-    // Turning Tor OFF must fully stop a Tor-only session in *any* engaged state, not just the
-    // ACTIVE set: a pending/bootstrapping start can still have profileId unset in the snapshot
-    // (service start race) or sit in ERROR — the hot-reload path leaves that session running, so
-    // the modal kept showing the yellow pending pill and the IP skeleton after "Turn off".
     val torOnlyEngaged =
         snapshot.profileId == com.foxhole.guard.runtime.FoxholeVpnService.TOR_ONLY_PROFILE_ID &&
             snapshot.state != ConnectionState.IDLE
@@ -238,8 +208,6 @@ internal fun HomeViewModel.onPrivacyRouteModeSelected(value: PrivacyRouteMode) {
             torIpInfoMutable.value = null
             container.settingsRepository.updatePrivacyRouteMode(value)
             container.connectionController.disconnect(suppressLocalGuard = false)
-            // The dashboard must fall back to the CURRENT device identity once the Tor-only
-            // session is gone: wait for the runtime to settle, then refresh silently.
             withTimeoutOrNull(HomeViewModel.STOP_VPN_KEEP_TOR_SETTLE_TIMEOUT_MS) {
                 container.connectionController.snapshot.first { it.state !in ACTIVE_CONNECTION_STATES }
             }
@@ -298,13 +266,6 @@ internal fun HomeViewModel.shouldBlockTorOverUdpVpnEnable(
     return protocolHint?.isUdpTransport() == true
 }
 
-/**
- * A scope change with NO running Tor: persist it and say so in green — nothing to restart, the
- * next start simply picks the new scope up. Picking "selected apps" with nothing selected is
- * still refused outright (there would be nothing to route).
- *
- * @return false when the change was refused, so the caller keeps its dropdown where it was.
- */
 internal fun HomeViewModel.onPrivacyRouteScopeSelected(value: PrivacyRouteScope): Boolean {
     val settings = container.settingsRepository.settings.value
     if (settings.privacyRoute.scope == value) {
@@ -326,9 +287,6 @@ private fun HomeViewModel.applyPrivacyRouteScopeSelection(value: PrivacyRouteSco
     viewModelScope.launch {
         container.settingsRepository.updatePrivacyRouteScope(value)
         emitRoutingScenarioSelected(value.terminalLabelRes())
-        if (torLaneAwaitsApps(value)) {
-            snackbars.emit(infoBanner(R.string.privacy_route_select_apps_first))
-        }
     }
 }
 
@@ -338,20 +296,6 @@ private fun PrivacyRouteScope.terminalLabelRes(): Int =
         PrivacyRouteScope.SELECTED_APPS -> R.string.cli_route_tor_apps
     }
 
-/**
- * Configuring a scope is not starting a route. Refusing to store «selected apps» while the Tor lane
- * was empty made the pair unreachable in a split: the lane can only be filled once the scope exists,
- * and the scope could not be saved until the lane was filled. The write is unconditional now; the
- * start path still refuses an empty lane, so nothing can come up carrying nothing.
- */
-private fun HomeViewModel.torLaneAwaitsApps(value: PrivacyRouteScope): Boolean =
-    value == PrivacyRouteScope.SELECTED_APPS &&
-        container.settingsRepository.settings.value.expert.packages(AppTunnelLane.TOR).isEmpty()
-
-/**
- * The same scope change while Tor IS engaged, with the user's answer to "restart now?": either
- * hot-reload the live route immediately, or persist and let the next start pick it up.
- */
 internal fun HomeViewModel.applyPrivacyRouteScopeChange(
     value: PrivacyRouteScope,
     restartNow: Boolean,
@@ -372,8 +316,6 @@ internal fun HomeViewModel.applyPrivacyRouteScopeChange(
 }
 
 internal fun HomeViewModel.onPrivacyRouteScopeConfigured(value: PrivacyRouteScope) {
-    // The dashboard/profile entry points still change the scope with an immediate hot reload of a
-    // live route; the settings screen asks first (see [applyPrivacyRouteScopeChange]).
     applyPrivacyRouteScopeChange(value, restartNow = true)
 }
 
@@ -384,14 +326,10 @@ internal fun HomeViewModel.onPrivacyRouteBypassVpnTunnelChanged(value: Boolean) 
 }
 
 internal fun HomeViewModel.onPrivacyRouteBypassVpnTunnelConfigured(value: Boolean) {
-    // Toggling the "bypass VPN tunnel" option restructures the Tor route, so reconnect immediately
-    // via the hot-reload path when Tor is running.
     onPrivacyRouteBypassVpnTunnelChanged(value)
 }
 
 internal fun HomeViewModel.onPrivacyRouteBlockAppsWhenTorUnavailableChanged(value: Boolean) {
-    // Fail-closed guard for the Tor lane: reload a live tunnel so the reject rule for Tor apps
-    // arms/disarms immediately instead of waiting for the next connect.
     updateRuntimeSettingAndMaybeReload {
         container.settingsRepository.updatePrivacyRouteBlockAppsWhenTorUnavailable(value)
     }
@@ -406,7 +344,6 @@ internal fun HomeViewModel.onPrivacyRouteSelectedPackagesChanged(value: List<Str
 }
 
 internal fun HomeViewModel.onPrivacyRouteSelectedPackagesConfigured(value: List<String>) {
-    // Editing the Tor app list must reconnect a running Tor route so the new per-app scope applies.
     onPrivacyRouteSelectedPackagesChanged(value)
 }
 
@@ -430,8 +367,6 @@ internal fun HomeViewModel.onBlockAppsAlwaysChanged(value: Boolean) {
     if (value &&
         container.settingsRepository.settings.value.expert.blockedLanePackages().none(String::isNotBlank)
     ) {
-        // Same contract as the split switch: flipping "always block" with an empty app list
-        // answers with the guidance banner; nothing to arm yet.
         snackbars.tryEmit(warningBanner(R.string.blocked_apps_requires_apps))
         return
     }
@@ -481,8 +416,6 @@ private fun HomeViewModel.updateAppRoutingSettingAndPromptReconnect(
         val currentFingerprint = container.connectionController.currentRuntimeFingerprint()
         if (appliedFingerprint != currentFingerprint) {
             clearRuntimeReconnectRequired()
-            // Never hot-reload across Android interface shapes. A change to the TUN address or app
-            // split needs a reconnect because the existing VpnService interface cannot host it.
             val liveTorOnly = targetProfileId == FoxholeVpnService.TOR_ONLY_PROFILE_ID
             val routingChange =
                 resolveRoutingChangeAction(
@@ -534,9 +467,6 @@ internal fun HomeViewModel.updateRouteModeSettingAndPromptRestart(
     viewModelScope.launch {
         val currentSettings = container.settingsRepository.current()
         val targetProfileId = activeRuntimeProfileIdForReload()
-        // Tor beside the tunnel is its own runtime and ignores traffic.mode entirely: switching
-        // tunnel<->proxy while only Tor-only is up must apply silently, never hold the switch
-        // hostage behind a "restart Tor" prompt.
         val activeRuntime =
             targetProfileId != null &&
                 targetProfileId != FoxholeVpnService.TOR_ONLY_PROFILE_ID &&

@@ -1,12 +1,27 @@
 package com.foxhole.guard.core.settings
 
+import com.foxhole.core.model.AccentColor
 import com.foxhole.core.model.PanelAppearance
+import com.foxhole.core.model.VisualStyle
 
 // Appearance and dialog opt-out UI settings. Extracted from SettingsRepositoryExpertUi
 // (file split by domain).
 
 suspend fun SettingsRepository.updatePanelAppearance(value: PanelAppearance) =
-    update { it.copy(ui = it.ui.copy(panelAppearance = value)) }
+    update {
+        val accent = if (value != PanelAppearance.AUTO && it.ui.accentColor == AccentColor.AUTO) {
+            AccentColor.ORANGE
+        } else {
+            it.ui.accentColor
+        }
+        it.copy(ui = it.ui.copy(panelAppearance = value, accentColor = accent))
+    }
+
+suspend fun SettingsRepository.updateVisualStyle(value: VisualStyle) =
+    update { it.copy(ui = it.ui.copy(visualStyle = value)) }
+
+suspend fun SettingsRepository.updateAccentColor(value: AccentColor) =
+    update { it.copy(ui = it.ui.copy(accentColor = value)) }
 
 suspend fun SettingsRepository.updateSuppressProfileSwipeReconnectConfirm(value: Boolean) =
     update { it.copy(ui = it.ui.copy(suppressProfileSwipeReconnectConfirm = value)) }

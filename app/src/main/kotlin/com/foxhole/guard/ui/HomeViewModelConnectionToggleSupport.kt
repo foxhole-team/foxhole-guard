@@ -46,11 +46,6 @@ internal fun HomeViewModel.toggleConnectionInternal() {
     connectSelectedProfile(state, connectProfile, networkOverride?.protocolOptionId)
 }
 
-/**
- * Split-button "Start VPN": connects the active profile without treating an engaged Tor-only
- * runtime as something to toggle off. With Tor beside the tunnel (bypass) the connect replaces the
- * Tor-only session with one VPN+Tor session, so Tor keeps flowing on the device route.
- */
 internal fun HomeViewModel.startVpnConnectionInternal() {
     cancelAutoConnect(clearUiOnly = true)
     val state = controlUiState.value
@@ -184,16 +179,9 @@ private fun HomeViewModel.cancelProtocolSearchConnection(): Boolean {
         container.connectionController.disconnect(suppressLocalGuard = false)
         return true
     }
-    // CANCEL_REFRESH_AND_CONTINUE: the tap is not consumed and connect proceeds normally.
     return false
 }
 
-/**
- * What a START tap does while a protocol run is live, extracted pure for testing. A visible
- * auto-connect run is stopped by the tap — that is its "stop". A background smart-profile
- * measurement is invisible to the user, and consuming START looked like a dead button, so the
- * measurement is cancelled and connect continues.
- */
 internal enum class ProtocolSearchToggleAction { NONE, CANCEL_SEARCH_AND_CONSUME, CANCEL_REFRESH_AND_CONTINUE }
 
 internal fun protocolSearchToggleActionFor(
@@ -222,26 +210,22 @@ private fun HomeViewModel.toggleStandaloneRuntimeConnection(state: HomeUiState):
         return false
     }
     clearTorOperation()
+    disengageI2pForDisconnect()
     container.connectionController.disconnect(suppressLocalGuard = false)
     return true
 }
 
 private fun HomeViewModel.toggleTorOnlyRuntimeConnection(state: HomeUiState): Boolean {
-    // Disconnect any engaged Tor-only session, including the pending/bootstrapping and ERROR states
-    // that ACTIVE_CONNECTION_STATES omits, so Stop-Tor always cancels an in-flight Tor (no VPN).
     val torOnlyEngagedInSnapshot =
         state.connection.profileId == FoxholeVpnService.TOR_ONLY_PROFILE_ID &&
             state.connection.state != ConnectionState.IDLE
-    // Early-start race: right after Start TOR the service may not have published the Tor-only
-    // profile id into the snapshot yet, while the pending operation (yellow pill + IP skeleton) is
-    // already showing. Without this branch the toggle fell through to the connect path and
-    // RESTARTED Tor instead of stopping it — Stop looked like it did nothing.
     val torStartPendingWithoutPrimaryRuntime =
         state.torOperation.active && !state.connection.isPrimaryConnectionRuntime()
     if (!torOnlyEngagedInSnapshot && !torStartPendingWithoutPrimaryRuntime) {
         return false
     }
     clearTorOperation()
+    disengageI2pForDisconnect()
     container.connectionController.disconnectTorOnly()
     return true
 }
@@ -258,9 +242,6 @@ private fun HomeViewModel.handleToggleWithoutActiveProfile(state: HomeUiState) {
         return
     }
     if (!privacyRoute.enabled && privacyRoute.permitted) {
-        // The core is permitted but the route is not armed yet — the exact state right after
-        // flipping the core switch. The dashboard Connect TOR button arms and starts it through
-        // the same quick-start path the Tor window uses, instead of erroring out.
         onEnableDirectTorQuickStart()
         return
     }
@@ -295,16 +276,13 @@ private fun HomeViewModel.togglePrimaryRuntimeConnection(
             true
         }
         PrimaryRuntimeToggleAction.DISCONNECT -> {
-            // Stop tears the whole tunnel down. Any Tor riding beside the VPN dies with it (the
-            // teardown stops the Tor process too); an armed-but-permitted route stays armed for the
-            // next start. Cancelling the in-flight Tor operation stops the Tor modal pinning forever.
             clearTorOperation()
+            disengageI2pForDisconnect()
             container.connectionController.disconnect(suppressLocalGuard = false)
             true
         }
     }
 
-/** The stop/reconnect decision for the primary runtime, extracted pure for testing. */
 internal enum class PrimaryRuntimeToggleAction { NONE, RECONNECT, DISCONNECT }
 
 internal fun primaryRuntimeToggleActionFor(

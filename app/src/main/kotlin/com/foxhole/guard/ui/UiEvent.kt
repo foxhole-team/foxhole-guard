@@ -1,6 +1,5 @@
 package com.foxhole.guard.ui
 
-/** Lightweight one-shot feedback consumed by the terminal event line. */
 internal data class FoxholeBannerEvent(
     val message: String,
     val tone: FoxholeBannerTone,

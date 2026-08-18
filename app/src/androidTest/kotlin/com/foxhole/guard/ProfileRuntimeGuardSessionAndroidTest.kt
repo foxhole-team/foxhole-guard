@@ -20,15 +20,16 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeoutOrNull
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeTrue
 import org.junit.Test
 
 internal class ProfileRuntimeGuardSessionAndroidTest : ProfileRuntimeSessionAndroidTestSupport() {
     @Test
     fun manualSmartSubscriptionVlessTcpBackgroundHold() {
-        if (InstrumentationRegistry.getArguments().getString("foxhole.liveSmartVlessTcpBackground") != "1") {
-            Log.d(TEST_TAG, "manual smart VLESS TCP background hold skipped")
-            return
-        }
+        assumeTrue(
+            "manual smart VLESS TCP background hold skipped: pass -e foxhole.liveSmartVlessTcpBackground 1 to run it",
+            InstrumentationRegistry.getArguments().getString("foxhole.liveSmartVlessTcpBackground") == "1",
+        )
         runBlocking {
             val app = ApplicationProvider.getApplicationContext<FoxholeApplication>()
             val subscriptionUrl =
@@ -175,10 +176,10 @@ internal class ProfileRuntimeGuardSessionAndroidTest : ProfileRuntimeSessionAndr
 
     @Test
     fun manualSmartSubscriptionVlessNetworkSwitchRefresh() {
-        if (InstrumentationRegistry.getArguments().getString("foxhole.liveSmartVlessNetworkSwitch") != "1") {
-            Log.d(TEST_TAG, "manual smart VLESS network switch refresh skipped")
-            return
-        }
+        assumeTrue(
+            "manual smart VLESS network switch refresh skipped: pass -e foxhole.liveSmartVlessNetworkSwitch 1 to run it",
+            InstrumentationRegistry.getArguments().getString("foxhole.liveSmartVlessNetworkSwitch") == "1",
+        )
         runBlocking {
             val app = ApplicationProvider.getApplicationContext<FoxholeApplication>()
             val subscriptionUrl =
@@ -351,10 +352,10 @@ internal class ProfileRuntimeGuardSessionAndroidTest : ProfileRuntimeSessionAndr
 
     @Test
     fun manualSmartSubscriptionRuntimeStressCycles() {
-        if (InstrumentationRegistry.getArguments().getString("foxhole.liveRuntimeStress") != "1") {
-            Log.d(TEST_TAG, "manual runtime stress skipped")
-            return
-        }
+        assumeTrue(
+            "manual runtime stress skipped: pass -e foxhole.liveRuntimeStress 1 to run it",
+            InstrumentationRegistry.getArguments().getString("foxhole.liveRuntimeStress") == "1",
+        )
         runBlocking {
             val app = ApplicationProvider.getApplicationContext<FoxholeApplication>()
             val requireSuccess = requireLiveSmartSuccess()
@@ -481,10 +482,10 @@ internal class ProfileRuntimeGuardSessionAndroidTest : ProfileRuntimeSessionAndr
 
     @Test
     fun restoreBaselineRuntimeSettingsWhenRequested() {
-        if (InstrumentationRegistry.getArguments().getString("foxhole.restoreRuntimeBaseline") != "1") {
-            Log.d(TEST_TAG, "restore runtime baseline skipped")
-            return
-        }
+        assumeTrue(
+            "restore runtime baseline skipped: pass -e foxhole.restoreRuntimeBaseline 1 to run it",
+            InstrumentationRegistry.getArguments().getString("foxhole.restoreRuntimeBaseline") == "1",
+        )
         runBlocking {
             val app = ApplicationProvider.getApplicationContext<FoxholeApplication>()
             baselineRuntimeSettings(app)
@@ -494,10 +495,10 @@ internal class ProfileRuntimeGuardSessionAndroidTest : ProfileRuntimeSessionAndr
 
     @Test
     fun liveOptionProbeMatrixLogsVpnBoundIpResults() {
-        if (InstrumentationRegistry.getArguments().getString("foxhole.liveOptionProbe") != "1") {
-            Log.d(TEST_TAG, "live option probe skipped")
-            return
-        }
+        assumeTrue(
+            "live option probe skipped: pass -e foxhole.liveOptionProbe 1 to run it",
+            InstrumentationRegistry.getArguments().getString("foxhole.liveOptionProbe") == "1",
+        )
         runBlocking {
             val app = ApplicationProvider.getApplicationContext<FoxholeApplication>()
             val storedActive = app.container.profileRepository.getActiveProfile()

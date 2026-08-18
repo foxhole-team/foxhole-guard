@@ -7,14 +7,6 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 
-/**
- * The field catalog of the structured protocol editor — the reverse of the importer's per-type
- * outbound builders (`ProfileImportNodeSupport` / `ProfileImportQuicNodeSupport` / `buildTls` /
- * `buildTransport`). Each [CliProtoField] is a path into one normalized outbound object, so reading
- * and writing never rebuild the outbound: a write replaces exactly one leaf and leaves every other
- * key — advanced, per-type or plain unknown — untouched. A blank value removes the leaf (and any
- * container the removal emptied), which is how "unset" is expressed in normalized configs.
- */
 internal enum class CliProtoGroup { COMMON, AUTH, TRANSPORT, TLS }
 
 internal enum class CliProtoKind { TEXT, NUMBER, BOOL, CSV, CHOICE }
@@ -31,33 +23,46 @@ private val TRANSPORT_TYPE_PATH = listOf("transport", "type")
 private val UTLS_FINGERPRINT_PATH = listOf("tls", "utls", "fingerprint")
 private val REALITY_PUBLIC_KEY_PATH = listOf("tls", "reality", "public_key")
 
-private val UTLS_FINGERPRINTS =
-    listOf("", "chrome", "firefox", "edge", "safari", "ios", "android", "random")
+internal val UTLS_FINGERPRINTS =
+    listOf("", "chrome", "firefox", "edge", "safari", "ios", "qq", "random", "randomized")
 private val VMESS_SECURITIES =
     listOf("", "auto", "none", "zero", "aes-128-gcm", "chacha20-poly1305")
 private val TRANSPORT_TYPES = listOf("", "ws", "grpc", "httpupgrade", "http")
 
-/** Outbound types that get a full field form; everything else falls back to manual text editing. */
-internal val CLI_STRUCTURED_OUTBOUND_TYPES =
-    setOf("vless", "vmess", "trojan", "shadowsocks", "hysteria2", "tuic", "anytls", "naive")
+internal const val CLI_WIREGUARD_TYPE = "wireguard"
+internal const val CLI_AMNEZIA_WIREGUARD_TYPE = "amneziawg"
 
-/** The types a blank protocol can be created as — the structured ones, in a stable order. */
-internal val CLI_NEW_OUTBOUND_TYPES = CLI_STRUCTURED_OUTBOUND_TYPES.sorted()
+internal val CLI_STRUCTURED_OUTBOUND_TYPES =
+    setOf(
+        "vless",
+        "vmess",
+        "trojan",
+        "shadowsocks",
+        "hysteria2",
+        "tuic",
+        "anytls",
+        "naive",
+        CLI_WIREGUARD_TYPE,
+        CLI_AMNEZIA_WIREGUARD_TYPE,
+    )
+
+internal val CLI_NEW_OUTBOUND_TYPES =
+    CLI_STRUCTURED_OUTBOUND_TYPES.filterNot { type -> type == CLI_AMNEZIA_WIREGUARD_TYPE }.sorted()
+
+private const val FIRST_PEER = "peers[0]"
 
 private val TRANSPORT_CAPABLE_TYPES = setOf("vless", "vmess", "trojan")
 private val TLS_CAPABLE_TYPES =
     setOf("vless", "vmess", "trojan", "hysteria2", "tuic", "anytls", "naive")
 
-/** True for the one field whose edit must go through [writeCliTransportType]. */
 internal fun CliProtoField.isTransportType(): Boolean = path == TRANSPORT_TYPE_PATH
 
-/** The visible, editable field list of one outbound, given its type and current transport type. */
 internal fun cliProtoFields(
     type: String,
     transportType: String,
 ): List<CliProtoField> =
     buildList {
-        addAll(commonFields())
+        addAll(commonFields(type))
         addAll(authFields(type))
         if (type in TRANSPORT_CAPABLE_TYPES) {
             add(transportTypeField())
@@ -68,12 +73,22 @@ internal fun cliProtoFields(
         }
     }
 
-private fun commonFields(): List<CliProtoField> =
-    listOf(
-        CliProtoField("server", listOf("server"), CliProtoKind.TEXT, CliProtoGroup.COMMON),
-        CliProtoField("server_port", listOf("server_port"), CliProtoKind.NUMBER, CliProtoGroup.COMMON),
-        CliProtoField("tag", listOf("tag"), CliProtoKind.TEXT, CliProtoGroup.COMMON),
-    )
+private fun commonFields(type: String): List<CliProtoField> =
+    if (type in CLI_PACKET_TUNNEL_TYPES) {
+        listOf(
+            CliProtoField("server", listOf(FIRST_PEER, "address"), CliProtoKind.TEXT, CliProtoGroup.COMMON),
+            CliProtoField("server_port", listOf(FIRST_PEER, "port"), CliProtoKind.NUMBER, CliProtoGroup.COMMON),
+            CliProtoField("tag", listOf("tag"), CliProtoKind.TEXT, CliProtoGroup.COMMON),
+            CliProtoField("address", listOf("address"), CliProtoKind.CSV, CliProtoGroup.COMMON),
+            CliProtoField("mtu", listOf("mtu"), CliProtoKind.NUMBER, CliProtoGroup.COMMON),
+        )
+    } else {
+        listOf(
+            CliProtoField("server", listOf("server"), CliProtoKind.TEXT, CliProtoGroup.COMMON),
+            CliProtoField("server_port", listOf("server_port"), CliProtoKind.NUMBER, CliProtoGroup.COMMON),
+            CliProtoField("tag", listOf("tag"), CliProtoKind.TEXT, CliProtoGroup.COMMON),
+        )
+    }
 
 @Suppress("CyclomaticComplexMethod")
 private fun authFields(type: String): List<CliProtoField> =
@@ -114,8 +129,44 @@ private fun authFields(type: String): List<CliProtoField> =
                 choice("congestion_control", listOf("congestion_control"), listOf("", "cubic", "new_reno", "bbr")),
                 choice("udp_relay_mode", listOf("udp_relay_mode"), listOf("", "native", "quic")),
             )
+        in CLI_PACKET_TUNNEL_TYPES ->
+            listOf(
+                text("private_key", listOf("private_key"), CliProtoGroup.AUTH),
+                text("peer_public_key", listOf(FIRST_PEER, "public_key"), CliProtoGroup.AUTH),
+                text("pre_shared_key", listOf(FIRST_PEER, "pre_shared_key"), CliProtoGroup.AUTH),
+                CliProtoField(
+                    label = "allowed_ips",
+                    path = listOf(FIRST_PEER, "allowed_ips"),
+                    kind = CliProtoKind.CSV,
+                    group = CliProtoGroup.AUTH,
+                ),
+                CliProtoField(
+                    label = "persistent_keepalive_interval",
+                    path = listOf(FIRST_PEER, "persistent_keepalive_interval"),
+                    kind = CliProtoKind.NUMBER,
+                    group = CliProtoGroup.AUTH,
+                ),
+            ) + if (type == CLI_AMNEZIA_WIREGUARD_TYPE) amneziaFields() else emptyList()
         else -> emptyList()
     }
+
+private fun amneziaFields(): List<CliProtoField> =
+    listOf(
+        number("amnezia.Jc", "junk_packet_count"),
+        number("amnezia.Jmin", "junk_min_size"),
+        number("amnezia.Jmax", "junk_max_size"),
+        number("amnezia.S1", "init_junk_size"),
+        number("amnezia.S2", "response_junk_size"),
+        number("amnezia.S3", "cookie_junk_size"),
+        number("amnezia.S4", "transport_junk_size"),
+        text("amnezia.H1", listOf("amnezia", "header_initiation"), CliProtoGroup.TRANSPORT),
+        text("amnezia.H2", listOf("amnezia", "header_response"), CliProtoGroup.TRANSPORT),
+        text("amnezia.H3", listOf("amnezia", "header_cookie"), CliProtoGroup.TRANSPORT),
+        text("amnezia.H4", listOf("amnezia", "header_transport"), CliProtoGroup.TRANSPORT),
+    )
+
+private fun number(label: String, key: String): CliProtoField =
+    CliProtoField(label, listOf("amnezia", key), CliProtoKind.NUMBER, CliProtoGroup.TRANSPORT)
 
 private fun transportTypeField(): CliProtoField =
     CliProtoField(
@@ -182,6 +233,8 @@ private fun choice(
     choices: List<String>,
 ): CliProtoField = CliProtoField(label, path, CliProtoKind.CHOICE, CliProtoGroup.AUTH, choices)
 
+private val CLI_PACKET_TUNNEL_TYPES = setOf(CLI_WIREGUARD_TYPE, CLI_AMNEZIA_WIREGUARD_TYPE)
+
 internal fun JsonObject.readCliProtoField(field: CliProtoField): String {
     val element = elementAtPath(field.path) ?: return ""
     return when (field.kind) {
@@ -196,12 +249,6 @@ internal fun JsonObject.readCliProtoField(field: CliProtoField): String {
     }
 }
 
-/**
- * Writes one field back into the outbound. Beyond the leaf itself this keeps the two normalized
- * sub-objects consistent that the importer also fills implicitly: `tls.utls` and `tls.reality`
- * carry an `enabled` flag next to the value the form edits, and clearing the value drops the whole
- * sub-object instead of leaving `{"enabled": true}` behind.
- */
 internal fun JsonObject.writeCliProtoField(
     field: CliProtoField,
     value: String,
@@ -214,11 +261,6 @@ internal fun JsonObject.writeCliProtoField(
     }
 }
 
-/**
- * Transport switch: drops the leaves of the variant being left (ws `path`/`headers.Host`, grpc
- * `service_name`, …) so a stale key cannot contradict the new type, while any transport key this
- * editor does not model (`max_early_data`, extra headers) stays exactly where it was.
- */
 internal fun JsonObject.writeCliTransportType(value: String): JsonObject {
     val kept = transportDetailFields(value).map(CliProtoField::path).toSet()
     val cleared =
@@ -259,19 +301,45 @@ private fun JsonObject.withEnabledFlag(
         putAtPath(path, null)
     }
 
-private fun JsonObject.elementAtPath(path: List<String>): JsonElement? =
-    path.fold<String, JsonElement?>(this) { element, key -> (element as? JsonObject)?.get(key) }
+private val INDEXED_PATH_SEGMENT = Regex("""^(.+)\[(\d+)]$""")
 
-/** Replaces (or removes, on a null [value]) one leaf, pruning containers the removal emptied. */
+private fun JsonElement?.childAtSegment(segment: String): JsonElement? {
+    val parent = this as? JsonObject ?: return null
+    val indexed = INDEXED_PATH_SEGMENT.matchEntire(segment) ?: return parent[segment]
+    val array = parent[indexed.groupValues[1]] as? JsonArray ?: return null
+    return array.getOrNull(indexed.groupValues[2].toInt())
+}
+
+private fun JsonObject.elementAtPath(path: List<String>): JsonElement? =
+    path.fold<String, JsonElement?>(this) { element, key -> element.childAtSegment(key) }
+
 private fun JsonObject.putAtPath(
     path: List<String>,
     value: JsonElement?,
 ): JsonObject {
     val key = path.first()
+    INDEXED_PATH_SEGMENT.matchEntire(key)?.let { indexed ->
+        return putAtIndexedPath(indexed.groupValues[1], indexed.groupValues[2].toInt(), path.drop(1), value)
+    }
     if (path.size == 1) {
         return JsonObject(if (value == null) this - key else this + (key to value))
     }
     val child = this[key] as? JsonObject ?: JsonObject(emptyMap())
     val updated = child.putAtPath(path.drop(1), value)
     return JsonObject(if (updated.isEmpty()) this - key else this + (key to updated))
+}
+
+private fun JsonObject.putAtIndexedPath(
+    key: String,
+    index: Int,
+    rest: List<String>,
+    value: JsonElement?,
+): JsonObject {
+    val array = this[key] as? JsonArray ?: return this
+    val item = array.getOrNull(index) as? JsonObject ?: return this
+    if (rest.isEmpty()) {
+        return this
+    }
+    val updated = array.toMutableList().apply { this[index] = item.putAtPath(rest, value) }
+    return JsonObject(this + (key to JsonArray(updated)))
 }

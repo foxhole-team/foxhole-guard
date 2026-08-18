@@ -14,7 +14,6 @@ class FoxCoreRuntimeStatsTrackerTest {
         val observerSource = source("guard/traffic/FoxCoreRuntimeConnectionObserver.kt")
         val dnsTrackerSource = source("guard/traffic/FoxCoreRuntimeStatsTracker.kt")
         val trafficMapSamplesSource = source("guard/traffic/TrafficMapConnectionSamples.kt")
-        // The traffic-sampling wiring was extracted from FoxholeVpnService into its support file.
         val trafficSupportSource = source("guard/runtime/FoxholeVpnServiceTrafficSupport.kt")
 
         assertTrue(observerSource.contains("runtimeTrafficMapJson()"))

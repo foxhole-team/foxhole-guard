@@ -1,18 +1,15 @@
 package com.foxhole.guard.ui
 
-/** Features whose first activation may depend on a remotely verified data set. */
 internal enum class DatasetActivationFeature {
     TOR_BRIDGES,
     FOXHOLE_SENTINEL,
 }
 
-/** User-visible source choices shared by Settings and the first-run wizard. */
 internal enum class DatasetActivationSource {
     TOR_PROJECT,
     FOXHOLE_DB,
 }
 
-/** The pure state of the source -> required data -> verified activation flow. */
 internal enum class DatasetActivationStep {
     SOURCE,
     DATASET_REQUIRED,
@@ -48,7 +45,6 @@ internal fun DatasetActivationFeature.availableDatasetSources(): List<DatasetAct
         DatasetActivationFeature.FOXHOLE_SENTINEL -> listOf(DatasetActivationSource.FOXHOLE_DB)
     }
 
-/** Only FoxHole DB choices require the signed remote data-set gate. */
 internal fun datasetDownloadRequired(
     feature: DatasetActivationFeature,
     source: DatasetActivationSource,
@@ -65,7 +61,6 @@ internal fun DatasetActivationState.selectSource(source: DatasetActivationSource
         this
     }
 
-/** Invalid/out-of-order events are ignored, so a late callback cannot skip the verification gate. */
 internal fun DatasetActivationState.reduce(event: DatasetActivationEvent): DatasetActivationState =
     when (event) {
         DatasetActivationEvent.USE ->
@@ -107,7 +102,6 @@ internal fun DatasetActivationState.reduce(event: DatasetActivationEvent): Datas
             }
     }
 
-/** Shared final commit gate for Settings and onboarding. */
 internal fun datasetActivationAllowed(
     requested: Boolean,
     feature: DatasetActivationFeature,

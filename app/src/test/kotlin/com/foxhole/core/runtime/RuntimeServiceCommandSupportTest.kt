@@ -165,8 +165,6 @@ class RuntimeServiceCommandSupportTest {
         assertEquals("disconnect", disconnect?.queueReason)
 
         assertEquals(RuntimeCommand.Reload("9", RuntimeCommandSource.SERVICE), reload)
-        // Reload runs at NORMAL priority so a config reload never preempts (force-kills) a live
-        // start; see RuntimeSupervisor.commandPriority.
         assertEquals(RuntimeCommandPriority.NORMAL, reload?.priority)
         assertEquals("reload:9", reload?.queueReason)
 
@@ -183,16 +181,12 @@ class RuntimeServiceCommandSupportTest {
 
         assertEquals(RuntimeCommand.StartLocalGuard(LocalGuardMode.FIREWALL, RuntimeCommandSource.SERVICE), localGuard)
         assertEquals(RuntimeCommandPriority.SWITCH, localGuard?.priority)
-        // cfg-штамп различает старты guard'а с разным конфигом: без него StartLocalGuard,
-        // посланный из-за изменения настроек, коалессировался с ещё бегущим стартом того же mode.
         assertEquals("local_guard:firewall:cfg=0", localGuard?.queueReason)
     }
 
     @Test
     fun `duplicate restore is skipped once a profile runtime is active`() {
         assertTrue(shouldSkipRestoreForActiveProfileRuntime(activeProfileSessionPresent = true))
-        // Tile/widget may optimistically publish CONNECTING with a retained profile id before the
-        // first RESTORE reaches the service. With no service-owned session it must still connect.
         assertFalse(shouldSkipRestoreForActiveProfileRuntime(activeProfileSessionPresent = false))
     }
 
@@ -219,10 +213,6 @@ class RuntimeServiceCommandSupportTest {
 
     @Test
     fun `local guard start is not deferred while a tor-only runtime is active`() {
-        // Enabling the firewall while Tor-only is running must switch modes (stop Tor, start the
-        // guard), not defer silently — otherwise Tor keeps running and the dashboard keeps showing
-        // the Tor exit IP. Only a real upstream VPN profile (id > 0) defers, because that tunnel
-        // already enforces the guard's blocking/DNS duties in place.
         listOf(
             ConnectionState.CONNECTING,
             ConnectionState.CONNECTED,
@@ -297,8 +287,6 @@ class RuntimeServiceCommandSupportTest {
                 ),
             ),
         )
-        // A guard stuck in ERROR still owns the runtime snapshot; disabling the firewall must tear
-        // it down instead of skipping the stop.
         assertTrue(
             shouldStopRuntimeAfterLocalGuardDisabled(
                 ConnectionSnapshot(
@@ -372,8 +360,6 @@ class RuntimeServiceCommandSupportTest {
 
         assertTrue(toggleSource.contains("toggleTorOnlyRuntimeConnection(state)"))
         assertTrue(toggleSource.contains("state.connection.profileId == FoxholeVpnService.TOR_ONLY_PROFILE_ID"))
-        // Early-start pending (profile id not yet in the snapshot) must also resolve to a stop, not
-        // a reconnect — see toggleTorOnlyRuntimeConnection.
         assertTrue(toggleSource.contains("state.torOperation.active && !state.connection.isPrimaryConnectionRuntime()"))
         assertTrue(toggleSource.contains("container.connectionController.disconnectTorOnly()"))
         assertTrue(controllerSource.contains("fun disconnectTorOnly(userInitiated: Boolean = true)"))

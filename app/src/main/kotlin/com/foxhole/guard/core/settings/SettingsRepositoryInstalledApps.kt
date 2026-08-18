@@ -22,8 +22,9 @@ import kotlinx.coroutines.withContext
 
 suspend fun SettingsRepository.updateInstalledAppMonitoringEnabled(value: Boolean) =
     update { current ->
+        val enabled = value && current.anomaly.enabled
         val statistics =
-            if (value) {
+            if (enabled) {
                 current.statistics.copy(enabled = true, appChangesEnabled = true)
             } else {
                 current.statistics.copy(appChangesEnabled = false)
@@ -31,7 +32,7 @@ suspend fun SettingsRepository.updateInstalledAppMonitoringEnabled(value: Boolea
         current.copy(
             statistics = statistics,
             installedAppInventoryAudit =
-            if (value) {
+            if (enabled) {
                 current.installedAppInventoryAudit
             } else {
                 InstalledAppInventoryAudit()
@@ -54,7 +55,11 @@ suspend fun SettingsRepository.recordInstalledAppInventory(
     detectedAt: Long = System.currentTimeMillis(),
 ) {
     val currentSettings = current()
-    if (!currentSettings.statistics.enabled || !currentSettings.statistics.appChangesEnabled) {
+    if (
+        !currentSettings.anomaly.enabled ||
+        !currentSettings.statistics.enabled ||
+        !currentSettings.statistics.appChangesEnabled
+    ) {
         return
     }
     val currentPackages =
@@ -68,7 +73,7 @@ suspend fun SettingsRepository.recordInstalledAppInventory(
                 .toList()
         }
     update { current ->
-        if (!current.statistics.enabled || !current.statistics.appChangesEnabled) {
+        if (!current.anomaly.enabled || !current.statistics.enabled || !current.statistics.appChangesEnabled) {
             return@update current
         }
         current.copy(
@@ -232,7 +237,7 @@ internal fun recordInstalledAppChangeIn(
                 null
             },
         )
-    if (!current.statistics.enabled || !current.statistics.appChangesEnabled) {
+    if (!current.anomaly.enabled || !current.statistics.enabled || !current.statistics.appChangesEnabled) {
         return current.copy(
             connection = updatedConnection,
             expert = updatedExpert,
@@ -435,7 +440,7 @@ private fun Settings.shouldUpdateEnrichedAudit(
     sameInstallation: Boolean,
     replacedByNewPending: Boolean,
 ): Boolean {
-    val auditEnabled = statistics.enabled && statistics.appChangesEnabled
+    val auditEnabled = anomaly.enabled && statistics.enabled && statistics.appChangesEnabled
     val exactInstalledPackage = inventoryContainsPackage && installedIdentity != null
     val matchingInstallation = exactInstalledPackage && sameInstallation
     return auditEnabled && matchingInstallation && !replacedByNewPending

@@ -1,8 +1,11 @@
 package com.foxhole.guard.ui
+import android.app.Application
 import androidx.lifecycle.viewModelScope
 import com.foxhole.core.model.AnomalyHistoryRetention
 import com.foxhole.core.model.AnomalySensitivity
 import com.foxhole.core.model.RetentionPolicy
+import com.foxhole.guard.applyThreatIntelUpdateSchedule
+import com.foxhole.guard.core.sentinel.anomaly.SentinelDetectionNotifier
 import com.foxhole.guard.core.settings.updateAllowInsecureTls
 import com.foxhole.guard.core.settings.updateAllowPrivateOutboundHosts
 import com.foxhole.guard.core.settings.updateAnalyzeBackgroundTraffic
@@ -17,10 +20,8 @@ import com.foxhole.guard.core.settings.updateNotifyUnusualTraffic
 import com.foxhole.guard.core.settings.updateRawLiveDiagnostics
 import com.foxhole.guard.core.settings.updateSniff
 import com.foxhole.guard.core.settings.updateStrictRoute
+import com.foxhole.guard.threatIntelBackgroundUpdateEnabled
 import kotlinx.coroutines.launch
-
-// Diagnostics, anomaly-detection and expert flag settings handlers for HomeViewModel.
-// Extracted from HomeViewModelSettingsSupport (file split by domain); extension functions only.
 
 internal fun HomeViewModel.onDiagnosticsRetentionSelected(value: RetentionPolicy) {
     viewModelScope.launch {
@@ -42,8 +43,18 @@ internal fun HomeViewModel.onNotifyUnusualTrafficChanged(value: Boolean) {
 }
 
 internal fun HomeViewModel.onAnomalyEnabledChanged(value: Boolean) {
-    viewModelScope.launch {
+    updateRuntimeSettingAndMaybeReload {
         container.settingsRepository.updateAnomalyEnabled(value)
+        val settings = container.settingsRepository.current()
+        val app = getApplication<Application>()
+        app.applyThreatIntelUpdateSchedule(
+            enabled = threatIntelBackgroundUpdateEnabled(settings),
+        )
+        if (!value) {
+            onThreatIntelManualRefreshCancel()
+            SentinelDetectionNotifier(app).cancelAll()
+        }
+        syncGuardMonitoringLifecycle()
     }
 }
 

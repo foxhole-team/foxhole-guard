@@ -23,7 +23,7 @@ FoxHole Guard не содержит рекламы, аналитики испо�
 • фоновые сервисы для уведомлений web-приложений и мониторинга событий безопасности;
 • резервное копирование профилей и настроек.
 
-Поддерживаемые протоколы: VLESS, VMess, Hysteria2, WireGuard, AmneziaWG, Trojan, Shadowsocks, Outline, Naive, TUIC, AnyTLS, ShadowTLS v3, SOCKS5 и HTTP CONNECT. Поддерживаются Reality и Vision.
+Поддерживаемые протоколы: VLESS, VMess, Hysteria2, WireGuard, AmneziaWG, Trojan, Shadowsocks, Outline, Naive, TUIC, AnyTLS, SOCKS5 и HTTP CONNECT. Поддерживаются Reality и Vision.
 
 DNS-фильтры собираются из открытого фильтра AdGuard DNS. Загружаемые наборы являются данными фильтрации, а не исполняемым кодом. Перед применением проверяются подпись, размер, совместимость и SHA-256.
 

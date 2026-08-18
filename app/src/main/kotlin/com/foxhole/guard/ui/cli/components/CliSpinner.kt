@@ -9,6 +9,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -16,15 +17,17 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.foxhole.core.model.VisualStyle
+import com.foxhole.guard.R
 import com.foxhole.guard.ui.cli.CliType
 import com.foxhole.guard.ui.cli.LocalCliColors
+import com.foxhole.guard.ui.cli.LocalCliVisualStyle
 
-// An ASCII propeller rather than braille: all four frames exist in the pixel fonts, with no system
-// symbol fallback, so the spinner stays 16-bit in both face modes.
 private const val SPINNER_FRAMES = "|/-\\"
 
-/** ASCII spinner glyph, ~200ms per frame. */
 @Composable
 internal fun CliSpinner(
     modifier: Modifier = Modifier,
@@ -32,16 +35,18 @@ internal fun CliSpinner(
     visible: Boolean = true,
 ) {
     val colors = LocalCliColors.current
-    // The glyphs do not have identical measured bounds in every pixel-font fallback. Keep both
-    // frame changes and running -> idle transitions inside one immutable layout slot.
     Box(
         modifier = modifier.size(cliSpinnerSlotSize),
         contentAlignment = Alignment.Center,
     ) {
-        if (visible) {
+        if (visible && LocalCliVisualStyle.current == VisualStyle.PLAIN) {
+            CliShimmerText(
+                text = "…",
+                style = CliType.body,
+                baseColor = if (color == Color.Unspecified) colors.accent else color,
+            )
+        } else if (visible) {
             val transition = rememberInfiniteTransition(label = "cliSpinner")
-            // An Int animation rather than float: repeated frame values do not invalidate the
-            // composition, so the text recomposes on glyph changes rather than every display frame.
             val frameIndex by transition.animateValue(
                 initialValue = 0,
                 targetValue = SPINNER_FRAMES.length,
@@ -62,13 +67,23 @@ internal fun CliSpinner(
     }
 }
 
-/** Shared row floor for text/spinner swaps; one source of truth keeps their geometry identical. */
 internal val cliSpinnerSlotSize = 16.dp
 
-/**
- * The canonical spinner-with-caption waiting row, instead of `Row { CliSpinner(); Text(…) }`
- * scattered across screens. [small] switches the caption size for dense journal blocks.
- */
+@Composable
+internal fun CliSectionPreloader(
+    text: String,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier.fillMaxSize().testTag(CLI_SECTION_PRELOADER_TAG),
+        contentAlignment = Alignment.Center,
+    ) {
+        CliLoadingRow(text = text)
+    }
+}
+
+internal const val CLI_SECTION_PRELOADER_TAG = "cli_section_preloader"
+
 @Composable
 internal fun CliLoadingRow(
     text: String,
@@ -76,6 +91,15 @@ internal fun CliLoadingRow(
     small: Boolean = false,
 ) {
     val colors = LocalCliColors.current
+    if (LocalCliVisualStyle.current == VisualStyle.PLAIN) {
+        Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
+            CliShimmerText(
+                text = stringResource(R.string.cli_common_updating),
+                style = if (small) CliType.small else CliType.body,
+            )
+        }
+        return
+    }
     Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
         CliSpinner()
         Text(

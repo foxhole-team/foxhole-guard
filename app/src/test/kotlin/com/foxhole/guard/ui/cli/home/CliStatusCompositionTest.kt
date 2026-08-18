@@ -18,13 +18,6 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/**
- * Состав блока `status`: РЕЖИМ и СЦЕНАРИЙ, и правило «печатаем только то, что в силе».
- *
- * Владелец ловил на устройстве обратное: сохранённый в настройках per-app режим печатался как
- * маршрут, хотя ничего не работало. Тумблер в настройках — не состояние рантайма, и ни одна строка
- * здесь не имеет права его так называть.
- */
 class CliStatusCompositionTest {
 
     private fun runtimes(
@@ -49,8 +42,6 @@ class CliStatusCompositionTest {
         privacyRoute = PrivacyRouteSettings(scope = torScope),
     )
 
-    // ---- MODE -------------------------------------------------------------------------------
-
     @Test
     fun `both legs live report the combined mode`() {
         assertEquals(
@@ -65,10 +56,6 @@ class CliStatusCompositionTest {
         assertEquals(CliStatusMode.TOR, cliStatusMode(runtimes = runtimes(tor = true)))
     }
 
-    /**
-     * Фаервол — модуль, а не режим работы: режимов три (VPN, TOR, VPN и TOR), и поднятый фильтр
-     * не становится четвёртым. Свою строку он печатает среди модулей.
-     */
     @Test
     fun `the firewall is never a mode`() {
         assertEquals(CliStatusMode.NONE, cliStatusMode(runtimes = runtimes()))
@@ -137,9 +124,6 @@ class CliStatusCompositionTest {
         fetchedAt = 1L,
     )
 
-    // ---- SCENARIO ---------------------------------------------------------------------------
-
-    /** Главное правило: без живого маршрута сценария нет — сохранённый режим не печатается. */
     @Test
     fun `a stored per-app mode is not a scenario while nothing runs`() {
         assertNull(
@@ -165,7 +149,6 @@ class CliStatusCompositionTest {
         )
     }
 
-    /** «Все, кроме выбранных» без единого исключения — это и есть всё устройство. */
     @Test
     fun `exclude mode without exceptions is the whole device`() {
         assertEquals(
@@ -183,7 +166,6 @@ class CliStatusCompositionTest {
         )
     }
 
-    /** Раздача наружу перебивает любой per-app режим: маршрут отдан другим устройствам. */
     @Test
     fun `a served lan proxy outranks the per-app mode`() {
         assertEquals(
@@ -206,7 +188,6 @@ class CliStatusCompositionTest {
         )
     }
 
-    /** Сценарий TOR читает свою собственную область, а не per-app режим VPN. */
     @Test
     fun `the tor scenario is independent of the vpn one`() {
         val perAppVpn = settings(
@@ -270,9 +251,6 @@ class CliStatusCompositionTest {
         assertEquals(CliCompactRouteStatus.entries.size, cases.map { it.third }.distinct().size)
     }
 
-    // ---- RULES ------------------------------------------------------------------------------
-
-    /** Правила приложений и сайтов печатаются только пока их применяет живой маршрут. */
     @Test
     fun `app and site rules are printed only while a route carries traffic`() {
         assertFalse(cliRouteRulesInForce(runtimes()))
@@ -281,7 +259,6 @@ class CliStatusCompositionTest {
         assertTrue(cliRouteRulesInForce(runtimes(tor = true)))
     }
 
-    /** Фаервол объявляется живым только когда его кто-то держит — тумблера мало. */
     @Test
     fun `an armed firewall without a host is not live`() {
         val armed = settings(firewall = true)
@@ -310,8 +287,6 @@ class CliStatusCompositionTest {
         )
     }
 
-    // ---- STATUS WORD ------------------------------------------------------------------------
-
     @Test
     fun `the state word names the routes that are actually up`() {
         assertEquals(CliStatusWord.VPN, word(runtimes(vpn = true)))
@@ -320,14 +295,12 @@ class CliStatusCompositionTest {
         assertEquals(CliStatusWord.NONE, word(runtimes()))
     }
 
-    /** I2P объявляется подключённым по сети, а не по тумблеру «engaged». */
     @Test
     fun `i2p claims the word only once its network is up`() {
         assertEquals(CliStatusWord.I2P, word(runtimes(i2p = true), i2pConnected = true))
         assertEquals(CliStatusWord.NONE, word(runtimes(i2p = true), i2pConnected = false))
     }
 
-    /** Фаервол — последний в очереди: любой маршрут и живая сеть I2P сильнее. */
     @Test
     fun `the firewall word yields to every real connection`() {
         assertEquals(CliStatusWord.FIREWALL, word(runtimes(), firewallLive = true))
@@ -355,12 +328,6 @@ class CliStatusCompositionTest {
         assertEquals(CliStatusWord.ERROR, word(runtimes(), state = ConnectionState.ERROR))
     }
 
-    /**
-     * Модуль TOR выключен — его правила не печатаются вовсе.
-     *
-     * Закрепления при этом никуда не деваются, они просто ничего не формируют: цепи нет, нести по
-     * ним нечего. Строка о них была бы обещанием маршрута, которого не существует.
-     */
     @Test
     fun `the tor lane is silent while its module is off`() {
         val pinned = Settings(
@@ -372,13 +339,6 @@ class CliStatusCompositionTest {
         assertTrue(cliTorLaneVisible(pinned.copy(privacyRoute = PrivacyRouteSettings(permitted = true))))
     }
 
-    // ---- EXTENDED BLOCK ---------------------------------------------------------------------
-
-    /**
-     * Важность приходит с записью от того кода, который её писал, а не выводится из слов сообщения.
-     * Подстрочный поиск, который тут был раньше, объявлял критическим успешный прогон
-     * `scheduled refresh completed … retryableFailures=0` — из-за счётчика, равного нулю.
-     */
     @Test
     fun `only entries recorded as failures reach the extended block`() {
         assertTrue(isCriticalDiagnostic(failure("connect failed: handshake timeout")))
@@ -387,7 +347,6 @@ class CliStatusCompositionTest {
         assertFalse(isCriticalDiagnostic(entry("active profile changed")))
     }
 
-    /** И слова в сообщении больше ничего не решают — ни в ту, ни в другую сторону. */
     @Test
     fun `the wording of a message decides nothing`() {
         assertFalse(
@@ -395,9 +354,7 @@ class CliStatusCompositionTest {
                 entry("scheduled refresh completed targeted=0 success=0 retryableFailures=0"),
             ),
         )
-        // Запись без пометки не становится критической, даже если звучит как отказ.
         assertFalse(isCriticalDiagnostic(entry("bridge list refresh failed error=IOException")))
-        // И становится ею ровно тогда, когда её так записали.
         assertTrue(isCriticalDiagnostic(failure("bridge list refresh failed error=IOException")))
     }
 

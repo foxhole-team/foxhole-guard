@@ -12,23 +12,6 @@ import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/**
- * The Tor half of the same defect [TrafficSettingsSafeModeTest] covers for the tunnel block.
- *
- * Safe mode is ON for every fresh install, and [Settings.normalized] used to answer that by
- * replacing the WHOLE privacy-route block with `PrivacyRouteSettings()`. Every Tor setting that is
- * not the route itself — bridges, bridge transport, bridge auto-update, exit rotation and its
- * interval, block-apps-without-Tor — therefore never reached the disk on a pristine install: the
- * setter applied the value, normalization reverted it, and `SettingsRepository.update` dropped the
- * write because the normalized result equalled the current one. The user saw the toggle snap back
- * with no error, and the "more tor" screen is reachable without leaving safe mode at all.
- *
- * Each case is the whole write path a user triggers: apply the pure transform, normalize (what
- * update() does before comparing), assert the settings actually changed (what update() gates the
- * disk write on) and assert the value survives a storage round-trip. Safe mode must stay ON
- * throughout — none of these fields engages the Tor lane, so touching them is not a reason to
- * disarm the expert lanes.
- */
 internal class PrivacyRouteSafeModeTest : SettingsRepositoryTestSupport() {
     private val pristine = Settings().normalized()
 
@@ -41,8 +24,6 @@ internal class PrivacyRouteSafeModeTest : SettingsRepositoryTestSupport() {
 
     @Test
     fun `disabling bridges survives normalization and a reread on a fresh install`() {
-        // bridgesEnabled defaults to TRUE, so this is the direction a user actually notices: the
-        // switch went off, the block reset put it back on, and nothing was written.
         val stored = updatePrivacyRouteBridgesEnabledIn(pristine, false).normalized()
 
         assertNotEquals(pristine, stored)
@@ -97,8 +78,6 @@ internal class PrivacyRouteSafeModeTest : SettingsRepositoryTestSupport() {
 
     @Test
     fun `block apps without tor survives an empty tor lane`() {
-        // It used to be cleared whenever the Tor lane was empty — which is exactly the state of a
-        // fresh install, so the toggle could never be turned on at all.
         val stored = updatePrivacyRouteBlockAppsWhenTorUnavailableIn(pristine, true).normalized()
 
         assertTrue(stored.privacyRoute.blockAppsWhenTorUnavailable)
@@ -148,7 +127,6 @@ internal class PrivacyRouteSafeModeTest : SettingsRepositoryTestSupport() {
         assertEquals(60, reread(unlocked).privacyRoute.autoRotateIntervalMinutes)
     }
 
-    /** The storage round-trip: encrypted payload out, payload back in, normalized on load. */
     private fun reread(value: Settings): Settings =
         json.decodeFromString<Settings>(json.encodeToString(value)).normalized()
 }

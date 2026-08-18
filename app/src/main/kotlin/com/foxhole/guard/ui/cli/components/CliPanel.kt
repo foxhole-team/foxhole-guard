@@ -15,11 +15,16 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -34,27 +39,18 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import com.foxhole.core.model.PanelAppearance
+import com.foxhole.core.model.VisualStyle
 import com.foxhole.guard.R
 import com.foxhole.guard.ui.cli.CliSpacing
-import com.foxhole.guard.ui.cli.CliType
 import com.foxhole.guard.ui.cli.LocalCliColors
 import com.foxhole.guard.ui.cli.LocalCliPanelAppearance
+import com.foxhole.guard.ui.cli.LocalCliVisualStyle
 import com.foxhole.guard.ui.cli.cliCaptionSpanStyle
+import com.foxhole.guard.ui.cli.cliCaptionTextStyle
+import com.foxhole.guard.ui.cli.cliLabelText
 
-/**
- * Rounded 1dp-border box - the Compose analogue of a `╭─╮ │ ╰─╯` frame. The optional title
- * renders as a clean caption inside the top edge: pixel icon + the word in the display face,
- * dimmed. No decorative stripes — prod polish removed the `░▒ ──` dither so captions stay
- * readable and screens do not blur together.
- *
- * With [collapsible] the caption row becomes tappable with a `▸/▾` glyph (48dp floor,
- * accent glyph per the affordance contract) and the body folds via [expanded] +
- * [onToggleExpanded] — state stays with the caller. Existing non-collapsible call sites
- * keep compiling and rendering as before.
- * [onLongClick] is reserved for whole-panel secondary actions such as clearing the terminal;
- * providing it keeps an ordinary tap inert unless [onClick] is also present.
- */
 @Composable
+@Suppress("LongParameterList")
 internal fun CliPanel(
     modifier: Modifier = Modifier,
     title: String? = null,
@@ -67,78 +63,55 @@ internal fun CliPanel(
     onToggleExpanded: (() -> Unit)? = null,
     attention: Boolean = false,
     attentionColor: Color = Color.Unspecified,
-    // Tap covers the whole panel including padding. The press tint is drawn after clip and
-    // background, so the ripple stays inside the rounding instead of leaking a rectangle.
     onClick: (() -> Unit)? = null,
     onLongClick: (() -> Unit)? = null,
+    infoText: String? = null,
+    accentBorderColor: Color = Color.Unspecified,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val colors = LocalCliColors.current
     val panelAppearance = LocalCliPanelAppearance.current
     val shape = RoundedCornerShape(8.dp)
+    var infoOpen by rememberSaveable { mutableStateOf(false) }
+    if (infoOpen && infoText != null) {
+        CliInfoSheet(
+            text = infoText,
+            onDismiss = { infoOpen = false },
+        )
+    }
+    val animatedEdge = if (accentBorderColor != Color.Unspecified) {
+        if (LocalCliVisualStyle.current == VisualStyle.PLAIN) {
+            Modifier.cliAccentSweepBorder(accentBorderColor)
+        } else {
+            Modifier.cliMarchingBorder(accentBorderColor)
+        }
+    } else {
+        Modifier
+    }
     Column(
         modifier = modifier
             .clip(shape)
             .background(cliPanelBackground(background, colors.panel, panelAppearance))
             .cliPanelInteraction(onClick = onClick, onLongClick = onLongClick)
-            .border(1.dp, colors.border, shape),
+            .border(1.dp, colors.border, shape)
+            .then(animatedEdge),
     ) {
         val headerColor = resolvedPanelColor(titleColor, colors.dim)
         if (title != null && collapsible) {
-            val stateText = stringResource(
-                if (expanded) R.string.cli_panel_expanded else R.string.cli_panel_collapsed,
+            CliPanelCollapsibleHeader(
+                title = title,
+                headerColor = headerColor,
+                icon = icon,
+                iconColor = iconColor,
+                expanded = expanded,
+                onToggleExpanded = onToggleExpanded,
+                attention = attention,
+                attentionColor = attentionColor,
+                hasInfo = infoText != null,
+                onInfoTap = { infoOpen = true },
             )
-            // A clickable caption spans the full width, with padding inside the pressable, so the
-            // press fills the section edge to edge and clips to the panel rounding.
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .defaultMinSize(minHeight = 48.dp)
-                    .cliPressable(enabled = onToggleExpanded != null) {
-                        onToggleExpanded?.invoke()
-                    }
-                    .semantics {
-                        stateDescription = stateText
-                        onToggleExpanded?.let { toggle ->
-                            if (expanded) {
-                                collapse {
-                                    toggle()
-                                    true
-                                }
-                            } else {
-                                expand {
-                                    toggle()
-                                    true
-                                }
-                            }
-                        }
-                    }
-                    .padding(horizontal = CliSpacing.md),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                CliPanelCaption(
-                    title = title,
-                    color = headerColor,
-                    icon = icon,
-                    iconColor = iconColor,
-                    modifier = Modifier.weight(1f),
-                )
-                if (attention) {
-                    CliAttentionPixel(
-                        color = resolvedPanelColor(attentionColor, colors.warn),
-                    )
-                    Spacer(modifier = Modifier.width(CliSpacing.sm))
-                }
-                CliDisclosureGlyph(
-                    expanded = expanded,
-                    color = if (onToggleExpanded != null) colors.accent else colors.dim,
-                )
-            }
         }
         if (collapsible) {
-            // AnimatedVisibility drops content from the composition when collapsing, which erased
-            // the rememberSaveable drafts of custom inputs inside. SaveableStateProvider keeps them
-            // across collapse and expand.
             val stateHolder = rememberSaveableStateHolder()
             AnimatedVisibility(
                 visible = expanded,
@@ -165,11 +138,13 @@ internal fun CliPanel(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        CliPanelCaption(
+                        CliPanelTitleGroup(
                             title = title,
                             color = headerColor,
                             icon = icon,
                             iconColor = iconColor,
+                            hasInfo = infoText != null,
+                            onInfoTap = { infoOpen = true },
                             modifier = Modifier.weight(1f),
                         )
                         if (attention) {
@@ -185,7 +160,105 @@ internal fun CliPanel(
     }
 }
 
-/** DARK removes only the implicit panel fill; callers' explicit semantic fills always win. */
+@Composable
+private fun CliPanelCollapsibleHeader(
+    title: String,
+    headerColor: Color,
+    @DrawableRes icon: Int?,
+    iconColor: Color,
+    expanded: Boolean,
+    onToggleExpanded: (() -> Unit)?,
+    attention: Boolean,
+    attentionColor: Color,
+    hasInfo: Boolean,
+    onInfoTap: () -> Unit,
+) {
+    val colors = LocalCliColors.current
+    val stateText = stringResource(
+        if (expanded) R.string.cli_panel_expanded else R.string.cli_panel_collapsed,
+    )
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .defaultMinSize(minHeight = 48.dp)
+            .cliPressable(enabled = onToggleExpanded != null) {
+                onToggleExpanded?.invoke()
+            }
+            .semantics {
+                stateDescription = stateText
+                onToggleExpanded?.let { toggle ->
+                    if (expanded) {
+                        collapse {
+                            toggle()
+                            true
+                        }
+                    } else {
+                        expand {
+                            toggle()
+                            true
+                        }
+                    }
+                }
+            }
+            .padding(horizontal = CliSpacing.md),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        CliPanelTitleGroup(
+            title = title,
+            color = headerColor,
+            icon = icon,
+            iconColor = iconColor,
+            hasInfo = hasInfo,
+            onInfoTap = onInfoTap,
+            modifier = Modifier.weight(1f),
+        )
+        if (attention) {
+            CliAttentionPixel(
+                color = resolvedPanelColor(attentionColor, colors.warn),
+            )
+            Spacer(modifier = Modifier.width(CliSpacing.sm))
+        }
+        CliDisclosureGlyph(
+            expanded = expanded,
+            color = if (onToggleExpanded != null) colors.accent else colors.dim,
+        )
+    }
+}
+
+@Composable
+private fun CliPanelTitleGroup(
+    title: String,
+    color: Color,
+    @DrawableRes icon: Int?,
+    iconColor: Color,
+    hasInfo: Boolean,
+    onInfoTap: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(modifier = modifier, verticalAlignment = Alignment.Top) {
+        CliPanelCaption(
+            title = title,
+            color = color,
+            icon = icon,
+            iconColor = iconColor,
+            modifier = Modifier.weight(1f, fill = false),
+        )
+        if (hasInfo) {
+            CliPanelInfoGlyph(onTap = onInfoTap)
+        }
+    }
+}
+
+@Composable
+private fun CliPanelInfoGlyph(onTap: () -> Unit) {
+    CliHeaderHelpButton(
+        contentDescription = stringResource(R.string.cli_common_information),
+        onClick = onTap,
+    )
+}
+
+private val PANEL_HEADER_ICON_SIZE = 16.dp
+
 internal fun cliPanelBackground(
     candidate: Color,
     fallback: Color,
@@ -216,11 +289,6 @@ private fun Modifier.cliPanelInteraction(
     },
 )
 
-/**
- * Clean panel caption: pixel icon + the title word in the display face. The dither/stripe
- * decoration (`░▒ ── … ── ▒░`) is gone — prod polish: captions are text, separation is the
- * panel border's job.
- */
 @Composable
 private fun CliPanelCaption(
     title: String,
@@ -230,18 +298,16 @@ private fun CliPanelCaption(
     iconColor: Color = Color.Unspecified,
 ) {
     val colors = LocalCliColors.current
-    // The caption word uses the display face at small metrics; see cliCaptionSpanStyle, since
-    // Android gives no per-glyph family fallback.
     val captionSpan = cliCaptionSpanStyle(title)
+    val shownTitle = cliLabelText(title)
     Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
         if (icon != null) {
-            // 16dp snaps to whole 1x/2x/3x at any density, and the accent tint lifts the caption
-            // without colouring the whole text.
             CliPixIcon(
                 id = icon,
                 contentDescription = null,
-                size = 16.dp,
+                size = PANEL_HEADER_ICON_SIZE,
                 tint = iconColor.takeIf { it != Color.Unspecified }
+                    ?: colors.err.takeIf { icon == R.drawable.pix_trash }
                     ?: color.takeIf { it != Color.Unspecified }
                     ?: colors.accent,
             )
@@ -249,16 +315,14 @@ private fun CliPanelCaption(
         }
         Text(
             text = buildAnnotatedString {
-                withStyle(captionSpan) { append(title) }
+                withStyle(captionSpan) { append(shownTitle) }
             },
-            style = CliType.small,
+            style = cliCaptionTextStyle(),
             color = color,
-            maxLines = 1,
+            maxLines = 2,
             overflow = TextOverflow.Ellipsis,
         )
     }
 }
 
-// SaveableStateProvider key for an unnamed collapsible panel. Each CliPanel owns its holder, so
-// panels cannot collide.
 private const val CLI_PANEL_STATE_KEY = "cli-panel"

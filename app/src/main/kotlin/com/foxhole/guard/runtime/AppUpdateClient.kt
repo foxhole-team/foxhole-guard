@@ -7,10 +7,12 @@ import com.foxhole.guard.core.data.withBoundedRemoteFetchTimeouts
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.Response
 import java.io.File
 import java.io.IOException
 import java.security.MessageDigest
@@ -19,10 +21,17 @@ import java.security.MessageDigest
  * Application updates for builds installed from GitHub. F-Droid and Play manage their own updates,
  * so the caller gates this on [com.foxhole.guard.BuildConfig.UPDATE_CHANNEL].
  *
- * The release carries an `update-manifest.json` asset next to the APK; that manifest — not the tag
- * name — is the source of truth, because only a `versionCode` can be ordered reliably (`beta10`
- * sorts before `beta5` as a string). The APK is accepted only when its SHA-256 matches the digest
- * the manifest declares, so a swapped asset cannot reach the installer.
+ * Two independent facts come out of one release:
+ *
+ * * **whether a newer version exists**, which the tag alone answers — this is what tells the user
+ *   an update is required and how far behind they are, and it works for any ordinary release;
+ * * **whether that version can be installed from inside the app**, which needs the release recipe's
+ *   `update-manifest.json` asset, because only its SHA-256 lets the downloaded APK be trusted.
+ *
+ * The first no longer depends on the second. A release published without the manifest used to be
+ * reported as a failed check, which is how "you are three versions behind" reached the user as
+ * "update check failed"; it now becomes an offer that simply is not self-installable
+ * ([AppUpdateCheck.Available.installable]).
  */
 @Serializable
 data class AppUpdateManifest(
@@ -33,6 +42,26 @@ data class AppUpdateManifest(
     val notes: String = "",
 )
 
+enum class AppUpdateFailure {
+    NETWORK,
+
+    RATE_LIMITED,
+
+    UNAUTHORIZED,
+
+    NOT_FOUND,
+
+    MALFORMED,
+
+    BLOCKED,
+
+    NO_ARTIFACT,
+
+    VERIFICATION,
+
+    UNKNOWN,
+}
+
 sealed interface AppUpdateCheck {
     data object UpToDate : AppUpdateCheck
 
@@ -40,10 +69,60 @@ sealed interface AppUpdateCheck {
         val manifest: AppUpdateManifest,
         val downloadUrl: String,
         val sizeBytes: Long,
-    ) : AppUpdateCheck
+        val versionsBehind: Int = 1,
+        val releaseUrl: String = "",
+    ) : AppUpdateCheck {
+        val versionName: String get() = manifest.versionName
 
-    data class Failed(val reason: String) : AppUpdateCheck
+        val severity: AppUpdateSeverity get() = AppUpdateSeverity.forVersionsBehind(versionsBehind)
+
+        val installable: Boolean
+            get() = downloadUrl.isNotBlank() && manifest.apkName.isNotBlank() && manifest.apkSha256.isSha256Hex()
+    }
+
+    data class Failed(
+        val failure: AppUpdateFailure,
+        val reason: String,
+    ) : AppUpdateCheck
 }
+
+internal class AppUpdateHttpException(
+    val code: Int,
+    val rateLimited: Boolean,
+    message: String,
+) : IOException(message)
+
+internal class AppUpdateBlockedUrlException(
+    message: String,
+) : Exception(message)
+
+internal fun Throwable.asAppUpdateFailure(): AppUpdateFailure =
+    when {
+        this is AppUpdateBlockedUrlException -> AppUpdateFailure.BLOCKED
+        this is AppUpdateHttpException ->
+            when {
+                rateLimited -> AppUpdateFailure.RATE_LIMITED
+                code == HTTP_UNAUTHORIZED || code == HTTP_FORBIDDEN -> AppUpdateFailure.UNAUTHORIZED
+                code == HTTP_NOT_FOUND || code == HTTP_GONE -> AppUpdateFailure.NOT_FOUND
+                code >= HTTP_SERVER_ERROR -> AppUpdateFailure.NETWORK
+                else -> AppUpdateFailure.UNKNOWN
+            }
+        this is SerializationException -> AppUpdateFailure.MALFORMED
+        this is AppUpdateVerificationException -> AppUpdateFailure.VERIFICATION
+        this is IOException -> AppUpdateFailure.NETWORK
+        this is IllegalArgumentException -> AppUpdateFailure.MALFORMED
+        else -> AppUpdateFailure.UNKNOWN
+    }
+
+internal fun Throwable.appUpdateReason(): String = message?.takeIf(String::isNotBlank) ?: javaClass.simpleName
+
+private const val HTTP_UNAUTHORIZED = 401
+private const val HTTP_FORBIDDEN = 403
+private const val HTTP_NOT_FOUND = 404
+private const val HTTP_GONE = 410
+private const val HTTP_TOO_MANY_REQUESTS = 429
+private const val HTTP_SERVER_ERROR = 500
+private const val RATE_LIMIT_PEEK_BYTES = 2048L
 
 class AppUpdateClient(
     private val httpClient: OkHttpClient,
@@ -57,41 +136,98 @@ class AppUpdateClient(
 ) {
     private val json = Json { ignoreUnknownKeys = true }
 
-    suspend fun check(currentVersionCode: Long): AppUpdateCheck =
+    suspend fun check(
+        currentVersionCode: Long,
+        currentVersionName: String = "",
+    ): AppUpdateCheck =
         withContext(Dispatchers.IO) {
-            runCatching {
-                val client = guardedClient()
-                val endpoint = releasesApiUrl().ifBlank { DEFAULT_RELEASES_API_URL }.asPublicHttpsUrl()
-                val releaseJson =
-                    client.getText(
-                        endpoint,
-                        MAX_METADATA_BYTES,
-                        "release metadata",
-                    )
-                val release = json.decodeFromString<GithubRelease>(releaseJson)
-                val manifestAsset = release.assets.firstOrNull { asset -> asset.name == MANIFEST_ASSET_NAME }
-                    ?: return@runCatching AppUpdateCheck.Failed("release has no $MANIFEST_ASSET_NAME")
-                val manifestJson =
-                    client.getText(
-                        manifestAsset.readableUrl().asPublicHttpsUrl(),
-                        MAX_METADATA_BYTES,
-                        "update manifest",
-                    )
-                val manifest = json.decodeFromString<AppUpdateManifest>(manifestJson)
-                if (manifest.versionCode <= currentVersionCode) {
-                    return@runCatching AppUpdateCheck.UpToDate
-                }
-                val apkAsset = release.assets.firstOrNull { asset -> asset.name == manifest.apkName }
-                    ?: return@runCatching AppUpdateCheck.Failed("release has no ${manifest.apkName}")
-                AppUpdateCheck.Available(
-                    manifest = manifest,
-                    downloadUrl = apkAsset.readableUrl(),
-                    sizeBytes = apkAsset.size,
-                )
-            }.getOrElse { error ->
-                AppUpdateCheck.Failed(error.message ?: error.javaClass.simpleName)
-            }
+            runCatching { latestRelease(currentVersionCode, currentVersionName) }
+                .getOrElse { error -> AppUpdateCheck.Failed(error.asAppUpdateFailure(), error.appUpdateReason()) }
         }
+
+    private fun isNewerRelease(
+        manifest: AppUpdateManifest?,
+        currentVersionCode: Long,
+        installed: AppUpdateVersion?,
+        published: AppUpdateVersion,
+    ): Boolean =
+        when {
+            manifest != null && manifest.versionCode > 0L -> manifest.versionCode > currentVersionCode
+            installed != null -> published > installed
+            else -> false
+        }
+
+    @Suppress("ReturnCount")
+    private fun latestRelease(
+        currentVersionCode: Long,
+        currentVersionName: String,
+    ): AppUpdateCheck {
+        val client = guardedClient()
+        val endpoint = releasesApiUrl().ifBlank { DEFAULT_RELEASES_API_URL }.asPublicHttpsUrl()
+        val releaseJson = client.getText(endpoint, MAX_METADATA_BYTES, "release metadata")
+        val release = json.decodeFromString<GithubRelease>(releaseJson)
+        val tag = release.tagName.ifBlank { release.name }
+        if (tag.isBlank() && release.assets.isEmpty()) {
+            return AppUpdateCheck.Failed(
+                AppUpdateFailure.MALFORMED,
+                "release metadata carries neither a tag nor any asset",
+            )
+        }
+        val manifest = release.manifestOrNull(client)
+        val publishedName = manifest?.versionName?.takeIf(String::isNotBlank) ?: appUpdateDisplayVersionName(tag)
+        val published =
+            AppUpdateVersion.parseOrNull(publishedName)
+                ?: return AppUpdateCheck.Failed(
+                    AppUpdateFailure.MALFORMED,
+                    "release version '$publishedName' cannot be ordered",
+                )
+        val installed = AppUpdateVersion.parseOrNull(currentVersionName)
+        if (!isNewerRelease(manifest, currentVersionCode, installed, published)) {
+            return AppUpdateCheck.UpToDate
+        }
+        val versionsBehind =
+            installed?.let { from -> appUpdateVersionsBehind(from, published) }?.takeIf { behind -> behind > 0 } ?: 1
+        if (manifest == null) {
+            return AppUpdateCheck.Available(
+                manifest =
+                AppUpdateManifest(
+                    versionCode = 0L,
+                    versionName = publishedName,
+                    apkName = "",
+                    apkSha256 = "",
+                    notes = release.body,
+                ),
+                downloadUrl = "",
+                sizeBytes = 0L,
+                versionsBehind = versionsBehind,
+                releaseUrl = release.htmlUrl,
+            )
+        }
+        if (!manifest.apkSha256.isSha256Hex()) {
+            return AppUpdateCheck.Failed(AppUpdateFailure.MALFORMED, "update manifest carries no usable sha256")
+        }
+        val apkAsset =
+            release.assets.firstOrNull { asset -> asset.name == manifest.apkName }
+                ?: return AppUpdateCheck.Failed(AppUpdateFailure.NO_ARTIFACT, "release has no ${manifest.apkName}")
+        return AppUpdateCheck.Available(
+            manifest = manifest,
+            downloadUrl = apkAsset.readableUrl(),
+            sizeBytes = apkAsset.size,
+            versionsBehind = versionsBehind,
+            releaseUrl = release.htmlUrl,
+        )
+    }
+
+    private fun GithubRelease.manifestOrNull(client: OkHttpClient): AppUpdateManifest? {
+        val asset = assets.firstOrNull { candidate -> candidate.name == MANIFEST_ASSET_NAME } ?: return null
+        val manifestJson =
+            client.getText(
+                asset.readableUrl().asPublicHttpsUrl(),
+                MAX_METADATA_BYTES,
+                "update manifest",
+            )
+        return json.decodeFromString<AppUpdateManifest>(manifestJson)
+    }
 
     /**
      * Downloads the APK and returns it only when the digest matches. A partial or mismatched file is
@@ -143,6 +279,10 @@ class AppUpdateClient(
                         }
                     }
                 }
+                if (update.sizeBytes > 0L && into.length() != update.sizeBytes) {
+                    into.delete()
+                    throw IOException("apk size ${into.length()} does not match the announced ${update.sizeBytes}")
+                }
                 val actual = digest.digest().joinToString("") { byte -> "%02x".format(byte) }
                 if (!actual.equals(update.manifest.apkSha256, ignoreCase = true)) {
                     into.delete()
@@ -159,17 +299,24 @@ class AppUpdateClient(
             callTimeoutMs = CALL_TIMEOUT_MS,
         )
 
-    private fun String.asPublicHttpsUrl(): HttpUrl = ensurePublicHttpsUrl(resolveHost = true, resolver = resolver)
+    private fun String.asPublicHttpsUrl(): HttpUrl =
+        runCatching { ensurePublicHttpsUrl(resolveHost = true, resolver = resolver) }
+            .getOrElse { error -> throw AppUpdateBlockedUrlException(error.appUpdateReason()) }
 
     private fun OkHttpClient.getText(
         url: HttpUrl,
         maxBytes: Long,
         label: String,
     ): String {
-        url.requirePublicHttpsUrl(resolveHost = true, resolver = resolver)
+        runCatching { url.requirePublicHttpsUrl(resolveHost = true, resolver = resolver) }
+            .getOrElse { error -> throw AppUpdateBlockedUrlException(error.appUpdateReason()) }
         newCall(Request.Builder().url(url).get().authorized(url).build()).execute().use { response ->
             if (!response.isSuccessful) {
-                throw IOException("$label request failed with HTTP ${response.code}")
+                throw AppUpdateHttpException(
+                    code = response.code,
+                    rateLimited = response.looksRateLimited(),
+                    message = "$label request failed with HTTP ${response.code}",
+                )
             }
             return requireNotNull(response.body) { "$label response body is empty" }
                 .readBytesCapped(maxBytes)
@@ -177,8 +324,26 @@ class AppUpdateClient(
         }
     }
 
+    private fun Response.looksRateLimited(): Boolean {
+        if (code == HTTP_TOO_MANY_REQUESTS) {
+            return true
+        }
+        if (code != HTTP_FORBIDDEN) {
+            return false
+        }
+        if (header("x-ratelimit-remaining")?.trim() == "0") {
+            return true
+        }
+        val body = runCatching { peekBody(RATE_LIMIT_PEEK_BYTES).string() }.getOrNull().orEmpty()
+        return body.contains("rate limit", ignoreCase = true)
+    }
+
     @Serializable
     private data class GithubRelease(
+        @kotlinx.serialization.SerialName("tag_name") val tagName: String = "",
+        val name: String = "",
+        val body: String = "",
+        @kotlinx.serialization.SerialName("html_url") val htmlUrl: String = "",
         val assets: List<GithubAsset> = emptyList(),
     )
 

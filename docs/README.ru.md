@@ -41,15 +41,13 @@
 **FoxHole Guard** не содержит рекламы, аналитики использования или телеметрии. Списки приложений, статистика, журналы, правила маршрутизации и результаты локального анализа остаются на устройстве, если пользователь сам их не экспортирует.
 
 > [!IMPORTANT]
-> проект находится на ранней стадии **бета-тестирования** и продолжает активно дорабатываться и проходить production-гейты. **Поддержка проекта ускорит его дальнейшую разработку**. Часть кода и большая часть документации, разрабатывалась с помощью ИИ.
+> Текущая публичная бета — **0.0.2**. Проект активно развивается и проходит проверки перед релизом. Анализ FoxHole Sentinel и его уведомления по умолчанию выключены и запускаются только после включения модуля пользователем. Часть кода и документации создана с помощью ИИ.
 
 <p align="center">
-  <img src="../fastlane/metadata/android/ru-RU/images/phoneScreenshots/main_ru.png" width="16%" alt="главный экран">
-  <img src="../fastlane/metadata/android/ru-RU/images/phoneScreenshots/scenarios_ru.png" width="16%" alt="сценарии">
-  <img src="../fastlane/metadata/android/ru-RU/images/phoneScreenshots/smart_profile_vpn_ru.png" width="16%" alt="смарт-профили">
-  <img src="../fastlane/metadata/android/ru-RU/images/phoneScreenshots/map_ru.png" width="16%" alt="карта трафика">
-  <img src="../fastlane/metadata/android/ru-RU/images/phoneScreenshots/statistics_ru.png" width="16%" alt="статистика">
-  <img src="../fastlane/metadata/android/ru-RU/images/phoneScreenshots/settings_ru.png" width="16%" alt="настройки">
+  <img src="../fastlane/metadata/android/ru-RU/images/phoneScreenshots/00_main_ru.png" width="24%" alt="главный экран">
+  <img src="../fastlane/metadata/android/ru-RU/images/phoneScreenshots/01_scenarios_ru.png" width="24%" alt="сценарии">
+  <img src="../fastlane/metadata/android/ru-RU/images/phoneScreenshots/03_map_ru.png" width="24%" alt="карта трафика">
+  <img src="../fastlane/metadata/android/ru-RU/images/phoneScreenshots/04_settings_ru.png" width="24%" alt="настройки">
 </p>
 
 ---
@@ -57,13 +55,13 @@
 ## ✨ Основные возможности
 
 - **FoxHole Core** - собственное сетевое ядро, написанное на Rust.
-- **Поддержка VPN-протоколов** - VLESS, VMess, Hysteria2, WireGuard, AmneziaWG, Trojan, Shadowsocks, Naive, TUIC, AnyTLS и ShadowTLS.
+- **Поддержка VPN-протоколов** - VLESS, VMess, Hysteria2, WireGuard, AmneziaWG, Trojan, Shadowsocks, Naive, TUIC и AnyTLS.
 - **Доступ к сети Tor** - подключение к Tor внутри TCP VPN-туннеля, маршрутизация выбранных приложений, поддержка мостов и автоматическая смена цепочки Tor по расписанию.
 - **Доступ к сети I2P** - доступ к ресурсам `.i2p` через отдельный процесс `i2pd` и локальный SOCKS5-контракт с FoxHole Core.
 - **Фаервол** - блокировка приложений, kill switch и карантин новых установленных приложений.
 - **Управление DNS** - локальный DNS interceptor, UDP/TCP/DoT/DoH, cache и stale cache.
 - **Карта трафика** - отображение текущих сетевых соединений устройства на карте мира.
-- **FoxHole Sentinel** - отдельный компонент безопасности для поиска аномалий в сетевом трафике.
+- **FoxHole Sentinel** — необязательный локальный анализ IOC и сетевых аномалий, по умолчанию выключен.
 - **Web-приложения** - поддержка HTML5-приложений и доставка уведомлений.
 - **Прокси-сервер** - прокси-сервер в локальной сети с поддержкой SOCKS5 и HTTP CONNECT с авторизацией.
 - **Фоновые сервисы** - `foxhole watchdog web` и `foxhole watchdog guard` для доставки уведомлений web-приложений и фонового мониторинга событий безопасности.
@@ -200,7 +198,7 @@ FoxHole Core поддерживает onion service.
 
 ### 🛡️ FoxHole Sentinel
 
-FoxHole Sentinel - модуль локального мониторинга безопасности FoxHole Guard. Его фоновая часть работает в сервисе `foxhole watchdog guard`.
+FoxHole Sentinel — необязательный модуль локального мониторинга безопасности FoxHole Guard. По умолчанию он выключен; после включения его фоновые задачи работают в сервисе `foxhole watchdog guard`.
 
 FoxHole Sentinel предназначен для объединения нескольких независимых источников сигналов: индикаторов компрометации, сетевой активности, статического анализа приложений и поведенческих признаков. Результаты анализа обрабатываются локально и не отправляются разработчику.
 
@@ -210,31 +208,30 @@ FoxHole Sentinel не позиционируется как антивирус. 
 
 На текущем этапе в FoxHole Sentinel реализованы:
 
-- **Echap Stalkerware Indicators** - локальная проверка известных индикаторов stalkerware;
-- **MVT Indicators** - поддержка публичных IOC из открытых исследовательских наборов;
-- **сетевой IOC-матчер** - сетевая активность приложений из живого потока событий FoxHole Core сопоставляется с известными доменами и IP-адресами; включается тумблером анализа FoxHole Sentinel;
-- локальная корреляция обнаруженных IOC с приложением, которому принадлежит сетевой flow;
+- **Echap Stalkerware Indicators** — локальная проверка известных индикаторов сталкерского ПО;
+- **сопоставление сетевых IOC** — сетевая активность приложений из потока событий FoxHole Core сравнивается с известными доменами и IP-адресами; функция включается вместе с анализом FoxHole Sentinel;
+- локальная привязка обнаруженного IOC к приложению, которому принадлежит сетевой поток;
 - интеграция с фаерволом и карантином FoxHole Guard;
 - аудит событий ядра через ограниченный поток событий FoxHole Core.
 
 Совпадение с IOC является сигналом безопасности, но само по себе не используется как безусловное доказательство заражения устройства.
 
-FoxHole Core не хранит постоянный пользовательский Guard-журнал. Ядро передаёт приложению ограниченный поток событий, а долговременный журнал ведёт Android-приложение. Если потребитель не успевает обработать поток, audit interface явно сообщает о `dropped`.
+FoxHole Core не хранит постоянный пользовательский журнал безопасности. Ядро передаёт приложению ограниченный поток событий, а долговременный журнал ведёт Android-приложение. Если приложение не успевает обработать поток, интерфейс аудита явно сообщает число пропущенных событий в поле `dropped`.
 
 #### 🧪 Планируется
 
 Архитектура FoxHole Sentinel предусматривает дальнейшее расширение локального анализа, однако следующие функции **пока не реализованы и не входят в текущую версию**:
 
-- YARA-X для локального анализа APK, DEX и native-библиотек;
-- обнаружение packer-, obfuscation- и anti-analysis-признаков;
+- YARA-X для локального анализа APK, DEX и нативных библиотек;
+- обнаружение упаковщиков, обфускации и противодействия анализу;
 - поведенческий анализ DEX и последовательностей Android API;
 - корреляция с MITRE ATT&CK Mobile;
 - расширенный анализ сетевого поведения приложений;
-- обнаружение beacon-подобной активности;
+- обнаружение периодической маячковой активности;
 - анализ необычных TX/RX-паттернов;
 - DGA-подобные DNS-признаки;
-- per-app baseline с учётом Wi-Fi/mobile и foreground/background-состояния;
-- correlation engine, объединяющий static-, IOC-, Android- и network-evidence в единый finding.
+- базовые профили приложений с учётом Wi-Fi или мобильной сети и фонового режима;
+- механизм корреляции статических, IOC-, Android- и сетевых признаков в одно заключение.
 
 Эти функции планируются как локальные детекторы без облачной проверки и без отправки APK, списка установленных приложений или истории сетевой активности.
 
@@ -267,7 +264,6 @@ FoxHole Core не хранит постоянный пользовательск
 | **Naive** | нативный HTTP/2 CONNECT с protocol padding |
 | **TUIC** | clean-room v5, QUIC, TLS-exporter auth, TCP/UDP, fragmentation, reconnect |
 | **AnyTLS** | clean-room v2, TLS auth, padding, session reuse/multiplex, TCP и UoT v2 UDP |
-| **ShadowTLS** | strict v3 / TLS 1.3, chained HMAC, обязательный inner Shadowsocks |
 | **SOCKS5** | CONNECT, UDP ASSOCIATE, авторизация |
 | **HTTP proxy** | HTTP CONNECT, авторизация |
 | **Tor** | Arti, TCP, `.onion`, bridges |
@@ -290,8 +286,6 @@ Outline рассматривается как вариант Shadowsocks.
 ### 🚫 Не поддерживается
 
 **ShadowsocksR (SSR)** не поддерживается как устаревшее и несовместимое с текущим набором протоколов расширение Shadowsocks.
-
-**ShadowTLS v1** не поддерживается. Используется строгая реализация ShadowTLS v3.
 
 ---
 
@@ -335,7 +329,7 @@ https://foxhole-team.github.io/foxhole-db/manifest.json
 
 Перед использованием приложение проверяет предусмотренные форматом параметры, включая подпись, размер, совместимость и SHA-256.
 
-При ошибке проверки используется последний успешно проверенный набор правил.
+При ошибке проверки уже установленный набор правил сохраняется. На новой установке DNS-фильтрация остаётся недоступной, пока набор не пройдёт проверку.
 
 ---
 
@@ -426,14 +420,15 @@ FoxHole Guard использует два независимых фоновых 
 
 [![FoxHole DB](https://img.shields.io/badge/GitHub-FoxHole_DB-181717?logo=github)](https://github.com/foxhole-team/foxhole-db)
 
-FoxHole DB содержит четыре независимых набора данных, которые приложение загружает в зависимости от включённых функций.
+FoxHole DB содержит пять независимых подписанных наборов данных. Приложение загружает их по мере необходимости. Набор TLS содержит только таблицы: генератор ClientHello остаётся частью FoxHole Core, а неудачное обновление сохраняет встроенные или последние проверенные таблицы.
 
 | Набор данных | Артефакт | Формат | Источник | Лицензия | Версия |
 | --- | --- | --- | --- | --- | --- |
-| **DNS - списки фильтрации** | `adguard-dns-filter.fhds` | `foxhole-dns-fst-v1` | [AdGuard DNS filter](https://github.com/AdguardTeam/AdGuardSDNSFilter) | GPL-3.0 | Upstream-коммит пинится на каждую сборку. |
-| **Tor - зеркало builtin-мостов** | `bridges.json` | `tor-bridges-json` | [Builtin-мосты Tor Project (Moat)](https://bridges.torproject.org/moat/circumvention/builtin) | публичные данные обхода цензуры | Метка `generated_at`; артефакт байтово воспроизводим из неизменённого upstream. |
-| **FoxHole Sentinel - списки безопасности (threat intelligence)** | `threat-intel.json` | `sentinel-threat-intel-json`, документ `schema: 3` | [AssoEchap/stalkerware-indicators](https://github.com/AssoEchap/stalkerware-indicators) | CC-BY-4.0 | Upstream-коммит пинится на каждую сборку и фиксируется в `threat-intel-source-info.json`. |
-| **геобаза данных - IP → страна** | `dbip-country-ipv4.csv`, `dbip-country-ipv6.csv` | `dbip-country-csv` | [DB-IP Lite через sapics/ip-location-db](https://github.com/sapics/ip-location-db) (`dbip-country`) | CC-BY-4.0 | Upstream-`version` из `package.json` датасета переносится в манифест. |
+| **DNS — списки фильтрации** | `adguard-dns-filter.fhds` | `foxhole-dns-fst-v1` | [AdGuard DNS filter](https://github.com/AdguardTeam/AdGuardSDNSFilter) | GPL-3.0 | Для каждой сборки фиксируется точный коммит источника. |
+| **Tor — зеркало встроенных мостов** | `bridges.json` | `tor-bridges-json` | [Встроенные мосты Tor Project (Moat)](https://bridges.torproject.org/moat/circumvention/builtin) | публичные данные обхода цензуры | Метка `generated_at`; ключи объектов нормализуются, порядок элементов массивов сохраняется. |
+| **FoxHole Sentinel — данные об угрозах** | `threat-intel.json` | `sentinel-threat-intel-json`, документ `schema: 3` | [AssoEchap/stalkerware-indicators](https://github.com/AssoEchap/stalkerware-indicators) | CC-BY-4.0 | Для каждой сборки фиксируется точный коммит источника в `threat-intel-source-info.json`. |
+| **Геобаза данных — IP → страна** | `dbip-country-ipv4.csv`, `dbip-country-ipv6.csv` | `dbip-country-csv` | [DB-IP Lite через sapics/ip-location-db](https://github.com/sapics/ip-location-db) (`dbip-country`) | CC-BY-4.0 | Версия исходного набора из `package.json` переносится в манифест. |
+| **TLS-отпечатки — таблицы ClientHello** | `fingerprints.json` | `tls-fingerprint-tables-json` | [`fingerprints/` в FoxHole Core](https://github.com/foxhole-team/foxhole-core) | GPL-3.0-or-later | Для каждой сборки фиксируется ревизия источника; перед установкой для каждого профиля заново вычисляется `fingerprint_sha256`. |
 
 ---
 

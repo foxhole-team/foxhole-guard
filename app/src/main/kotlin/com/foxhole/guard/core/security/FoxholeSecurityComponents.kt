@@ -133,7 +133,9 @@ class FoxholeSecurityComponents(
      * is separately switchable, so a PIN can guard entry alone.
      */
     fun isEventMonitoringActive(): Boolean =
-        isPasswordProtectionActive() && settingsRepository.settings.value.appLock.eventMonitoringEnabled
+        settingsRepository.settings.value.anomaly.enabled &&
+            isPasswordProtectionActive() &&
+            settingsRepository.settings.value.appLock.eventMonitoringEnabled
 
     /**
      * True while the profile DB must not be touched: password protection is on but the

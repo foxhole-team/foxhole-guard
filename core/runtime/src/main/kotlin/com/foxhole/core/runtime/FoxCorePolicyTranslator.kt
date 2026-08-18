@@ -37,6 +37,7 @@ internal object FoxCorePolicyTranslator {
         forceFakeIpDns: Boolean = false,
         quarantineNewApps: Boolean = false,
         knownApplications: List<KnownApplicationIdentity> = emptyList(),
+        killSwitch: Boolean = false,
     ): FoxCorePolicyTranslation {
         if (primaryIsPacketTunnel && overlays.isNotEmpty()) {
             rejectFoxCoreConfig(
@@ -76,7 +77,7 @@ internal object FoxCorePolicyTranslator {
                 // was not successfully migrated into the immutable outbound registry.
                 put("tor_enabled", FoxCoreOverlay.TOR in overlays)
                 put("i2p_enabled", FoxCoreOverlay.I2P in overlays)
-                put("kill_switch", false)
+                put("kill_switch", killSwitch)
                 put("quarantine_new_apps", quarantineNewApps)
                 if (quarantineNewApps && knownApplications.isNotEmpty()) {
                     put(
@@ -427,7 +428,9 @@ internal object FoxCorePolicyTranslator {
             // is handed no upstream and no rule set, so nothing in `$.dns` reaches it except the one
             // address lifted out here — and a resolver or filter the user configured for the other
             // profiles must not decide whether this one starts.
-            return packetTunnelDns(servers)
+            val packetTunnel = packetTunnelDns(servers)
+            requireI2pFakeIpDns(overlays, packetTunnel.config.optionalString("mode", "$.dns"))
+            return packetTunnel
         }
         validateDnsServers(servers, overlays)
         val filter = translateDnsRules(source, overlays)
@@ -462,6 +465,7 @@ internal object FoxCorePolicyTranslator {
                 forceFakeIpDns || overlays.isNotEmpty() -> "fake_ip"
                 else -> "real_ip"
             }
+        requireI2pFakeIpDns(overlays, mode)
         val config =
             buildJsonObject {
                 put("advertise", advertiseOverride ?: upstream.advertise)
@@ -513,6 +517,20 @@ internal object FoxCorePolicyTranslator {
                 }
             }
         return DnsTranslation(config = config, packetTunnelAdvertise = null)
+    }
+
+    private fun requireI2pFakeIpDns(
+        overlays: Set<FoxCoreOverlay>,
+        mode: String?,
+    ) {
+        if (FoxCoreOverlay.I2P in overlays && mode != "fake_ip") {
+            rejectFoxCoreConfig(
+                FoxCoreConfigRejection.POLICY_UNREPRESENTABLE,
+                "$.dns.mode",
+                "the I2P overlay resolves `.i2p` through the fake-IP lane; without it the engine " +
+                    "dials an address literal that i2pd refuses, so no eepsite can open",
+            )
+        }
     }
 
     /**

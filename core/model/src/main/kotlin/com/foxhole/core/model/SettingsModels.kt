@@ -9,7 +9,9 @@ import kotlinx.serialization.Serializable
 data class UiSettings(
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     // Separate from themeMode: changes only default panel surfaces, never the colour palette.
-    val panelAppearance: PanelAppearance = PanelAppearance.STANDARD,
+    val panelAppearance: PanelAppearance = PanelAppearance.AUTO,
+    val visualStyle: VisualStyle = VisualStyle.PLAIN,
+    val accentColor: AccentColor = AccentColor.AUTO,
     val locale: AppLocale = AppLocale.SYSTEM,
     // False on a fresh install so the first-run wizard shows; stored payloads carry true.
     val onboardingCompleted: Boolean = false,
@@ -64,7 +66,7 @@ data class UiSettings(
     // Covers every firewall-enable warning surface (consent, dashboard window, indirect prompts).
     val suppressFirewallEnableWarning: Boolean = false,
     // Off renders the frosted chrome as solid tints for weak GPUs.
-    val blurEffectsEnabled: Boolean = true,
+    val blurEffectsEnabled: Boolean = false,
     // App-wide: TOR/I2P wear the darkened theme accent instead of their fixed hues everywhere
     // (map legs, status tones, TOR window, traffic-chart series).
     val monochromeTorTheme: Boolean = false,
@@ -117,6 +119,7 @@ data class ConnectionSettings(
     // enables the scheduled 12h asset downloads. Auto is inert while check is off.
     val componentUpdateCheckEnabled: Boolean = true,
     val componentAutoUpdateEnabled: Boolean = false,
+    val tlsFingerprintAutoUpdate: Boolean = true,
     // Resolve only IP + country from the on-device GeoIP DB, never the online IP-info service.
     val geoOfflineMode: Boolean = false,
 )
@@ -182,8 +185,7 @@ data class PrivacyRouteSettings(
     val bridgeTransport: TorBridgeTransport = TorBridgeTransport.AUTO,
     // Scheduled bridge-list refresh (12h WorkManager job); off = the bundled/last-downloaded list.
     val bridgesAutoUpdate: Boolean = false,
-    // false = Tor Project builtin-bridges endpoint, true = the Foxhole GitHub mirror.
-    val bridgesUseFoxholeSource: Boolean = false,
+    val bridgesUseFoxholeSource: Boolean = true,
     val bridgesUpdatedAt: Long? = null,
     val bridgesCheckedAt: Long? = null,
     val bridgesLastUpdateSuccess: Boolean? = null,
@@ -255,10 +257,10 @@ data class ExpertSettings(
     val warningAcknowledgedAt: Long? = null,
     val blockScreenshots: Boolean = false,
     val firewallEnabled: Boolean = false,
+    val killSwitchEnabled: Boolean = false,
     val newAppQuarantineEnabled: Boolean = false,
     val systemDnsProtectionEnabled: Boolean = false,
-    // Connections journal, raw by default; persistence stays firewall-gated.
-    val networkActivityLogging: Boolean = true,
+    val networkActivityLogging: Boolean = false,
     // Legacy fallback behind [effectiveDiagnosticsRetention]. Do not read directly.
     val diagnosticsRetention: DiagnosticsRetention = DiagnosticsRetention.HOURS_24,
     val diagnosticsRetentionPolicy: RetentionPolicy? = null,

@@ -10,7 +10,6 @@ import com.foxhole.guard.ui.PendingRoutingScenarioChange
 import com.foxhole.guard.ui.VpnRoutingScenario
 import com.foxhole.guard.ui.cli.LocalCliColors
 
-/** Shared atomic-off confirmation for Home modes and VPN/Tor routing scenarios. */
 @Composable
 internal fun CliRoutingChangeConfirmSheet(
     change: PendingRoutingScenarioChange,
@@ -84,7 +83,6 @@ private fun RoutingModePreset.labelRes(): Int =
         RoutingModePreset.VPN -> R.string.cli_st_vpn
         RoutingModePreset.TOR -> R.string.cli_st_tor
         RoutingModePreset.VPN_TOR -> R.string.cli_home_status_mode_vpn_tor
-        // Split is a VPN scenario, not a fourth Home operating mode.
         RoutingModePreset.SPLIT_INCLUDE,
         RoutingModePreset.SPLIT_EXCLUDE,
         -> R.string.cli_st_vpn

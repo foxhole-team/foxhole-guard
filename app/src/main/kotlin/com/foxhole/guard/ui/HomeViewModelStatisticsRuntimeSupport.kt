@@ -22,12 +22,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
-/**
- * Warms the statistics dashboard before the route lands: flips the visibility gate and briefly
- * subscribes the route state so the heavy aggregation runs during the navigation transition. The
- * built snapshot stays cached in the StateFlow, so the screen paints without the shimmer. The
- * route's own DisposableEffect remains the source of truth for turning visibility off.
- */
 internal fun HomeViewModel.prewarmStatistics() {
     onStatisticsUiVisibilityChanged(true)
     viewModelScope.launch {
@@ -39,14 +33,8 @@ internal fun HomeViewModel.prewarmStatistics() {
 
 internal const val STATISTICS_PREWARM_TIMEOUT_MS = 3_000L
 
-/**
- * Session-only statistics: collection keeps feeding the live screens,
- * but nothing survives past the connection session — every statistics store is wiped once on
- * cold start (covers force-kills mid-session) and again whenever an active session ends.
- */
 internal fun HomeViewModel.startSessionOnlyStatisticsWipe() {
     viewModelScope.launch {
-        // The wipe opens the statistics DB: hold until the PIN unlock installs the key.
         awaitDatabaseUnlocked()
         if (container.settingsRepository.settings.first().statistics.sessionOnly) {
             wipeSessionOnlyStatistics()
@@ -64,8 +52,6 @@ internal fun HomeViewModel.startSessionOnlyStatisticsWipe() {
     }
 }
 
-// Returns a Result rather than swallowing: a background wipe has nothing to show, but the privacy
-// toggle must admit when history stayed on disk.
 private suspend fun HomeViewModel.wipeSessionOnlyStatistics(): Result<Unit> =
     runCatching {
         container.anomalyRepository.clearTrafficStatistics()
@@ -75,8 +61,6 @@ private suspend fun HomeViewModel.wipeSessionOnlyStatistics(): Result<Unit> =
 internal fun HomeViewModel.onStatisticsSessionOnlyChanged(value: Boolean) {
     viewModelScope.launch {
         container.settingsRepository.updateStatisticsSessionOnly(value)
-        // Arming the mode mid-run cleans the already-persisted history right away, so the
-        // switch honestly means "nothing outlives the session" from the moment it is flipped.
         if (value) {
             wipeSessionOnlyStatistics().onFailure {
                 emitError(
@@ -101,11 +85,6 @@ internal fun HomeViewModel.onStatisticsUiVisibilityChanged(visible: Boolean) {
             loadInstalledApps()
         }
     }
-    if (visible && container.settingsRepository.settings.value.statistics.appChangesEnabled) {
-        viewModelScope.launch {
-            recordInstalledAppInventoryFromLoadedApps()
-        }
-    }
 }
 
 internal fun HomeViewModel.onStatisticsEnabledChanged(value: Boolean) {
@@ -119,15 +98,10 @@ internal fun HomeViewModel.onStatisticsEnabledChanged(value: Boolean) {
         if (value && runtimeAllowed) {
             loadInstalledApps()
         }
-        if (value && container.settingsRepository.settings.value.statistics.appChangesEnabled) {
-            recordInstalledAppInventoryFromLoadedApps()
-        }
         syncLocalGuardWithPermissionRequest()
     }
 }
 
-// Visibility only: reveals/hides the statistics screen + menu entry. Never starts collection (that
-// stays the in-screen "Record statistics" toggle), so no sampler/inventory sync here.
 internal fun HomeViewModel.onStatisticsComponentVisibleChanged(value: Boolean) {
     viewModelScope.launch {
         container.settingsRepository.updateStatisticsComponentVisible(value)
@@ -151,8 +125,6 @@ internal fun HomeViewModel.onStatisticsRefreshIntervalSelected(value: Statistics
     }
 }
 
-// The statistics screen's day/week dropdown. Persisted, never session-local: the user expects the
-// picked window to survive restarts. Collection is untouched — the window only cuts what is shown.
 internal fun HomeViewModel.onStatisticsWindowChanged(value: StatisticsWindow) {
     viewModelScope.launch {
         container.settingsRepository.updateStatisticsWindow(value)
@@ -188,10 +160,6 @@ internal fun HomeViewModel.onAppTrafficStatsEnabledChanged(value: Boolean) {
             container.settingsRepository.updateStatisticsEnabled(true)
             container.settingsRepository.updateStatisticsMetricEnabled(StatisticsMetric.APP_TRAFFIC, true)
         }
-        // The recording toggle is only ever turned on once Usage Access is granted, so turning it
-        // on is the user's consent; updateAppTrafficStatsEnabled forces appTrafficUsageAccessConsent
-        // to match in the same transaction — otherwise the Apps card stays stuck on "enable app
-        // traffic recording" because the collection/display gate also requires the consent flag.
         container.settingsRepository.updateAppTrafficStatsEnabled(value)
         if (!value) {
             container.anomalyRepository.clearAppTrafficPrivacyData()

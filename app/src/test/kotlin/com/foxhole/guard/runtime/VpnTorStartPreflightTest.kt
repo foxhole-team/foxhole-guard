@@ -98,12 +98,6 @@ class VpnTorStartPreflightTest {
         assertEquals(stored, stored.forProtocolTestTrafficFreeze(enabled = false))
     }
 
-    /**
-     * The Pixel report of 2026-08-10 21:59: whole-device TOR armed on a live «proxy · selected
-     * apps» tunnel. The pair is unbuildable (the include split and the Tor final are two different
-     * defaults for the same traffic), so it has to be refused by the preflight — before a TUN, a
-     * native runtime or a reload exists to be broken by it.
-     */
     @Test
     fun `whole-device TOR is refused while the VPN carries only the selected apps`() {
         val profile = profileWithOptions(selectedId = "vless")
@@ -116,7 +110,6 @@ class VpnTorStartPreflightTest {
     @Test
     fun `whole-device TOR stays allowed where there is no include split to contradict`() {
         val profile = profileWithOptions(selectedId = "vless")
-        // Full tunnel: the whole device really is in the tun, so «whole device through TOR» holds.
         assertNull(
             vpnTorStartBlockReason(
                 includeSplitWholeDeviceTorSettings().let {
@@ -127,7 +120,6 @@ class VpnTorStartPreflightTest {
                 torOnlyConnect = false,
             ),
         )
-        // Tor-only has no VPN split at all; the refusal must not swallow the profile-required rule.
         assertEquals(
             VpnTorStartBlockReason.PROFILE_REQUIRED,
             vpnTorStartBlockReason(includeSplitWholeDeviceTorSettings(), null, null, torOnlyConnect = true),

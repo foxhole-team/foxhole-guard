@@ -4,10 +4,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.setValue
 
-/** Ordered, truthful Tor narration stages. A late CONNECTED snapshot replays skipped stages. */
-internal enum class CliTorNarrationStage { CONNECTING, CIRCUITS, CONNECTED, LOOKUP }
+internal enum class CliTorNarrationStage { STARTING, CONNECTING, CIRCUITS, CONNECTED, LOOKUP }
 
-/** Small queue owned by [CliTerminalState]; it contains no journal or connection decisions. */
 internal class CliTorNarration(
     private val strings: CliTerminalStrings,
     private val onStage: (text: String, tone: CliLineTone) -> Unit,
@@ -51,7 +49,6 @@ internal class CliTorNarration(
         revision += 1
     }
 
-    /** A confirmed identity arrived while LOOKUP was already visible; wake the UI timer. */
     fun signalIdentityReady() {
         revision += 1
     }
@@ -59,6 +56,7 @@ internal class CliTorNarration(
     private fun show(stage: CliTorNarrationStage) {
         current = stage
         val (text, tone) = when (stage) {
+            CliTorNarrationStage.STARTING -> strings.torStarting to CliLineTone.WARN
             CliTorNarrationStage.CONNECTING -> strings.torConnecting to CliLineTone.WARN
             CliTorNarrationStage.CIRCUITS -> strings.torCircuits to CliLineTone.WARN
             CliTorNarrationStage.CONNECTED -> strings.torConnected to CliLineTone.OK

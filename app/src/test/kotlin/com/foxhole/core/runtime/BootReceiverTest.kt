@@ -61,12 +61,6 @@ class BootReceiverTest {
         assertEquals(TrafficMode.TUNNEL, plan.trafficMode)
     }
 
-    /**
-     * Reported from the device: password + autostart + firewall came up after a reboot with
-     * nothing running at all. Autostart wins the plan, the profile restore then waits for the
-     * unlock — and the firewall, which needs no password, waited with it. The guard mode has to
-     * survive into the profile plan or the receiver has nothing to fall back to.
-     */
     @Test
     fun `boot restore carries the guard mode so a locked database still comes up guarded`() {
         val plan =

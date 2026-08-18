@@ -22,6 +22,7 @@ import androidx.work.WorkManager
 import com.foxhole.core.model.AppLocale
 import com.foxhole.core.model.DiagnosticEntry
 import com.foxhole.core.model.RetentionPolicy
+import com.foxhole.core.model.Settings
 import com.foxhole.core.model.SubscriptionRefreshInterval
 import com.foxhole.core.model.dnsRuleSetFilteringEnabled
 import com.foxhole.core.model.effectiveDiagnosticsRetention
@@ -34,6 +35,8 @@ import com.foxhole.guard.core.diagnostics.DiagnosticsSessionStore
 import com.foxhole.guard.core.settings.readFastStoredAppLocale
 import com.foxhole.guard.guardian.GuardHeartbeatWorker
 import com.foxhole.guard.guardian.enqueuePendingQuarantineAnalysis
+import com.foxhole.guard.runtime.AppUpdatePolicy
+import com.foxhole.guard.runtime.AppUpdateWorker
 import com.foxhole.guard.runtime.DnsFilterUpdateWorker
 import com.foxhole.guard.runtime.FOXHOLE_THREAT_INTEL_MANIFEST_URL
 import com.foxhole.guard.runtime.GeoIpUpdateWorker
@@ -41,10 +44,12 @@ import com.foxhole.guard.runtime.GuardReconcileWorker
 import com.foxhole.guard.runtime.SubscriptionRefreshWorker
 import com.foxhole.guard.runtime.SystemDnsChangeMonitor
 import com.foxhole.guard.runtime.ThreatIntelUpdateWorker
+import com.foxhole.guard.runtime.TlsFingerprintUpdateWorker
 import com.foxhole.guard.runtime.TorBridgeUpdateWorker
 import com.foxhole.guard.runtime.TorExitRotationSupervisor
 import com.foxhole.guard.runtime.enqueueQuarantineRuntimeEnforcement
 import com.foxhole.guard.runtime.shouldRearmQuarantineRuntimeEnforcement
+import com.foxhole.guard.widget.FoxStatusWidget
 import com.foxhole.guard.widget.FoxStatusWidgetAnimation
 import com.foxhole.guard.widget.StatusWidget
 import com.foxhole.guard.widget.WebAppsWidget
@@ -192,7 +197,6 @@ class FoxholeApplication :
                 runCatching { WebAppsWidget().updateAll(this@FoxholeApplication) }
             }
         }
-        // Widget-defaults changes in app settings re-render both widgets.
         appScope.launch {
             appGraph.settingsRepository.settings
                 .map { it.widgets }
@@ -201,6 +205,7 @@ class FoxholeApplication :
                 .collect {
                     runCatching { WebAppsWidget().updateAll(this@FoxholeApplication) }
                     runCatching { StatusWidget().updateAll(this@FoxholeApplication) }
+                    runCatching { FoxStatusWidget().updateAll(this@FoxholeApplication) }
                 }
         }
         // Status widget re-renders on runtime-bridge state/mode changes.
@@ -229,8 +234,14 @@ class FoxholeApplication :
             interval = settings.connection.subscriptionRefreshInterval,
             policy = ExistingPeriodicWorkPolicy.KEEP,
         )
-        // The "Check for updates" master (Component updates screen) gates every scheduled
-        // component refresh: with it off nothing probes the update sources in the background.
+        applyComponentUpdateSchedules(settings)
+        applyGuardHeartbeatSchedule(
+            enabled = appGraph.securityComponents.isEventMonitoringActive(),
+            policy = ExistingPeriodicWorkPolicy.KEEP,
+        )
+    }
+
+    private fun applyComponentUpdateSchedules(settings: Settings) {
         val componentUpdatesPermitted = settings.connection.componentUpdateCheckEnabled
         applyDnsFilterUpdateSchedule(
             enabled =
@@ -243,17 +254,24 @@ class FoxholeApplication :
             enabled = componentUpdatesPermitted && settings.connection.geoIpAutoUpdate,
             policy = ExistingPeriodicWorkPolicy.KEEP,
         )
+        applyAppUpdateSchedule(
+            enabled =
+            AppUpdatePolicy.backgroundCheckAllowed(
+                channel = BuildConfig.UPDATE_CHANNEL,
+                componentUpdateCheckEnabled = componentUpdatesPermitted,
+            ),
+            policy = ExistingPeriodicWorkPolicy.KEEP,
+        )
         applyTorBridgeUpdateSchedule(
             enabled = componentUpdatesPermitted && settings.privacyRoute.bridgesAutoUpdate,
             policy = ExistingPeriodicWorkPolicy.KEEP,
         )
-        // Dormant until the signed feed is hosted: scheduling activates with the configured endpoint.
         applyThreatIntelUpdateSchedule(
-            enabled = FOXHOLE_THREAT_INTEL_MANIFEST_URL.isNotBlank(),
+            enabled = threatIntelBackgroundUpdateEnabled(settings),
             policy = ExistingPeriodicWorkPolicy.KEEP,
         )
-        applyGuardHeartbeatSchedule(
-            enabled = appGraph.securityComponents.isEventMonitoringActive(),
+        applyTlsFingerprintUpdateSchedule(
+            enabled = componentUpdatesPermitted && settings.connection.tlsFingerprintAutoUpdate,
             policy = ExistingPeriodicWorkPolicy.KEEP,
         )
     }
@@ -430,6 +448,7 @@ internal fun Context.applyDnsFilterUpdateSchedule(
             .setConstraints(
                 Constraints.Builder()
                     .setRequiredNetworkType(NetworkType.CONNECTED)
+                    .setRequiresBatteryNotLow(true)
                     .build(),
             ).setBackoffCriteria(
                 BackoffPolicy.EXPONENTIAL,
@@ -555,6 +574,7 @@ internal fun Context.applyGeoIpUpdateSchedule(
             .setConstraints(
                 Constraints.Builder()
                     .setRequiredNetworkType(NetworkType.CONNECTED)
+                    .setRequiresBatteryNotLow(true)
                     .build(),
             ).setBackoffCriteria(
                 BackoffPolicy.EXPONENTIAL,
@@ -570,6 +590,39 @@ internal fun Context.applyGeoIpUpdateSchedule(
 
 // 12h version probe; range files download only on a real version change (upstream ~monthly).
 internal const val GEOIP_UPDATE_INTERVAL_HOURS = 12L
+
+internal fun Context.applyAppUpdateSchedule(
+    enabled: Boolean,
+    policy: ExistingPeriodicWorkPolicy = ExistingPeriodicWorkPolicy.UPDATE,
+) {
+    val workManager = WorkManager.getInstance(this)
+    if (!enabled) {
+        workManager.cancelUniqueWork(AppUpdateWorker.WORK_NAME)
+        return
+    }
+    val work =
+        PeriodicWorkRequestBuilder<AppUpdateWorker>(
+            APP_UPDATE_INTERVAL_HOURS,
+            TimeUnit.HOURS,
+        )
+            .setConstraints(
+                Constraints.Builder()
+                    .setRequiredNetworkType(NetworkType.CONNECTED)
+                    .setRequiresBatteryNotLow(true)
+                    .build(),
+            ).setBackoffCriteria(
+                BackoffPolicy.EXPONENTIAL,
+                30,
+                TimeUnit.MINUTES,
+            ).build()
+    workManager.enqueueUniquePeriodicWork(
+        AppUpdateWorker.WORK_NAME,
+        policy,
+        work,
+    )
+}
+
+internal const val APP_UPDATE_INTERVAL_HOURS = 24L
 
 internal fun Context.applyTorBridgeUpdateSchedule(
     enabled: Boolean,
@@ -636,6 +689,43 @@ internal fun Context.applyThreatIntelUpdateSchedule(
 }
 
 internal const val THREAT_INTEL_UPDATE_INTERVAL_HOURS = 72L
+
+internal fun threatIntelBackgroundUpdateEnabled(settings: Settings): Boolean =
+    settings.anomaly.enabled &&
+        settings.connection.componentUpdateCheckEnabled &&
+        FOXHOLE_THREAT_INTEL_MANIFEST_URL.isNotBlank()
+
+internal fun Context.applyTlsFingerprintUpdateSchedule(
+    enabled: Boolean,
+    policy: ExistingPeriodicWorkPolicy = ExistingPeriodicWorkPolicy.UPDATE,
+) {
+    val workManager = WorkManager.getInstance(this)
+    if (!enabled) {
+        workManager.cancelUniqueWork(TlsFingerprintUpdateWorker.WORK_NAME)
+        return
+    }
+    val work =
+        PeriodicWorkRequestBuilder<TlsFingerprintUpdateWorker>(
+            TLS_FINGERPRINT_UPDATE_INTERVAL_HOURS,
+            TimeUnit.HOURS,
+        )
+            .setConstraints(
+                Constraints.Builder()
+                    .setRequiredNetworkType(NetworkType.CONNECTED)
+                    .build(),
+            ).setBackoffCriteria(
+                BackoffPolicy.EXPONENTIAL,
+                10,
+                TimeUnit.MINUTES,
+            ).build()
+    workManager.enqueueUniquePeriodicWork(
+        TlsFingerprintUpdateWorker.WORK_NAME,
+        policy,
+        work,
+    )
+}
+
+internal const val TLS_FINGERPRINT_UPDATE_INTERVAL_HOURS = 24L
 private const val BACKGROUND_INITIALIZATION_STARTUP_DELAY_MS = 1_500L
 private const val BACKGROUND_WORK_SCHEDULE_IDLE_DELAY_MS = 30_000L
 

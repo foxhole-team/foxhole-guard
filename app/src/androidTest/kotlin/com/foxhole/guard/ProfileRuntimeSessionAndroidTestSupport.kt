@@ -55,8 +55,6 @@ import java.io.File
 import java.io.FileInputStream
 import java.util.regex.Pattern
 
-// Shared fixture of the runtime-session suites: settings baselines, waiters and probes.
-// Split from ProfileRuntimeSessionAndroidTest.kt.
 internal open class ProfileRuntimeSessionAndroidTestSupport {
     protected val json = Json { ignoreUnknownKeys = true }
 
@@ -611,14 +609,6 @@ internal open class ProfileRuntimeSessionAndroidTestSupport {
             .map { option -> RuntimeProbeTarget(protocolHint = option.protocolHint, optionId = option.id) }
             .ifEmpty { listOf(RuntimeProbeTarget(protocolHint = protocolHint, optionId = null)) }
 
-    /**
-     * The first option in the imported profile that speaks one of [protocols].
-     *
-     * Connecting to a profile without naming an option takes whatever the
-     * subscription happens to list first, which on this feed is not always a
-     * profile that comes up — the live legs below would then fail on the setup
-     * rather than on what they are testing.
-     */
     protected suspend fun probeTargetFor(
         app: FoxholeApplication,
         profileId: Long,
@@ -703,13 +693,8 @@ internal open class ProfileRuntimeSessionAndroidTestSupport {
         internal const val BYTES_PER_KB = 1024L
         internal const val RUNTIME_STRESS_RSS_DELTA_LIMIT_KB = 250L * 1024L
         /**
-         * The split test's upstream, in the shape the importer actually accepts.
-         *
-         * It used to be sing-box's `{"type":"direct"}`, and the raw-JSON strategy looks for Xray's
-         * `protocol` key (`looksLikeXrayJson`) — so the import failed with "unsupported format" and
-         * the test never reached the thing it was written for. Freedom outbound is the honest
-         * upstream here: the split is about which apps enter the tun, not about where the tunnel
-         * dials, and the direct leg has to stay direct for the assertion to mean anything.
+         * Must be a Freedom outbound: the raw-JSON strategy keys off Xray's `protocol` field, and
+         * the direct leg has to stay direct for the split assertion to mean anything.
          */
         internal val LIVE_SPLIT_DIRECT_PROFILE =
             """

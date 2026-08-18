@@ -34,10 +34,6 @@ internal data class CliStatsProfileRow(
     val totalBytes: Long get() = rxBytes + txBytes
 }
 
-/**
- * One row per profile. A smart profile persists one traffic total per protocol option, so profile
- * identity — not option/protocol identity — is the aggregation boundary for this table.
- */
 internal fun cliStatsProfileRows(items: List<ProfileTrafficUiItem>): List<CliStatsProfileRow> =
     items
         .groupBy(ProfileTrafficUiItem::profileId)

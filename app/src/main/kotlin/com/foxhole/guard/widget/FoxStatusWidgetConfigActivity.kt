@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -45,7 +46,6 @@ import com.foxhole.guard.ui.cli.components.CliPanel
 import com.foxhole.guard.ui.cli.components.CliToggleRow
 import kotlinx.coroutines.launch
 
-/** The image widget deliberately exposes only its transition-animation preference. */
 class FoxStatusWidgetConfigActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -63,7 +63,13 @@ class FoxStatusWidgetConfigActivity : ComponentActivity() {
             return
         }
         setContent {
-            CliTheme {
+            val settings by (application as FoxholeApplication)
+                .appGraph.settingsRepository.settings.collectAsState()
+            CliTheme(
+                panelAppearance = settings.ui.panelAppearance,
+                visualStyle = settings.ui.visualStyle,
+                accentColor = settings.ui.accentColor,
+            ) {
                 FoxStatusWidgetConfigScreen(
                     loadInitial = { loadInitial(widgetId) },
                     onCancel = ::finish,
@@ -74,14 +80,17 @@ class FoxStatusWidgetConfigActivity : ComponentActivity() {
     }
 
     private suspend fun loadInitial(widgetId: Int): Boolean {
+        val settingsDefault =
+            (application as FoxholeApplication)
+                .appGraph.settingsRepository.settings.value.widgets.foxAnimationEnabled
         val glanceId =
             runCatching { GlanceAppWidgetManager(this).getGlanceIdBy(widgetId) }.getOrNull()
-                ?: return true
+                ?: return settingsDefault
         val preferences =
             runCatching {
                 getAppWidgetState(this, PreferencesGlanceStateDefinition, glanceId)
-            }.getOrNull() ?: return true
-        return preferences[FOX_STATUS_ANIMATION_KEY] ?: true
+            }.getOrNull() ?: return settingsDefault
+        return preferences[FOX_STATUS_ANIMATION_KEY] ?: settingsDefault
     }
 
     private fun applyAndFinish(widgetId: Int, enabled: Boolean) {
@@ -97,8 +106,6 @@ class FoxStatusWidgetConfigActivity : ComponentActivity() {
                 val app = application as FoxholeApplication
                 val connected = widgetHasPrimaryConnection(app.appGraph.connectionController.snapshot.value)
                 if (enabled && connected) {
-                    // Configuration can happen after the connection edge was already observed.
-                    // Start one visible six-frame pass for the newly added widget as well.
                     app.appScope.launch {
                         FoxStatusWidgetAnimation.renderConnectionState(
                             this@FoxStatusWidgetConfigActivity,

@@ -1,10 +1,6 @@
 package com.foxhole.core.runtime
 
-/**
- * What one `nativeReloadPolicy` call actually said. The core returns eight distinct refusal
- * codes ("no Tor in this build" is permanent, "malformed policy" is an app bug, a revision
- * conflict is a retry); flattening them into one POLICY_RELOAD_FAILED reproduced D11 app-side.
- */
+// Keep native refusal classes distinct: callers retry conflicts but not permanent failures.
 internal sealed interface PolicyReloadOutcome {
     /** Applied; the core installed this revision. */
     data class Applied(
@@ -48,15 +44,12 @@ internal fun policyReloadFailure(code: Long): FoxCoreRuntimeFailure =
         FoxholeNativeEngine.RELOAD_OVERLAY_WITHOUT_FAKE_IP,
         FoxholeNativeEngine.RELOAD_NO_ATTRIBUTION,
         FoxholeNativeEngine.RELOAD_PACKET_TUNNEL_REJECTS_FAKE_IP,
+        FoxholeNativeEngine.RELOAD_PACKET_TUNNEL_REJECTS_PRIMARY_DNS,
         -> FoxCoreRuntimeFailure.POLICY_ROUTE_UNSUPPORTED
         else -> FoxCoreRuntimeFailure.POLICY_RELOAD_FAILED
     }
 
-/**
- * Read the core's own words only for `-1`: the other seven name their cause, while `-1` covers
- * both a truncated write and a removed schema field — different fixes. One extra JNI call,
- * taken only when it can tell us something.
- */
+// Only -1 is ambiguous enough to justify the extra JNI error-string call.
 internal fun policyReloadNeedsDetail(code: Long): Boolean =
     code.toInt() == FoxholeNativeEngine.RELOAD_INVALID
 

@@ -41,15 +41,13 @@ The core idea of the project is a single application for everyday network protec
 **FoxHole Guard** contains no advertising, usage analytics, or telemetry. Application lists, statistics, logs, routing rules, and local analysis results remain on the device unless the user explicitly exports them.
 
 > [!IMPORTANT]
-> The project is in an early beta-testing stage and continues to be developed and pass production gates. **Supporting the project helps accelerate further development.** Part of the code and documentation was created with AI assistance.
+> The current public beta is **0.0.2**. The project is still under active development and production testing. FoxHole Sentinel analysis and its notifications are disabled by default and run only after the user enables the module. Part of the code and documentation was created with AI assistance.
 
 <p align="center">
-  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/main_en.png" width="16%" alt="Main">
-  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/scenarios_en.png" width="16%" alt="Scenarios">
-    <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/smart_profile_vpn_en.png" width="16%" alt="Smart-profiles">
-  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/map_en.png" width="16%" alt="Map">
-  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/statistics_en.png" width="16%" alt="Statistics">
-  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/settings_en.png" width="16%" alt="Settings">
+  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/00_main_en.png" width="24%" alt="Main">
+  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/01_scenarios_en.png" width="24%" alt="Scenarios">
+  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/03_map_en.png" width="24%" alt="Map">
+  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/04_settings_en.png" width="24%" alt="Settings">
 </p>
 
 ---
@@ -57,13 +55,13 @@ The core idea of the project is a single application for everyday network protec
 ## ✨ Key features
 
 - **FoxHole Core** - a custom network core written in Rust.
-- **VPN protocol support** - VLESS, VMess, Hysteria2, WireGuard, AmneziaWG, Trojan, Shadowsocks, Naive, TUIC, AnyTLS, and ShadowTLS.
+- **VPN protocol support** - VLESS, VMess, Hysteria2, WireGuard, AmneziaWG, Trojan, Shadowsocks, Naive, TUIC, and AnyTLS.
 - **Tor access** - connection to Tor inside a TCP VPN tunnel, routing for selected applications, bridge support, and automatic scheduled Tor circuit rotation.
 - **I2P access** - access to `.i2p` resources through a separate `i2pd` process and a local SOCKS5 contract with FoxHole Core.
 - **Firewall** - application blocking, kill switch, and quarantine for newly installed applications.
 - **DNS management** - local DNS interceptor, UDP/TCP/DoT/DoH, cache, and stale cache.
 - **Traffic map** - displays current device network connections on a world map.
-- **FoxHole Sentinel** - a separate security component for detecting anomalies in network traffic.
+- **FoxHole Sentinel** - optional local IOC and network-anomaly analysis, disabled by default.
 - **Web apps** - support for HTML5 applications and notification delivery.
 - **Proxy server** - a local-network proxy server with SOCKS5 and HTTP CONNECT support and authentication.
 - **Background services** - `foxhole watchdog web` and `foxhole watchdog guard` for web-app notification delivery and background security-event monitoring.
@@ -200,7 +198,7 @@ Supported:
 
 ### 🛡️ FoxHole Sentinel
 
-FoxHole Sentinel is FoxHole Guard's local security monitoring module. Its background component runs in the `foxhole watchdog guard` service.
+FoxHole Sentinel is FoxHole Guard's optional local security-monitoring module. It is disabled by default; when enabled, its background work runs in the `foxhole watchdog guard` service.
 
 FoxHole Sentinel is designed to combine several independent signal sources: indicators of compromise, network activity, static application analysis, and behavioral indicators. Analysis results are processed locally and are not sent to the developer.
 
@@ -211,7 +209,6 @@ FoxHole Sentinel is not positioned as an antivirus product. Its purpose is to sh
 At the current stage, FoxHole Sentinel includes:
 
 - **Echap Stalkerware Indicators** - local checking against known stalkerware indicators;
-- **MVT Indicators** - support for public IOCs from open research datasets;
 - **network IOC matcher** - application network activity from the live FoxHole Core event stream is matched against known domains and IP addresses; enabled with the FoxHole Sentinel analysis toggle;
 - local correlation of detected IOCs with the application that owns the network flow;
 - integration with the FoxHole Guard firewall and quarantine;
@@ -267,7 +264,6 @@ A hash chain is used for integrity verification.
 | **Naive** | native HTTP/2 CONNECT with protocol padding |
 | **TUIC** | clean-room v5, QUIC, TLS-exporter auth, TCP/UDP, fragmentation, reconnect |
 | **AnyTLS** | clean-room v2, TLS auth, padding, session reuse/multiplex, TCP and UoT v2 UDP |
-| **ShadowTLS** | strict v3 / TLS 1.3, chained HMAC, mandatory inner Shadowsocks |
 | **SOCKS5** | CONNECT, UDP ASSOCIATE, authentication |
 | **HTTP proxy** | HTTP CONNECT, authentication |
 | **Tor** | Arti, TCP, `.onion`, bridges |
@@ -290,8 +286,6 @@ Supported:
 ### 🚫 Not supported
 
 **ShadowsocksR (SSR)** is deprecated and unsupported.
-
-**ShadowTLS v1** is not supported. A strict ShadowTLS v3 implementation is used.
 
 ---
 
@@ -335,7 +329,7 @@ Downloaded DNS rulesets are **filtering data, not executable code**.
 
 Before use, the application validates format-defined parameters including signature, size, compatibility, and SHA-256.
 
-If validation fails, the most recent successfully validated ruleset is used.
+If validation fails, an installed verified ruleset is kept. On a fresh install, DNS filtering remains unavailable until a ruleset passes verification.
 
 ---
 
@@ -426,14 +420,15 @@ In hardened mode, `foxhole watchdog guard` creates a foreground service so it re
 
 [![FoxHole DB](https://img.shields.io/badge/GitHub-FoxHole_DB-181717?logo=github)](https://github.com/foxhole-team/foxhole-db)
 
-FoxHole DB contains four independent datasets downloaded by the application depending on which features are enabled.
+FoxHole DB contains five independent signed datasets downloaded by the application as their features need them. The TLS feed carries tables only: ClientHello generation remains compiled into FoxHole Core, and a failed update leaves the built-in or last verified tables in use.
 
 | Dataset | Artifact | Format | Source | License | Version |
 | --- | --- | --- | --- | --- | --- |
 | **DNS - filtering lists** | `adguard-dns-filter.fhds` | `foxhole-dns-fst-v1` | [AdGuard DNS filter](https://github.com/AdguardTeam/AdGuardSDNSFilter) | GPL-3.0 | The upstream commit is pinned for each build. |
-| **Tor - mirror of built-in bridges** | `bridges.json` | `tor-bridges-json` | [Tor Project built-in bridges (Moat)](https://bridges.torproject.org/moat/circumvention/builtin) | public censorship-circumvention data | `generated_at` marker; the artifact is byte-for-byte reproducible from unchanged upstream data. |
+| **Tor - mirror of built-in bridges** | `bridges.json` | `tor-bridges-json` | [Tor Project built-in bridges (Moat)](https://bridges.torproject.org/moat/circumvention/builtin) | public censorship-circumvention data | `generated_at` marker; object keys are normalized, while upstream array order is preserved. |
 | **FoxHole Sentinel - security lists (threat intelligence)** | `threat-intel.json` | `sentinel-threat-intel-json`, document `schema: 3` | [AssoEchap/stalkerware-indicators](https://github.com/AssoEchap/stalkerware-indicators) | CC-BY-4.0 | The upstream commit is pinned for each build and recorded in `threat-intel-source-info.json`. |
 | **Geo database - IP → country** | `dbip-country-ipv4.csv`, `dbip-country-ipv6.csv` | `dbip-country-csv` | [DB-IP Lite via sapics/ip-location-db](https://github.com/sapics/ip-location-db) (`dbip-country`) | CC-BY-4.0 | Upstream `version` from the dataset's `package.json` is copied into the manifest. |
+| **TLS fingerprint tables - ClientHello profiles** | `fingerprints.json` | `tls-fingerprint-tables-json` | [FoxHole Core `fingerprints/`](https://github.com/foxhole-team/foxhole-core) | GPL-3.0-or-later | The upstream revision is pinned for each build; every profile re-derives its own `fingerprint_sha256` before it is applied. |
 
 ---
 

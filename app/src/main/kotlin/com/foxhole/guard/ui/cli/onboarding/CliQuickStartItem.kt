@@ -21,19 +21,14 @@ import com.foxhole.guard.ui.cli.CliType
 import com.foxhole.guard.ui.cli.LocalCliColors
 import com.foxhole.guard.ui.cli.components.CliPanel
 import com.foxhole.guard.ui.cli.components.CliPixIcon
+import com.foxhole.guard.ui.cli.components.CliRowDivider
 
-/** One self-contained instruction. A localized line is never joined to its neighbour. */
 @Immutable
 internal data class CliQuickStartItem(
     val text: String,
     @DrawableRes val icon: Int,
 )
 
-/**
- * The resource is deliberately one sentence per non-empty line. Keeping the item boundary in the
- * translation avoids language-dependent sentence regexes and guarantees that Help and first run
- * show the same ordered checklist.
- */
 internal fun quickStartItems(body: String): List<CliQuickStartItem> =
     body.lineSequence()
         .map(String::trim)
@@ -56,7 +51,6 @@ internal fun CliQuickStartItems(
     CliIconTextItems(items = items, framed = framed, modifier = modifier)
 }
 
-/** Shared icon checklist grammar used by Quick Start, the beta notice and long-form Help. */
 @Composable
 internal fun CliIconTextItems(
     items: List<CliQuickStartItem>,
@@ -67,12 +61,13 @@ internal fun CliIconTextItems(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(CliSpacing.sm),
     ) {
-        items.forEach { item ->
+        items.forEachIndexed { index, item ->
             if (framed) {
                 CliPanel(modifier = Modifier.fillMaxWidth()) {
                     CliQuickStartItemRow(item)
                 }
             } else {
+                if (index > 0) CliRowDivider()
                 CliQuickStartItemRow(item)
             }
         }

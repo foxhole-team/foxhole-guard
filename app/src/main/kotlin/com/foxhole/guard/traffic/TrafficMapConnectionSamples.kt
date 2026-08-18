@@ -14,16 +14,11 @@ internal fun RuntimeConnectionSnapshot.toTrafficMapConnectionSamples(
         .take(maxConnections)
         .forEach { connection ->
             if (connection.outboundType.equals(DNS_OUTBOUND_TYPE, ignoreCase = true)) {
-                // The DNS resolver egress is its own map node (never an app destination): count
-                // the query connection and resolve the resolver's country from the connection or
-                // the configured DNS server.
                 connection
                     .toTrafficMapDnsSample(countryCodeForDestination, dnsServerHost)
                     ?.let(samples::add)
             } else if (ownPackageName != null && connection.packageNames.contains(ownPackageName)) {
-                // Our own sockets are the tunnel carrier to the VPN server — bytes already
-                // represented by the session totals on the route node; counting them as an app
-                // destination painted the VPN server's country into the apps table.
+                return@forEach
             } else {
                 connection
                     .toTrafficMapConnectionSample(countryCodeForDestination, directCountsAsEgress)
@@ -89,12 +84,6 @@ internal fun runtimeConnectionTrafficMapSample(
     directCountsAsEgress: Boolean = false,
 ): TrafficMapConnectionSample? {
     if (isNonTunneledOutboundType(outboundType, directCountsAsEgress)) {
-        // The map represents traffic that actually left through the observed egress. Under a VPN
-        // tunnel, flows FoxCore routed to the `direct`/`block` outbound (split-tunnel
-        // "direct" apps, private-IP/LAN direct rules, blocked flows) bypass the VPN and must not
-        // be drawn as VPN nodes. In the local-guard firewall mode there is no tunnel and `direct`
-        // IS the device egress — dropping it left the firewall map permanently empty, so the
-        // caller marks direct as countable there.
         return null
     }
     val totalBytes =
@@ -131,7 +120,6 @@ private const val DNS_OUTBOUND_TYPE = "dns"
 private const val DIRECT_OUTBOUND_TYPE = "direct"
 private const val BLOCK_OUTBOUND_TYPE = "block"
 
-// Outbound types that did not egress through the tunnel and must be excluded from the traffic map.
 private val NON_TUNNELED_OUTBOUND_TYPES =
     setOf(DNS_OUTBOUND_TYPE, DIRECT_OUTBOUND_TYPE, BLOCK_OUTBOUND_TYPE)
 

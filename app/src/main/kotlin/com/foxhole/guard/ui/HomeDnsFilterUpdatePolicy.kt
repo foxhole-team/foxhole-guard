@@ -4,7 +4,6 @@ import com.foxhole.core.model.DnsSettings
 import com.foxhole.core.model.dnsRuleSetFilteringEnabled
 import com.foxhole.guard.runtime.DnsFilterUpdateStatus
 
-/** Pure DNS data-set transition policy shared by Settings, onboarding and focused JVM tests. */
 internal fun dnsFilterRefreshAllowsRuntime(status: DnsFilterUpdateStatus): Boolean =
     status == DnsFilterUpdateStatus.UPDATED
 
@@ -25,16 +24,11 @@ internal fun dnsFilterTerminalPhase(status: DnsFilterUpdateStatus): FoxholeUpdat
         DnsFilterUpdateStatus.SKIPPED, DnsFilterUpdateStatus.FAILED -> FoxholeUpdatePhase.FAILED
     }
 
-/** Missing or corrupt local data turns every network-level success into one truthful failure. */
 internal fun dnsFilterVerifiedTerminalPhase(
     status: DnsFilterUpdateStatus,
     verifiedRuleSetReady: Boolean,
 ): FoxholeUpdatePhase =
     if (verifiedRuleSetReady) dnsFilterTerminalPhase(status) else FoxholeUpdatePhase.FAILED
 
-internal fun shouldReloadRuntimeAfterDnsRuleSetRefresh(
-    status: DnsFilterUpdateStatus,
-    dnsSettings: DnsSettings,
-): Boolean =
-    dnsFilterRefreshAllowsRuntime(status) &&
-        dnsSettings.dnsRuleSetFilteringEnabled()
+internal fun shouldReloadRuntimeAfterDnsRuleSetEnable(dnsSettings: DnsSettings): Boolean =
+    dnsSettings.dnsRuleSetFilteringEnabled()

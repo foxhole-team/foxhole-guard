@@ -19,11 +19,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 
-/**
- * The dashboard pill used to render the saved switch, so a LAN proxy that never bound still showed
- * as ON to everyone on the Wi-Fi. These tests pin the replacement: green means the core reported
- * bound listeners, and nothing else does.
- */
 class HomeLanProxyStatusTest {
     private fun state(
         allowLanAccess: Boolean,
@@ -94,7 +89,6 @@ class HomeLanProxyStatusTest {
     }
 }
 
-/** The request the service hands the core: ports per protocol, upstream from the live session. */
 class LanProxyRequestTest {
     private val binding =
         LanNetworkBinding(

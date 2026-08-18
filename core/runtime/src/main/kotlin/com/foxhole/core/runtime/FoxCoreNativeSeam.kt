@@ -55,6 +55,7 @@ private fun JsonObject.nativeString(name: String): String? =
         ?.trim()
         ?.takeIf(String::isNotBlank)
 
+@Suppress("TooManyFunctions")
 internal interface FoxCoreNativeApi {
     fun version(): String
 
@@ -68,6 +69,17 @@ internal interface FoxCoreNativeApi {
         networkHandle: Long,
         host: RuntimeServiceHost,
     ): Long
+
+    fun startWithNetworkAndDnsRuleSet(
+        tunFd: Int,
+        configJson: String,
+        networkHandle: Long,
+        name: String,
+        manifest: ByteArray,
+        signature: ByteArray,
+        artifact: ByteArray,
+        host: RuntimeServiceHost,
+    ): Long = 0L
 
     fun startWithNetworkAndTrustedDnsRuleSet(
         tunFd: Int,
@@ -105,6 +117,8 @@ internal interface FoxCoreNativeApi {
     fun stats(handle: Long): String
 
     fun connections(handle: Long): String
+
+    fun trafficMap(handle: Long): String = connections(handle)
 
     fun drainTrafficEvents(
         handle: Long,
@@ -202,6 +216,27 @@ internal object JniFoxCoreNativeApi : FoxCoreNativeApi {
             host,
         )
 
+    override fun startWithNetworkAndDnsRuleSet(
+        tunFd: Int,
+        configJson: String,
+        networkHandle: Long,
+        name: String,
+        manifest: ByteArray,
+        signature: ByteArray,
+        artifact: ByteArray,
+        host: RuntimeServiceHost,
+    ): Long =
+        FoxholeNativeEngine.nativeStartWithNetworkAndDnsRuleSet(
+            tunFd,
+            configJson,
+            networkHandle,
+            name,
+            manifest,
+            signature,
+            artifact,
+            host,
+        )
+
     override fun startWithNetworkAndTrustedDnsRuleSet(
         tunFd: Int,
         configJson: String,
@@ -249,6 +284,8 @@ internal object JniFoxCoreNativeApi : FoxCoreNativeApi {
     override fun stats(handle: Long): String = FoxholeNativeEngine.nativeStats(handle)
 
     override fun connections(handle: Long): String = FoxholeNativeEngine.nativeConnections(handle)
+
+    override fun trafficMap(handle: Long): String = FoxholeNativeEngine.nativeTrafficMap(handle)
 
     override fun drainTrafficEvents(
         handle: Long,

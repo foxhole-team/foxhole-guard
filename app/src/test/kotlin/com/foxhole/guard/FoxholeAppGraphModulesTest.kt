@@ -15,9 +15,6 @@ class FoxholeAppGraphModulesTest {
                 File("../app/src/main/kotlin/com/foxhole/guard/FoxholeAppGraphModules.kt"),
             ).first { file -> file.isFile }.readText()
 
-        // Резолвер под бюджетом: этот экземпляр зовут и вне OkHttp-звонка (санитайзер резолвед-
-        // конфига на пути connect), где никакой call timeout его не покрывает — без обёртки
-        // системный getaddrinfo вешал команду connect навсегда.
         assertTrue(source.contains("preferredNonVpnInternetNetwork("))
         assertTrue(source.contains("currentUnderlyingNetwork()?.getAllByName(hostname)"))
         assertTrue(source.contains("fallback = NetworkBoundPublicDnsFallback(::currentUnderlyingNetwork)"))

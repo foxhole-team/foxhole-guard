@@ -26,18 +26,6 @@ import com.foxhole.guard.ui.cli.components.CliKeyValue
 import com.foxhole.guard.ui.cli.components.CliPanel
 import com.foxhole.guard.ui.cli.components.CliRowDivider
 
-/**
- * The I2P section: router state, whether this node relays for others, and the two byte totals over
- * four fixed periods.
- *
- * The two totals are never merged. "I2P traffic" is i2pd's received + sent network total, including
- * bootstrap and tunnel maintenance; "transit traffic" is the reported subset carried for other
- * people while relaying. Adding them would double-count relay traffic.
- *
- * Unlike the overview above, these periods do not follow the day/week dropdown: I2P bytes carry no
- * per-app attribution, so they are read out of their own store with their own fixed horizons — and
- * folded against the same bucketed dashboard clock every other panel uses.
- */
 @Composable
 internal fun CliStatsI2pPanel(
     state: StatisticsRouteUiState,
@@ -46,8 +34,6 @@ internal fun CliStatsI2pPanel(
     val phase = home.i2pPhase.phase
     val history = state.i2pTrafficHistory
     val relayOn = home.settings.i2p.relayTransitTraffic
-    // Nothing to say: the router is down and nothing was ever recorded. The section appears the
-    // moment either changes and never disappears again once bytes exist.
     if (phase == I2pNetworkPhase.OFFLINE && history.lifetime.isEmpty) {
         return
     }
@@ -67,8 +53,6 @@ internal fun CliStatsI2pPanel(
         CliKeyValue(
             key = stringResource(R.string.cli_stats_key_i2p_phase),
             value = phase.name.lowercase(),
-            // `networkUp` is the one contract for "the network carries traffic" — the terminal and
-            // the home status rows read the same predicate, so they cannot disagree with this row.
             valueColor = if (phase.networkUp) colors.ok else colors.warn,
         )
         CliRowDivider()
@@ -85,8 +69,6 @@ internal fun CliStatsI2pPanel(
             periods = periods,
             select = I2pTrafficTotals::ownBytes,
         )
-        // The transit block stays visible after the relay is switched off: the bytes were really
-        // forwarded, and hiding the rows would read as if they had been erased.
         if (relayOn || periods.allTime.transitBytes > 0L) {
             CliRowDivider()
             CliStatsI2pPeriodRows(
@@ -106,7 +88,6 @@ internal fun CliStatsI2pPanel(
     Spacer(modifier = Modifier.height(CliSpacing.sm))
 }
 
-/** One labelled block: the counter's name, then its four periods in one fixed order. */
 @Composable
 private fun CliStatsI2pPeriodRows(
     title: String,

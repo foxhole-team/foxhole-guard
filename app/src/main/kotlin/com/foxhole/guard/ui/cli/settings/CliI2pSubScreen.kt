@@ -26,11 +26,11 @@ import com.foxhole.guard.R
 import com.foxhole.guard.ui.HomeViewModel
 import com.foxhole.guard.ui.cli.CliSpacing
 import com.foxhole.guard.ui.cli.CliType
+import com.foxhole.guard.ui.cli.LocalCliBottomChromeClearance
 import com.foxhole.guard.ui.cli.LocalCliColors
 import com.foxhole.guard.ui.cli.components.CliActionRow
 import com.foxhole.guard.ui.cli.components.CliDropdownOption
 import com.foxhole.guard.ui.cli.components.CliDropdownRow
-import com.foxhole.guard.ui.cli.components.CliInfoNote
 import com.foxhole.guard.ui.cli.components.CliInputRow
 import com.foxhole.guard.ui.cli.components.CliPanel
 import com.foxhole.guard.ui.cli.components.CliRoutingChangeConfirmSheet
@@ -43,16 +43,15 @@ import com.foxhole.guard.ui.i2pHostValidationErrorRes
 import com.foxhole.guard.ui.normalizedI2pHostInput
 import com.foxhole.guard.ui.onI2pAddressBookEntryDeleted
 import com.foxhole.guard.ui.onI2pAddressBookEntrySaved
+import com.foxhole.guard.ui.onI2pAllowOutsideTunnelChanged
 import com.foxhole.guard.ui.onI2pAllowRelayOnCellularChanged
 import com.foxhole.guard.ui.onI2pAutoReconnectChanged
-import com.foxhole.guard.ui.onI2pEngagedChanged
 import com.foxhole.guard.ui.onI2pRelayTransitTrafficChanged
 import com.foxhole.guard.ui.onI2pTransitBandwidthSelected
 import com.foxhole.guard.ui.onI2pTransitTunnelsLimitSelected
 
 private val I2P_TUNNEL_LIMIT_PRESETS = listOf(50, 100, 250, 500, 1_000)
 
-/** I2P settings in the terminal grammar; every control is wired to the existing i2pd runtime. */
 @Composable
 internal fun CliI2pSubScreen(
     viewModel: HomeViewModel,
@@ -75,15 +74,23 @@ internal fun CliI2pSubScreen(
         modifier =
         modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
             .padding(horizontal = CliSpacing.md),
     ) {
-        // Back-ряда нет по канону суб-экранов настроек: путь назад — системный back.
         CliScreenHeader(label = "I2P", icon = R.drawable.pix_incognito)
-        CliI2pRuntimePanel(viewModel = viewModel, settings = settings)
-        Spacer(modifier = Modifier.height(CliSpacing.sm))
-        CliI2pAddressBookPanel(viewModel = viewModel, settings = settings)
-        Spacer(modifier = Modifier.height(CliSpacing.sm))
+
+        Column(
+
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(bottom = LocalCliBottomChromeClearance.current),
+
+        ) {
+            CliI2pRuntimePanel(viewModel = viewModel, settings = settings)
+            Spacer(modifier = Modifier.height(CliSpacing.sm))
+            CliI2pAddressBookPanel(viewModel = viewModel, settings = settings)
+            Spacer(modifier = Modifier.height(CliSpacing.sm))
+        }
     }
 }
 
@@ -99,22 +106,18 @@ private fun CliI2pRuntimePanel(
     ) {
         if (settings.enabled) {
             CliToggleRow(
-                label = stringResource(R.string.cli_i2p_runtime),
-                icon = R.drawable.pix_power,
-                checked = settings.engaged,
-                onToggle = { value -> viewModel.onI2pEngagedChanged(value) },
-                note = stringResource(R.string.cli_i2p_runtime_note),
-            )
-            CliToggleRow(
                 label = stringResource(R.string.cli_i2p_auto_reconnect),
                 icon = R.drawable.pix_restart,
                 checked = settings.autoReconnectAfterVpnDisconnect,
                 onToggle = viewModel::onI2pAutoReconnectChanged,
-                note = stringResource(R.string.cli_i2p_auto_reconnect_note),
+                infoText = stringResource(R.string.cli_i2p_follow_tunnel_note),
             )
-            CliInfoNote(
-                text = stringResource(R.string.cli_i2p_direct_in_development_note),
-                modifier = Modifier.padding(vertical = CliSpacing.xs),
+            CliToggleRow(
+                label = stringResource(R.string.cli_i2p_allow_outside_tunnel),
+                icon = R.drawable.pix_link,
+                checked = settings.allowOutsideTunnel,
+                onToggle = { value -> viewModel.onI2pAllowOutsideTunnelChanged(value) },
+                infoText = stringResource(R.string.cli_i2p_outside_tunnel_sequence_note),
             )
             CliToggleRow(
                 label = stringResource(R.string.i2p_relay_transit_title),

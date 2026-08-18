@@ -158,7 +158,6 @@ class AppLockManagerTest {
         elapsed += 30L * 60_000L
         manager.onAppForegrounded()
 
-        // 30 min away with a 60-min timeout must NOT re-lock.
         assertEquals(LockState.UNLOCKED, manager.currentLockState())
     }
 
@@ -200,7 +199,6 @@ class AppLockManagerTest {
 
         manager.onScreenOff()
 
-        // The user asked to keep the session for the whole process life; screen-off must not wipe.
         assertEquals(LockState.UNLOCKED, manager.currentLockState())
         assertTrue(session.isUnlocked)
     }

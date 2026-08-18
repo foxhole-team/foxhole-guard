@@ -1,6 +1,8 @@
 package com.foxhole.guard.widget
 
 import com.foxhole.core.model.AnomalySettings
+import com.foxhole.core.model.AppLockMode
+import com.foxhole.core.model.AppLockSettings
 import com.foxhole.core.model.AppTunnelLane
 import com.foxhole.core.model.ConnectionSnapshot
 import com.foxhole.core.model.ConnectionState
@@ -270,6 +272,28 @@ internal class StatusWidgetPresentationTest {
         assertEquals(41L, presentation.vpnLatencyMs)
         assertNull(presentation.torLatencyMs)
         assertTrue(widgetHasPrimaryConnection(snapshot))
+    }
+
+    @Test
+    fun `sentinel stays absent when its master switch is off`() {
+        val presentation =
+            statusWidgetPresentation(
+                snapshot = ConnectionSnapshot(state = ConnectionState.IDLE),
+                settings =
+                Settings(
+                    anomaly = AnomalySettings(enabled = false),
+                    appLock =
+                    AppLockSettings(
+                        mode = AppLockMode.PASSWORD,
+                        eventMonitoringEnabled = true,
+                    ),
+                ),
+                vpnIpInfo = null,
+                torIpInfo = null,
+                i2pConnected = false,
+            )
+
+        assertFalse(StatusWidgetComponent.SENTINEL in presentation.components)
     }
 
     private fun ipInfo(ip: String, country: String) =

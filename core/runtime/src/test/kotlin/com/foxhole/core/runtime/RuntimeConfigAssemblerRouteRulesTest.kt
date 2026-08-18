@@ -536,6 +536,84 @@ internal class RuntimeConfigAssemblerRouteRulesTest : RuntimeConfigAssemblerTest
     }
 
     @Test
+    fun `tor only session denies the vpn lane it cannot carry`() {
+        val config =
+            parse(
+                assembler.assembleTorOnly(
+                    settings =
+                    Settings(
+                        expert =
+                        ExpertSettings(
+                            appAssignments =
+                            mapOf(
+                                "com.app.tor" to AppTunnelLane.TOR,
+                                "com.app.vpn" to AppTunnelLane.VPN,
+                            ),
+                        ),
+                        privacyRoute =
+                        com.foxhole.core.model.PrivacyRouteSettings(
+                            mode = PrivacyRouteMode.TOR_OVER_VPN,
+                            scope = PrivacyRouteScope.SELECTED_APPS,
+                            blockAppsWhenTorUnavailable = true,
+                        ),
+                    ),
+                    activePreset = null,
+                    torRuntimePaths = TorRuntimePaths(dataDirectory = "/tor-data"),
+                ),
+            )
+
+        val tunInbound = config["inbounds"]!!.jsonArray.first().jsonObject
+        assertEquals(
+            listOf("com.app.tor", "com.app.vpn"),
+            tunInbound["include_package"]!!.jsonArray.map { it.jsonPrimitive.content },
+        )
+        val rejectRule =
+            config["route"]!!.jsonObject["rules"]!!.jsonArray.map { it.jsonObject }
+                .single { it["action"]?.jsonPrimitive?.content == "reject" }
+        assertEquals(
+            listOf("com.app.vpn"),
+            rejectRule["package_name"]!!.jsonArray.map { it.jsonPrimitive.content },
+        )
+    }
+
+    @Test
+    fun `tor only session leaves the vpn lane alone while the guard is disarmed`() {
+        val config =
+            parse(
+                assembler.assembleTorOnly(
+                    settings =
+                    Settings(
+                        expert =
+                        ExpertSettings(
+                            appAssignments =
+                            mapOf(
+                                "com.app.tor" to AppTunnelLane.TOR,
+                                "com.app.vpn" to AppTunnelLane.VPN,
+                            ),
+                        ),
+                        privacyRoute =
+                        com.foxhole.core.model.PrivacyRouteSettings(
+                            mode = PrivacyRouteMode.TOR_OVER_VPN,
+                            scope = PrivacyRouteScope.SELECTED_APPS,
+                        ),
+                    ),
+                    activePreset = null,
+                    torRuntimePaths = TorRuntimePaths(dataDirectory = "/tor-data"),
+                ),
+            )
+
+        val tunInbound = config["inbounds"]!!.jsonArray.first().jsonObject
+        assertEquals(
+            listOf("com.app.tor"),
+            tunInbound["include_package"]!!.jsonArray.map { it.jsonPrimitive.content },
+        )
+        assertTrue(
+            config["route"]!!.jsonObject["rules"]!!.jsonArray.map { it.jsonObject }
+                .none { it["action"]?.jsonPrimitive?.content == "reject" },
+        )
+    }
+
+    @Test
     fun `tor only config exposes embedded FoxCore tor as proxy outbound without vpn profile`() {
         val config =
             parse(

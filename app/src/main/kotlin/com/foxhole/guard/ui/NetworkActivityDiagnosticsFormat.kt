@@ -11,20 +11,12 @@ import com.foxhole.guard.statistics.normalizedCountryCode
 
 internal const val NETWORK_ACTIVITY_TAG = "activity"
 
-// Formatting of network-activity events into journal entries (endpoints, countries).
-// Split from SettingsDiagnosticsScreen.kt.
-// The connections journal is always raw — the pseudonymization layer (stable aliases per
-// package/host/profile) was dead in every UI call site and is gone; hiding data in the user's own
-// on-device journal protected nothing. Exported diagnostics files keep their own sanitizer.
-
 internal fun networkActivityDiagnosticEntries(
     events: List<NetworkActivityEvent>,
     context: Context,
     countryResolver: TorGeoIpCountryResolver,
     ipInfo: IpInfo?,
 ): List<DiagnosticEntry> {
-    // Resolved once for the whole list: one label serves every event, and the unknown-city string
-    // used to be hard-coded in English in the middle of a localised journal.
     val unknownLabel = context.getString(R.string.cli_common_unknown)
     return events.map { event ->
         DiagnosticEntry(

@@ -9,10 +9,10 @@ import java.io.File
 
 class CliLogsAndModulesLayoutContractTest {
     @Test
-    fun `module settings gear and dashed arrow turn green with the module`() {
+    fun `module settings gear and dashed arrow follow the selected accent`() {
         val module = cli("settings/CliModuleBlock.kt")
 
-        assertTrue(module.contains("val settingsActionColor = if (checked) colors.ok else colors.accent"))
+        assertTrue(module.contains("val settingsActionColor = colors.accent"))
         assertTrue(module.contains("CliModuleSettingsConnector(color = settingsActionColor)"))
         assertTrue(module.contains("actionColor = settingsActionColor"))
     }
@@ -33,7 +33,7 @@ class CliLogsAndModulesLayoutContractTest {
         val source = cli("logs/CliLogsScreen.kt")
         val layout = source
             .substringAfter("ColumnScope.CliJournalLayout")
-            .substringBefore("/** Journal selection stays reachable")
+            .substringBefore("private fun CliJournalDock(")
 
         val content = layout.indexOf("CLI_LOGS_CONTENT_TAG")
         val dock = layout.indexOf("CliJournalDock")
@@ -183,7 +183,7 @@ class CliLogsAndModulesLayoutContractTest {
         val about = cli("settings/CliAboutSubScreen.kt")
         val export = app("src/main/kotlin/com/foxhole/guard/ui/HomeViewModelConfigRulesSupport.kt")
 
-        assertTrue(about.contains("CliDashedInfoNote(text = stringResource(R.string.cli_about_log_share_note))"))
+        assertTrue(about.contains("infoText = stringResource(R.string.cli_about_log_share_note)"))
         assertTrue(about.contains("withContext(Dispatchers.IO) { viewModel.exportDiagnostics() }"))
         assertTrue(about.contains("Intent.createChooser("))
         assertTrue(export.contains("container.diagnosticsLogger.createExportFile()"))

@@ -15,11 +15,6 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
-// The traffic widget's live-chart history: a per-second ring of lane rates (device total, TOR,
-// I2P — each rx/tx), fed from the same 1 Hz sampler that drives the widget numbers. Everything
-// here is SINGLE-THREADED by contract: the recorder appends on Main.immediate and the chart reads
-// on the main thread, so the rings are shared without copies or locks.
-
 internal const val TRAFFIC_CHART_LANE_TOTAL_RX = 0
 internal const val TRAFFIC_CHART_LANE_TOTAL_TX = 1
 internal const val TRAFFIC_CHART_LANE_TOR_RX = 2
@@ -28,10 +23,6 @@ internal const val TRAFFIC_CHART_LANE_I2P_RX = 4
 internal const val TRAFFIC_CHART_LANE_I2P_TX = 5
 internal const val TRAFFIC_CHART_LANE_COUNT = 6
 
-/**
- * Fixed-capacity ring of per-second lane samples. Indexing is oldest-first: `valueAt(lane, 0)` is
- * the oldest retained second, `valueAt(lane, sampleCount - 1)` the newest.
- */
 internal class TrafficChartHistory(
     capacitySeconds: Int,
 ) {
@@ -52,7 +43,6 @@ internal class TrafficChartHistory(
         if (sampleCount < capacitySeconds) sampleCount++
     }
 
-    /** Advances the real-time window through an unsampled interval without discarding its tail. */
     fun appendZeros(count: Int) {
         val zerosToAppend = count.coerceIn(0, capacitySeconds)
         repeat(zerosToAppend) {
@@ -74,7 +64,6 @@ internal class TrafficChartHistory(
         sampleCount = 0
     }
 
-    /** Zeroes one lane pair in place (swipe-clear of a single page's trace). */
     fun clearLanePair(
         rxLane: Int,
         txLane: Int,
@@ -83,7 +72,6 @@ internal class TrafficChartHistory(
         lanes[txLane].fill(0L)
     }
 
-    /** Re-allocates to [newCapacitySeconds], preserving the newest samples that still fit. */
     fun resize(newCapacitySeconds: Int) {
         val capacity = newCapacitySeconds.coerceAtLeast(1)
         if (capacity == capacitySeconds) return
@@ -101,30 +89,11 @@ internal class TrafficChartHistory(
     }
 }
 
-/**
- * One published chart frame: a fresh instance per appended sample, so the StateFlow emits exactly
- * once per second and the card recomposes exactly once per sample. The [history] reference is the
- * live ring — main-thread reads only.
- */
 internal class TrafficChartFrame(
     val version: Long,
     val history: TrafficChartHistory,
 )
 
-/**
- * Collects the 1 Hz [TrafficSnapshot] stream into the ring. Lane semantics:
- * - TOTAL — the sampler's device rates as-is (everything riding the tunnel, TOR and I2P included);
- * - TOR / I2P — honest totals-deltas over the tick (their published per-second rates are
- *   event-driven and can go stale between connection snapshots).
- *
- * Time-window grammar:
- * - a sampling gap advances the ring with zero/unknown seconds instead of clearing all history;
- *   returning from Settings or the background therefore still shows the retained part of the
- *   selected 5/10/custom-minute window;
- * - a long gap drops TOR/I2P delta baselines so elapsed downtime cannot become one giant spike;
- * - terminal and unavailable states keep the retained tail under the standby plaque. The next
- *   live sample ages it by the real elapsed seconds, naturally pushing it out of the window.
- */
 internal class TrafficChartRecorder(
     private val scope: CoroutineScope,
     private val traffic: StateFlow<TrafficSnapshot>,
@@ -154,7 +123,6 @@ internal class TrafficChartRecorder(
         }
     }
 
-    /** A stopped runtime retains the selected time window but starts fresh lane deltas. */
     internal fun onConnectionState(state: ConnectionState) {
         if (state != ConnectionState.IDLE && state != ConnectionState.ERROR) return
         dropLaneBaselines()
@@ -178,8 +146,6 @@ internal class TrafficChartRecorder(
         nowMs: Long = System.currentTimeMillis(),
     ) {
         if (!snapshot.available) {
-            // Nothing runs: keep the timestamp so the next live sample can age the retained tail
-            // by the real downtime instead of either erasing it or pretending no time passed.
             dropLaneBaselines()
             return
         }

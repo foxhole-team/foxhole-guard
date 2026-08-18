@@ -11,7 +11,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
@@ -20,15 +22,23 @@ import com.foxhole.core.model.Settings
 import com.foxhole.core.model.dnsRuleSetFilteringEnabled
 import com.foxhole.guard.BuildConfig
 import com.foxhole.guard.R
+import com.foxhole.guard.runtime.AppUpdateBuildSignals
+import com.foxhole.guard.runtime.AppUpdateCheck
+import com.foxhole.guard.runtime.AppUpdateSeverity
 import com.foxhole.guard.runtime.AppUpdateState
+import com.foxhole.guard.runtime.RemoteUpdatePhase
+import com.foxhole.guard.runtime.appUpdateSeverity
 import com.foxhole.guard.ui.FoxholeDbGroupUi
 import com.foxhole.guard.ui.FoxholeUpdatePhase
 import com.foxhole.guard.ui.GeoIpDatabaseUiState
 import com.foxhole.guard.ui.HomeViewModel
 import com.foxhole.guard.ui.appUpdateChannelIsGithub
+import com.foxhole.guard.ui.appUpdateFailureLabelRes
+import com.foxhole.guard.ui.appUpdateRequiredLabelRes
 import com.foxhole.guard.ui.cli.CliColors
 import com.foxhole.guard.ui.cli.CliFormat
 import com.foxhole.guard.ui.cli.CliSpacing
+import com.foxhole.guard.ui.cli.LocalCliBottomChromeClearance
 import com.foxhole.guard.ui.cli.LocalCliColors
 import com.foxhole.guard.ui.cli.components.CliButton
 import com.foxhole.guard.ui.cli.components.CliDashedInfoNote
@@ -48,18 +58,11 @@ import com.foxhole.guard.ui.onUpdateSourcesChanged
 import com.foxhole.guard.ui.refreshGeoIpDatabaseInfo
 import com.foxhole.guard.ui.threatIntelInstalledGeneratedAt
 import com.foxhole.guard.ui.threatIntelUpdatePhase
+import com.foxhole.guard.ui.tlsFingerprintInstalledGeneratedAt
+import com.foxhole.guard.ui.tlsFingerprintUpdatePhase
+import kotlinx.coroutines.delay
 import java.time.Instant
 
-/**
- * Updates as the FoxHole DB model: one repository, four data groups, and the app downloads only
- * what is enabled. Each panel reports first — the status line (up to date, or "update required" in
- * red), the switches, the per-group states — and ends with its one action button pinned at the
- * bottom edge, full width. The app's own updater is a separate panel with the same order, so the
- * two buttons sit where the eye already expects them and neither drifts up the panel as the rows
- * above it grow.
- *
- * The header control opens [CliUpdateSourcesButton]: which repository these panels read.
- */
 @Composable
 internal fun CliUpdatesSubScreen(
     viewModel: HomeViewModel,
@@ -70,14 +73,17 @@ internal fun CliUpdatesSubScreen(
     val dnsPhase by viewModel.dnsFilterUpdatePhase.collectAsStateWithLifecycle()
     val bridgePhase by viewModel.torBridgeUpdatePhase.collectAsStateWithLifecycle()
     val threatIntelPhase by viewModel.threatIntelUpdatePhase.collectAsStateWithLifecycle()
+    val tlsFingerprintPhase by viewModel.tlsFingerprintUpdatePhase.collectAsStateWithLifecycle()
     val dnsUpdateAvailable by viewModel.dnsFilterUpdateAvailable.collectAsStateWithLifecycle()
     val appUpdate by viewModel.container.appUpdateRepository.state.collectAsStateWithLifecycle()
     val settings = state.settings
 
     LaunchedEffect(Unit) { viewModel.refreshGeoIpDatabaseInfo() }
-    // Not reactive on its own; re-read once the security-lists refresh settles.
     val threatIntelGeneratedAt = remember(threatIntelPhase) {
         viewModel.threatIntelInstalledGeneratedAt()
+    }
+    val tlsFingerprintGeneratedAt = remember(tlsFingerprintPhase) {
+        viewModel.tlsFingerprintInstalledGeneratedAt()
     }
 
     val groups = foxholeDbGroups(
@@ -85,13 +91,14 @@ internal fun CliUpdatesSubScreen(
         geoIp = geoIp,
         dnsUpdateAvailable = dnsUpdateAvailable,
         threatIntelGeneratedAt = threatIntelGeneratedAt,
+        tlsFingerprintGeneratedAt = tlsFingerprintGeneratedAt,
     )
-    val anyPhaseRunning = listOf(dnsPhase, bridgePhase, threatIntelPhase, geoIp.phase).any { it.isRunning }
+    val anyPhaseRunning =
+        listOf(dnsPhase, bridgePhase, threatIntelPhase, geoIp.phase, tlsFingerprintPhase).any { it.isRunning }
 
     Column(
         modifier = modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
             .padding(horizontal = CliSpacing.md),
     ) {
         CliScreenHeader(
@@ -100,42 +107,80 @@ internal fun CliUpdatesSubScreen(
             trailing = {
                 CliUpdateSourcesButton(
                     sources = settings.updateSources,
-                    // F-Droid and Play builds have no self-updater, so there is no app feed for
-                    // them to point anywhere: the sheet offers the data repository alone.
                     appChannelEditable = appUpdateChannelIsGithub,
                     onApply = viewModel::onUpdateSourcesChanged,
                 )
             },
         )
-        CliFoxholeDbPanel(
-            viewModel = viewModel,
-            settings = settings,
-            groups = groups,
-            phases = FoxholeDbPhases(
-                dns = dnsPhase,
-                bridges = bridgePhase,
-                security = threatIntelPhase,
-                geo = geoIp.phase,
-            ),
-            refreshRunning = anyPhaseRunning,
-        )
-        // Only GitHub builds self-update: F-Droid and Play ship their own updater.
-        if (appUpdateChannelIsGithub) {
-            Spacer(modifier = Modifier.height(CliSpacing.sm))
-            CliPanel(
-                title = stringResource(R.string.cli_updates_app),
-                icon = R.drawable.pix_update,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                CliAppUpdatePanelBody(
-                    state = appUpdate,
-                    onCheck = viewModel::onAppUpdateCheckRequested,
-                    onDownload = viewModel::onAppUpdateDownloadRequested,
-                    onInstall = viewModel::onAppUpdateInstallRequested,
-                )
+
+        Column(
+
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(bottom = LocalCliBottomChromeClearance.current),
+
+        ) {
+            if (AppUpdateBuildSignals.fdroidUpdateNoticeRequired()) {
+                CliFdroidUpdateNotice()
+                Spacer(modifier = Modifier.height(CliSpacing.sm))
             }
+            CliFoxholeDbPanel(
+                viewModel = viewModel,
+                settings = settings,
+                groups = groups,
+                phases = FoxholeDbPhases(
+                    dns = dnsPhase,
+                    bridges = bridgePhase,
+                    security = threatIntelPhase,
+                    geo = geoIp.phase,
+                    tlsFingerprints = tlsFingerprintPhase,
+                ),
+                refreshRunning = anyPhaseRunning,
+                refreshPhase =
+                foxholeAggregatePhase(dnsPhase, bridgePhase, threatIntelPhase, geoIp.phase, tlsFingerprintPhase),
+            )
+            if (appUpdateChannelIsGithub) {
+                Spacer(modifier = Modifier.height(CliSpacing.sm))
+                CliPanel(
+                    title = stringResource(R.string.cli_updates_app),
+                    icon = R.drawable.pix_update,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    CliAppUpdatePanelBody(
+                        state = appUpdate,
+                        onCheck = viewModel::onAppUpdateCheckRequested,
+                        onDownload = viewModel::onAppUpdateDownloadRequested,
+                        onInstall = viewModel::onAppUpdateInstallRequested,
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(CliSpacing.sm))
         }
-        Spacer(modifier = Modifier.height(CliSpacing.sm))
+    }
+}
+
+@Composable
+private fun CliFdroidUpdateNotice() {
+    val colors = LocalCliColors.current
+    CliPanel(
+        title = stringResource(R.string.cli_updates_fdroid_title),
+        titleColor = colors.err,
+        icon = R.drawable.pix_update,
+        iconColor = colors.err,
+        attention = true,
+        attentionColor = colors.err,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        CliKeyValue(
+            key = stringResource(R.string.cli_updates_app_version),
+            value = BuildConfig.VERSION_NAME,
+            valueColor = colors.err,
+            icon = R.drawable.pix_status,
+            iconColor = colors.err,
+        )
+        Spacer(modifier = Modifier.height(CliSpacing.xs))
+        CliDashedInfoNote(text = stringResource(R.string.cli_updates_fdroid_notice))
     }
 }
 
@@ -144,6 +189,7 @@ private data class FoxholeDbPhases(
     val bridges: FoxholeUpdatePhase,
     val security: FoxholeUpdatePhase,
     val geo: FoxholeUpdatePhase,
+    val tlsFingerprints: FoxholeUpdatePhase,
 )
 
 private data class FoxholeDbGroups(
@@ -151,11 +197,10 @@ private data class FoxholeDbGroups(
     val bridges: FoxholeDbGroupUi,
     val security: FoxholeDbGroupUi,
     val geo: FoxholeDbGroupUi,
+    val tlsFingerprints: FoxholeDbGroupUi,
 ) {
-    private val all get() = listOf(dns, bridges, security, geo)
+    private val all get() = listOf(dns, bridges, security, geo, tlsFingerprints)
 
-    // The status split behind the screen's colour law: red = an enabled group holds NO data at
-    // all (first download required), orange = data present but the feed moved on.
     val downloadRequired: Boolean
         get() = all.any { group -> group.enabled && group.updatedAtMs == null }
     val updatePending: Boolean
@@ -169,6 +214,7 @@ private fun foxholeDbGroups(
     geoIp: GeoIpDatabaseUiState,
     dnsUpdateAvailable: Boolean,
     threatIntelGeneratedAt: String?,
+    tlsFingerprintGeneratedAt: String?,
 ): FoxholeDbGroups =
     FoxholeDbGroups(
         dns = FoxholeDbGroupUi(
@@ -187,10 +233,16 @@ private fun foxholeDbGroups(
                 runCatching { Instant.parse(stamp).toEpochMilli() }.getOrNull()
             },
         ),
-        // The geo group has no switch — the map and geo statistics need it whenever it is absent.
         geo = FoxholeDbGroupUi(
             enabled = true,
             updatedAtMs = geoIp.info?.installed?.downloadedAtMs,
+        ),
+        tlsFingerprints = FoxholeDbGroupUi(
+            enabled = true,
+            updatedAtMs =
+            tlsFingerprintGeneratedAt?.let { stamp ->
+                runCatching { Instant.parse(stamp).toEpochMilli() }.getOrNull()
+            },
         ),
     )
 
@@ -201,26 +253,20 @@ private fun CliFoxholeDbPanel(
     groups: FoxholeDbGroups,
     phases: FoxholeDbPhases,
     refreshRunning: Boolean,
+    refreshPhase: FoxholeUpdatePhase,
 ) {
     val colors = LocalCliColors.current
     CliPanel(
         title = stringResource(R.string.cli_foxdb_title),
         icon = R.drawable.pix_update,
         modifier = Modifier.fillMaxWidth(),
+        infoText = stringResource(R.string.cli_foxdb_note),
     ) {
-        // Status law of this screen: green up-to-date / orange update pending / red when a
-        // download is required (a group holds no data at all). No timestamps — the stamp said
-        // nothing actionable and drowned the one thing that matters.
         val statusColor = when {
             groups.downloadRequired -> colors.err
             groups.updatePending -> colors.warn
             else -> colors.ok
         }
-        // Report first, action last: the status line and the per-group states are what the button
-        // is about, so they read as the question and the button as the answer. The button holds
-        // the panel's bottom edge in every state — one action for all of them (download, update or
-        // plain check), full width, outlined in the status colour so the two still read as one
-        // statement.
         CliKeyValue(
             key = stringResource(R.string.cli_foxdb_status),
             value = stringResource(
@@ -230,8 +276,6 @@ private fun CliFoxholeDbPanel(
             icon = R.drawable.pix_status,
             iconColor = statusColor,
         )
-        Spacer(modifier = Modifier.height(CliSpacing.sm))
-        CliDashedInfoNote(text = stringResource(R.string.cli_foxdb_note))
         Spacer(modifier = Modifier.height(CliSpacing.sm))
         CliRowDivider()
         CliToggleRow(
@@ -278,29 +322,27 @@ private fun CliFoxholeDbPanel(
             phase = phases.geo,
         )
         CliRowDivider()
+        CliFoxholeDbGroupRow(
+            label = stringResource(R.string.cli_foxdb_group_tls),
+            icon = R.drawable.pix_shield,
+            group = groups.tlsFingerprints,
+            phase = phases.tlsFingerprints,
+        )
+        CliRowDivider()
         Spacer(modifier = Modifier.height(CliSpacing.xs))
+        val doneHold = rememberUpdateDoneHold(refreshRunning) &&
+            refreshPhase != FoxholeUpdatePhase.FAILED
         CliButton(
-            label = stringResource(
-                when {
-                    refreshRunning -> R.string.cli_wizard_phase_downloading
-                    groups.downloadRequired -> R.string.cli_foxdb_sheet_download
-                    groups.updatePending -> R.string.cli_foxdb_refresh
-                    else -> R.string.cli_updates_btn_check
-                },
-            ),
+            label = foxholeRefreshButtonLabel(refreshRunning, doneHold, refreshPhase, groups),
             color = statusColor,
-            enabled = !refreshRunning,
+            enabled = !refreshRunning && !doneHold,
+            animatedLabel = refreshRunning,
             onClick = { viewModel.onFoxholeDbRefreshAll(settings) },
             modifier = Modifier.fillMaxWidth(),
         )
     }
 }
 
-/**
- * One group line, statuses only (no timestamps): dim "off", red "download required" for a group
- * without data, orange "update required" when the feed moved on, green up-to-date otherwise —
- * with the live phase overriding everything while a refresh runs.
- */
 @Composable
 private fun CliFoxholeDbGroupRow(
     label: String,
@@ -317,12 +359,8 @@ private fun CliFoxholeDbGroupRow(
             value = stringResource(presentation.labelRes),
             valueColor = valueColor,
             icon = icon,
-            iconColor = if (valueColor == colors.ok) colors.ok else colors.dim,
+            iconColor = colors.dim,
         )
-        if (phase.foxholeUpdateStage() != null) {
-            Spacer(modifier = Modifier.height(CliSpacing.xs))
-            CliFoxholeUpdateProgress(phase = phase)
-        }
     }
 }
 
@@ -360,12 +398,63 @@ private fun FoxholeDbGroupTone.color(colors: CliColors): Color = when (this) {
     FoxholeDbGroupTone.SUCCESS -> colors.ok
 }
 
+private fun foxholeAggregatePhase(vararg phases: FoxholeUpdatePhase): FoxholeUpdatePhase =
+    phases.filter { phase -> phase.isRunning }
+        .maxByOrNull { phase -> phase.foxholeUpdateStage() ?: 0 }
+        ?: phases.maxByOrNull { phase -> phase.foxholeUpdateStage() ?: 0 }
+        ?: FoxholeUpdatePhase.IDLE
+
 /**
- * The application's own update panel body: a status row (green up to date, orange when a new
- * version is pending) over the same full-width outlined action button as the FoxHole DB panel —
- * check, download or install depending on where the three-step flow stands. Same order as the
- * panel above: the report leads, the action holds the bottom edge.
+ * Holds the finished label on the button for a moment after the run ends, then lets the button
+ * go back to its action. The only timer in the staged label: every stage before it is a phase
+ * the updater actually publishes.
  */
+@Composable
+private fun rememberUpdateDoneHold(running: Boolean): Boolean {
+    var holding by remember { mutableStateOf(false) }
+    var ranAtLeastOnce by remember { mutableStateOf(false) }
+    LaunchedEffect(running) {
+        if (running) {
+            ranAtLeastOnce = true
+            holding = false
+        } else if (ranAtLeastOnce) {
+            ranAtLeastOnce = false
+            holding = true
+            delay(UPDATE_DONE_HOLD_MS)
+            holding = false
+        }
+    }
+    return holding
+}
+
+@Composable
+private fun foxholeRefreshButtonLabel(
+    running: Boolean,
+    doneHold: Boolean,
+    phase: FoxholeUpdatePhase,
+    groups: FoxholeDbGroups,
+): String {
+    if (doneHold) return stringResource(R.string.cli_updates_phase_done)
+    if (!running) {
+        return stringResource(
+            when {
+                groups.downloadRequired -> R.string.cli_foxdb_sheet_download
+                groups.updatePending -> R.string.cli_foxdb_refresh
+                else -> R.string.cli_updates_btn_check
+            },
+        )
+    }
+    return stringResource(phase.updateStageLabelRes())
+}
+
+private fun FoxholeUpdatePhase.updateStageLabelRes(): Int = when (this) {
+    FoxholeUpdatePhase.CHECKING, FoxholeUpdatePhase.IDLE -> R.string.cli_updates_phase_checking
+    FoxholeUpdatePhase.DOWNLOADING -> R.string.cli_updates_phase_downloading
+    FoxholeUpdatePhase.VERIFYING -> R.string.cli_updates_phase_verifying
+    FoxholeUpdatePhase.DONE, FoxholeUpdatePhase.NO_UPDATE -> R.string.cli_updates_phase_done
+    FoxholeUpdatePhase.FAILED -> R.string.cli_foxdb_status_failed
+}
+
 @Composable
 private fun CliAppUpdatePanelBody(
     state: AppUpdateState,
@@ -381,14 +470,16 @@ private fun CliAppUpdatePanelBody(
         value = appUpdateStatusValue(state),
         valueColor = statusColor,
         icon = R.drawable.pix_status,
-        iconColor = if (statusColor == colors.ok) colors.ok else colors.dim,
+        iconColor = colors.dim,
     )
     CliRowDivider()
     Spacer(modifier = Modifier.height(CliSpacing.xs))
+    val doneHold = rememberUpdateDoneHold(busy) && state !is AppUpdateState.Failed
     CliButton(
-        label = stringResource(appUpdateButtonLabelRes(state)),
+        label = if (doneHold) stringResource(R.string.cli_updates_phase_done) else appUpdateButtonLabel(state),
         color = if (busy) colors.dim else statusColor,
-        enabled = !busy,
+        enabled = !busy && !doneHold,
+        animatedLabel = busy,
         onClick = when (state) {
             is AppUpdateState.Available -> onDownload
             is AppUpdateState.Downloaded -> onInstall
@@ -396,6 +487,25 @@ private fun CliAppUpdatePanelBody(
         },
         modifier = Modifier.fillMaxWidth(),
     )
+}
+
+@Composable
+private fun appUpdateButtonLabel(state: AppUpdateState): String = when (state) {
+    is AppUpdateState.Downloading -> stringResource(
+        R.string.cli_updates_progress,
+        stringResource(R.string.cli_updates_phase_downloading),
+        CliFormat.percent(
+            if (state.totalBytes > 0L) state.downloadedBytes.toFloat() / state.totalBytes else 0f,
+        ),
+    )
+    is AppUpdateState.Busy -> stringResource(state.phase.updateStageLabelRes())
+    else -> stringResource(appUpdateButtonLabelRes(state))
+}
+
+private fun RemoteUpdatePhase.updateStageLabelRes(): Int = when (this) {
+    RemoteUpdatePhase.CHECKING -> R.string.cli_updates_phase_checking
+    RemoteUpdatePhase.DOWNLOADING -> R.string.cli_updates_phase_downloading
+    RemoteUpdatePhase.VERIFYING -> R.string.cli_updates_phase_verifying
 }
 
 private fun FoxholeUpdatePhase.statusLabelRes(): Int = when (this) {
@@ -408,70 +518,81 @@ private fun FoxholeUpdatePhase.statusLabelRes(): Int = when (this) {
     FoxholeUpdatePhase.FAILED -> R.string.cli_foxdb_status_failed
 }
 
-// Status-colour law of the updates screen: pending work is warn, a failed check err, a clean
-// state ok — Idle stays dim because "never checked" is not a measurement.
 private fun appUpdateStatusColor(
     state: AppUpdateState,
     colors: com.foxhole.guard.ui.cli.CliColors,
 ) = when (state) {
-    is AppUpdateState.Available, is AppUpdateState.Downloaded, is AppUpdateState.Downloading -> colors.warn
     is AppUpdateState.Failed -> colors.err
     AppUpdateState.UpToDate -> colors.ok
     AppUpdateState.Idle, is AppUpdateState.Busy -> colors.dim
+    else -> when (state.appUpdateSeverity) {
+        AppUpdateSeverity.BEHIND_ONE -> colors.warn
+        AppUpdateSeverity.BEHIND_TWO -> colors.alert
+        AppUpdateSeverity.BEHIND_MANY -> colors.err
+        AppUpdateSeverity.NONE -> colors.dim
+    }
 }
 
 @Composable
 private fun appUpdateStatusValue(state: AppUpdateState): String = when (state) {
     AppUpdateState.Idle -> BuildConfig.VERSION_NAME
-    is AppUpdateState.Busy -> stringResource(R.string.cli_wizard_phase_checking)
+    is AppUpdateState.Busy -> stringResource(state.phase.updateStageLabelRes())
     AppUpdateState.UpToDate -> stringResource(R.string.cli_updates_app_uptodate)
-    is AppUpdateState.Available ->
-        stringResource(R.string.cli_updates_app_available, state.update.manifest.versionName)
+    is AppUpdateState.Available -> appUpdateOfferLabel(state.update)
     is AppUpdateState.Downloading ->
         CliFormat.percent(
             if (state.totalBytes > 0L) state.downloadedBytes.toFloat() / state.totalBytes else 0f,
         )
-    is AppUpdateState.Downloaded ->
-        stringResource(R.string.cli_updates_app_available, state.update.manifest.versionName)
-    is AppUpdateState.Failed -> stringResource(R.string.cli_updates_app_failed)
+    is AppUpdateState.Downloaded -> appUpdateOfferLabel(state.update)
+    is AppUpdateState.Failed -> stringResource(state.failure.appUpdateFailureLabelRes())
 }
+
+@Composable
+private fun appUpdateOfferLabel(update: AppUpdateCheck.Available): String =
+    appUpdateRequiredLabelRes(update.severity)
+        ?.let { res -> stringResource(res, update.versionName) }
+        ?: stringResource(R.string.cli_updates_app_available, update.versionName)
 
 private fun appUpdateButtonLabelRes(state: AppUpdateState): Int = when (state) {
     is AppUpdateState.Available -> R.string.cli_foxdb_sheet_download
     is AppUpdateState.Downloaded -> R.string.cli_updates_app_install
-    is AppUpdateState.Busy -> R.string.cli_wizard_phase_checking
-    is AppUpdateState.Downloading -> R.string.cli_wizard_phase_downloading
+    is AppUpdateState.Busy -> R.string.cli_updates_phase_checking
+    is AppUpdateState.Downloading -> R.string.cli_updates_phase_downloading
     else -> R.string.cli_updates_btn_check
 }
 
-/**
- * True when anything on the updates screen actually wants the user — a group without data, a
- * pending FoxHole DB update or an app update to download/install. Drives the blinking attention
- * pixel on the settings root's "updates" row. Geo counts only once its info has genuinely been
- * read: before the first refresh the null info would blink over nothing.
- */
+private const val UPDATE_DONE_HOLD_MS = 2_000L
+
 @Composable
 internal fun rememberCliUpdatesAttention(viewModel: HomeViewModel): Boolean {
     val state by viewModel.settingsRouteState.collectAsStateWithLifecycle()
     val geoIp by viewModel.geoIpDatabaseUiState.collectAsStateWithLifecycle()
     val dnsUpdateAvailable by viewModel.dnsFilterUpdateAvailable.collectAsStateWithLifecycle()
     val threatIntelPhase by viewModel.threatIntelUpdatePhase.collectAsStateWithLifecycle()
+    val tlsFingerprintPhase by viewModel.tlsFingerprintUpdatePhase.collectAsStateWithLifecycle()
     val appUpdate by viewModel.container.appUpdateRepository.state.collectAsStateWithLifecycle()
     LaunchedEffect(Unit) { viewModel.refreshGeoIpDatabaseInfo() }
     val threatIntelGeneratedAt = remember(threatIntelPhase) {
         viewModel.threatIntelInstalledGeneratedAt()
+    }
+    val tlsFingerprintGeneratedAt = remember(tlsFingerprintPhase) {
+        viewModel.tlsFingerprintInstalledGeneratedAt()
     }
     val groups = foxholeDbGroups(
         settings = state.settings,
         geoIp = geoIp,
         dnsUpdateAvailable = dnsUpdateAvailable,
         threatIntelGeneratedAt = threatIntelGeneratedAt,
+        tlsFingerprintGeneratedAt = tlsFingerprintGeneratedAt,
     )
     val geoKnown = geoIp.info != null
+    val appUpdatePending =
+        appUpdateChannelIsGithub &&
+            (appUpdate is AppUpdateState.Available || appUpdate is AppUpdateState.Downloaded)
     return groups.dns.needsData ||
         groups.bridges.needsData ||
         groups.security.needsData ||
         (geoKnown && groups.geo.needsData) ||
-        appUpdate is AppUpdateState.Available ||
-        appUpdate is AppUpdateState.Downloaded
+        groups.tlsFingerprints.needsData ||
+        appUpdatePending
 }
