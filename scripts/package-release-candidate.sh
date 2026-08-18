@@ -85,6 +85,55 @@ normalized_expected_cert() {
   printf '%s' "$configured"
 }
 
+verify_fdroid_signing_blocks() {
+  local apk=$1
+  command -v python3 >/dev/null 2>&1 || die "python3 is required to inspect APK signing blocks"
+
+  python3 - "$apk" <<'PY' || die "F-Droid signing-block verification failed for $(basename "$apk")"
+import struct
+import sys
+from pathlib import Path
+
+apk = Path(sys.argv[1])
+data = apk.read_bytes()
+eocd = data.rfind(b"PK\x05\x06", max(0, len(data) - 65_557))
+if eocd < 0:
+    raise SystemExit("APK end-of-central-directory record is missing")
+
+central_directory_offset = struct.unpack_from("<I", data, eocd + 16)[0]
+if central_directory_offset < 24 or central_directory_offset == 0xFFFFFFFF:
+    raise SystemExit("APK central-directory offset is invalid or unsupported")
+
+footer = data[central_directory_offset - 24 : central_directory_offset]
+block_size = struct.unpack_from("<Q", footer)[0]
+if footer[8:] != b"APK Sig Block 42":
+    raise SystemExit("APK Signing Block footer is missing")
+
+block_start = central_directory_offset - block_size - 8
+if block_start < 0 or struct.unpack_from("<Q", data, block_start)[0] != block_size:
+    raise SystemExit("APK Signing Block size is invalid")
+
+forbidden = {
+    0x2146444E: "Google Play Signature (Frosting)",
+    0x504B4453: "Dependency metadata",
+    0x71777777: "Meituan payload",
+}
+position = block_start + 8
+entries_end = central_directory_offset - 24
+while position < entries_end:
+    entry_size = struct.unpack_from("<Q", data, position)[0]
+    if entry_size < 4 or position + 8 + entry_size > entries_end:
+        raise SystemExit("APK Signing Block entry is invalid")
+    entry_id = struct.unpack_from("<I", data, position + 8)[0]
+    if entry_id in forbidden:
+        raise SystemExit(f"forbidden F-Droid signing block: {forbidden[entry_id]}")
+    position += 8 + entry_size
+
+if position != entries_end:
+    raise SystemExit("APK Signing Block entry alignment is invalid")
+PY
+}
+
 verify_apk() {
   local apk=$1
   local cert_report=$2
@@ -104,6 +153,7 @@ verify_apk() {
   )"
   [[ -n "$actual" ]] || die "could not read signing certificate digest from $(basename "$apk")"
   [[ "$actual" == "$expected_cert" ]] || die "release certificate mismatch for $(basename "$apk")"
+  verify_fdroid_signing_blocks "$apk"
 
   package_line="$($aapt2 dump badging "$apk" | sed -n '1p')"
   [[ "$package_line" == *"name='com.foxhole.guard'"* ]] || die "unexpected package in $(basename "$apk")"

@@ -64,6 +64,22 @@ class ReleaseEngineeringContractTest {
     }
 
     @Test
+    fun `release candidates reject signing metadata forbidden by F-Droid`() {
+        val appBuild = projectFile("build.gradle.kts").readText()
+        val dependenciesInfo =
+            appBuild
+                .substringAfter("dependenciesInfo {")
+                .substringBefore("}")
+        val candidateScript = projectFile("../scripts/package-release-candidate.sh").readText()
+
+        assertTrue(dependenciesInfo.contains("includeInApk = false"))
+        assertTrue(dependenciesInfo.contains("includeInBundle = false"))
+        assertTrue(candidateScript.contains("verify_fdroid_signing_blocks"))
+        assertTrue(candidateScript.contains("0x504B4453: \"Dependency metadata\""))
+        assertTrue(candidateScript.contains("verify_fdroid_signing_blocks \"${'$'}apk\""))
+    }
+
+    @Test
     fun `native inventory gates agree on one runtime library set and assets stay stripped`() {
         val source = projectFile("build.gradle.kts").readText()
 

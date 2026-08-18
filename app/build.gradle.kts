@@ -835,6 +835,11 @@ android {
         manifestPlaceholders["appLabel"] = "@string/app_name"
     }
 
+    dependenciesInfo {
+        includeInApk = false
+        includeInBundle = false
+    }
+
     ksp {
         arg("room.schemaLocation", "$projectDir/schemas")
         arg("room.incremental", "true")
