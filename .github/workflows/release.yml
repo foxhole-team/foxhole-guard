@@ -208,11 +208,33 @@ jobs:
             --target "$GITHUB_SHA" \
             --title "FoxHole Guard $VERSION_NAME"
 
+          releases_json="$RUNNER_TEMP/draft-releases.json"
+          gh api -X GET "repos/$GITHUB_REPOSITORY/releases" -f per_page=100 > "$releases_json"
+          release_id="$(
+            jq -er \
+              --arg tag "$RELEASE_TAG" '
+                [.[] | select(.tag_name == $tag and .draft == true)] |
+                if length == 1 then .[0].id else error("expected exactly one draft release") end
+              ' \
+              "$releases_json"
+          )"
+          release_json="$RUNNER_TEMP/draft-release.json"
+          gh api "repos/$GITHUB_REPOSITORY/releases/$release_id" > "$release_json"
+
           published_dir="$RUNNER_TEMP/published-release"
           mkdir -p "$published_dir"
-          gh release download "$RELEASE_TAG" --dir "$published_dir"
           for source in "${assets[@]}"; do
             published="$published_dir/$(basename "$source")"
+            asset_id="$(
+              jq -er \
+                --arg name "$(basename "$source")" '
+                  [.assets[] | select(.name == $name)] |
+                  if length == 1 then .[0].id else error("expected exactly one release asset") end
+                ' \
+                "$release_json"
+            )"
+            gh api -H 'Accept: application/octet-stream' \
+              "repos/$GITHUB_REPOSITORY/releases/assets/$asset_id" > "$published"
             [[ -f "$published" ]] || {
               echo "Draft release is missing $(basename "$source")." >&2
               exit 1
@@ -223,6 +245,9 @@ jobs:
             }
           done
 
+          gh api --method PATCH \
+            "repos/$GITHUB_REPOSITORY/releases/$release_id" \
+            -F draft=false >/dev/null
           tag_type="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$RELEASE_TAG" --jq '.object.type')"
           tag_sha="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$RELEASE_TAG" --jq '.object.sha')"
           [[ "$tag_type" == "commit" && "$tag_sha" == "$GITHUB_SHA" ]] || {
