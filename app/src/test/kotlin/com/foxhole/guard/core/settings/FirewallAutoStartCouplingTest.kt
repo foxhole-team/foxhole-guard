@@ -7,10 +7,6 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/**
- * Enabling the firewall enables autostart in the toggle handler only, never in normalization: normalization runs on every load and would make 'firewall on, autostart off' unreachable.
- * Disabling the firewall deliberately leaves autostart alone, since it may already carry a VPN profile restore.
- */
 internal class FirewallAutoStartCouplingTest {
     @Test
     fun `normalization does not couple the firewall to auto start, so auto start stays switchable off`() {

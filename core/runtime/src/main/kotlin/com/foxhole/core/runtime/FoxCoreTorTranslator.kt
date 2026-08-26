@@ -6,6 +6,9 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
+internal const val ARTI_CLIENT_STATE_DIRECTORY = "arti-state"
+internal const val ARTI_CLIENT_CACHE_DIRECTORY = "arti-cache"
+
 internal object FoxCoreTorTranslator {
     fun translateOverlay(
         sources: List<LegacyOutbound>,
@@ -101,8 +104,8 @@ internal object FoxCoreTorTranslator {
             ).trimEnd('/')
         return buildJsonObject {
             put("type", "tor")
-            put("state_dir", "$dataDirectory/$ARTI_STATE_DIRECTORY")
-            put("cache_dir", "$dataDirectory/$ARTI_CACHE_DIRECTORY")
+            put("state_dir", "$dataDirectory/$ARTI_CLIENT_STATE_DIRECTORY")
+            put("cache_dir", "$dataDirectory/$ARTI_CLIENT_CACHE_DIRECTORY")
             put("isolate_streams", true)
             if (detour == "proxy") {
                 put(
@@ -248,9 +251,6 @@ internal object FoxCoreTorTranslator {
     private const val MAX_TOR_PROTOCOLS_PER_TRANSPORT = 16
     private const val MAX_TOR_TRANSPORT_ARGUMENTS = 32
     private const val MAX_TOR_TRANSPORT_ARGUMENT_LENGTH = 2_048
-    private const val ARTI_STATE_DIRECTORY = "arti-state"
-    private const val ARTI_CACHE_DIRECTORY = "arti-cache"
-
     private val TOR_LEGACY_KEYS =
         setOf(
             "type",

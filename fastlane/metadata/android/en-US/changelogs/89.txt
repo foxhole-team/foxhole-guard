@@ -1,7 +1,0 @@
-0.0.1 public beta
-
-- Hardened FoxHole Core UDP, DNS, Android TUN, and runtime ownership.
-- Fixed identity refresh across connect, disconnect, and network handover.
-- Fixed DNS filtering, firewall continuity, protocol tests, and terminal progress.
-- Added FoxHole Sentinel quarantine, safer backup restore, signed FoxHole DB data, and responsive widgets.
-- Polished profiles, map, statistics, logs, settings, onboarding, and help.

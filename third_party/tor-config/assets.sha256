@@ -1,0 +1,3 @@
+4ac86cc6e2468e54b118430881d81fcaec3e95fcfcaccd6076629b5a125a8306  data/torrc-defaults
+12852ac8bd29ac3bbb10e2d0d6878ab4f27c636371aaa95a93ed866a030c649f  tor/pluggable_transports/pt_config.json
+f7e9211dd0e0089c93a0a84329fed41b2ac7b988531475b5eb2c86d38ad64d6c  tor/pluggable_transports/README.CONJURE.md

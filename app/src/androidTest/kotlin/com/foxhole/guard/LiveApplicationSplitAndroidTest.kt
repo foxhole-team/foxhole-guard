@@ -19,10 +19,6 @@ import org.junit.Assume.assumeTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 
-/**
- * Measures the kernel's source address for an unbound socket: refreshIpInfo binds to the VPN Network, so the app's own IP panel reports the tunnel exit even for an excluded app.
- * Manual gate: -Pandroid.testInstrumentationRunnerArguments.foxhole.liveSplit=1.
- */
 @RunWith(AndroidJUnit4::class)
 internal class LiveApplicationSplitAndroidTest : ProfileRuntimeSessionAndroidTestSupport() {
     @Test

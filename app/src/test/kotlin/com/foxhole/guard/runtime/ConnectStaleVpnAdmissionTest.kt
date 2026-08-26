@@ -107,7 +107,7 @@ class ConnectStaleVpnAdmissionTest {
     }
 
     @Test
-    fun `an error with queued cleanup keeps the stopping state until the queue drains`() {
+    fun `an error waits only while a real cleanup owner remains`() {
         val queuedCleanup = queue(priorityBuffered = 1)
         assertTrue(
             shouldWaitForRuntimeTeardownBeforeConnect(
@@ -119,12 +119,23 @@ class ConnectStaleVpnAdmissionTest {
         )
         assertEquals(1, queuedCleanup.commandQueueDepth)
 
-        assertTrue(
+        assertFalse(
             shouldWaitForRuntimeTeardownBeforeConnect(
                 connectionState = ConnectionState.ERROR,
                 activeVpnNetwork = true,
                 commandQueue = queue(),
                 nativeRuntime = NativeRuntimeSnapshot.NONE,
+            ),
+        )
+        assertTrue(
+            shouldWaitForRuntimeTeardownBeforeConnect(
+                connectionState = ConnectionState.ERROR,
+                activeVpnNetwork = true,
+                commandQueue = queue(),
+                nativeRuntime = NativeRuntimeSnapshot.NONE.copy(
+                    nativeState = RuntimeState.ERROR,
+                    hasTunFileDescriptor = true,
+                ),
             ),
         )
     }

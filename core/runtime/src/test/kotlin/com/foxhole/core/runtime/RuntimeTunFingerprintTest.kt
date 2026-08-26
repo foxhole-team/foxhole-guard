@@ -38,8 +38,6 @@ class RuntimeTunFingerprintTest {
 
     @Test
     fun `route rule changes do not change the fingerprint`() {
-        // The whole point of the fast path: per-app routing rules move connections inside the
-        // box, not the kernel interface — their churn must keep the tun fd reusable.
         val before =
             fingerprint(
                 config(routeRule = """{"package_name":["com.app.a"],"outbound":"block"}"""),
@@ -67,8 +65,6 @@ class RuntimeTunFingerprintTest {
 
     @Test
     fun `kernel filter package uid change changes the fingerprint`() {
-        // Uninstall+reinstall keeps the package NAME in include_package but hands it a new UID;
-        // a reused fd would keep filtering the dead UID while the reinstalled app bypasses the tun.
         val beforeReinstall =
             fingerprint(config(includePackage = "com.app.a"), packageUidResolver = { 10_001 })
         val afterReinstall =

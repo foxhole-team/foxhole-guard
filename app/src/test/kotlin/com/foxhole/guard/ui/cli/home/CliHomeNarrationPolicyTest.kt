@@ -1,14 +1,37 @@
 package com.foxhole.guard.ui.cli.home
 
+import com.foxhole.core.model.AppliedTorRoute
 import com.foxhole.core.model.ConnectionSnapshot
 import com.foxhole.core.model.ConnectionState
 import com.foxhole.core.model.IpInfo
+import com.foxhole.core.model.PrivacyRouteScope
 import com.foxhole.guard.ui.HomeRouteUiState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 
 class CliHomeNarrationPolicyTest {
+    @Test
+    fun `terminal rejects a tor route identity replayed through the vpn channel`() {
+        val fetchedAt = 2_000L
+        val torExit = ipInfo(fetchedAt)
+        val connection =
+            ConnectionSnapshot(
+                state = ConnectionState.CONNECTED,
+                profileId = 7L,
+                torActive = true,
+                appliedTorRoute = AppliedTorRoute(PrivacyRouteScope.ALL_APPS, bypassVpnTunnel = false),
+                lastChangeAt = fetchedAt,
+            )
+
+        assertNull(
+            terminalVpnIdentity(
+                HomeRouteUiState(connection = connection, ipInfo = torExit, torIpInfo = torExit),
+                fetchedAt,
+            ),
+        )
+    }
+
     @Test
     fun `terminal accepts current validation identity published just before connected`() {
         val connectingAt = 1_000L

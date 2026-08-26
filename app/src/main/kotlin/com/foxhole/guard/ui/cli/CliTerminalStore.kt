@@ -2,6 +2,7 @@ package com.foxhole.guard.ui.cli
 
 import com.foxhole.guard.core.sentinel.AndroidKeystoreFileCipher
 import com.foxhole.guard.core.sentinel.FileCipher
+import com.foxhole.guard.ui.cli.home.CliLineIcon
 import com.foxhole.guard.ui.cli.home.CliLineTone
 import com.foxhole.guard.ui.cli.home.CliTerminalLine
 import kotlinx.serialization.Serializable
@@ -9,10 +10,6 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.io.File
 
-/**
- * Keystore-encrypted like the diagnostics journal; retention is enforced on write and again on read so lines that expired while the app was off never reach the screen.
- * An unreadable or truncated file is deleted and the terminal starts clean - a corrupt log must never block app start.
- */
 internal class CliTerminalStore(
     private val file: File,
     private val fileCipher: FileCipher = AndroidKeystoreFileCipher(KEYSTORE_ALIAS),
@@ -108,6 +105,7 @@ internal class CliTerminalStore(
             timestampMs = timestampMs,
             text = text,
             tone = tone,
+            icon = icon,
             prompt = prompt,
             flagCountry = flagCountry,
             value = value,
@@ -124,6 +122,7 @@ internal class CliTerminalStore(
         val timestampMs: Long,
         val text: String,
         val tone: CliLineTone = CliLineTone.PLAIN,
+        val icon: CliLineIcon? = null,
         val prompt: Boolean = false,
         val flagCountry: String? = null,
         val value: String? = null,
@@ -139,6 +138,7 @@ internal class CliTerminalStore(
                 timestampMs = timestampMs,
                 text = text,
                 tone = tone,
+                icon = icon,
                 prompt = prompt,
                 flagCountry = flagCountry,
                 value = value,

@@ -5,10 +5,6 @@ import com.foxhole.core.model.ProtocolHint
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
-// QUIC-family share-URI parsers (TUIC, AnyTLS), split out of ProfileImportNodeSupport so that class
-// stays under the size budget. They lean on the same internal URI/TLS/tag helpers as the other
-// parsers, reached here as extensions on the receiver.
-
 internal fun ProfileImportNodeSupport.parseTuicUri(
     value: String,
     allowPrivateOutboundHosts: Boolean,

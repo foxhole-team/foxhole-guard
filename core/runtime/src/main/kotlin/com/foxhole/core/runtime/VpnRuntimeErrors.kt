@@ -15,10 +15,6 @@ internal fun unwrapVpnRuntimeFailure(error: Throwable): Throwable {
     }
 }
 
-/**
- * Detailed diagnostic description. This can retain an unknown native exception message and must
- * not be copied into user-visible state; app/UI boundaries map failures to localized categories.
- */
 fun describeVpnRuntimeFailure(error: Throwable): String {
     val root = unwrapVpnRuntimeFailure(error)
     val raw = root.message?.trim().takeIf { !it.isNullOrEmpty() } ?: root.javaClass.simpleName

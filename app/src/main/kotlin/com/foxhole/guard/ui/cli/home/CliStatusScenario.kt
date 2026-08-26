@@ -86,7 +86,7 @@ internal fun cliCompactRouteStatus(
         null
     }
     val vpnProxy = runtimes.proxy || vpnScenario.isPerAppProxy()
-    val torProxy = runtimes.tor && settings.privacyRoute.scope == PrivacyRouteScope.SELECTED_APPS
+    val torProxy = runtimes.tor && runtimes.torScope == PrivacyRouteScope.SELECTED_APPS
     val current = shape(
         vpn = runtimes.vpn,
         tor = runtimes.tor,
@@ -132,11 +132,11 @@ internal fun cliVpnScenario(
 }
 
 internal fun cliTorScenario(
-    settings: Settings,
     torLive: Boolean,
+    appliedScope: PrivacyRouteScope? = null,
 ): CliStatusScenario? {
     if (!torLive) return null
-    return when (settings.privacyRoute.scope) {
+    return when (appliedScope ?: return null) {
         PrivacyRouteScope.ALL_APPS -> CliStatusScenario.WHOLE_DEVICE
         PrivacyRouteScope.SELECTED_APPS -> CliStatusScenario.PROXY_SELECTED
     }
@@ -187,7 +187,7 @@ internal fun cliStatusWordTone(word: CliStatusWord): CliLineTone = when (word) {
     CliStatusWord.CONNECTING,
     CliStatusWord.RECONNECTING,
     CliStatusWord.DISCONNECTING,
-    -> CliLineTone.WARN
+    -> CliLineTone.PENDING
     CliStatusWord.ERROR -> CliLineTone.ERR
     CliStatusWord.VPN -> CliLineTone.VPN
     CliStatusWord.TOR, CliStatusWord.VPN_TOR -> CliLineTone.TOR

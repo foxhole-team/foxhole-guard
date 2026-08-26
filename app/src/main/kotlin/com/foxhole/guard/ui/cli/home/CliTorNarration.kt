@@ -56,9 +56,9 @@ internal class CliTorNarration(
     private fun show(stage: CliTorNarrationStage) {
         current = stage
         val (text, tone) = when (stage) {
-            CliTorNarrationStage.STARTING -> strings.torStarting to CliLineTone.WARN
-            CliTorNarrationStage.CONNECTING -> strings.torConnecting to CliLineTone.WARN
-            CliTorNarrationStage.CIRCUITS -> strings.torCircuits to CliLineTone.WARN
+            CliTorNarrationStage.STARTING -> strings.torStarting to CliLineTone.PENDING
+            CliTorNarrationStage.CONNECTING -> strings.torConnecting to CliLineTone.PENDING
+            CliTorNarrationStage.CIRCUITS -> strings.torCircuits to CliLineTone.PENDING
             CliTorNarrationStage.CONNECTED -> strings.torConnected to CliLineTone.OK
             CliTorNarrationStage.LOOKUP -> strings.torExitLookup to CliLineTone.TOR
         }

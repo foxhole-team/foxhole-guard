@@ -34,8 +34,7 @@ internal data class PreparedSubscriptionRefreshProfile(
     val stagedSecretWrite: StagedProfileSecretWrite,
     val importedProfile: ParsedSubscriptionProfile,
     val previousSelectedProtocolOptionId: String?,
-    // True when the refreshed secret is byte-identical to the stored one: the profile keeps its
-    // existing secretRef, no re-encryption happens and the old ref must NOT be cleaned up.
+
     val reusesExistingSecret: Boolean = false,
 )
 

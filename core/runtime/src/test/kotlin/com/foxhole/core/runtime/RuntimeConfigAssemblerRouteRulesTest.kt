@@ -219,6 +219,7 @@ internal class RuntimeConfigAssemblerRouteRulesTest : RuntimeConfigAssemblerTest
                     Settings(
                         privacyRoute =
                         com.foxhole.core.model.PrivacyRouteSettings(
+                            permitted = true,
                             mode = PrivacyRouteMode.TOR_OVER_VPN,
                             scope = PrivacyRouteScope.ALL_APPS,
                         ),
@@ -236,8 +237,7 @@ internal class RuntimeConfigAssemblerRouteRulesTest : RuntimeConfigAssemblerTest
         val tor = outbounds.single { it["tag"]!!.jsonPrimitive.content == "tor-over-vpn" }
         assertEquals("tor", tor["type"]!!.jsonPrimitive.content)
         assertEquals("proxy", tor["detour"]!!.jsonPrimitive.content)
-        // Over the VPN tunnel Arti uses the already-established stream proxy and therefore does
-        // not start bridge transports on a second, ambiguous network path.
+
         assertTrue(tor["extra_args"] == null)
         assertEquals(
             "/data/user/0/com.foxhole.guard/files/tor-data/arm64-v8a",
@@ -270,6 +270,7 @@ internal class RuntimeConfigAssemblerRouteRulesTest : RuntimeConfigAssemblerTest
                     Settings(
                         privacyRoute =
                         com.foxhole.core.model.PrivacyRouteSettings(
+                            permitted = true,
                             mode = PrivacyRouteMode.TOR_OVER_VPN,
                             scope = PrivacyRouteScope.ALL_APPS,
                             udpPolicy = PrivacyRouteUdpPolicy.BLOCK,
@@ -313,6 +314,7 @@ internal class RuntimeConfigAssemblerRouteRulesTest : RuntimeConfigAssemblerTest
                         Settings(
                             privacyRoute =
                             com.foxhole.core.model.PrivacyRouteSettings(
+                                permitted = true,
                                 mode = PrivacyRouteMode.TOR_OVER_VPN,
                                 scope = PrivacyRouteScope.ALL_APPS,
                             ),
@@ -347,6 +349,7 @@ internal class RuntimeConfigAssemblerRouteRulesTest : RuntimeConfigAssemblerTest
                     Settings(
                         privacyRoute =
                         com.foxhole.core.model.PrivacyRouteSettings(
+                            permitted = true,
                             mode = PrivacyRouteMode.TOR_OVER_VPN,
                             scope = PrivacyRouteScope.SELECTED_APPS,
                         ),
@@ -383,8 +386,7 @@ internal class RuntimeConfigAssemblerRouteRulesTest : RuntimeConfigAssemblerTest
                     it["outbound"]!!.jsonPrimitive.content == "proxy"
             },
         )
-        // Selected-apps Tor: the app's own loopback-proxy probes must observe the plain VPN
-        // egress (dashboard VPN identity), never ride Tor like the chosen packages do.
+
         val runtimeProxyRule = route["rules"]!!.jsonArray.map { it.jsonObject }
             .single { rule ->
                 rule["inbound"]?.jsonArray?.any { it.jsonPrimitive.content == "foxhole-runtime-proxy-in" } == true
@@ -403,6 +405,7 @@ internal class RuntimeConfigAssemblerRouteRulesTest : RuntimeConfigAssemblerTest
                     Settings(
                         privacyRoute =
                         com.foxhole.core.model.PrivacyRouteSettings(
+                            permitted = true,
                             mode = PrivacyRouteMode.TOR_OVER_VPN,
                             scope = PrivacyRouteScope.SELECTED_APPS,
                         ),
@@ -459,6 +462,7 @@ internal class RuntimeConfigAssemblerRouteRulesTest : RuntimeConfigAssemblerTest
                     Settings(
                         privacyRoute =
                         com.foxhole.core.model.PrivacyRouteSettings(
+                            permitted = true,
                             mode = PrivacyRouteMode.TOR_OVER_VPN,
                             scope = PrivacyRouteScope.SELECTED_APPS,
                         ),
@@ -487,6 +491,7 @@ internal class RuntimeConfigAssemblerRouteRulesTest : RuntimeConfigAssemblerTest
                     Settings(
                         privacyRoute =
                         com.foxhole.core.model.PrivacyRouteSettings(
+                            permitted = true,
                             mode = PrivacyRouteMode.TOR_OVER_VPN,
                             scope = PrivacyRouteScope.ALL_APPS,
                         ),
@@ -514,6 +519,7 @@ internal class RuntimeConfigAssemblerRouteRulesTest : RuntimeConfigAssemblerTest
                     Settings(
                         privacyRoute =
                         com.foxhole.core.model.PrivacyRouteSettings(
+                            permitted = true,
                             mode = PrivacyRouteMode.TOR_OVER_VPN,
                             scope = PrivacyRouteScope.ALL_APPS,
                             bypassVpnTunnel = true,
@@ -552,6 +558,7 @@ internal class RuntimeConfigAssemblerRouteRulesTest : RuntimeConfigAssemblerTest
                         ),
                         privacyRoute =
                         com.foxhole.core.model.PrivacyRouteSettings(
+                            permitted = true,
                             mode = PrivacyRouteMode.TOR_OVER_VPN,
                             scope = PrivacyRouteScope.SELECTED_APPS,
                             blockAppsWhenTorUnavailable = true,
@@ -593,6 +600,7 @@ internal class RuntimeConfigAssemblerRouteRulesTest : RuntimeConfigAssemblerTest
                         ),
                         privacyRoute =
                         com.foxhole.core.model.PrivacyRouteSettings(
+                            permitted = true,
                             mode = PrivacyRouteMode.TOR_OVER_VPN,
                             scope = PrivacyRouteScope.SELECTED_APPS,
                         ),
@@ -622,6 +630,7 @@ internal class RuntimeConfigAssemblerRouteRulesTest : RuntimeConfigAssemblerTest
                     Settings(
                         privacyRoute =
                         com.foxhole.core.model.PrivacyRouteSettings(
+                            permitted = true,
                             mode = PrivacyRouteMode.TOR_OVER_VPN,
                             scope = PrivacyRouteScope.ALL_APPS,
                         ),
@@ -670,6 +679,7 @@ internal class RuntimeConfigAssemblerRouteRulesTest : RuntimeConfigAssemblerTest
                     Settings(
                         privacyRoute =
                         com.foxhole.core.model.PrivacyRouteSettings(
+                            permitted = true,
                             mode = PrivacyRouteMode.TOR_OVER_VPN,
                             scope = PrivacyRouteScope.ALL_APPS,
                         ),
@@ -704,6 +714,7 @@ internal class RuntimeConfigAssemblerRouteRulesTest : RuntimeConfigAssemblerTest
                     Settings(
                         privacyRoute =
                         com.foxhole.core.model.PrivacyRouteSettings(
+                            permitted = true,
                             mode = PrivacyRouteMode.TOR_OVER_VPN,
                             scope = PrivacyRouteScope.ALL_APPS,
                         ),
@@ -738,6 +749,7 @@ internal class RuntimeConfigAssemblerRouteRulesTest : RuntimeConfigAssemblerTest
                     Settings(
                         privacyRoute =
                         com.foxhole.core.model.PrivacyRouteSettings(
+                            permitted = true,
                             mode = PrivacyRouteMode.TOR_OVER_VPN,
                             scope = PrivacyRouteScope.ALL_APPS,
                         ),
@@ -772,6 +784,7 @@ internal class RuntimeConfigAssemblerRouteRulesTest : RuntimeConfigAssemblerTest
                     Settings(
                         privacyRoute =
                         com.foxhole.core.model.PrivacyRouteSettings(
+                            permitted = true,
                             mode = PrivacyRouteMode.TOR_OVER_VPN,
                             scope = PrivacyRouteScope.SELECTED_APPS,
                         ),

@@ -11,14 +11,6 @@ import com.foxhole.guard.ui.HomeRouteUiState
 import com.foxhole.guard.ui.cli.CliTheme
 import com.foxhole.guard.ui.cli.LocalCliColors
 
-/**
- * Previews live in the debug source set on purpose: `@Preview` comes from `ui-tooling-preview`,
- * which this project pulls in as `debugImplementation` only, so previews in `src/main` would drag
- * a tooling dependency into the shipped APK for nothing.
- *
- * They exist because [CliMapContent] takes plain state and one callback instead of the whole
- * HomeViewModel.
- */
 @Preview(name = "map · disabled", widthDp = 360, heightDp = 640)
 @Composable
 private fun CliMapContentDisabledPreview() {
@@ -32,7 +24,6 @@ private fun CliMapContentDisabledPreview() {
     }
 }
 
-/** Enabled but with nothing measured yet — the empty country table and the bare route scheme. */
 @Preview(name = "map · no traffic yet", widthDp = 360, heightDp = 640)
 @Composable
 private fun CliMapContentEmptyPreview() {

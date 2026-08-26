@@ -1,5 +1,6 @@
 package com.foxhole.core.runtime
 
+import android.system.Os
 import androidx.test.core.app.ApplicationProvider
 import com.foxhole.core.model.PrivacyRouteMode
 import com.foxhole.core.model.PrivacyRouteScope
@@ -94,7 +95,73 @@ class TorRuntimeInstallerDeviceTest {
         }
     }
 
+    @Test
+    fun cachedPrepareRepairsUnsafeArtiDirectoryPermissions() {
+        runBlocking {
+            val context = ApplicationProvider.getApplicationContext<FoxholeApplication>()
+            val installer = TorRuntimeInstaller(context)
+            val prepared = installer.prepare()
+            val first = prepared.withIdentityVersion(TEST_IDENTITY_VERSION)
+            val unrelatedDirectory = File(context.filesDir, "tor-installer-permission-test-unrelated")
+            check(unrelatedDirectory.mkdirs() || unrelatedDirectory.isDirectory)
+            val directories =
+                listOf(
+                    context.filesDir,
+                    File(context.filesDir, "foxcore"),
+                    File(context.filesDir, "foxcore/arti"),
+                    File(prepared.dataDirectory),
+                    File(first.dataDirectory),
+                    File(first.dataDirectory, TEST_ARTI_STATE_DIRECTORY),
+                    File(first.dataDirectory, TEST_ARTI_CACHE_DIRECTORY),
+                )
+
+            try {
+                Os.chmod(unrelatedDirectory.absolutePath, UNSAFE_DIRECTORY_MODE)
+                directories.forEach { directory -> Os.chmod(directory.absolutePath, UNSAFE_DIRECTORY_MODE) }
+
+                assertEquals(first, installer.prepare().withIdentityVersion(TEST_IDENTITY_VERSION))
+                assertPrivatePermissions(directories)
+
+                directories.forEach { directory -> Os.chmod(directory.absolutePath, RESTRICTIVE_DIRECTORY_MODE) }
+                assertEquals(first, installer.prepare().withIdentityVersion(TEST_IDENTITY_VERSION))
+                assertPrivatePermissions(directories)
+
+                assertEquals(
+                    "an unrelated app-private directory must not be changed",
+                    UNSAFE_DIRECTORY_MODE,
+                    Os.stat(unrelatedDirectory.absolutePath).st_mode and PERMISSION_BITS_MASK,
+                )
+            } finally {
+                directories.filter(File::exists).forEach { directory ->
+                    Os.chmod(directory.absolutePath, PRIVATE_DIRECTORY_MODE)
+                }
+                if (unrelatedDirectory.exists()) {
+                    Os.chmod(unrelatedDirectory.absolutePath, PRIVATE_DIRECTORY_MODE)
+                    unrelatedDirectory.deleteRecursively()
+                }
+            }
+        }
+    }
+
+    private fun assertPrivatePermissions(directories: List<File>) {
+        directories.forEach { directory ->
+            assertEquals(
+                directory.absolutePath,
+                PRIVATE_DIRECTORY_MODE,
+                Os.stat(directory.absolutePath).st_mode and PERMISSION_BITS_MASK,
+            )
+        }
+    }
+
     private companion object {
+        const val PRIVATE_DIRECTORY_MODE = 448
+        const val RESTRICTIVE_DIRECTORY_MODE = 365
+        const val UNSAFE_DIRECTORY_MODE = 511
+        const val PERMISSION_BITS_MASK = 511
+        const val TEST_ARTI_STATE_DIRECTORY = "arti-state"
+        const val TEST_ARTI_CACHE_DIRECTORY = "arti-cache"
+        const val TEST_IDENTITY_VERSION = 9_876_543L
+
         val json =
             Json {
                 ignoreUnknownKeys = false
@@ -107,6 +174,7 @@ class TorRuntimeInstallerDeviceTest {
             Settings(
                 privacyRoute =
                     PrivacyRouteSettings(
+                        permitted = true,
                         mode = PrivacyRouteMode.TOR_OVER_VPN,
                         scope = PrivacyRouteScope.ALL_APPS,
                     ),

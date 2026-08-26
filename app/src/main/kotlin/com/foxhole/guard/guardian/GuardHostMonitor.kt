@@ -8,10 +8,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
-/**
- * Hosts stay remembered while monitoring is disabled, so enabling the guard under an already-running VPN service starts the heartbeat without restarting the tunnel.
- * Every mutation is synchronized: service callbacks, WorkManager and settings actions arrive on different threads.
- */
 internal class GuardHostMonitor(
     private val scope: CoroutineScope,
     private val monitoringActive: () -> Boolean,

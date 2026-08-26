@@ -5,8 +5,6 @@ import com.foxhole.core.model.StoredProfileSecret
 import kotlinx.serialization.json.Json
 import java.util.UUID
 
-// The write/cleanup split of the secret-first mutation: a profile that reuses its stored secret
-// stages no write, and its ref must never reach the cleanup list — it is still live.
 internal fun List<PreparedSubscriptionRefreshProfile>.stagedSecretWrites(): List<StagedProfileSecretWrite> =
     filterNot(PreparedSubscriptionRefreshProfile::reusesExistingSecret)
         .map(PreparedSubscriptionRefreshProfile::stagedSecretWrite)
@@ -52,9 +50,7 @@ internal fun prepareSubscriptionRefreshProfiles(
                 importedRequiresInsecureTls &&
                     (grantInsecureTlsConsent || previousInsecureTlsConsentGranted),
             )
-        // Deterministic node tags make an unchanged subscription reproduce the stored secret
-        // byte-for-byte; reusing the stored ref then skips the re-encryption and the secret-file
-        // rewrite entirely (zero-churn refresh).
+
         val reusesExistingSecret = matchedProfile != null && matchedProfile.storedSecret == refreshedSecret
         PreparedSubscriptionRefreshProfile(
             existingEntity = matchedProfile?.entity,

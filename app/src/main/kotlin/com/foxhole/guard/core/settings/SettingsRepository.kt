@@ -7,6 +7,7 @@ import com.foxhole.core.model.CachedActiveProfile
 import com.foxhole.core.model.KnownApplicationIdentity
 import com.foxhole.core.model.LatencyProbeMethod
 import com.foxhole.core.model.LocalAuthSettings
+import com.foxhole.core.model.PanelAppearance
 import com.foxhole.core.model.PrivacyRouteSettings
 import com.foxhole.core.model.Settings
 import com.foxhole.core.model.SubscriptionRefreshInterval
@@ -38,7 +39,6 @@ class SettingsRepository(
     internal val storage = SettingsRepositoryStorage(appContext)
     private val lock = Mutex()
     private val settingsMutable: MutableStateFlow<Settings>
-    private val themeModeMutable: MutableStateFlow<ThemeMode>
     private val hydratedMutable = MutableStateFlow(false)
 
     @Volatile
@@ -47,21 +47,12 @@ class SettingsRepository(
     val settings: StateFlow<Settings>
         get() = settingsMutable
 
-    val themeMode: StateFlow<ThemeMode>
-        get() = themeModeMutable
-
-    /**
-     * False until the encrypted settings have actually been loaded from disk. Until then
-     * [settings] carries bootstrap defaults (only the fast UI snapshot is real), so screens that
-     * gate content on a toggle must not treat the pre-hydration value as the user's choice.
-     */
     val hydrated: StateFlow<Boolean>
         get() = hydratedMutable
 
     init {
         val bootstrapSettings = storage.bootstrapInitialSettings()
         settingsMutable = MutableStateFlow(bootstrapSettings)
-        themeModeMutable = MutableStateFlow(bootstrapSettings.ui.themeMode)
     }
 
     suspend fun warmUp(): Settings {
@@ -82,7 +73,6 @@ class SettingsRepository(
             }
             initializationResult = Result.success(normalized)
             settingsMutable.value = normalized
-            themeModeMutable.value = normalized.ui.themeMode
             hydratedMutable.value = true
             storage.writeFastUiSnapshot(normalized.ui)
             storage.writeFastAppLockUi(normalized.appLock)
@@ -92,10 +82,11 @@ class SettingsRepository(
     internal suspend fun replaceForTests(value: Settings) = restoreExactCheckpoint(value)
 
     suspend fun updateThemeMode(value: ThemeMode) {
-        ensureInitialized()
-        storage.writeFastThemeMode(value)
-        themeModeMutable.value = value
-        update { it.copy(ui = it.ui.copy(themeMode = value)) }
+        update {
+            it.copy(
+                ui = it.ui.copy(themeMode = value, panelAppearance = PanelAppearance.AUTO),
+            )
+        }
     }
 
     suspend fun updateLocale(value: AppLocale) {
@@ -132,9 +123,6 @@ class SettingsRepository(
     suspend fun updateSubscriptionRefreshInterval(value: SubscriptionRefreshInterval) =
         update { it.copy(connection = it.connection.copy(subscriptionRefreshInterval = value)) }
 
-    // Turning safe mode ON is an explicit user action, so unlike passive normalization it also
-    // resets the whole traffic and privacy-route blocks. What it does to the expert block is
-    // delegated to the ONE shared definition — see [disarmedBySafeMode].
     suspend fun updateSafeModeEnabled(value: Boolean) =
         update { current ->
             if (value) {
@@ -162,9 +150,6 @@ class SettingsRepository(
     suspend fun updateLatencyProbeMethod(value: LatencyProbeMethod) =
         update { it.copy(connection = it.connection.copy(latencyProbeMethod = value)) }
 
-    // Component-update settings (check/auto-update switches and the update stamps) live in
-    // SettingsRepositoryComponentUpdates.kt — class split by domain.
-
     suspend fun updateGeoOfflineMode(value: Boolean) =
         update { it.copy(connection = it.connection.copy(geoOfflineMode = value)) }
 
@@ -191,7 +176,6 @@ class SettingsRepository(
                     initializationResult = loadedResult
                     loadedResult.onSuccess { initialized ->
                         settingsMutable.value = initialized
-                        themeModeMutable.value = initialized.ui.themeMode
                         hydratedMutable.value = true
                     }
                     loadedResult.getOrThrow()
@@ -218,14 +202,11 @@ class SettingsRepository(
             }
             initializationResult = Result.success(next)
             settingsMutable.value = next
-            themeModeMutable.value = next.ui.themeMode
             storage.writeFastUiSnapshot(next.ui)
             storage.writeFastAppLockUi(next.appLock)
         }
         changedQuarantineRevision?.let { revision ->
-            // Persistence is already committed. Scheduling is best-effort here because a transient
-            // WorkManager initialization failure must not make the caller retry the settings write;
-            // startup re-arms every persisted pending decision as a second durable seam.
+
             runCatching { onQuarantinePolicyRevisionChanged(revision) }
         }
     }

@@ -16,15 +16,6 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
-/**
- * Automatic Tor exit rotation: while a Tor route is CONNECTED and the setting
- * is on, requests a fresh circuit identity every configured interval — the same operation as the
- * Tor window's manual refresh (identity bump + runtime reload).
- *
- * Lives in the application scope, not the UI: rotation keeps ticking with the app in the
- * background for as long as the process (and with it the tunnel) is alive. Any input change
- * (setting toggled, interval changed, connection state moved) restarts the countdown.
- */
 class TorExitRotationSupervisor(
     private val scope: CoroutineScope,
     private val settingsRepository: SettingsRepository,
@@ -41,9 +32,7 @@ class TorExitRotationSupervisor(
                     if (gate == null) return@collectLatest
                     while (currentCoroutineContext().isActive) {
                         delay(gate.intervalMinutes * MILLIS_PER_MINUTE)
-                        // A failed identity bump / reload must not kill the supervisor coroutine:
-                        // that would silently stop all further auto-rotation until the process
-                        // restarts. Log-and-continue keeps the next tick scheduled.
+
                         runCatching {
                             settingsRepository.rotatePrivacyRouteIdentity()
                             connectionController.reload(gate.profileId)
@@ -70,9 +59,10 @@ class TorExitRotationSupervisor(
         privacyRoute: PrivacyRouteSettings,
     ): RotationGate? {
         val torRouteActive =
-            snapshot.profileId == FoxholeVpnService.TOR_ONLY_PROFILE_ID || privacyRoute.enabled
+            snapshot.profileId == FoxholeVpnService.TOR_ONLY_PROFILE_ID || snapshot.torActive
         val eligible =
             privacyRoute.permitted &&
+                privacyRoute.enabled &&
                 privacyRoute.autoRotateExit &&
                 torRouteActive &&
                 snapshot.state == ConnectionState.CONNECTED

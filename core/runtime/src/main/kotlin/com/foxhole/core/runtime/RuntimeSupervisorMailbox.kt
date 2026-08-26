@@ -16,6 +16,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 
 @Suppress("TooManyFunctions")
+// STOP/KILL are lossless and may preempt; an in-flight SWITCH stays atomic while ordinary work may coalesce.
 internal class RuntimeSupervisorMailbox(
     private val scope: CoroutineScope,
     private val diagnosticsLogger: RuntimeDiagnosticsSink?,
@@ -23,9 +24,6 @@ internal class RuntimeSupervisorMailbox(
     private val diagnosticsRecorder: RuntimeCommandDiagnosticsRecorder? = null,
     switchCleanupTimeoutMs: Long = RuntimePreemptedCleanupBarrier.PREEMPTED_SWITCH_CLEANUP_TIMEOUT_MS,
 ) {
-    // Sequence values mint from the shared RuntimeGenerationClock (FIFO tie-breaks need only
-    // monotonicity); the local mirror keeps queueSnapshot().lastSequence scoped to THIS mailbox
-    // instead of global clock activity.
     @Volatile
     private var lastMintedSequence = 0L
     private val normalBuffered = AtomicInteger(0)
@@ -40,9 +38,6 @@ internal class RuntimeSupervisorMailbox(
             },
         )
 
-    // Priority commands must never be dropped, but an unlimited channel lets concurrent framework
-    // callbacks outrun the actor and grow without a memory bound. Producers are serialized around
-    // coalescing below; with four priority classes the retained frontier is smaller than this cap.
     private val priorityCommands = Channel<QueuedRuntimeCommand>(PRIORITY_COMMAND_BUFFER_CAPACITY)
     private val priorityEnqueueLock = Any()
     private val closed = AtomicBoolean(false)
@@ -275,12 +270,7 @@ internal class RuntimeSupervisorMailbox(
                     drainingPreemptedJobs = drainingPreemptedJobs,
                 )
             }
-            // A same-reason normal command arriving mid-run is NOT dropped: the running pass may
-            // have read settings older than this request (e.g. a reload that loaded its session
-            // before the latest Apps-screen toggle landed), so swallowing it latched stale config
-            // until a manual reconnect. It trails instead — enqueuePendingNormalCommand keeps at
-            // most ONE pending per reason, so a rapid toggle burst collapses to two passes total:
-            // the running one and a single trailing latest-wins pass that re-reads fresh settings.
+
             else -> {
                 val result = enqueuePendingNormalCommand(command, pending)
                 pendingDepth.set(pending.size)
@@ -385,10 +375,6 @@ internal class RuntimeSupervisorMailbox(
             }
         }
 
-    // A running transition (SWITCH and above) is atomic: only a user-initiated stop or a kill may
-    // interrupt it. Everything else queues behind it — a newer switch replaces the pending one
-    // (latest wins) instead of force-killing the runtime mid-transition. Running NORMAL/STOP work
-    // stays preemptible by any higher class, e.g. Stop cancelling an in-flight reload.
     private fun QueuedRuntimeCommand.shouldPreempt(running: QueuedRuntimeCommand): Boolean =
         priority > running.priority &&
             (
@@ -429,9 +415,6 @@ internal class RuntimeSupervisorMailbox(
                 if (preemptedJobsForSwitch.isNotEmpty() &&
                     !cleanupBarrier.awaitBeforeSwitch(preemptedJobsForSwitch)
                 ) {
-                    // A hung cleanup must not eat the user's transition: the preempted runtime is
-                    // already force-killed, so dropping the command here would park the mailbox on
-                    // a dead snapshot forever. Latest wins — run the switch anyway.
                     recordCommandEvent(
                         headline = "runtime switch proceeding after cleanup timeout",
                         command = command,

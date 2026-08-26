@@ -3,7 +3,7 @@ package com.foxhole.core.model
 import androidx.compose.runtime.Immutable
 import kotlinx.serialization.Serializable
 
-const val SETTINGS_SCHEMA_VERSION = 19
+const val SETTINGS_SCHEMA_VERSION = 20
 const val NETWORK_FINGERPRINT_SCHEMA_CURRENT = 2
 const val NETWORK_FINGERPRINT_SCHEMA_LEGACY = 1
 const val DEFAULT_DNS_FILTER_UPDATE_URL = "https://foxhole-team.github.io/foxhole-db/manifest.json"
@@ -95,8 +95,7 @@ data class ProfileProtocolOption(
     val protocolHint: ProtocolHint,
     val requiresInsecureTls: Boolean = false,
     val isSelected: Boolean = false,
-    // Per-protocol on/off inside a smart profile (N1). Persisted in the profile secret; a disabled
-    // option stays in the list but cannot be picked as the running protocol until re-enabled.
+
     val enabled: Boolean = true,
 )
 
@@ -168,6 +167,13 @@ data class ProfileTrafficTotal(
 )
 
 @Immutable
+data class AppliedTorRoute(
+    val scope: PrivacyRouteScope,
+    val bypassVpnTunnel: Boolean,
+    val selectedPackages: List<String> = emptyList(),
+)
+
+@Immutable
 data class ConnectionSnapshot(
     val state: ConnectionState = ConnectionState.IDLE,
     val teardownPhase: RuntimeTeardownPhase? = null,
@@ -176,15 +182,12 @@ data class ConnectionSnapshot(
     val profileName: String? = null,
     val protocolHint: ProtocolHint? = null,
     val protocolOptionId: String? = null,
-    // True only when the *applied* runtime config actually carries the Tor route (in-tunnel or
-    // beside) or the runtime IS the standalone Tor-only session. The settings toggle merely arms
-    // the route; status labels/badges must report engagement from this flag, never from settings.
+
     val torActive: Boolean = false,
+    val appliedTorRoute: AppliedTorRoute? = null,
     val message: String? = null,
     val reasonCode: AutoConnectReasonCode? = null,
-    // A service-owned hot apply is validating an already-live runtime. This is deliberately false
-    // for genuine reconnects and cold restarts so presentation reducers can retain proven route
-    // identity without hiding a real connection transition.
+
     val inPlaceRuntimeReload: Boolean = false,
     val isSmartStartConnection: Boolean = false,
     val upstreamNetworkRevision: Long = 0L,
@@ -294,17 +297,10 @@ data class StoredProfileProtocolOption(
     val protocolHint: ProtocolHint,
     val normalizedConfigJson: String,
     val requiresInsecureTls: Boolean = false,
-    // Persisted per-protocol on/off (N1). Defaults to true so profiles serialized before this field
-    // existed deserialize as fully enabled.
+
     val enabled: Boolean = true,
 )
 
-/**
- * Strict Rust-engine documents plus the Android-owned TUN plan produced at the migration boundary.
- *
- * Secrets can be present in the engine document, so the value deliberately has a redacted
- * [toString]. It is an in-memory session contract, not a persistence DTO.
- */
 @Immutable
 data class FoxCoreSessionConfig(
     val engineConfigJson: String,
@@ -318,13 +314,6 @@ data class FoxCoreSessionConfig(
             "dnsRuleSetBootstrap=${dnsRuleSetBootstrap?.redactedDescription()})"
 }
 
-/**
- * Non-JSON bootstrap for the DNS FST covered by a verified FoxHole DB manifest signature.
- *
- * The update verification key is pinned in the prepared FoxCore DNS policy;
- * artifact bytes are read separately and never enter profile JSON, logs or
- * backups.
- */
 data class FoxCoreDnsRuleSetBootstrap(
     val name: String,
     val artifactPath: String,
@@ -374,33 +363,21 @@ data class VpnSession(
     val protocolOptionId: String? = null,
     val configJson: String,
     val correlationId: String,
-    /**
-     * The only configuration the native data plane is allowed to consume. [configJson] remains
-     * temporarily for app-side validation and one-shot migration of saved profiles; it is never
-     * passed to JNI.
-     */
+
     val foxCoreConfig: FoxCoreSessionConfig? = null,
-    // True when this session's assembled config carries the Tor route (or is the Tor-only
-    // runtime); flows into ConnectionSnapshot.torActive on connect/reload.
+
     val torActive: Boolean = false,
-    /**
-     * Full-capture local guards must return fake addresses to Android and keep the original host
-     * attached to the flow. The narrow DNS-only guard cannot use fake addresses because it does
-     * not route the later application connection through its TUN.
-     */
+    val appliedTorRoute: AppliedTorRoute? = null,
+
     val forceFakeIpDns: Boolean = false,
-    /**
-     * Native, first-packet quarantine. When armed, FoxCore rejects every attributed package that
-     * is absent from [knownApplications]; the PackageManager broadcast and Sentinel analysis are
-     * deliberately not on the enforcement path.
-     */
+
     val quarantineNewApps: Boolean = false,
     val knownApplications: List<KnownApplicationIdentity> = emptyList(),
-    /** Fingerprint captured from the same immutable inputs that assembled [configJson]. */
+
     val runtimeConfigFingerprint: Int? = null,
-    /** Durable quarantine/BLOCK revision captured together with this exact session. */
+
     val quarantinePolicyRevision: Long = 0L,
-    /** Generation of the exact authenticated i2pd endpoint embedded in this config. */
+
     val i2pEndpointGeneration: Long? = null,
 )
 

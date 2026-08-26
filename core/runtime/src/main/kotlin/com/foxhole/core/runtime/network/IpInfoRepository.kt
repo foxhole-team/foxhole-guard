@@ -37,9 +37,7 @@ import kotlin.system.measureTimeMillis
 class IpInfoRepository(
     private val client: OkHttpClient,
     private val json: Json,
-    // Offline IP→country fallback (bundled/updatable geoip ranges). Fills countryCode/countryName
-    // the instant an exit IP is known, so the dashboard and traffic map never wait on — or lose —
-    // the online geo providers. City/ISP still come from the online enrichment when it succeeds.
+
     private val localCountryCode: ((String) -> String?)? = null,
 ) {
     private val httpClientCacheLock = Any()
@@ -261,12 +259,6 @@ class IpInfoRepository(
             }
         }
 
-    /**
-     * Fetches the Tor Project check directly and accepts only an explicit `IsTor: true` answer.
-     *
-     * This is deliberately separate from the ordinary [fetch] fallback chain: a healthy generic
-     * IP provider proves public reachability, but cannot prove that the request used Tor.
-     */
     suspend fun fetchVerifiedTorExit(
         callTimeoutMs: Long? = null,
         proxy: HttpProxyAccess,
@@ -288,10 +280,6 @@ class IpInfoRepository(
             }
         }
 
-    // Races the candidates and returns as soon as one delivers a complete answer (for geo
-    // enrichment: country + city + isp); the remaining in-flight endpoints are cancelled. A slow
-    // or unreachable provider can therefore never hold a fast city/geo answer hostage for the
-    // whole call timeout. Incomplete answers are kept and the best one is the fallback result.
     private suspend fun fetchCandidatesInParallel(
         strategy: EndpointFetchStrategy,
         mode: IpInfoFetchMode,
@@ -772,8 +760,5 @@ class IpInfoRepository(
         val SOCKS_AUTH_LOCK = Any()
         const val HTTP_CLIENT_CACHE_MAX_SIZE = 24
         val HTTP_CLIENT_CACHE_TTL_NANOS = TimeUnit.MINUTES.toNanos(5)
-
-        // Both defaults must survive a Tor circuit (TLS handshake through Tor is often 1-4s);
-        // geo enrichment races candidates in parallel so the longer window does not stack.
     }
 }

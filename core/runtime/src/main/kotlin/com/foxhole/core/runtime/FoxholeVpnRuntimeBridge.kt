@@ -22,11 +22,8 @@ import java.net.InetAddress
 import java.net.Socket
 
 object FoxholeVpnRuntimeBridge {
-    // Internal, not private: the surfaces split into FoxholeVpnRuntimeBridgeSurfaces.kt publish
-    // under the very same lock they did as members here.
     internal val writeLock = Any()
 
-    // Wired once by the app to route stale-write rejections into the diagnostics journal.
     @Volatile
     var onWriteRejected: ((mode: TrafficMode, incoming: ConnectionSnapshot?) -> Unit)? = null
 
@@ -37,18 +34,11 @@ object FoxholeVpnRuntimeBridge {
             onRejected = { mode, incoming -> onWriteRejected?.invoke(mode, incoming) },
         )
 
-    /**
-     * Mode-scoped write facade with a monotonically increasing session epoch. A newer writer may
-     * claim the current mode, while CONNECTING may also transfer ownership across modes. Once a
-     * newer writer claims the bridge, every mutation from the older writer is rejected, including
-     * a delayed CONNECTING that used to reopen the previous runtime.
-     */
     fun writer(mode: TrafficMode): ModeScopedBridgeWriter =
         ModeScopedBridgeWriter(
             token = writerGate.newToken(mode),
         )
 
-    /** Control-flow check for teardown paths that should skip work during a cross-mode handoff. */
     fun snapshotOwnedByAnotherMode(mode: TrafficMode): Boolean =
         snapshotMutable.value.isActiveRuntimeForAnotherMode(mode)
 
@@ -63,7 +53,6 @@ object FoxholeVpnRuntimeBridge {
             applyWriterMutationLocked(mutation)
         }
 
-    // Called only while writeLock is held.
     private fun applyWriterMutationLocked(mutation: BridgeWriterMutation): Boolean =
         when (mutation) {
             is BridgeWriterMutation.UpdateSnapshot -> {
@@ -111,23 +100,12 @@ object FoxholeVpnRuntimeBridge {
     private val ipInfoMutable = MutableStateFlow<IpInfo?>(null)
     private val deviceIpInfoMutable = MutableStateFlow<IpInfo?>(null)
 
-    // The Tor exit IP as observed by the runtime's own tunnel validation (it routes through
-    // tunnel -> runtime -> Tor). The dashboard VPN ipInfo deliberately keeps the VPN exit, and the
-    // app's own probe is excluded from Tor, so this is the only source of the real Tor exit.
     private val torRouteIpInfoMutable = MutableStateFlow<IpInfo?>(null)
     private val trafficMutable = MutableStateFlow(TrafficSnapshot())
 
-    // Honest network phases: Tor's fed by the log tail / control probe, I2P's by the
-    // i2pd process output. Both reset to OFFLINE with their runtimes.
     private val torPhaseMutable = MutableStateFlow(TorPhaseSnapshot())
     private val i2pPhaseMutable = MutableStateFlow(I2pPhaseSnapshot())
 
-    // The LAN proxy as the core reports it. Ungated on purpose: its only writer is the LAN
-    // controller on the VPN service's control path, and unlike the connection snapshot it is not
-    // contested between traffic modes — a stale-writer fence here would only be able to drop the
-    // teardown that turns the pill off.
-    //
-    // Internal, not private: its writer is one of the surfaces split below the object.
     internal val lanProxyStatusMutable = MutableStateFlow(LanProxyStatusSnapshot())
     internal val localProxyStatusMutable = MutableStateFlow(LocalProxyStatusSnapshot())
     private val activeServerPingTargetMutable = MutableStateFlow<ActiveServerPingTarget?>(null)
@@ -135,12 +113,9 @@ object FoxholeVpnRuntimeBridge {
     private val immediateTrafficSampleRequestsMutable = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     private val runtimeUiStateMutable = MutableStateFlow(RuntimeUiState())
 
-    // The VpnService's own protect(), installed by the control plane and read on probe threads.
-    // Internal, not private: its accessors are surfaces split below the object.
     @Volatile
     internal var socketProtector: ((Socket) -> Boolean)? = null
 
-    // Written from the control plane on Main and from validation coroutines on IO.
     @Volatile
     private var pendingIpRefreshReason: RuntimeIpRefreshReason? = null
 
@@ -153,7 +128,6 @@ object FoxholeVpnRuntimeBridge {
     val i2pPhase: StateFlow<I2pPhaseSnapshot> = i2pPhaseMutable
     val lanProxyStatus: StateFlow<LanProxyStatusSnapshot> = lanProxyStatusMutable
 
-    /** The device-local proxy, published by the same session path and read the same way. */
     val localProxyStatus: StateFlow<LocalProxyStatusSnapshot> = localProxyStatusMutable
     val activeServerPingTarget: StateFlow<ActiveServerPingTarget?> = activeServerPingTargetMutable
     val highFrequencyTrafficUpdates: StateFlow<Boolean> = highFrequencyTrafficUpdatesMutable
@@ -173,7 +147,6 @@ object FoxholeVpnRuntimeBridge {
         }
     }
 
-    // Called only while writeLock is held.
     private fun updateSnapshotLocked(
         value: ConnectionSnapshot,
         refreshLastChangeAt: Boolean,
@@ -193,7 +166,6 @@ object FoxholeVpnRuntimeBridge {
         }
     }
 
-    // Called only while writeLock is held.
     private fun updateIpInfoLocked(value: IpInfo?) {
         pendingIpRefreshReason = null
         ipInfoMutable.value =
@@ -204,7 +176,6 @@ object FoxholeVpnRuntimeBridge {
                 value.retainKnownDetailsFrom(previous)
             }
         if (value == null) {
-            // Clearing the dashboard IP (disconnect/teardown) also clears the Tor route exit.
             torRouteIpInfoMutable.value = null
         }
         publishRuntimeUiState()
@@ -213,9 +184,7 @@ object FoxholeVpnRuntimeBridge {
     fun updateTorRouteIpInfo(value: IpInfo?) {
         synchronized(writeLock) {
             torRouteIpInfoMutable.value = value
-            // The Tor exit is half of the published Tor state (Bootstrapping -> Ready), so the
-            // projection has to be re-run here. Without it the state stayed on whatever the last
-            // snapshot write happened to leave behind.
+
             publishRuntimeUiState()
         }
     }
@@ -226,7 +195,6 @@ object FoxholeVpnRuntimeBridge {
         }
     }
 
-    // Called only while writeLock is held.
     private fun markIpInfoRefreshPendingLocked(reason: RuntimeIpRefreshReason) {
         pendingIpRefreshReason = reason
         publishRuntimeUiState()
@@ -241,7 +209,6 @@ object FoxholeVpnRuntimeBridge {
             updateDeviceIpInfoLocked(value, allowNewAddress)
         }
 
-    // Called only while writeLock is held.
     private fun updateDeviceIpInfoLocked(
         value: IpInfo?,
         allowNewAddress: Boolean,
@@ -296,13 +263,11 @@ object FoxholeVpnRuntimeBridge {
         }
     }
 
-    // Called only while writeLock is held.
     private fun clearTransientStateLocked(clearIpInfo: Boolean) {
         pendingIpRefreshReason = null
         if (clearIpInfo) {
             ipInfoMutable.value = null
-            // Mirror updateIpInfoLocked(null): the disconnect that clears the dashboard IP must also
-            // drop the Tor-route exit, or the last TOR IP lingers on screen after a VPN+TOR stop.
+
             torRouteIpInfoMutable.value = null
         }
         activeServerPingTargetMutable.value = null
@@ -311,21 +276,6 @@ object FoxholeVpnRuntimeBridge {
         publishRuntimeUiState()
     }
 
-    /**
-     * The Tor phase, derived — because nothing feeds it.
-     *
-     * `updateTorPhase` had no caller anywhere in the product: the phase was written for the era
-     * when Tor was a separate daemon whose bootstrap was read off a log tail, and when Tor moved
-     * inside FoxCore that feed disappeared with it. The core publishes no bootstrap progress at
-     * all, so the snapshot sat on OFFLINE forever and every Tor line the terminal knows how to
-     * print — leg opened, network up, stopped — was unreachable. Measured on the bench Pixel: a
-     * session that demonstrably carried traffic through Tor reported `Off` for three minutes.
-     *
-     * So it is computed here from what the runtime does know, and deliberately not more than that:
-     * an engaged Tor route that has not finished connecting is CONNECTING, one on a connected
-     * session is CONNECTED. BUILDING_CIRCUITS and the percentage are not invented — the terminal
-     * already handles a bootstrap that skips straight to connected.
-     */
     private fun torPhaseFor(snapshot: ConnectionSnapshot): TorPhaseSnapshot {
         val engaged = snapshot.torActive || snapshot.profileId == TOR_ONLY_PROFILE_ID
         val previous = torPhaseMutable.value
@@ -346,7 +296,6 @@ object FoxholeVpnRuntimeBridge {
         }
     }
 
-    // Called only while writeLock is held.
     private fun publishRuntimeUiState() {
         torPhaseMutable.value = torPhaseFor(snapshotMutable.value)
         runtimeUiStateMutable.value =
@@ -360,11 +309,6 @@ object FoxholeVpnRuntimeBridge {
             ).project(previous = runtimeUiStateMutable.value)
     }
 }
-
-// Two writer surfaces of the bridge that own no part of the connection snapshot and take no part
-// in its projection: the LAN proxy pill and the direct-socket protector. They sit beside the
-// object rather than inside it (member-count budget); the state, the lock and the publishing
-// order are unchanged, and they stay in this file so the legacy-bridge fence keeps covering them.
 
 fun FoxholeVpnRuntimeBridge.updateLanProxyStatus(value: LanProxyStatusSnapshot) {
     synchronized(writeLock) {
@@ -386,11 +330,6 @@ fun FoxholeVpnRuntimeBridge.updateSocketProtector(value: ((Socket) -> Boolean)?)
 fun FoxholeVpnRuntimeBridge.protectDirectSocket(socket: Socket): Boolean =
     socketProtector?.invoke(socket) ?: false
 
-/**
- * Bridge mutators bound to the [TrafficMode] on whose behalf they publish. Every method returns
- * false (and writes nothing) when another mode owns the published snapshot — the central
- * replacement for the per-call-site isActiveRuntimeForAnotherMode guards.
- */
 class ModeScopedBridgeWriter internal constructor(
     private val token: BridgeWriterToken,
 ) {
@@ -517,12 +456,8 @@ private class BridgeWriterGate(
     private val currentSnapshot: () -> ConnectionSnapshot,
     private val onRejected: (TrafficMode, ConnectionSnapshot?) -> Unit,
 ) {
-    // Guarded by lock. Epochs mint from the shared control-plane clock (Ф3c): acceptLocked uses
-    // only ordering comparisons, and a global total order strengthens them — bridge tokens and
-    // control-plane transitions now order against each other too.
     private var fenceEpoch = 0L
 
-    // Guarded by lock.
     private var activeToken: BridgeWriterToken? = null
 
     fun newToken(mode: TrafficMode): BridgeWriterToken =
@@ -552,7 +487,6 @@ private class BridgeWriterGate(
         return result
     }
 
-    // Called only while lock is held.
     fun fenceForControlPlaneTransition(
         previous: ConnectionSnapshot,
         incoming: ConnectionSnapshot,
@@ -570,7 +504,6 @@ private class BridgeWriterGate(
         }
     }
 
-    // Called only while lock is held.
     private fun acceptLocked(
         token: BridgeWriterToken,
         incoming: ConnectionSnapshot?,

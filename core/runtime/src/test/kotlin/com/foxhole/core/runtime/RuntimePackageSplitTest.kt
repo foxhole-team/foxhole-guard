@@ -7,7 +7,6 @@ import org.junit.Test
 class RuntimePackageSplitTest {
     @Test
     fun `include split fails closed when nothing was applied`() {
-        // Zero allowed apps would turn the per-app tun into a full-device capture.
         assertTrue(
             shouldFailClosedVpnPackageSplit(
                 includeMode = true,
@@ -19,7 +18,6 @@ class RuntimePackageSplitTest {
 
     @Test
     fun `include split tolerates an uninstalled package when others applied`() {
-        // The uninstalled app has no traffic; the remaining apps still route through the tunnel.
         assertFalse(
             shouldFailClosedVpnPackageSplit(
                 includeMode = true,

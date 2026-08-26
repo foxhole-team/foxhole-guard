@@ -58,8 +58,6 @@ private fun Settings.withNewAppQuarantineEnabled(
 private suspend fun SettingsRepository.reconcileEnabledQuarantineOrRollback(newlyEnabled: Boolean) {
     runCatching { reconcileNewAppQuarantineGaps() }
         .onFailure {
-            // Never leave a newly enabled quarantine with a baseline whose enable-time race could
-            // not be closed. Any already-persisted pending blocks remain fail-closed.
             if (newlyEnabled) {
                 update { current ->
                     current.copy(
@@ -74,11 +72,6 @@ private suspend fun SettingsRepository.reconcileEnabledQuarantineOrRollback(newl
         }.getOrThrow()
 }
 
-/**
- * One-shot compatibility migration for settings written before the persisted quarantine baseline
- * existed. A non-empty baseline is never refreshed here: doing so would admit apps installed while
- * the tunnel was down.
- */
 suspend fun SettingsRepository.ensureNewAppQuarantineBaseline(settings: Settings? = null): Settings {
     val currentSettings = settings ?: current()
     if (

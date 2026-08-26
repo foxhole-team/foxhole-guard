@@ -24,7 +24,7 @@ internal fun CliExternalLinkSheet(
         onDismiss = onDismiss,
         modifier = modifier,
         title = stringResource(R.string.cli_external_link_title),
-        icon = R.drawable.pix_link,
+        icon = R.drawable.lin_link,
     ) {
         Text(
             text = stringResource(R.string.cli_external_link_body),
@@ -39,7 +39,6 @@ internal fun CliExternalLinkSheet(
         )
         Spacer(modifier = Modifier.height(CliSpacing.md))
         CliSheetActionsRow(
-            onCancel = onDismiss,
             actions = listOf(
                 CliSheetAction(
                     label = stringResource(R.string.cli_common_yes_confirm),
@@ -47,6 +46,7 @@ internal fun CliExternalLinkSheet(
                         onDismiss()
                         runCatching { uriHandler.openUri(url) }
                     },
+                    dismissAfterClick = true,
                 ),
             ),
         )

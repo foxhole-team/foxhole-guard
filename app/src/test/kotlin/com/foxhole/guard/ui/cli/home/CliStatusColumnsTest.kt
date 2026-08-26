@@ -11,6 +11,23 @@ import java.io.File
 class CliStatusColumnsTest {
 
     @Test
+    fun `terminal starts ordinary lines in lowercase without rewriting identity values`() {
+        assertEquals("waiting for connection", cliTerminalLineText("Waiting for connection"))
+        assertEquals("ожидание подключения", cliTerminalLineText("Ожидание подключения"))
+        assertEquals("VPN profile", cliTerminalLineText("VPN profile"))
+        assertEquals("FoxHole Guard · v0.1.0", cliTerminalLineText("FoxHole Guard · v0.1.0"))
+        assertEquals("scenario:", cliTerminalKeyLabel("Scenario"))
+    }
+
+    @Test
+    fun `terminal commands are lowercased for display without changing their length`() {
+        val command = "START VPN --MODE=TOR"
+
+        assertEquals("start vpn --mode=tor", cliTerminalCommandText(command))
+        assertEquals(command.length, cliTerminalCommandText(command).length)
+    }
+
+    @Test
     fun `a journal event keeps its tag and message in one wrapping line`() {
         val row = cliEventColumnRow(
             event = "connection",
@@ -56,6 +73,24 @@ class CliStatusColumnsTest {
     }
 
     @Test
+    fun `terminal IP keeps its full semantic text on one visual line`() {
+        val value = cli("home/CliHomeTerminal.kt")
+            .substringAfter("private fun RowScope.CliTerminalValueText(")
+            .substringBefore("private const val INLINE_PACKAGE_SLOT_PREFIX")
+
+        assertTrue(value.contains("cliTerminalValueStaysOnOneLine(line.icon, value)"))
+        assertTrue(value.contains("maxLines = if (keepOnOneLine) 1 else BODY_MAX_LINES"))
+        assertTrue(value.contains("softWrap = !keepOnOneLine"))
+        assertTrue(value.contains("TextOverflow.Ellipsis"))
+        assertTrue("the unabridged value remains the Text semantics payload", value.contains("text = value"))
+        assertTrue(cliTerminalValueStaysOnOneLine(CliLineIcon.IP, "not resolved yet"))
+        assertTrue(cliTerminalValueStaysOnOneLine(null, "198.51.100.10 · US"))
+        assertTrue(cliTerminalValueStaysOnOneLine(null, "198.51.100.10\u2009·\u2009US"))
+        assertTrue(cliTerminalValueStaysOnOneLine(null, "2001:db8::1 · NL"))
+        assertFalse(cliTerminalValueStaysOnOneLine(null, "a long provider description"))
+    }
+
+    @Test
     fun `route identity stays in the shared right aligned terminal columns`() {
         val identities = cli("home/CliRouteIdentityRows.kt")
             .substringAfter("internal fun cliStatusRouteIdentityRows(")
@@ -71,6 +106,38 @@ class CliStatusColumnsTest {
         assertTrue(columns.contains("index < line.packages.lastIndex"))
         assertTrue(columns.contains("line.value != null"))
         assertTrue(columns.contains("line.flagCountry != null"))
+    }
+
+    @Test
+    fun `connecting scenario reports that it is waiting without changing the state mapping`() {
+        val stateLabels = cli("home/CliHomeTerminal.kt")
+            .substringAfter("internal fun stateLabel(state: ConnectionState)")
+            .substringBefore("\n}")
+        assertTrue(
+            stateLabels.contains(
+                "ConnectionState.CONNECTING -> stringResource(R.string.cli_home_state_connecting)",
+            ),
+        )
+        assertTrue(
+            resource("values/strings.xml").contains(
+                "name=\"cli_home_state_connecting\">Waiting for connection</string>",
+            ),
+        )
+        assertTrue(
+            resource("values-ru/strings.xml").contains(
+                "name=\"cli_home_state_connecting\">Ожидание подключения</string>",
+            ),
+        )
+        assertTrue(
+            resource("values/strings.xml").contains(
+                "name=\"cli_cfg_home_additional_info_map\">Traffic map</string>",
+            ),
+        )
+        assertTrue(
+            resource("values-ru/strings.xml").contains(
+                "name=\"cli_cfg_home_additional_info_map\">Карта трафика</string>",
+            ),
+        )
     }
 
     @Test

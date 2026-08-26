@@ -5,9 +5,6 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.os.PersistableBundle
 import androidx.annotation.DrawableRes
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -28,7 +25,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.disabled
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.foxhole.guard.R
 import com.foxhole.guard.ui.cli.CliIconSize
@@ -43,16 +45,21 @@ internal fun CliSecretRow(
     onValueChange: (String) -> Unit,
     clipboardLabel: String,
     modifier: Modifier = Modifier,
+    onCopy: (() -> Unit)? = null,
     onCopied: (() -> Unit)? = null,
+    rowMinHeight: Dp = 48.dp,
 ) {
     val colors = LocalCliColors.current
     val context = LocalContext.current
     var editing by rememberSaveable(prompt) { mutableStateOf(false) }
-    val revealSource = remember { MutableInteractionSource() }
-    val revealed by revealSource.collectIsPressedAsState()
+    var editDraft by remember(prompt) { mutableStateOf("") }
+    var editDraftChanged by remember(prompt) { mutableStateOf(false) }
+    var revealed by rememberSaveable(prompt, value.isBlank()) { mutableStateOf(false) }
+    val hasValue = value.isNotBlank()
+    val actionSize = minOf(rowMinHeight, SECRET_ACTION_SIZE)
     Column(modifier = modifier.fillMaxWidth()) {
         Row(
-            modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 48.dp),
+            modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = rowMinHeight),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
@@ -71,54 +78,91 @@ internal fun CliSecretRow(
                 modifier = Modifier.weight(1f),
             )
             CliSecretAction(
-                icon = R.drawable.pix_edit,
-                description = stringResource(R.string.cli_secret_action_edit),
-                tint = if (editing) colors.accent else colors.dim,
-                onClick = { editing = !editing },
+                icon = if (revealed) R.drawable.lin_eye_off else R.drawable.lin_eye,
+                description = stringResource(
+                    if (revealed) R.string.cli_secret_action_hide else R.string.cli_secret_action_show,
+                ),
+                tint = if (hasValue) {
+                    if (revealed) colors.accent else colors.dim
+                } else {
+                    colors.faint
+                },
+                enabled = hasValue,
+                size = actionSize,
+                onClick = { revealed = !revealed },
             )
-            Box(
-                modifier = Modifier
-                    .size(SECRET_ACTION_SIZE)
-                    .clickable(
-                        interactionSource = revealSource,
-                        indication = null,
-                        onClickLabel = stringResource(R.string.cli_secret_action_reveal),
-                    ) {},
-                contentAlignment = Alignment.Center,
-            ) {
-                CliPixIcon(
-                    id = R.drawable.pix_incognito,
-                    contentDescription = stringResource(R.string.cli_secret_action_reveal),
-                    size = CliIconSize.row,
-                    tint = if (revealed) colors.accent else colors.dim,
-                )
-            }
             CliSecretAction(
-                icon = R.drawable.pix_copy,
-                description = stringResource(R.string.cli_secret_action_copy),
-                tint = colors.dim,
+                icon = R.drawable.lin_copy,
+                description = stringResource(R.string.cli_lan_proxy_copy_pass),
+                tint = if (hasValue) colors.dim else colors.faint,
+                enabled = hasValue,
+                size = actionSize,
                 onClick = {
-                    cliCopySecretToClipboard(context, clipboardLabel, value)
+                    if (onCopy != null) {
+                        onCopy()
+                    } else {
+                        cliCopySecretToClipboard(context, clipboardLabel, value)
+                    }
                     onCopied?.invoke()
+                },
+            )
+            CliSecretAction(
+                icon = R.drawable.lin_edit,
+                description = stringResource(R.string.cli_lock_change),
+                tint = if (editing) colors.accent else colors.dim,
+                size = actionSize,
+                onClick = {
+                    editing = !editing
+                    editDraft = ""
+                    editDraftChanged = false
                 },
             )
         }
         if (editing) {
             CliInputRow(
                 prompt = prompt,
-                value = value,
-                onValueChange = onValueChange,
+                value = editDraft,
+                onValueChange = { nextDraft ->
+                    val change = cliSecretDraftChange(nextDraft, editDraftChanged)
+                    editDraft = change.draft
+                    editDraftChanged = change.changed
+                    change.replacement?.let(onValueChange)
+                },
+                onSubmit = {
+                    editing = false
+                    editDraft = ""
+                    editDraftChanged = false
+                },
                 autoFocus = true,
                 password = !revealed,
+                rowMinHeight = rowMinHeight,
             )
         }
     }
 }
 
-private fun cliSecretDisplay(value: String, revealed: Boolean): String = when {
-    value.isEmpty() -> ""
+internal fun cliSecretDisplay(value: String, revealed: Boolean): String = when {
+    value.isBlank() -> ""
     revealed -> value
     else -> SECRET_MASK
+}
+
+internal data class CliSecretDraftChange(
+    val draft: String,
+    val changed: Boolean,
+    val replacement: String?,
+)
+
+internal fun cliSecretDraftChange(
+    nextDraft: String,
+    previouslyChanged: Boolean,
+): CliSecretDraftChange {
+    val changed = previouslyChanged || nextDraft.isNotEmpty()
+    return CliSecretDraftChange(
+        draft = nextDraft,
+        changed = changed,
+        replacement = if (changed) nextDraft else null,
+    )
 }
 
 @Composable
@@ -126,15 +170,23 @@ private fun CliSecretAction(
     @DrawableRes icon: Int,
     description: String,
     tint: Color,
+    enabled: Boolean = true,
+    size: Dp = SECRET_ACTION_SIZE,
     onClick: () -> Unit,
 ) {
     Box(
-        modifier = Modifier.size(SECRET_ACTION_SIZE).cliPressable(onClick = onClick),
+        modifier = Modifier
+            .size(size)
+            .semantics {
+                contentDescription = description
+                if (!enabled) disabled()
+            }
+            .cliPressable(enabled = enabled, role = Role.Button, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        CliPixIcon(
+        CliIcon(
             id = icon,
-            contentDescription = description,
+            contentDescription = null,
             size = CliIconSize.row,
             tint = tint,
         )
@@ -146,7 +198,7 @@ internal fun cliCopySecretToClipboard(
     label: String,
     secret: String,
 ) {
-    if (secret.isEmpty()) {
+    if (secret.isBlank()) {
         return
     }
     val clipboard = context.getSystemService(ClipboardManager::class.java) ?: return
@@ -161,4 +213,4 @@ internal fun cliCopySecretToClipboard(
 }
 
 private const val SECRET_MASK = "••••••••"
-private val SECRET_ACTION_SIZE = 40.dp
+private val SECRET_ACTION_SIZE = 48.dp

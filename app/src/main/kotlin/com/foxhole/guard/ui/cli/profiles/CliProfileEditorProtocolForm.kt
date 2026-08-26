@@ -23,10 +23,10 @@ import com.foxhole.guard.ui.cli.CliType
 import com.foxhole.guard.ui.cli.LocalCliColors
 import com.foxhole.guard.ui.cli.components.CliConfirmSheet
 import com.foxhole.guard.ui.cli.components.CliElbowLine
+import com.foxhole.guard.ui.cli.components.CliIcon
 import com.foxhole.guard.ui.cli.components.CliInputRow
 import com.foxhole.guard.ui.cli.components.CliOptionRow
 import com.foxhole.guard.ui.cli.components.CliPanel
-import com.foxhole.guard.ui.cli.components.CliPixIcon
 import com.foxhole.guard.ui.cli.components.CliSelectRow
 import com.foxhole.guard.ui.cli.components.CliToggleRow
 import com.foxhole.guard.ui.cli.components.cliPressable
@@ -46,7 +46,7 @@ internal fun CliProfileEditorProtocolCard(
     val colors = LocalCliColors.current
     val type = outbound.cliEditorProtocolType()
     CliPanel(
-        icon = R.drawable.pix_shield,
+        icon = R.drawable.lin_shield,
         modifier = modifier.fillMaxWidth(),
         title = "$type · ${outbound.cliOutboundTag().ifBlank { slotLabel }}",
         titleColor = if (enabled) colors.accent else colors.faint,
@@ -91,8 +91,8 @@ private fun CliProtocolCardActions(
                 .cliPressable(onClick = { confirmDelete = true }),
             contentAlignment = Alignment.Center,
         ) {
-            CliPixIcon(
-                id = R.drawable.pix_trash,
+            CliIcon(
+                id = R.drawable.lin_trash,
                 contentDescription = stringResource(R.string.cli_prof_edit_delete),
                 tint = colors.err,
             )
@@ -101,7 +101,7 @@ private fun CliProtocolCardActions(
     if (confirmDelete) {
         CliConfirmSheet(
             title = stringResource(R.string.cli_prof_edit_delete),
-            icon = R.drawable.pix_trash,
+            icon = R.drawable.lin_trash,
             question = stringResource(R.string.cli_data_destructive_confirm, label),
             onConfirm = {
                 confirmDelete = false

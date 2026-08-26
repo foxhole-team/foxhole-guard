@@ -23,10 +23,7 @@ internal data class SubscriptionResponse(
 internal class SubscriptionFetchUseCase(
     private val httpClient: OkHttpClient,
     private val resolver: RemoteHostResolver? = null,
-    // Read for every fetch: a local firewall may capture FoxHole's own UID when WebView routing is
-    // enabled, while subscription refresh is control-plane traffic that must use the current
-    // physical network. A provider also avoids pinning a stale Wi-Fi/cellular Network in a cached
-    // OkHttpClient after handover.
+
     private val underlyingSocketFactory: () -> SocketFactory? = { null },
 ) {
     private val defaultClient: OkHttpClient by lazy {

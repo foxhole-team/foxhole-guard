@@ -3,43 +3,76 @@ package com.foxhole.core.runtime
 import java.util.Locale
 import kotlin.math.roundToLong
 
-/**
- * Router facts scraped from the loopback i2pd webconsole main page. The webconsole is the only
- * i2pd status surface that names the router's external address (I2PControl has no such key), and
- * we ship the exact i2pd these markers are written against — the parser is pinned to the vendored
- * HTTPServer.cpp output and unit-tested on a sample of it.
- */
 data class I2pRouterStatus(
-    /** First published external address, `IP:port (transport)`; null while firewalled/unknown. */
+
     val externalAddress: String? = null,
-    /** The `Network status` line as printed (OK / Firewalled / Testing / ...). */
+
     val networkStatus: String? = null,
-    /** netdb size (`Routers` counter). */
+
     val knownRouters: Int? = null,
     val transitTunnels: Int? = null,
-    /** Client (in+out) tunnel count — the router's own tunnels, as opposed to transit. */
+
     val clientTunnels: Int? = null,
-    /** i2pd's own version string. */
+
     val version: String? = null,
-    /** Traffic as the console prints it, e.g. "12.34 MiB (5.20 KiB/s)". */
+
     val received: String? = null,
     val sent: String? = null,
-    /**
-     * Bytes this router has forwarded FOR OTHER ROUTERS since it started, as the console's own
-     * `Transit` line reports them (i2pd's GetTotalTransitTransmittedBytes). It is i2pd's first-party
-     * transit counter, not a difference of two other numbers — nothing of ours is in it.
-     */
+
     val transit: String? = null,
-    /** Numeric copies of the console counters for the I2P window's totals and live speed badges. */
+
     val rxTotalBytes: Long? = null,
     val txTotalBytes: Long? = null,
     val rxBytesPerSec: Long? = null,
     val txBytesPerSec: Long? = null,
     val transitTotalBytes: Long? = null,
     val transitBytesPerSec: Long? = null,
-    /** Base64 router identity — the router's address on the I2P network. */
+
     val routerIdent: String? = null,
 )
+
+fun parseI2pdFoxHoleStatus(body: String): I2pRouterStatus? {
+    val values =
+        body.lineSequence()
+            .mapNotNull { line ->
+                val separator = line.indexOf('=')
+                if (separator <= 0) {
+                    null
+                } else {
+                    line.substring(0, separator) to line.substring(separator + 1)
+                }
+            }.toMap()
+    if (values["foxhole_status"] != "1") {
+        return null
+    }
+    return I2pRouterStatus(
+        networkStatus = values["network_status"]?.toIntOrNull().toI2pdNetworkStatus(),
+        knownRouters = values["known_routers"]?.toIntOrNull(),
+        transitTunnels = values["transit_tunnels"]?.toIntOrNull(),
+        clientTunnels = values["client_tunnels"]?.toIntOrNull(),
+        version = values["version"]?.takeIf(String::isNotBlank),
+        rxTotalBytes = values["received_bytes"]?.toLongOrNull(),
+        txTotalBytes = values["sent_bytes"]?.toLongOrNull(),
+        rxBytesPerSec = values["received_bytes_per_sec"].toRoundedLongOrNull(),
+        txBytesPerSec = values["sent_bytes_per_sec"].toRoundedLongOrNull(),
+        transitTotalBytes = values["transit_bytes"]?.toLongOrNull(),
+        transitBytesPerSec = values["transit_bytes_per_sec"].toRoundedLongOrNull(),
+    )
+}
+
+private fun Int?.toI2pdNetworkStatus(): String? =
+    when (this) {
+        0 -> "OK"
+        1 -> "Firewalled"
+        2 -> "Unknown"
+        3 -> "Proxy"
+        4 -> "Mesh"
+        5 -> "Stan"
+        else -> null
+    }
+
+private fun String?.toRoundedLongOrNull(): Long? =
+    this?.toDoubleOrNull()?.coerceIn(0.0, Long.MAX_VALUE.toDouble())?.roundToLong()
 
 fun parseI2pdWebConsoleStatus(html: String): I2pRouterStatus {
     val received = parseTraffic(RECEIVED_REGEX, html)
@@ -69,7 +102,6 @@ fun parseI2pdWebConsoleStatus(html: String): I2pRouterStatus {
     )
 }
 
-/** "12.34 MiB (5.20 KiB/s)" — the console prints the total and the 15s rate side by side. */
 private fun parseTraffic(
     regex: Regex,
     html: String,
@@ -112,7 +144,7 @@ private fun parseExternalAddress(html: String): String? {
         .mapNotNull { row ->
             val transport = row.groupValues[1].trim()
             val address = row.groupValues[2].trim()
-            // An unpublished (firewalled) address prints "supported [:port]" instead of a host.
+
             if (address.isEmpty() || address.startsWith("supported")) null else "$address ($transport)"
         }
         .firstOrNull()
@@ -125,13 +157,9 @@ private val CLIENT_TUNNELS_REGEX = Regex("""<b>Client Tunnels:</b>\s*(\d+)""")
 private val VERSION_REGEX = Regex("""<b>Version:</b>\s*([^<]+)<br>""")
 private val ROUTER_IDENT_REGEX = Regex("""<b>Router Ident:</b>\s*([^<\s]+)""")
 
-// The console prints the total through ShowTraffic() and appends the 15s rate in brackets, both on
-// the same line: "<b>Received:</b> 12.34 MiB (5.20 KiB/s)<br>".
 private val RECEIVED_REGEX = Regex("""<b>Received:</b>\s*(.*?)<br>""", RegexOption.DOT_MATCHES_ALL)
 private val SENT_REGEX = Regex("""<b>Sent:</b>\s*(.*?)<br>""", RegexOption.DOT_MATCHES_ALL)
 
-// The colon is part of the marker, so this cannot be confused with the "Transit Tunnels:" counter
-// printed a few lines above it.
 private val TRANSIT_REGEX = Regex("""<b>Transit:</b>\s*(.*?)<br>""", RegexOption.DOT_MATCHES_ALL)
 private val TRAFFIC_AMOUNT_REGEX =
     Regex("""(\d+(?:[.,]\d+)?)\s*([KMGT]?i?B)(?:/s)?""", RegexOption.IGNORE_CASE)

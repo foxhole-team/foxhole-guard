@@ -2,21 +2,13 @@ package com.foxhole.guard.runtime
 
 import com.foxhole.core.runtime.RuntimeDiagnosticsSink
 
-/**
- * Orchestrates the signed SENTINEL threat-intel refresh, mirroring [DnsFilterUpdateRepository].
- *
- * The production endpoint is configured by [FOXHOLE_THREAT_INTEL_MANIFEST_URL]. An injected blank
- * endpoint deliberately disables remote refresh and leaves the bundled seed active.
- */
 class ThreatIntelUpdateRepository(
     private val client: ThreatIntelUpdateClient,
     private val store: ThreatIntelStore,
     private val diagnosticsLogger: RuntimeDiagnosticsSink,
-    // Read per refresh — see TorBridgeUpdateClient: the repository may be redirected while this
-    // object is already in the graph.
+
     private val manifestUrl: () -> String = { FOXHOLE_THREAT_INTEL_MANIFEST_URL },
 ) {
-    /** `generated_at` of the installed feed, or null while only the bundled seed is present. */
     fun installedGeneratedAt(): String? = store.installedGeneratedAt()
 
     suspend fun refreshNow(

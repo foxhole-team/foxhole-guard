@@ -66,24 +66,29 @@ class CliKillSwitchSettingsTest {
                 "cli_firewall_killswitch_software",
                 "cli_firewall_killswitch_system",
                 "cli_firewall_killswitch_info",
-            ).joinToString("\n") { key -> value(strings, key) }
+            ).joinToString("\n") { key -> value(strings, key) }.lowercase()
 
-            assertTrue("$qualifier must call ours a software switch", visible.contains(softwareWord(qualifier)))
-            assertTrue("$qualifier must name the OS switch", visible.contains(systemSwitchName(qualifier)))
+            assertTrue("$qualifier must call ours a software kill switch", visible.contains(softwareWord(qualifier)))
+            assertTrue(
+                "$qualifier must name the OS switch",
+                visible.contains(systemSwitchName(qualifier).lowercase()),
+            )
             assertTrue("$qualifier must say ours does not replace it", visible.contains(notReplaced(qualifier)))
             assertTrue("$qualifier must admit the uncovered window", visible.contains(killedWord(qualifier)))
         }
     }
 
-    private fun softwareWord(qualifier: String) = if (qualifier == "values") "software switch" else "программный"
+    private fun softwareWord(qualifier: String) =
+        if (qualifier == "values") "software kill switch" else "программный kill switch"
 
     private fun systemSwitchName(qualifier: String) =
         if (qualifier == "values") "block connections without VPN" else "блокировать соединения без VPN"
 
     private fun notReplaced(qualifier: String) =
-        if (qualifier == "values") "does not replace it" else "не заменяет"
+        if (qualifier == "values") "does not replace the system protection" else "не является заменой"
 
-    private fun killedWord(qualifier: String) = if (qualifier == "values") "killed" else "убит"
+    private fun killedWord(qualifier: String) =
+        if (qualifier == "values") "removes the process from memory" else "выгрузки процесса из памяти"
 
     private fun value(
         strings: String,

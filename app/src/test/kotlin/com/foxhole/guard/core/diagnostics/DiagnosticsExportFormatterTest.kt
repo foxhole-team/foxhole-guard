@@ -16,7 +16,7 @@ class DiagnosticsExportFormatterTest {
     @Test
     fun `export includes metadata header and sanitizes retained entries`() {
         val payload =
-            formatDiagnosticsExport(
+            formatSanitizedAboutDiagnosticsExport(
                 metadata =
                 DiagnosticsExportMetadata(
                     generatedAt = 1_700_000_000_000L,
@@ -38,7 +38,7 @@ class DiagnosticsExportFormatterTest {
                     DiagnosticEntry(
                         timestamp = 1_700_000_000_500L,
                         tag = "profile",
-                        message = "server=example.com ip=79.120.30.76 token=secret",
+                        message = "endpoint=SAFE_MARKER_ALPHA token=SAFE_MARKER_BETA",
                     ),
                 ),
                 formatter = formatter,
@@ -49,16 +49,15 @@ class DiagnosticsExportFormatterTest {
         assertTrue(payload.contains("CPU ABI: arm64-v8a, armeabi-v7a"))
         assertTrue(payload.contains("Diagnostics Retention: 7 days"))
         assertTrue(payload.contains("App Network Activity Logging: disabled"))
-        assertTrue(payload.contains("[profile] server=[redacted] ip=[redacted] token=[redacted]"))
-        assertFalse(payload.contains("example.com"))
-        assertFalse(payload.contains("79.120.30.76"))
-        assertFalse(payload.contains("secret"))
+        assertTrue(payload.contains("[profile] endpoint=[redacted] token=[redacted]"))
+        assertFalse(payload.contains("SAFE_MARKER_ALPHA"))
+        assertFalse(payload.contains("SAFE_MARKER_BETA"))
     }
 
     @Test
     fun `export has no raw mode`() {
         val payload =
-            formatDiagnosticsExport(
+            formatSanitizedAboutDiagnosticsExport(
                 metadata =
                 DiagnosticsExportMetadata(
                     generatedAt = 1_700_000_000_000L,
@@ -80,22 +79,21 @@ class DiagnosticsExportFormatterTest {
                     DiagnosticEntry(
                         timestamp = 1_700_000_000_500L,
                         tag = "profile",
-                        message = "server=example.com ip=79.120.30.76 token=secret",
+                        message = "endpoint=SAFE_MARKER_GAMMA token=SAFE_MARKER_DELTA",
                     ),
                 ),
                 formatter = formatter,
             )
 
-        assertTrue(payload.contains("[profile] server=[redacted] ip=[redacted] token=[redacted]"))
-        assertFalse(payload.contains("example.com"))
-        assertFalse(payload.contains("79.120.30.76"))
-        assertFalse(payload.contains("secret"))
+        assertTrue(payload.contains("[profile] endpoint=[redacted] token=[redacted]"))
+        assertFalse(payload.contains("SAFE_MARKER_GAMMA"))
+        assertFalse(payload.contains("SAFE_MARKER_DELTA"))
     }
 
     @Test
     fun `export shows explicit message when no entries are retained`() {
         val payload =
-            formatDiagnosticsExport(
+            formatSanitizedAboutDiagnosticsExport(
                 metadata =
                 DiagnosticsExportMetadata(
                     generatedAt = 1_700_000_000_000L,

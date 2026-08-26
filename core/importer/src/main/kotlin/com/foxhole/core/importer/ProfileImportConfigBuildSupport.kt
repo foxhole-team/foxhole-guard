@@ -17,8 +17,6 @@ import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
 import java.net.InetAddress
 
-// The config-building leg of the import hierarchy: WireGuard parsing and the normalized
-// migration-document assembly (TLS/transport included). Split from ProfileImportNodeSupport.kt.
 internal open class ProfileImportConfigBuildSupport(
     json: Json,
     remoteHostResolver: RemoteHostResolver? = null,
@@ -81,7 +79,6 @@ internal open class ProfileImportConfigBuildSupport(
     }
 
     private fun amneziaUriInterfaceLines(query: Map<String, String>): List<String> {
-        // Re-spell link parameters as wg-quick lines so link and file imports share one parser.
         val declared =
             AMNEZIA_URI_QUERY_KEYS.mapNotNull { key ->
                 query[key]?.trim()?.takeIf(String::isNotBlank)?.let { key to it }
@@ -236,21 +233,6 @@ internal open class ProfileImportConfigBuildSupport(
         return json.encodeToString(JsonObject.serializer(), normalizedConfig)
     }
 
-    /**
-     * The resolvers a WireGuard profile declares, kept as the profile wrote them.
-     *
-     * These are not outbound endpoints: a packet-tunnel profile does not intercept DNS, so the
-     * address here is advertised on the TUN and reached as a packet through the tunnel. That is why
-     * the public-host rule is not applied — a WireGuard peer's resolver normally lives inside the
-     * tunnel (10.x, 172.16.x, fd00::/8), and screening it out used to be invisible only because DNS
-     * quietly fell back to the managed remote resolver. It no longer does, so screening it out would
-     * leave the profile with no resolver at all and refuse it.
-     *
-     * What stays out: loopback, "any" and link-local addresses, which would point the device at
-     * itself or at its own LAN segment rather than at anything the profile meant; and hostnames,
-     * because Android's TUN takes numeric addresses only and resolving that name would have to
-     * happen outside the very tunnel the profile exists to keep queries inside.
-     */
     private fun allowedWireGuardDnsServers(nodes: List<ProxyNode>): List<String> =
         nodes
             .asSequence()
@@ -270,7 +252,7 @@ internal open class ProfileImportConfigBuildSupport(
         if (!literal.isImporterIpv4Literal() && !literal.isImporterIpv6Literal()) {
             return false
         }
-        // Safe for a literal: InetAddress performs no lookup when the text is already an address.
+
         val address = runCatching { InetAddress.getByName(literal) }.getOrNull() ?: return false
         return !address.isLoopbackAddress &&
             !address.isAnyLocalAddress &&
@@ -588,7 +570,7 @@ internal open class ProfileImportConfigBuildSupport(
         return when {
             fingerprint.isNullOrEmpty() || fingerprint in UTLS_FINGERPRINT_OFF_VALUES -> null
             fingerprint in SUPPORTED_UTLS_FINGERPRINTS -> fingerprint
-            // These TLS 1.2 parrots have no key_share for REALITY authentication.
+
             reality && fingerprint in REALITY_IMPOSSIBLE_UTLS_FINGERPRINTS ->
                 error(
                     "REALITY cannot use fp=$fingerprint: that parrot sends no key_share extension, and " +
@@ -599,7 +581,6 @@ internal open class ProfileImportConfigBuildSupport(
     }
 }
 
-// Membership promises that FoxCore can emit the named ClientHello.
 val SUPPORTED_UTLS_FINGERPRINTS: Set<String> =
     setOf(
         "chrome",

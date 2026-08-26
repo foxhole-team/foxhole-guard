@@ -10,19 +10,6 @@ import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
-/**
- * The application vault, split into isolated sections: each has its own AES-GCM key in the Android
- * Keystore and its own directory, so compromising or clearing one section does not touch the rest.
- * There is deliberately no shared master key.
- *
- * Sections:
- *  - [Section.AUTH] is reserved for future encrypted credentials;
- *  - [Section.JOURNALS] / [Section.CONFIGS] are reserved for migrating the existing isolated
- *    stores; the facade gives them one entry point without duplicating encryption.
- *
- * File format: a 12-byte IV followed by ciphertext and tag. The file name is the base64url of the
- * key without padding, so arbitrary keys are filesystem-safe.
- */
 internal class FoxholeVault(
     context: Context,
 ) {
@@ -81,7 +68,6 @@ internal class FoxholeVault(
         }
     }
 
-    /** Wipes one section only; isolation is the vault's contract. */
     fun wipe(section: Section) {
         synchronized(lock) {
             sectionDir(section).deleteRecursively()
@@ -121,7 +107,6 @@ internal class FoxholeVault(
     }
 }
 
-/** File name from an arbitrary key: base64url without padding — reversible and FS-safe. */
 internal fun encodeVaultFileName(key: String): String =
     java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(key.toByteArray())
 

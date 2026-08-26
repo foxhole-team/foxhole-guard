@@ -5,20 +5,19 @@ import com.foxhole.core.model.AppTunnelLane
 import com.foxhole.core.model.InstalledAppInventoryAudit
 import com.foxhole.core.model.KnownApplicationIdentity
 import com.foxhole.core.model.LocalAuthSettings
+import com.foxhole.core.model.PanelAppearance
 import com.foxhole.core.model.SETTINGS_SCHEMA_VERSION
 import com.foxhole.core.model.Settings
 import com.foxhole.core.model.migrateStoredProfileSourceToken
 import com.foxhole.core.model.migrateStoredProtocolToken
 import com.foxhole.core.model.storedProtocolHintOrNull
+import com.foxhole.guard.core.settings.legacyPanelAppearanceThemeMode
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-
-// The document serialized *inside* the password-encrypted portable envelope. Unknown fields are
-// tolerated only within a schema version this build understands.
 
 const val BACKUP_DOCUMENT_FORMAT = "foxhole-guard-backup"
 const val BACKUP_DOCUMENT_FORMAT_VERSION = 1
@@ -29,17 +28,10 @@ val backupJson: Json =
         explicitNulls = false
         coerceInputValues = true
         prettyPrint = true
-        // Write every field, including runtime defaults (e.g. usageTrackingStartedAt): a backup
-        // must be self-contained and round-trip exactly, not re-derive live defaults on restore.
+
         encodeDefaults = true
     }
 
-/**
- * One profile inside the backup: enough to re-import it through the ordinary import pipeline.
- * Subscriptions carry their URL (restore re-fetches), local configs carry the raw input or the
- * resolved config JSON. Protocol names are stored as plain strings so a backup from a newer app
- * with unknown protocols still parses — the restore preview flags them instead.
- */
 @Serializable
 data class BackupProfilePayload(
     val backupId: Long? = null,
@@ -67,10 +59,6 @@ data class BackupDocument(
     val profiles: List<BackupProfilePayload> = emptyList(),
 )
 
-/**
- * Device-local runtime state must not travel between installs: the ids inside these fields point
- * into THIS device's profile database and would dangle after a restore elsewhere.
- */
 fun Settings.sanitizedForBackup(): Settings =
     copy(
         ui =
@@ -83,8 +71,7 @@ fun Settings.sanitizedForBackup(): Settings =
         smartProfilePreferences = emptyList(),
         profileTrafficTotals = emptyList(),
         installedAppInventoryAudit = InstalledAppInventoryAudit(),
-        // A private-repository bearer token is destination-local even though the envelope is
-        // encrypted: importing it on another phone silently broadens that phone's GitHub access.
+
         updateSources = updateSources.copy(appReleasesToken = ""),
         networkRules =
         networkRules.copy(
@@ -104,8 +91,7 @@ fun Settings.sanitizedForBackup(): Settings =
         ),
         expert =
         expert.copy(
-            // Pending blocks belong to this device and are carried by the destination merge. Do
-            // not leave their derived BLOCK assignments behind after removing the pending list.
+
             appAssignments = expert.appAssignments - expert.pendingQuarantinePackages.toSet(),
             quarantineKnownApplications = emptyList(),
             pendingQuarantinePackages = emptyList(),
@@ -118,8 +104,7 @@ fun Settings.sanitizedForBackup(): Settings =
         ),
         appTrafficUsageAccessConsent = false,
         usageTrackingStartedAt = 0L,
-        // The keybox never leaves the device; restoring PASSWORD without its hardware-bound box
-        // would soft-brick the app, so the file carries no app-lock state.
+
         appLock = AppLockSettings(),
     )
 
@@ -171,8 +156,6 @@ fun mergeRestoredSettings(
 }
 
 fun encodeBackupDocument(document: BackupDocument): String {
-    // Enforce the secret boundary here as well as at the UI caller. A future exporter that builds a
-    // BackupDocument directly must not be able to write the private-release PAT into plain JSON.
     val sanitized = document.sanitizedSettings()
     return backupJson.encodeToString(BackupDocument.serializer(), sanitized) + "\n"
 }
@@ -204,7 +187,13 @@ fun decodeBackupDocument(payload: String): BackupParseResult {
         document.formatVersion > BACKUP_DOCUMENT_FORMAT_VERSION ->
             BackupParseResult.Failure.UNSUPPORTED_FORMAT_VERSION
         !document.hasCompatibleSettingsSchema() -> BackupParseResult.Failure.UNSUPPORTED_SETTINGS_SCHEMA
-        else -> BackupParseResult.Success(document.migratedProfileTokens().sanitizedSettings())
+        else ->
+            BackupParseResult.Success(
+                document
+                    .migratedProfileTokens()
+                    .migratedLegacyAppearance()
+                    .sanitizedSettings(),
+            )
     }
 }
 
@@ -218,7 +207,25 @@ private fun BackupDocument.hasCompatibleSettingsSchema(): Boolean {
 private fun BackupDocument.sanitizedSettings(): BackupDocument =
     copy(settings = settings?.sanitizedForBackup())
 
-/** foxhole_guard_backup_all_2026-07-11_0615.foxhole-backup — encrypted, portable envelope. */
+private fun BackupDocument.migratedLegacyAppearance(): BackupDocument =
+    copy(
+        settings =
+        settings?.let { stored ->
+            val legacyAppearance = stored.ui.panelAppearance
+            if (legacyAppearance == PanelAppearance.AUTO) {
+                stored
+            } else {
+                stored.copy(
+                    ui =
+                    stored.ui.copy(
+                        themeMode = legacyPanelAppearanceThemeMode(legacyAppearance),
+                        panelAppearance = PanelAppearance.AUTO,
+                    ),
+                )
+            }
+        },
+    )
+
 fun backupFileName(
     profilesIncluded: Boolean,
     settingsIncluded: Boolean,
@@ -234,7 +241,6 @@ fun backupFileName(
     return "foxhole_guard_backup_${scope}_$stamp.foxhole-backup"
 }
 
-/** The restore preview's per-profile verdict: what it is and whether this build can run it. */
 data class BackupProfileCompatibility(
     val payload: BackupProfilePayload,
     val knownProtocolNames: List<String>,
@@ -259,13 +265,6 @@ fun BackupProfilePayload.compatibility(): BackupProfileCompatibility {
     )
 }
 
-/**
- * The raw input the ordinary import pipeline should re-import this profile from.
- *
- * The stored resolved config wins so restore works offline and byte-identically; the
- * subscription URL is a last resort for legacy backups without a stored config — it is
- * kept as metadata (see relink in ProfileBackupSupport) so manual refresh still works.
- */
 fun BackupProfilePayload.restoreRawInput(): String? =
     resolvedConfigJson?.takeIf { it.isNotBlank() }
         ?: rawInput?.takeIf { it.isNotBlank() }

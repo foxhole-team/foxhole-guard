@@ -2,6 +2,7 @@ package com.foxhole.guard.ui.cli.map
 
 import android.os.Build
 import android.provider.Settings
+import androidx.annotation.DrawableRes
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,12 +12,14 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -32,6 +35,7 @@ import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.foxhole.core.model.ConnectionSnapshot
@@ -39,6 +43,7 @@ import com.foxhole.core.model.Profile
 import com.foxhole.core.model.TrafficMapEdge
 import com.foxhole.core.model.TrafficMapEdgeRole
 import com.foxhole.core.model.TrafficMapPeriod
+import com.foxhole.core.model.TrafficMapPeriodSnapshot
 import com.foxhole.core.model.TrafficMapPoint
 import com.foxhole.core.model.TrafficMapUiState
 import com.foxhole.guard.R
@@ -52,8 +57,8 @@ import com.foxhole.guard.ui.cli.components.CliButton
 import com.foxhole.guard.ui.cli.components.CliChromeTailSpacer
 import com.foxhole.guard.ui.cli.components.CliFlagIcon
 import com.foxhole.guard.ui.cli.components.CliGlassHeaderScreen
+import com.foxhole.guard.ui.cli.components.CliIcon
 import com.foxhole.guard.ui.cli.components.CliPanel
-import com.foxhole.guard.ui.cli.components.CliPixIcon
 import com.foxhole.guard.ui.cli.components.CliRowDivider
 import com.foxhole.guard.ui.cli.components.CliScreenHeader
 import com.foxhole.guard.ui.cli.components.cliPressable
@@ -105,7 +110,7 @@ internal fun CliMapContent(
     CliGlassHeaderScreen(
         modifier = modifier,
         header = {
-            CliScreenHeader(label = stringResource(R.string.cli_dock_map), icon = R.drawable.pix_map)
+            CliScreenHeader(label = stringResource(R.string.cli_dock_map), icon = R.drawable.lin_map)
         },
     ) { topInset ->
         if (!mapEnabled) {
@@ -138,90 +143,23 @@ internal fun CliMapContent(
                 .padding(horizontal = CliSpacing.md),
         ) {
             Spacer(modifier = Modifier.height(topInset))
-            val snapshot = map.periodSnapshots.snapshot(TrafficMapPeriod.SESSION)
-            val routeMode = remember(home.settings, home.connection) {
-                cliRouteMode(home.settings, home.connection)
-            }
-            val vpnCountry =
-                remember(home.activeProfile, home.connection, map.vpnRoute?.countryCode) {
-                    cliMapVpnCountry(
-                        profile = home.activeProfile,
-                        connection = home.connection,
-                        runtimeCountryCode = map.vpnRoute?.countryCode,
-                    )
-                }
-            val confirmedTorCountryCode = home.torIpInfo?.confirmedTorIdentityOrNull()?.countryCode
-            val liveRoute = remember(
-                map.vpnRoute,
-                map.torExit,
-                map.dnsServer,
-                routeMode,
-                confirmedTorCountryCode,
-            ) {
-                cliLiveMapRoute(map, routeMode, confirmedTorCountryCode)
-            }
-
-            val fanSource = liveRoute.torExit ?: liveRoute.vpnRoute
-            val fanRole = when {
-                liveRoute.torExit != null -> TrafficMapEdgeRole.TOR_DESTINATION
-                liveRoute.vpnRoute != null -> TrafficMapEdgeRole.VPN_DESTINATION
-                else -> TrafficMapEdgeRole.DIRECT
-            }
-            val periodEdges = remember(map.edges, snapshot.destinations, fanSource, fanRole) {
-                map.edges.filter { edge -> edge.visibleFor(liveRoute) } +
-                    snapshot.destinations.map { point ->
-                        TrafficMapEdge(
-                            fromLat = fanSource?.lat ?: map.originLat,
-                            fromLon = fanSource?.lon ?: map.originLon,
-                            toLat = point.lat,
-                            toLon = point.lon,
-                            bytes = point.bytes,
-                            role = fanRole,
-                        )
-                    }
-            }
-
-            val originVisible = map.isAvailable || map.originCountryCode != null
-            CliPanel(modifier = Modifier.fillMaxWidth()) {
-                CliPixelMap(
-                    origin = map.originLat to map.originLon,
-                    originAvailable = originVisible,
-                    vpnRoute = liveRoute.vpnRoute,
-                    torExit = liveRoute.torExit,
-                    dnsServer = liveRoute.dnsServer,
-                    destinations = snapshot.destinations,
-                    edges = periodEdges,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                CliMapLegend(
-                    originAvailable = originVisible,
-                    vpn = routeMode.vpn || routeMode.proxy,
-                    tor = routeMode.tor,
-                    dns = liveRoute.dnsServer != null,
-                    originCountryCode = map.originCountryCode,
-                    vpnCountryCode = vpnCountry,
-                    torCountryCode = liveRoute.torExit?.countryCode,
-                    dnsCountryCode = liveRoute.dnsServer?.countryCode,
-                )
-                Spacer(modifier = Modifier.height(CliSpacing.sm))
-                CliRouteScheme(
-                    state = map,
-                    mode = routeMode,
-                    deviceCountryCode = home.deviceIpInfo?.countryCode,
-                    vpnHopCountryCode = vpnCountry,
-                    vpnExitCountryCode = home.ipInfo?.countryCode.takeIf { routeMode.engaged },
-                    torExitCountryCode = confirmedTorCountryCode.takeIf { routeMode.tor },
-                )
-            }
-            if (snapshot.hasTraffic) {
+            val overview = rememberCliMapOverviewState(map = map, home = home)
+            CliMapOverviewPanel(
+                map = map,
+                home = home,
+                overview = overview,
+                content = CliMapOverviewContent.ALL,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            if (overview.snapshot.hasTraffic) {
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(
                     text = pluralStringResource(
                         R.plurals.cli_map_session_summary,
-                        snapshot.countryCount,
-                        snapshot.countryCount,
-                        CliFormat.bytes(snapshot.totalBytes),
-                        snapshot.totalConnections,
+                        overview.snapshot.countryCount,
+                        overview.snapshot.countryCount,
+                        CliFormat.bytes(overview.snapshot.totalBytes),
+                        overview.snapshot.totalConnections,
                     ),
                     style = CliType.small,
                     color = colors.dim,
@@ -230,8 +168,162 @@ internal fun CliMapContent(
             }
             Spacer(modifier = Modifier.height(CliSpacing.sm))
 
-            CliMapCountriesPanel(snapshot = snapshot, map = map)
+            CliMapCountriesPanel(snapshot = overview.snapshot, map = map)
             CliChromeTailSpacer()
+        }
+    }
+}
+
+internal enum class CliMapOverviewContent {
+    MAP,
+    ROUTE,
+    ALL,
+}
+
+@Immutable
+internal data class CliMapOverviewState(
+    val snapshot: TrafficMapPeriodSnapshot,
+    val routeMode: CliRouteMode,
+    val vpnCountry: String?,
+    val confirmedTorCountryCode: String?,
+    val liveRoute: CliLiveMapRoute,
+    val periodEdges: List<TrafficMapEdge>,
+    val originVisible: Boolean,
+)
+
+@Composable
+internal fun rememberCliMapOverviewState(
+    map: TrafficMapUiState,
+    home: HomeRouteUiState,
+): CliMapOverviewState {
+    val snapshot = map.periodSnapshots.snapshot(TrafficMapPeriod.SESSION)
+    val routeMode = remember(home.settings, home.connection) {
+        cliRouteMode(home.settings, home.connection)
+    }
+    val vpnCountry = remember(home.activeProfile, home.connection, map.vpnRoute?.countryCode) {
+        cliMapVpnCountry(
+            profile = home.activeProfile,
+            connection = home.connection,
+            runtimeCountryCode = map.vpnRoute?.countryCode,
+        )
+    }
+    val confirmedTorCountryCode = home.torIpInfo?.confirmedTorIdentityOrNull()?.countryCode
+    val liveRoute = remember(
+        map.vpnRoute,
+        map.torExit,
+        map.dnsServer,
+        routeMode,
+        confirmedTorCountryCode,
+    ) {
+        cliLiveMapRoute(map, routeMode, confirmedTorCountryCode)
+    }
+    val periodEdges = rememberCliMapPeriodEdges(map, snapshot, liveRoute)
+    return CliMapOverviewState(
+        snapshot = snapshot,
+        routeMode = routeMode,
+        vpnCountry = vpnCountry,
+        confirmedTorCountryCode = confirmedTorCountryCode,
+        liveRoute = liveRoute,
+        periodEdges = periodEdges,
+        originVisible = map.isAvailable || map.originCountryCode != null,
+    )
+}
+
+@Composable
+private fun rememberCliMapPeriodEdges(
+    map: TrafficMapUiState,
+    snapshot: TrafficMapPeriodSnapshot,
+    liveRoute: CliLiveMapRoute,
+): List<TrafficMapEdge> {
+    val fanSource = liveRoute.torExit ?: liveRoute.vpnRoute
+    val fanRole = when {
+        liveRoute.torExit != null -> TrafficMapEdgeRole.TOR_DESTINATION
+        liveRoute.vpnRoute != null -> TrafficMapEdgeRole.VPN_DESTINATION
+        else -> TrafficMapEdgeRole.DIRECT
+    }
+    return remember(map.edges, snapshot.destinations, fanSource, fanRole) {
+        map.edges.filter { edge -> edge.visibleFor(liveRoute) } +
+            snapshot.destinations.map { point ->
+                TrafficMapEdge(
+                    fromLat = fanSource?.lat ?: map.originLat,
+                    fromLon = fanSource?.lon ?: map.originLon,
+                    toLat = point.lat,
+                    toLon = point.lon,
+                    bytes = point.bytes,
+                    role = fanRole,
+                )
+            }
+    }
+}
+
+@Composable
+@Suppress("LongParameterList")
+internal fun CliMapOverviewPanel(
+    map: TrafficMapUiState,
+    home: HomeRouteUiState,
+    overview: CliMapOverviewState,
+    content: CliMapOverviewContent,
+    modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null,
+    title: String? = null,
+    titleModifier: Modifier = Modifier,
+    titleColor: Color = Color.Unspecified,
+    @DrawableRes icon: Int? = null,
+    mapHorizontalInset: Dp = 0.dp,
+    mapLegendTopSpacing: Dp = 6.dp,
+    mapLegendCentered: Boolean = false,
+    mapLegendOffsetY: Dp = 0.dp,
+    showRouteHeader: Boolean = true,
+    prewarmMapAssets: Boolean = true,
+) {
+    CliPanel(
+        modifier = modifier,
+        title = title,
+        titleModifier = titleModifier,
+        titleColor = titleColor,
+        icon = icon,
+        onClick = onClick,
+    ) {
+        if (content != CliMapOverviewContent.ROUTE) {
+            CliPixelMap(
+                origin = map.originLat to map.originLon,
+                originAvailable = overview.originVisible,
+                vpnRoute = overview.liveRoute.vpnRoute,
+                torExit = overview.liveRoute.torExit,
+                dnsServer = overview.liveRoute.dnsServer,
+                destinations = overview.snapshot.destinations,
+                edges = overview.periodEdges,
+                modifier = Modifier.fillMaxWidth(),
+                horizontalInset = mapHorizontalInset,
+                prewarmAssets = prewarmMapAssets,
+            )
+            CliMapLegend(
+                originAvailable = overview.originVisible,
+                vpn = overview.routeMode.vpn || overview.routeMode.proxy,
+                tor = overview.routeMode.tor,
+                dns = overview.liveRoute.dnsServer != null,
+                topSpacing = mapLegendTopSpacing,
+                centered = mapLegendCentered,
+                offsetY = mapLegendOffsetY,
+                originCountryCode = map.originCountryCode,
+                vpnCountryCode = overview.vpnCountry,
+                torCountryCode = overview.liveRoute.torExit?.countryCode,
+                dnsCountryCode = overview.liveRoute.dnsServer?.countryCode,
+            )
+        }
+        if (content == CliMapOverviewContent.ALL) {
+            Spacer(modifier = Modifier.height(CliSpacing.sm))
+        }
+        if (content != CliMapOverviewContent.MAP) {
+            CliRouteScheme(
+                state = map,
+                mode = overview.routeMode,
+                deviceCountryCode = home.deviceIpInfo?.countryCode,
+                vpnHopCountryCode = overview.vpnCountry,
+                vpnExitCountryCode = home.ipInfo?.countryCode.takeIf { overview.routeMode.engaged },
+                torExitCountryCode = overview.confirmedTorCountryCode.takeIf { overview.routeMode.tor },
+                showHeader = showRouteHeader,
+            )
         }
     }
 }
@@ -262,29 +354,38 @@ private fun CliMapLegend(
     vpn: Boolean,
     tor: Boolean,
     dns: Boolean,
+    topSpacing: Dp = 6.dp,
+    centered: Boolean = false,
+    offsetY: Dp = 0.dp,
     originCountryCode: String? = null,
     vpnCountryCode: String? = null,
     torCountryCode: String? = null,
     dnsCountryCode: String? = null,
 ) {
     val colors = LocalCliColors.current
-    Spacer(modifier = Modifier.height(6.dp))
+    Spacer(modifier = Modifier.height(topSpacing))
     Row(
-        modifier = Modifier.heightIn(min = LEGEND_ROW_HEIGHT),
-        horizontalArrangement = Arrangement.spacedBy(CliSpacing.md),
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = LEGEND_ROW_HEIGHT)
+            .offset(y = offsetY),
+        horizontalArrangement = Arrangement.spacedBy(
+            CliSpacing.md,
+            if (centered) Alignment.CenterHorizontally else Alignment.Start,
+        ),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (originAvailable) {
             CliMapLegendItem(
-                R.drawable.pix_home,
+                R.drawable.lin_home,
                 rememberDeviceLegendLabel(),
                 colors.fg,
                 originCountryCode,
             )
         }
-        if (vpn) CliMapLegendItem(R.drawable.pix_shield, "vpn", colors.vpn, vpnCountryCode)
-        if (tor) CliMapLegendItem(R.drawable.pix_tor, "tor", colors.tor, torCountryCode)
-        if (dns) CliMapLegendItem(R.drawable.pix_dns, "dns", colors.info, dnsCountryCode)
+        if (vpn) CliMapLegendItem(R.drawable.lin_shield, "vpn", colors.vpn, vpnCountryCode)
+        if (tor) CliMapLegendItem(R.drawable.lin_tor, "tor", colors.tor, torCountryCode)
+        if (dns) CliMapLegendItem(R.drawable.lin_dns, "dns", colors.info, dnsCountryCode)
     }
 }
 
@@ -312,7 +413,7 @@ private fun CliMapLegendItem(
 ) {
     val colors = LocalCliColors.current
     Row(verticalAlignment = Alignment.CenterVertically) {
-        CliPixIcon(id = iconRes, contentDescription = null, size = 12.dp, tint = tint)
+        CliIcon(id = iconRes, contentDescription = null, size = 12.dp, tint = tint)
         Spacer(modifier = Modifier.width(CliSpacing.xs))
         Text(
             text = label,
@@ -320,6 +421,9 @@ private fun CliMapLegendItem(
             color = colors.dim,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.offset(
+                y = CLI_MAP_LEGEND_LABEL_OFFSET,
+            ),
         )
         if (!countryCode.isNullOrBlank()) {
             Spacer(modifier = Modifier.width(CliSpacing.xs))
@@ -327,6 +431,8 @@ private fun CliMapLegendItem(
         }
     }
 }
+
+internal val CLI_MAP_LEGEND_LABEL_OFFSET = 0.dp
 
 @Composable
 private fun CliMapCountriesPanel(
@@ -338,31 +444,26 @@ private fun CliMapCountriesPanel(
     val locale = configuration.locales[0]
     var selectedCountryCode by rememberSaveable { mutableStateOf<String?>(null) }
     CliPanel(
-        icon = R.drawable.pix_globe,
+        icon = R.drawable.lin_globe,
         title = stringResource(R.string.cli_common_countries_title),
         modifier = Modifier.fillMaxWidth()
     ) {
         if (!snapshot.hasTraffic) {
             Text(
-                text = stringResource(R.string.cli_common_empty_run_traffic),
+                text = stringResource(R.string.cli_common_no_traffic_data),
                 style = CliType.body,
                 color = colors.dim,
             )
         } else {
             CliMapCountryTableHeader()
             CliRowDivider(modifier = Modifier.padding(vertical = CliSpacing.xs))
-            CliMapCountryTableRow(
-                countryCode = null,
-                label = stringResource(R.string.cli_map_key_total),
-                bytes = snapshot.totalBytes,
-                connections = snapshot.totalConnections,
-                valueColor = colors.info,
-            )
             val topCountries = snapshot.destinations
                 .sortedByDescending { it.bytes }
                 .take(8)
-            topCountries.forEach { point ->
-                CliRowDivider(modifier = Modifier.padding(vertical = CliSpacing.xs))
+            topCountries.forEachIndexed { index, point ->
+                if (index > 0) {
+                    CliRowDivider(modifier = Modifier.padding(vertical = CliSpacing.xs))
+                }
                 CliMapCountryTableRow(
                     countryCode = point.countryCode,
                     label = localizedTrafficMapCountryLabel(
@@ -387,6 +488,8 @@ private fun CliMapCountriesPanel(
                     color = colors.faint,
                 )
             }
+            CliRowDivider(modifier = Modifier.padding(vertical = CliSpacing.xs))
+            CliMapCountryCountFooter(countryCount = snapshot.countryCount)
         }
     }
     selectedCountryCode?.let { code ->
@@ -461,8 +564,6 @@ private fun CliMapCountryTableRow(
         if (countryCode != null) {
             CliFlagIcon(countryCode = countryCode)
             Spacer(modifier = Modifier.width(CliSpacing.xs))
-        } else {
-            Spacer(modifier = Modifier.width(COUNTRY_FLAG_SLOT_WIDTH))
         }
         Text(
             text = if (countryCode == null) label else "${countryCode.uppercase(Locale.US)} · $label",
@@ -485,6 +586,29 @@ private fun CliMapCountryTableRow(
             text = connections.toString(),
             style = CliType.body,
             color = resolvedValueColor,
+            textAlign = TextAlign.End,
+            maxLines = 1,
+            modifier = Modifier.width(COUNTRY_CONNECTIONS_COLUMN_WIDTH),
+        )
+    }
+}
+
+@Composable
+private fun CliMapCountryCountFooter(countryCount: Int) {
+    val colors = LocalCliColors.current
+    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            text = stringResource(R.string.cli_map_key_total),
+            style = CliType.body,
+            color = colors.info,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        Text(
+            text = countryCount.toString(),
+            style = CliType.body,
+            color = colors.info,
             textAlign = TextAlign.End,
             maxLines = 1,
             modifier = Modifier.width(COUNTRY_CONNECTIONS_COLUMN_WIDTH),
@@ -569,5 +693,4 @@ private fun TrafficMapEdge.visibleFor(route: CliLiveMapRoute): Boolean =
     }
 
 private val COUNTRY_TRAFFIC_COLUMN_WIDTH = 74.dp
-private val COUNTRY_CONNECTIONS_COLUMN_WIDTH = 44.dp
-private val COUNTRY_FLAG_SLOT_WIDTH = 20.dp
+private val COUNTRY_CONNECTIONS_COLUMN_WIDTH = 72.dp

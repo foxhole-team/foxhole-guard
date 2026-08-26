@@ -6,11 +6,6 @@ import androidx.work.WorkerParameters
 import com.foxhole.guard.FoxholeApplication
 import com.foxhole.guard.WatchdogNames
 
-/**
- * The safety pass of [WatchdogNames.WEB]: the ticker lives in the process and dies with it, so
- * WorkManager wakes the process every 15 minutes (its minimum) and runs the same pollOnce. The
- * gates are checked by pollOnce itself, so there are no conditions here.
- */
 class WebAppsWatchdogWorker(
     context: Context,
     params: WorkerParameters,

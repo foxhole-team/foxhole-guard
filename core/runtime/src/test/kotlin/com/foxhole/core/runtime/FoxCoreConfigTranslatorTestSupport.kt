@@ -236,12 +236,6 @@ internal open class FoxCoreConfigTranslatorTestSupport {
             },
         )
 
-    /**
-     * The DNS server a WireGuard `DNS =` line becomes on import.
-     *
-     * A packet-tunnel profile is refused without it: nothing intercepts DNS on that shape, so this
-     * entry is the only resolver there is to hand to Android.
-     */
     protected fun wireGuardDnsServer(address: String = "10.17.0.1"): JsonObject =
         buildJsonObject {
             put("tag", WIREGUARD_DNS_TAG)

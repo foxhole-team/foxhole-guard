@@ -8,7 +8,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class NetworkIocMatcherTest {
-
     private val matcher =
         NetworkIocMatcher(
             ThreatIntelDocument(
@@ -32,14 +31,11 @@ class NetworkIocMatcherTest {
 
     @Test
     fun `a domain merely ending in the same text does not match`() {
-        // A substring match would accuse this host; the walk is over labels, not characters.
         assertNull(matcher.match("notevil.example"))
     }
 
     @Test
     fun `a parent of a listed subdomain does not match`() {
-        // `c2.tracker.example` is listed, `tracker.example` is not: matching up the tree would
-        // condemn every neighbour under a shared parent.
         assertNull(matcher.match("tracker.example"))
     }
 
@@ -74,7 +70,6 @@ class NetworkIocMatcherTest {
 }
 
 class SentinelNetworkIndicatorsTest {
-
     private val sentinel = FoxholeSentinel()
     private val matcher =
         NetworkIocMatcher(ThreatIntelDocument(domains = listOf("evil.example"), ips = listOf("198.51.100.7")))
@@ -103,8 +98,7 @@ class SentinelNetworkIndicatorsTest {
 
         assertEquals(listOf("com.app.one", "com.app.two"), findings.map { it.packageName })
         assertEquals("evil.example", findings.first().hit.indicator)
-        // The source event's context travels with the finding so the caller can attribute a
-        // journal entry without re-walking the events.
+
         assertEquals(7L, findings.first().profileId)
         assertEquals("tcp", findings.first().protocol)
         assertEquals(1_000L, findings.first().timestampMs)

@@ -11,9 +11,9 @@ import androidx.test.uiautomator.By
 import androidx.test.uiautomator.UiDevice
 import androidx.test.uiautomator.Until
 import com.foxhole.core.model.ConnectionState
-import com.foxhole.core.model.I2pNetworkPhase
 import com.foxhole.core.model.StatisticsMetric
 import com.foxhole.core.model.TrafficMode
+import com.foxhole.core.model.networkUp
 import com.foxhole.core.runtime.network.DNS_INDEPENDENT_IP_INFO_ENDPOINT
 import com.foxhole.core.runtime.network.IpInfoFetchMode
 import com.foxhole.guard.FoxholeApplication
@@ -167,11 +167,16 @@ class LiveLocalFirewallGuardRuntimeTest {
                 settings.updateI2pEngaged(true)
                 app.container.connectionController.syncLocalGuard()
 
+                val i2pConnected =
+                    waitForCondition(timeoutMs = I2P_CONNECTED_TIMEOUT_MS) {
+                        app.container.connectionController.i2pPhase.value.phase.networkUp
+                    }
+                val connectedWaitSnapshot = app.container.connectionController.i2pPhase.value
                 assertTrue(
-                    "I2P never started beside the active firewall",
-                    waitForCondition(timeoutMs = 30_000L) {
-                        app.container.connectionController.i2pPhase.value.phase != I2pNetworkPhase.OFFLINE
-                    },
+                    "I2P never reached service-owned CONNECTED beside the firewall " +
+                        "(phase=${connectedWaitSnapshot.phase}, tunnelsBuilt=${connectedWaitSnapshot.tunnelsBuilt}, " +
+                        "i2pd state=${app.container.i2pdManager.snapshot().state})",
+                    i2pConnected,
                 )
                 assertEquals(LocalGuardMode.FIREWALL, settings.current().localGuardModeOrNull())
                 assertTrue(
@@ -186,13 +191,18 @@ class LiveLocalFirewallGuardRuntimeTest {
                         InetAddress.getAllByName("example.com").isNotEmpty()
                     },
                 )
-                assertTrue(
-                    "connected i2pd traffic never reached the persisted statistics counter",
+                val persistedTraffic =
                     withTimeoutOrNull(I2P_STATS_TIMEOUT_MS) {
                         app.container.i2pTrafficRepository.history.first { history ->
                             history.lifetime.ownBytes > 0L
                         }
-                    } != null,
+                    } != null
+                val statsWaitSnapshot = app.container.connectionController.i2pPhase.value
+                assertTrue(
+                    "connected i2pd traffic never reached the persisted statistics counter " +
+                        "(phase=${statsWaitSnapshot.phase}, tunnelsBuilt=${statsWaitSnapshot.tunnelsBuilt}, " +
+                        "i2pd state=${app.container.i2pdManager.snapshot().state})",
+                    persistedTraffic,
                 )
             } finally {
                 settings.updateI2pEngaged(false)
@@ -576,6 +586,7 @@ class LiveLocalFirewallGuardRuntimeTest {
     private companion object {
         const val TEST_TAG = "LiveLocalFirewallGuard"
         const val CONNECTIVITY_PROBE_TIMEOUT_MS = 5_000L
+        const val I2P_CONNECTED_TIMEOUT_MS = 420_000L
         const val I2P_STATS_TIMEOUT_MS = 90_000L
         const val BYTES_PER_KB = 1024L
         const val LOCAL_GUARD_STRESS_PSS_DELTA_LIMIT_KB = 150L * 1024L

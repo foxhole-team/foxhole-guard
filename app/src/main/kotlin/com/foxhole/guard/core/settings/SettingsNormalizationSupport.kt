@@ -14,6 +14,8 @@ import com.foxhole.core.model.KnownApplicationIdentity
 import com.foxhole.core.model.LocalAuthSettings
 import com.foxhole.core.model.LocalSurfaceSettings
 import com.foxhole.core.model.NetworkRulesSettings
+import com.foxhole.core.model.PanelAppearance
+import com.foxhole.core.model.PrivacyRouteMode
 import com.foxhole.core.model.PrivacyRouteSettings
 import com.foxhole.core.model.ProxyInboundSettings
 import com.foxhole.core.model.ProxySurfaceMode
@@ -38,6 +40,7 @@ internal const val INSTALLED_APP_CHANGE_HISTORY_LIMIT = 60
 
 private const val SETTINGS_RESET_DEFAULTS_SCHEMA_VERSION = 16
 private const val TRAFFIC_MAP_DEFAULT_ENABLED_SCHEMA_VERSION = 17
+private const val PROXY_SURFACE_MODE_SCHEMA_VERSION = 19
 private const val SETTINGS_MIN_PORT = 1
 private val QUARANTINE_SIGNING_DIGEST = Regex("^[0-9a-f]{64}$")
 private const val SETTINGS_MAX_PORT = 65535
@@ -49,12 +52,12 @@ internal fun Settings.normalized(): Settings {
         schemaVersion = SETTINGS_SCHEMA_VERSION,
         ui =
         ui.copy(
-            themeMode = if (resetDefaults) ThemeMode.SYSTEM else ui.themeMode,
+            themeMode = ui.themeMode,
+            panelAppearance = PanelAppearance.AUTO,
             onboardingCompleted = ui.onboardingCompleted,
             betaNoticeAcknowledged = ui.betaNoticeAcknowledged,
             showExpertSettings = ui.showExpertSettings && expert.unlockedAt != null,
-            // Schema 19 retires the unsafe proxy-only service. The field remains decodable for a
-            // one-shot migration, but the UI must never offer a path that bypasses the VPN TUN.
+
             showTrafficModeSelector = false,
             supportBotHandleOverride = storedSupportBotHandleOverride(ui.supportBotHandleOverride),
             trafficMapEnabled = if (enableTrafficMapByDefault) true else ui.trafficMapEnabled,
@@ -64,26 +67,17 @@ internal fun Settings.normalized(): Settings {
             ipInfoEndpoint = normalizeIpInfoEndpoint(connection.ipInfoEndpoint),
         ),
         updateSources = updateSources.normalized(),
-        // Safe mode owns exactly ONE traffic field — the mode (updateTrafficMode keeps safe mode
-        // only while mode == TUNNEL); stack/MTU/ipv6/strategy are plain tunnel tuning. Replacing
-        // the WHOLE block with TrafficSettings() made all four silently unsavable on a fresh
-        // install: normalized() reverted the write, update() saw next == current and never hit
-        // disk. Explicit reset paths still clear the whole block — that is a user action.
+
         traffic =
         traffic.copy(
-            // FoxCore has one ownership model: VpnService + TUN. A stored PROXY value migrates
-            // to TUNNEL; its enabled local listeners live on in expert.localSurfaces.
+
             mode = TrafficMode.TUNNEL,
             mtu = traffic.mtu.coerceIn(SETTINGS_MIN_MTU, SETTINGS_MAX_MTU),
         ),
-        // Legacy migration: the old Security-screen "system DNS protection" flag becomes the DNS
-        // screen's "replace system DNS" toggle; the expert flag itself is cleared below.
+
         dns = dns.normalized().copy(replaceSystemDns = dns.replaceSystemDns || expert.systemDnsProtectionEnabled),
         networkRules = networkRules.normalized(),
-        // Safe mode owns exactly the four fields that ENGAGE the Tor lane (mode, permitted,
-        // scope, bypass) — the setters carrying the `safeModeEnabled && …` clause. Replacing the
-        // WHOLE block with PrivacyRouteSettings() made the bridge/rotation/reconnect toggles
-        // silently unsavable on a fresh install — same defect and fix as the traffic block above.
+
         privacyRoute =
         privacyRoute
             .normalized()
@@ -106,14 +100,20 @@ internal fun Settings.normalized(): Settings {
             .mapNotNull { items -> items.maxByOrNull { total -> total.updatedAt } }
             .sortedByDescending { total -> total.updatedAt },
         installedAppInventoryAudit = installedAppInventoryAudit.normalized(),
-        // The recording preference and the device-local Usage Access decision are independent.
-        // Coupling them with a two-way AND made a transient/indeterminate AppOps read persistently
-        // switch recording off. Runtime collection still requires both plus the live AppOp.
+
         appTrafficStatsEnabled = appTrafficStatsEnabled,
         appTrafficUsageAccessConsent = appTrafficUsageAccessConsent,
         usageTrackingStartedAt = usageTrackingStartedAt.takeIf { it > 0L } ?: System.currentTimeMillis(),
     )
 }
+
+internal fun legacyPanelAppearanceThemeMode(panelAppearance: PanelAppearance): ThemeMode =
+    when (panelAppearance) {
+        PanelAppearance.AUTO -> ThemeMode.SYSTEM
+        PanelAppearance.STANDARD -> ThemeMode.DARK
+        PanelAppearance.DARK -> ThemeMode.OLED
+        PanelAppearance.LIGHT -> ThemeMode.LIGHT
+    }
 
 private fun ExpertSettings.normalized(
     safeModeEnabled: Boolean,
@@ -121,8 +121,7 @@ private fun ExpertSettings.normalized(
     storedSchemaVersion: Int,
 ): ExpertSettings {
     val normalizedPendingQuarantinePackages = normalizedPendingQuarantinePackages()
-    // A pending decision is itself an enforcement fact. Repair the BLOCK lane from it instead of
-    // intersecting pending with whatever assignment happened to survive an edit/restore.
+
     val normalizedAssignments = normalizedAppAssignments(normalizedPendingQuarantinePackages)
     val normalizedBlockedPackages = normalizedAssignments.filterValues { it == AppTunnelLane.BLOCK }.keys
     val normalizedPendingDetails = normalizedPendingDetails(normalizedPendingQuarantinePackages)
@@ -150,7 +149,7 @@ private fun ExpertSettings.normalized(
             blockScreenshots = if (resetScreenshotBlocking) false else blockScreenshots,
             firewallEnabled = normalizedFirewallEnabled,
             newAppQuarantineEnabled = quarantineArmed,
-            // Migrated into DnsSettings.replaceSystemDns (see Settings.normalized); always off here.
+
             systemDnsProtectionEnabled = false,
             rawLiveDiagnostics = rawLiveDiagnostics && BuildConfig.DEBUG,
             localSurfaces = localSurfaces.normalized().migratedProxySurfaceModesIfNeeded(storedSchemaVersion),
@@ -215,8 +214,6 @@ private fun KnownApplicationIdentity.normalizedForQuarantineOrNull(): KnownAppli
     val normalizedPackage = packageName.trim().takeIf(String::isNotBlank) ?: return null
     val normalizedDigest = signingCertificateSha256?.trim()?.lowercase()
     if (normalizedDigest != null && !QUARANTINE_SIGNING_DIGEST.matches(normalizedDigest)) {
-        // Never weaken a malformed certificate pin to a package-only allow entry. Dropping the
-        // complete identity makes the native policy quarantine the package instead.
         return null
     }
     return copy(
@@ -226,39 +223,29 @@ private fun KnownApplicationIdentity.normalizedForQuarantineOrNull(): KnownAppli
     )
 }
 
-/**
- * Safe mode drops every expert routing/exposure lane but keeps the firewall block lane and its
- * quarantine. THE single definition of what safe mode owns — [Settings.normalized],
- * [SettingsRepository.updateSafeModeEnabled] and [Settings.resetExpertSettingsToSafeDefaults]
- * all route through it so they cannot drift apart again.
- * Written as a NEGATIVE `copy()` on purpose: the old positive whitelist silently reset every
- * field added after it was written (diagnosticsRetentionPolicy was a latent victim). With copy()
- * a new field survives by default and SafeModeExpertInvariantTest fails until it is classified.
- */
+// Negative copy preserves future expert fields; the invariant test forces every new field to be classified.
 internal fun ExpertSettings.disarmedBySafeMode(): ExpertSettings {
     val defaults = ExpertSettings()
     return copy(
-        // Routing lanes — the whole reason safe mode exists.
+
         sniff = defaults.sniff,
         strictRoute = defaults.strictRoute,
         bypassLan = defaults.bypassLan,
         allowPrivateOutboundHosts = defaults.allowPrivateOutboundHosts,
         perAppRoutingMode = defaults.perAppRoutingMode,
         siteRoutingAction = defaults.siteRoutingAction,
-        // Locally published proxy/DNS surfaces are an attack surface, not tunnel tuning.
+
         localSurfaces = defaults.localSurfaces,
-        // Raw live diagnostics echo destinations into the journal (debug builds only anyway).
+
         rawLiveDiagnostics = defaults.rawLiveDiagnostics,
-        // The firewall lane survives: BLOCK assignments and their pending quarantine are
-        // protection, not routing. Everything else keeps its value via copy().
+
         appAssignments = appAssignments.filterValues { it == AppTunnelLane.BLOCK },
     )
 }
 
 private fun WebAppsSettings.normalized(firewallEnabled: Boolean): WebAppsSettings =
     copy(
-        // Watchdog polling must follow the guard: turning the firewall off (any path) kills push
-        // on the same write instead of leaving a background WebView without a tunnel.
+
         pushServiceEnabled = pushServiceEnabled && firewallEnabled,
         pollIntervalMinutes =
         WEB_APPS_POLL_OPTIONS.minByOrNull { option -> abs(option - pollIntervalMinutes) }
@@ -303,15 +290,11 @@ private fun InstalledAppInventoryAudit.normalized(): InstalledAppInventoryAudit 
 
 private fun PrivacyRouteSettings.normalized(): PrivacyRouteSettings =
     copy(
-        // Keep the preference before a Tor lane exists; rule generation handles an empty lane.
+        mode = mode.takeIf { permitted } ?: PrivacyRouteMode.OFF,
+
         scope = scope,
     )
 
-/**
- * The privacy-route half of safe mode: only the four fields that engage the Tor lane disarm.
- * NEGATIVE `copy()` for the same reason as [disarmedBySafeMode] on [ExpertSettings]: a positive
- * whitelist silently disarms every later-added field — how bridge/rotation became unsavable.
- */
 private fun PrivacyRouteSettings.disarmedBySafeMode(safeModeEnabled: Boolean): PrivacyRouteSettings {
     if (!safeModeEnabled) {
         return this
@@ -357,6 +340,7 @@ internal fun NetworkRulesSettings.normalized(): NetworkRulesSettings {
     )
 }
 
+// LAN authentication is mandatory; blank credentials suppress the surface instead of exposing an open relay.
 private fun LocalSurfaceSettings.normalized(): LocalSurfaceSettings =
     copy(
         proxyMode = proxyMode,
@@ -368,11 +352,7 @@ private fun LocalSurfaceSettings.normalized(): LocalSurfaceSettings =
         clashApi = clashApi.normalized(),
         v2RayApi = v2RayApi.normalized(),
         auth = auth.normalized(),
-        // LAN auth is MANDATORY (stage2 §8): the LAN leg is published on the phone's Wi-Fi
-        // address, so an unauthenticated inbound is an open relay into the owner's VPN/Tor for
-        // the whole network. The flag is forced on here; LocalAuthSettings.normalized() replaces
-        // a blank password with a generated one, and the runtime refuses a LAN inbound on a
-        // blank password — "no credentials" degrades to "no LAN surface", never "open surface".
+
         lanAuth = lanAuth.normalized().copy(enabled = true),
     )
 
@@ -402,7 +382,7 @@ internal fun LocalSurfaceSettings.withEnabledProxyMode(mode: ProxySurfaceMode): 
     }
 
 private fun LocalSurfaceSettings.migratedProxySurfaceModesIfNeeded(schemaVersion: Int): LocalSurfaceSettings {
-    if (schemaVersion >= SETTINGS_SCHEMA_VERSION) {
+    if (schemaVersion >= PROXY_SURFACE_MODE_SCHEMA_VERSION) {
         return this
     }
     val migratedMode =
@@ -421,8 +401,7 @@ private fun LocalSurfaceSettings.migratedProxySurfaceModesIfNeeded(schemaVersion
 internal fun AppLockSettings.normalized(): AppLockSettings =
     when (mode) {
         AppLockMode.PASSWORD -> this
-        // Biometrics only make sense on top of an active gate; OFF drops the stale
-        // flag so a later re-enable starts from a clean toggle.
+
         AppLockMode.SYSTEM -> copy(guardHosting = GuardHostingMode.ECONOMY)
         AppLockMode.OFF -> copy(guardHosting = GuardHostingMode.ECONOMY, biometricEnabled = false)
     }

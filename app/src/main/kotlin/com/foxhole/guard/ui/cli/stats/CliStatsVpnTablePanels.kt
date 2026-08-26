@@ -32,7 +32,7 @@ internal fun CliStatsVpnProtocolTablePanel(
 ) {
     Spacer(modifier = Modifier.height(CliSpacing.sm))
     CliPanel(
-        icon = R.drawable.pix_shield,
+        icon = R.drawable.lin_shield,
         title = stringResource(R.string.cli_stats_protocols_title),
         modifier = Modifier.fillMaxWidth(),
     ) {
@@ -63,7 +63,7 @@ internal fun CliStatsVpnTransportTablePanel(
 ) {
     Spacer(modifier = Modifier.height(CliSpacing.sm))
     CliPanel(
-        icon = R.drawable.pix_link,
+        icon = R.drawable.lin_link,
         title = stringResource(R.string.cli_stats_transports_title),
         modifier = Modifier.fillMaxWidth(),
     ) {

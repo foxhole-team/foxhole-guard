@@ -17,22 +17,6 @@ import java.io.File
 import java.io.IOException
 import java.security.MessageDigest
 
-/**
- * Application updates for builds installed from GitHub. F-Droid and Play manage their own updates,
- * so the caller gates this on [com.foxhole.guard.BuildConfig.UPDATE_CHANNEL].
- *
- * Two independent facts come out of one release:
- *
- * * **whether a newer version exists**, which the tag alone answers — this is what tells the user
- *   an update is required and how far behind they are, and it works for any ordinary release;
- * * **whether that version can be installed from inside the app**, which needs the release recipe's
- *   `update-manifest.json` asset, because only its SHA-256 lets the downloaded APK be trusted.
- *
- * The first no longer depends on the second. A release published without the manifest used to be
- * reported as a failed check, which is how "you are three versions behind" reached the user as
- * "update check failed"; it now becomes an offer that simply is not self-installable
- * ([AppUpdateCheck.Available.installable]).
- */
 @Serializable
 data class AppUpdateManifest(
     val versionCode: Long,
@@ -127,11 +111,9 @@ private const val RATE_LIMIT_PEEK_BYTES = 2048L
 class AppUpdateClient(
     private val httpClient: OkHttpClient,
     private val resolver: RemoteHostResolver? = null,
-    // Read per call: both are settings the user can change from the updates screen, and a value
-    // captured at construction would keep the previous repository until the process restarted.
+
     private val releasesApiUrl: () -> String = { DEFAULT_RELEASES_API_URL },
-    // Bearer token for a private repository. Blank for the public feed, and never sent anywhere
-    // but the configured host — see [authorized].
+
     private val releasesToken: () -> String = { "" },
 ) {
     private val json = Json { ignoreUnknownKeys = true }
@@ -173,6 +155,11 @@ class AppUpdateClient(
                 "release metadata carries neither a tag nor any asset",
             )
         }
+        val installed = AppUpdateVersion.parseOrNull(currentVersionName)
+        val tagged = AppUpdateVersion.parseOrNull(tag)
+        if (installed != null && tagged != null && tagged <= installed) {
+            return AppUpdateCheck.UpToDate
+        }
         val manifest = release.manifestOrNull(client)
         val publishedName = manifest?.versionName?.takeIf(String::isNotBlank) ?: appUpdateDisplayVersionName(tag)
         val published =
@@ -181,7 +168,6 @@ class AppUpdateClient(
                     AppUpdateFailure.MALFORMED,
                     "release version '$publishedName' cannot be ordered",
                 )
-        val installed = AppUpdateVersion.parseOrNull(currentVersionName)
         if (!isNewerRelease(manifest, currentVersionCode, installed, published)) {
             return AppUpdateCheck.UpToDate
         }
@@ -229,10 +215,6 @@ class AppUpdateClient(
         return json.decodeFromString<AppUpdateManifest>(manifestJson)
     }
 
-    /**
-     * Downloads the APK and returns it only when the digest matches. A partial or mismatched file is
-     * deleted rather than left behind: the installer must never see a half-written package.
-     */
     suspend fun download(
         update: AppUpdateCheck.Available,
         into: File,
@@ -251,7 +233,6 @@ class AppUpdateClient(
                     Request.Builder()
                         .url(url)
                         .get()
-                        // The API asset endpoint serves metadata by default; the binary needs this.
                         .header("Accept", ASSET_ACCEPT)
                         .authorized(url)
                         .build()
@@ -350,30 +331,16 @@ class AppUpdateClient(
     @Serializable
     private data class GithubAsset(
         val name: String,
-        // The API endpoint of the asset. A private repository serves its assets only from here —
-        // browser_download_url answers 404 to a token — so it is what an authenticated read uses.
+
         val url: String = "",
         @kotlinx.serialization.SerialName("browser_download_url") val browserDownloadUrl: String,
         val size: Long = 0,
     )
 
-    /**
-     * Where this asset can actually be read from: the API endpoint while a token is configured,
-     * the plain download URL otherwise. Both are verified the same way afterwards — the manifest's
-     * sha256 still has to match the bytes, whichever host served them.
-     */
     private fun GithubAsset.readableUrl(): String =
         if (releasesToken().isNotBlank() && url.isNotBlank()) url else browserDownloadUrl
 
-    /**
-     * Attaches the token, and only to the configured release host.
-     *
-     * Two guards, both deliberate: a token is never sent to the default public feed (it has no
-     * business there and would only be an accidental disclosure), and never to a host other than
-     * the one the user pointed the updater at — GitHub redirects asset downloads to a CDN, and a
-     * credential must not follow. OkHttp drops the header itself on a cross-host redirect; this
-     * makes the first request obey the same rule.
-     */
+    // A release token belongs only to the configured API host, never the public default or a redirect CDN.
     private fun Request.Builder.authorized(url: HttpUrl): Request.Builder {
         val token = releasesToken()
         if (token.isBlank()) {

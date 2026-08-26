@@ -7,7 +7,6 @@ import org.junit.Test
 import java.net.InetAddress
 import java.net.UnknownHostException
 
-// Phase 4b: a refresh must resolve each unique public host once, not once per node per parse.
 internal class MemoizedRemoteHostResolverTest {
     private val publicAddress = InetAddress.getByName("93.184.216.34")
     private val privateAddress = InetAddress.getByName("10.10.0.5")
@@ -78,7 +77,7 @@ internal class MemoizedRemoteHostResolverTest {
         resolver("a.example.org")
         resolver("b.example.org")
         resolver("c.example.org")
-        // "a" was evicted by "c"; re-resolving it must hit the delegate again.
+
         resolver("a.example.org")
 
         assertEquals(4, calls)

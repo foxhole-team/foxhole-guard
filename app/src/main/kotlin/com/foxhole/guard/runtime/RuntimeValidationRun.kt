@@ -1,6 +1,7 @@
 package com.foxhole.guard.runtime
 
 import android.net.Network
+import android.os.SystemClock
 import com.foxhole.core.model.ConnectionSnapshot
 import com.foxhole.core.model.IpInfo
 import com.foxhole.core.model.ProtocolHint
@@ -37,6 +38,7 @@ import org.json.JSONObject
 
 internal data class RuntimeValidationRun(
     val validationStartedAt: Long,
+    val deadlineAtElapsedRealtimeMs: Long,
     val currentSession: VpnSession?,
     val activeProtocolHint: ProtocolHint?,
     val baseValidationPolicyContext: TunnelValidationPolicyContext,
@@ -59,13 +61,19 @@ internal suspend fun FoxholeVpnService.prepareRuntimeValidationRun(
     currentSession: VpnSession?,
 ): RuntimeValidationRun {
     val activeProtocolHint = currentSession?.protocolHint
+    val probePlan = runtimeValidationProbePlan(currentSession)
     return RuntimeValidationRun(
         validationStartedAt = validationStartedAt,
+        deadlineAtElapsedRealtimeMs =
+        runtimeValidationDeadlineAt(
+            startedAtElapsedRealtimeMs = SystemClock.elapsedRealtime(),
+            totalTimeoutMs = probePlan.totalTimeoutMs,
+        ),
         currentSession = currentSession,
         activeProtocolHint = activeProtocolHint,
         baseValidationPolicyContext = tunnelValidationPolicyContextFor(PrivateDnsSettings.current(this)),
         preferIpv4Validation = shouldPreferIpv4TunnelValidation(activeProtocolHint, currentSession?.configJson),
-        probePlan = runtimeValidationProbePlan(currentSession),
+        probePlan = probePlan,
         diagnostics = runtimeValidationDiagnosticFields(currentSession),
     )
 }
@@ -97,7 +105,11 @@ internal suspend fun FoxholeVpnService.runTunnelConnectivityProbe(
         attempts = validationRun.probePlan.attempts,
         initialDelayMs = validationRun.probePlan.initialDelayMs,
         retryDelayMs = validationRun.probePlan.retryDelayMs,
-        timeoutMs = validationRun.probePlan.totalTimeoutMs,
+        timeoutMs =
+        runtimeValidationWatchdogTimeoutMs(
+            deadlineAtElapsedRealtimeMs = validationRun.deadlineAtElapsedRealtimeMs,
+            nowElapsedRealtimeMs = SystemClock.elapsedRealtime(),
+        ),
         onFailure = { attemptIndex, error ->
             container.diagnosticsLogger.recordFailure(
                 "dns",
@@ -134,9 +146,9 @@ private suspend fun FoxholeVpnService.runTunnelValidationAttempt(
         expectedFreshVpnInterfaceName,
     )
     val runtimeProxyAccepted = tryRuntimeProxyTunnelValidation(validationRun, networkContext)
-    if (validationRun.currentSession?.profileId == FoxholeVpnService.TOR_ONLY_PROFILE_ID) {
+    if (validationRun.currentSession.requiresVerifiedTorExitForValidation()) {
         check(runtimeProxyAccepted) {
-            "tor-only tunnel did not prove public egress through tor"
+            "tor-carrying tunnel did not prove public egress through tor"
         }
         requireVpnBoundDnsResolution(networkContext.vpnNetwork)
         return networkContext.vpnNetwork
@@ -148,15 +160,10 @@ private suspend fun FoxholeVpnService.runTunnelValidationAttempt(
             tryEndpointPreIpValidation(validationRun, networkContext)
     if (earlyAccepted) {
         requireVpnBoundDnsResolution(networkContext.vpnNetwork)
-        // A deferred VPN+Tor start is deliberately built as plain VPN first. Do not let an
-        // endpoint-only acceptance release the Tor upgrade while the VPN identity refresh is
-        // still running in the background: the reload changes activeSession and makes that
-        // refresh stale, leaving IP VPN empty forever while IP TOR appears first.
+
         if (pendingTorRouteUpgradeSessionId == validationRun.currentSession?.correlationId) {
             val ipRefresh = refreshTunnelIpForValidation(validationRun, networkContext)
-            // This is a sequencing barrier, not a best-effort decoration. A failure must keep the
-            // validation attempt in its retry/fail-closed path; accepting weaker endpoint evidence
-            // here would release Tor before IP VPN is committed again.
+
             publishSuccessfulValidationIpRefresh(validationRun, ipRefresh.getOrThrow())
             return networkContext.vpnNetwork
         }
@@ -216,6 +223,7 @@ private fun FoxholeVpnService.recordVpnDnsRuntimeCounters() {
         "dial_errors=${snapshot.optLong("dial_errors", -1L)}",
         "flow_errors=${snapshot.optLong("flow_errors", -1L)}",
         "udp_opened=${snapshot.optLong("udp_flows_opened", -1L)}",
+        "udp_unsupported=${snapshot.optLong("udp_unsupported", -1L)}",
     )
 }
 
@@ -244,7 +252,12 @@ private suspend fun FoxholeVpnService.awaitRuntimeValidationNetworkContext(
                 profileId = validationRun.currentSession?.profileId ?: runtimeSnapshot.profileId,
             ),
         )
-    recordRuntimeProxyValidationPolicy(settings, runtimeSnapshot, policyContext)
+    recordRuntimeProxyValidationPolicy(
+        settings = settings,
+        runtimeSnapshot = runtimeSnapshot,
+        policyContext = policyContext,
+        session = validationRun.currentSession,
+    )
     val androidValidatedEarly = isVpnNetworkValidated(vpnNetwork)
     container.diagnosticsLogger.recordStructured(
         "runtime",
@@ -254,7 +267,11 @@ private suspend fun FoxholeVpnService.awaitRuntimeValidationNetworkContext(
         expectedFreshVpnInterfaceName?.let { "excluded_interface=$it" },
         "android_validated=$androidValidatedEarly",
     )
-    recordAndroidValidatedNetworkPolicy(androidValidatedEarly, policyContext)
+    recordAndroidValidatedNetworkPolicy(
+        androidValidatedEarly = androidValidatedEarly,
+        policyContext = policyContext,
+        session = validationRun.currentSession,
+    )
     return RuntimeValidationNetworkContext(
         vpnNetwork = vpnNetwork,
         requestNetwork = tunnelValidationRequestNetwork(vpnNetwork),
@@ -269,10 +286,13 @@ private fun FoxholeVpnService.recordRuntimeProxyValidationPolicy(
     settings: Settings,
     runtimeSnapshot: ConnectionSnapshot,
     policyContext: TunnelValidationPolicyContext,
+    session: VpnSession?,
 ) {
     container.diagnosticsLogger.record(
         "dns",
         when {
+            session.requiresVerifiedTorExitForValidation() ->
+                "service-owned verified tor exit required for tunnel validation"
             policyContext.allowRuntimeProxyTunnelValidation ->
                 "runtime proxy egress accepted for include-app tunnel validation"
             settings.requiresStrictRuntimeProxyIpRefresh(runtimeSnapshot) ->
@@ -285,16 +305,20 @@ private fun FoxholeVpnService.recordRuntimeProxyValidationPolicy(
 private fun FoxholeVpnService.recordAndroidValidatedNetworkPolicy(
     androidValidatedEarly: Boolean,
     policyContext: TunnelValidationPolicyContext,
+    session: VpnSession?,
 ) {
     if (!androidValidatedEarly) {
         return
     }
     container.diagnosticsLogger.record(
         "dns",
-        if (policyContext.allowRuntimeProxyTunnelValidation) {
-            "vpn network has Android validation; trying runtime proxy include-app tunnel validation"
-        } else {
-            "vpn network has Android validation; still requiring vpn-bound tunnel validation"
+        when {
+            session.requiresVerifiedTorExitForValidation() ->
+                "vpn network has Android validation; still requiring service-owned verified tor exit"
+            policyContext.allowRuntimeProxyTunnelValidation ->
+                "vpn network has Android validation; trying runtime proxy include-app tunnel validation"
+            else ->
+                "vpn network has Android validation; still requiring vpn-bound tunnel validation"
         },
     )
 }
@@ -303,29 +327,48 @@ private suspend fun FoxholeVpnService.tryRuntimeProxyTunnelValidation(
     validationRun: RuntimeValidationRun,
     networkContext: RuntimeValidationNetworkContext,
 ): Boolean {
-    if (!networkContext.policyContext.allowRuntimeProxyTunnelValidation) {
+    val requiresVerifiedTorExit =
+        validationRun.currentSession.requiresVerifiedTorExitForValidation()
+    if (!networkContext.policyContext.allowRuntimeProxyTunnelValidation && !requiresVerifiedTorExit) {
         return false
     }
     val runtimeProxyValidation =
         runRuntimeValidationCatchingUnlessCancelled {
             profileRuntimeValidationStep("runtime_proxy_egress") {
                 validateRuntimeProxyEgressWithWarmup(
-                    settings = networkContext.settings,
-                    vpnNetwork = networkContext.vpnNetwork,
-                    session = validationRun.currentSession,
-                    validationPolicyContext = networkContext.policyContext,
-                    preferIpv4Validation = validationRun.preferIpv4Validation,
-                    endpointCallTimeoutMs = validationRun.probePlan.literalCallTimeoutMs,
-                    ipRefreshCallTimeoutMs = validationRun.probePlan.callTimeoutMs,
-                    totalTimeoutMs = validationRun.probePlan.totalTimeoutMs,
-                    retryDelayMs = validationRun.probePlan.retryDelayMs,
+                    request =
+                    RuntimeProxyEgressValidationRequest(
+                        settings = networkContext.settings,
+                        vpnNetwork = networkContext.vpnNetwork,
+                        session = validationRun.currentSession,
+                        validationPolicyContext = networkContext.policyContext,
+                        preferIpv4Validation = validationRun.preferIpv4Validation,
+                    ),
+                    warmupPolicy =
+                    RuntimeProxyWarmupPolicy(
+                        endpointCallTimeoutMs = validationRun.probePlan.literalCallTimeoutMs,
+                        ipRefreshCallTimeoutMs = validationRun.probePlan.callTimeoutMs,
+                        deadlineAtElapsedRealtimeMs = validationRun.deadlineAtElapsedRealtimeMs,
+                        controlProbeReserveMs = validationRun.probePlan.controlProbeReserveMs,
+                        retryDelayMs = validationRun.probePlan.retryDelayMs,
+                        maxAttempts = validationRun.probePlan.maxRuntimeProxyWarmupAttempts,
+                    ),
                 )
             }
         }
     return if (runtimeProxyValidation.isFailure) {
+        val failureMessage =
+            runtimeProxyValidation
+                .exceptionOrNull()
+                ?.message
+                .orEmpty()
         container.diagnosticsLogger.recordFailure(
             "dns",
-            "runtime proxy egress validation failed before vpn-bound fallback: ${runtimeProxyValidation.exceptionOrNull()?.message.orEmpty()}",
+            if (requiresVerifiedTorExit) {
+                "verified tor egress validation failed without generic fallback: $failureMessage"
+            } else {
+                "runtime proxy egress validation failed before vpn-bound fallback: $failureMessage"
+            },
         )
         false
     } else {
@@ -333,11 +376,13 @@ private suspend fun FoxholeVpnService.tryRuntimeProxyTunnelValidation(
         if (!acceptsRuntimeProxyValidationResult(validationRun.currentSession, proxyResult)) {
             container.diagnosticsLogger.record(
                 "dns",
-                "runtime proxy evidence rejected for tor-only validation kind=${proxyResult.kind.name.lowercase()}",
+                "runtime proxy evidence rejected for strict tor validation kind=${proxyResult.kind.name.lowercase()}",
             )
             return false
         }
-        proxyResult.ipInfo?.let { info -> publishRuntimeProxyValidatedIpInfo(info, validationRun.currentSession) }
+        proxyResult.ipInfo?.let { info ->
+            publishRuntimeProxyValidatedIpInfo(info, validationRun.currentSession)
+        }
         container.diagnosticsLogger.record(
             "dns",
             "runtime proxy egress accepted tunnel validation kind=${proxyResult.kind.name.lowercase()}",

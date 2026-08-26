@@ -250,10 +250,7 @@ internal fun StoredProfileSecret.hasInsecureTlsConsent(): Boolean =
     when (insecureTlsConsentGranted) {
         true -> true
         false -> false
-        // Deliberate (see ProfileInsecureTlsSupportTest "…counts as refresh consent"): a legacy
-        // profile predating the consent field that already carries the insecure-TLS marker keeps its
-        // implied consent, so a subscription refresh does not silently re-prompt or drop it. New
-        // imports always record an explicit true/false, so null only ever means "legacy".
+
         null -> requiresInsecureTls
     }
 

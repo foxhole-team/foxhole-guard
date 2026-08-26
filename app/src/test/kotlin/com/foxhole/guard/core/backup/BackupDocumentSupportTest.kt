@@ -1,5 +1,7 @@
 package com.foxhole.guard.core.backup
 
+import com.foxhole.core.model.AccentColor
+import com.foxhole.core.model.AppLocale
 import com.foxhole.core.model.AppLockMode
 import com.foxhole.core.model.AppLockSettings
 import com.foxhole.core.model.AppTunnelLane
@@ -8,12 +10,15 @@ import com.foxhole.core.model.ExpertSettings
 import com.foxhole.core.model.KnownApplicationIdentity
 import com.foxhole.core.model.LocalAuthSettings
 import com.foxhole.core.model.LocalSurfaceSettings
+import com.foxhole.core.model.PanelAppearance
 import com.foxhole.core.model.PendingQuarantineAppDetails
 import com.foxhole.core.model.ProfileSourceType
 import com.foxhole.core.model.ProfileTrafficTotal
 import com.foxhole.core.model.ProtocolHint
 import com.foxhole.core.model.Settings
 import com.foxhole.core.model.SmartProfilePreference
+import com.foxhole.core.model.ThemeMode
+import com.foxhole.core.model.UiSettings
 import com.foxhole.core.model.UpdateSourceSettings
 import com.foxhole.core.model.blockedLanePackages
 import com.foxhole.core.model.retiredRawConfigSourceStorageToken
@@ -62,6 +67,31 @@ class BackupDocumentSupportTest {
     }
 
     @Test
+    fun `legacy backup appearance overrides its encoded default theme once`() {
+        val legacy =
+            sampleDocument().copy(
+                settingsSchemaVersion = 19,
+                settings =
+                Settings(
+                    schemaVersion = 19,
+                    ui =
+                    UiSettings(
+                        themeMode = ThemeMode.SYSTEM,
+                        panelAppearance = PanelAppearance.DARK,
+                    ),
+                ),
+            )
+
+        val migrated = decodeBackupDocument(encodeBackupDocument(legacy)) as BackupParseResult.Success
+        assertEquals(ThemeMode.OLED, migrated.document.settings?.ui?.themeMode)
+        assertEquals(PanelAppearance.AUTO, migrated.document.settings?.ui?.panelAppearance)
+
+        val repeated =
+            decodeBackupDocument(encodeBackupDocument(migrated.document)) as BackupParseResult.Success
+        assertEquals(migrated.document.settings, repeated.document.settings)
+    }
+
+    @Test
     fun `unknown fields are tolerated`() {
         val retiredSourceToken = retiredRawConfigSourceStorageToken()
         val payload =
@@ -72,7 +102,12 @@ class BackupDocumentSupportTest {
               "createdAt": 5,
               "appVersionName": "9.9.9",
               "appVersionCode": 99,
+              "settingsSchemaVersion": 20,
               "futureField": {"nested": true},
+              "settings": {
+                "schemaVersion": 20,
+                "ui": {"visualStyle": "PIXEL", "accentColor": "CYAN", "locale": "RU"}
+              },
               "profiles": [
                 {"name": "X", "sourceType": "$retiredSourceToken", "rawInput": "{}", "futureFlag": 3}
               ]
@@ -83,6 +118,10 @@ class BackupDocumentSupportTest {
         val profile = (result as BackupParseResult.Success).document.profiles.single()
         assertEquals("X", profile.name)
         assertEquals(ProfileSourceType.RAW_CONFIG_JSON.name, profile.sourceType)
+        val ui = result.document.settings?.ui
+        assertEquals(AccentColor.CYAN, ui?.accentColor)
+        assertEquals(AppLocale.RU, ui?.locale)
+        assertFalse(encodeBackupDocument(result.document).contains("\"visualStyle\""))
     }
 
     @Test

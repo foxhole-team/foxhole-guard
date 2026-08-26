@@ -149,7 +149,7 @@ object SubscriptionMetadataParser {
             SubscriptionUserInfo(
                 uploadBytes = values["upload"]?.toNonNegativeLongOrNull(),
                 downloadBytes = values["download"]?.toNonNegativeLongOrNull(),
-                // Providers encode unlimited quota as total=0, not as exhausted.
+
                 totalBytes = values["total"]?.toNonNegativeLongOrNull()?.takeIf { it > 0L },
                 expiresAt = parseExpirationValue(values["expire"]),
             )

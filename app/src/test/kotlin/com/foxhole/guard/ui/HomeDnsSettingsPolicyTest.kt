@@ -120,27 +120,30 @@ class HomeDnsSettingsPolicyTest {
     }
 
     @Test
-    fun `dns filter controls collapse into protection group while disabled`() {
+    fun `dns filter controls smoothly collapse into protection group while disabled`() {
         val source = cliSettingsSource("CliSettingsDnsSection.kt")
         val updates = cliSettingsSource("CliUpdatesSubScreen.kt")
 
-        assertTrue(source.contains("if (!dns.filteringEnabled)"))
+        assertTrue(source.contains("CliSettingsAnimatedRows(visible = dns.filteringEnabled)"))
         assertTrue(source.contains("R.string.cli_cfg_dns_tracker_level"))
         assertTrue(source.contains("dnsTrackerLevelVisible(dns)"))
         assertFalse(source.contains("dns-filter-update"))
+        assertFalse(source.contains("CliFoxholeUpdateProgress("))
+        assertTrue(source.contains("CliVerifiedUpdateProgress("))
         assertTrue(updates.contains("onFoxholeDbRefreshAll"))
     }
 
     @Test
-    fun `dns enable uses the canonical confirmation sheet and blue info marker`() {
+    fun `dns enable uses the canonical confirmation sheet and download progress`() {
         val source = cliSettingsSource("CliSettingsDnsSection.kt")
 
         assertTrue(source.contains("CliBottomSheet("))
         assertTrue(source.contains("CliSheetActionsRow("))
         assertTrue(source.contains("R.string.cli_dns_filter_enable_body"))
-        assertTrue(source.contains("R.drawable.pix_info"))
-        assertTrue(source.contains("tint = colors.note"))
-        assertTrue(source.contains("R.string.cli_dns_filter_enable_info"))
+        assertTrue(source.contains("CliVerifiedUpdateProgress("))
+        assertTrue(source.contains("downloadProgress = refreshProgress"))
+        assertFalse(source.contains("R.drawable.lin_info"))
+        assertFalse(source.contains("R.string.cli_dns_filter_enable_info"))
     }
 
     @Test

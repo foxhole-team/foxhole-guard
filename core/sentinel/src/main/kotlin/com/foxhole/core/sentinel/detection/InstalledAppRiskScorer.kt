@@ -4,14 +4,6 @@ import com.foxhole.core.model.InstalledAppRiskLevel
 import com.foxhole.core.model.InstalledAppRiskSignal
 import com.foxhole.core.model.ThreatIntelDocument
 
-/**
- * Android-collected facts about a single installed package. The app-side collector gathers these
- * from `PackageManager`/`PowerManager` and hands them to the SENTINEL core for scoring, so the
- * detection logic stays pure (no Android dependency) and unit-testable.
- *
- * Permission-derived booleans are pre-resolved by the collector (e.g. `requestsOverlay` already
- * folds in `SYSTEM_ALERT_WINDOW`) so this module never references Android permission constants.
- */
 data class InstalledAppFacts(
     val packageName: String,
     val label: String,
@@ -30,12 +22,6 @@ data class InstalledAppFacts(
     val signingCertSha1: Set<String> = emptySet(),
 )
 
-/**
- * Updatable threat intelligence the scorer matches packages against. Populated by a downloadable
- * signature feed (reusing the DNS filter update pipeline); empty until a feed is loaded, in which
- * case scoring is the pure capability heuristics. Package names and certificate hashes are matched
- * case-insensitively.
- */
 data class InstalledAppThreatIntel(
     val maliciousPackages: Set<String> = emptySet(),
     val maliciousCertSha256: Set<String> = emptySet(),
@@ -53,7 +39,6 @@ data class InstalledAppThreatIntel(
     val isEmpty: Boolean
         get() = normalizedPackages.isEmpty() && normalizedCerts.isEmpty() && normalizedCertsSha1.isEmpty()
 
-    /** Union of two intel sources, e.g. the bundled seed baseline plus the latest remote feed. */
     fun mergedWith(other: InstalledAppThreatIntel): InstalledAppThreatIntel =
         InstalledAppThreatIntel(
             maliciousPackages = maliciousPackages + other.maliciousPackages,
@@ -66,7 +51,6 @@ data class InstalledAppThreatIntel(
     }
 }
 
-/** Build the security core's matching structure from a parsed bundle document. */
 fun ThreatIntelDocument.toThreatIntel(): InstalledAppThreatIntel =
     InstalledAppThreatIntel(
         maliciousPackages = packages.filter(String::isNotBlank).toSet(),
@@ -74,17 +58,11 @@ fun ThreatIntelDocument.toThreatIntel(): InstalledAppThreatIntel =
         maliciousCertSha1 = certsSha1.filter(String::isNotBlank).toSet(),
     )
 
-/** Outcome of scoring one package: the risk signals that fired and the rolled-up level. */
 data class InstalledAppRiskAssessment(
     val riskSignals: List<InstalledAppRiskSignal>,
     val riskLevel: InstalledAppRiskLevel,
 )
 
-/**
- * Pure installed-app risk scoring — the FoxHole Sentinel core's app-threat side, alongside the
- * traffic-anomaly engine. Capability-based heuristics today; a future updatable threat-intel feed
- * (known-malicious package names / signing certificates) plugs in here without touching callers.
- */
 fun scoreInstalledApp(
     facts: InstalledAppFacts,
     threatIntel: InstalledAppThreatIntel = InstalledAppThreatIntel.EMPTY,

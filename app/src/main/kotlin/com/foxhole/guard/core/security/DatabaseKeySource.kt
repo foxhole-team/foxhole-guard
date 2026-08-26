@@ -17,12 +17,6 @@ interface DatabaseKeySource {
     fun acquirePassphrase(): ByteArray
 }
 
-/**
- * Default (level 1) key source: a random passphrase file wrapped by the Android
- * Keystore. Hardened against the silent-rekey bricking risk - it refuses to mint a
- * fresh passphrase whenever a password keybox exists, so any pre-unlock DB touch
- * fails loudly instead of replacing the key of an existing encrypted database.
- */
 class KeystoreDatabaseKeySource internal constructor(
     private val passphraseFile: File,
     private val cipher: com.foxhole.guard.core.sentinel.FileCipher,
@@ -58,7 +52,6 @@ class KeystoreDatabaseKeySource internal constructor(
     }
 }
 
-/** Production factory mirroring a constructor; keeps the class's DI-friendly ctor injectable. */
 @Suppress("FunctionName")
 fun KeystoreDatabaseKeySource(
     context: Context,
@@ -87,11 +80,6 @@ private const val KEYSTORE_ALIAS = "foxhole.profile.db.passphrase"
 private const val ANDROID_KEYSTORE = "AndroidKeyStore"
 private const val DATA_KEY_BYTES = 32
 
-/**
- * Level 3 key source: the passphrase lives only in the password-derived keybox and is
- * held in the session holder while unlocked. Fails closed if reached before unlock;
- * every pre-unlock DB path is gated so that never happens in practice.
- */
 class KeyboxDatabaseKeySource(
     private val session: SecureSessionHolder,
 ) : DatabaseKeySource {

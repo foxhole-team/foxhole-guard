@@ -14,22 +14,10 @@ import com.foxhole.guard.diagnosticFailureLabel
 import kotlinx.coroutines.CancellationException
 
 internal enum class VpnTorStartBlockReason {
+    TOR_PERMISSION_REQUIRED,
     PROFILE_REQUIRED,
     INCOMPATIBLE_VPN_PROTOCOL,
 
-    /**
-     * «Whole device through TOR» asked for while the VPN itself carries only the SELECTED apps.
-     *
-     * The two halves contradict each other and no config can make both true: in an include split
-     * the tun captures the selection alone, so every other app is outside the tunnel and can never
-     * reach a Tor route that lives inside it. Assembling it anyway produced a route whose default
-     * is Tor and whose "everything else goes direct" rule cannot exist beside it — the core
-     * refused the document (`policy_unrepresentable`) and the user read «the profile configuration
-     * is invalid» with the tunnel already gone.
-     *
-     * Refused here rather than reinterpreted: silently narrowing «whole device» to «the selected
-     * apps» would tell a person their whole phone rides Tor while most of it goes out clearnet.
-     */
     TOR_ALL_APPS_NEEDS_FULL_TUNNEL,
 }
 
@@ -40,11 +28,6 @@ internal data class ResolvedVpnStart(
     val torOnly: Boolean,
 )
 
-/**
- * Enforces the VPN + TOR contract before a TUN or native runtime starts. Android may already have
- * promoted the command receiver to an FGS to satisfy the platform deadline; rejection immediately
- * tears that shell down. Direct TOR is intentionally exempt: it is the supported profile-less route.
- */
 @Suppress("ReturnCount")
 internal fun vpnTorStartBlockReason(
     settings: Settings,
@@ -52,11 +35,16 @@ internal fun vpnTorStartBlockReason(
     protocolOptionId: String?,
     torOnlyConnect: Boolean,
 ): VpnTorStartBlockReason? {
+    if (torOnlyConnect && (!settings.privacyRoute.permitted || !settings.privacyRoute.enabled)) {
+        return VpnTorStartBlockReason.TOR_PERMISSION_REQUIRED
+    }
     if (!settings.privacyRoute.enabled) {
         return null
     }
-    // A tor-only runtime has no VPN split to contradict: there, «whole device» is exactly what it
-    // says. The collision only exists while a profile tunnel carries the route.
+    if (!settings.privacyRoute.permitted) {
+        return VpnTorStartBlockReason.TOR_PERMISSION_REQUIRED
+    }
+
     if (!torOnlyConnect && settings.torAllAppsCollidesWithVpnIncludeSplit()) {
         return VpnTorStartBlockReason.TOR_ALL_APPS_NEEDS_FULL_TUNNEL
     }
@@ -73,6 +61,7 @@ internal fun vpnTorStartBlockReason(
 @StringRes
 internal fun VpnTorStartBlockReason.messageResource(): Int =
     when (this) {
+        VpnTorStartBlockReason.TOR_PERMISSION_REQUIRED -> R.string.privacy_route_core_forbidden
         VpnTorStartBlockReason.PROFILE_REQUIRED -> R.string.error_vpn_tor_profile_required
         VpnTorStartBlockReason.INCOMPATIBLE_VPN_PROTOCOL -> R.string.error_vpn_tor_profile_incompatible
         VpnTorStartBlockReason.TOR_ALL_APPS_NEEDS_FULL_TUNNEL -> R.string.error_tor_all_apps_needs_full_tunnel

@@ -48,8 +48,6 @@ internal class LanProxyAuthNormalizationTest {
 
     @Test
     fun `the loopback proxy auth flag is left alone`() {
-        // Only the LAN leg is forced: the loopback surface is not reachable from the network, so its
-        // own toggle keeps whatever the user chose.
         val localSurfaces =
             settingsWithLanAuth(LocalAuthSettings(username = "boxy", password = "hunter2"))
                 .let { settings ->
@@ -69,9 +67,6 @@ internal class LanProxyAuthNormalizationTest {
         assertTrue(localSurfaces.lanAuth.enabled)
     }
 
-    // Safe mode rebuilds ExpertSettings from a whitelist that drops localSurfaces entirely, and the
-    // LAN surface can only be enabled with safe mode already off (updateLocalProxyLanAccess clears
-    // it), so the fixture starts from there.
     private fun settingsWithLanAuth(lanAuth: LocalAuthSettings): Settings =
         Settings(
             connection = ConnectionSettings(safeModeEnabled = false),

@@ -47,17 +47,7 @@ internal class FoxholeConnectionLifecycle(
     private val snapshot: StateFlow<ConnectionSnapshot>,
     private val appliedRuntimeSignature: MutableStateFlow<Int?>,
     private val hasActiveVpnNetwork: () -> Boolean,
-    /**
-     * The master TUN descriptor this process holds on purpose, or null.
-     *
-     * Excluded from the stale-tunnel probe: it is open by design across an
-     * outbound change, so counting it makes a protocol switch look like a stale
-     * tunnel that has to be disconnected first.
-     *
-     * Wired from `RuntimeInstanceStore.nativeSnapshot()` — the same source the
-     * teardown watchdog reads, and the store keeps the last value across `clear()`
-     * so a settling teardown still recognises its own descriptor.
-     */
+
     private val ownMasterTunFd: () -> Int? = { null },
     private val runtimeQueueSnapshot: () -> RuntimeCommandQueueSnapshot,
     private val nativeRuntimeSnapshot: () -> NativeRuntimeSnapshot,
@@ -75,8 +65,7 @@ internal class FoxholeConnectionLifecycle(
         RuntimeResumeStateStore.clearRecentUserStop(context)
         val profile = profileRepository.getProfile(profileId) ?: error("profile not found")
         val settings = settingsRepository.current()
-        // A subscription can replace its option set in the service preflight. Keep this optimistic
-        // dashboard snapshot non-throwing; the post-refresh service path performs strict resolution.
+
         val runtimeProtocolOption =
             if (profile.sourceType == ProfileSourceType.SUBSCRIPTION_URL) {
                 profile.previewRuntimeProtocolOption(protocolOptionId)
@@ -118,7 +107,7 @@ internal class FoxholeConnectionLifecycle(
     suspend fun connectTorOnly(statusMessage: String?) {
         RuntimeResumeStateStore.clearRecentUserStop(context)
         val settings = settingsRepository.current()
-        require(settings.privacyRoute.enabled) { "TOR route is disabled" }
+        require(settings.privacyRoute.permitted && settings.privacyRoute.enabled) { "TOR route is disabled" }
         if (!awaitCrossModeRuntimeReleaseBeforeConnect(TrafficMode.TUNNEL)) return
         if (!awaitRuntimeTeardownBeforeConnect()) return
         if (snapshot.value.state !in ACTIVE_CONNECTION_STATES) {
@@ -143,12 +132,6 @@ internal class FoxholeConnectionLifecycle(
         )
     }
 
-    // A connect that targets one runtime mode while the OTHER mode still owns an active session
-    // (e.g. Start VPN-proxy while a Tor-only tunnel is engaged) must release the old runtime
-    // through its own graceful disconnect and wait for the state to settle. Skipping this let the
-    // new service brute-stop the other one (stopInactiveServices -> stopService -> onDestroy), and
-    // the dying service's fail-closed ERROR snapshot landed AFTER the new CONNECTING snapshot —
-    // the connect looked dead while the Tor core kept a tor-only tunnel engaged.
     private suspend fun awaitCrossModeRuntimeReleaseBeforeConnect(targetMode: TrafficMode): Boolean {
         if (!snapshot.value.isActiveRuntimeForAnotherMode(targetMode)) {
             return true
@@ -168,9 +151,6 @@ internal class FoxholeConnectionLifecycle(
         )
         val settled =
             withTimeoutOrNull(CROSS_MODE_RELEASE_TIMEOUT_MS) {
-                // DISCONNECTING is deliberately not part of ACTIVE_CONNECTION_STATES. Waiting
-                // only for "not active" would therefore complete against the stopping snapshot
-                // published above, before FoxCore and Android had released the previous TUN.
                 snapshot.first { current ->
                     current.state !in ACTIVE_CONNECTION_STATES &&
                         current.state != ConnectionState.DISCONNECTING
@@ -187,11 +167,6 @@ internal class FoxholeConnectionLifecycle(
         return settled
     }
 
-    /**
-     * Keeps a retry behind an already-running failure/disconnect cleanup. The mailbox provides the
-     * execution fence; this UI-side wait prevents an optimistic CONNECTING snapshot from hiding the
-     * honest teardown spinner while FoxCore and Android still release the previous owner.
-     */
     private suspend fun awaitRuntimeTeardownBeforeConnect(): Boolean {
         fun teardownPending(): Boolean =
             shouldWaitForRuntimeTeardownBeforeConnect(
@@ -220,13 +195,6 @@ internal class FoxholeConnectionLifecycle(
         return settled
     }
 
-    /**
-     * Releases a tunnel this process still owns before connecting.
-     *
-     * A process-owned master descriptor is excluded by [processTunFileDescriptorProbe], so refusal
-     * here means a positively observed foreign/stale TUN survived both graceful stop and kill. A
-     * new native start must not race that owner; it remains stopped and exposes a retryable error.
-     */
     private suspend fun releaseStaleVpnBeforeConnect(): Boolean {
         if (disconnectStaleVpnBeforeConnectIfNeeded()) {
             return true
@@ -240,10 +208,6 @@ internal class FoxholeConnectionLifecycle(
     }
 
     private suspend fun disconnectStaleVpnBeforeConnectIfNeeded(): Boolean {
-        // Rapid reconnect may replace a framework handle that is still settling after its tun
-        // closed; only a handle backed by a process-local tun descriptor blocks the new establish.
-        // Disconnect acceptance is stricter and waits for Android to remove the old handle, but
-        // connect admission must not turn that short framework lag into an unnecessary kill.
         fun hasRealStaleVpnTunnel(): Boolean =
             shouldReleaseStaleVpnTunnelBeforeConnect(
                 activeVpnNetwork = hasActiveVpnNetwork(),
@@ -324,9 +288,7 @@ internal class FoxholeConnectionLifecycle(
         if (shouldClearDetachedTunnelReconnect(currentSnapshot, activeVpnNetworkAvailable)) {
             diagnosticsLogger.record("connection", "disconnect clearing detached reconnect snapshot")
             stopAllServicesAndPublishIdle()
-            // This branch kills the live service with suppressLocalGuard=true, so the service will
-            // not raise guard back itself. The user stopped only the VPN, so a configured firewall
-            // is raised explicitly rather than waiting for the reconcile tick.
+
             if (!suppressLocalGuard) {
                 settingsRepository.settings.value.localGuardModeOrNull()?.let { mode ->
                     diagnosticsLogger.record("connection", "detached reconnect stop re-raising local guard")
@@ -399,9 +361,6 @@ internal class FoxholeConnectionLifecycle(
             privateDnsState = PrivateDnsSettings.currentState(context),
         )
 
-    // Local-guard sessions must compare against the guard fingerprint (which also tracks the guard
-    // mode, persistent-blocking and activity-logging toggles) — the general fingerprint zeroes those
-    // fields, which let a live firewall ignore those toggles entirely (they no-op'd until restart).
     suspend fun currentLocalGuardRuntimeFingerprint(mode: LocalGuardMode): Int =
         runtimeConfigAssembler.localGuardRuntimeFingerprint(
             settingsRepository.current(),
@@ -471,15 +430,6 @@ internal fun initialRuntimeTeardownPhase(
         else -> RuntimeTeardownPhase.ANDROID_TUNNEL
     }
 
-/**
- * Must a connect release a tunnel this process still owns?
- *
- * Deliberately the same bar as [shouldTerminateProcessForStuckTunnel]: only a POSITIVELY observed
- * foreign `/dev/tun` descriptor counts. The two other verdicts are not leaks — `UNKNOWN` means
- * `/proc/self/fd` could not be read, and the master descriptor FoxCore keeps while native owns a
- * duplicate is the design — yet both used to read as "stale", so every start that found any live
- * VPN network burned the release budget on a tunnel nobody was going to close.
- */
 internal fun shouldReleaseStaleVpnTunnelBeforeConnect(
     activeVpnNetwork: Boolean,
     tunDescriptorProbe: ProcessTunDescriptorProbe,
@@ -498,7 +448,7 @@ internal fun shouldWaitForRuntimeTeardownBeforeConnect(
             (activeVpnNetwork || commandQueue.commandQueueDepth > 0 || nativeTeardown)
     val failedCleanupStillOwned =
         connectionState == ConnectionState.ERROR &&
-            (activeVpnNetwork || commandQueue.commandQueueDepth > 0 || nativeTeardown)
+            (commandQueue.commandQueueDepth > 0 || nativeTeardown)
     return teardownPriority || nativeTeardown || disconnectStillOwned || failedCleanupStillOwned
 }
 

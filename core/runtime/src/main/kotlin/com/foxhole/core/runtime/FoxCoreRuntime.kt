@@ -10,13 +10,8 @@ import com.foxhole.core.model.VpnSession
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
-/**
- * The single Android owner of a FoxCore JNI handle and its kernel TUN. A master descriptor stays
- * in Java while native code owns a duplicate: an immutable outbound change can replace the Rust
- * engine on the same Android interface without dropping the OS VPN, while final stop still has
- * one explicit owner that closes the master.
- */
 @Suppress("LargeClass")
+// Single Android owner of the JNI handle and master TUN; stale native work commits only under its generation.
 internal class FoxCoreRuntime internal constructor(
     private val diagnosticsLogger: RuntimeDiagnosticsSink,
     private val translator: FoxCoreConfigTranslator = FoxCoreConfigTranslator(),
@@ -29,7 +24,6 @@ internal class FoxCoreRuntime internal constructor(
     private val transitionMutex = Mutex()
     private val stateLock = Any()
 
-    /** Owns the LAN listener for as long as this runtime owns a native handle. */
     private val lanProxy = LanProxyController(native)
     private val localProxy = LocalProxyController(native)
     private val torProbeProxy = TorProbeProxyController(native)
@@ -61,6 +55,8 @@ internal class FoxCoreRuntime internal constructor(
     @Volatile
     private var handoverQuiesced: Boolean = false
 
+    private val forceStopPoison = NativeForceStopPoisonController(diagnosticsLogger)
+
     /** Native JNI work runs outside [transitionMutex]; this is the owned transition it may finish. */
     private var pendingTransition: PendingNativeTransition? = null
 
@@ -86,6 +82,10 @@ internal class FoxCoreRuntime internal constructor(
             transitionMutex.withLock {
                 preemptSupersededPendingStart(generation)
                 when {
+                    forceStopPoison.processPoisoned ->
+                        NativeTransitionPreparation.Failed(
+                            forceStopPoison.failure("start_prepare") { setState(RuntimeState.ERROR) },
+                        )
                     !nativeStartOwnership.isCurrent(generation) ->
                         NativeTransitionPreparation.Failed(
                             rejectSupersededNativeStart(stage = "before_prepare"),
@@ -167,6 +167,10 @@ internal class FoxCoreRuntime internal constructor(
             transitionMutex.withLock {
                 val current = active
                 when {
+                    forceStopPoison.processPoisoned ->
+                        NativeTransitionPreparation.Failed(
+                            forceStopPoison.failure("reload_prepare") { setState(RuntimeState.ERROR) },
+                        )
                     !nativeStartOwnership.isCurrent(generation) ->
                         NativeTransitionPreparation.Failed(
                             rejectSupersededNativeStart(stage = "reload_prepare"),
@@ -280,12 +284,20 @@ internal class FoxCoreRuntime internal constructor(
             val next = started.copy(dnsServers = translated.tunPlan.advertisedDnsServers)
             val committed =
                 transitionMutex.withLock {
-                    if (!ownsPendingStart(generation)) {
-                        false
-                    } else {
-                        pendingTransition = null
-                        nativeStartOwnership.commitIfCurrent(generation) {
-                            publishState(next, generation)
+                    val poisonedOutcome = forceStopPoison.poisonedOutcome
+                    when {
+                        poisonedOutcome != null -> {
+                            if ((pendingTransition as? PendingNativeTransition.Start)?.generation == generation) {
+                                pendingTransition = null
+                            }
+                            false
+                        }
+                        !ownsPendingStart(generation) -> false
+                        else -> {
+                            pendingTransition = null
+                            nativeStartOwnership.commitIfCurrent(generation) {
+                                publishState(next, generation)
+                            }
                         }
                     }
                 }
@@ -310,24 +322,33 @@ internal class FoxCoreRuntime internal constructor(
                 } else {
                     executeReplacementReload(prepared, host, generation)
                 }
-            val stillOwned =
+            var poisonedOutcome: NativeForceStopOutcome? = null
+            val committed =
                 transitionMutex.withLock {
-                    ownsPendingReload(generation, prepared.current)
+                    poisonedOutcome = forceStopPoison.poisonedOutcome
+                    when {
+                        poisonedOutcome != null -> {
+                            if ((pendingTransition as? PendingNativeTransition.Reload)?.generation == generation) {
+                                pendingTransition = null
+                            }
+                            null
+                        }
+                        !ownsPendingReload(generation, prepared.current) -> null
+                        else -> {
+                            pendingTransition = null
+                            commitReloadOutcome(prepared, outcome, generation)
+                        }
+                    }
                 }
-            if (!stillOwned) {
+            if (committed != null) return committed
+            val discarded =
                 outcome.startedSessionOrNull()?.let { late ->
                     discardSupersededNativeStart(late, generation)
                 }
-                return rejectSupersededNativeStart(stage = "reload_commit")
-            }
-            return transitionMutex.withLock {
-                if (!ownsPendingReload(generation, prepared.current)) {
-                    rejectSupersededNativeStart(stage = "reload_commit_race")
-                } else {
-                    pendingTransition = null
-                    commitReloadOutcome(prepared, outcome, generation)
-                }
-            }
+            return poisonedOutcome
+                ?.let { poison -> nativeForceStopPoisonedFailure(poison, "reload_commit") }
+                ?: discarded
+                ?: rejectSupersededNativeStart(stage = "reload_commit")
         }
     }
 
@@ -404,10 +425,17 @@ internal class FoxCoreRuntime internal constructor(
         host: RuntimeServiceHost,
         generation: Long,
     ): NativeReloadOutcome {
+        if (transitionMutex.withLock { forceStopPoison.processPoisoned }) {
+            return NativeReloadOutcome.StopFailed
+        }
         val stopped = nativeEngine.stop(prepared.current.handle, REPLACEMENT_STOP_POLICY)
+        val forceStopOutcome =
+            transitionMutex.withLock {
+                forceStopPoison.remember(stopped.forceStopOutcome, prepared.current.host)
+            }
         val network = host.currentUnderlyingNetwork()
         return when {
-            !stopped.stopped -> NativeReloadOutcome.StopFailed
+            !stopped.stopped || forceStopOutcome.processPoisoned -> NativeReloadOutcome.StopFailed
             !nativeStartOwnership.isCurrent(generation) -> NativeReloadOutcome.Superseded
             network == null || network.networkHandle <= 0L ->
                 NativeReloadOutcome.RestoredFailure(
@@ -453,11 +481,19 @@ internal class FoxCoreRuntime internal constructor(
             if (handoverQuiesced) {
                 return@withLock true
             }
+            if (forceStopPoison.processPoisoned) {
+                setState(RuntimeState.ERROR)
+                return@withLock false
+            }
             setState(RuntimeState.STOPPING)
             cleanupDraining = true
             val stopped = nativeEngine.stop(current.handle, REPLACEMENT_STOP_POLICY)
+            val forceStopOutcome = forceStopPoison.remember(stopped.forceStopOutcome, current.host)
             val nativeTunProbe = probeTunDescriptor(current.nativeTunFd)
-            if (!stopped.stopped || nativeTunProbe != NativeTunDescriptorProbe.CLOSED) {
+            if (forceStopOutcome.processPoisoned ||
+                !stopped.stopped ||
+                nativeTunProbe != NativeTunDescriptorProbe.CLOSED
+            ) {
                 cleanupDraining = false
                 setState(RuntimeState.ERROR)
                 return@withLock false
@@ -496,17 +532,24 @@ internal class FoxCoreRuntime internal constructor(
                     tunClosed = pendingTunClosed,
                     escalatedToKill = false,
                     elapsedMs = elapsedMillis(startedAt),
+                    forceStopOutcome = forceStopPoison.current,
                 )
             }
             setState(RuntimeState.STOPPING)
             cleanupDraining = true
             val wasQuiesced = handoverQuiesced
             val stop =
-                if (wasQuiesced) {
-                    NativeStopOutcome(stopped = true, escalated = false)
-                } else {
-                    nativeEngine.stop(current.handle, policy)
+                when {
+                    forceStopPoison.processPoisoned ->
+                        NativeStopOutcome(
+                            stopped = false,
+                            escalated = false,
+                            forceStopOutcome = forceStopPoison.current,
+                        )
+                    wasQuiesced -> NativeStopOutcome(stopped = true, escalated = false)
+                    else -> nativeEngine.stop(current.handle, policy)
                 }
+            val forceStopOutcome = forceStopPoison.remember(stop.forceStopOutcome, current.host)
             val nativeStopped = stop.stopped
             val nativeTunProbe =
                 if (wasQuiesced) NativeTunDescriptorProbe.CLOSED else probeTunDescriptor(current.nativeTunFd)
@@ -530,6 +573,7 @@ internal class FoxCoreRuntime internal constructor(
                 tunClosed = tunClosed,
                 escalatedToKill = stop.escalated,
                 elapsedMs = elapsedMillis(startedAt),
+                forceStopOutcome = forceStopOutcome,
             )
         }
 
@@ -561,12 +605,20 @@ internal class FoxCoreRuntime internal constructor(
                 reason = safeReason(reason),
                 tunClosed = pendingTunClosed,
                 serverDetached = true,
+                forceStopOutcome = forceStopPoison.current,
             )
         }
         setState(RuntimeState.KILLING)
         cleanupDraining = true
         val wasQuiesced = handoverQuiesced
-        val killed = wasQuiesced || nativeEngine.forceKill(current.handle)
+        val nativeForceStopOutcome =
+            when {
+                forceStopPoison.processPoisoned -> forceStopPoison.current
+                wasQuiesced -> NativeForceStopOutcome.NOT_ATTEMPTED
+                else -> nativeEngine.forceKill(current.handle)
+            }
+        val forceStopOutcome = forceStopPoison.remember(nativeForceStopOutcome, current.host)
+        val killed = wasQuiesced || nativeForceStopOutcome.handleReleased
         val nativeTunProbe =
             if (wasQuiesced) NativeTunDescriptorProbe.CLOSED else probeTunDescriptor(current.nativeTunFd)
         val tunClosed =
@@ -588,6 +640,7 @@ internal class FoxCoreRuntime internal constructor(
             tunClosed = tunClosed,
             serverDetached = killed,
             closeDetached = !killed || !tunClosed,
+            forceStopOutcome = forceStopOutcome,
         )
     }
 
@@ -749,7 +802,17 @@ internal class FoxCoreRuntime internal constructor(
         cleanupDraining = true
         val discarded = nativeStartOwnership.discardLateSession(
             session = next,
-            releaseNative = nativeEngine::forceKill,
+            releaseNative = { handle ->
+                val alreadyPoisoned = transitionMutex.withLock { forceStopPoison.processPoisoned }
+                if (alreadyPoisoned) {
+                    false
+                } else {
+                    val outcome = nativeEngine.forceKill(handle)
+                    transitionMutex.withLock {
+                        forceStopPoison.remember(outcome, next.host)
+                    }.handleReleased
+                }
+            },
         )
         transitionMutex.withLock {
             val pendingGeneration = pendingTransition?.generation
@@ -757,8 +820,7 @@ internal class FoxCoreRuntime internal constructor(
                 pendingTransition = null
             }
             cleanupDraining = false
-            // A successor may already own a pending transition or an active session. Late cleanup
-            // belongs only to its own generation and must never overwrite the successor's state.
+
             if (active == null && pendingTransition == null) {
                 synchronized(stateLock) {
                     state =
@@ -771,7 +833,9 @@ internal class FoxCoreRuntime internal constructor(
                 }
             }
         }
-        return foxCoreFailure(FoxCoreRuntimeFailure.NATIVE_START_FAILED)
+        return forceStopPoison.poisonedOutcome
+            ?.let { outcome -> nativeForceStopPoisonedFailure(outcome, "late_start_discard") }
+            ?: foxCoreFailure(FoxCoreRuntimeFailure.NATIVE_START_FAILED)
     }
 
     private fun rejectSupersededNativeStart(stage: String): Result<Unit> =
@@ -782,10 +846,6 @@ internal class FoxCoreRuntime internal constructor(
             }
         }
 
-    /**
-     * Publishes (or takes down) the LAN proxy on the live session. Returns what the core actually
-     * reports, so the caller never has to guess whether its own request took effect.
-     */
     override fun syncLanProxy(
         request: LanProxyRequest?,
         blocked: LanProxyUnavailableReason?,
@@ -825,7 +885,6 @@ internal class FoxCoreRuntime internal constructor(
         return outcome
     }
 
-    /** Apply the decision [settleTeardown] made. */
     private fun applyTeardownSettlement(
         nativeReleased: Boolean,
         tunClosed: Boolean,
@@ -851,8 +910,7 @@ internal class FoxCoreRuntime internal constructor(
             state = RuntimeState.IDLE
             lastStopReason = safeReason(reason)
         }
-        // The LAN listener relays into this session; it cannot outlive it. The core drops it with
-        // the handle anyway — this is the half that stops the dashboard claiming it is still up.
+
         lanProxy.onSessionGone()
         localProxy.sync(handle = null, request = null)
         torProbeProxy.sync(handle = null, requestedOwner = null)
@@ -946,11 +1004,6 @@ internal class FoxCoreRuntime internal constructor(
         const val MAX_TRAFFIC_EVENT_BATCH = 4_096
         const val MAX_REASON_LENGTH = 96
 
-        /**
-         * Replacing the engine on a live TUN escalates — either the old engine is gone or the
-         * new one cannot have the tunnel. Declining to escalate left a timed-out stop in the
-         * core's reaper with the app claiming to run on it.
-         */
         val REPLACEMENT_STOP_POLICY =
             RuntimeStopPolicy(
                 closeTunFdImmediately = false,

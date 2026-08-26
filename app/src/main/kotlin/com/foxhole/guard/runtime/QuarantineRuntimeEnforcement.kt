@@ -104,10 +104,6 @@ internal class QuarantineRuntimeEnforcementTracker {
         }
 }
 
-/**
- * Small executable state machine around the Android dispatch seam. Dispatch acceptance is never an
- * ack: only a native-applied receipt for the current generation and service-owned runtime wins.
- */
 internal class QuarantineEnforcementCoordinator(
     private val snapshot: () -> QuarantineRuntimeEnforcementSnapshot,
     private val currentReceipt: () -> AppliedQuarantinePolicy?,

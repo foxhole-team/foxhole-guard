@@ -498,10 +498,7 @@ internal class ProfileImportEngine(
         if (nodes.size < 2 || nodes.any { node -> node.protocolHint == ProtocolHint.UNKNOWN }) {
             return null
         }
-        // A fetched smart subscription is one selectable profile even when each protocol uses its
-        // own endpoint. Requiring one common host split the VLESS/TROJAN/WireGuard/etc. bundle into
-        // unrelated profile cards. Keep ordinary same-protocol server lists separate: only a
-        // genuinely multi-protocol payload becomes a smart profile.
+
         if (nodes.map(ProxyNode::protocolHint).distinct().size < 2) {
             return null
         }

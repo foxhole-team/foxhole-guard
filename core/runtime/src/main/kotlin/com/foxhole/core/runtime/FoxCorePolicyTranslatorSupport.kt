@@ -7,10 +7,6 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 
-// The policy translator's vocabulary: intermediate representations, the keys the schema accepts,
-// and the predicates separating our own managed rules from user ones. No decisions here — only the
-// terms they are expressed in.
-
 internal class MutableRouteTranslation(
     var defaultAction: String,
 ) {
@@ -32,14 +28,6 @@ internal class MutableRouteTranslation(
         }
     }
 
-    /**
-     * Classifies [packageName] only if no earlier rule did.
-     *
-     * The catch-all counterpart of [addApplication]: a disagreement between two SPECIFIC rules is a
-     * config that means two things at once and is refused, but an inverted include set is the
-     * fallback for everything the specific rules did not name — so an earlier verdict (a blocked
-     * app) wins instead of colliding with it.
-     */
     fun retainApplication(
         packageName: String,
         action: String,

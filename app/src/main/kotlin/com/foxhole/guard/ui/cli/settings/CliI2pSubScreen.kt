@@ -76,7 +76,7 @@ internal fun CliI2pSubScreen(
             .fillMaxSize()
             .padding(horizontal = CliSpacing.md),
     ) {
-        CliScreenHeader(label = "I2P", icon = R.drawable.pix_incognito)
+        CliScreenHeader(label = "I2P", icon = R.drawable.lin_incognito)
 
         Column(
 
@@ -101,31 +101,31 @@ private fun CliI2pRuntimePanel(
 ) {
     CliPanel(
         title = stringResource(R.string.privacy_route_i2p_group),
-        icon = R.drawable.pix_link,
+        icon = R.drawable.lin_link,
         modifier = Modifier.fillMaxWidth(),
     ) {
-        if (settings.enabled) {
+        CliSettingsAnimatedRows(visible = settings.enabled) {
             CliToggleRow(
                 label = stringResource(R.string.cli_i2p_auto_reconnect),
-                icon = R.drawable.pix_restart,
+                icon = R.drawable.lin_restart,
                 checked = settings.autoReconnectAfterVpnDisconnect,
                 onToggle = viewModel::onI2pAutoReconnectChanged,
                 infoText = stringResource(R.string.cli_i2p_follow_tunnel_note),
             )
             CliToggleRow(
                 label = stringResource(R.string.cli_i2p_allow_outside_tunnel),
-                icon = R.drawable.pix_link,
+                icon = R.drawable.lin_link,
                 checked = settings.allowOutsideTunnel,
                 onToggle = { value -> viewModel.onI2pAllowOutsideTunnelChanged(value) },
                 infoText = stringResource(R.string.cli_i2p_outside_tunnel_sequence_note),
             )
             CliToggleRow(
                 label = stringResource(R.string.i2p_relay_transit_title),
-                icon = R.drawable.pix_link,
+                icon = R.drawable.lin_link,
                 checked = settings.relayTransitTraffic,
                 onToggle = viewModel::onI2pRelayTransitTrafficChanged,
             )
-            if (settings.relayTransitTraffic) {
+            CliSettingsAnimatedRows(visible = settings.relayTransitTraffic) {
                 CliI2pRelayControls(viewModel = viewModel, settings = settings)
             }
         }
@@ -140,13 +140,13 @@ private fun CliI2pRelayControls(
     var customLimit by rememberSaveable { mutableStateOf("") }
     CliToggleRow(
         label = stringResource(R.string.i2p_relay_cellular_title),
-        icon = R.drawable.pix_device,
+        icon = R.drawable.lin_device,
         checked = settings.allowRelayOnCellular,
         onToggle = viewModel::onI2pAllowRelayOnCellularChanged,
     )
     CliDropdownRow(
         label = stringResource(R.string.i2p_transit_bandwidth_title),
-        icon = R.drawable.pix_stats,
+        icon = R.drawable.lin_stats,
         value = i2pBandwidthLabel(settings.transitBandwidth),
         options = I2pTransitBandwidth.entries.map { bandwidth ->
             CliDropdownOption(id = bandwidth.name, label = i2pBandwidthLabel(bandwidth))
@@ -156,7 +156,7 @@ private fun CliI2pRelayControls(
     )
     CliDropdownRow(
         label = stringResource(R.string.i2p_transit_tunnels_title),
-        icon = R.drawable.pix_up,
+        icon = R.drawable.lin_up,
         value = settings.transitTunnelsLimit.toString(),
         options = I2P_TUNNEL_LIMIT_PRESETS.map { limit ->
             CliDropdownOption(id = limit.toString(), label = limit.toString())
@@ -170,7 +170,7 @@ private fun CliI2pRelayControls(
             }
         },
     )
-    if (customLimit.isNotEmpty()) {
+    CliSettingsAnimatedRows(visible = customLimit.isNotEmpty()) {
         CliInputRow(
             prompt = "limit",
             value = customLimit,
@@ -198,14 +198,14 @@ private fun CliI2pAddressBookPanel(
     var destination by rememberSaveable { mutableStateOf("") }
     var validationError by rememberSaveable { mutableStateOf<Int?>(null) }
     CliPanel(
-        icon = R.drawable.pix_incognito,
+        icon = R.drawable.lin_incognito,
         title = stringResource(R.string.privacy_route_i2p_addresses_title),
         modifier = Modifier.fillMaxWidth(),
     ) {
         settings.addressBook.forEach { entry ->
             CliActionRow(
                 label = entry.host,
-                icon = R.drawable.pix_link,
+                icon = R.drawable.lin_link,
                 value = "[x]",
                 onTap = { viewModel.onI2pAddressBookEntryDeleted(entry.host) },
             )
@@ -228,7 +228,7 @@ private fun CliI2pAddressBookPanel(
         )
         CliActionRow(
             label = stringResource(R.string.i2p_address_add_title),
-            icon = R.drawable.pix_add,
+            icon = R.drawable.lin_add,
             onTap = {
                 val error = i2pHostValidationErrorRes(host) ?: i2pDestinationValidationErrorRes(destination)
                 validationError = error

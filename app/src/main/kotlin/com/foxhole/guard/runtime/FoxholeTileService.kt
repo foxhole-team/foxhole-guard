@@ -135,10 +135,7 @@ class FoxholeTileService : TileService() {
     ) {
         val tile = qsTile ?: return
         tile.label = getString(R.string.app_name)
-        // Quick Settings tile icons are system-tinted per active/inactive state (solid color +
-        // transparency, no baked brand color) -- foxhole_logo's thin decorative linework is designed
-        // for large sizes and reads as a faint smear at the ~24dp tile size. ic_qs_tile is a
-        // simplified, fully-opaque solid-white silhouette derived from it, sized for legibility here.
+
         tile.icon = Icon.createWithResource(this, R.drawable.ic_qs_tile)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             tile.subtitle = subtitle

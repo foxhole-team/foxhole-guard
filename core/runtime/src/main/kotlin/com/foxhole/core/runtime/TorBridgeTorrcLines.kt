@@ -11,17 +11,10 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
-/**
- * Pure, Android-free translation of a bridge policy + a bridge source (a downloaded list or the
- * bundled `pt_config.json`) into the `UseBridges` / `Bridge …` torrc-defaults lines. Kept as a
- * top-level function so it is unit-tested on the JVM without a device.
- */
 data class TorBridgePolicy(
     val enabled: Boolean = true,
     val transport: TorBridgeTransport = TorBridgeTransport.AUTO,
 ) {
-    // Stirred into TorRuntimeInstaller's cache key so a settings change or a fresh downloaded list
-    // forces the torrc-defaults to be rewritten instead of served from the bundle-version cache.
     fun fingerprint(payloadFingerprint: String?): String =
         "$enabled:${transport.name}:${payloadFingerprint ?: "bundled"}"
 
@@ -40,13 +33,6 @@ private data class BridgeSource(
     val groups: Map<String, List<String>>,
 )
 
-/**
- * @param transportLines normalized `ClientTransportPlugin …` lines (only transports whose native
- *   binary is present survive — see [TorRuntimeInstaller.normalizedTorrcDefaultsLine]).
- * @param downloadedGroupsJson the store payload (preferred); a bare group object or a
- *   `{"bridges": {...}}` wrapper, optionally carrying `recommendedDefault`.
- * @param bundledPtConfigJson the bundled `pt_config.json` fallback.
- */
 fun buildBridgeTorrcLines(
     policy: TorBridgePolicy,
     transportLines: List<String>,
@@ -56,27 +42,29 @@ fun buildBridgeTorrcLines(
     if (!policy.enabled) {
         return emptyList()
     }
-    val source =
-        parseBridgeSource(downloadedGroupsJson)
-            ?: parseBridgeSource(bundledPtConfigJson)
+    val selectedTransport =
+        policy.transport.takeUnless { it == TorBridgeTransport.AUTO }
+            ?: TorBridgeTransport.SNOWFLAKE
+    val selectedBridges =
+        sequenceOf(
+            parseBridgeSource(downloadedGroupsJson),
+            parseBridgeSource(bundledPtConfigJson),
+        ).filterNotNull()
+            .map { source -> selectedReadyBridges(source, selectedTransport, transportLines) }
+            .firstOrNull { bridges -> bridges.isNotEmpty() }
             ?: return emptyList()
-    val readyBridges =
-        orderedBridges(source).filter { bridge -> transportReady(bridge.substringBefore(' '), transportLines) }
-    if (readyBridges.isEmpty()) {
-        return emptyList()
-    }
-    val selected =
-        if (policy.transport == TorBridgeTransport.AUTO) {
-            readyBridges
-        } else {
-            // A specific transport that yields no ready bridges (e.g. WEBTUNNEL/CONJURE absent from
-            // the current list) falls back to the full AUTO set — never leave Tor bridge-less.
-            readyBridges
-                .filter { bridge -> policy.transport.matchesBridgeTransportToken(bridge.substringBefore(' ')) }
-                .ifEmpty { readyBridges }
-        }
-    return listOf("UseBridges 1") + selected.map { bridge -> "Bridge $bridge" }
+    return listOf("UseBridges 1") + selectedBridges.map { bridge -> "Bridge $bridge" }
 }
+
+private fun selectedReadyBridges(
+    source: BridgeSource,
+    transport: TorBridgeTransport,
+    transportLines: List<String>,
+): List<String> =
+    orderedBridges(source)
+        .filter { bridge -> transport.matchesBridgeTransportToken(bridge.substringBefore(' ')) }
+        .filter { bridge -> transportReady(bridge.substringBefore(' '), transportLines) }
+        .filter(::isArtiCompatibleBridgeLine)
 
 private fun parseBridgeSource(rawJson: String?): BridgeSource? {
     val text = rawJson?.takeIf(String::isNotBlank) ?: return null

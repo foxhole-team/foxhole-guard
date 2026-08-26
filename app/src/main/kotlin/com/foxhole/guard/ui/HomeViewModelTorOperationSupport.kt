@@ -88,9 +88,26 @@ internal suspend fun HomeViewModel.disableTorOperationAfterRuntimeError(
     }
     clearTorOperation()
     torIpInfoMutable.value = null
-    container.settingsRepository.updatePrivacyRouteMode(PrivacyRouteMode.OFF)
-    if (snapshot.profileId == FoxholeVpnService.TOR_ONLY_PROFILE_ID) {
-        container.connectionController.disconnect(suppressLocalGuard = false)
+    val ticket = runtimeSettingUpdates.reserve()
+    try {
+        ticket.awaitTurn()
+        runAuthoritativeRuntimeSettingUpdate(
+            updateAction = {
+                container.settingsRepository.updatePrivacyRouteMode(PrivacyRouteMode.OFF)
+            },
+            applyAction = {
+                clearRuntimeReconnectRequired()
+                when {
+                    snapshot.profileId == FoxholeVpnService.TOR_ONLY_PROFILE_ID ->
+                        container.connectionController.disconnectTorOnly(userInitiated = false)
+                    snapshot.torActive ->
+                        container.connectionController.disconnect(suppressLocalGuard = false, userInitiated = false)
+                }
+                true
+            },
+        )
+    } finally {
+        ticket.complete()
     }
 }
 

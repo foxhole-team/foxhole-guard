@@ -1,16 +1,10 @@
 package com.foxhole.core.runtime
 
-// Keep native refusal classes distinct: callers retry conflicts but not permanent failures.
 internal sealed interface PolicyReloadOutcome {
-    /** Applied; the core installed this revision. */
     data class Applied(
         val revision: Long,
     ) : PolicyReloadOutcome
 
-    /**
-     * Refused with a code. [detail] is the core's own words (`nativeLastPolicyError`),
-     * populated only for [RELOAD_INVALID] — the one code that cannot be acted on alone.
-     */
     data class Refused(
         val code: Long,
         val detail: String,
@@ -20,19 +14,9 @@ internal sealed interface PolicyReloadOutcome {
     data object CallFailed : PolicyReloadOutcome
 }
 
-/**
- * Only the revision conflict is worth one retry without the guard: the app is the only policy
- * writer (a signed DNS rule-set install bumps the revision), so the user's request still stands.
- * Everything else refuses identically forever — a retry loop there is a battery drain that
- * never reports a problem.
- */
 internal fun policyReloadIsRetryable(code: Long): Boolean =
     code.toInt() == FoxholeNativeEngine.RELOAD_REVISION_CONFLICT
 
-/**
- * Maps a refusal code to the reported failure, keeping apart what matters to a user: no Tor in
- * this runtime (switch comes down) vs unparseable policy (app bug) vs conflict (just retry).
- */
 internal fun policyReloadFailure(code: Long): FoxCoreRuntimeFailure =
     when (code.toInt()) {
         0 -> FoxCoreRuntimeFailure.NOT_RUNNING
@@ -53,10 +37,6 @@ internal fun policyReloadFailure(code: Long): FoxCoreRuntimeFailure =
 internal fun policyReloadNeedsDetail(code: Long): Boolean =
     code.toInt() == FoxholeNativeEngine.RELOAD_INVALID
 
-/**
- * One reload attempt with the refusal read back rather than flattened. Lives here (not on the
- * runtime class) so codes, meaning, retryability and the producing call read as one piece.
- */
 internal fun attemptPolicyReload(
     native: FoxCoreNativeApi,
     handle: Long,
@@ -82,8 +62,6 @@ internal fun attemptPolicyReload(
     if (detail.isBlank()) {
         diagnosticsLogger.recordStructured("foxcore", "policy reload rejected", reason)
     } else {
-        // The core's prose is a message, not an identifier — reduce it to the same shape every
-        // other reason in this log has.
         diagnosticsLogger.recordStructured(
             "foxcore",
             "policy reload rejected",
@@ -103,19 +81,11 @@ private fun safePolicyDetail(detail: String): String =
 
 private const val MAX_POLICY_DETAIL_LENGTH = 120
 
-/**
- * Check the native library is there and is the one this app was built against. All four failure
- * modes used to report NATIVE_UNAVAILABLE ("not included in this build") — true for exactly one
- * of them: an ABI mismatch (a library from a different core revision, the ordinary accident with
- * two repositories) read as a missing library. Pixel-diagnosed: eighteen straight start failures
- * said "not included" for a library that was in the APK.
- */
 internal fun preflightNative(
     native: FoxCoreNativeApi,
     diagnosticsLogger: RuntimeDiagnosticsSink,
     json: kotlinx.serialization.json.Json,
 ): Result<Unit> {
-    // The only failure that truly is a missing/unloadable library: the very first call into it.
     val abi =
         try {
             native.abiVersion()
@@ -142,7 +112,6 @@ internal fun preflightNative(
     return Result.success(Unit)
 }
 
-/** Three detail slots, because a vararg call with a spread copies the array. */
 private class PreflightMismatch(
     val failure: FoxCoreRuntimeFailure,
     val first: String,

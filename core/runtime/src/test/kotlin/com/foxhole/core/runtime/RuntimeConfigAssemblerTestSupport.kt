@@ -18,8 +18,6 @@ import kotlinx.serialization.json.put
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 
-// Shared fixture of the RuntimeConfigAssembler suites: the assembler instance, fakes and
-// the config builders/readers every slice uses. Split from RuntimeConfigAssemblerTest.kt.
 internal open class RuntimeConfigAssemblerTestSupport {
     protected val json =
         Json {

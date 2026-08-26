@@ -37,15 +37,15 @@ import com.foxhole.guard.ui.cli.CliSpacing
 import com.foxhole.guard.ui.cli.CliType
 import com.foxhole.guard.ui.cli.LocalCliBottomChromeClearance
 import com.foxhole.guard.ui.cli.LocalCliColors
-import com.foxhole.guard.ui.cli.components.CliActionRow
-import com.foxhole.guard.ui.cli.components.CliContextHelpButton
 import com.foxhole.guard.ui.cli.components.CliDropdownOption
 import com.foxhole.guard.ui.cli.components.CliDropdownRow
 import com.foxhole.guard.ui.cli.components.CliInputModal
 import com.foxhole.guard.ui.cli.components.CliInputRow
 import com.foxhole.guard.ui.cli.components.CliPanel
 import com.foxhole.guard.ui.cli.components.CliScreenHeader
+import com.foxhole.guard.ui.cli.components.CliSecretRow
 import com.foxhole.guard.ui.cli.components.CliToggleRow
+import com.foxhole.guard.ui.cli.components.CliTopBarHelpButton
 import com.foxhole.guard.ui.onCopyLanProxyPassword
 import com.foxhole.guard.ui.onHttpSurfaceChanged
 import com.foxhole.guard.ui.onLanProxyAuthChanged
@@ -71,8 +71,8 @@ internal fun CliLanProxySubScreen(
     ) {
         CliScreenHeader(
             label = stringResource(R.string.cli_route_lan_proxy),
-            icon = R.drawable.pix_device,
-            trailing = { CliContextHelpButton(bodyRes = R.string.cli_help_lan_proxy_body) },
+            icon = R.drawable.lin_device,
+            trailing = { CliTopBarHelpButton(bodyRes = R.string.cli_help_lan_proxy_body) },
         )
 
         Column(
@@ -85,21 +85,21 @@ internal fun CliLanProxySubScreen(
         ) {
             CliPanel(
                 title = stringResource(R.string.cli_route_lan_proxy),
-                icon = R.drawable.pix_link,
+                icon = R.drawable.lin_link,
                 modifier = Modifier.fillMaxWidth(),
                 infoText = stringResource(R.string.cli_lan_proxy_compat_note),
             ) {
                 CliToggleRow(
                     label = stringResource(R.string.cli_lan_proxy_enable),
-                    icon = R.drawable.pix_device,
+                    icon = R.drawable.lin_device,
                     checked = lan.allowLanAccess,
                     onToggle = viewModel::onLocalProxyLanAccessChanged,
                     infoText = stringResource(R.string.cli_lan_proxy_trusted_note),
                 )
-                if (lan.allowLanAccess) {
+                CliSettingsAnimatedRows(visible = lan.allowLanAccess) {
                     CliDropdownRow(
                         label = stringResource(R.string.cli_route_lan_mode),
-                        icon = R.drawable.pix_link,
+                        icon = R.drawable.lin_link,
                         value = lan.lanProxyMode.name.lowercase(),
                         options = ProxySurfaceMode.entries.map { surface ->
                             CliDropdownOption(id = surface.name, label = surface.name.lowercase())
@@ -110,7 +110,7 @@ internal fun CliLanProxySubScreen(
                     CliLanPortRow(viewModel = viewModel, lan = lan)
                 }
             }
-            if (lan.allowLanAccess) {
+            CliSettingsAnimatedRows(visible = lan.allowLanAccess) {
                 Spacer(modifier = Modifier.height(CliSpacing.sm))
                 CliLanProxyStatusPanel(status = lanStatus)
                 Spacer(modifier = Modifier.height(CliSpacing.sm))
@@ -128,7 +128,7 @@ private fun CliLanProxyAuthPanel(
 ) {
     val colors = LocalCliColors.current
     CliPanel(
-        icon = R.drawable.pix_lock,
+        icon = R.drawable.lin_lock,
         title = stringResource(R.string.cli_lan_proxy_auth),
         modifier = Modifier.fillMaxWidth(),
         infoText = stringResource(R.string.cli_lan_proxy_auth_required_note),
@@ -140,15 +140,16 @@ private fun CliLanProxyAuthPanel(
                 viewModel.onLanProxyAuthChanged(lan.lanAuth.copy(username = value.take(64)))
             },
         )
-        CliInputRow(
+        CliSecretRow(
             prompt = "pass",
             value = lan.lanAuth.password,
-            password = true,
+            clipboardLabel = stringResource(R.string.cli_lan_proxy_auth),
+            onCopy = viewModel::onCopyLanProxyPassword,
             onValueChange = { value ->
                 viewModel.onLanProxyAuthChanged(lan.lanAuth.copy(password = value.take(128)))
             },
         )
-        if (lan.lanAuth.password.isBlank()) {
+        CliSettingsAnimatedRows(visible = lan.lanAuth.password.isBlank()) {
             Text(
                 text = stringResource(R.string.cli_lan_proxy_pass_required_warn),
                 style = CliType.small,
@@ -156,12 +157,6 @@ private fun CliLanProxyAuthPanel(
                 modifier = Modifier.padding(bottom = CliSpacing.xs),
             )
         }
-        CliActionRow(
-            label = stringResource(R.string.cli_lan_proxy_copy_pass),
-            icon = R.drawable.pix_copy,
-            onTap = viewModel::onCopyLanProxyPassword,
-            enabled = lan.lanAuth.password.isNotBlank(),
-        )
     }
 }
 
@@ -169,7 +164,7 @@ private fun CliLanProxyAuthPanel(
 private fun CliLanProxyStatusPanel(status: LanProxyStatusSnapshot) {
     val colors = LocalCliColors.current
     CliPanel(
-        icon = R.drawable.pix_link,
+        icon = R.drawable.lin_link,
         title = stringResource(R.string.cli_lan_proxy_status),
         modifier = Modifier.fillMaxWidth(),
     ) {
@@ -262,7 +257,7 @@ private fun CliLanPortRow(
     viewModel: HomeViewModel,
     lan: LocalSurfaceSettings,
 ) {
-    if (lan.lanProxyMode != ProxySurfaceMode.HTTP) {
+    CliSettingsAnimatedRows(visible = lan.lanProxyMode != ProxySurfaceMode.HTTP) {
         CliProxyPortRow(
             key = "socks",
             label = stringResource(R.string.cli_lan_proxy_socks_address),
@@ -270,7 +265,7 @@ private fun CliLanPortRow(
             onPort = { port -> viewModel.onSocksSurfaceChanged(lan.socks.copy(port = port)) },
         )
     }
-    if (lan.lanProxyMode != ProxySurfaceMode.SOCKS5) {
+    CliSettingsAnimatedRows(visible = lan.lanProxyMode != ProxySurfaceMode.SOCKS5) {
         CliProxyPortRow(
             key = "http",
             label = stringResource(R.string.cli_lan_proxy_http_address),
@@ -291,7 +286,7 @@ internal fun CliProxyPortRow(
     var portText by rememberSaveable(key) { mutableStateOf("") }
     CliDropdownRow(
         label = "${stringResource(R.string.cli_route_lan_port)} · $label",
-        icon = R.drawable.pix_link,
+        icon = R.drawable.lin_link,
         value = port.toString(),
         options = listOf(
             CliDropdownOption(id = CLI_OPT_CUSTOM, label = stringResource(R.string.cli_common_custom)),
@@ -302,7 +297,7 @@ internal fun CliProxyPortRow(
     if (customOpen) {
         CliInputModal(
             title = stringResource(R.string.cli_input_value_title),
-            icon = R.drawable.pix_link,
+            icon = R.drawable.lin_link,
             prompt = "port",
             value = portText,
             onValueChange = { raw -> portText = raw.filter(Char::isDigit).take(5) },

@@ -22,11 +22,6 @@ import java.net.Socket
 class FoxholeVpnRuntimeBridgeTest {
     @Test
     fun `the tor phase follows an engaged session instead of sitting on offline forever`() {
-        // Nothing ever wrote this field: `updateTorPhase` had no caller in the product, because the
-        // feed it was written for (a log tail of a separate tor daemon) left when Tor moved inside
-        // FoxCore, and the core publishes no bootstrap progress. So every Tor line the terminal can
-        // print was unreachable and the published Tor state was `Off` on a session that was
-        // demonstrably carrying traffic through Tor.
         FoxholeVpnRuntimeBridge.update(ConnectionSnapshot(state = ConnectionState.IDLE))
         assertEquals(TorNetworkPhase.OFFLINE, FoxholeVpnRuntimeBridge.torPhase.value.phase)
         assertEquals(RuntimeTorUiState.Off, FoxholeVpnRuntimeBridge.runtimeUiState.value.tor)
@@ -41,8 +36,6 @@ class FoxholeVpnRuntimeBridgeTest {
         )
         assertEquals(TorNetworkPhase.CONNECTED, FoxholeVpnRuntimeBridge.torPhase.value.phase)
 
-        // "Tor is up" and "traffic demonstrably leaves through Tor" are different claims: the
-        // published state only reaches Ready once the exit the runtime observed is in hand.
         assertTrue(FoxholeVpnRuntimeBridge.runtimeUiState.value.tor is RuntimeTorUiState.Bootstrapping)
         FoxholeVpnRuntimeBridge.updateTorRouteIpInfo(ipInfo("203.0.113.9"))
         val ready = FoxholeVpnRuntimeBridge.runtimeUiState.value.tor
@@ -529,9 +522,6 @@ class FoxholeVpnRuntimeBridgeTest {
 
     @Test
     fun `writer minted after a fence survives interleaved clock activity`() {
-        // Epochs mint from the shared RuntimeGenerationClock: a fence must reject every token
-        // minted before it and must NOT reject a later writer, no matter how many unrelated
-        // control-plane mints (commands, transitions, child lifecycles) land in between.
         val fencedWriter = FoxholeVpnRuntimeBridge.writer(TrafficMode.TUNNEL)
         assertTrue(
             fencedWriter.update(
@@ -543,7 +533,6 @@ class FoxholeVpnRuntimeBridgeTest {
             ),
         )
 
-        // runtimeTerminated fence.
         FoxholeVpnRuntimeBridge.update(ConnectionSnapshot())
         repeat(5) { RuntimeGenerationClock.next() }
         val freshWriter = FoxholeVpnRuntimeBridge.writer(TrafficMode.TUNNEL)

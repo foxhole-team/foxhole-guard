@@ -1,5 +1,6 @@
 package com.foxhole.core.runtime
 
+import com.foxhole.core.model.AppliedTorRoute
 import com.foxhole.core.model.DnsFilterCategory
 import com.foxhole.core.model.DnsSettings
 import com.foxhole.core.model.ExpertSettings
@@ -28,10 +29,6 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
-
-// Route assembly for RuntimeConfigAssembler: route patching, Tor/proxy/udp/package route
-// rules, resolver-for-route, route-rule builders. Behaviour-preserving Phase B extraction;
-// json-free transforms, resolved same-package by the assembler orchestration methods.
 
 internal fun JsonObject.primaryProxyOutbound(): JsonObject? {
     val outbounds = this["outbounds"]?.jsonArray.orEmpty().map { it.jsonObject }
@@ -120,10 +117,6 @@ internal fun patchRoute(
             torFailClosedRules.forEach(::add)
             add(runtimeProxyRouteRule(runtimeProxyOutboundTag(privacyRouteActive, splitPlan)))
             if (blockUnsupportedUdp) {
-                // A TCP-only VPN cannot carry Android's ordinary UDP/53 resolver packets. DNS
-                // capture is therefore transport compatibility here, not the user's optional DNS
-                // filtering/interception feature: route DNS into the managed resolver before the
-                // catch-all UDP reject or the tunnel becomes HTTP-by-IP-only.
                 hijackDnsRules().forEach(::add)
                 if (expert.bypassLan) {
                     add(bypassLanRule())
@@ -186,7 +179,8 @@ internal fun patchRoute(
 }
 
 fun Settings.isTorPrivacyRouteActive(vpnProtocolHint: ProtocolHint?): Boolean =
-    privacyRoute.mode == PrivacyRouteMode.TOR_OVER_VPN &&
+    privacyRoute.permitted &&
+        privacyRoute.mode == PrivacyRouteMode.TOR_OVER_VPN &&
         traffic.mode == TrafficMode.TUNNEL &&
         (privacyRoute.bypassVpnTunnel || vpnProtocolHint?.isUdpTransport() != true) &&
         when (privacyRoute.scope) {
@@ -194,36 +188,31 @@ fun Settings.isTorPrivacyRouteActive(vpnProtocolHint: ProtocolHint?): Boolean =
             PrivacyRouteScope.SELECTED_APPS -> expert.torLanePackages().isNotEmpty()
         }
 
-/**
- * «Whole device through TOR» asked for while the VPN carries only the SELECTED apps.
- *
- * The pair states two incompatible things about the same device. An include split makes the tun
- * capture the selection alone, so no other app is inside the tunnel the Tor route lives in — there
- * is no arrangement of rules under which they ride Tor. The document the assembler produced said
- * so plainly: `route.final` became the Tor outbound (the default for everything) while the split
- * still emitted its inverted «everything else goes direct» rule, and the two cannot both be the
- * default. The core refused the whole policy (`policy_unrepresentable at $.route.rules[N]`) and the
- * person who pressed one button lost the tunnel they had.
- *
- * Callers refuse on this instead of assembling; the assembler asserts it as the last line of
- * defence. Deliberately NOT reinterpreted as «Tor for the included apps»: a privacy switch that
- * quietly covers three apps while the screen reads «whole device» is worse than a refusal.
- */
+fun Settings.appliedTorRouteOrNull(vpnProtocolHint: ProtocolHint?): AppliedTorRoute? {
+    if (!isTorPrivacyRouteActive(vpnProtocolHint)) {
+        return null
+    }
+    return AppliedTorRoute(
+        scope = privacyRoute.scope,
+        bypassVpnTunnel = privacyRoute.bypassVpnTunnel,
+        selectedPackages =
+        if (privacyRoute.scope == PrivacyRouteScope.SELECTED_APPS) {
+            expert.torLanePackages()
+        } else {
+            emptyList()
+        },
+    )
+}
+
 fun Settings.torAllAppsCollidesWithVpnIncludeSplit(): Boolean =
-    privacyRoute.enabled &&
+    privacyRoute.permitted &&
+        privacyRoute.enabled &&
         privacyRoute.scope == PrivacyRouteScope.ALL_APPS &&
         traffic.mode == TrafficMode.TUNNEL &&
         expert.vpnIncludedPackages().isNotEmpty()
 
-/** Locale-independent tag the refusal carries so [Settings] classification can name it. */
 const val TOR_ALL_APPS_NEEDS_FULL_TUNNEL_MARKER = "tor_all_apps_needs_full_tunnel"
 
-/**
- * Last line of defence for the pair the callers already refuse (see
- * [torAllAppsCollidesWithVpnIncludeSplit]). Refusing here beats emitting a document the core
- * rejects: a rejection reaches the person as «the profile configuration is invalid» and names
- * nothing they can act on.
- */
 internal fun requireBuildableTorScope(
     privacyRouteActive: Boolean,
     splitPlan: RuntimeSplitPlan,
@@ -233,11 +222,6 @@ internal fun requireBuildableTorScope(
     }
 }
 
-/**
- * A configuration the runtime refuses to build at all, tagged with a value-free [marker] so the
- * app can turn it into a sentence that says what is wrong. Distinct from the translator's
- * rejections, which describe a document that was already built.
- */
 class RuntimeConfigUnsupportedException(
     val marker: String,
 ) : IllegalStateException(marker)
@@ -296,10 +280,7 @@ internal fun patchTorOnlyRoute(
     return buildJsonObject {
         put("rules", combinedRules)
         ruleSets?.let { put("rule_set", it) }
-        // Selected-apps scope must NOT funnel the rest of the device into Tor: Tor carries only
-        // the selected apps' TCP (matched by the rules above); everything else keeps ordinary
-        // direct internet. final=proxy here starved every other app (their UDP/DNS cannot ride
-        // Tor) and the whole device looked offline. All-apps scope keeps the Tor-final by design.
+
         put(
             "final",
             if (settings.privacyRoute.scope == PrivacyRouteScope.ALL_APPS) "proxy" else "direct",
@@ -315,7 +296,11 @@ internal fun buildTorPrivacyRouteRules(
     udpPolicy: PrivacyRouteUdpPolicy = settings.privacyRoute.udpPolicy,
 ): List<JsonObject> =
     buildTorPrivacyRouteRules(
-        splitPlan = buildSplitPlan(settings, privacyRouteActive = settings.privacyRoute.enabled),
+        splitPlan =
+        buildSplitPlan(
+            settings,
+            privacyRouteActive = settings.privacyRoute.permitted && settings.privacyRoute.enabled,
+        ),
         outboundTag = outboundTag,
         udpPolicy = udpPolicy,
     )
@@ -337,11 +322,7 @@ internal fun buildTorPrivacyRouteRules(
             } else {
                 listOf(udpRouteRule(udpOutbound))
             }
-        // One rule per package, not one rule listing them all: a network-qualified rule cannot be
-        // expressed as a per-app action, so the translator turns it into a route — and a route may
-        // name only a single package. Bundling several Tor apps into one rule made the whole
-        // profile unrepresentable ("the profile configuration is invalid", nothing connected), and
-        // only ever with more than one app pinned to Tor.
+
         splitPlan.torTcpPackages.isNotEmpty() ->
             splitPlan.torUdpBlockedPackages.distinct().sorted().flatMap { packageName ->
                 if (udpPolicy == PrivacyRouteUdpPolicy.BLOCK) {
@@ -372,13 +353,8 @@ internal fun runtimeProxyOutboundTag(
     splitPlan: RuntimeSplitPlan,
 ): String =
     if (privacyRouteActive && splitPlan.torAllApps) {
-        // All traffic rides Tor anyway, so the app's own loopback-proxy probes go through Tor too
-        // and confirm the real exit (they are held out of the dashboard VPN identity).
         TOR_OVER_VPN_OUTBOUND_TAG
     } else {
-        // Selected-apps Tor: only the chosen packages ride Tor. The app's own probes must observe
-        // the plain VPN egress — routing them through Tor starved the dashboard network card of
-        // the VPN identity and let a VPN-bound fallback probe masquerade as a "Tor exit".
         "proxy"
     }
 
@@ -432,9 +408,19 @@ private val NON_DNS_UDP_PORT_RANGES = listOf("1-52", "54-65535")
 internal fun shouldBlockUnsupportedUdp(
     base: JsonObject,
     vpnProtocolHint: ProtocolHint?,
+): Boolean {
+    val primaryOutbound = base.primaryProxyOutbound()
+    val inherentlyTcpOnly = primaryOutbound?.stringField("type") == "naive"
+    val explicitlyTcpOnly = primaryOutbound?.isTcpOnlyNetwork() == true
+    return inherentlyTcpOnly || (vpnProtocolHint?.isUdpTransport() != true && explicitlyTcpOnly)
+}
+
+internal fun shouldUseStreamSafeManagedDns(
+    base: JsonObject,
+    vpnProtocolHint: ProtocolHint?,
 ): Boolean =
-    vpnProtocolHint?.isUdpTransport() != true &&
-        base.primaryProxyOutbound()?.isTcpOnlyNetwork() == true
+    vpnProtocolHint == ProtocolHint.SHADOWSOCKS ||
+        shouldBlockUnsupportedUdp(base, vpnProtocolHint)
 
 internal fun packageNetworkRouteRule(
     packageNames: List<String>,
@@ -542,13 +528,6 @@ internal fun mergedRouteRuleSets(
         }
     val foxholeRuleSets =
         when {
-            // FoxCore receives the verified FST through the non-JSON bootstrap and installs it in
-            // the DNS policy store. Re-emitting the same file as a sing-box route rule-set is not
-            // only redundant: the strict migration boundary deliberately rejects effectful local
-            // files at $.route.rule_set, so an enabled filter made every profile fail before TUN
-            // creation. Keep third-party/source rule sets below (so the translator can still
-            // reject effects it cannot represent), but do not leak FoxHole's migrated artifact
-            // back into the legacy route document.
             dnsFilterRuntimePaths?.foxCoreBootstrap != null -> emptyList()
             !dnsSettings.bundledAdGuardFilterEnabled() || dnsFilterRuntimePaths == null -> emptyList()
             categoryRuleSets.isNotEmpty() -> categoryRuleSets
@@ -606,7 +585,6 @@ internal fun buildAppRouteRules(expert: ExpertSettings): List<JsonObject> =
         }
     }
 
-// Reject each uncarried pinned lane before later split rules can route it elsewhere.
 internal fun buildFailClosedBlockRules(
     settings: Settings,
     torLaneCarried: Boolean,
@@ -634,11 +612,6 @@ internal fun buildFailClosedBlockRules(
     )
 }
 
-// The VPN split expressed in the normalized route plan. INCLUDE keeps only selected apps on the
-// proxy path (everything else — including connections with no resolvable owner, matching the old
-// Builder-split behaviour where they never entered the tun) goes direct; EXCLUDE sends just the
-// selected apps direct. Tor-selected apps are already merged into/subtracted from the plan's
-// lists by buildSplitPlan, and the tor rules run before these, so the two never fight.
 internal fun buildVpnSplitRouteRules(splitPlan: RuntimeSplitPlan): List<JsonObject> =
     buildList {
         when (splitPlan.vpnMode) {
@@ -823,14 +796,6 @@ internal fun sniffRule(): JsonObject =
         put("action", "sniff")
     }
 
-/**
- * Route-level enforcement of the DNS filter on sniffed hostnames. The DNS rules only see queries
- * that pass the in-tunnel resolver; an app pinned to its own resolver (with intercept/replace off)
- * bypasses them entirely. With domain sniffing on, the connection itself still exposes the
- * hostname — this rule rejects it against the same category rule sets, so the filter keeps
- * working in every mode as long as sniffing is enabled. DNS/domain bypass exceptions are honored
- * via inverted sub-rules.
- */
 internal fun dnsFilterSniffRejectRule(
     dnsSettings: DnsSettings,
     dnsFilterRuntimePaths: DnsFilterRuntimePaths?,
@@ -838,10 +803,7 @@ internal fun dnsFilterSniffRejectRule(
     if (!dnsSettings.bundledAdGuardFilterEnabled() || dnsFilterRuntimePaths == null) {
         return null
     }
-    // The strict FoxCore policy owns this verified FST through foxCoreBootstrap. Its DNS
-    // interceptor enforces the blocklist and the translated DNS rules carry the same user
-    // bypasses. A sing-box route rule referencing the local file has no strict FoxCore shape and
-    // would make the entire profile unrepresentable before the TUN exists.
+
     if (dnsFilterRuntimePaths.foxCoreBootstrap != null) {
         return null
     }

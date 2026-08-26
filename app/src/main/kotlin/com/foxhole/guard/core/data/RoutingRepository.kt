@@ -29,8 +29,7 @@ class RoutingRepository(
     private val httpClient: OkHttpClient,
     private val json: Json,
     private val trustedCatalogSha256ByUrl: Map<String, String> = emptyMap(),
-    // Suspends until the SQLCipher key is installed — see ProfileRepository. The routing
-    // flows feed the dashboard state combine, which can start collecting before unlock.
+
     private val awaitDatabaseReady: suspend () -> Unit = {},
 ) {
     private val database: ProfileDatabase by lazy(LazyThreadSafetyMode.SYNCHRONIZED, databaseProvider)

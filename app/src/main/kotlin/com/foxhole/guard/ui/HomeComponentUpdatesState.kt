@@ -9,6 +9,7 @@ internal class HomeComponentUpdatesState {
     val dnsFilterRefreshInProgressMutable = MutableStateFlow(false)
     val dnsFilterUpdateAvailableMutable = MutableStateFlow(false)
     val dnsFilterUpdatePhaseMutable = MutableStateFlow(FoxholeUpdatePhase.IDLE)
+    val dnsFilterDownloadProgressMutable = MutableStateFlow<RemoteDownloadProgress?>(null)
     val torBridgeRefreshInProgressMutable = MutableStateFlow(false)
     val torBridgeUpdatePhaseMutable = MutableStateFlow(FoxholeUpdatePhase.IDLE)
     val torBridgeDownloadProgressMutable = MutableStateFlow<RemoteDownloadProgress?>(null)

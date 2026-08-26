@@ -21,15 +21,6 @@ internal fun webAppClearSite(url: String): String? {
     return parsed.host
 }
 
-/**
- * Native wipe of web-app data. With MULTI_PROFILE each app is its own profile, so a per-app wipe
- * is [WebAppProfiles.delete] — plus a per-site sweep of the shared default profile, where data
- * from before the profile split may still linger. Without profiles, per-site clearing rides
- * [WebStorageCompat.deleteBrowsingDataForSite]; a WebView with neither feature only offers the
- * full-profile wipe, which the UI confirms separately because it clears every web app at once.
- * Callers pause the watchdog around a wipe ([WebAppsWatchdog.withPollingPaused]) so its hidden
- * WebView is not holding the site — or the profile — open.
- */
 internal class WebAppsDataCleaner(
     private val context: Context,
 ) {
@@ -40,15 +31,13 @@ internal class WebAppsDataCleaner(
         get() = webAppClearMode(WebAppProfiles.supported, perSiteSupported) !=
             WebAppClearMode.FULL_WIPE_ONLY
 
-    /** Clears one app's data; returns the cleared site label, null when refused or failed. */
     suspend fun clearApp(appId: Long, url: String): String? {
         val site = webAppClearSite(url) ?: return null
         return when (webAppClearMode(WebAppProfiles.supported, perSiteSupported)) {
             WebAppClearMode.PER_APP_PROFILE ->
                 withContext(Dispatchers.Main) {
                     val dropped = WebAppProfiles.delete(appId)
-                    // Leftovers from before the profile split live in the default profile;
-                    // sweep them per-site where the WebView can.
+
                     if (perSiteSupported) {
                         clearDefaultProfileSite(site)
                         CookieManager.getInstance().flush()
@@ -77,7 +66,6 @@ internal class WebAppsDataCleaner(
         }.getOrNull()
     }
 
-    /** Full wipe: every app's profile and the shared default profile's cookies, storages, cache. */
     suspend fun clearAll(appIds: List<Long>): Boolean =
         withContext(Dispatchers.Main) {
             runCatching {
@@ -95,8 +83,7 @@ internal class WebAppsDataCleaner(
                         CookieManager.getInstance().removeAllCookies { continuation.resume(Unit) }
                     }
                     WebStorage.getInstance().deleteAllData()
-                    // The HTTP cache has no static handle before DELETE_BROWSING_DATA: a throwaway
-                    // WebView is the documented way to reach the profile-wide cache.
+
                     WebView(context).apply {
                         clearCache(true)
                         destroy()

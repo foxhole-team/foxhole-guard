@@ -8,7 +8,6 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import com.foxhole.core.model.ConnectionState
 import com.foxhole.core.model.DiagnosticEntry
-import com.foxhole.core.model.DiagnosticSanitizer
 import com.foxhole.core.model.DiagnosticSeverity
 import com.foxhole.core.model.RetentionPolicy
 import com.foxhole.core.model.Settings
@@ -44,9 +43,24 @@ internal fun trimLiveDiagnosticEntries(
         .takeLast(minOf(retention.maxEntries, MAX_LIVE_DIAGNOSTIC_ENTRIES))
 }
 
-internal fun liveDiagnosticMessage(
+internal fun rawDiagnosticMessage(
     message: String,
-): String = DiagnosticSanitizer.sanitizeForPersistence(message)
+): String = message
+
+internal fun processTerminationTombstoneMessage(
+    headline: String,
+    details: List<String>,
+): String =
+    rawDiagnosticMessage(
+        buildString {
+            append(headline.trim())
+            val visibleDetails = details.map(String::trim).filter(String::isNotBlank)
+            if (visibleDetails.isNotEmpty()) {
+                append(": ")
+                append(visibleDetails.joinToString(separator = " • "))
+            }
+        },
+    )
 
 @Suppress("TooManyFunctions")
 class DiagnosticsLogger(
@@ -94,23 +108,31 @@ class DiagnosticsLogger(
         record("diagnostics", "Log session started")
     }
 
-    /**
-     * Callers record from arbitrary threads — including Main on user-driven paths — so only the
-     * timestamp is taken here; the sanitizer regexes and the locked live-list rebuild run on a
-     * single worker. (An input-dispatch ANR was traced to exactly that work on the main thread.)
-     */
     fun record(tag: String, message: String) {
         enqueueRecord(tag, message, DiagnosticSeverity.INFO)
     }
 
-    /**
-     * The same entry, marked as a failure by the code that knows it is in a failure path.
-     *
-     * A separate call rather than a parameter with a default, so marking one is a deliberate act
-     * and reading the level back is never a guess about the wording.
-     */
     fun recordFailure(tag: String, message: String) {
         enqueueRecord(tag, message, DiagnosticSeverity.FAILURE)
+    }
+
+    internal fun recordProcessTerminationTombstoneSync(
+        headline: String,
+        vararg details: String,
+    ) {
+        val now = nowProvider()
+        val retention = currentRetention()
+        val entry =
+            DiagnosticEntry(
+                timestamp = now,
+                tag = "crash",
+                message = processTerminationTombstoneMessage(headline, details.asList()),
+                severity = DiagnosticSeverity.FAILURE,
+            )
+        runCatching { sessionStore.append(entry, retention) }
+            .onFailure { error ->
+                Log.w(LOG_TAG, "process termination tombstone write failed error=${error.javaClass.simpleName}")
+            }
     }
 
     private fun enqueueRecord(
@@ -118,13 +140,11 @@ class DiagnosticsLogger(
         message: String,
         severity: DiagnosticSeverity,
     ) {
-        // Sanitization precedes queue ownership: a stalled worker can retain at most bounded,
-        // already-redacted records, never a raw profile URI or endpoint copied from a caller.
         recordQueue.offer(
             DiagnosticEntrySeed(
                 timestamp = nowProvider(),
                 tag = tag.lowercase(Locale.ROOT),
-                message = liveDiagnosticMessage(DiagnosticSanitizer.normalizeForStorage(message)),
+                message = rawDiagnosticMessage(message),
                 severity = severity,
             ),
         )
@@ -151,16 +171,11 @@ class DiagnosticsLogger(
     private fun processRecord(seed: DiagnosticEntrySeed) {
         val now = seed.timestamp
         val retention = currentRetention()
-        val normalizedMessage = seed.message
-        val normalizedTag = seed.tag
-        val entry = DiagnosticEntry(now, normalizedTag, normalizedMessage, seed.severity)
-        // Diagnostics are always sanitized. The opt-in network journal keeps its detailed,
-        // encrypted structured events in the database; it must never turn unrelated runtime,
-        // import or crash diagnostics into a raw secret-bearing log.
+        val entry = DiagnosticEntry(now, seed.tag, seed.message, seed.severity)
         publishLiveEntry(entry, now, retention)
         enqueuePersistence(entry, retention)
         if (BuildConfig.ENABLE_DIAGNOSTIC_LOGCAT) {
-            Log.d(LOG_TAG, "[$normalizedTag] ${DiagnosticSanitizer.sanitizeForExport(normalizedMessage)}")
+            Log.d(LOG_TAG, "diagnostic entry recorded")
         }
     }
 
@@ -232,11 +247,11 @@ class DiagnosticsLogger(
         val now = nowProvider()
         val retention = currentRetention()
         synchronized(entriesLock) {
-            entriesMutable.value = trimLiveDiagnosticEntries(entriesMutable.value, now, retention).sanitizeLiveEntries()
+            entriesMutable.value = trimLiveDiagnosticEntries(entriesMutable.value, now, retention)
         }
     }
 
-    fun snapshotForExport(): String {
+    fun snapshotSanitizedForAboutExport(): String {
         val now = nowProvider()
         val retention = currentRetention()
         val persistedSnapshot =
@@ -248,35 +263,27 @@ class DiagnosticsLogger(
         val snapshot =
             synchronized(entriesLock) {
                 val liveSnapshot = prune(entriesMutable.value, now, retention)
-                val exportSnapshot = prune(mergeEntries(persistedSnapshot, liveSnapshot), now, retention)
-                val prepared =
-                    exportSnapshot.map { entry ->
-                        entry.copy(message = DiagnosticSanitizer.sanitizeForExport(entry.message))
-                    }
-                entriesMutable.value =
-                    trimLiveDiagnosticEntries(entriesMutable.value, now, retention)
-                        .map { entry -> entry.copy(message = DiagnosticSanitizer.sanitizeForExport(entry.message)) }
-                prepared
+                entriesMutable.value = trimLiveDiagnosticEntries(entriesMutable.value, now, retention)
+                prune(mergeEntries(persistedSnapshot, liveSnapshot), now, retention)
             }
-        return formatDiagnosticsExport(
+        return formatSanitizedAboutDiagnosticsExport(
             metadata = diagnosticsExportMetadata(retention),
             entries = snapshot,
             formatter = formatter,
         )
     }
 
-    fun createExportFile(): File {
+    fun createSanitizedAboutExportFile(): File {
         cleanupExpiredExports()
         val targetDir = File(context.cacheDir, EXPORT_DIR_NAME).apply { mkdirs() }
         val targetFile = File(targetDir, "foxhole-diagnostics-${UUID.randomUUID()}.log.gz")
         GZIPOutputStream(targetFile.outputStream().buffered()).bufferedWriter(Charsets.UTF_8).use { writer ->
-            writer.write(snapshotForExport())
+            writer.write(snapshotSanitizedForAboutExport())
         }
         scheduleCleanup()
         return targetFile
     }
 
-    /** Clears one journal (live ring + persisted files) without touching the others. */
     fun clearTag(tag: String) {
         synchronized(entriesLock) {
             entriesMutable.value = entriesMutable.value.filterNot { entry -> entry.tag == tag }
@@ -291,8 +298,6 @@ class DiagnosticsLogger(
     }
 
     fun clear() {
-        // Drop queued-but-unprocessed records too, or entries recorded just before the wipe
-        // would resurface right after it.
         recordQueue.clear()
         synchronized(entriesLock) {
             entriesMutable.value = emptyList()
@@ -362,7 +367,6 @@ class DiagnosticsLogger(
                             )
                         entriesMutable.value =
                             trimLiveDiagnosticEntries(merged, now, retention)
-                                .sanitizeLiveEntries()
                     }
                 }.onFailure { error ->
                     publishPersistenceFailure(error)
@@ -486,9 +490,6 @@ class DiagnosticsLogger(
     private fun currentRetention(): RetentionPolicy =
         runCatching { retentionProvider() }.getOrDefault(RetentionPolicy())
 
-    private fun List<DiagnosticEntry>.sanitizeLiveEntries(): List<DiagnosticEntry> =
-        map { entry -> entry.copy(message = liveDiagnosticMessage(entry.message)) }
-
     private fun diagnosticsExportMetadata(retention: RetentionPolicy): DiagnosticsExportMetadata {
         val settings = runCatching(settingsSnapshotProvider).getOrDefault(Settings())
         return DiagnosticsExportMetadata(
@@ -574,7 +575,6 @@ private fun prune(
     return entries.filter { it.timestamp >= cutoff }.takeLast(retention.maxEntries)
 }
 
-/** Sanitized record captured on the caller's thread; everything else happens on the worker. */
 internal data class DiagnosticEntrySeed(
     val timestamp: Long,
     val tag: String,
@@ -582,7 +582,6 @@ internal data class DiagnosticEntrySeed(
     val severity: DiagnosticSeverity = DiagnosticSeverity.INFO,
 )
 
-/** Fixed-size drop-oldest queue; every live element is owned here until one worker polls it. */
 internal class BoundedDiagnosticRecordQueue(
     private val capacity: Int,
 ) {

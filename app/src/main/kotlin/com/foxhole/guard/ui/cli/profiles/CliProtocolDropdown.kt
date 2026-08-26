@@ -15,6 +15,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -41,11 +43,15 @@ import com.foxhole.guard.ui.cli.CliColors
 import com.foxhole.guard.ui.cli.CliSpacing
 import com.foxhole.guard.ui.cli.CliType
 import com.foxhole.guard.ui.cli.LocalCliColors
+import com.foxhole.guard.ui.cli.components.CLI_MENU_ROW_MIN_HEIGHT
 import com.foxhole.guard.ui.cli.components.CliActiveDot
 import com.foxhole.guard.ui.cli.components.CliCheckGlyph
 import com.foxhole.guard.ui.cli.components.CliElbowLine
-import com.foxhole.guard.ui.cli.components.CliPixIcon
+import com.foxhole.guard.ui.cli.components.CliIcon
+import com.foxhole.guard.ui.cli.components.CliLatencyKind
+import com.foxhole.guard.ui.cli.components.CliLatencyTone
 import com.foxhole.guard.ui.cli.components.CliRowDivider
+import com.foxhole.guard.ui.cli.components.cliLatencyTone
 import com.foxhole.guard.ui.cli.components.cliPressable
 import com.foxhole.guard.ui.smartProfileConnectDurations
 import com.foxhole.guard.ui.smartProfileDownOptionIds
@@ -78,29 +84,45 @@ internal fun CliProtocolDropdown(
             profile.protocolOptions.filter(ProfileProtocolOption::enabled)
         }
         Column(modifier = Modifier.fillMaxWidth()) {
-            CliProtocolTableHeader(widths = widths, cellSpacing = cellSpacing, showStatus = showStatus)
+            CliProtocolTableHeader(
+                widths = widths,
+                cellSpacing = cellSpacing,
+                showStatus = showStatus,
+                nameLabel = stringResource(R.string.cli_prof_table_profile_name),
+            )
             CliRowDivider()
-            options.forEachIndexed { optionIndex, option ->
-                if (optionIndex > 0) CliRowDivider()
-                CliProtocolOptionRow(
-                    presentation = protocolRowPresentation(state, profile, option),
-                    widths = widths,
-                    cellSpacing = cellSpacing,
-                    showStatus = showStatus,
-                    onClick = {
-                        if (option.enabled) {
-                            viewModel.onSelectProfileProtocolOption(profile.id, option.id)
-                            onOptionSelected()
-                        }
-                    },
-                    onToggleEnabled = onOptionEnabledToggle?.let { toggle ->
-                        {
-                            toggle(option.id, !option.enabled)
-                        }
-                    },
-                )
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f, fill = false),
+            ) {
+                itemsIndexed(
+                    items = options,
+                    key = { _, option -> option.id },
+                ) { optionIndex, option ->
+                    if (optionIndex > 0) CliRowDivider()
+                    CliProtocolOptionRow(
+                        presentation = protocolRowPresentation(state, profile, option),
+                        widths = widths,
+                        cellSpacing = cellSpacing,
+                        showStatus = showStatus,
+                        onClick = {
+                            if (option.enabled) {
+                                viewModel.onSelectProfileProtocolOption(profile.id, option.id)
+                                onOptionSelected()
+                            }
+                        },
+                        onToggleEnabled = onOptionEnabledToggle?.let { toggle ->
+                            {
+                                toggle(option.id, !option.enabled)
+                            }
+                        },
+                    )
+                }
+                item(key = "test-legend") {
+                    CliElbowLine(text = stringResource(R.string.cli_prof_test_legend), color = colors.faint)
+                }
             }
-            CliElbowLine(text = stringResource(R.string.cli_prof_test_legend), color = colors.faint)
         }
     }
 }
@@ -110,6 +132,7 @@ internal fun CliProtocolTableHeader(
     widths: CliProtocolColumnWidths,
     cellSpacing: Dp,
     showStatus: Boolean = true,
+    nameLabel: String? = null,
 ) {
     val colors = LocalCliColors.current
     val headerStyle = cliProfileTableHeaderStyle()
@@ -117,7 +140,20 @@ internal fun CliProtocolTableHeader(
         modifier = Modifier.fillMaxWidth().padding(bottom = CliSpacing.xs),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Spacer(modifier = Modifier.weight(1f))
+        if (nameLabel == null) {
+            Spacer(modifier = Modifier.weight(1f))
+        } else {
+            Text(
+                text = nameLabel,
+                style = headerStyle,
+                color = colors.faint,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(start = CliSpacing.xs),
+            )
+        }
         CliProtocolTableCell(
             text = CLI_PROTO_HEADER_CONNECT,
             cellWidth = widths.connect,
@@ -167,8 +203,8 @@ internal fun CliProtocolOptionRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .defaultMinSize(minHeight = 48.dp)
-            .padding(horizontal = CliSpacing.xs, vertical = 4.dp)
+            .defaultMinSize(minHeight = CLI_MENU_ROW_MIN_HEIGHT)
+            .padding(horizontal = CliSpacing.xs)
             .combinedClickable(onClick = onClick, onLongClick = onClick),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -181,13 +217,13 @@ internal fun CliProtocolOptionRow(
                 style = CliType.body,
                 color = presentation.nameColor(colors),
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+                overflow = TextOverflow.Clip,
                 modifier = Modifier
-                    .weight(1f, fill = false)
+                    .weight(1f)
                     .basicMarquee(
                         iterations = Int.MAX_VALUE,
-                        initialDelayMillis = CLI_PROTOCOL_MARQUEE_DELAY_MS,
-                        repeatDelayMillis = CLI_PROTOCOL_MARQUEE_REPEAT_MS,
+                        initialDelayMillis = PROTOCOL_NAME_MARQUEE_DELAY_MS,
+                        repeatDelayMillis = PROTOCOL_NAME_MARQUEE_REPEAT_MS,
                     ),
             )
             if (presentation.stars.isNotEmpty()) {
@@ -197,19 +233,34 @@ internal fun CliProtocolOptionRow(
         CliProtocolTableCell(
             text = presentation.connect,
             cellWidth = widths.connect,
-            color = protocolMetricColor(presentation.connectMs, presentation.status, colors),
+            color = protocolMetricColor(
+                presentation.connectMs,
+                presentation.status,
+                CliLatencyKind.CONNECT,
+                colors,
+            ),
             spacing = cellSpacing,
         )
         CliProtocolTableCell(
             text = presentation.ping,
             cellWidth = widths.ping,
-            color = protocolMetricColor(presentation.pingMs, presentation.status, colors),
+            color = protocolMetricColor(
+                presentation.pingMs,
+                presentation.status,
+                CliLatencyKind.PROTOCOL,
+                colors,
+            ),
             spacing = cellSpacing,
         )
         CliProtocolTableCell(
             text = presentation.latency,
             cellWidth = widths.latency,
-            color = protocolMetricColor(presentation.latencyMs, presentation.status, colors),
+            color = protocolMetricColor(
+                presentation.latencyMs,
+                presentation.status,
+                CliLatencyKind.PROTOCOL,
+                colors,
+            ),
             spacing = cellSpacing,
         )
         if (showStatus) {
@@ -217,7 +268,7 @@ internal fun CliProtocolOptionRow(
             Box(
                 modifier = Modifier
                     .width(widths.status)
-                    .defaultMinSize(minHeight = 48.dp)
+                    .defaultMinSize(minHeight = CLI_MENU_ROW_MIN_HEIGHT)
                     .then(statusModifier),
                 contentAlignment = Alignment.Center,
             ) {
@@ -245,14 +296,14 @@ private fun CliProtocolStatusBadge(status: CliProtocolStatus) {
         contentAlignment = Alignment.Center,
     ) {
         when {
-            positive -> CliPixIcon(
-                id = R.drawable.pix_check,
+            positive -> CliIcon(
+                id = R.drawable.lin_check,
                 contentDescription = null,
                 tint = tint,
                 size = 12.dp,
             )
-            status == CliProtocolStatus.OFF -> CliPixIcon(
-                id = R.drawable.pix_power,
+            status == CliProtocolStatus.OFF -> CliIcon(
+                id = R.drawable.lin_power,
                 contentDescription = null,
                 tint = tint,
                 size = 12.dp,
@@ -428,18 +479,21 @@ internal fun CliProtocolRowPresentation.nameColor(colors: CliColors): Color = wh
     else -> colors.dim
 }
 
-private fun protocolMetricColor(
+internal fun protocolMetricColor(
     value: Long?,
     status: CliProtocolStatus,
+    kind: CliLatencyKind,
     colors: CliColors,
-): Color = when {
-    status == CliProtocolStatus.DOWN -> colors.err
-    status == CliProtocolStatus.TESTING -> colors.warn
-    value == null -> colors.faint
-    value <= 150L -> colors.ok
-    value <= 300L -> colors.warn
-    value <= 600L -> colors.tor
-    else -> colors.err
+): Color {
+    if (status == CliProtocolStatus.DOWN) return colors.err
+    if (status == CliProtocolStatus.TESTING) return colors.warn
+    return when (cliLatencyTone(value, kind)) {
+        CliLatencyTone.UNAVAILABLE -> colors.faint
+        CliLatencyTone.NORMAL -> colors.ok
+        CliLatencyTone.DEGRADED -> colors.warn
+        CliLatencyTone.ELEVATED -> colors.alert
+        CliLatencyTone.POOR -> colors.err
+    }
 }
 
 internal data class CliProtocolRowPresentation(
@@ -476,6 +530,8 @@ private const val CLI_PROTO_HEADER_LATENCY = "L"
 private const val CLI_PROTO_HEADER_STATUS = "S"
 private const val CLI_PROTO_METRIC_MISSING = "—"
 private const val CLI_PROTO_METRIC_TESTING = "…"
+private const val PROTOCOL_NAME_MARQUEE_DELAY_MS = 1_200
+private const val PROTOCOL_NAME_MARQUEE_REPEAT_MS = 1_000
 
 private val CliProtocolStatusMinWidth = 48.dp
 
@@ -488,6 +544,3 @@ private const val CLI_PROTOCOL_NAME_MIN_HOST_FRACTION = 0.35f
 private const val CLI_PROTOCOL_METRIC_COLUMN_COUNT = 3
 
 private const val CLI_PROTOCOL_GAP_COUNT = 4
-
-private const val CLI_PROTOCOL_MARQUEE_DELAY_MS = 900
-private const val CLI_PROTOCOL_MARQUEE_REPEAT_MS = 900

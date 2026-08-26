@@ -18,7 +18,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import com.foxhole.guard.R
@@ -29,9 +28,7 @@ import kotlinx.coroutines.delay
 internal const val CLI_SHIMMER_CYCLE_MS = 1400
 
 private const val SHIMMER_SPAN_PX = 340f
-private const val DARK_SWEEP_FRACTION = 0.55f
-private const val LIGHT_SWEEP_FRACTION = 0.7f
-private const val LUMINANCE_MIDPOINT = 0.4f
+private const val SHIMMER_DARKEN_FRACTION = 0.55f
 
 @Composable
 internal fun CliShimmerText(
@@ -48,6 +45,11 @@ internal fun CliShimmerText(
     var visibleChars by remember { mutableIntStateOf(text.length) }
     LaunchedEffect(text) {
         if (text == shown) return@LaunchedEffect
+        if (!cliSystemMotionEnabled()) {
+            shown = text
+            visibleChars = text.length
+            return@LaunchedEffect
+        }
         while (visibleChars > 0) {
             delay(CLI_ERASE_STEP_MS)
             visibleChars = (visibleChars - CLI_CHARS_PER_STEP).coerceAtLeast(0)
@@ -85,11 +87,7 @@ internal fun CliShimmerText(
 }
 
 internal fun cliShimmerHighlight(base: Color): Color =
-    if (base.luminance() > LUMINANCE_MIDPOINT) {
-        lerp(base, Color.Black, DARK_SWEEP_FRACTION)
-    } else {
-        lerp(base, Color.White, LIGHT_SWEEP_FRACTION)
-    }
+    lerp(base, Color.Black, SHIMMER_DARKEN_FRACTION)
 
 @Composable
 internal fun CliUpdatingText(

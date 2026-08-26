@@ -56,12 +56,6 @@ internal object UsageStatsAccess {
     private const val USAGE_STATS_PROBE_WINDOW_MS = 24L * 60L * 60L * 1000L
 }
 
-/**
- * MODE_DEFAULT is deliberately not denial. Android defines it as "use the default security
- * check", and an empty UsageStats query can also mean a freshly installed or idle device. Treating
- * that combination as revoked used to persist both app-traffic flags as false and erase privacy
- * data merely by opening the statistics sheet after an APK update.
- */
 internal fun usageAccessStateForMode(
     mode: Int,
     hasQueryableUsage: Boolean,
@@ -70,12 +64,7 @@ internal fun usageAccessStateForMode(
         AppOpsManager.MODE_ALLOWED -> UsageAccessState.GRANTED
         AppOpsManager.MODE_IGNORED,
         AppOpsManager.MODE_ERRORED -> UsageAccessState.DENIED
-        // When the op reads as its default the package-scoped app-op is inconclusive — this happens
-        // on ROMs that grant Usage Access at the UID level, where checkOpNoThrow(uid, package)
-        // returns MODE_DEFAULT even though access is granted. checkPermission(PACKAGE_USAGE_STATS)
-        // is the wrong fallback (regular apps never hold that system permission), so it always read
-        // as denied and the app-traffic feature could never enable. A non-empty real query
-        // proves access; an empty query proves nothing and therefore stays indeterminate.
+
         AppOpsManager.MODE_DEFAULT ->
             if (hasQueryableUsage) UsageAccessState.GRANTED else UsageAccessState.INDETERMINATE
         else -> UsageAccessState.INDETERMINATE
@@ -139,9 +128,7 @@ class AppTrafficSampler(
                     ?.queryUidUsageSummary(startAt, now)
                     .orEmpty()
             val networkType = networkTypeProvider.current()
-            // Tunneled per-app bytes accumulated from FoxCore flows: the platform never
-            // attributes them to WIFI/MOBILE (they ride the VPN network ident), so they must be
-            // merged in per package — otherwise per-app stats only ever see the untunneled trickle.
+
             val tunnelDeltas = TunnelAppTrafficStats.drain()
             val installed = cachedInstalledApplications(now)
             val installedPackages = installed.mapTo(mutableSetOf(), ApplicationInfo::packageName)
@@ -176,8 +163,7 @@ class AppTrafficSampler(
                         }
                     }
                     .toList()
-            // Tunnel-only packages (present in connections but with no platform delta this pass,
-            // e.g. a package resolved from process info but filtered out of the installed list).
+
             val tunnelOnlyWindows =
                 tunnelDeltas
                     .asSequence()

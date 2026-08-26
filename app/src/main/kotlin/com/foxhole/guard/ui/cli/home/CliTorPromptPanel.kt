@@ -24,6 +24,9 @@ import com.foxhole.guard.ui.confirmMoveTorIntoVpn
 import com.foxhole.guard.ui.confirmStartTorBesideUdpVpn
 import com.foxhole.guard.ui.confirmSwitchProfileWhileConnected
 import com.foxhole.guard.ui.confirmSwitchProtocolWhileConnected
+import com.foxhole.guard.ui.confirmVpnTorModeChoice
+import com.foxhole.guard.ui.confirmVpnTorStopAll
+import com.foxhole.guard.ui.confirmVpnTorStopTor
 import com.foxhole.guard.ui.dismissTorTransitionPrompt
 import com.foxhole.guard.ui.onEnableDirectTorQuickStart
 
@@ -38,18 +41,25 @@ internal fun CliTorPromptPanel(
     CliBottomSheet(
         onDismiss = viewModel::dismissTorTransitionPrompt,
         title = stringResource(promptTitleRes(prompt)),
-        icon = R.drawable.pix_tor,
+        icon = R.drawable.lin_tor,
         trailing = secondsLeft?.let { seconds -> { CliTorPromptCountdown(seconds) } },
+        closeLabel = if (prompt.isVpnTorChoice()) {
+            stringResource(R.string.cli_common_no_cancel)
+        } else {
+            null
+        },
     ) {
-        Text(text = torPromptQuestion(prompt), style = CliType.body, color = colors.fg)
-        Spacer(modifier = Modifier.height(CliSpacing.sm))
+        torPromptQuestion(prompt)?.let { question ->
+            Text(text = question, style = CliType.body, color = colors.fg)
+            Spacer(modifier = Modifier.height(CliSpacing.sm))
+        }
         CliSheetActionsRow(
-            onCancel = viewModel::dismissTorTransitionPrompt,
             actions = torPromptActions(
                 viewModel = viewModel,
                 prompt = prompt,
                 onLiveModeSwitchConfirmed = onLiveModeSwitchConfirmed,
-            ),
+            ).map { action -> action.copy(dismissAfterClick = true) },
+            horizontal = prompt.isVpnTorChoice(),
         )
     }
 }
@@ -65,6 +75,8 @@ private fun CliTorPromptCountdown(secondsLeft: Int) {
 }
 
 private fun promptTitleRes(prompt: TorTransitionPrompt): Int = when (prompt) {
+    is TorTransitionPrompt.VpnTorStop -> R.string.cli_home_vpn_tor_stop_title
+    is TorTransitionPrompt.VpnTorModeChoice -> R.string.cli_home_vpn_tor_mode_title
     is TorTransitionPrompt.SwitchProfileWhileConnected,
     is TorTransitionPrompt.SwitchProtocolWhileConnected,
     -> R.string.cli_prof_switch_title
@@ -72,7 +84,7 @@ private fun promptTitleRes(prompt: TorTransitionPrompt): Int = when (prompt) {
 }
 
 @Composable
-private fun torPromptQuestion(prompt: TorTransitionPrompt): String = when (prompt) {
+private fun torPromptQuestion(prompt: TorTransitionPrompt): String? = when (prompt) {
     is TorTransitionPrompt.DisableTorForUdpProtocol ->
         stringResource(R.string.cli_home_torprompt_disable_udp, prompt.protocolName)
     is TorTransitionPrompt.StartTcpVpnWhileTorOnlyActive ->
@@ -83,6 +95,9 @@ private fun torPromptQuestion(prompt: TorTransitionPrompt): String = when (promp
         stringResource(R.string.cli_home_torprompt_direct)
     TorTransitionPrompt.StartTorBesideUdpVpn ->
         stringResource(R.string.cli_home_torprompt_beside)
+    is TorTransitionPrompt.VpnTorStop,
+    is TorTransitionPrompt.VpnTorModeChoice,
+    -> null
     is TorTransitionPrompt.SwitchProfileWhileConnected ->
         stringResource(R.string.cli_prof_switch_profile_q, prompt.profileName)
     is TorTransitionPrompt.SwitchProtocolWhileConnected ->
@@ -137,6 +152,34 @@ private fun torPromptActions(
                 onClick = { viewModel.confirmStartTorBesideUdpVpn() },
             ),
         )
+    is TorTransitionPrompt.VpnTorStop ->
+        listOf(
+            CliSheetAction(
+                label = stringResource(R.string.cli_home_vpn_tor_stop_tor),
+                onClick = { viewModel.confirmVpnTorStopTor(prompt) },
+            ),
+            CliSheetAction(
+                label = stringResource(R.string.cli_home_vpn_tor_stop_all),
+                onClick = { viewModel.confirmVpnTorStopAll(prompt) },
+                tone = com.foxhole.guard.ui.cli.components.CliSheetActionTone.DESTRUCTIVE,
+            ),
+        )
+    is TorTransitionPrompt.VpnTorModeChoice ->
+        listOf(
+            CliSheetAction(
+                label = stringResource(R.string.cli_home_vpn_tor_mode_tor),
+                onClick = {
+                    viewModel.confirmVpnTorModeChoice(prompt, RoutingModePreset.TOR)
+                },
+            ),
+            CliSheetAction(
+                label = stringResource(R.string.cli_home_vpn_tor_mode_vpn),
+                onClick = {
+                    viewModel.confirmVpnTorModeChoice(prompt, RoutingModePreset.VPN)
+                },
+                tone = com.foxhole.guard.ui.cli.components.CliSheetActionTone.ACCENT,
+            ),
+        )
     is TorTransitionPrompt.SwitchProfileWhileConnected ->
         listOf(
             CliSheetAction(
@@ -162,3 +205,6 @@ private fun torPromptActions(
             ),
         )
 }
+
+private fun TorTransitionPrompt.isVpnTorChoice(): Boolean =
+    this is TorTransitionPrompt.VpnTorStop || this is TorTransitionPrompt.VpnTorModeChoice

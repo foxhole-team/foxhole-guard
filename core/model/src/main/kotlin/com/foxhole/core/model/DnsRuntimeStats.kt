@@ -9,10 +9,9 @@ data class DnsRuntimeDelta(
     val blocked: Int,
     val allowed: Int,
     val blockedDomains: Map<String, Long> = emptyMap(),
-    // Real per-category counts from FoxCore's typed DNS audit events.
+
     val blockedByCategory: Map<DnsFilterCategory, Int> = emptyMap(),
-    // Real per-app counts from the event's package identity, with recent query observations as a
-    // fallback for events whose package is unavailable.
+
     val blockedByApp: Map<String, Int> = emptyMap(),
 )
 
@@ -25,11 +24,6 @@ object DnsRuntimeStats {
     private val observationLock = Any()
     private val dnsQueryObservations = ArrayDeque<DnsQueryObservation>()
 
-    /**
-     * Applies deltas from FoxCore's cumulative DNS verdict counters. These counters are the
-     * authoritative totals; the bounded audit stream below only enriches them with domain,
-     * category and app breakdowns.
-     */
     fun recordDnsVerdictDelta(
         blocked: Long,
         allowed: Long,
@@ -38,11 +32,6 @@ object DnsRuntimeStats {
         allowedQueries.addSaturating(allowed)
     }
 
-    /**
-     * Remembers which app just queried which domain (from a DNS connection's sniffed host and
-     * process info) so a later typed block event without a package can be attributed to the app. The
-     * ring is bounded by size and age; a repeated observation refreshes the domain's entry.
-     */
     fun recordDnsQueryObservation(
         domain: String,
         packageNames: List<String>,
@@ -68,20 +57,13 @@ object DnsRuntimeStats {
         }
     }
 
-    /**
-     * Records one typed `dns_blocked` audit event without incrementing the aggregate blocked
-     * counter a second time. Missing events after queue overflow only reduce the breakdown;
-     * [recordDnsVerdictDelta] still keeps the total exact.
-     */
     fun recordBlockedDnsBreakdown(
         domain: String,
         category: DnsFilterCategory?,
         packageName: String?,
     ) {
         val normalizedDomain = domain.normalizedDnsRuntimeDomainOrNull() ?: return
-        // The per-domain map is drained by the anomaly window (firewall mode), but the
-        // DNS-replacement guard never runs that path, so cap the distinct-domain set to keep a
-        // long guard session from growing it unbounded.
+
         if (blockedDomainQueries.size < MAX_TRACKED_BLOCKED_DOMAINS ||
             blockedDomainQueries.containsKey(normalizedDomain)
         ) {

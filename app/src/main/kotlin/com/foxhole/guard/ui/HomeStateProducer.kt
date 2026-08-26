@@ -1,6 +1,7 @@
 package com.foxhole.guard.ui
 import android.os.SystemClock
 import com.foxhole.core.model.ACTIVE_CONNECTION_STATES
+import com.foxhole.core.model.ConnectionSnapshot
 import com.foxhole.core.model.I2pPhaseSnapshot
 import com.foxhole.core.model.InstalledAppOption
 import com.foxhole.core.model.IpInfo
@@ -307,7 +308,7 @@ internal class HomeStateProducer(
                 connection = connectionStreams.connection,
                 ipInfo = connectionStreams.ipInfo,
                 deviceIpInfo = connectionStreams.deviceIpInfo,
-                torIpInfo = localStreams.torIpInfo,
+                torIpInfo = torIpInfoForAppliedRuntime(connectionStreams.connection, localStreams.torIpInfo),
                 ipInfoLoading =
                 shouldShowIpInfoLoading(
                     explicitLoading = localStreams.ipInfoLoading,
@@ -427,6 +428,14 @@ internal class HomeStateProducer(
         }
     }
 }
+
+internal fun torIpInfoForAppliedRuntime(
+    connection: ConnectionSnapshot,
+    torIpInfo: IpInfo?,
+): IpInfo? =
+    torIpInfo.takeIf {
+        connection.torActive && connection.appliedTorRoute != null
+    }
 
 private fun <T> Flow<T>.throttleLatest(windowMs: Long): Flow<T> =
     conflate().transform { value ->

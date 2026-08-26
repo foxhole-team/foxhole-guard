@@ -19,10 +19,12 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -36,36 +38,44 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.foxhole.core.model.PanelAppearance
-import com.foxhole.core.model.VisualStyle
+import com.foxhole.core.model.AppLocale
+import com.foxhole.core.model.ThemeMode
 import com.foxhole.guard.R
 import com.foxhole.guard.runtime.RemoteUpdatePhase
 import com.foxhole.guard.ui.HomeViewModel
 import com.foxhole.guard.ui.OnboardingDownload
 import com.foxhole.guard.ui.OnboardingDownloadState
 import com.foxhole.guard.ui.OnboardingProgress
+import com.foxhole.guard.ui.cli.CliRadius
 import com.foxhole.guard.ui.cli.CliSpacing
 import com.foxhole.guard.ui.cli.CliType
 import com.foxhole.guard.ui.cli.LocalCliColors
-import com.foxhole.guard.ui.cli.LocalCliVisualStyle
 import com.foxhole.guard.ui.cli.cliDisplayStyle
-import com.foxhole.guard.ui.cli.cliPanelSwap
+import com.foxhole.guard.ui.cli.cliSlide
 import com.foxhole.guard.ui.cli.components.CliButton
+import com.foxhole.guard.ui.cli.components.CliConfirmSheet
 import com.foxhole.guard.ui.cli.components.CliDropdownOption
 import com.foxhole.guard.ui.cli.components.CliDropdownRow
+import com.foxhole.guard.ui.cli.components.CliIcon
 import com.foxhole.guard.ui.cli.components.CliPanel
-import com.foxhole.guard.ui.cli.components.CliPixIcon
 import com.foxhole.guard.ui.cli.components.CliPixelProgressBar
+import com.foxhole.guard.ui.cli.components.CliRejectFeedback
+import com.foxhole.guard.ui.cli.components.CliRowDivider
 import com.foxhole.guard.ui.cli.components.CliToggleRow
+import com.foxhole.guard.ui.cli.components.LocalCliInfoSheetBodyIconVisible
 import com.foxhole.guard.ui.cli.components.cliDashedBorder
 import com.foxhole.guard.ui.cli.components.cliMarchingBorder
+import com.foxhole.guard.ui.cli.components.cliRejectShake
+import com.foxhole.guard.ui.cli.components.rememberCliRejectFeedback
 import com.foxhole.guard.ui.cli.fox.CliFoxHero
+import com.foxhole.guard.ui.onLocaleSelected
 import com.foxhole.guard.ui.onOnboardingDownload
 import com.foxhole.guard.ui.onOnboardingFinished
 import com.foxhole.guard.ui.onOnboardingSkipped
-import com.foxhole.guard.ui.onPanelAppearanceSelected
-import com.foxhole.guard.ui.onVisualStyleSelected
+import com.foxhole.guard.ui.onPixelArtEnabledChanged
+import com.foxhole.guard.ui.onThemeSelected
 import com.foxhole.guard.ui.onboardingProgress
+import kotlinx.coroutines.launch
 
 @Composable
 internal fun CliOnboardingWizard(viewModel: HomeViewModel) {
@@ -75,61 +85,82 @@ internal fun CliOnboardingWizard(viewModel: HomeViewModel) {
     var choices by rememberSaveable(stateSaver = OnboardingWizardChoicesSaver) {
         mutableStateOf(OnboardingWizardChoices())
     }
+    val licenseRejectFeedback = rememberCliRejectFeedback()
+    val feedbackScope = rememberCoroutineScope()
     var licenseValidationError by rememberSaveable { mutableStateOf(false) }
+    var skipSetupConfirmationOpen by rememberSaveable { mutableStateOf(false) }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(colors.bg)
-            .statusBarsPadding()
-            .navigationBarsPadding()
-            .padding(CliSpacing.md),
-    ) {
-        WizardHeader()
-        Spacer(modifier = Modifier.height(CliSpacing.sm))
-        WizardStepContent(
-            step = step,
-            viewModel = viewModel,
-            progress = progress,
-            choices = choices,
-            licenseValidationError = licenseValidationError,
-            onChoicesChange = { next ->
-                choices = next
-                if (next.licenseAccepted) licenseValidationError = false
-            },
-            modifier = Modifier.weight(1f),
-        )
+    CompositionLocalProvider(LocalCliInfoSheetBodyIconVisible provides false) {
+        if (skipSetupConfirmationOpen) {
+            CliConfirmSheet(
+                title = stringResource(R.string.cli_wizard_skip),
+                question = stringResource(R.string.cli_wizard_skip_note),
+                icon = R.drawable.lin_info,
+                confirmLabel = stringResource(R.string.cli_wizard_skip),
+                onConfirm = {
+                    skipSetupConfirmationOpen = false
+                    viewModel.onOnboardingSkipped()
+                },
+                onDismiss = { skipSetupConfirmationOpen = false },
+            )
+        }
 
-        Spacer(modifier = Modifier.height(CliSpacing.sm))
-        WizardFooter(
-            step = step,
-            canContinue = wizardCanContinue(step, choices, progress),
-            onBack = { step -= 1 },
-            onContinue = {
-                when (step) {
-                    LICENSE_STEP -> {
-                        if (choices.licenseAccepted) {
-                            licenseValidationError = false
-                            step = COMPONENTS_STEP
-                        } else {
-                            licenseValidationError = true
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(colors.bg)
+                .statusBarsPadding()
+                .navigationBarsPadding()
+                .padding(CliSpacing.md),
+        ) {
+            WizardHeader()
+            Spacer(modifier = Modifier.height(CliSpacing.sm))
+            WizardStepContent(
+                step = step,
+                viewModel = viewModel,
+                progress = progress,
+                choices = choices,
+                licenseValidationError = licenseValidationError,
+                licenseRejectFeedback = licenseRejectFeedback,
+                onChoicesChange = { next ->
+                    choices = next
+                    if (next.licenseAccepted) licenseValidationError = false
+                },
+                modifier = Modifier.weight(1f),
+            )
+
+            Spacer(modifier = Modifier.height(CliSpacing.sm))
+            WizardFooter(
+                step = step,
+                canContinue = wizardCanContinue(step, choices, progress),
+                onBack = { step -= 1 },
+                onContinue = {
+                    when (step) {
+                        LICENSE_STEP -> {
+                            if (choices.licenseAccepted) {
+                                licenseValidationError = false
+                                step = COMPONENTS_STEP
+                            } else {
+                                licenseValidationError = true
+                                feedbackScope.launch { licenseRejectFeedback.play() }
+                            }
                         }
+                        DATA_STEP -> {
+                            viewModel.startOnboardingDownloads(choices)
+                            step = DOWNLOAD_STEP
+                        }
+                        DOWNLOAD_STEP -> viewModel.finishOnboarding(choices)
+                        else -> step += 1
                     }
-                    DATA_STEP -> {
-                        viewModel.startOnboardingDownloads(choices)
-                        step = DOWNLOAD_STEP
-                    }
-                    DOWNLOAD_STEP -> viewModel.finishOnboarding(choices)
-                    else -> step += 1
-                }
-            },
-            onSkipSetup = { viewModel.onOnboardingSkipped() },
-            onSkipData = {
-                choices = choices.withoutDownloads()
-                viewModel.startOnboardingDownloads(choices.withoutDownloads())
-                step = DOWNLOAD_STEP
-            },
-        )
+                },
+                onSkipSetup = { skipSetupConfirmationOpen = true },
+                onSkipData = {
+                    val skippedChoices = choices.withoutDownloads()
+                    choices = skippedChoices
+                    viewModel.finishOnboarding(skippedChoices)
+                },
+            )
+        }
     }
 }
 
@@ -140,15 +171,15 @@ private fun WizardStepContent(
     progress: OnboardingProgress,
     choices: OnboardingWizardChoices,
     licenseValidationError: Boolean,
+    licenseRejectFeedback: CliRejectFeedback,
     onChoicesChange: (OnboardingWizardChoices) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val plainStyle = LocalCliVisualStyle.current == VisualStyle.PLAIN
     Box(modifier = modifier, contentAlignment = Alignment.TopStart) {
         AnimatedContent(
             targetState = step,
             transitionSpec = {
-                cliPanelSwap(forward = targetState > initialState, plain = plainStyle)
+                cliSlide(forward = targetState > initialState)
             },
             contentAlignment = Alignment.TopStart,
             label = "onboarding-step",
@@ -159,6 +190,7 @@ private fun WizardStepContent(
                     viewModel = viewModel,
                     accepted = choices.licenseAccepted,
                     validationError = licenseValidationError,
+                    rejectFeedback = licenseRejectFeedback,
                     onAcceptedChange = { onChoicesChange(choices.copy(licenseAccepted = it)) },
                 )
 
@@ -191,15 +223,6 @@ private fun WizardStepContent(
                             ),
                         )
                     },
-                    sentinelEnabled = choices.sentinelEnabled,
-                    onSentinelChange = { enabled ->
-                        onChoicesChange(
-                            choices.copy(
-                                sentinelEnabled = enabled,
-                                threatIntelDownload = enabled,
-                            ),
-                        )
-                    },
                     i2pEnabled = choices.i2pEnabled,
                     onI2pChange = { enabled ->
                         onChoicesChange(
@@ -211,15 +234,6 @@ private fun WizardStepContent(
                     },
                     i2pRelay = choices.i2pRelay,
                     onI2pRelayChange = { onChoicesChange(choices.copy(i2pRelay = it)) },
-                    dnsFilterEnabled = choices.dnsFilterEnabled,
-                    onDnsFilterChange = { enabled ->
-                        onChoicesChange(
-                            choices.copy(
-                                dnsFilterEnabled = enabled,
-                                dnsDownload = if (enabled) true else choices.dnsDownload,
-                            ),
-                        )
-                    },
                 )
 
                 DATA_STEP -> WizardDataSetsStep(
@@ -261,9 +275,9 @@ private fun WizardHeader() {
         CliFoxHero(size = WIZARD_HERO_SIZE)
         Text(
             text = buildAnnotatedString {
-                append("FoxHole ")
+                append("FOXHOLE ")
                 pushStyle(SpanStyle(color = colors.info))
-                append("Guard")
+                append("GUARD")
                 pop()
             },
             style = cliDisplayStyle(stringResource(R.string.cli_wizard_welcome_title)),
@@ -283,6 +297,7 @@ private fun WizardLicenseStep(
     viewModel: HomeViewModel,
     accepted: Boolean,
     validationError: Boolean,
+    rejectFeedback: CliRejectFeedback,
     onAcceptedChange: (Boolean) -> Unit,
 ) {
     val colors = LocalCliColors.current
@@ -291,55 +306,38 @@ private fun WizardLicenseStep(
             .fillMaxSize()
             .verticalScroll(rememberScrollState()),
     ) {
-        CliPanel(title = stringResource(R.string.cli_wizard_license_caption), icon = R.drawable.pix_info) {
+        CliPanel(title = stringResource(R.string.cli_wizard_license_caption), icon = R.drawable.lin_info) {
             Text(
                 text = stringResource(R.string.cli_wizard_license_body),
                 style = CliType.small,
                 color = colors.fg,
             )
+            Spacer(modifier = Modifier.height(CliSpacing.sm))
+            CliToggleRow(
+                label = stringResource(R.string.cli_wizard_license_accept),
+                checked = accepted,
+                onToggle = onAcceptedChange,
+            )
         }
-        Spacer(modifier = Modifier.height(CliSpacing.sm))
-        CliToggleRow(
-            label = stringResource(R.string.cli_wizard_license_accept),
-            checked = accepted,
-            onToggle = onAcceptedChange,
-        )
         Spacer(modifier = Modifier.height(CliSpacing.sm))
         WizardAppearancePanel(viewModel = viewModel)
-        Spacer(modifier = Modifier.height(CliSpacing.sm))
-        val skipNote = stringResource(R.string.cli_wizard_skip_note)
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .cliDashedBorder(colors.note)
-                .padding(CliSpacing.sm),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            CliPixIcon(
-                id = R.drawable.pix_info,
-                contentDescription = skipNote,
-                size = 16.dp,
-                tint = colors.note,
-            )
-            Spacer(modifier = Modifier.height(CliSpacing.xs))
-            Text(
-                text = skipNote,
-                style = CliType.small,
-                color = colors.note,
-                textAlign = TextAlign.Center,
-            )
-        }
         if (validationError) {
             Spacer(modifier = Modifier.height(CliSpacing.sm))
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .cliRejectShake(rejectFeedback)
                     .cliDashedBorder(colors.err)
                     .padding(CliSpacing.sm),
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(text = "!", style = CliType.small, color = colors.err)
+                CliIcon(
+                    id = R.drawable.lin_info,
+                    contentDescription = null,
+                    size = 16.dp,
+                    tint = colors.err,
+                )
                 Spacer(modifier = Modifier.size(CliSpacing.xs))
                 Text(
                     text = stringResource(R.string.cli_wizard_license_required),
@@ -360,46 +358,39 @@ private fun WizardComponentsStep(
     onTorBridgesChange: (Boolean) -> Unit,
     bridgesMirror: Boolean,
     onBridgesMirrorChange: (Boolean) -> Unit,
-    sentinelEnabled: Boolean,
-    onSentinelChange: (Boolean) -> Unit,
     i2pEnabled: Boolean,
     onI2pChange: (Boolean) -> Unit,
     i2pRelay: Boolean,
     onI2pRelayChange: (Boolean) -> Unit,
-    dnsFilterEnabled: Boolean,
-    onDnsFilterChange: (Boolean) -> Unit,
 ) {
-    val colors = LocalCliColors.current
     Column(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState()),
     ) {
-        CliPanel(title = stringResource(R.string.cli_wizard_components_caption), icon = R.drawable.pix_shield) {
-            Text(
-                text = stringResource(R.string.cli_wizard_components_intro),
-                style = CliType.small,
-                color = colors.dim,
-            )
-            Spacer(modifier = Modifier.height(CliSpacing.sm))
+        CliPanel(
+            title = stringResource(R.string.cli_wizard_components_caption),
+            icon = R.drawable.lin_shield,
+            infoText = stringResource(R.string.cli_wizard_components_intro),
+        ) {
             CliToggleRow(
                 label = stringResource(R.string.cli_wizard_component_tor),
                 checked = torEnabled,
                 onToggle = onTorChange,
-                note = stringResource(R.string.cli_wizard_component_tor_note),
+                infoText = stringResource(R.string.cli_wizard_component_tor_note),
             )
             if (torEnabled) {
                 CliToggleRow(
                     label = stringResource(R.string.cli_wizard_component_tor_bridges),
                     checked = torBridges,
                     onToggle = onTorBridgesChange,
-                    note = stringResource(R.string.cli_wizard_component_tor_bridges_note),
+                    infoText = stringResource(R.string.cli_wizard_component_tor_bridges_note),
                     modifier = Modifier.padding(start = CliSpacing.md),
                 )
                 if (torBridges) {
                     CliDropdownRow(
                         label = stringResource(R.string.cli_dataset_source),
-                        icon = R.drawable.pix_globe,
+                        icon = R.drawable.lin_globe,
                         value = stringResource(
                             if (bridgesMirror) {
                                 R.string.cli_dataset_source_foxhole_db
@@ -425,38 +416,10 @@ private fun WizardComponentsStep(
                 }
             }
             CliToggleRow(
-                label = stringResource(R.string.cli_cfg_more_anomaly),
-                checked = sentinelEnabled,
-                onToggle = onSentinelChange,
-                note = stringResource(R.string.cli_wizard_component_sentinel_note),
-            )
-            if (sentinelEnabled) {
-                CliDropdownRow(
-                    label = stringResource(R.string.cli_dataset_source),
-                    icon = R.drawable.pix_globe,
-                    value = stringResource(R.string.cli_dataset_source_foxhole_db),
-                    options = listOf(
-                        CliDropdownOption(
-                            id = WIZARD_SOURCE_FOXHOLE_DB,
-                            label = stringResource(R.string.cli_dataset_source_foxhole_db),
-                        ),
-                    ),
-                    selectedId = WIZARD_SOURCE_FOXHOLE_DB,
-                    onSelect = {},
-                    modifier = Modifier.padding(start = CliSpacing.md),
-                )
-            }
-            CliToggleRow(
                 label = stringResource(R.string.cli_wizard_component_i2p),
                 checked = i2pEnabled,
                 onToggle = onI2pChange,
-                note = stringResource(R.string.cli_wizard_component_i2p_note),
-            )
-            CliToggleRow(
-                label = stringResource(R.string.cli_wizard_component_dns),
-                checked = dnsFilterEnabled,
-                onToggle = onDnsFilterChange,
-                note = stringResource(R.string.cli_wizard_component_dns_note),
+                infoText = stringResource(R.string.cli_wizard_component_i2p_note),
             )
         }
         Spacer(modifier = Modifier.height(CliSpacing.sm))
@@ -470,54 +433,84 @@ private fun WizardComponentsStep(
 
 @Composable
 private fun WizardAppearancePanel(viewModel: HomeViewModel) {
-    val visualStyle by viewModel.visualStyle.collectAsStateWithLifecycle()
-    val panelAppearance by viewModel.panelAppearance.collectAsStateWithLifecycle()
-    CliPanel(title = stringResource(R.string.cli_wizard_appearance_caption), icon = R.drawable.pix_star) {
-        val pixelLabel = stringResource(R.string.cli_cfg_visual_style_pixel)
-        val plainLabel = stringResource(R.string.cli_cfg_visual_style_plain)
+    val appearance by viewModel.appearanceUiState.collectAsStateWithLifecycle()
+    val settingsState by viewModel.settingsRouteState.collectAsStateWithLifecycle()
+    CliPanel(title = stringResource(R.string.cli_wizard_appearance_caption), icon = R.drawable.lin_star) {
+        val systemLocaleLabel = stringResource(R.string.cli_cfg_locale_system)
+        val russianLocaleLabel = stringResource(R.string.cli_cfg_locale_ru)
+        val englishLocaleLabel = stringResource(R.string.cli_cfg_locale_en)
+        val localeLabel = { locale: AppLocale ->
+            when (locale) {
+                AppLocale.SYSTEM -> systemLocaleLabel
+                AppLocale.RU -> russianLocaleLabel
+                AppLocale.EN -> englishLocaleLabel
+            }
+        }
+        val selectedLocale = settingsState.settings.ui.locale
         CliDropdownRow(
-            label = stringResource(R.string.cli_wizard_visual_style),
-            icon = R.drawable.pix_edit,
-            value = if (visualStyle == VisualStyle.PIXEL) pixelLabel else plainLabel,
-            options = VisualStyle.entries.map { style ->
+            label = stringResource(R.string.cli_cfg_language),
+            icon = R.drawable.lin_globe,
+            value = localeLabel(selectedLocale),
+            options = AppLocale.entries.map { locale ->
                 CliDropdownOption(
-                    id = style.name,
-                    label = if (style == VisualStyle.PIXEL) pixelLabel else plainLabel,
+                    id = locale.name,
+                    label = localeLabel(locale),
+                    flagCountry = wizardLocaleFlagCountry(locale),
                 )
             },
-            selectedId = visualStyle.name,
-            onSelect = { id -> viewModel.onVisualStyleSelected(VisualStyle.valueOf(id)) },
+            selectedId = selectedLocale.name,
+            onSelect = { id -> viewModel.onLocaleSelected(AppLocale.valueOf(id)) },
+            showSelectedOptionIcon = true,
         )
-        val autoLabel = stringResource(R.string.cli_cfg_appearance_auto)
-        val standardLabel = stringResource(R.string.cli_cfg_appearance_standard)
+        CliRowDivider()
+        val systemLabel = stringResource(R.string.cli_cfg_appearance_system)
         val darkLabel = stringResource(R.string.cli_cfg_appearance_dark)
+        val oledLabel = stringResource(R.string.cli_cfg_appearance_oled)
         val lightLabel = stringResource(R.string.cli_cfg_appearance_light)
-        val paletteLabel = { appearance: PanelAppearance ->
-            when (appearance) {
-                PanelAppearance.AUTO -> autoLabel
-                PanelAppearance.STANDARD -> standardLabel
-                PanelAppearance.DARK -> darkLabel
-                PanelAppearance.LIGHT -> lightLabel
+        val paletteLabel = { selectedThemeMode: ThemeMode ->
+            when (selectedThemeMode) {
+                ThemeMode.SYSTEM -> systemLabel
+                ThemeMode.DARK -> darkLabel
+                ThemeMode.OLED -> oledLabel
+                ThemeMode.LIGHT -> lightLabel
             }
         }
         CliDropdownRow(
             label = stringResource(R.string.cli_cfg_appearance),
-            icon = R.drawable.pix_star,
-            value = paletteLabel(panelAppearance),
-            options = PanelAppearance.entries.map { appearance ->
-                CliDropdownOption(id = appearance.name, label = paletteLabel(appearance))
+            icon = R.drawable.lin_star,
+            value = paletteLabel(appearance.themeMode),
+            options = ThemeMode.entries.map { availableThemeMode ->
+                CliDropdownOption(id = availableThemeMode.name, label = paletteLabel(availableThemeMode))
             },
-            selectedId = panelAppearance.name,
-            onSelect = { id -> viewModel.onPanelAppearanceSelected(PanelAppearance.valueOf(id)) },
+            selectedId = appearance.themeMode.name,
+            onSelect = { id -> viewModel.onThemeSelected(ThemeMode.valueOf(id)) },
+            showSelectedOptionIcon = true,
+        )
+        CliRowDivider()
+        CliToggleRow(
+            label = stringResource(R.string.cli_cfg_pixel_art),
+            checked = settingsState.settings.ui.pixelArtEnabled,
+            onToggle = viewModel::onPixelArtEnabledChanged,
+            icon = R.drawable.lin_terminal,
         )
     }
+}
+
+private fun wizardLocaleFlagCountry(locale: AppLocale): String? = when (locale) {
+    AppLocale.SYSTEM -> null
+    AppLocale.RU -> "ru"
+    AppLocale.EN -> "gb"
 }
 
 @Composable
 private fun I2pRelayBanner(i2pEnabled: Boolean, relay: Boolean, onRelayChange: (Boolean) -> Unit) {
     val colors = LocalCliColors.current
     val frame = if (i2pEnabled) {
-        Modifier.border(1.dp, colors.accent, androidx.compose.foundation.shape.RoundedCornerShape(2.dp))
+        Modifier.border(
+            1.dp,
+            colors.accent,
+            androidx.compose.foundation.shape.RoundedCornerShape(CliRadius.pixel),
+        )
     } else {
         Modifier.cliMarchingBorder(colors.accent)
     }
@@ -529,7 +522,7 @@ private fun I2pRelayBanner(i2pEnabled: Boolean, relay: Boolean, onRelayChange: (
             .padding(CliSpacing.sm),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            CliPixIcon(id = R.drawable.pix_globe, contentDescription = null, size = 16.dp, tint = colors.accent)
+            CliIcon(id = R.drawable.lin_globe, contentDescription = null, size = 16.dp, tint = colors.accent)
             Spacer(modifier = Modifier.size(6.dp))
             Text(
                 text = stringResource(R.string.cli_wizard_i2p_banner_title),
@@ -574,7 +567,7 @@ private fun WizardDataSetsStep(
             .fillMaxSize()
             .verticalScroll(rememberScrollState()),
     ) {
-        CliPanel(title = stringResource(R.string.cli_wizard_geo_caption), icon = R.drawable.pix_globe) {
+        CliPanel(title = stringResource(R.string.cli_wizard_geo_caption), icon = R.drawable.lin_globe) {
             Text(
                 text = stringResource(R.string.cli_wizard_geo_body),
                 style = CliType.small,
@@ -585,13 +578,13 @@ private fun WizardDataSetsStep(
                 label = stringResource(R.string.cli_wizard_download_geoip),
                 checked = geoIp,
                 onToggle = onGeoIpChange,
-                note = stringResource(R.string.cli_wizard_geo_later_note),
+                infoText = stringResource(R.string.cli_wizard_geo_later_note),
             )
             CliToggleRow(
                 label = stringResource(R.string.cli_wizard_download_tls),
                 checked = tlsFingerprints,
                 onToggle = onTlsFingerprintsChange,
-                note = stringResource(R.string.cli_wizard_download_tls_note),
+                infoText = stringResource(R.string.cli_wizard_download_tls_note),
             )
             CliToggleRow(
                 label = stringResource(R.string.cli_wizard_download_dns),
@@ -613,7 +606,7 @@ private fun WizardDataSetsStep(
                 label = stringResource(R.string.cli_wizard_download_auto),
                 checked = autoUpdate,
                 onToggle = onAutoUpdateChange,
-                note = stringResource(R.string.cli_wizard_download_auto_note),
+                infoText = stringResource(R.string.cli_wizard_download_auto_note),
             )
             Spacer(modifier = Modifier.height(CliSpacing.xs))
             Text(
@@ -653,14 +646,13 @@ private fun WizardDownloadStep(
             .fillMaxSize()
             .verticalScroll(rememberScrollState()),
     ) {
-        CliPanel(title = stringResource(R.string.cli_wizard_download_caption), icon = R.drawable.pix_dns) {
+        CliPanel(title = stringResource(R.string.cli_wizard_download_caption), icon = R.drawable.lin_dns) {
             Text(
                 text = stringResource(R.string.cli_wizard_download_intro),
                 style = CliType.small,
                 color = colors.dim,
             )
             Spacer(modifier = Modifier.height(CliSpacing.sm))
-
             WizardProgressBar(
                 fraction = progress.fraction,
                 verified = progress.finished && progress.items.isNotEmpty() && progress.items.none { it.failed },
@@ -797,7 +789,6 @@ private fun WizardFooter(
                 ),
                 onClick = onContinue,
                 modifier = Modifier.weight(1f),
-                filled = canContinue && step != LICENSE_STEP,
                 enabled = step == LICENSE_STEP || canContinue,
                 dimWhenDisabled = step != LICENSE_STEP,
                 color = colors.ok,

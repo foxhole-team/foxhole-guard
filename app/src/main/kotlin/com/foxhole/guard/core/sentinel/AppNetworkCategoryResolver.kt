@@ -5,15 +5,6 @@ import android.content.pm.ApplicationInfo
 import com.foxhole.core.model.AppNetworkUsageCategory
 import java.util.concurrent.ConcurrentHashMap
 
-/**
- * Resolves a package's [AppNetworkUsageCategory] from the developer-declared platform category
- * (`ApplicationInfo.category`). Video, audio, and game apps legitimately move large download
- * volumes, so FoxHole Sentinel dampens download-shaped spikes from them; everything else — and
- * anything unresolvable — scores as STANDARD, keeping full sensitivity.
- *
- * Results are cached per package: the anomaly pipeline asks on every traffic window and a
- * declared category effectively never changes within a process lifetime.
- */
 class AppNetworkCategoryResolver(
     context: Context,
 ) {

@@ -23,6 +23,7 @@ import com.foxhole.guard.ui.cli.components.CliActionRow
 import com.foxhole.guard.ui.cli.components.CliDropdownOption
 import com.foxhole.guard.ui.cli.components.CliDropdownRow
 import com.foxhole.guard.ui.cli.components.CliPanel
+import com.foxhole.guard.ui.cli.components.CliPanelEdgeToEdgeContentPadding
 import com.foxhole.guard.ui.cli.components.CliRowDivider
 import com.foxhole.guard.ui.cli.components.CliToggleRow
 import com.foxhole.guard.ui.completeBiometricEnrolment
@@ -62,17 +63,18 @@ internal fun CliSecuritySection(
     val mode = settings.appLock.mode
     CliPanel(
         title = stringResource(R.string.cli_cfg_group_security),
-        icon = R.drawable.pix_lock,
+        icon = R.drawable.lin_lock,
         iconColor = colors.accent,
         modifier = Modifier.fillMaxWidth(),
         collapsible = true,
         expanded = expanded,
         onToggleExpanded = onToggleExpanded,
+        contentPadding = CliPanelEdgeToEdgeContentPadding,
     ) {
         if (mode == AppLockMode.PASSWORD) {
             CliDropdownRow(
                 label = stringResource(R.string.cli_lock_password),
-                icon = R.drawable.pix_lock,
+                icon = R.drawable.lin_lock,
                 value = stringResource(R.string.cli_common_on),
                 options = listOf(
                     CliDropdownOption(id = LOCK_OPT_CHANGE, label = stringResource(R.string.cli_lock_change)),
@@ -90,7 +92,7 @@ internal fun CliSecuritySection(
         } else {
             CliActionRow(
                 label = stringResource(R.string.cli_lock_password),
-                icon = R.drawable.pix_lock,
+                icon = R.drawable.lin_lock,
                 value = when (mode) {
                     AppLockMode.SYSTEM -> "system"
                     else -> stringResource(R.string.cli_common_off)
@@ -99,10 +101,10 @@ internal fun CliSecuritySection(
             )
         }
         CliRowDivider()
-        if (mode != AppLockMode.OFF) {
+        CliSettingsAnimatedRows(visible = mode != AppLockMode.OFF) {
             CliDropdownRow(
                 label = stringResource(R.string.cli_lock_timeout),
-                icon = R.drawable.pix_clock,
+                icon = R.drawable.lin_clock,
                 value = timeoutLabel(settings.appLock.lockTimeout),
                 options = AppLockTimeout.entries.map { timeout ->
                     CliDropdownOption(id = timeout.name, label = timeoutLabel(timeout))
@@ -112,20 +114,20 @@ internal fun CliSecuritySection(
             )
             CliRowDivider()
         }
-        if (mode == AppLockMode.PASSWORD) {
+        CliSettingsAnimatedRows(visible = mode == AppLockMode.PASSWORD) {
             val eventMonitoringActive = settings.anomaly.enabled && settings.appLock.eventMonitoringEnabled
             CliToggleRow(
                 label = stringResource(R.string.cli_lock_event_monitoring),
-                icon = R.drawable.pix_shield,
+                icon = R.drawable.lin_shield,
                 checked = eventMonitoringActive,
                 onToggle = viewModel::onEventMonitoringChanged,
                 enabled = settings.anomaly.enabled,
             )
-            if (eventMonitoringActive) {
+            CliSettingsAnimatedRows(visible = eventMonitoringActive) {
                 CliRowDivider()
                 CliDropdownRow(
                     label = stringResource(R.string.cli_lock_guard_hosting),
-                    icon = R.drawable.pix_status,
+                    icon = R.drawable.lin_status,
                     value = guardHostingLabel(settings.appLock.guardHosting),
                     options = GuardHostingMode.entries.map { hosting ->
                         CliDropdownOption(id = hosting.name, label = guardHostingLabel(hosting))
@@ -136,13 +138,15 @@ internal fun CliSecuritySection(
             }
             CliRowDivider()
         }
-        if (mode != AppLockMode.OFF && viewModel.biometricStrongAvailable()) {
+        CliSettingsAnimatedRows(
+            visible = mode != AppLockMode.OFF && viewModel.biometricStrongAvailable(),
+        ) {
             CliBiometricRow(viewModel = viewModel, settings = settings)
             CliRowDivider()
         }
         CliToggleRow(
             label = stringResource(R.string.cli_cfg_block_screenshots),
-            icon = R.drawable.pix_forbidden,
+            icon = R.drawable.lin_forbidden,
             checked = settings.expert.blockScreenshots,
             onToggle = viewModel::onBlockScreenshotsChanged,
         )
@@ -172,7 +176,7 @@ private fun CliBiometricRow(
     val scope = rememberCoroutineScope()
     CliToggleRow(
         label = stringResource(R.string.cli_lock_biometric),
-        icon = R.drawable.pix_check,
+        icon = R.drawable.lin_check,
         checked = settings.appLock.biometricEnabled,
         onToggle = { enabled ->
             when {

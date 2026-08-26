@@ -45,6 +45,7 @@ import com.foxhole.guard.ui.cli.LocalCliColors
 import com.foxhole.guard.ui.cli.LocalCliPanelAppearance
 import com.foxhole.guard.ui.cli.components.CliButton
 import com.foxhole.guard.ui.cli.components.CliKeyValue
+import com.foxhole.guard.ui.cli.components.CliModalCloseButton
 import com.foxhole.guard.ui.cli.components.CliPanel
 import com.foxhole.guard.ui.cli.components.cliMarchingBorder
 import com.foxhole.guard.ui.cli.components.cliModalSurfaceColor
@@ -79,7 +80,11 @@ internal fun CliQrScannerOverlay(
 
     Dialog(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnClickOutside = false),
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            dismissOnClickOutside = false,
+            decorFitsSystemWindows = true,
+        ),
     ) {
         Column(
             modifier = Modifier
@@ -88,7 +93,7 @@ internal fun CliQrScannerOverlay(
                 .padding(CliSpacing.lg),
             verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
         ) {
-            Text(text = "> ${CliCommands.SCAN_QR}", style = CliType.title, color = colors.accent)
+            Text(text = "> ${CliCommands.SCAN_QR}", style = CliType.title, color = colors.fg)
             Text(text = title, style = CliType.small, color = colors.dim)
             Box(
                 modifier = Modifier
@@ -145,9 +150,7 @@ internal fun CliQrScannerOverlay(
                     onReject = { payload = null },
                 )
             }
-            CliButton(
-                label = stringResource(R.string.cli_common_no_cancel),
-                color = colors.err,
+            CliModalCloseButton(
                 onClick = onDismiss,
                 modifier = Modifier.fillMaxWidth(),
             )
@@ -186,7 +189,7 @@ private fun CliQrConfirmation(
 ) {
     val colors = LocalCliColors.current
     CliPanel(
-        icon = R.drawable.pix_qr,
+        icon = R.drawable.lin_qr,
         title = stringResource(R.string.cli_qr_detected_title),
         modifier = Modifier.fillMaxWidth()
     ) {

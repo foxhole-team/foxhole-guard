@@ -12,28 +12,13 @@ class TorGeoIpCountryResolver(
 ) {
     private val appContext = context.applicationContext
 
-    /**
-     * True once the range tables are in memory. The first lookup otherwise PARSES the whole geoip
-     * asset behind a lock (seconds on a debug build), so any caller that runs inside a flow's
-     * transform — where a blocked call stalls every later emission — must gate on this instead.
-     */
     fun isLoaded(): Boolean = sharedIpv4Ranges != null && (!resolveIpv6 || sharedIpv6Ranges != null)
 
-    /**
-     * Whether there is a database to resolve against at all — parsing it if it is still cold.
-     *
-     * Distinct from [isLoaded], which asks whether the tables are warm. This asks whether country
-     * attribution is possible on this install: with the geoip data moved into the FoxHole DB geo
-     * group, the answer is false until that group is downloaded, and every caller that would
-     * otherwise present an empty map as a real one needs to be able to tell the difference.
-     */
     fun hasDatabase(): Boolean = ipv4Ranges().size > 0
 
-    /** Non-blocking sibling of [countryCodeForDestination]: null while the tables are still cold. */
     fun countryCodeForDestinationIfLoaded(destination: String): String? =
         if (isLoaded()) countryCodeForDestination(destination) else null
 
-    /** Parses the range tables if they are cold. Call it OFF any latency-sensitive path. */
     fun warmUp() {
         ipv4Ranges()
         if (resolveIpv6) {
@@ -42,11 +27,6 @@ class TorGeoIpCountryResolver(
     }
 
     fun countryCodeForDestination(destination: String): String? {
-        // The traffic map re-resolves every retained connection destination each ~3s sample batch;
-        // destinations repeat heavily, so an LRU in front of the host-parse + range binary search
-        // pays for itself. Results are stable for a given range-table version — invalidateShared
-        // (geoip reload/override download) clears the cache together with the tables. The key
-        // carries resolveIpv6 because instances with the flag off resolve v6 destinations to null.
         val cacheKey = "$resolveIpv6|$destination"
         cachedDestinationCountry(cacheKey)?.let { cached ->
             return cached.takeUnless { value -> value == NoDestinationCountry }
@@ -71,10 +51,6 @@ class TorGeoIpCountryResolver(
         return resolved
     }
 
-    /**
-     * Country for a bare numeric IP (v4 or v6), resolving IPv6 regardless of the
-     * [resolveIpv6] connection-path flag: exit-IP geo lookups always want an answer.
-     */
     fun countryCodeForIpAddress(ipAddress: String): String? =
         ipAddress
             .hostFromConnectionDestination()
@@ -97,8 +73,6 @@ class TorGeoIpCountryResolver(
             overrideActive = sharedRangesFromOverride,
         )
 
-    // The shared ranges live in the companion so the update flow can invalidate them for every
-    // live resolver instance (VPN service, IpInfo enrichment, traffic map) with one call.
     private fun ipv4Ranges(): Ipv4CountryRanges =
         sharedIpv4Ranges ?: loadIpv4Ranges()
 
@@ -176,12 +150,8 @@ class TorGeoIpCountryResolver(
 
         internal const val DestinationCountryCacheLimit = 1024
 
-        // Sentinel for "resolved, no country": null results are as table-stable as hits and would
-        // otherwise re-run the parse + binary search on every batch for unknown destinations.
         internal const val NoDestinationCountry = ""
 
-        // Own lock, NOT SharedGeoIpLock: that one is held across whole-asset parses (seconds cold),
-        // and cache reads must never queue behind a table load.
         private val DestinationCountryCacheLock = Any()
 
         private val destinationCountryCache =
@@ -220,7 +190,6 @@ class TorGeoIpCountryResolver(
         fun overrideIpv6File(context: Context): java.io.File =
             java.io.File(overrideDirectory(context), OVERRIDE_IPV6_FILE_NAME)
 
-        /** Drops the shared range cache so the next lookup reloads (override files first). */
         fun invalidateShared() {
             synchronized(SharedGeoIpLock) {
                 sharedIpv4Ranges = null
@@ -230,13 +199,6 @@ class TorGeoIpCountryResolver(
             clearDestinationCountryCache()
         }
 
-        // Asset paths kept for installs that still carry the packaged database.
-        //
-        // They are NOT a fallback any more, whatever this comment used to claim: the geoip data was
-        // moved into the FoxHole DB geo group to take 24 MB off the install, so on a current build
-        // these paths resolve to nothing and country attribution stays empty until the group is
-        // downloaded. The lookup is left in because it costs one failed asset open and it keeps
-        // working for an install that predates the move.
         private val Ipv4GeoIpAssetCandidates =
             listOf(
                 "geoip/geoip",
@@ -521,8 +483,6 @@ private fun String.trimmedFieldOrNull(
     }
 }
 
-// Accepts both the Tor geoip integer form ("16777216") and the DB-IP CSV dotted-quad
-// form ("1.0.0.0") so downloaded databases install without a conversion pass.
 @Suppress("CyclomaticComplexMethod", "ReturnCount")
 private fun String.parseLongFieldOrNull(field: GeoIpFieldSlice): Long? {
     var value = 0L

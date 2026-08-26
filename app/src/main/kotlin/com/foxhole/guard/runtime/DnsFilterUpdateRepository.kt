@@ -23,9 +23,6 @@ class DnsFilterUpdateRepository(
         RuntimeDnsRuleSetInstallOutcome.Deferred
     },
 ) {
-    // Probes the update source for a newer rule set without downloading any artifact. On the
-    // schema-2 channel "newer" is per list: a level switch (say trackers Normal -> Pro) asks for a
-    // different list and shows up here as an available update.
     suspend fun checkForUpdate(dnsSettingsOverride: DnsSettings? = null): DnsFilterUpdateCheck {
         val dnsSettings = dnsSettingsOverride ?: settingsRepository.current().dns
         val installedCommit = installedManifestProvider()?.source?.commit
@@ -46,11 +43,6 @@ class DnsFilterUpdateRepository(
         return check
     }
 
-    /**
-     * Scheduled auto-update pass: a cheap manifest probe first, the full artifact download only
-     * when a newer list is published — plus a forced full refresh once the installed list is older
-     * than [forcedRefreshIntervalMs], so a device that keeps missing probes still converges.
-     */
     suspend fun autoRefresh(
         forcedRefreshIntervalMs: Long,
         nowMs: () -> Long = System::currentTimeMillis,

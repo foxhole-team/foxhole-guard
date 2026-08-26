@@ -11,12 +11,6 @@ import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import kotlin.system.measureTimeMillis
 
-/**
- * Regression guard: системный резолв на пути connect вставал навсегда (`Linux.android_getaddrinfo`
- * без бюджета), и команда connect висела в супервизоре, а UI — в «connecting». Ожидание обязано
- * быть конечным, а таймаут — приезжать как [UnknownHostException], чтобы [PublicRemoteDns]
- * переключился на DoH-фолбэк.
- */
 class BoundedSystemHostResolverTest {
     @Test
     fun `resolved addresses pass through unchanged`() {

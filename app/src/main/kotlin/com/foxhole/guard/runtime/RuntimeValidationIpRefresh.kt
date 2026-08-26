@@ -14,10 +14,6 @@ import com.foxhole.core.runtime.shouldPreferIpv4TunnelValidation
 import com.foxhole.core.runtime.tunnelRuntimeProxyAccess
 import com.foxhole.core.runtime.tunnelValidationRequestNetwork
 
-// The IP-identity half of validation: refreshing what address the session actually egresses from
-// (VPN, proxy, tunnel runtime-proxy, and their IPv4 variants), which is what the validation gate and
-// the dashboard both read.
-
 internal suspend fun FoxholeVpnService.refreshVpnIpInfoInternal(
     callTimeoutMs: Long,
     network: Network? = null,
@@ -116,9 +112,6 @@ internal suspend fun FoxholeVpnService.refreshTunnelRuntimeProxyIpInfoInternal(c
         )
 }
 
-// The runtime proxy fetch egresses through Tor whenever the session is the standalone Tor-only
-// runtime or a VPN session carrying the Tor route: lead the IP-info fetch with the Tor Project exit
-// check so a slow/hostile exit can't time the probe out (which used to tear the Tor session down).
 internal fun FoxholeVpnService.activeSessionCarriesTor(): Boolean =
     activeSession?.let { session ->
         session.torActive || session.profileId == FoxholeVpnService.TOR_ONLY_PROFILE_ID

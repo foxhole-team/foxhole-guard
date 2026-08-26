@@ -45,9 +45,10 @@ internal fun CliStatsI2pPanel(
             nowMs = state.statisticsDashboard.nowMs,
         )
     }
+    Spacer(modifier = Modifier.height(CliSpacing.sm))
     CliPanel(
         title = stringResource(R.string.cli_stats_i2p_title),
-        icon = R.drawable.pix_incognito,
+        icon = R.drawable.lin_incognito,
         modifier = Modifier.fillMaxWidth(),
     ) {
         CliKeyValue(
@@ -85,7 +86,6 @@ internal fun CliStatsI2pPanel(
             )
         }
     }
-    Spacer(modifier = Modifier.height(CliSpacing.sm))
 }
 
 @Composable

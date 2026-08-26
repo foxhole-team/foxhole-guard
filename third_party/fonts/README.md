@@ -1,45 +1,34 @@
-# Bundled fonts
+# Bundled UI fonts
 
-Third-party font assets shipped inside the APK at `app/src/main/res/font/` — the
-single fixed pixel style of the CLI UI (see `ui/cli/CliTheme.kt`). All three faces
-are licensed under the SIL Open Font License, Version 1.1
-(https://openfontlicense.org), which permits bundling, subsetting and redistribution
-as long as the copyright and license notice travel with the font. Copyright lines
-below are taken verbatim from the `name` tables of the shipped files.
+All bundled faces are unmodified upstream binaries. Tiny5 provides the same
+Latin and Cyrillic pixel face for headings, top bars, controls and compact dock
+labels. JetBrains Mono provides every body, small, technical and non-heading
+display role.
 
-## lanapixel.ttf
+## Tiny5
 
-- Face: LanaPixel (11px-design pixel font; body/small/button text)
-- Copyright: Copyright (c) 2020, eishiya
-- License: SIL Open Font License 1.1
-- Source: https://opengameart.org/content/lanapixel-localization-friendly-pixel-font
-- Shipped as a subset: Basic Latin, Latin-1 Supplement, Latin Extended-A (partial),
-  Cyrillic, general punctuation, arrows (U+2190–2199). NOTE: the box-drawing /
-  geometric-shape / dingbat ranges (U+2500–25FF, U+2700–27BF) are NOT in this subset —
-  the CLI glyphs ▸ ▾ ● ○ ❯ █ ░ ▒ ─ render via the platform symbol fallback.
+- Face: Tiny5 Regular
+- Upstream: https://github.com/Gissio/font_Tiny5
+- Pinned commit: `cd350d50285f80abb885160e5054353d02397129`
+- Selected font SHA-256: `756261726e160783bfa66723951f12e0e7ca53fa1dfcfbeced760e41093f9702`
+- Copyright: Copyright 2022-2024 The Tiny5 Project Authors.
+- License: SIL Open Font License 1.1; upstream `OFL.txt` is stored as
+  `Tiny5-OFL.txt` (SHA-256
+  `6fe7d64407c69d187748206265977654747d3e2fe9e38e45a62cd03ec4770df6`).
 
-## press_start_2p.ttf
+The full upstream TTF is used without subsetting so English and Russian headings
+always render through one font rather than a script-specific fallback.
 
-- Face: Press Start 2P (arcade caps; fixed-width accents — ASCII art, PIN dots)
-- Copyright: Copyright 2012 The Press Start 2P Project Authors (cody@zone38.net),
-  with Reserved Font Name "Press Start 2P"
-- License: SIL Open Font License 1.1 (embedded in the font's license name table)
-- Source: https://fonts.google.com/specimen/Press+Start+2P
+## JetBrains Mono
 
-## silkscreen_bold.ttf
-
-- Face: Silkscreen Bold (8px-design techno pixel face; display titles — brand
-  «FoxHole Guard», screen headers, panel captions)
-- Copyright: Copyright 2001 The Silkscreen Project Authors
-  (https://github.com/googlefonts/silkscreen)
-- License: SIL Open Font License 1.1 (`OFL.txt` next to this file, vendored verbatim
-  from the upstream repository)
-- Source: https://github.com/googlefonts/silkscreen (fonts/ttf/Silkscreen-Bold.ttf)
-- Latin-only: the Compose FontFamily chains LanaPixel as a per-glyph fallback, so
-  cyrillic display text (ru locale) renders in LanaPixel.
-
-The full, unmodified OFL-1.1 terms are stored once in `OFL.txt`. The copyright and
-Reserved Font Name notices above are the component-specific part of that notice;
-they are also reproduced in the root `THIRD_PARTY_NOTICES.md`. Keeping one copy of
-the identical license body avoids three files drifting while preserving every
-copyright and license notice required for redistribution.
+- Upstream: https://github.com/JetBrains/JetBrainsMono
+- Release: `v2.304`
+- Embedded font version: `2.304`
+- Release asset: `JetBrainsMono-2.304.zip`
+- Release asset SHA-256: `6f6376c6ed2960ea8a963cd7387ec9d76e3f629125bc33d1fdcd7eb7012f7bbf`
+- Selected font SHA-256:
+  - `jetbrains_mono_bold.ttf`: `5590990c82e097397517f275f430af4546e1c45cff408bde4255dad142479dcb`
+- Copyright: Copyright 2020 The JetBrains Mono Project Authors.
+- License: SIL Open Font License 1.1; upstream `OFL.txt` is stored as
+  `JetBrainsMono-OFL.txt` (SHA-256
+  `30f0c136e3c88e422d0791acd97238870f9054a9729bc34cf2ff0d4ed8cac4ad`).

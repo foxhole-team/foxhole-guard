@@ -2,36 +2,33 @@ package com.foxhole.core.runtime
 
 import java.io.File
 
-/** Process identity reduced to the fields needed for private-child teardown. */
 data class RunningProcessInfo(
     val pid: Int,
     val args: List<String>,
 )
 
-/**
- * Last-resort teardown for helper processes owned by this app.
- *
- * A native engine can outlive its graceful close deadline while a managed pluggable transport or
- * I2P helper still holds sockets. The executable and data-directory roots passed here are private
- * to the app UID, so matching both avoids touching unrelated processes.
- */
 class RuntimeChildProcessReaper(
     private val selfPid: Int,
     private val killProcess: (Int) -> Unit,
     private val diagnosticsLogger: RuntimeDiagnosticsSink? = null,
     private val listProcesses: () -> List<RunningProcessInfo> = ::scanProcCmdlines,
 ) {
-    /** Kills every matching child except the current process; returns the number reaped. */
     fun reapOrphans(
         executablePath: String,
         dataDirectoryRoot: String,
+    ): Int = reapOrphans(setOf(executablePath), dataDirectoryRoot)
+
+    fun reapOrphans(
+        executablePaths: Set<String>,
+        dataDirectoryRoot: String,
     ): Int {
+        val normalizedExecutablePaths = executablePaths.filter(String::isNotBlank).toSet()
         val orphans =
             runCatching { listProcesses() }
                 .getOrDefault(emptyList())
                 .filter { process ->
                     process.pid != selfPid &&
-                        matches(process.args, executablePath, dataDirectoryRoot)
+                        matches(process.args, normalizedExecutablePaths, dataDirectoryRoot)
                 }
         orphans.forEach { process -> runCatching { killProcess(process.pid) } }
         if (orphans.isNotEmpty()) {
@@ -48,16 +45,18 @@ class RuntimeChildProcessReaper(
     companion object {
         private val CMDLINE_ARG_SEPARATOR = Char.MIN_VALUE
 
-        /**
-         * Matches either the exact private executable or an argument rooted in the private data
-         * directory. Managed transports inherit that directory even when their executable differs.
-         */
         fun matches(
             args: List<String>,
             executablePath: String,
             dataDirectoryRoot: String,
+        ): Boolean = matches(args, setOf(executablePath), dataDirectoryRoot)
+
+        fun matches(
+            args: List<String>,
+            executablePaths: Set<String>,
+            dataDirectoryRoot: String,
         ): Boolean {
-            if (args.firstOrNull() == executablePath) {
+            if (args.firstOrNull() in executablePaths) {
                 return true
             }
             val normalizedRoot = dataDirectoryRoot.trimEnd('/')
@@ -67,7 +66,6 @@ class RuntimeChildProcessReaper(
                 }
         }
 
-        /** Reads `/proc/<pid>/cmdline` for every visible numeric pid. */
         internal fun scanProcCmdlines(): List<RunningProcessInfo> =
             File("/proc")
                 .listFiles { file -> file.isDirectory && file.name.all(Char::isDigit) }

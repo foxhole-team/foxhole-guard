@@ -1,9 +1,12 @@
 package com.foxhole.core.runtime
 
 import com.foxhole.core.model.VpnSession
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotSame
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
+import org.junit.Assert.assertThrows
 import org.junit.Test
 import java.util.Collections
 import java.util.concurrent.CountDownLatch
@@ -62,6 +65,115 @@ class RuntimeInstanceStoreTest {
         assertEquals(null, store.current())
         assertEquals(NativeRuntimeSnapshot.NONE, store.nativeSnapshot())
         assertEquals(0, createCount.get())
+    }
+
+    @Test
+    fun `stale service destroy cannot detach a runtime claimed by its successor`() {
+        val createCount = AtomicInteger(0)
+        val store = RuntimeInstanceStore { FakeStoreRuntime(createCount.incrementAndGet()) }
+        val oldOwner = store.claimServiceOwner()
+        val runtime = store.get()
+        val replacementOwner = store.claimServiceOwner()
+
+        assertEquals(oldOwner.generation + 1L, replacementOwner.generation)
+        assertEquals(false, store.beginServiceDestroy(oldOwner))
+        assertNull(store.detachCurrentForServiceDestroy(oldOwner))
+        assertSame(runtime, store.current())
+        assertEquals(true, store.beginServiceDestroy(replacementOwner))
+        assertSame(runtime, store.detachCurrentForServiceDestroy(replacementOwner))
+        store.sealServiceDestroy(replacementOwner) {}
+        assertNull(store.current())
+        val successorOwner = store.claimServiceOwner()
+        assertThrows(IllegalStateException::class.java) { store.get() }
+        assertEquals(
+            false,
+            runBlocking {
+                store.prepareServiceOwnerForRuntime(successorOwner, timeoutMs = 1L) {}
+            },
+        )
+        store.completeServiceDestroyRuntime(replacementOwner)
+        var cleanupRan = false
+        assertEquals(
+            true,
+            runBlocking {
+                store.prepareServiceOwnerForRuntime(successorOwner, timeoutMs = 1_000L) {
+                    cleanupRan = true
+                }
+            },
+        )
+        assertEquals(true, cleanupRan)
+        assertNotSame(runtime, store.get())
+        assertEquals(2, createCount.get())
+    }
+
+    @Test
+    fun `orphan cleanup waits for every live and retired runtime then transfers to successor`() {
+        val createCount = AtomicInteger(0)
+        val store = RuntimeInstanceStore { FakeStoreRuntime(createCount.incrementAndGet()) }
+        val owner = store.claimServiceOwner()
+        val retired = store.get()
+        assertSame(retired, store.retireCurrent())
+        val live = store.get()
+        var cleanupCount = 0
+
+        assertEquals(true, store.beginServiceDestroy(owner))
+        assertSame(live, store.detachCurrentForServiceDestroy(owner))
+        assertSame(retired, store.takeRetiredForServiceDestroy(owner))
+        store.sealServiceDestroy(owner) { cleanupCount += 1 }
+
+        store.completeServiceDestroyRuntime(owner)
+        assertEquals(0, cleanupCount)
+        assertThrows(IllegalStateException::class.java) { store.get() }
+
+        val successorOwner = store.claimServiceOwner()
+        store.completeServiceDestroyRuntime(owner)
+        assertEquals(0, cleanupCount)
+        assertEquals(
+            true,
+            runBlocking {
+                store.prepareServiceOwnerForRuntime(successorOwner, timeoutMs = 1_000L) {
+                    cleanupCount += 1
+                }
+            },
+        )
+        assertEquals(1, cleanupCount)
+        assertNotSame(live, store.get())
+    }
+
+    @Test
+    fun `destroying a waiting successor preserves the predecessor drain for the next owner`() {
+        val store = RuntimeInstanceStore { FakeStoreRuntime(1) }
+        val firstOwner = store.claimServiceOwner()
+        store.get()
+        var cleanupCount = 0
+        assertEquals(true, store.beginServiceDestroy(firstOwner))
+        assertEquals(true, store.detachCurrentForServiceDestroy(firstOwner) != null)
+        store.sealServiceDestroy(firstOwner) { cleanupCount += 1 }
+
+        val waitingOwner = store.claimServiceOwner()
+        assertEquals(true, store.beginServiceDestroy(waitingOwner))
+        store.sealServiceDestroy(waitingOwner) { cleanupCount += 1 }
+        val finalOwner = store.claimServiceOwner()
+
+        assertEquals(
+            false,
+            runBlocking {
+                store.prepareServiceOwnerForRuntime(finalOwner, timeoutMs = 1L) {
+                    cleanupCount += 1
+                }
+            },
+        )
+        store.completeServiceDestroyRuntime(firstOwner)
+        assertEquals(0, cleanupCount)
+        assertEquals(
+            true,
+            runBlocking {
+                store.prepareServiceOwnerForRuntime(finalOwner, timeoutMs = 1_000L) {
+                    cleanupCount += 1
+                }
+            },
+        )
+        assertEquals(1, cleanupCount)
     }
 
     private companion object {

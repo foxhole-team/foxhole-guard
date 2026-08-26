@@ -5,7 +5,6 @@ internal fun RuntimeConnectionSnapshot.toTrafficMapConnectionSamples(
     maxConnections: Int,
     countryCodeForDestination: (String) -> String?,
     ownPackageName: String? = null,
-    dnsServerHost: () -> String? = { null },
     includeDirectOutbound: () -> Boolean = { false },
 ): List<TrafficMapConnectionSample> {
     val samples = mutableListOf<TrafficMapConnectionSample>()
@@ -15,7 +14,7 @@ internal fun RuntimeConnectionSnapshot.toTrafficMapConnectionSamples(
         .forEach { connection ->
             if (connection.outboundType.equals(DNS_OUTBOUND_TYPE, ignoreCase = true)) {
                 connection
-                    .toTrafficMapDnsSample(countryCodeForDestination, dnsServerHost)
+                    .toTrafficMapDnsSample(countryCodeForDestination)
                     ?.let(samples::add)
             } else if (ownPackageName != null && connection.packageNames.contains(ownPackageName)) {
                 return@forEach
@@ -30,11 +29,10 @@ internal fun RuntimeConnectionSnapshot.toTrafficMapConnectionSamples(
 
 private fun RuntimeConnectionRecord.toTrafficMapDnsSample(
     countryCodeForDestination: (String) -> String?,
-    dnsServerHost: () -> String?,
 ): TrafficMapConnectionSample? {
     val destinationHost = destination.orEmpty().toRuntimeEndpoint().host
     val countryCode =
-        sequenceOf(destinationHost, dnsServerHost().orEmpty())
+        sequenceOf(destinationHost)
             .map(String::trim)
             .filter(String::isNotEmpty)
             .firstNotNullOfOrNull { candidate ->
@@ -44,6 +42,7 @@ private fun RuntimeConnectionRecord.toTrafficMapDnsSample(
             }
             ?: return null
     val bytes = maxOf(0L, bytesTx) + maxOf(0L, bytesRx)
+    if (bytes <= 0L) return null
     return TrafficMapConnectionSample(
         connectionId = connectionId,
         countryCode = countryCode,

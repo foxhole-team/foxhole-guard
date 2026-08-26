@@ -1,4 +1,5 @@
 package com.foxhole.guard.ui
+
 import android.app.Application
 import androidx.lifecycle.viewModelScope
 import com.foxhole.core.model.ACTIVE_CONNECTION_STATES
@@ -14,9 +15,10 @@ import com.foxhole.core.model.isUdpTransport
 import com.foxhole.core.model.torScopeRunnable
 import com.foxhole.guard.R
 import com.foxhole.guard.core.settings.activeRoutingModePreset
-import com.foxhole.guard.core.settings.updatePrivacyRouteBypassVpnTunnel
 import com.foxhole.guard.core.settings.updatePrivacyRouteMode
+import com.foxhole.guard.core.settings.updatePrivacyRouteModeAndBypassVpnTunnel
 import com.foxhole.guard.runtime.FoxholeVpnService
+import com.foxhole.guard.runtime.runCatchingUnlessCancelled
 import com.foxhole.guard.userFacingErrorMessage
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -110,9 +112,20 @@ private fun HomeViewModel.refusesTorEnable(
 
 internal fun HomeViewModel.confirmStartTorBesideUdpVpn() {
     torTransitionPromptMutable.value = null
-    viewModelScope.launch {
-        container.settingsRepository.updatePrivacyRouteBypassVpnTunnel(true)
-        onPrivacyRouteModeSelected(PrivacyRouteMode.TOR_OVER_VPN)
+    val settings = container.settingsRepository.settings.value
+    val besideVpnSettings =
+        settings.copy(
+            privacyRoute = settings.privacyRoute.copy(bypassVpnTunnel = true),
+        )
+    if (refusesTorEnable(container.connectionController.snapshot.value, besideVpnSettings)) {
+        return
+    }
+    markTorOperation(HomeTorOperationKind.CONNECTING)
+    updateRuntimeSettingAndMaybeReload(forceRuntimeApply = true) {
+        container.settingsRepository.updatePrivacyRouteModeAndBypassVpnTunnel(
+            mode = PrivacyRouteMode.TOR_OVER_VPN,
+            bypassVpnTunnel = true,
+        )
     }
 }
 
@@ -137,37 +150,93 @@ internal fun HomeViewModel.onEnableDirectTorQuickStart() {
     torIpInfoMutable.value = null
     markTorOperation(HomeTorOperationKind.CONNECTING)
     val snapshot = container.connectionController.snapshot.value
+    if (isTorOnlyRuntimeActive(snapshot)) {
+        clearTorOperation()
+        return
+    }
     if (snapshot.isActivePrimaryVpnProfileRuntime()) {
         if (privacyRoute.scope == PrivacyRouteScope.ALL_APPS) {
             clearTorOperation()
             snackbars.tryEmit(errorBanner(R.string.privacy_route_all_apps_requires_no_vpn))
             return
         }
-        updateRuntimeSettingAndMaybeReload {
+        updateRuntimeSettingAndMaybeReload(forceRuntimeApply = true) {
             container.diagnosticsLogger.record("tor", "tor quick start hot-reload active vpn runtime")
             container.settingsRepository.updatePrivacyRouteMode(PrivacyRouteMode.TOR_OVER_VPN)
         }
         return
     }
-    viewModelScope.launch {
-        runCatching {
-            container.diagnosticsLogger.record("tor", "tor quick start standalone tor-only runtime")
-            container.settingsRepository.updatePrivacyRouteMode(PrivacyRouteMode.TOR_OVER_VPN)
-            if (privacyRoute.scope == PrivacyRouteScope.ALL_APPS) {
-                snackbars.tryEmit(infoBanner(R.string.privacy_route_all_apps_start_warning))
-            }
-            check(container.settingsRepository.current().privacyRoute.enabled) { "TOR route is disabled" }
-            requestManualConnectPermissionOrConnect(FoxholeVpnService.TOR_ONLY_PROFILE_ID)
-        }.onFailure { error ->
-            clearTorOperation()
-            emitError(
-                getApplication<Application>().userFacingErrorMessage(
-                    error,
-                    R.string.error_runtime_stopped,
+    if (android.net.VpnService.prepare(getApplication<Application>()) != null) {
+        val accepted =
+            enqueueVpnPermissionRequest(
+                PendingConnectRequest(
+                    profileId = FoxholeVpnService.TOR_ONLY_PROFILE_ID,
+                    action = PendingConnectAction.TOR_ONLY_QUICK_START,
                 ),
             )
+        if (!accepted) {
+            clearTorOperation()
+        }
+        return
+    }
+    startStandaloneTorRuntime(privacyRoute.scope == PrivacyRouteScope.ALL_APPS) {
+        container.diagnosticsLogger.record("tor", "tor quick start standalone tor-only runtime")
+        container.settingsRepository.updatePrivacyRouteMode(PrivacyRouteMode.TOR_OVER_VPN)
+    }
+}
+
+internal fun HomeViewModel.startStandaloneTorRuntime(
+    warnWholeDevice: Boolean,
+    persistIntent: suspend () -> Unit,
+) {
+    val ticket = runtimeSettingUpdates.reserve()
+    viewModelScope.launch {
+        try {
+            ticket.awaitTurn()
+            if (isTorOnlyRuntimeActive(container.connectionController.snapshot.value)) {
+                clearTorOperation()
+                return@launch
+            }
+            runCatchingUnlessCancelled {
+                runFailClosedRuntimeStart(
+                    updateAction = persistIntent,
+                    startAction = {
+                        if (warnWholeDevice) {
+                            snackbars.tryEmit(infoBanner(R.string.privacy_route_all_apps_start_warning))
+                        }
+                        check(container.settingsRepository.current().privacyRoute.enabled) { "TOR route is disabled" }
+                        connectNow(FoxholeVpnService.TOR_ONLY_PROFILE_ID)
+                    },
+                    rollbackAction = {
+                        try {
+                            container.settingsRepository.updatePrivacyRouteMode(PrivacyRouteMode.OFF)
+                        } finally {
+                            container.connectionController.disconnectTorOnly(userInitiated = false)
+                        }
+                    },
+                )
+            }.onFailure { error ->
+                clearTorOperation()
+                emitError(
+                    getApplication<Application>().userFacingErrorMessage(
+                        error,
+                        R.string.error_runtime_stopped,
+                    ),
+                )
+            }
+        } finally {
+            ticket.complete()
         }
     }
+}
+
+internal fun HomeViewModel.cancelPendingTorQuickStartPermissionRequest() {
+    if (pendingConnectRequest?.action != PendingConnectAction.TOR_ONLY_QUICK_START) {
+        return
+    }
+    pendingConnectRequest = null
+    clearTorOperation()
+    container.diagnosticsLogger.record("tor", "pending TOR quick start cancelled")
 }
 
 private fun ConnectionSnapshot.isActivePrimaryVpnProfileRuntime(): Boolean =
@@ -283,31 +352,49 @@ internal fun HomeViewModel.clearProtocolSwitchRevert() {
 internal fun HomeViewModel.confirmDisableTorForUdpProtocol(
     prompt: TorTransitionPrompt.DisableTorForUdpProtocol,
 ) {
+    val ticket = runtimeSettingUpdates.reserve()
     viewModelScope.launch {
-        torTransitionPromptMutable.value = null
-        container.settingsRepository.updatePrivacyRouteMode(PrivacyRouteMode.OFF)
-        clearTorOperation()
-        torIpInfoMutable.value = null
-        val selected =
-            runCatching {
-                container.profileRepository.selectProfileProtocolOption(
-                    profileId = prompt.profileId,
-                    optionId = prompt.protocolOptionId,
-                )
-            }.onFailure { error ->
-                emitError(
-                    getApplication<Application>().userFacingErrorMessage(
-                        error,
-                        R.string.profile_update_failed,
-                    ),
-                )
+        try {
+            ticket.awaitTurn()
+            torTransitionPromptMutable.value = null
+            clearTorOperation()
+            torIpInfoMutable.value = null
+            val snapshotBeforeUpdate = container.connectionController.snapshot.value
+            val selected =
+                runCatchingUnlessCancelled {
+                    runAuthoritativeRuntimeSettingUpdateThen(
+                        updateAction = {
+                            container.settingsRepository.updatePrivacyRouteMode(PrivacyRouteMode.OFF)
+                        },
+                        applyAction = {
+                            forceApplyTorRuntimeSetting(
+                                forceStopStandaloneTor = isTorOnlyRuntimeActive(snapshotBeforeUpdate),
+                            )
+                        },
+                        followUpAction = {
+                            container.profileRepository.selectProfileProtocolOption(
+                                profileId = prompt.profileId,
+                                optionId = prompt.protocolOptionId,
+                            )
+                        },
+                    )
+                }.onFailure { error ->
+                    emitError(
+                        getApplication<Application>().userFacingErrorMessage(
+                            error,
+                            R.string.profile_update_failed,
+                        ),
+                    )
+                }
+            if (selected.isFailure) {
+                return@launch
             }
-        if (selected.isFailure) {
-            return@launch
-        }
-        val snapshot = container.connectionController.snapshot.value
-        if (snapshot.state in ACTIVE_CONNECTION_STATES && snapshot.profileId == prompt.profileId) {
-            requestReconnect(prompt.profileId)
+            val snapshot = container.connectionController.snapshot.value
+            if (snapshot.state in ACTIVE_CONNECTION_STATES && snapshot.profileId == prompt.profileId) {
+                requestReconnect(prompt.profileId)
+            }
+        } finally {
+            ticket.complete()
         }
     }
 }
@@ -315,24 +402,73 @@ internal fun HomeViewModel.confirmDisableTorForUdpProtocol(
 internal fun HomeViewModel.confirmMoveTorIntoVpn(
     prompt: TorTransitionPrompt.StartTcpVpnWhileTorOnlyActive,
 ) {
-    viewModelScope.launch {
-        torTransitionPromptMutable.value = null
-        container.settingsRepository.updatePrivacyRouteMode(PrivacyRouteMode.TOR_OVER_VPN)
-        container.settingsRepository.updatePrivacyRouteBypassVpnTunnel(false)
-        requestManualConnectPermissionOrConnect(prompt.profileId, prompt.protocolOptionId)
-    }
+    transitionTorOnlyToVpn(prompt, bypassVpnTunnel = false)
 }
 
 internal fun HomeViewModel.confirmKeepTorOnDeviceAndStartVpn(
     prompt: TorTransitionPrompt.StartTcpVpnWhileTorOnlyActive,
 ) {
+    transitionTorOnlyToVpn(prompt, bypassVpnTunnel = true)
+}
+
+private fun HomeViewModel.transitionTorOnlyToVpn(
+    prompt: TorTransitionPrompt.StartTcpVpnWhileTorOnlyActive,
+    bypassVpnTunnel: Boolean,
+) {
+    val ticket = runtimeSettingUpdates.reserve()
     viewModelScope.launch {
-        torTransitionPromptMutable.value = null
-        container.settingsRepository.updatePrivacyRouteMode(PrivacyRouteMode.TOR_OVER_VPN)
-        container.settingsRepository.updatePrivacyRouteBypassVpnTunnel(true)
-        requestManualConnectPermissionOrConnect(prompt.profileId, prompt.protocolOptionId)
+        try {
+            ticket.awaitTurn()
+            torTransitionPromptMutable.value = null
+            if (!isTorOnlyRuntimeActive(container.connectionController.snapshot.value)) {
+                container.diagnosticsLogger.record("tor", "ignored stale TOR-only placement confirmation")
+                return@launch
+            }
+            torOnlyToVpnPlacementBlockReason(
+                settings = container.settingsRepository.settings.value,
+                bypassVpnTunnel = bypassVpnTunnel,
+            )?.let { messageResource ->
+                snackbars.tryEmit(errorBanner(messageResource))
+                return@launch
+            }
+            runAuthoritativeRuntimeSettingUpdate(
+                updateAction = {
+                    container.settingsRepository.updatePrivacyRouteModeAndBypassVpnTunnel(
+                        mode = PrivacyRouteMode.TOR_OVER_VPN,
+                        bypassVpnTunnel = bypassVpnTunnel,
+                    )
+                },
+                applyAction = {
+                    container.connectionController.disconnectTorOnly(userInitiated = false)
+                    true
+                },
+            )
+            if (awaitConfirmedModeHandoffIdle()) {
+                requestManualConnectPermissionOrConnect(prompt.profileId, prompt.protocolOptionId)
+            }
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            throw cancelled
+        } catch (error: Exception) {
+            emitError(runtimeConnectionFailureMessage(error))
+        } finally {
+            ticket.complete()
+        }
     }
 }
+
+internal fun torOnlyToVpnPlacementBlockReason(
+    settings: Settings,
+    bypassVpnTunnel: Boolean,
+): Int? =
+    when {
+        !settings.privacyRoute.permitted -> R.string.privacy_route_core_forbidden
+        !settings.torScopeRunnable() -> R.string.privacy_route_select_apps_first
+        bypassVpnTunnel && settings.privacyRoute.scope == PrivacyRouteScope.ALL_APPS ->
+            R.string.privacy_route_all_apps_requires_no_vpn
+        !bypassVpnTunnel && privacyRouteModeCollidesWithVpnIncludeSplit(settings, PrivacyRouteMode.TOR_OVER_VPN) ->
+            R.string.error_tor_all_apps_needs_full_tunnel
+        else -> null
+    }
 
 internal fun HomeViewModel.dismissTorTransitionPrompt() {
     liveModeSwitchCountdownJob?.cancel()
@@ -351,21 +487,21 @@ internal fun HomeViewModel.onConnectModeSwitchRequested(
     scope: PrivacyRouteScope,
 ): ConnectModeSwitchRequestResult {
     val snapshot = container.connectionController.snapshot.value
-    if (!routingModePresetSelectable(target, scope)) {
-        return ConnectModeSwitchRequestResult.REJECTED
-    }
-    if (!snapshot.isPrimaryConnectionRuntime()) {
-        return requestOrApplyOperatingModeChange(target, scope)
-    }
-    if (
-        target == com.foxhole.core.model.RoutingModePreset.VPN_TOR &&
-        shouldBlockTorOverUdpVpnEnable(bypassVpnTunnel = false)
-    ) {
-        refuseUdpVpnTorModeSwitch(snapshot)
-        return ConnectModeSwitchRequestResult.REJECTED
-    }
+    if (!routingModePresetSelectable(target, scope)) return ConnectModeSwitchRequestResult.REJECTED
     val current = container.settingsRepository.settings.value.activeRoutingModePreset()
-    return requestOrApplyLiveOperatingModeChange(current, target, scope)
+    return when {
+        !snapshot.isPrimaryConnectionRuntime() -> requestOrApplyOperatingModeChange(target, scope)
+        target == com.foxhole.core.model.RoutingModePreset.VPN_TOR &&
+            shouldBlockTorOverUdpVpnEnable(bypassVpnTunnel = false) -> {
+            refuseUdpVpnTorModeSwitch(snapshot)
+            ConnectModeSwitchRequestResult.REJECTED
+        }
+        shouldOfferVpnTorModeChoice(target, snapshot) -> {
+            startVpnTorModeChoicePrompt(checkNotNull(snapshot.appliedVpnTorRouteOrNull()).scope)
+            ConnectModeSwitchRequestResult.DEFERRED
+        }
+        else -> requestOrApplyLiveOperatingModeChange(current, target, scope)
+    }
 }
 
 private fun HomeViewModel.refuseUdpVpnTorModeSwitch(snapshot: ConnectionSnapshot) {
@@ -375,6 +511,12 @@ private fun HomeViewModel.refuseUdpVpnTorModeSwitch(snapshot: ConnectionSnapshot
             ?.displayName
     torTransitionPromptMutable.value =
         TorTransitionPrompt.UdpVpnProtocolNotSupported(protocolName = protocolName)
+}
+
+private fun HomeViewModel.startVpnTorModeChoicePrompt(scope: PrivacyRouteScope) {
+    dismissPendingRoutingScenario()
+    dismissTorTransitionPrompt()
+    torTransitionPromptMutable.value = TorTransitionPrompt.VpnTorModeChoice(scope = scope)
 }
 
 private fun HomeViewModel.requestOrApplyLiveOperatingModeChange(
@@ -525,17 +667,20 @@ private fun HomeViewModel.applyConfirmedConnectModeSwitch(
     }
 }
 
-private suspend fun HomeViewModel.awaitConfirmedModeHandoffIdle(): Boolean {
+internal suspend fun HomeViewModel.awaitConfirmedModeHandoffIdle(): Boolean {
     val terminalState =
         withTimeoutOrNull(HomeViewModel.STOP_VPN_KEEP_TOR_SETTLE_TIMEOUT_MS) {
             container.connectionController.snapshot.first { snapshot ->
-                snapshot.state == ConnectionState.IDLE || snapshot.state == ConnectionState.ERROR
+                snapshot.state.isModeHandoffTerminal()
             }
         }
-    if (terminalState?.state == ConnectionState.IDLE) return true
+    if (terminalState != null) return true
     emitError(getApplication<Application>().getString(R.string.error_runtime_stopped))
     return false
 }
+
+internal fun ConnectionState.isModeHandoffTerminal(): Boolean =
+    this == ConnectionState.IDLE || this == ConnectionState.ERROR
 
 internal fun HomeViewModel.maybePromptStartTcpVpnWhileTorOnlyActive(
     profile: Profile,

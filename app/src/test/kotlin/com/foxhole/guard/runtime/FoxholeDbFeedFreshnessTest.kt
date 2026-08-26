@@ -16,6 +16,22 @@ class FoxholeDbFeedFreshnessTest {
     private val now: Instant = Instant.parse("2026-08-17T12:00:00Z")
 
     @Test
+    fun `configured manifest urls are treated as the shared feed base`() {
+        assertEquals(
+            "https://mirror.example.org/foxhole-db/manifest.json",
+            foxholeDbManifestUrl("https://mirror.example.org/foxhole-db/manifest.json"),
+        )
+        assertEquals(
+            "https://mirror.example.org/foxhole-db/bridges-manifest.json",
+            foxholeDbBridgesManifestUrl("https://mirror.example.org/foxhole-db/manifest.json"),
+        )
+        assertEquals(
+            "https://mirror.example.org/foxhole-db/manifest.json",
+            foxholeDbManifestUrl("https://mirror.example.org/foxhole-db/manifest.json/"),
+        )
+    }
+
+    @Test
     fun `a manifest inside the age bound is accepted and one past it is not`() {
         val fresh = now.minusSeconds(FOXHOLE_DB_MAX_MANIFEST_AGE_SECONDS - 1)
         assertEquals(fresh, requireFreshFoxholeDbManifest(fresh.toString(), "geoip", now))

@@ -12,19 +12,6 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 
-/**
- * The device-local proxy: the scenario where the VPN serves this phone instead of capturing it.
- *
- * Everything here mirrors the LAN surface deliberately — a request the app computes, a controller
- * that applies it to the live session, and a status document read back from the core — because the
- * two answer the same question in different places, and one of them has already been through this.
- * What differs is what the core allows: this listener binds `127.0.0.1`, speaks HTTP CONNECT only,
- * and may be raised without credentials, which the LAN one may never be.
- *
- * The name is fixed rather than user-supplied. Named inbounds exist so several web apps can each
- * have their own; the scenario here is the single proxy the owner points other apps at, and giving
- * it a stable name is what lets the status document be found again after a restart.
- */
 const val LOCAL_PROXY_INBOUND_NAME = "device-local"
 
 /** What the app asks for. Absent credentials mean an anonymous listener — allowed on loopback. */
@@ -34,14 +21,6 @@ data class LocalProxyRequest(
     val password: String?,
     val upstream: LocalProxyUpstream,
 ) {
-    /**
-     * The document the core parses. `http_port` 0 asks for an ephemeral port, and that is the
-     * recommended form: a phone has no port registry, so a fixed number is a coin flip against
-     * every other app on the device.
-     *
-     * Credentials are written as a pair or not at all — half a credential is a refusal in the core,
-     * and building one here would turn an abandoned form into an error the user cannot read.
-     */
     fun toConfigJson(): String = toConfigJson(LOCAL_PROXY_INBOUND_NAME)
 
     internal fun toConfigJson(inboundName: String): String {
@@ -64,14 +43,6 @@ data class LocalProxyRequest(
     }
 }
 
-/**
- * Reads the core's account of its named inbounds and answers for ours alone.
- *
- * A document that cannot be parsed is not an error state: the engine may simply be stopped, and the
- * caller already distinguishes "no session" from "refused". What must never happen is inventing an
- * address — the port may have been ephemeral, and a guessed one sends the owner's other app at
- * whatever else is listening.
- */
 internal fun parseLocalProxyStatusJson(
     raw: String,
     now: Long,
@@ -85,9 +56,7 @@ internal fun parseLocalProxyStatusJson(
         .firstOrNull { entry -> entry.text("name") == inboundName }
         ?: return LocalProxyStatusSnapshot(phase = LocalProxyPhase.OFF, updatedAt = now)
     val address = ours.text("http_address")
-    // FoxCore serializes `LanProxyState::Ready` as `ready` for both LAN and named loopback
-    // inbounds. Keep this parser on that public wire vocabulary: accepting an invented
-    // `listening` value left a successfully bound Tor identity probe permanently in ARMING.
+
     val serving = ours.text("state").equals("ready", ignoreCase = true) && address != null
     return LocalProxyStatusSnapshot(
         phase = if (serving) LocalProxyPhase.SERVING else LocalProxyPhase.ARMING,
@@ -97,13 +66,6 @@ internal fun parseLocalProxyStatusJson(
     )
 }
 
-/**
- * Owns the device-local proxy across a session.
- *
- * Remembers what it applied so an unchanged request does not re-bind the listener on every settings
- * write, and reads the state back from the core rather than assuming its own call worked — a start
- * that returned OK still has to say which port it got.
- */
 internal class LocalProxyController(
     private val native: FoxCoreNativeApi,
     private val inboundName: String = LOCAL_PROXY_INBOUND_NAME,
@@ -117,12 +79,6 @@ internal class LocalProxyController(
 
     fun status(): LocalProxyStatusSnapshot = lastStatus
 
-    /**
-     * Brings the listener in line with [request]; a null request takes it down.
-     *
-     * A null [handle] is not a failure either: the switch is on and there is no session yet, which
-     * is exactly what ARMING means and what the screen must show instead of a port.
-     */
     fun sync(
         handle: Long?,
         request: LocalProxyRequest?,
@@ -142,8 +98,6 @@ internal class LocalProxyController(
             )
         }
         if (applied != request) {
-            // Stop first: the core refuses a second inbound under a name it already holds, and a
-            // silent AlreadyExists would leave the previous port serving the previous upstream.
             stopIfApplied(handle)
             val code = native.startLoopbackInbound(handle, request.toConfigJson(inboundName))
             if (code != RESULT_OK) {

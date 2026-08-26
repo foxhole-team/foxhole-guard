@@ -88,7 +88,7 @@ internal fun CliWebAppsScreen(
     CliGlassHeaderScreen(
         modifier = modifier,
         header = {
-            CliScreenHeader(label = stringResource(R.string.cli_dock_webapps), icon = R.drawable.pix_webapps)
+            CliScreenHeader(label = stringResource(R.string.cli_dock_webapps), icon = R.drawable.lin_webapps)
         },
     ) { topInset ->
         Column(
@@ -257,10 +257,16 @@ private fun CliWebAppActionsSheet(
     var renameOpen by rememberSaveable(app.id) { mutableStateOf(false) }
     var renameValue by rememberSaveable(app.id) { mutableStateOf(app.name) }
     var clearAllConsentOpen by rememberSaveable(app.id) { mutableStateOf(false) }
+    val dismissSheet: () -> Unit =
+        if (clearAllConsentOpen) {
+            { clearAllConsentOpen = false }
+        } else {
+            onDone
+        }
     CliBottomSheet(
-        onDismiss = onDone,
+        onDismiss = dismissSheet,
         title = app.name,
-        icon = R.drawable.pix_webapps,
+        icon = R.drawable.lin_webapps,
     ) {
         CliDropdownRow(
             label = stringResource(R.string.cli_home_status_route),
@@ -280,7 +286,6 @@ private fun CliWebAppActionsSheet(
                 color = colors.warn,
             )
             CliSheetActionsRow(
-                onCancel = { clearAllConsentOpen = false },
                 actions = listOf(
                     CliSheetAction(
                         label = stringResource(R.string.cli_webapps_clear_all_yes),
@@ -289,6 +294,7 @@ private fun CliWebAppActionsSheet(
                             viewModel.clearAllWebAppsData()
                             onDone()
                         },
+                        dismissAfterClick = true,
                     ),
                 ),
             )
@@ -336,11 +342,6 @@ private fun CliWebAppActionsSheet(
                         onDone()
                     },
                 )
-                CliChip(
-                    label = stringResource(R.string.cli_common_no_cancel),
-                    color = colors.err,
-                    onClick = onDone,
-                )
             }
         }
     }
@@ -364,7 +365,7 @@ private fun CliWebAppAddPanel(
     var url by rememberSaveable { mutableStateOf("") }
     CliPanel(
         title = stringResource(R.string.cli_webapps_add),
-        icon = R.drawable.pix_webapps,
+        icon = R.drawable.lin_webapps,
         modifier = Modifier.fillMaxWidth(),
     ) {
         when (addState) {

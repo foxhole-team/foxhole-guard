@@ -7,6 +7,13 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class TorBridgeTorrcLinesTest {
+    private val snowflakeIdentity = "2B280B23E1107BB62ABFC40DDCC8824814F80A72"
+    private val bundledSnowflakeBridge =
+        "snowflake 192.0.2.3:80 $snowflakeIdentity " +
+            "fingerprint=$snowflakeIdentity url=https://x"
+    private val downloadedSnowflakeBridge =
+        "snowflake 10.0.0.1:443 0123456789ABCDEF0123456789ABCDEF01234567 " +
+            "fingerprint=z url=https://x"
     private val transportLines =
         listOf(
             "ClientTransportPlugin meek_lite,obfs2,obfs3,obfs4,scramblesuit,webtunnel exec /lib/liblyrebird.so",
@@ -20,8 +27,8 @@ class TorBridgeTorrcLinesTest {
           "recommendedDefault": "obfs4",
           "bridges": {
             "meek": ["meek_lite 192.0.2.20:80 url=https://cdn front=x utls=HelloRandomizedALPN"],
-            "obfs4": ["obfs4 37.218.245.14:38224 D9A82D2F cert=abc iat-mode=0"],
-            "snowflake": ["snowflake 192.0.2.3:80 2B280B23 fingerprint=2B280B23 url=https://x"]
+            "obfs4": ["obfs4 37.218.245.14:38224 D9A82D2F9C2F65A18407B1D2B764F130847F8B5D cert=abc iat-mode=0"],
+            "snowflake": ["$bundledSnowflakeBridge"]
           }
         }
         """.trimIndent()
@@ -39,7 +46,7 @@ class TorBridgeTorrcLinesTest {
     }
 
     @Test
-    fun `auto orders the recommended group first and enables bridges`() {
+    fun `legacy auto resolves to snowflake only`() {
         val lines =
             buildBridgeTorrcLines(
                 policy = TorBridgePolicy(transport = TorBridgeTransport.AUTO),
@@ -49,9 +56,8 @@ class TorBridgeTorrcLinesTest {
             )
         assertEquals("UseBridges 1", lines.first())
         val bridges = lines.drop(1)
-        assertTrue(bridges.first().startsWith("Bridge obfs4 "))
-        assertTrue(bridges.any { it.startsWith("Bridge meek_lite ") })
-        assertTrue(bridges.any { it.startsWith("Bridge snowflake ") })
+        assertTrue(bridges.isNotEmpty())
+        assertTrue(bridges.all { it.startsWith("Bridge snowflake ") })
     }
 
     @Test
@@ -69,8 +75,7 @@ class TorBridgeTorrcLinesTest {
     }
 
     @Test
-    fun `transport with no ready bridges falls back to the auto set`() {
-        // No webtunnel bridge line exists in the source, so WEBTUNNEL must not leave Tor bridge-less.
+    fun `transport missing from both sources fails closed`() {
         val lines =
             buildBridgeTorrcLines(
                 policy = TorBridgePolicy(transport = TorBridgeTransport.WEBTUNNEL),
@@ -78,13 +83,11 @@ class TorBridgeTorrcLinesTest {
                 downloadedGroupsJson = null,
                 bundledPtConfigJson = bundled,
             )
-        assertEquals("UseBridges 1", lines.first())
-        assertTrue(lines.drop(1).any { it.startsWith("Bridge obfs4 ") })
+        assertTrue(lines.isEmpty())
     }
 
     @Test
     fun `lines whose transport plugin is absent are dropped`() {
-        // Only snowflake plugin present: obfs4/meek lines must be filtered out.
         val lines =
             buildBridgeTorrcLines(
                 policy = TorBridgePolicy(transport = TorBridgeTransport.AUTO),
@@ -96,9 +99,9 @@ class TorBridgeTorrcLinesTest {
     }
 
     @Test
-    fun `downloaded bare-groups payload takes precedence over the bundle`() {
+    fun `downloaded selected group takes precedence over the bundle`() {
         val downloaded =
-            """{"obfs4":["obfs4 10.0.0.1:443 AAAA cert=z iat-mode=0"]}"""
+            """{"snowflake":["$downloadedSnowflakeBridge"]}"""
         val lines =
             buildBridgeTorrcLines(
                 policy = TorBridgePolicy(transport = TorBridgeTransport.AUTO),
@@ -106,7 +109,47 @@ class TorBridgeTorrcLinesTest {
                 downloadedGroupsJson = downloaded,
                 bundledPtConfigJson = bundled,
             )
-        assertEquals(listOf("UseBridges 1", "Bridge obfs4 10.0.0.1:443 AAAA cert=z iat-mode=0"), lines)
+        assertEquals(
+            listOf(
+                "UseBridges 1",
+                "Bridge $downloadedSnowflakeBridge",
+            ),
+            lines,
+        )
+    }
+
+    @Test
+    fun `downloaded source missing selected transport falls back to the same bundled transport`() {
+        val downloaded =
+            """{"snowflake":["$downloadedSnowflakeBridge"]}"""
+        val lines =
+            buildBridgeTorrcLines(
+                policy = TorBridgePolicy(transport = TorBridgeTransport.OBFS4),
+                transportLines = transportLines,
+                downloadedGroupsJson = downloaded,
+                bundledPtConfigJson = bundled,
+            )
+
+        assertEquals("UseBridges 1", lines.first())
+        assertTrue(lines.drop(1).isNotEmpty())
+        assertTrue(lines.drop(1).all { it.startsWith("Bridge obfs4 ") })
+    }
+
+    @Test
+    fun `invalid downloaded selected group falls back to the same bundled transport`() {
+        val downloaded =
+            """{"snowflake":["snowflake 10.0.0.1:443 identity-missing fingerprint=z url=https://x"]}"""
+        val lines =
+            buildBridgeTorrcLines(
+                policy = TorBridgePolicy(transport = TorBridgeTransport.SNOWFLAKE),
+                transportLines = transportLines,
+                downloadedGroupsJson = downloaded,
+                bundledPtConfigJson = bundled,
+            )
+
+        assertEquals("UseBridges 1", lines.first())
+        assertTrue(lines.drop(1).isNotEmpty())
+        assertTrue(lines.drop(1).all { it.startsWith("Bridge snowflake 192.0.2.3:80 ") })
     }
 
     @Test
@@ -118,7 +161,8 @@ class TorBridgeTorrcLinesTest {
                 downloadedGroupsJson = "not json {",
                 bundledPtConfigJson = bundled,
             )
-        assertTrue(lines.drop(1).any { it.startsWith("Bridge obfs4 ") })
+        assertTrue(lines.drop(1).isNotEmpty())
+        assertTrue(lines.drop(1).all { it.startsWith("Bridge snowflake ") })
     }
 
     @Test

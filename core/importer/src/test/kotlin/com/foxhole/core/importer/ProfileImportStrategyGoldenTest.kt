@@ -153,8 +153,6 @@ class ProfileImportStrategyGoldenTest {
 
     @Test
     fun `huge subscription-style node payload keeps direct node strategy`() {
-        // Distinct servers per line — identity de-dup collapses genuinely identical outbounds, so a
-        // realistic large subscription must vary the host, not just the #name.
         val payload =
             (1..128)
                 .joinToString(separator = "\n") { index ->
@@ -259,7 +257,6 @@ class ProfileImportStrategyGoldenTest {
     }
 }
 
-// Enumeration mirrors for the golden sweep; only this test iterates the full strategy set.
 private fun orderedUserInputStrategyIds(): List<ProfileImportStrategyId> =
     listOf(
         ProfileImportStrategyId.SUBSCRIPTION_URL,

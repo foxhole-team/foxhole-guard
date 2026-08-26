@@ -13,13 +13,16 @@ import java.io.File
 class CliGlassChromeContractTest {
 
     @Test
-    fun `standard and dark glass chrome stay black`() {
+    fun `glass chrome follows semantic panels except for legacy true black`() {
         val panel = Color(0xFF334455)
 
-        assertEquals(Color.Black, cliGlassFallbackColor(PanelAppearance.STANDARD, panel))
+        assertEquals(panel, cliGlassFallbackColor(PanelAppearance.AUTO, panel))
+        assertEquals(panel, cliGlassFallbackColor(PanelAppearance.STANDARD, panel))
         assertEquals(panel, cliGlassFallbackColor(PanelAppearance.LIGHT, panel))
         assertEquals(Color.Black, cliGlassFallbackColor(PanelAppearance.DARK, panel))
-        assertEquals(Color.Black.copy(alpha = 0.68f), cliGlassTintColor(PanelAppearance.STANDARD, panel))
+        assertEquals(panel.copy(alpha = 0.68f), cliGlassTintColor(PanelAppearance.AUTO, panel))
+        assertEquals(panel.copy(alpha = 0.68f), cliGlassTintColor(PanelAppearance.STANDARD, panel))
+        assertEquals(panel.copy(alpha = 0.60f), cliGlassTintColor(PanelAppearance.LIGHT, panel))
         assertEquals(Color.Black.copy(alpha = 0.68f), cliGlassTintColor(PanelAppearance.DARK, panel))
     }
 
@@ -32,18 +35,19 @@ class CliGlassChromeContractTest {
         assertTrue(glass.contains("Build.VERSION_CODES.S"))
         assertTrue(glass.contains(".background(cliGlassFallback())"))
         assertTrue(glass.contains("LocalCliGlassBlurEnabled = staticCompositionLocalOf { false }"))
-        assertTrue(glass.contains("val bodyBackdrop = if (blurEnabled) rememberCliBackdrop() else null"))
     }
 
     @Test
-    fun `screen headers sample their own local backdrop never the shared app layer`() {
+    fun `screen headers use the exact semantic home background without backdrop work`() {
         val glass = cli("components/CliGlass.kt")
         val headerScreen = glass
             .substringAfter("internal fun CliGlassHeaderScreen(")
 
-        assertTrue(headerScreen.contains("val bodyBackdrop = if (blurEnabled) rememberCliBackdrop() else null"))
-        assertTrue(headerScreen.contains("cliBackdropSource(bodyBackdrop)"))
-        assertTrue(headerScreen.contains("backdrop = bodyBackdrop"))
+        assertTrue(headerScreen.contains("val colors = LocalCliColors.current"))
+        assertTrue(headerScreen.contains(".background(colors.bg)"))
+        assertFalse(headerScreen.contains("rememberCliBackdrop()"))
+        assertFalse(headerScreen.contains("cliBackdropSource("))
+        assertFalse(headerScreen.contains("CliGlassSurface("))
         assertTrue(headerScreen.contains(".statusBarsPadding()"))
         assertTrue(headerScreen.contains("content(topInset)"))
         val app = cli("CliApp.kt")
@@ -76,18 +80,24 @@ class CliGlassChromeContractTest {
         assertFalse(app.contains("rememberCliBackdrop()"))
         assertFalse(app.contains("cliBackdropSource("))
         assertTrue(app.contains(".align(Alignment.BottomCenter)"))
+        assertTrue(app.contains(".navigationBarsPadding()"))
         assertTrue(app.contains("val LocalCliBottomChromeClearance"))
         assertFalse(
             app.contains("navigationBarsPadding(),\n        ) {\n            // Keep the dock in the layout flow")
         )
         assertTrue(dock.contains("CliGlassSurface("))
+        assertTrue(dock.contains("private val CLI_DOCK_LIFT_TOP = 0.dp"))
+        assertTrue(dock.contains("private val CLI_DOCK_LIFT_BOTTOM = 0.dp"))
+        assertTrue(dock.contains("private val CLI_DOCK_VISUAL_DROP = 2.dp"))
+        assertTrue(dock.contains(".cliDockVisualDrop()"))
+        assertTrue(dock.contains("translate(top = CLI_DOCK_VISUAL_DROP.toPx())"))
         assertFalse(dock.contains(".background(dockFill)"))
     }
 
     @Test
     fun `every scrolling screen reserves the chrome clearance inside its own scroll`() {
         val tail = cli("components/CliGlass.kt")
-        assertTrue(tail.contains("internal fun CliChromeTailSpacer()"))
+        assertTrue(tail.contains("internal fun CliChromeTailSpacer("))
         assertTrue(tail.contains("LocalCliBottomChromeClearance.current"))
 
         val consumers = listOf(
@@ -101,7 +111,7 @@ class CliGlassChromeContractTest {
             "logs/CliLogsScreen.kt",
         )
         consumers.forEach { path ->
-            assertTrue("$path must spend the chrome clearance", cli(path).contains("CliChromeTailSpacer()"))
+            assertTrue("$path must spend the chrome clearance", cli(path).contains("CliChromeTailSpacer("))
         }
     }
 
@@ -128,6 +138,7 @@ class CliGlassChromeContractTest {
             "map/CliMapScreen.kt",
             "webapps/CliWebAppsScreen.kt",
             "stats/CliStatsScreen.kt",
+            "profiles/CliProfilesScreen.kt",
         )
         screens.forEach { path ->
             val source = cli(path)
@@ -150,20 +161,20 @@ class CliGlassChromeContractTest {
         assertTrue(home.contains("terminal.footnote(statusFullNote)"))
 
         val russian = resource("values-ru/strings.xml")
-        assertTrue(russian.contains("<string name=\"cli_cmd_status\">состояние</string>"))
-        assertTrue(russian.contains("<string name=\"cli_cmd_status_full\">полное состояние</string>"))
+        assertTrue(russian.contains("<string name=\"cli_cmd_status\">статус</string>"))
+        assertTrue(russian.contains("<string name=\"cli_cmd_status_full\">расширенный статус</string>"))
         val english = resource("values/strings.xml")
         assertTrue(english.contains("<string name=\"cli_cmd_status\">status</string>"))
-        assertTrue(english.contains("<string name=\"cli_cmd_status_full\">full status</string>"))
+        assertTrue(english.contains("<string name=\"cli_cmd_status_full\">extended status</string>"))
     }
 
     @Test
     fun `the dark palette meets its own documented contrast lines`() {
-        assertTrue(contrastOnBlack(0x747D8C) >= 5.0)
-        assertTrue(contrastOnBlack(0x4B5A74) >= 3.0)
+        assertTrue(contrastOnBlack(0x8B7A5E) >= 4.5)
+        assertTrue(contrastOnBlack(0x806548) >= 3.0)
         val theme = cli("CliTheme.kt")
-        assertTrue(theme.contains("Color(0xFF747D8C)"))
-        assertTrue(theme.contains("Color(0xFF4B5A74)"))
+        assertTrue(theme.contains("Color(0xFF8B7A5E)"))
+        assertTrue(theme.contains("Color(0xFF806548)"))
     }
 
     private fun contrastOnBlack(rgb: Int): Double {

@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -40,7 +41,7 @@ import com.foxhole.guard.ui.cli.components.CliPanel
 import com.foxhole.guard.ui.cli.components.CliRowDivider
 import com.foxhole.guard.ui.cli.components.CliScreenHeader
 import com.foxhole.guard.ui.emitError
-import com.foxhole.guard.ui.exportDiagnostics
+import com.foxhole.guard.ui.exportSanitizedDiagnosticsFromAbout
 import com.foxhole.guard.widget.FOX_STATUS_ANIMATION_FRAMES
 import com.foxhole.guard.widget.FOX_STATUS_FRAME_DURATION_MS
 import kotlinx.coroutines.Dispatchers
@@ -66,7 +67,7 @@ internal fun CliAboutSubScreen(
             .fillMaxSize()
             .padding(horizontal = CliSpacing.md),
     ) {
-        CliScreenHeader(label = stringResource(R.string.cli_cfg_more_about), icon = R.drawable.pix_star)
+        CliScreenHeader(label = stringResource(R.string.cli_cfg_more_about), icon = R.drawable.lin_star)
 
         Column(
 
@@ -78,7 +79,8 @@ internal fun CliAboutSubScreen(
         ) {
             CliAboutDashedBlock(
                 title = stringResource(R.string.cli_about_title),
-                icon = R.drawable.pix_info,
+                icon = R.drawable.lin_info,
+                titleModifier = Modifier.offset(x = ABOUT_PRIMARY_TITLE_LIFT, y = ABOUT_PRIMARY_TITLE_LIFT),
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -95,7 +97,8 @@ internal fun CliAboutSubScreen(
             Spacer(modifier = Modifier.height(CliSpacing.sm))
             CliAboutDashedBlock(
                 title = stringResource(R.string.about_licenses_title),
-                icon = R.drawable.pix_info,
+                icon = R.drawable.lin_info,
+                titleModifier = Modifier.offset(x = ABOUT_PRIMARY_TITLE_LIFT, y = ABOUT_PRIMARY_TITLE_LIFT),
             ) {
                 ABOUT_LICENSES.forEachIndexed { index, (component, license) ->
                     if (index > 0) CliRowDivider()
@@ -105,14 +108,14 @@ internal fun CliAboutSubScreen(
             Spacer(modifier = Modifier.height(CliSpacing.sm))
             CliAboutDashedBlock(
                 title = stringResource(R.string.cli_about_links_title),
-                icon = R.drawable.pix_link,
+                icon = R.drawable.lin_link,
                 infoText = stringResource(R.string.cli_about_log_share_note),
             ) {
                 ABOUT_LINKS.forEachIndexed { index, (label, url) ->
                     if (index > 0) CliRowDivider()
                     CliActionRow(
                         label = label,
-                        icon = R.drawable.pix_link,
+                        icon = R.drawable.lin_link,
                         value = stringResource(R.string.cli_about_link_open),
                         onTap = { pendingExternalUrl = url },
                     )
@@ -121,14 +124,16 @@ internal fun CliAboutSubScreen(
                 CliRowDivider()
                 CliActionRow(
                     label = stringResource(R.string.cli_about_log_share),
-                    icon = R.drawable.pix_export,
+                    icon = R.drawable.lin_export,
                     enabled = !preparingAppJournal,
                     onTap = {
                         if (!preparingAppJournal) {
                             preparingAppJournal = true
                             scope.launch {
                                 val result = runCatching {
-                                    withContext(Dispatchers.IO) { viewModel.exportDiagnostics() }
+                                    withContext(Dispatchers.IO) {
+                                        viewModel.exportSanitizedDiagnosticsFromAbout()
+                                    }
                                 }
                                 preparingAppJournal = false
                                 result.onSuccess { shareIntent ->
@@ -192,11 +197,13 @@ private fun CliAboutVersionTable(
 private fun CliAboutDashedBlock(
     title: String,
     @DrawableRes icon: Int,
+    titleModifier: Modifier = Modifier,
     infoText: String? = null,
     content: @Composable () -> Unit,
 ) {
     CliPanel(
         title = title,
+        titleModifier = titleModifier,
         icon = icon,
         modifier = Modifier.fillMaxWidth(),
         infoText = infoText,
@@ -206,31 +213,35 @@ private fun CliAboutDashedBlock(
 }
 
 private val ABOUT_FOX_SIZE = 72.dp
+private val ABOUT_PRIMARY_TITLE_LIFT = (-2).dp
 
-// Component names and SPDX identifiers are intentionally not localized.
 private val ABOUT_LICENSES =
     listOf(
         "FoxHole Guard" to "GPL-3.0-or-later",
         "FoxHole Core" to "GPL-3.0-or-later",
         "Arti (Tor)" to "MIT OR Apache-2.0",
-        "lyrebird" to "BSD-3-Clause",
+        "lyrebird" to "GPL-3.0-or-later AND BSD-3-Clause",
         "conjure-client" to "BSD-3-Clause",
         "i2pd (PurpleI2P)" to "BSD-3-Clause",
+        "OpenSSL" to "Apache-2.0",
+        "Boost" to "BSL-1.0",
+        "Android libc++" to "Apache-2.0 WITH LLVM-exception",
         "SQLCipher" to "BSD-3-Clause",
+        "libsodium" to "ISC",
         "OkHttp" to "Apache-2.0",
         "AndroidX / Jetpack Compose" to "Apache-2.0",
         "Kotlin / kotlinx" to "Apache-2.0",
         "Protocol Buffers" to "BSD-3-Clause",
         "ZXing Android Embedded" to "Apache-2.0",
         "lazysodium-android" to "MPL-2.0",
-        "JNA" to "LGPL-2.1 / Apache-2.0",
+        "JNA" to "Apache-2.0 OR LGPL-2.1-or-later",
         "AdGuard DNS filter" to "GPL-3.0",
         "DB-IP / ip-location-db" to "CC BY 4.0",
         "Stalkerware indicators (Echap)" to "CC BY 4.0",
-        "Silkscreen / Press Start 2P / LanaPixel" to "OFL-1.1",
-        "Inter / JetBrains Mono" to "OFL-1.1",
-        "1-bit Pixel Icons (Nikoichu)" to "CC0-1.0",
+        "Tiny5" to "OFL-1.1",
+        "JetBrains Mono" to "OFL-1.1",
         "Tabler Icons" to "MIT",
+        "flag-icons source set" to "MIT",
     )
 
 private val ABOUT_LINKS = listOf(

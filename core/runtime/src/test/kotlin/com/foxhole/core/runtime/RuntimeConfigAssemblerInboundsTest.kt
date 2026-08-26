@@ -531,9 +531,7 @@ internal class RuntimeConfigAssemblerInboundsTest : RuntimeConfigAssemblerTestSu
         assertEquals("com.example.app", splitRule["package_name"]!!.jsonArray[0].jsonPrimitive.content)
         assertEquals(true, splitRule["invert"]!!.jsonPrimitive.content.toBoolean())
         assertEquals("direct", splitRule["outbound"]!!.jsonPrimitive.content)
-        // DNS stays device-wide: FoxCore terminates every query in one interceptor on one upstream
-        // lane, so a per-app dns rule is not a thing the engine can be told — and emitting it made
-        // the translator reject the whole config, one step before the tun was built.
+
         val dnsRules = config["dns"]!!.jsonObject["rules"]?.jsonArray.orEmpty()
         assertTrue(dnsRules.none { rule -> rule.jsonObject.containsKey("package_name") })
         assertTrue(
@@ -589,8 +587,6 @@ internal class RuntimeConfigAssemblerInboundsTest : RuntimeConfigAssemblerTestSu
 
     @Test
     fun `local firewall guard blocks a blocked app before hijacking its DNS`() {
-        // First match wins: the blocked app's package rule must precede the hijack-dns
-        // rules, or the app keeps a working resolver (a DNS-exfiltration channel) despite the block.
         val settings =
             Settings(
                 dns = DnsSettings(interceptDnsRequests = true),

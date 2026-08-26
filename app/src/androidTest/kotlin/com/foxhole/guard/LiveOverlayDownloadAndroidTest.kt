@@ -74,7 +74,6 @@ internal class LiveOverlayDownloadAndroidTest : ProfileRuntimeSessionAndroidTest
                 val expectedDigest = direct.body.sha256Hex()
                 Log.d(TEST_TAG, "liveTorDownload direct bytes=${direct.body.size} sha256=$expectedDigest")
 
-                // Web apps keep this test process inside the Tor-only tunnel.
                 settings.updateWebAppsEnabled(true)
                 settings.updatePrivacyRoutePermitted(true)
                 settings.updatePrivacyRouteMode(PrivacyRouteMode.TOR_OVER_VPN)
@@ -261,7 +260,6 @@ internal class LiveOverlayDownloadAndroidTest : ProfileRuntimeSessionAndroidTest
         const val RUNTIME_STOP_TIMEOUT_MS = 30_000L
     }
 }
-
 
 internal class OverlayHttpResponse(
     val statusCode: Int,

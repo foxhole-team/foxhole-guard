@@ -12,7 +12,6 @@ import com.foxhole.core.model.blockedLanePackages
 import com.foxhole.guard.FoxholeApplication
 import java.util.concurrent.TimeUnit
 
-/** Durable retry for a persisted quarantine/BLOCK revision not yet acked by the live runtime. */
 class QuarantineRuntimeEnforcementWorker(
     context: Context,
     params: WorkerParameters,
@@ -67,8 +66,7 @@ internal fun Context.enqueueQuarantineRuntimeEnforcement(@Suppress("UNUSED_PARAM
             ).build()
     WorkManager.getInstance(this).enqueueUniqueWork(
         QuarantineRuntimeEnforcementWorker.WORK_NAME,
-        // A running pass may already have captured revision N when N+1 is persisted. Appending a
-        // successor closes that lost-wakeup window; same-reason runtime commands still coalesce.
+
         ExistingWorkPolicy.APPEND_OR_REPLACE,
         work,
     )

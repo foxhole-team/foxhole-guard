@@ -4,8 +4,6 @@ import android.net.ConnectivityManager
 import android.net.Network
 import com.foxhole.core.model.CONNECTIVITY_PROBE_ENDPOINTS
 
-// Self-contained runtime probe helpers, kept engine-side (out of the host connection
-// controller) so the engine does not depend on it.
 fun representativeLatencyMs(latenciesMs: List<Long>): Long? {
     val normalized = latenciesMs.map { it.coerceAtLeast(1L) }.sorted()
     if (normalized.isEmpty()) {

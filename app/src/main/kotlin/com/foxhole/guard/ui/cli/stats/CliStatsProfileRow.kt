@@ -59,7 +59,7 @@ internal fun CliStatsProfileTablePanel(items: List<ProfileTrafficUiItem>) {
     val colors = LocalCliColors.current
     Spacer(modifier = Modifier.height(CliSpacing.sm))
     CliPanel(
-        icon = R.drawable.pix_profiles,
+        icon = R.drawable.lin_profiles,
         title = stringResource(R.string.cli_stats_profiles_title),
         modifier = Modifier.fillMaxWidth(),
     ) {

@@ -33,16 +33,14 @@ class TrafficMapRepository(
     private val nowProvider: () -> Long = System::currentTimeMillis,
     private val ownPackageName: String? = null,
 ) {
+    private val ownPackageNames = setOfNotNull(ownPackageName)
     private val retainedConnectionAccumulatorState = MutableStateFlow(TrafficMapConnectionAccumulator())
-    private val dnsResolverState = MutableStateFlow<TrafficMapDnsResolverAggregate?>(null)
+    private val dnsResolverState = MutableStateFlow(TrafficMapDnsResolverSnapshot())
 
     private val historyCutoffMsState = MutableStateFlow(0L)
 
     @Volatile
     private var sessionTrafficBytesProvider: () -> Long = { 0L }
-
-    @Volatile
-    private var dnsServerCountryProvider: () -> String? = { null }
 
     @Volatile
     private var retainedDestinationCountryBytes: Map<String, Long> = emptyMap()
@@ -80,18 +78,18 @@ class TrafficMapRepository(
 
     fun startDestinationCountryTrackingFromSamples(
         scope: CoroutineScope,
-        connectionSamples: Flow<List<TrafficMapConnectionSample>>,
+        connectionSamples: Flow<TrafficMapRuntimeSnapshotSamples>,
         sessionTrafficBytesProvider: () -> Long = { 0L },
-        dnsServerCountryProvider: () -> String? = { null },
     ): Job {
         this.sessionTrafficBytesProvider = sessionTrafficBytesProvider
-        this.dnsServerCountryProvider = dnsServerCountryProvider
         val destinationSamples =
-            connectionSamples.map { samples ->
-                val (dnsSamples, destinations) =
-                    samples.partition { sample -> sample.kind == TrafficMapConnectionSampleKind.DNS_SERVER }
-                dnsResolverState.updateDnsResolverAggregate(dnsSamples)
-                destinations
+            connectionSamples.map { runtimeSnapshot ->
+                val split = splitTrafficMapSamples(runtimeSnapshot.samples)
+                dnsResolverState.replaceDnsResolverSnapshot(
+                    generation = runtimeSnapshot.generation,
+                    samples = split.dnsSamples,
+                )
+                split.destinations
             }
         return connectionAccumulatorFlowFromSamples(destinationSamples)
             .collectDestinationCountryTracking(scope)
@@ -118,7 +116,7 @@ class TrafficMapRepository(
     fun clearDestinationCountryBytes() {
         retainedConnectionAccumulatorState.value = TrafficMapConnectionAccumulator()
         retainedDestinationCountryBytes = emptyMap()
-        dnsResolverState.value = null
+        dnsResolverState.clearDnsResolverAggregate()
     }
 
     fun clearTrafficMapHistory(nowMs: Long = nowProvider()) {
@@ -170,7 +168,7 @@ class TrafficMapRepository(
                 destinationSnapshot = destinationBundle.liveSnapshot,
                 periodSnapshots = destinationBundle.periodSnapshots,
                 countryDetailsByCode = destinationBundle.countryDetailsByCode,
-                dnsResolver = dnsResolverState.value,
+                dnsResolver = destinationBundle.dnsResolver,
             )
         }
             .distinctUntilChanged()
@@ -209,35 +207,29 @@ class TrafficMapRepository(
         countryDetailsByCode: Map<String, TrafficMapCountryDetail>,
         dnsResolver: TrafficMapDnsResolverAggregate? = null,
     ): TrafficMapUiState {
+        val registry = countryRegistry()
         val mapAnchorInfo = originInfo ?: routeInfo ?: torInfo
         val origin =
             mapAnchorInfo?.countryCode
-                ?.let(::trafficMapOrigin)
+                ?.let(registry::coordinate)
                 ?.withCityAnchor(mapAnchorInfo.city)
-        val visibleDestinations =
-            destinationSnapshot.points
-                .take(MaxTrafficMapDestinations)
+        val visibleDestinations = trafficMapVisibleDestinations(destinationSnapshot.points)
         val sessionBytes = sessionTrafficBytesProvider().coerceAtLeast(0L)
-        val routeAggregate =
-            destinationSnapshot.routeAggregate.let { aggregate ->
-                if (sessionBytes > aggregate.bytes) aggregate.copy(bytes = sessionBytes) else aggregate
-            }
+        val routeAggregate = destinationSnapshot.routeAggregate.withSessionByteFloor(sessionBytes)
         val vpnRoute =
             routeInfo
-                ?.let { info -> trafficMapRoutePoint(info, routeAggregate) }
+                ?.let { info -> trafficMapRoutePoint(info, routeAggregate, registry) }
         val torExit =
             torInfo
-                ?.let { info -> trafficMapTorPoint(info, routeAggregate) }
-        val dnsServer =
-            dnsResolver?.let(::trafficMapDnsServerPoint)
-                ?: trafficMapDnsServerFallbackPoint()
+                ?.let { info -> trafficMapTorPoint(info, routeAggregate, registry) }
+        val dnsServer = dnsResolver?.let { aggregate -> trafficMapDnsServerPoint(aggregate, registry) }
         val highlightedCountries =
-            (
-                visibleDestinations.map(TrafficMapPoint::countryCode) +
-                    listOfNotNull(originInfo?.countryCode, vpnRoute?.countryCode, torExit?.countryCode)
-                )
-                .map { countryCode -> countryCode.uppercase(Locale.US) }
-                .toSet()
+            buildSet {
+                visibleDestinations.forEach { destination -> add(destination.countryCode.uppercase(Locale.US)) }
+                originInfo?.countryCode?.let { countryCode -> add(countryCode.uppercase(Locale.US)) }
+                vpnRoute?.countryCode?.let { countryCode -> add(countryCode.uppercase(Locale.US)) }
+                torExit?.countryCode?.let { countryCode -> add(countryCode.uppercase(Locale.US)) }
+            }
         return TrafficMapUiState(
             originLat = origin?.lat ?: FallbackTrafficMapOrigin.lat,
             originLon = origin?.lon ?: FallbackTrafficMapOrigin.lon,
@@ -329,10 +321,15 @@ class TrafficMapRepository(
                     networkActivityEvents = events,
                     includeHostDetails = showPrivateDetails,
                     historyCutoffMs = cutoffMs,
-                    ownPackageNames = setOfNotNull(ownPackageName),
+                    ownPackageNames = ownPackageNames,
                 )
             }.distinctUntilChanged()
-        return combine(accumulatorSnapshots, windowSnapshots, countryDetails) { accumulator, windows, details ->
+        return combine(
+            accumulatorSnapshots,
+            windowSnapshots,
+            countryDetails,
+            dnsResolverState,
+        ) { accumulator, windows, details, dnsResolver ->
             TrafficMapDestinationBundle(
                 liveSnapshot = accumulator.liveSnapshot,
                 periodSnapshots =
@@ -343,6 +340,7 @@ class TrafficMapRepository(
                     days7 = windows.days7,
                 ),
                 countryDetailsByCode = details,
+                dnsResolver = dnsResolver.aggregate,
             )
         }
     }
@@ -398,9 +396,6 @@ class TrafficMapRepository(
         )
     }
 
-    private fun trafficMapOrigin(countryCode: String): TrafficMapCountryCoordinate? =
-        countryRegistry().coordinate(countryCode)
-
     private fun TrafficMapCountryCoordinate.withCityAnchor(city: String?): TrafficMapCountryCoordinate {
         val anchor = TrafficMapCityAnchors.resolve(countryCode = countryCode, city = city) ?: return this
         return copy(lat = anchor.lat, lon = anchor.lon)
@@ -430,8 +425,9 @@ class TrafficMapRepository(
     private fun trafficMapRoutePoint(
         routeInfo: TrafficMapOriginInfo,
         aggregate: TrafficMapRouteAggregate,
+        registry: TrafficMapCountryRegistry,
     ): TrafficMapPoint? {
-        val coordinate = trafficMapOrigin(routeInfo.countryCode)?.withCityAnchor(routeInfo.city) ?: return null
+        val coordinate = registry.coordinate(routeInfo.countryCode)?.withCityAnchor(routeInfo.city) ?: return null
         return TrafficMapPoint(
             countryCode = coordinate.countryCode,
             label = routeInfo.trafficMapPlaceLabel(fallback = coordinate.label),
@@ -448,8 +444,9 @@ class TrafficMapRepository(
     private fun trafficMapTorPoint(
         torInfo: TrafficMapOriginInfo,
         aggregate: TrafficMapRouteAggregate,
+        registry: TrafficMapCountryRegistry,
     ): TrafficMapPoint? {
-        val coordinate = trafficMapOrigin(torInfo.countryCode) ?: return null
+        val coordinate = registry.coordinate(torInfo.countryCode) ?: return null
         return TrafficMapPoint(
             countryCode = coordinate.countryCode,
             label = torInfo.countryName?.takeIf(String::isNotBlank) ?: coordinate.label,
@@ -463,9 +460,12 @@ class TrafficMapRepository(
         )
     }
 
-    private fun trafficMapDnsServerPoint(aggregate: TrafficMapDnsResolverAggregate): TrafficMapPoint? {
+    private fun trafficMapDnsServerPoint(
+        aggregate: TrafficMapDnsResolverAggregate,
+        registry: TrafficMapCountryRegistry,
+    ): TrafficMapPoint? {
         val countryCode = aggregate.countryCode ?: return null
-        val coordinate = trafficMapOrigin(countryCode) ?: return null
+        val coordinate = registry.coordinate(countryCode) ?: return null
         return TrafficMapPoint(
             countryCode = coordinate.countryCode,
             label = coordinate.label,
@@ -473,20 +473,6 @@ class TrafficMapRepository(
             lon = coordinate.lon,
             bytes = aggregate.bytes,
             connections = aggregate.connections,
-            role = TrafficMapPointRole.DNS_SERVER,
-        )
-    }
-
-    private fun trafficMapDnsServerFallbackPoint(): TrafficMapPoint? {
-        val countryCode = normalizeCountryCode(dnsServerCountryProvider()) ?: return null
-        val coordinate = trafficMapOrigin(countryCode) ?: return null
-        return TrafficMapPoint(
-            countryCode = coordinate.countryCode,
-            label = coordinate.label,
-            lat = coordinate.lat,
-            lon = coordinate.lon,
-            bytes = 0L,
-            connections = 0,
             role = TrafficMapPointRole.DNS_SERVER,
         )
     }
@@ -529,10 +515,43 @@ private data class TrafficMapWindowSnapshots(
     val days7: TrafficMapPeriodSnapshot,
 )
 
-private fun IpInfo.trafficMapPrimaryIpAddress(): String? =
-    listOfNotNull(ipv4, ip, ipv6)
-        .map(String::trim)
-        .firstOrNull(String::isNotBlank)
+private data class TrafficMapSampleSplit(
+    val dnsSamples: List<TrafficMapConnectionSample>,
+    val destinations: List<TrafficMapConnectionSample>,
+)
+
+private fun trafficMapVisibleDestinations(points: List<TrafficMapPoint>): List<TrafficMapPoint> =
+    if (points.size <= TrafficMapRepository.MaxTrafficMapDestinations) {
+        points
+    } else {
+        points.take(TrafficMapRepository.MaxTrafficMapDestinations)
+    }
+
+private fun TrafficMapRouteAggregate.withSessionByteFloor(sessionBytes: Long): TrafficMapRouteAggregate =
+    if (sessionBytes > bytes) copy(bytes = sessionBytes) else this
+
+private fun splitTrafficMapSamples(samples: List<TrafficMapConnectionSample>): TrafficMapSampleSplit {
+    val destinations = ArrayList<TrafficMapConnectionSample>(samples.size)
+    var dnsSamples: ArrayList<TrafficMapConnectionSample>? = null
+    samples.forEach { sample ->
+        if (sample.kind == TrafficMapConnectionSampleKind.DNS_SERVER) {
+            val currentDnsSamples = dnsSamples ?: ArrayList<TrafficMapConnectionSample>().also { dnsSamples = it }
+            currentDnsSamples += sample
+        } else {
+            destinations += sample
+        }
+    }
+    return TrafficMapSampleSplit(
+        dnsSamples = dnsSamples ?: emptyList(),
+        destinations = destinations,
+    )
+}
+
+private fun IpInfo.trafficMapPrimaryIpAddress(): String? {
+    ipv4?.trim()?.takeIf(String::isNotBlank)?.let { return it }
+    ip.trim().takeIf(String::isNotBlank)?.let { return it }
+    return ipv6?.trim()?.takeIf(String::isNotBlank)
+}
 
 private fun TrafficMapOriginInfo.trafficMapPlaceLabel(fallback: String): String =
     city?.takeIf(String::isNotBlank)

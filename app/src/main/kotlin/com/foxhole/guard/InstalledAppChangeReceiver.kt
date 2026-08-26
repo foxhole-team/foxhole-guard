@@ -66,8 +66,7 @@ class InstalledAppChangeReceiver : BroadcastReceiver() {
                                 "app-inventory",
                                 "package change preflight failed: ${preparation.error.javaClass.simpleName}",
                             )
-                            // The inventory snapshot must not advance past an install whose durable
-                            // quarantine decision could not be written. Reconciliation will retry it.
+
                             return@finishPendingBroadcast
                         }
                         is PackageChangePreparation.Persisted -> preparation.change
@@ -78,8 +77,7 @@ class InstalledAppChangeReceiver : BroadcastReceiver() {
                 if (preparedChange?.preflight?.quarantinedInstall == true) {
                     app.enqueuePendingQuarantineAnalysis()
                 }
-                // Guard journal is independent of the statistics toggles. It runs after the
-                // durable quarantine preflight, but before optional FoxHole Sentinel enrichment.
+
                 if (guardChange != null && app.appGraph.securityComponents.isEventMonitoringActive()) {
                     runCatching {
                         app.appGraph.securityComponents.guardSentinel.recordPackageChange(
@@ -100,21 +98,15 @@ class InstalledAppChangeReceiver : BroadcastReceiver() {
     }
 }
 
-/**
- * What one install/removal is worth to this app: the consent gates it passes and whether the live
- * runtime has to hear about it at all.
- */
 private data class PackageChangeRelevance(
     val monitoringEnabled: Boolean,
     val quarantineEnabled: Boolean,
     val laneAssignedChange: Boolean,
     val quarantineRelevantChange: Boolean,
 ) {
-    /** Nothing to record and nothing to re-apply: the change may be dropped. */
     val ignorable: Boolean
         get() = !monitoringEnabled && !quarantineRelevantChange && !laneAssignedChange
 
-    /** The change may touch the inventory audit and the security analysis. */
     val auditable: Boolean
         get() = monitoringEnabled || quarantineRelevantChange
 
@@ -122,7 +114,6 @@ private data class PackageChangeRelevance(
         get() = laneAssignedChange
 }
 
-/** Basic PackageManager facts captured before optional FoxHole Sentinel enrichment. */
 private data class PackageChangePreflight(
     val packageInfo: PackageInventoryInfo,
     val recordedAt: Long,
@@ -148,10 +139,7 @@ private fun Settings.packageChangeRelevance(change: PackageInventoryChange): Pac
     return PackageChangeRelevance(
         monitoringEnabled = anomaly.enabled && statistics.enabled && statistics.appChangesEnabled,
         quarantineEnabled = quarantineEnabled,
-        // Any lane membership (tor/vpn/block/exclude) makes the change runtime-relevant:
-        // an uninstall must drop the package's UID from the live tun filter, and a fresh
-        // reinstall arrives with a NEW UID the running filter knows nothing about — both
-        // used to wait for a manual reconnect unless quarantine happened to be on.
+
         laneAssignedChange = change.packageName in expert.appAssignments,
         quarantineRelevantChange =
         quarantineEnabled &&
@@ -184,11 +172,6 @@ private suspend fun FoxholeApplication.preparePackageInventoryChange(
         PackageChangePreparation.Failed(error)
     }
 
-/**
- * Persists and applies the minimum BLOCK rule before threat-intel or component analysis begins.
- * If enrichment later fails or the broadcast deadline expires, the pending decision survives and
- * the package remains fail-closed.
- */
 private suspend fun FoxholeApplication.preflightPackageChange(
     change: PackageInventoryChange,
     relevance: PackageChangeRelevance,
@@ -209,9 +192,7 @@ private suspend fun FoxholeApplication.preflightPackageChange(
                 requireNotNull(identity) { "system package identity unavailable during quarantine preflight" }
             }
         }
-    // Persist every relevant package mutation before the sealed inventory snapshot can move. For
-    // a quarantined install this also creates the durable BLOCK rule with an explicit pending-risk
-    // marker; enrichment later updates facts only and is never allowed to recreate a decision.
+
     container.settingsRepository.recordInstalledAppChange(
         packageName = change.packageName,
         label = packageInfo.label,
@@ -323,8 +304,6 @@ private suspend fun FoxholeApplication.quarantineIdentityFor(
         null
     }
 
-// Persistence schedules a durable retry; this inline pass minimizes the install-to-BLOCK window.
-// An accepted service intent is not success: the controller waits for the exact session receipt.
 internal suspend fun FoxholeApplication.applyQuarantineToActiveRuntime() {
     val controller = container.connectionController
     val revision = container.settingsRepository.current().expert.quarantinePolicyRevision
@@ -345,10 +324,6 @@ private fun String.stablePackageHash(): Int =
         ?.hashCode()
         ?: 0
 
-/**
- * Completes bounded, persisted analysis work after a receiver timeout or process death. Returns
- * true while another WorkManager pass is needed.
- */
 internal suspend fun FoxholeApplication.reconcilePendingQuarantineAnalyses(): Boolean {
     val repository = container.settingsRepository
     val candidates = repository.incompleteQuarantineAnalyses()
@@ -508,8 +483,7 @@ private fun Context.packageInventoryInfo(
         label = appInfo?.loadLabel(packageManager)?.toString()?.takeIf(String::isNotBlank)
             ?: previous?.label
             ?: packageName,
-        // A fresh install whose PackageManager row is momentarily unavailable is unknown, not a
-        // trusted system app. Fail closed now; complete analysis can promote a real system app.
+
         isSystemApp = appInfo?.isSystemApp() ?: false,
         firstInstallTime = installedPackageInfo?.firstInstallTime?.takeIf { value -> value > 0L },
         installerPackageName = previous?.installerPackageName,

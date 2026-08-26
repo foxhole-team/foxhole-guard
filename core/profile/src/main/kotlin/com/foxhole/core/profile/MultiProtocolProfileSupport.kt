@@ -47,19 +47,10 @@ object MultiProtocolProfileSupport {
     fun supportedOptions(profile: Profile): List<ProfileProtocolOption> =
         supportedOptions(profile.protocolOptions)
 
-    /**
-     * Options the runtime may actually run: a protocol the client speaks that the user has not
-     * switched off (N1). Everything that *picks* a protocol — smart start, the manual TEST scan, the
-     * recommendation prompt, the reconnect coordinator — goes through here, so a disabled protocol is
-     * never probed or started. Callers that need to *render* every protocol (the smart-profile sheet
-     * with its per-protocol on/off toggles) read `Profile.protocolOptions` directly instead.
-     */
     fun supportedOptions(options: List<ProfileProtocolOption>): List<ProfileProtocolOption> =
         runnableProtocolOptions(options).filter(ProfileProtocolOption::enabled)
 
     fun selectedOption(profile: Profile): ProfileProtocolOption? {
-        // Degrade instead of failing: a profile whose every protocol is switched off still reports
-        // the option it would run, so display/diagnostics callers never see a sudden null.
         val options = supportedOptions(profile).ifEmpty { runnableProtocolOptions(profile.protocolOptions) }
         return options.firstOrNull { it.id == profile.selectedProtocolOptionId }
             ?: options.firstOrNull(ProfileProtocolOption::isSelected)
@@ -103,9 +94,7 @@ private fun autoConnectOptions(profile: Profile): List<ProfileProtocolOption> {
     val explicitOptions = MultiProtocolProfileSupport.supportedOptions(profile)
     return when {
         explicitOptions.isNotEmpty() -> explicitOptions
-        // Every runnable protocol of a smart profile is switched off (N1): the scan has nothing to
-        // offer. Falling through would synthesize a candidate out of the profile hint and probe a
-        // protocol the user just turned off.
+
         runnableProtocolOptions(profile.protocolOptions).isNotEmpty() -> emptyList()
         profile.protocolHint in unsupportedProtocolHints -> emptyList()
         else ->

@@ -1,17 +1,18 @@
 package com.foxhole.guard.ui.cli.home
 
 import androidx.annotation.DrawableRes
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
-import androidx.compose.animation.togetherWith
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -23,19 +24,20 @@ import com.foxhole.core.model.TOR_ONLY_PROFILE_ID
 import com.foxhole.core.model.TorNetworkPhase
 import com.foxhole.core.model.TorPhaseSnapshot
 import com.foxhole.core.model.TrafficMode
-import com.foxhole.core.model.VisualStyle
+import com.foxhole.core.model.samePrimaryAddress
 import com.foxhole.guard.R
 import com.foxhole.guard.ui.HomeRouteUiState
 import com.foxhole.guard.ui.TorIdentityProbePhase
-import com.foxhole.guard.ui.cli.CliMotion
 import com.foxhole.guard.ui.cli.CliSpacing
 import com.foxhole.guard.ui.cli.LocalCliColors
-import com.foxhole.guard.ui.cli.LocalCliVisualStyle
+import com.foxhole.guard.ui.cli.cliVerticalEnter
+import com.foxhole.guard.ui.cli.cliVerticalExit
 import com.foxhole.guard.ui.cli.components.CliFlagIcon
 import com.foxhole.guard.ui.cli.components.CliKeyValue
 import com.foxhole.guard.ui.cli.components.CliRowDivider
 import com.foxhole.guard.ui.cli.components.CliSpinner
 import com.foxhole.guard.ui.cli.components.CliUpdatingText
+import com.foxhole.guard.ui.cli.components.cliFlagCode
 import com.foxhole.guard.ui.cli.components.cliSpinnerSlotSize
 import com.foxhole.guard.ui.confirmedTorIdentityOrNull
 import java.util.Locale
@@ -64,10 +66,20 @@ internal fun cliRouteIdentitiesForInfo(
     runtimes: CliActiveRuntimes,
 ): List<CliRouteIdentity> =
     buildList {
-        if (runtimes.vpn) add(CliRouteIdentity(CliRouteIdentityKind.VPN, vpnInfo))
+        val distinctVpnInfo = distinctVpnRouteIdentity(vpnInfo, torInfo, runtimes.vpn && runtimes.tor)
+        if (runtimes.vpn) add(CliRouteIdentity(CliRouteIdentityKind.VPN, distinctVpnInfo))
         if (runtimes.tor) {
             add(CliRouteIdentity(CliRouteIdentityKind.TOR, torInfo?.confirmedTorIdentityOrNull()))
         }
+    }
+
+internal fun distinctVpnRouteIdentity(
+    vpnInfo: IpInfo?,
+    torInfo: IpInfo?,
+    torRouteObserved: Boolean,
+): IpInfo? =
+    vpnInfo?.takeUnless { candidate ->
+        torRouteObserved && torInfo?.let(candidate::samePrimaryAddress) == true
     }
 
 internal fun cliRouteIdentityValue(
@@ -77,9 +89,11 @@ internal fun cliRouteIdentityValue(
     val ip = info?.ip?.trim().orEmpty().takeIf(String::isNotEmpty)
     val city = info?.city?.trim()?.takeIf(String::isNotEmpty)
     return listOfNotNull(ip, city.takeIf { includeCity }, cliRouteIdentityCountryLabel(info))
-        .joinToString(" · ")
+        .joinToString(CLI_IDENTITY_SEGMENT_SEPARATOR)
         .ifEmpty { "—" }
 }
+
+internal const val CLI_IDENTITY_SEGMENT_SEPARATOR = "\u2009·\u2009"
 
 internal fun cliRouteIdentityCountryLabel(info: IpInfo?): String? =
     info?.countryCode
@@ -102,16 +116,16 @@ internal fun cliRouteIdentityFactStates(
             connection.profileId != null &&
             connection.profileId != LOCAL_GUARD_PROFILE_ID &&
             connection.profileId != TOR_ONLY_PROFILE_ID
-    val torPhaseObserved = home.torPhase.phase in TOR_IDENTITY_ACTIVE_PHASES
-    val torSnapshotObserved =
+    val torOnlySnapshotObserved =
         connection.state in ROUTE_IDENTITY_ACTIVE_STATES &&
-            (connection.torActive || connection.profileId == TOR_ONLY_PROFILE_ID)
-    val torRouteExpected =
-        connection.state in ROUTE_IDENTITY_ACTIVE_STATES &&
-            connection.profileId != LOCAL_GUARD_PROFILE_ID &&
-            home.settings.privacyRoute.enabled
+            connection.profileId == TOR_ONLY_PROFILE_ID
+    val appliedVpnTorSnapshotObserved =
+        primaryRouteObserved && connection.torActive && connection.appliedTorRoute != null
+    val standaloneTorRuntimeObserved = runtimes.tor && !primaryRouteObserved
     val vpnLive = runtimes.vpn || primaryRouteObserved
-    val torLive = runtimes.tor || torSnapshotObserved || torPhaseObserved || torRouteExpected
+    val torLive =
+        torOnlySnapshotObserved || appliedVpnTorSnapshotObserved || standaloneTorRuntimeObserved
+    val distinctVpnInfo = distinctVpnRouteIdentity(home.ipInfo, home.torIpInfo, vpnLive && torLive)
     val torLoading =
         torLive &&
             cliTorIdentityLoading(
@@ -123,7 +137,7 @@ internal fun cliRouteIdentityFactStates(
         if (vpnLive) {
             add(
                 CliRouteIdentityFactState(
-                    identity = CliRouteIdentity(CliRouteIdentityKind.VPN, home.ipInfo),
+                    identity = CliRouteIdentity(CliRouteIdentityKind.VPN, distinctVpnInfo),
                     live = true,
                     loading = identityLoading,
                 ),
@@ -140,14 +154,6 @@ internal fun cliRouteIdentityFactStates(
                     loading = identityLoading || torLoading,
                 ),
             )
-        } else if (home.settings.privacyRoute.permitted) {
-            add(
-                CliRouteIdentityFactState(
-                    identity = CliRouteIdentity(CliRouteIdentityKind.TOR, null),
-                    live = false,
-                    loading = false,
-                ),
-            )
         }
     }
 }
@@ -161,27 +167,52 @@ internal fun CliRouteIdentityFacts(
 ) {
     val facts = cliRouteIdentityFactStates(home, runtimes, loading, torIdentityProbePhase)
     val liveFacts = facts.filter(CliRouteIdentityFactState::live)
+    val routeFacts = facts.filterNot { it.identity.kind == CliRouteIdentityKind.TOR }
+    val torFact = facts.firstOrNull { it.identity.kind == CliRouteIdentityKind.TOR }
+    var retainedTorFact by remember { mutableStateOf(torFact) }
+    LaunchedEffect(torFact) {
+        if (torFact != null) retainedTorFact = torFact
+    }
+    val showGenericIp = liveFacts.isEmpty()
     Column(modifier = Modifier.fillMaxWidth()) {
-        if (liveFacts.isEmpty()) {
+        if (showGenericIp) {
             val shownIp = home.ipInfo
             CliRouteIdentityRow(
                 key = stringResource(R.string.cli_home_key_ip),
                 value = cliRouteIdentityValue(shownIp, includeCity = false),
                 animateValue = true,
-                icon = R.drawable.pix_link,
+                icon = R.drawable.lin_link,
                 countryCode = shownIp?.countryCode,
                 loading = loading,
                 modifier = Modifier.testTag(CLI_HOME_IP_TAG),
             )
-            if (facts.isNotEmpty()) CliRowDivider()
         }
-        facts.forEachIndexed { index, fact ->
-            if (index > 0) CliRowDivider()
+        routeFacts.forEachIndexed { index, fact ->
+            if (showGenericIp || index > 0) CliRowDivider()
             CliRouteIdentityFactRow(
                 identity = fact.identity,
                 loading = fact.loading,
-                first = liveFacts.isNotEmpty() && index == 0,
+                first = !showGenericIp && index == 0,
             )
+        }
+        AnimatedVisibility(
+            visible = torFact != null,
+            enter = cliVerticalEnter(),
+            exit = cliVerticalExit(),
+            label = "torIdentityRowVisibility",
+        ) {
+            val displayedFact = torFact ?: retainedTorFact
+            if (displayedFact != null) {
+                Column {
+                    val hasLeadingRow = showGenericIp || routeFacts.isNotEmpty()
+                    if (hasLeadingRow) CliRowDivider()
+                    CliRouteIdentityFactRow(
+                        identity = displayedFact.identity,
+                        loading = displayedFact.loading,
+                        first = !hasLeadingRow,
+                    )
+                }
+            }
         }
     }
 }
@@ -205,7 +236,7 @@ private fun CliRouteIdentityRow(
         valueColor = colors.fg,
         icon = icon,
         valueContent = cliRightAlignedLoadingContent(loading),
-        valueTrailing = if (loading || !countryCode.isNullOrBlank()) {
+        valueTrailing = if (cliRefreshTrailingVisible(loading, countryCode)) {
             {
                 CliRightAlignedRefreshTrailing(
                     loading = loading,
@@ -215,23 +246,30 @@ private fun CliRouteIdentityRow(
         } else {
             null
         },
-        animateValue = animateValue,
+        animateValue = animateValue && !loading,
         valueMaxLines = IDENTITY_VALUE_MAX_LINES,
+        keyColumnWeight = ROUTE_IDENTITY_KEY_WEIGHT,
+        valueColumnWeight = ROUTE_IDENTITY_VALUE_WEIGHT,
     )
 }
 
+private const val ROUTE_IDENTITY_KEY_WEIGHT = 0.65f
+private const val ROUTE_IDENTITY_VALUE_WEIGHT = 1.35f
+
 @Composable
 internal fun cliRightAlignedLoadingContent(loading: Boolean): (@Composable () -> Unit)? =
-    if (cliRightAlignedLoadingUsesText(loading, LocalCliVisualStyle.current)) {
+    if (cliRightAlignedLoadingUsesText(loading)) {
         { CliUpdatingText() }
     } else {
         null
     }
 
-internal fun cliRightAlignedLoadingUsesText(
+internal fun cliRightAlignedLoadingUsesText(loading: Boolean): Boolean = loading
+
+internal fun cliRefreshTrailingVisible(
     loading: Boolean,
-    style: VisualStyle,
-): Boolean = loading && style == VisualStyle.PLAIN
+    countryCode: String?,
+): Boolean = loading || cliFlagCode(countryCode) != null
 
 @Composable
 internal fun CliRightAlignedRefreshTrailing(
@@ -253,32 +291,19 @@ internal fun CliRefreshTrailing(
     plainLoadingIndicator: Boolean = true,
     modifier: Modifier = Modifier,
 ) {
-    val plainStyle = LocalCliVisualStyle.current == VisualStyle.PLAIN
-    AnimatedContent(
-        targetState = loading,
-        transitionSpec = {
-            (fadeIn(CliMotion.enter()) + scaleIn(initialScale = 0.8f, animationSpec = CliMotion.enter())) togetherWith
-                (fadeOut(CliMotion.exit()) + scaleOut(targetScale = 0.8f, animationSpec = CliMotion.exit()))
-        },
+    Box(
         contentAlignment = Alignment.CenterEnd,
         modifier = modifier.width(cliSpinnerSlotSize),
-        label = "identityRefresh",
-    ) { refreshing ->
-        if (refreshing && (!plainStyle || plainLoadingIndicator)) {
+    ) {
+        if (loading && plainLoadingIndicator) {
             CliSpinner()
-        } else if (!refreshing) {
+        } else if (!loading) {
             CliFlagIcon(countryCode = countryCode)
         }
     }
 }
 
-private const val IDENTITY_VALUE_MAX_LINES = 2
-
-internal fun cliTorIdentitySlotVisible(
-    torModeEnabled: Boolean,
-    torLoading: Boolean,
-    hasTorIdentityRow: Boolean,
-): Boolean = !hasTorIdentityRow && (torModeEnabled || torLoading)
+private const val IDENTITY_VALUE_MAX_LINES = 1
 
 @Composable
 private fun CliRouteIdentityFactRow(
@@ -291,7 +316,7 @@ private fun CliRouteIdentityFactRow(
         key = stringResource(if (vpn) R.string.cli_home_status_vpn_identity else R.string.cli_home_status_tor_identity),
         value = cliRouteIdentityValue(info = identity.info, includeCity = vpn),
         animateValue = true,
-        icon = if (vpn) R.drawable.pix_shield else R.drawable.pix_tor,
+        icon = if (vpn) R.drawable.lin_shield else R.drawable.lin_tor,
         countryCode = identity.info?.countryCode,
         loading = loading,
         modifier = if (first) Modifier.testTag(CLI_HOME_IP_TAG) else Modifier,
@@ -313,8 +338,6 @@ internal fun cliTorIdentityLoading(
 private val ROUTE_IDENTITY_ACTIVE_STATES =
     setOf(ConnectionState.CONNECTING, ConnectionState.CONNECTED, ConnectionState.RECONNECTING)
 private val ROUTE_IDENTITY_TRAFFIC_MODES = setOf(TrafficMode.TUNNEL, TrafficMode.PROXY)
-private val TOR_IDENTITY_ACTIVE_PHASES =
-    setOf(TorNetworkPhase.CONNECTING, TorNetworkPhase.BUILDING_CIRCUITS, TorNetworkPhase.CONNECTED)
 
 @Composable
 internal fun cliStatusRouteIdentityRows(

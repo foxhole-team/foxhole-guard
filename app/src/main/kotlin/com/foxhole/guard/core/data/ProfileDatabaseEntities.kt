@@ -35,10 +35,6 @@ import com.foxhole.core.model.storedProfileSourceType
 import com.foxhole.core.model.storedProtocolHint
 import java.util.Calendar
 
-// Room @Entity row models + query projection data classes for ProfileDatabase.
-// Split out of ProfileDatabase.kt (behaviour-preserving); the DAOs and @Database
-// reference these same-package.
-
 @Entity(tableName = "profiles")
 data class ProfileEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
@@ -216,8 +212,7 @@ data class TrafficWindowEntity(
     val latencyMs: Int?,
     val destinationCountries: Map<String, Long>,
     val blockedDnsDomains: Map<String, Long>,
-    // Keyed by DnsFilterCategory.name; stored as a plain string map to reuse the existing
-    // converter (unknown keys from newer app versions degrade to "uncategorized" silently).
+
     @ColumnInfo(defaultValue = "{}") val blockedDnsByCategory: Map<String, Long> = emptyMap(),
     @ColumnInfo(defaultValue = "{}") val blockedDnsApps: Map<String, Long> = emptyMap(),
 ) {
@@ -581,10 +576,6 @@ data class ProtocolMetricEventEntity(
     }
 }
 
-// Long-horizon anomaly memory: tiny aggregates that deliberately outlive statistics retention so
-// "ever seen" checks (new-country novelty, dormant-app wake-ups) stay correct after cleanup.
-// The privacy clear paths delete them together with the windowed data.
-
 @Entity(tableName = "seen_destination_countries")
 data class SeenDestinationCountryEntity(
     @PrimaryKey val country: String,
@@ -615,15 +606,6 @@ data class AnomalyCounterEntity(
     val value: Long,
 )
 
-/**
- * One wall-clock hour of I2P byte accounting. Two counters, no timestamps beyond the bucket's own
- * start and nothing that identifies a peer or a destination — which is why an hour of history costs
- * a single tiny row and thirty days of it stays a few hundred.
- *
- * `ownBytes` is the historical column name for i2pd's received + sent network total;
- * `transitBytes` is the reported subset forwarded for other people while relaying. They are stored
- * and printed apart, never summed.
- */
 @Entity(tableName = "i2p_traffic_buckets")
 data class I2pTrafficBucketEntity(
     @PrimaryKey val hourStartMs: Long,
@@ -637,11 +619,6 @@ data class I2pTrafficBucketEntity(
         )
 }
 
-/**
- * The lifetime I2P aggregate: exactly one row, two counters, no time dimension at all. It is kept
- * beside the buckets rather than summed from them because the buckets are pruned at thirty days,
- * and "all time" must not shrink when they are.
- */
 @Entity(tableName = "i2p_traffic_totals")
 data class I2pTrafficTotalEntity(
     @PrimaryKey val id: Int = I2P_TRAFFIC_TOTALS_ROW_ID,
@@ -651,18 +628,14 @@ data class I2pTrafficTotalEntity(
     fun toDomain(): I2pTrafficTotals = I2pTrafficTotals(ownBytes = ownBytes, transitBytes = transitBytes)
 }
 
-// The single row's key. A fixed id keeps the accumulate-in-place update a one-liner and makes a
-// second lifetime row structurally impossible.
 internal const val I2P_TRAFFIC_TOTALS_ROW_ID = 0
 
-// A user-added HTML5 web app: origin URL, cached name and icon, and the watchdog's notification
-// counter that feeds the screen and widget badges.
 @Entity(tableName = "web_apps")
 data class WebAppEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val url: String,
     val name: String,
-    // Icon path relative to filesDir; null means the letter placeholder.
+
     val iconPath: String?,
     val sortOrder: Int,
     // Stored as an enum token so unknown values from a future build can fail back to DEFAULT.

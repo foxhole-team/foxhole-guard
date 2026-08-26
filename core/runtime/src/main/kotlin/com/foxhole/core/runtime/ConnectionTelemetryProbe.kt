@@ -288,9 +288,6 @@ class ConnectionTelemetryProbe(
             }
         }
         if (target.transport != VpnHealthProbeTransport.TCP) {
-            // UDP transports (WireGuard, Hysteria2, TUIC) expose no TCP handshake to time — an
-            // ICMP echo to the SAME server host over the upstream interface is the honest
-            // equivalent, reusing the exact ping machinery of the ICMP tunnel-latency method.
             return withContext(Dispatchers.IO) {
                 measureServerIcmpLatency(
                     host = target.host,
@@ -437,7 +434,7 @@ class ConnectionTelemetryProbe(
         network: Network?,
     ): Long {
         val startedAt = SystemClock.elapsedRealtime()
-        // Availability probe only: opens a bounded TCP connect to the configured server target and sends no payload.
+
         Socket().use { socket ->
             if (network == null) {
                 check(protectDirectSocket(socket)) { "server tcp ping socket protect failed" }

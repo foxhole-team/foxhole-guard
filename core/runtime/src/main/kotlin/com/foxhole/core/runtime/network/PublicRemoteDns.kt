@@ -33,17 +33,7 @@ class PublicRemoteDns(
         if (publicAddresses.isNotEmpty()) {
             return publicAddresses.preferIpv4()
         }
-        // The system resolver answered out of FoxCore's own fake-IP pool, which happens to every
-        // name on the device while an overlay tunnel is up — this app's own control plane
-        // included, because the profile TUN captures the whole device by design
-        // (RuntimeTunInbound: the split lives in package_name route rules, not in the interface).
-        //
-        // That is not a private host and must not be reported as one. It is also the address that
-        // actually works right now: the stack terminates the flow and dials the name it stands
-        // for, so handing it back is what lets a subscription refresh — and the resolved-config
-        // sanitiser on the connect path — keep working through the tunnel. Folding it into the
-        // refusal below made every session rebuild throw `UnknownHostException` the moment a
-        // fake-IP tunnel was up, and the reload path answers that by tearing the tunnel down.
+
         val synthesizedAddresses = delegateAddresses.filter(InetAddress::isTunnelSynthesizedAddress)
         if (synthesizedAddresses.isNotEmpty()) {
             return synthesizedAddresses.preferIpv4()

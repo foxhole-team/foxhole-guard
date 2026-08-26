@@ -1,0 +1,14 @@
+third_party/fonts/Tiny5-OFL.txt text eol=lf whitespace=-blank-at-eol
+third_party/fonts/JetBrainsMono-OFL.txt text eol=lf whitespace=-blank-at-eol
+third_party/icons/Tabler-MIT.txt text eol=lf
+third_party/flags/flag-icons-LICENSE.txt text eol=lf
+third_party/flags/app-assets.sha256 text eol=lf
+third_party/licenses/*.txt text eol=lf whitespace=-blank-at-eol
+third_party/tor-config/* text eol=lf
+third_party/i2pd.version text eol=lf
+scripts/patches/*.patch text eol=lf whitespace=-space-before-tab,-blank-at-eol
+app/src/main/assets/tor/*/data/torrc-defaults text eol=lf
+app/src/main/assets/tor/*/tor/pluggable_transports/pt_config.json text eol=lf
+app/src/main/assets/tor/*/tor/pluggable_transports/README.CONJURE.md text eol=lf
+app/src/main/assets/flags/*.png binary
+app/src/main/res/font/*.ttf binary

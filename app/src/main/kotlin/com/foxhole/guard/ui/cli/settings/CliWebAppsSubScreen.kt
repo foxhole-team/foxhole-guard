@@ -53,7 +53,7 @@ internal fun CliWebAppsSubScreen(
             .fillMaxSize()
             .padding(horizontal = CliSpacing.md),
     ) {
-        CliScreenHeader(label = stringResource(R.string.cli_extras_webapps), icon = R.drawable.pix_webapps)
+        CliScreenHeader(label = stringResource(R.string.cli_extras_webapps), icon = R.drawable.lin_webapps)
 
         Column(
 
@@ -65,13 +65,16 @@ internal fun CliWebAppsSubScreen(
         ) {
             CliPanel(
                 title = stringResource(R.string.cli_extras_webapps),
-                icon = R.drawable.pix_link,
+                icon = R.drawable.lin_link,
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 CliWebAppsPushRows(viewModel = viewModel, settings = settings)
-                if (settings.webApps.pushServiceEnabled) {
+                CliSettingsAnimatedRows(visible = settings.webApps.pushServiceEnabled) {
                     val runtimeSnapshot by FoxholeVpnRuntimeBridge.snapshot.collectAsStateWithLifecycle()
-                    if (settings.webApps.isolationEnabled && runtimeSnapshot.state != ConnectionState.CONNECTED) {
+                    CliSettingsAnimatedRows(
+                        visible = settings.webApps.isolationEnabled &&
+                            runtimeSnapshot.state != ConnectionState.CONNECTED,
+                    ) {
                         CliElbowLine(text = stringResource(R.string.cli_webapps_push_idle))
                     }
                     var deliveryBlocked by remember { mutableStateOf(false) }
@@ -79,17 +82,15 @@ internal fun CliWebAppsSubScreen(
                         deliveryBlocked = viewModel.webAppNotificationsBlocked()
                         onPauseOrDispose { }
                     }
-                    if (deliveryBlocked) {
+                    CliSettingsAnimatedRows(visible = deliveryBlocked) {
                         CliElbowLine(
                             text = stringResource(R.string.cli_webapps_notifications_disabled),
                             color = LocalCliColors.current.warn,
                         )
                     }
-                }
-                if (settings.webApps.pushServiceEnabled) {
                     CliDropdownRow(
                         label = stringResource(R.string.cli_webapps_interval),
-                        icon = R.drawable.pix_clock,
+                        icon = R.drawable.lin_clock,
                         value = pollIntervalLabel(settings.webApps.pollIntervalMinutes),
                         options =
                         WEB_APPS_POLL_OPTIONS.map { minutes ->
@@ -101,14 +102,14 @@ internal fun CliWebAppsSubScreen(
                 }
                 CliToggleRow(
                     label = stringResource(R.string.cli_webapps_isolation),
-                    icon = R.drawable.pix_forbidden,
+                    icon = R.drawable.lin_forbidden,
                     checked = settings.webApps.isolationEnabled,
                     infoText = stringResource(R.string.cli_webapps_isolation_note),
                     onToggle = viewModel::onWebAppsIsolationChanged,
                 )
                 CliToggleRow(
                     label = stringResource(R.string.cli_webapps_dock),
-                    icon = R.drawable.pix_home,
+                    icon = R.drawable.lin_home,
                     checked = settings.webApps.dockScreenEnabled,
                     onToggle = viewModel::onWebAppsDockScreenChanged,
                 )
@@ -126,7 +127,7 @@ private fun CliWebAppsPushRows(
     var consentOpen by remember { mutableStateOf(false) }
     CliToggleRow(
         label = stringResource(R.string.cli_webapps_push),
-        icon = R.drawable.pix_info,
+        icon = R.drawable.lin_info,
         checked = settings.webApps.pushServiceEnabled,
         infoText = stringResource(R.string.cli_webapps_push_note),
         onToggle = { enable ->
@@ -141,7 +142,7 @@ private fun CliWebAppsPushRows(
     if (consentOpen) {
         CliConfirmSheet(
             title = stringResource(R.string.cli_cfg_firewall),
-            icon = R.drawable.pix_fire,
+            icon = R.drawable.lin_fire,
             question = stringResource(R.string.cli_webapps_firewall_consent),
             confirmLabel = stringResource(R.string.cli_cfg_firewall_yes),
             onConfirm = {

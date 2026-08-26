@@ -17,9 +17,6 @@ import java.io.InterruptedIOException
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
-// Raw HTTP-over-proxy tunnel plumbing for IP-info probes: CONNECT/GET request builders,
-// bounded response readers, and the per-stage timeout budget.
-
 internal data class HttpProxyTunnelTarget(
     val host: String,
     val port: Int,
@@ -297,8 +294,6 @@ internal fun diagnosticLog(message: String) {
 
 internal fun String.ipInfoHostLabel(): String = toHttpUrlOrNull()?.host ?: "invalid"
 
-// The HTTP client cache keys of IpInfoRepository (split out to keep the repository under the
-// file-size budget).
 internal data class HttpClientKey(
     val callTimeoutMs: Long?,
     val networkHandle: Long?,

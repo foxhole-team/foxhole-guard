@@ -5,6 +5,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
+import java.security.MessageDigest
 
 class ReleaseEngineeringContractTest {
     @Test
@@ -19,6 +20,18 @@ class ReleaseEngineeringContractTest {
                 "JNI callback must be kept on both the interface and its implementation: $signature",
                 2,
                 Regex(Regex.escape(signature)).findAll(rules).count(),
+            )
+        }
+    }
+
+    @Test
+    fun `R8 keeps concrete Glance widget providers distinct`() {
+        val rules = projectFile("proguard-rules.pro").readText()
+
+        listOf("StatusWidget", "WebAppsWidget", "FoxStatusWidget").forEach { widget ->
+            assertTrue(
+                "Glance provider identity must survive release shrinking: $widget",
+                rules.contains("-keep class com.foxhole.guard.widget.$widget { *; }"),
             )
         }
     }
@@ -80,6 +93,82 @@ class ReleaseEngineeringContractTest {
     }
 
     @Test
+    fun `fdroid history preserves the reviewed build and hardens only the current entry`() {
+        val metadata = projectFile("../metadata/com.foxhole.guard.yml").readText()
+        val builds = fdroidBuildBlocks(metadata)
+
+        assertEquals(listOf("0.0.2", "0.1.0"), builds.map(FdroidBuildBlock::versionName))
+
+        val reviewed = builds.single { it.versionName == "0.0.2" }.body
+        assertTrue(reviewed.contains("versionCode: 90"))
+        assertTrue(reviewed.contains("commit: 96e963fc020ef9615c1301d7f252352c3ab84cdd"))
+        assertTrue(reviewed.contains("FoxHoleCore@83c9f4b95080c254a4f88d2f2cb7fd48ad849c05"))
+        assertTrue(reviewed.contains("/home/runner/work/foxhole-guard"))
+        assertTrue(reviewed.contains("SOURCE_DATE_EPOCH=1787044986"))
+        assertTrue(reviewed.contains("1e327f87ac68eff0b0c549402952a1c230fe4b22"))
+
+        val current = builds.single { it.versionName == "0.1.0" }.body
+        val sudo = current.substringAfter("    sudo:").substringBefore("    output:")
+        val prebuild = current.substringAfter("    prebuild:").substringBefore("    build:")
+
+        assertTrue(current.contains("versionCode: 117"))
+        assertTrue(current.contains("FoxHoleCore@cd8bf71e950247d7bcebc8cd62142adef5c970fc"))
+        assertTrue(current.contains("foxhole.splitApks=true"))
+        assertTrue("missing base tools", sudo.contains("build-essential ca-certificates"))
+        assertTrue("missing native toolchain", sudo.contains("cmake ninja-build perl pkg-config rustup"))
+        assertFalse("unused curl", Regex("""\bcurl\b""").containsMatchIn(sudo))
+        assertFalse("unused git", Regex("""\bgit\b""").containsMatchIn(sudo))
+        assertFalse("unused Rust components", prebuild.contains("rustup component add"))
+        assertFalse("absolute home path", current.contains("/home/"))
+        assertFalse(
+            "source-moving workaround",
+            Regex("""(?m)^\s*-\s+mv\b""").containsMatchIn(current),
+        )
+    }
+
+    @Test
+    fun `store descriptions list all five independently signed data sets`() {
+        val fdroid = projectFile("../metadata/com.foxhole.guard.yml").readText()
+        val english = projectFile("../fastlane/metadata/android/en-US/full_description.txt").readText()
+        val russian = projectFile("../fastlane/metadata/android/ru-RU/full_description.txt").readText()
+
+        listOf(fdroid, english).forEach { description ->
+            assertTrue(description.contains("five independently signed data sets"))
+            assertTrue(description.contains("TLS fingerprint tables"))
+            assertFalse(description.contains("four signed data sets"))
+        }
+        assertTrue(russian.contains("пять независимо подписанных наборов данных"))
+        assertTrue(russian.contains("таблицы TLS-отпечатков"))
+        assertFalse(russian.contains("четыре подписанных набора данных"))
+    }
+
+    @Test
+    fun `i2pd build remaps host paths and gates every bundled binary`() {
+        val build = projectFile("../scripts/build-i2pd.sh").readText()
+        val verifier = projectFile("../scripts/verify-native-host-paths.sh").readText()
+        val appBuild = projectFile("build.gradle.kts").readText()
+
+        listOf("-ffile-prefix-map=", "-fmacro-prefix-map=", "-fdebug-prefix-map=").forEach { flag ->
+            assertTrue(build.contains(flag))
+        }
+        assertTrue(build.contains("--prefix=\"${'$'}openssl_prefix\" --openssldir=/etc/ssl"))
+        assertTrue(build.contains("make DESTDIR=\"${'$'}openssl_stage\" install_dev"))
+        assertTrue(build.contains("normalize_i2pd_build_id"))
+        assertTrue(build.contains("--remove-section=.note.gnu.build-id"))
+        assertTrue(build.contains("--update-section \".note.gnu.build-id=${'$'}note\""))
+        assertTrue(build.contains("\"${'$'}verify_host_paths\" \"${'$'}out_dir/libi2pd.so\""))
+
+        assertTrue(verifier.contains("/Users/"))
+        assertTrue(verifier.contains("/home/"))
+        assertTrue(verifier.contains("foxhole-native-deps"))
+        assertTrue(appBuild.contains("val verifyBundledI2pdHostPaths = tasks.register"))
+        assertTrue(
+            appBuild.contains("builder.environment()[\"I2PD_ABIS\"] = shippedAndroidAbis.joinToString(\" \")"),
+        )
+        assertTrue(appBuild.contains("dependsOn(verifyBundledI2pdHostPaths)"))
+    }
+
+    @Test
     fun `native inventory gates agree on one runtime library set and assets stay stripped`() {
         val source = projectFile("build.gradle.kts").readText()
 
@@ -138,7 +227,11 @@ class ReleaseEngineeringContractTest {
                 "lyrebird",
                 "conjure-client",
                 "i2pd (PurpleI2P)",
+                "OpenSSL",
+                "Boost",
+                "Android libc++",
                 "SQLCipher",
+                "libsodium",
                 "OkHttp",
                 "AndroidX / Jetpack Compose",
                 "ZXing Android Embedded",
@@ -146,13 +239,197 @@ class ReleaseEngineeringContractTest {
                 "AdGuard DNS filter",
                 "DB-IP / ip-location-db",
                 "Stalkerware indicators (Echap)",
-                "Silkscreen / Press Start 2P / LanaPixel",
-                "1-bit Pixel Icons (Nikoichu)",
+                "Tiny5",
+                "JetBrains Mono",
+                "flag-icons source set",
             )
 
         requiredComponents.forEach { component ->
             assertTrue("missing license entry for $component", screen.contains("\"$component\""))
         }
+    }
+
+    @Test
+    fun `bundled typography ships only pinned fonts with exact upstream licenses`() {
+        val fontDirectory = projectFile("src/main/res/font")
+        val theme = projectFile("src/main/kotlin/com/foxhole/guard/ui/cli/CliTheme.kt").readText()
+        val notices = projectFile("../THIRD_PARTY_NOTICES.md").readText()
+        val inventory = projectFile("../third_party/fonts/README.md").readText()
+
+        val expectedFonts =
+            mapOf(
+                "tiny5_regular.ttf" to
+                    "756261726e160783bfa66723951f12e0e7ca53fa1dfcfbeced760e41093f9702",
+                "jetbrains_mono_bold.ttf" to
+                    "5590990c82e097397517f275f430af4546e1c45cff408bde4255dad142479dcb",
+            )
+        assertEquals(
+            expectedFonts.keys,
+            fontDirectory.listFiles().orEmpty().map(File::getName).toSet(),
+        )
+        expectedFonts.forEach { (name, expectedHash) ->
+            assertEquals(name, expectedHash, projectFile("src/main/res/font/$name").sha256())
+            assertTrue("font hash missing from inventory: $name", inventory.contains(expectedHash))
+        }
+        val expectedLicenses =
+            mapOf(
+                "Tiny5-OFL.txt" to
+                    "6fe7d64407c69d187748206265977654747d3e2fe9e38e45a62cd03ec4770df6",
+                "JetBrainsMono-OFL.txt" to "30f0c136e3c88e422d0791acd97238870f9054a9729bc34cf2ff0d4ed8cac4ad",
+            )
+        expectedLicenses.forEach { (name, expectedHash) ->
+            assertEquals(name, expectedHash, projectFile("../third_party/fonts/$name").sha256())
+            assertTrue("license hash missing from inventory: $name", inventory.contains(expectedHash))
+        }
+        assertTrue(theme.contains("R.font.tiny5_regular"))
+        assertTrue(theme.contains("R.font.jetbrains_mono_bold"))
+        assertTrue(notices.contains("Tiny5"))
+        assertTrue(notices.contains("JetBrains Mono"))
+    }
+
+    @Test
+    fun `bundled native licenses and runtime flags match reviewed upstream bytes`() {
+        val expectedLicenses =
+            mapOf(
+                "third_party/flags/flag-icons-LICENSE.txt" to
+                    "8f1195d55a2fd315a07d812328470ca9ba2abb78c8d317ff19619d5125e00cea",
+                "third_party/i2pd/LICENSE" to
+                    "eb5ac2a5ede8cd6bed9e6d93ad943119a73bfaba378f21bafa307f9b026b2034",
+                "third_party/icons/Tabler-MIT.txt" to
+                    "b740a1d46122672da62833e97f7e7c8a13fa85cbc7445b584b297cc00dde93db",
+                "third_party/licenses/JNA-Apache-2.0.txt" to
+                    "0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e11b938e94594",
+                "third_party/licenses/JNA-LGPL-2.1.txt" to
+                    "eea173a556abac0370461e57e12aab266894ea6be3874c2be05fd87871f75449",
+                "third_party/licenses/JNA-LICENSE.txt" to
+                    "07c938b23950ab7d47a24ef35f9f5da3a05ae164278dc959ad6994135ed59ff1",
+                "third_party/licenses/SQLCipher-BSD-3-Clause.txt" to
+                    "09e4af560ce2e3c9c2aa6b564e35947b03db7d1ae345f22a32793ed46542cc14",
+                "third_party/licenses/lazysodium-MPL-2.0.txt" to
+                    "1f256ecad192880510e84ad60474eab7589218784b9a50bc7ceee34c2b91f1d5",
+                "third_party/licenses/libsodium-ISC.txt" to
+                    "43964d976a6db3fb986af689d05f8ca0e9971878bccae709750dac8fdc4a99cf",
+            )
+        expectedLicenses.forEach { (path, expectedHash) ->
+            assertEquals(path, expectedHash, projectFile("../$path").sha256())
+        }
+
+        val manifest = projectFile("../third_party/flags/app-assets.sha256")
+            .readLines()
+            .associate { line ->
+                val match = requireNotNull(Regex("([0-9a-f]{64})  ([a-z0-9-]+\\.png)").matchEntire(line))
+                match.groupValues[2] to match.groupValues[1]
+            }
+        assertEquals(270, manifest.size)
+        val assets = projectFile("src/main/assets/flags")
+            .listFiles { file -> file.isFile && file.extension == "png" }
+            .orEmpty()
+            .associateBy(File::getName)
+        assertEquals(manifest.keys, assets.keys)
+        manifest.forEach { (name, expectedHash) ->
+            assertEquals(name, expectedHash, requireNotNull(assets[name]).sha256())
+        }
+
+        val generator = projectFile("../scripts/generate-license-assets.py").readText()
+        val reproducer = projectFile("../scripts/generate-app-flag-assets.sh").readText()
+        assertTrue(generator.contains("require_flag_assets()"))
+        assertTrue(reproducer.contains("086f7e97d657358203916dbe84f61c2bccaa81eb"))
+        assertTrue(reproducer.contains("Expected 270 manifest entries"))
+    }
+
+    @Test
+    fun `Tor integration config is pinned to the reviewed official bundle`() {
+        val provenance = projectFile("../third_party/tor-config/README.md").readText()
+        val expected =
+            mapOf(
+                "data/torrc-defaults" to
+                    "4ac86cc6e2468e54b118430881d81fcaec3e95fcfcaccd6076629b5a125a8306",
+                "tor/pluggable_transports/pt_config.json" to
+                    "12852ac8bd29ac3bbb10e2d0d6878ab4f27c636371aaa95a93ed866a030c649f",
+                "tor/pluggable_transports/README.CONJURE.md" to
+                    "f7e9211dd0e0089c93a0a84329fed41b2ac7b988531475b5eb2c86d38ad64d6c",
+            )
+        val manifest = projectFile("../third_party/tor-config/assets.sha256")
+            .readLines()
+            .associate { line ->
+                val match = requireNotNull(Regex("([0-9a-f]{64})  ([A-Za-z0-9_./-]+)").matchEntire(line))
+                match.groupValues[2] to match.groupValues[1]
+            }
+        assertEquals(expected, manifest)
+        assertTrue(provenance.contains("tor-expert-bundle-android-aarch64-15.0.9.tar.gz"))
+        assertTrue(provenance.contains("5bdf7d70e3453d13ac5c7b094903b2aab987fbdeb99ea2145093a12119f7c154"))
+
+        listOf("arm64-v8a", "armeabi-v7a", "x86", "x86_64").forEach { abi ->
+            listOf("data/torrc-defaults", "tor/pluggable_transports/pt_config.json").forEach { path ->
+                assertEquals(
+                    "$abi/$path",
+                    expected.getValue(path),
+                    projectFile("src/main/assets/tor/$abi/$path").sha256(),
+                )
+            }
+        }
+        listOf("arm64-v8a", "armeabi-v7a").forEach { abi ->
+            val path = "tor/pluggable_transports/README.CONJURE.md"
+            assertEquals("$abi/$path", expected.getValue(path), projectFile("src/main/assets/tor/$abi/$path").sha256())
+        }
+    }
+
+    @Test
+    fun `release packages complete user-readable license assets`() {
+        val appBuild = projectFile("build.gradle.kts").readText()
+        val generator = projectFile("../scripts/generate-license-assets.py").readText()
+        val candidate = projectFile("../scripts/package-release-candidate.sh").readText()
+        val workflow = projectFile("../.github/workflows/release.yml").readText()
+        val about = projectFile("src/main/kotlin/com/foxhole/guard/ui/cli/settings/CliAboutSubScreen.kt").readText()
+        val notices = projectFile("../THIRD_PARTY_NOTICES.md").readText()
+
+        assertTrue(appBuild.contains("val prepareBundledLicenseAssets = tasks.register"))
+        assertTrue(appBuild.contains("from(generatedLicenseAssetsDir)"))
+        assertTrue(appBuild.contains("verifyReleaseContainsLicenseAssets"))
+        listOf(
+            "android/JNA-LICENSE.txt",
+            "android/SQLCipher-BSD-3-Clause.txt",
+            "android/lazysodium-MPL-2.0.txt",
+            "android/libsodium-ISC.txt",
+            "flags/flag-icons-LICENSE.txt",
+            "foxcore/foxcore-aarch64-linux-android.cdx.json",
+            "i2pd/Android-NDK-29-NOTICE.toolchain.txt",
+            "i2pd/Boost-1.84.0-BSL-1.0.txt",
+            "i2pd/OpenSSL-3.5.4-Apache-2.0.txt",
+            "i2pd/i2pd-BSD-3-Clause.txt",
+            "tor/conjure-client-BSD-3-Clause.txt",
+            "tor/lyrebird-BSD-3-Clause.txt",
+            "tor/lyrebird-GPL-3.0-or-later.txt",
+            "tor-config/PROVENANCE.txt",
+            "tor-config/upstream-members/README.CONJURE.md",
+        ).forEach { required ->
+            val generatorPath =
+                when {
+                    required.startsWith("android/") ->
+                        "third_party/licenses/${required.removePrefix("android/")}"
+                    required == "i2pd/Boost-1.84.0-BSL-1.0.txt" ->
+                        "f\"i2pd/Boost-{boost_version}-BSL-1.0.txt\""
+                    required == "i2pd/OpenSSL-3.5.4-Apache-2.0.txt" ->
+                        "f\"i2pd/OpenSSL-{openssl_version}-Apache-2.0.txt\""
+                    else -> required
+                }
+            assertTrue("generator does not package $required", generator.contains(generatorPath))
+            assertTrue("APK gate does not require $required", appBuild.contains(required))
+            assertTrue("candidate does not require $required", candidate.contains(required))
+        }
+        assertTrue(candidate.contains("licenseNotices"))
+        assertTrue(candidate.contains("verify_license_notices_archive"))
+        assertTrue(candidate.contains("verify_android_sbom_inventory"))
+        assertTrue(generator.contains("require_lyrebird_composite_license"))
+        assertTrue(generator.contains("not any(part.startswith(\".\") for part in relative.parts)"))
+        assertTrue(generator.contains("expected_module_counts = {\"lyrebird\": 61, \"conjure-client\": 33}"))
+        assertTrue(workflow.contains("[[ ${'$'}{#assets[@]} -eq 7 ]]"))
+        assertFalse(about.contains("CliLicenseNoticesSheet"))
+        assertFalse(about.contains("THIRD_PARTY_NOTICES.md"))
+        assertTrue(notices.contains("GPL-3.0-or-later AND BSD-3-Clause"))
+        assertTrue(notices.contains("does not populate component"))
+        assertFalse(notices.contains("covers everything inside the APK"))
+        assertFalse(notices.contains("License: **BSD-3-Clause**, © Yawning Angel"))
     }
 
     @Test
@@ -163,6 +440,7 @@ class ReleaseEngineeringContractTest {
         assertTrue(script.contains("if [[ \"${'$'}(uname -s)\" == \"Darwin\" ]]; then"))
         assertFalse(script.contains("[[ \"${'$'}(uname -s)\" == \"Darwin\" ]] &&"))
         assertTrue(script.contains("echo \"fetching ${'$'}name @ ${'$'}ref\" >&2"))
+        assertTrue(script.contains("unset GOROOT GOTOOLDIR"))
 
         assertTrue(pins.contains("conjure_ref=\"${'$'}conjure_commit\""))
         listOf("lyrebird_commit", "conjure_commit").forEach { pin ->
@@ -327,6 +605,11 @@ class ReleaseEngineeringContractTest {
             .map { match -> match.groupValues[1] }
             .toSet()
 
+    private fun File.sha256(): String =
+        MessageDigest.getInstance("SHA-256")
+            .digest(readBytes())
+            .joinToString("") { byte -> "%02x".format(byte.toInt() and 0xff) }
+
     private fun String.between(
         start: String,
         end: String,
@@ -335,5 +618,22 @@ class ReleaseEngineeringContractTest {
         val endIndex = indexOf(end, startIndex + start.length)
         require(startIndex >= 0 && endIndex > startIndex) { "Could not isolate source block $start -> $end" }
         return substring(startIndex, endIndex)
+    }
+}
+
+private data class FdroidBuildBlock(
+    val versionName: String,
+    val body: String,
+)
+
+private fun fdroidBuildBlocks(metadata: String): List<FdroidBuildBlock> {
+    val buildsSection = metadata.substringAfter("Builds:\n").substringBefore("\nMaintainerNotes:")
+    val starts = Regex("""(?m)^  - versionName: ([^\n]+)$""").findAll(buildsSection).toList()
+    return starts.mapIndexed { index, match ->
+        val end = starts.getOrNull(index + 1)?.range?.first ?: buildsSection.length
+        FdroidBuildBlock(
+            versionName = match.groupValues[1].trim(),
+            body = buildsSection.substring(match.range.first, end),
+        )
     }
 }

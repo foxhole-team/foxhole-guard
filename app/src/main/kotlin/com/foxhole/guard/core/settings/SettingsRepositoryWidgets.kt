@@ -1,5 +1,6 @@
 package com.foxhole.guard.core.settings
 
+import com.foxhole.core.model.StatusWidgetLayoutMode
 import com.foxhole.core.model.WidgetKindAppearance
 
 suspend fun SettingsRepository.updateStatusWidgetAppearance(
@@ -26,3 +27,6 @@ suspend fun SettingsRepository.updateWebAppsWidgetAppearance(
 
 suspend fun SettingsRepository.updateFoxWidgetAnimationEnabled(value: Boolean) =
     update { current -> current.copy(widgets = current.widgets.copy(foxAnimationEnabled = value)) }
+
+suspend fun SettingsRepository.updateStatusWidgetLayoutMode(value: StatusWidgetLayoutMode) =
+    update { current -> current.copy(widgets = current.widgets.copy(statusLayoutMode = value)) }

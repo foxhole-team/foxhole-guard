@@ -62,8 +62,7 @@ class PolicyReloadOutcomeTest {
     @Test
     fun `only the revision conflict is retried`() {
         assertTrue(policyReloadIsRetryable(FoxholeNativeEngine.RELOAD_REVISION_CONFLICT.toLong()))
-        // Everything else refuses identically forever; a retry loop on those is
-        // battery spent to report nothing.
+
         listOf(
             FoxholeNativeEngine.RELOAD_INVALID,
             FoxholeNativeEngine.RELOAD_UNKNOWN_OUTBOUND,
@@ -80,8 +79,6 @@ class PolicyReloadOutcomeTest {
 
     @Test
     fun `the core is asked for words only when the code cannot be acted on alone`() {
-        // One extra JNI call, taken only where it can tell us something: -1
-        // covers both a truncated write and a field this schema removed.
         assertTrue(policyReloadNeedsDetail(FoxholeNativeEngine.RELOAD_INVALID.toLong()))
         assertFalse(policyReloadNeedsDetail(FoxholeNativeEngine.RELOAD_TOR_UNAVAILABLE.toLong()))
         assertFalse(policyReloadNeedsDetail(FoxholeNativeEngine.RELOAD_REVISION_CONFLICT.toLong()))

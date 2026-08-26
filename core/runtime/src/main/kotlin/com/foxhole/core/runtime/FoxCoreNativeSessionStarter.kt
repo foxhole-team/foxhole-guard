@@ -12,12 +12,6 @@ import kotlinx.serialization.json.put
 import java.io.File
 import java.security.MessageDigest
 
-/**
- * Performs the security-sensitive handoff from the Android-owned TUN to one FoxCore JNI session.
- *
- * The caller retains the master descriptor. FoxCore receives only a duplicate and owns that
- * duplicate as soon as the JNI start call is entered.
- */
 internal class FoxCoreNativeSessionStarter(
     private val native: FoxCoreNativeApi,
     private val diagnosticsLogger: RuntimeDiagnosticsSink,
@@ -127,8 +121,7 @@ internal class FoxCoreNativeSessionStarter(
                     host = host,
                 )
             }.onFailure { error ->
-                // Do not close duplicatedFd here. Rust owns it from JNI entry onward, and closing
-                // the raw integer after rejection could hit a descriptor that the OS already reused.
+
                 diagnosticsLogger.recordStructured(
                     "foxcore",
                     "native start rejected",

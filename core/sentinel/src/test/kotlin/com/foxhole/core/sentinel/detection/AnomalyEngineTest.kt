@@ -130,9 +130,7 @@ class AnomalyEngineTest {
                 ),
                 appWindows = emptyList(),
                 history = AnomalyHistory(trafficWindows = trafficHistory(country = "US")),
-                // Keep country analysis enabled and deliberately match the retired detector's old
-                // fixed-country threshold. This fails if that legacy heuristic is ever wired back
-                // into the active detector set.
+
                 settings = enabledSettings.copy(analyzeDestinationCountries = true),
             )
 
@@ -141,8 +139,6 @@ class AnomalyEngineTest {
 
     @Test
     fun `stationary heavy uploader at its own baseline stays silent`() {
-        // A backup app that ALWAYS uploads a lot: current tx equals its historical baseline, so
-        // z is ~0 and the share boost must not fire on share/ratio alone.
         val steadyTx = 6_000_000L
         val assessment =
             engine.evaluate(
@@ -290,7 +286,6 @@ class AnomalyEngineTest {
 
     @Test
     fun `content-heavy app ack-shaped upload spike is softer than a standard app's`() {
-        // Streaming inflates tx through acks while staying download-shaped (low upload ratio).
         val history = appHistory(txBytes = 50_000)
         val currentWindow = trafficWindow(rxBytes = 80_000_000, txBytes = 1_500_000)
         val ackWindows = listOf(appWindow(packageName = "com.chat", rxBytes = 60_000_000, txBytes = 1_200_000))
@@ -520,7 +515,6 @@ class AnomalyEngineTest {
 
     @Test
     fun `persisted seen countries suppress re-alerting after raw history expires`() {
-        // Raw windows only know DE, but the long-horizon store also remembers US.
         val assessment =
             engine.evaluate(
                 current =
@@ -665,8 +659,6 @@ class AnomalyEngineTest {
 
     @Test
     fun `total traffic spike still fires when the dominant app is excluded`() {
-        // Full exclusion removes the excluded app's windows entirely, so the total spike keeps
-        // firing on `current` and intentionally loses the content-heavy dampening.
         val assessment =
             engine.evaluate(
                 current = trafficWindow(rxBytes = 90_000_000, txBytes = 1_000_000),

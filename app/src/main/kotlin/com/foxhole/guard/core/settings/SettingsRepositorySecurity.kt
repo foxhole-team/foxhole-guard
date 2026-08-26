@@ -4,9 +4,6 @@ import com.foxhole.core.model.AppLockMode
 import com.foxhole.core.model.AppLockTimeout
 import com.foxhole.core.model.GuardHostingMode
 
-// App-entry protection settings (task_new.md). Secrets never live here: the keybox on
-// disk owns the password material, these mutators only steer lock/guard behavior.
-
 suspend fun SettingsRepository.updateAppLockMode(value: AppLockMode) =
     update { it.copy(appLock = it.appLock.copy(mode = value)) }
 

@@ -1,7 +1,11 @@
 package com.foxhole.guard.ui.cli
 
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
 import com.foxhole.core.model.PanelAppearance
+import com.foxhole.guard.ui.cli.components.CliSheetHeaderIconRole
+import com.foxhole.guard.ui.cli.components.cliModalHeaderControlOffsetFor
+import com.foxhole.guard.ui.cli.components.cliModalHeaderIconOffsetFor
 import com.foxhole.guard.ui.cli.components.cliModalSurfaceColor
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -38,6 +42,27 @@ class CliConfirmationModalContractTest {
     }
 
     @Test
+    fun `material sheets and platform dialogs own their motion`() {
+        val frame = cli("components/CliModalFrame.kt")
+        val bottomSheet = cli("components/CliBottomSheet.kt")
+        val platformModalConsumers = listOf(
+            cli("components/CliInputModal.kt"),
+            cli("onboarding/CliOnboardingWizard.kt"),
+            cli("profiles/CliProfileEditorScreen.kt"),
+            cli("profiles/CliProfileTransfer.kt"),
+            cli("profiles/CliQrScannerOverlay.kt"),
+        )
+
+        assertFalse(frame.contains("cliModalContentEnter"))
+        assertFalse(frame.contains("CLI_MODAL_CONTENT_"))
+        assertFalse(bottomSheet.contains(".cliModalContentEnter()"))
+        assertFalse(bottomSheet.contains("surfaceMotion"))
+        assertFalse(bottomSheet.contains("cliBottomSheetSurfaceMotion"))
+        assertTrue(bottomSheet.contains("sheetState.hide()"))
+        platformModalConsumers.forEach { source -> assertFalse(source.contains("cliModalContentEnter")) }
+    }
+
+    @Test
     fun `the inline yes-no row no longer exists`() {
         assertFalse(
             "CliYesNoRow is back, so inline confirmations are possible again",
@@ -46,15 +71,188 @@ class CliConfirmationModalContractTest {
     }
 
     @Test
-    fun `the confirm sheet rides the shared bottom sheet with cancel first`() {
+    fun `the confirm sheet keeps actions above the shared accent close control`() {
         val source = cli("components/CliConfirmSheet.kt")
+        val bottomSheet = cli("components/CliBottomSheet.kt")
 
         assertTrue(source.contains("CliBottomSheet("))
+        assertTrue(source.contains("closeActionTag = cancelTag"))
         assertTrue(source.contains("CliSheetActionsRow("))
-        assertTrue(source.contains("color = colors.err"))
-        assertTrue(source.contains("filled = true"))
+        assertFalse(source.contains("cancelButton("))
+        assertFalse(source.contains("filled = true"))
         val singleAction = source.substringAfter("actions.size == 1 ->").substringBefore("else ->")
-        assertTrue(singleAction.indexOf("cancelButton(") < singleAction.indexOf("actionButton("))
+        assertTrue(singleAction.contains("actionButton(actions.single(), modifier.fillMaxWidth())"))
+        assertTrue(bottomSheet.contains("Modifier.verticalScroll(bodyScrollState)"))
+        assertTrue(
+            bottomSheet.indexOf("Modifier.verticalScroll(bodyScrollState)") <
+                bottomSheet.indexOf("CliModalCloseButton("),
+        )
+        assertTrue(bottomSheet.contains("color = LocalCliColors.current.accent"))
+    }
+
+    @Test
+    fun `vpn tor choices use two actions above the shared cancel footer`() {
+        val prompt = cli("home/CliTorPromptPanel.kt")
+        val buttons = cli("home/CliHomeButtons.kt")
+
+        listOf(
+            "TorTransitionPrompt.VpnTorStop",
+            "TorTransitionPrompt.VpnTorModeChoice",
+            "confirmVpnTorStopTor(prompt)",
+            "confirmVpnTorStopAll(prompt)",
+            "confirmVpnTorModeChoice(prompt, RoutingModePreset.TOR)",
+            "confirmVpnTorModeChoice(prompt, RoutingModePreset.VPN)",
+        ).forEach { contract -> assertTrue("missing $contract", prompt.contains(contract)) }
+        assertTrue(prompt.contains("closeLabel = if (prompt.isVpnTorChoice())"))
+        assertTrue(prompt.contains("R.string.cli_common_no_cancel"))
+        assertTrue(prompt.contains("horizontal = prompt.isVpnTorChoice()"))
+        assertTrue(buttons.indexOf("onVpnTorStopRequested()") < buttons.indexOf("onToggleConnection()"))
+    }
+
+    @Test
+    fun `smart profile test shares the fixed footer with accent close`() {
+        val sheet = cli("profiles/CliSmartProfileSheet.kt")
+        val bottomSheet = cli("components/CliBottomSheet.kt")
+
+        assertTrue(sheet.contains("footerTrailing = {"))
+        assertTrue(sheet.contains("CLI_SMART_SHEET_TEST_TAG"))
+        assertTrue(sheet.contains("CLI_SMART_SHEET_CLOSE_TAG"))
+        assertTrue(sheet.indexOf("footerTrailing = {") < sheet.indexOf("CliProtocolDropdown("))
+        assertTrue(sheet.contains("onOptionSelected = requestSheetDismiss"))
+        val testButton = sheet.substringAfter("internal fun CliSmartTestButton(")
+        assertTrue(testButton.contains("color = colors.ok"))
+        assertFalse(testButton.substringBefore("if (confirmVpnOnlyTest)").contains("filled = true"))
+        assertTrue(bottomSheet.contains("footerLeading: (@Composable RowScope.() -> Unit)? = null"))
+        assertTrue(bottomSheet.contains("footerTrailing: (@Composable RowScope.() -> Unit)? = null"))
+        assertTrue(bottomSheet.contains("horizontalArrangement = Arrangement.spacedBy(CliSpacing.sm)"))
+        assertTrue(bottomSheet.contains("Modifier.verticalScroll(bodyScrollState)"))
+        assertTrue(
+            bottomSheet.indexOf("Modifier.verticalScroll(bodyScrollState)") <
+                bottomSheet.indexOf("footerTrailing?.invoke(this)"),
+        )
+        val footer = bottomSheet.substringAfter("footerLeading?.invoke(this)")
+        assertTrue(footer.indexOf("CliModalCloseButton(") < footer.indexOf("footerTrailing?.invoke(this)"))
+    }
+
+    @Test
+    fun `shared bottom sheet hides once before its owner unmounts it`() {
+        val bottomSheet = cli("components/CliBottomSheet.kt")
+        val request = bottomSheet
+            .substringAfter("val dismissSheet: ((() -> Unit)?) -> Unit =")
+            .substringBefore("return CliBottomSheetDismissRequests(")
+
+        assertTrue(request.contains("if (!dismissInProgress)"))
+        assertTrue(request.contains("try {"))
+        assertFalse(request.contains("surfaceMotion"))
+        assertFalse(request.contains("EXIT_HANDOFF"))
+        assertTrue(request.contains("sheetState.hide()"))
+        assertTrue(request.contains("} finally {"))
+        assertTrue(request.contains("if (sheetState.isVisible)"))
+        assertTrue(request.contains("dismissInProgress = false"))
+        assertTrue(request.indexOf("sheetState.hide()") < request.indexOf("currentOnDismiss()"))
+        assertFalse(request.contains("catch ("))
+        assertFalse(request.contains("delay("))
+        assertTrue(bottomSheet.contains("onDismissRequest = requestDismiss"))
+        assertEquals(2, Regex("onClick = requestDismiss").findAll(bottomSheet).count())
+        assertTrue(bottomSheet.contains("LocalCliBottomSheetDismissRequest provides requestDismiss"))
+        assertTrue(bottomSheet.contains("LocalCliBottomSheetDismissAfter provides requestDismissAfter"))
+        assertTrue(bottomSheet.contains("autoDismissAfterMillis?.let"))
+    }
+
+    @Test
+    fun `modal header icons lift two steps without moving the trailing control`() {
+        assertEquals((-4).dp, cliModalHeaderIconOffsetFor("Confirm"))
+        assertEquals((-4).dp, cliModalHeaderIconOffsetFor("Подтвердить"))
+        assertEquals(
+            (-4).dp,
+            cliModalHeaderIconOffsetFor("Information", CliSheetHeaderIconRole.INFORMATION),
+        )
+        assertEquals(
+            (-4).dp,
+            cliModalHeaderIconOffsetFor(
+                "Information",
+                CliSheetHeaderIconRole.INFORMATION,
+                pixelArtEnabled = false,
+            ),
+        )
+        assertEquals((-2).dp, cliModalHeaderControlOffsetFor("Confirm"))
+        assertEquals((-2).dp, cliModalHeaderControlOffsetFor("Подтвердить"))
+
+        val titleRow = cli("components/CliBottomSheet.kt")
+            .substringAfter("if (title != null)")
+            .substringBefore("Spacer(modifier = Modifier.height(CliSpacing.sm))")
+        assertTrue(titleRow.contains("Row(verticalAlignment = Alignment.Top)"))
+        assertTrue(titleRow.contains(".height(CliHeaderControlSlotHeight)"))
+        assertTrue(titleRow.contains("contentAlignment = Alignment.Center"))
+        assertEquals(2, Regex("Spacer\\(modifier = Modifier\\.width\\(CliSpacing\\.xs\\)\\)").findAll(titleRow).count())
+        assertEquals(1, Regex("cliModalHeaderIconOffsetFor\\(").findAll(titleRow).count())
+        assertEquals(1, Regex("cliModalHeaderControlOffsetFor\\(").findAll(titleRow).count())
+        assertTrue(titleRow.contains("resolvedHeaderIconRole"))
+        assertTrue(titleRow.contains("pixelArtEnabled"))
+    }
+
+    @Test
+    fun `every modal title uses the default foreground colour`() {
+        val bottomSheet = cli("components/CliBottomSheet.kt")
+        val inputModal = cli("components/CliInputModal.kt")
+
+        assertTrue(bottomSheet.contains("color = colors.fg"))
+        assertTrue(inputModal.contains("color = colors.fg"))
+        assertTrue(cli("profiles/CliProfileEditorScreen.kt").contains("titleColor = colors.fg"))
+        assertTrue(cli("profiles/CliManualProfileEditor.kt").contains("titleColor = colors.fg"))
+        assertTrue(
+            cli("profiles/CliQrScannerOverlay.kt")
+                .contains("style = CliType.title, color = colors.fg"),
+        )
+        assertTrue(cli("profiles/CliProfileTransfer.kt").contains("titleColor = colors.fg"))
+    }
+
+    @Test
+    fun `home action rows animate coordinated layout changes`() {
+        val buttons = cli("home/CliHomeButtons.kt")
+
+        assertTrue(buttons.contains("label = \"homePrimaryActions\""))
+        assertTrue(buttons.contains("label = \"homeSecondaryActions\""))
+        assertEquals(1, Regex("targetState = row,").findAll(buttons).count())
+        assertTrue(buttons.contains("private fun CliMorphingActionRow("))
+        assertTrue(buttons.contains("transition.animateFloat("))
+        assertTrue(buttons.contains("transition.animateDp("))
+        assertTrue(buttons.contains("button in transition.currentState || button in transition.targetState"))
+        assertFalse(buttons.contains("fillMaxWidth().animateContentSize()"))
+    }
+
+    @Test
+    fun `every modal family exposes the same close action`() {
+        val bottomSheet = cli("components/CliBottomSheet.kt")
+        val input = cli("components/CliInputModal.kt")
+        val button = cli("components/CliButton.kt")
+
+        assertTrue(bottomSheet.contains("CliModalCloseButton("))
+        assertTrue(bottomSheet.contains("R.string.cli_common_close_action"))
+        assertTrue(bottomSheet.contains("contentWindowInsets = { BottomSheetDefaults.windowInsets }"))
+        assertTrue(input.contains("CliModalCloseButton("))
+        assertTrue(button.contains(".defaultMinSize(minHeight = 48.dp)"))
+        listOf(
+            "profiles/CliProfileEditorScreen.kt",
+            "profiles/CliManualProfileEditor.kt",
+            "profiles/CliQrScannerOverlay.kt",
+            "profiles/CliProfileTransfer.kt",
+        ).forEach { relative ->
+            val source = cli(relative)
+            assertTrue("$relative bypasses the shared close control", source.contains("CliModalCloseButton("))
+        }
+        listOf(
+            "components/CliInputModal.kt",
+            "profiles/CliProfileEditorScreen.kt",
+            "profiles/CliQrScannerOverlay.kt",
+            "profiles/CliProfileTransfer.kt",
+        ).forEach { relative ->
+            val source = cli(relative)
+            assertTrue(
+                "$relative can draw its footer under system navigation",
+                source.contains("decorFitsSystemWindows = true"),
+            )
+        }
     }
 
     @Test

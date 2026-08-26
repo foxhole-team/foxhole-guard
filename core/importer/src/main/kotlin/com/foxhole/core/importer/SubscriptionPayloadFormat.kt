@@ -39,7 +39,6 @@ internal fun detectSubscriptionPayloadFormat(
     raw: String,
     decodeBase64: (String) -> String?,
 ): SubscriptionPayloadFormat {
-    // Detection is content-only because providers commonly serve URI lists as text/html.
     val trimmed = raw.trim { character -> character.isWhitespace() || character == '\uFEFF' || character == '\u00A0' }
     if (trimmed.isBlank()) {
         return SubscriptionPayloadFormat.EMPTY

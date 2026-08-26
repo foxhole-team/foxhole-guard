@@ -24,7 +24,7 @@ class DiagnosticsSessionStoreTest {
             DiagnosticEntry(
                 timestamp = 1_000L,
                 tag = "network",
-                message = "remote=203.0.113.10 url=https://example.test/sub"
+                message = "endpoint=SAFE_MARKER_ALPHA token=SAFE_MARKER_BETA",
             ),
             RetentionPolicy(RetentionPreset.DAY),
         )
@@ -38,10 +38,10 @@ class DiagnosticsSessionStoreTest {
         val entries = secondStore.loadRecentEntries(now = 2_000L, retention = RetentionPolicy(RetentionPreset.DAY))
 
         assertEquals(1, entries.size)
-        assertEquals("remote=[redacted] url=https://[redacted]", entries.single().message)
+        assertEquals("endpoint=SAFE_MARKER_ALPHA token=SAFE_MARKER_BETA", entries.single().message)
         val persisted = directory.listFiles().orEmpty().single()
         assertTrue(persisted.name.endsWith(".jsonl.enc"))
-        assertFalse(persisted.readText().contains("203.0.113.10"))
+        assertFalse(persisted.readText().contains("SAFE_MARKER_ALPHA"))
     }
 
     @Test
@@ -49,7 +49,7 @@ class DiagnosticsSessionStoreTest {
         val directory = Files.createTempDirectory("foxhole-diagnostics-legacy").toFile()
         val legacyFile = File(directory, "session-1000-legacy.jsonl")
         legacyFile.writeText(
-            """{"timestamp":1000,"tag":"network","message":"remote=203.0.113.10"}""" + "\n",
+            """{"timestamp":1000,"tag":"network","message":"endpoint=SAFE_MARKER_GAMMA"}""" + "\n",
             Charsets.UTF_8,
         )
         val store =
@@ -61,10 +61,10 @@ class DiagnosticsSessionStoreTest {
 
         val entries = store.loadRecentEntries(now = 2_000L, retention = RetentionPolicy(RetentionPreset.DAY))
 
-        assertEquals(listOf("remote=[redacted]"), entries.map(DiagnosticEntry::message))
+        assertEquals(listOf("endpoint=SAFE_MARKER_GAMMA"), entries.map(DiagnosticEntry::message))
         assertFalse(legacyFile.exists())
         assertTrue(directory.listFiles().orEmpty().single().name.endsWith(".jsonl.enc"))
-        assertFalse(directory.listFiles().orEmpty().single().readText().contains("203.0.113.10"))
+        assertFalse(directory.listFiles().orEmpty().single().readText().contains("SAFE_MARKER_GAMMA"))
     }
 
     @Test
@@ -104,7 +104,9 @@ class DiagnosticsSessionStoreTest {
         val entries = store.loadRecentEntries(now = 3_000L, retention = RetentionPolicy(RetentionPreset.DAY))
 
         assertTrue(
-            entries.any { entry -> entry.tag == "diagnostics" && entry.message.contains("diagnostics journal read failed") },
+            entries.any { entry ->
+                entry.tag == "diagnostics" && entry.message.contains("diagnostics journal read failed")
+            },
         )
         assertTrue(entries.any { entry -> entry.tag == "network" && entry.message == "kept" })
         assertTrue(directory.listFiles().orEmpty().count { file -> file.name.endsWith(".jsonl.enc") } >= 2)
@@ -156,7 +158,7 @@ class DiagnosticsSessionStoreTest {
             DiagnosticEntry(
                 timestamp = 1_000L,
                 tag = "smart-start-replay",
-                message = """{"profileId":1,"optionId":"old"}""",
+                message = """{"profileId":"SAFE_MARKER_OLD","optionId":"SAFE_OPTION_OLD"}""",
             ),
             RetentionPolicy(RetentionPreset.DAY),
         )
@@ -167,7 +169,7 @@ class DiagnosticsSessionStoreTest {
             DiagnosticEntry(
                 timestamp = now,
                 tag = "smart-start-replay",
-                message = """{"profileId":2,"optionId":"current"}""",
+                message = """{"profileId":"SAFE_MARKER_CURRENT","optionId":"SAFE_OPTION_CURRENT"}""",
             ),
             RetentionPolicy(RetentionPreset.DAY),
         )
@@ -175,7 +177,7 @@ class DiagnosticsSessionStoreTest {
         val entries = store.loadRecentEntries(now = now, retention = RetentionPolicy(RetentionPreset.DAY))
 
         assertEquals(
-            listOf("""{"profileId":"[redacted]","optionId":"[redacted]"}"""),
+            listOf("""{"profileId":"SAFE_MARKER_CURRENT","optionId":"SAFE_OPTION_CURRENT"}"""),
             entries.map(DiagnosticEntry::message),
         )
     }

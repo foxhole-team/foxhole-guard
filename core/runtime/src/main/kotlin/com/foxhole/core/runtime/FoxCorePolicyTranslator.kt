@@ -17,11 +17,7 @@ internal data class FoxCorePolicyTranslation(
     val routes: JsonArray,
     val traffic: JsonObject,
     val document: JsonObject,
-    /**
-     * The resolver a packet-tunnel profile declares, for Android's TUN builder. Non-null only when
-     * the primary outbound is a packet tunnel: every other shape lets the engine intercept DNS and
-     * takes the advertised address out of [dns] instead.
-     */
+
     val packetTunnelDnsAdvertise: String? = null,
 )
 
@@ -73,8 +69,7 @@ internal object FoxCorePolicyTranslator {
                         },
                     )
                 }
-                // Explicit false is deliberate: the old config cannot arm a private network that
-                // was not successfully migrated into the immutable outbound registry.
+
                 put("tor_enabled", FoxCoreOverlay.TOR in overlays)
                 put("i2p_enabled", FoxCoreOverlay.I2P in overlays)
                 put("kill_switch", killSwitch)
@@ -300,8 +295,7 @@ internal object FoxCorePolicyTranslator {
         ) {
             rejectFoxCoreConfig(FoxCoreConfigRejection.POLICY_UNREPRESENTABLE, path)
         }
-        // A default that already moved means a second inverted rule (or a non-VPN final): two
-        // "everything else goes direct" statements cannot both be the default.
+
         if (target.defaultAction != "vpn") {
             rejectFoxCoreConfig(FoxCoreConfigRejection.POLICY_UNREPRESENTABLE, path)
         }
@@ -310,15 +304,9 @@ internal object FoxCorePolicyTranslator {
             rejectFoxCoreConfig(FoxCoreConfigRejection.INVALID_SHAPE, "$path.package_name")
         }
         target.defaultAction = "direct"
-        // Packages an EARLIER rule already classified keep that classification — first match wins,
-        // exactly as in the rule list this is translated from. This is not a detail: the assembler
-        // puts the firewall's blocked packages INSIDE the include set (so the block rule can see
-        // them at all) and emits their reject rule first, so demanding an empty application map
-        // here — or re-adding them as "vpn" through the conflict-checking [addApplication] — made
-        // "include split + firewall" an unrepresentable config. It was refused before the tun was
-        // built, and the profile simply would not connect while any app was blocked.
+
         included.forEach { packageName ->
-            // Application verdicts precede route rules; preserve complete per-package route pairs.
+
             if (!target.hasCompleteTransportRoute(packageName)) {
                 target.retainApplication(packageName, "vpn", path)
             }
@@ -424,10 +412,6 @@ internal object FoxCorePolicyTranslator {
                 }
                 ?: rejectFoxCoreConfig(FoxCoreConfigRejection.INVALID_SHAPE, "$.dns.servers")
         if (primaryIsPacketTunnel) {
-            // Deliberately ahead of the server and rule validation below. On this shape the engine
-            // is handed no upstream and no rule set, so nothing in `$.dns` reaches it except the one
-            // address lifted out here — and a resolver or filter the user configured for the other
-            // profiles must not decide whether this one starts.
             val packetTunnel = packetTunnelDns(servers)
             requireI2pFakeIpDns(overlays, packetTunnel.config.optionalString("mode", "$.dns"))
             return packetTunnel
@@ -533,21 +517,6 @@ internal object FoxCorePolicyTranslator {
         }
     }
 
-    /**
-     * DNS for a WireGuard/AmneziaWG primary: not intercepted at all.
-     *
-     * The engine refuses `dns.route='primary'` on an L3 packet tunnel, and rightly so — the tunnel
-     * carries IP packets and offers no stream outbound to resolve through, so every intercepted
-     * lookup would have left beside the tunnel in the clear. Before the engine grew that refusal a
-     * WireGuard profile connected and quietly leaked its DNS; afterwards it stopped starting at all.
-     * Neither is the behaviour of a WireGuard client, which simply declares the resolver from the
-     * config to the system and lets the queries ride the tunnel as ordinary packets. So this returns
-     * a document the engine's `intercepts()` reads as false — no `advertise`, no `upstreams`,
-     * `real_ip` — and hands the declared resolver back for the TUN instead.
-     *
-     * The price, accepted knowingly: the DNS filter and fake-IP do not work on these profiles.
-     * Nothing intercepts the queries, so there is nothing to filter them with.
-     */
     private fun packetTunnelDns(servers: List<JsonObject>): DnsTranslation {
         val resolver =
             packetTunnelResolver(servers)
@@ -565,17 +534,6 @@ internal object FoxCorePolicyTranslator {
         )
     }
 
-    /**
-     * The address a packet-tunnel profile declares as its resolver.
-     *
-     * Matched on the managed tag the importer writes for a WireGuard `DNS =` line rather than on
-     * `detour`: the managed remote resolver carries `detour: "proxy"` too, and it is a public
-     * address this app chose, not one the profile carries. Advertising that on the TUN would be the
-     * invented resolver the refusal above exists to avoid.
-     *
-     * Only an IP literal can be advertised — VpnService.Builder.addDnsServer takes a numeric
-     * address — so a hostname resolver reads as "no resolver" and is refused rather than dropped.
-     */
     private fun packetTunnelResolver(servers: List<JsonObject>): String? {
         servers.forEachIndexed { index, server ->
             val path = "$.dns.servers[$index]"

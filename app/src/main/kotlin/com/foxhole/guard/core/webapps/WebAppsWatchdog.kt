@@ -38,20 +38,6 @@ import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import java.util.concurrent.TimeUnit
 
-/**
- * [WatchdogNames.WEB], the push watchdog for web apps. Android WebView has no real Web Push, so a
- * hidden WebView walks the sites on a schedule using the JS shim ([webAppShimJs]) and a `(N)`
- * title heuristic. It runs when push is on; with tunnel isolation enabled it additionally demands
- * the tunnel or guard up
- * ([webAppRouteSatisfied]), so polling then always goes through the tunnel — with isolation off
- * (the default) it rides the current network like any browser.
- * Each app is polled by a fresh WebView bound to that app's profile ([WebAppProfiles]) — the same
- * profile its full-screen frame uses, so logged-in sessions stay visible to the watchdog while
- * apps stay invisible to each other. Without MULTI_PROFILE everything shares the default profile.
- *
- * Cadence: a [RuntimeSessionTicker] in the app process, plus a WorkManager pass every 15 minutes
- * in case the process dies. Concurrent passes collapse on a mutex.
- */
 internal class WebAppsWatchdog(
     private val context: Context,
     private val settingsRepository: SettingsRepository,
@@ -65,7 +51,6 @@ internal class WebAppsWatchdog(
     private val ticker = RuntimeSessionTicker(scope = scope)
     private val pollMutex = Mutex()
 
-    /** The open frame's app id: its badge growth is not notified — the user is already looking. */
     @Volatile
     var foregroundWebAppId: Long? = null
     private var webView: WebView? = null
@@ -104,8 +89,7 @@ internal class WebAppsWatchdog(
                     }
                 }
         }
-        // Route transitions do not re-register (and cancel) an in-flight pass. They only request
-        // one collapsed pass; pollMutex keeps this edge-triggered wake from overlapping the timer.
+
         scope.launch {
             combine(
                 FoxholeVpnRuntimeBridge.snapshot,
@@ -121,15 +105,11 @@ internal class WebAppsWatchdog(
         }
     }
 
-    /** One strict pass over every app; concurrent calls collapse. */
     suspend fun pollOnce() {
         if (!pollMutex.tryLock()) {
             return
         }
         try {
-            // ProxyController is process-global. A foreground frame owns it until its WebView is
-            // destroyed and the override is cleared, so a background pass must not even inspect
-            // another app while that ownership is live.
             if (foregroundWebAppId != null) return
             val webApps = settingsRepository.settings.value.webApps
             val snapshot = FoxholeVpnRuntimeBridge.snapshot.value
@@ -149,11 +129,6 @@ internal class WebAppsWatchdog(
         }
     }
 
-    /**
-     * One app. Every early return is an app that must NOT be polled: its route is unsatisfied, the
-     * runtime behind that route is not up, or the proxy override could not be installed — and a poll
-     * without the override would run on whatever network the process happens to have.
-     */
     private suspend fun pollWebApp(
         app: WebAppEntity,
         isolationEnabled: Boolean,
@@ -212,14 +187,6 @@ internal class WebAppsWatchdog(
         webAppsRepository.setBadge(app.id, newCount, System.currentTimeMillis())
     }
 
-    /**
-     * Claims the process-global proxy override for a foreground frame.
-     *
-     * The override is one switch for every WebView in the process, so the frame has to take it from
-     * the poller rather than share it: the foreground id stops new passes, the pause waits out the
-     * one that may already be mid-poll, and only then is the route installed. A refused activation
-     * hands the claim straight back — the caller must not open a frame that would run unrouted.
-     */
     suspend fun acquireForegroundProxy(
         appId: Long,
         route: WebAppRoute,
@@ -236,16 +203,11 @@ internal class WebAppsWatchdog(
         return activation
     }
 
-    /**
-     * Called once the frame's WebView is destroyed — never before. Clearing the override under a
-     * live WebView is what lets a page keep loading on the default network after its route is gone.
-     */
     suspend fun releaseForegroundProxy() {
         proxyController.clear()
         foregroundWebAppId = null
     }
 
-    /** Runs [block] with polling parked and the hidden WebView released, so a wipe finds no live page. */
     suspend fun withPollingPaused(block: suspend () -> Unit) {
         pollMutex.withLock {
             withContext(Dispatchers.Main) { releaseWebView() }
@@ -292,7 +254,7 @@ internal class WebAppsWatchdog(
             settings.javaScriptCanOpenWindowsAutomatically = false
             settings.setSupportMultipleWindows(false)
             settings.setGeolocationEnabled(false)
-            // The watchdog needs no images: saves traffic and load time.
+
             settings.blockNetworkImage = true
             WebAppProfiles.cookieManager(this).also { cookies ->
                 cookies.setAcceptCookie(true)
@@ -404,7 +366,6 @@ internal class WebAppsWatchdog(
     }
 
     private companion object {
-        /** The ticker keys its tasks by string, so the watchdog's name goes in as an id. */
         const val TICKER_TASK_ID = WatchdogNames.WEB_ID
         const val PAGE_LOAD_TIMEOUT_MS = 20_000L
         const val BLANK_URL = "about:blank"

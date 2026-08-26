@@ -1,28 +1,24 @@
 package com.foxhole.guard.ui.cli.settings
 
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
 import com.foxhole.core.model.DnsSettings
 import com.foxhole.core.model.DomainStrategy
 import com.foxhole.core.model.SecureDnsMode
 import com.foxhole.core.model.ThreatListLevel
 import com.foxhole.core.model.TrackerListLevel
 import com.foxhole.guard.R
+import com.foxhole.guard.runtime.RemoteDownloadProgress
 import com.foxhole.guard.ui.DnsResolverPreset
 import com.foxhole.guard.ui.FoxholeUpdatePhase
 import com.foxhole.guard.ui.HomeViewModel
@@ -36,14 +32,15 @@ import com.foxhole.guard.ui.cli.components.CliDropdownRow
 import com.foxhole.guard.ui.cli.components.CliElbowLine
 import com.foxhole.guard.ui.cli.components.CliInputModal
 import com.foxhole.guard.ui.cli.components.CliPanel
-import com.foxhole.guard.ui.cli.components.CliPixIcon
 import com.foxhole.guard.ui.cli.components.CliRowDivider
 import com.foxhole.guard.ui.cli.components.CliSelectRow
 import com.foxhole.guard.ui.cli.components.CliSheetAction
 import com.foxhole.guard.ui.cli.components.CliSheetActionsRow
 import com.foxhole.guard.ui.cli.components.CliToggleRow
 import com.foxhole.guard.ui.dnsResolverPresetFor
+import com.foxhole.guard.ui.isRunning
 import com.foxhole.guard.ui.onDnsDomainBypassRulesChanged
+import com.foxhole.guard.ui.onDnsFilterEnablePreflightCancelled
 import com.foxhole.guard.ui.onDnsReplaceSystemDnsChanged
 import com.foxhole.guard.ui.onDnsSettingsChanged
 import com.foxhole.guard.ui.onDomainStrategySelected
@@ -57,6 +54,7 @@ internal fun CliDnsSection(
     sniff: Boolean,
     refreshInProgress: Boolean,
     refreshPhase: FoxholeUpdatePhase,
+    refreshProgress: RemoteDownloadProgress?,
     expanded: Boolean,
     onToggleExpanded: () -> Unit,
     onOpenAppBypass: () -> Unit,
@@ -64,7 +62,7 @@ internal fun CliDnsSection(
     val colors = LocalCliColors.current
     CliPanel(
         title = stringResource(R.string.cli_cfg_section_dns),
-        icon = R.drawable.pix_dns,
+        icon = R.drawable.lin_dns,
         iconColor = colors.accent,
         modifier = Modifier.fillMaxWidth(),
         collapsible = true,
@@ -76,11 +74,12 @@ internal fun CliDnsSection(
             dns = dns,
             refreshInProgress = refreshInProgress,
             refreshPhase = refreshPhase,
+            refreshProgress = refreshProgress,
         )
         CliRowDivider()
         CliDropdownRow(
             label = stringResource(R.string.cli_cfg_dns_secure),
-            icon = R.drawable.pix_lock,
+            icon = R.drawable.lin_lock,
             value = dns.secureMode.name.lowercase(),
             options = SecureDnsMode.entries.map { mode ->
                 CliDropdownOption(
@@ -99,7 +98,7 @@ internal fun CliDnsSection(
         CliRowDivider()
         CliDropdownRow(
             label = stringResource(R.string.cli_cfg_domain_strategy),
-            icon = R.drawable.pix_globe,
+            icon = R.drawable.lin_globe,
             value = domainStrategy.name.lowercase(),
             options = DomainStrategy.entries.map { strategy ->
                 CliDropdownOption(id = strategy.name, label = strategy.name.lowercase())
@@ -112,12 +111,12 @@ internal fun CliDnsSection(
         CliRowDivider()
         CliToggleRow(
             label = stringResource(R.string.cli_cfg_dns_replace_system),
-            icon = R.drawable.pix_settings,
+            icon = R.drawable.lin_settings,
             checked = dns.replaceSystemDns,
             onToggle = viewModel::onDnsReplaceSystemDnsChanged,
             infoText = stringResource(R.string.cli_cfg_dns_replace_system_note),
         )
-        if (dnsReplaceSystemIpv6WarningVisible(dns)) {
+        CliSettingsAnimatedRows(visible = dnsReplaceSystemIpv6WarningVisible(dns)) {
             CliElbowLine(
                 text = stringResource(R.string.cli_cfg_dns_replace_system_ipv6_warn),
                 color = colors.warn,
@@ -128,7 +127,7 @@ internal fun CliDnsSection(
         CliRowDivider()
         CliActionRow(
             label = stringResource(R.string.cli_cfg_dns_app_bypass),
-            icon = R.drawable.pix_apps,
+            icon = R.drawable.lin_apps,
             value = dns.appBypassPackages.size.toString(),
             onTap = onOpenAppBypass,
         )
@@ -141,15 +140,13 @@ private fun CliDnsFilteringGroup(
     dns: DnsSettings,
     refreshInProgress: Boolean,
     refreshPhase: FoxholeUpdatePhase,
+    refreshProgress: RemoteDownloadProgress?,
 ) {
     val colors = LocalCliColors.current
     var enableConfirmationOpen by rememberSaveable { mutableStateOf(false) }
-    LaunchedEffect(dns.filteringEnabled) {
-        if (dns.filteringEnabled) enableConfirmationOpen = false
-    }
     CliToggleRow(
         label = stringResource(R.string.cli_cfg_dns_filter),
-        icon = R.drawable.pix_dns,
+        icon = R.drawable.lin_dns,
         checked = dns.filteringEnabled,
         enabled = !refreshInProgress,
         onToggle = { requestedEnabled ->
@@ -162,86 +159,89 @@ private fun CliDnsFilteringGroup(
         },
     )
     if (enableConfirmationOpen) {
+        val verifiedSuccess = dns.filteringEnabled &&
+            (refreshPhase == FoxholeUpdatePhase.DONE || refreshPhase == FoxholeUpdatePhase.NO_UPDATE)
         CliDnsFilterEnableSheet(
             phase = refreshPhase,
             refreshInProgress = refreshInProgress,
+            verifiedSuccess = verifiedSuccess,
+            downloadProgress = refreshProgress,
             onConfirm = {
                 viewModel.onDnsSettingsChanged(dns.copy(filteringEnabled = true))
             },
-            onDismiss = { enableConfirmationOpen = false },
+            onDismiss = {
+                if (refreshInProgress) viewModel.onDnsFilterEnablePreflightCancelled()
+                enableConfirmationOpen = false
+            },
         )
     }
-    if (refreshInProgress) {
-        CliFoxholeUpdateProgress(phase = refreshPhase)
-    }
-    if (!dns.filteringEnabled) {
-        return
-    }
-    CliRowDivider()
-    CliToggleRow(
-        label = stringResource(R.string.cli_cfg_dns_block_ads),
-        icon = R.drawable.pix_forbidden,
-        checked = dns.blockAds,
-        onToggle = { viewModel.onDnsSettingsChanged(dns.copy(blockAds = it)) },
-    )
-    CliRowDivider()
-    CliToggleRow(
-        label = stringResource(R.string.cli_cfg_dns_block_trackers),
-        icon = R.drawable.pix_incognito,
-        checked = dns.blockTrackers,
-        onToggle = { viewModel.onDnsSettingsChanged(dns.copy(blockTrackers = it)) },
-    )
-    if (dnsTrackerLevelVisible(dns)) {
+    CliSettingsAnimatedRows(visible = dns.filteringEnabled) {
         CliRowDivider()
-        CliDropdownRow(
-            label = stringResource(R.string.cli_cfg_dns_tracker_level),
-            icon = R.drawable.pix_up,
-            value = dns.trackerListLevel.name.lowercase(),
-            options = TrackerListLevel.entries.map { level ->
-                CliDropdownOption(id = level.name, label = level.name.lowercase())
-            },
-            selectedId = dns.trackerListLevel.name,
-            onSelect = { id ->
-                viewModel.onDnsSettingsChanged(dns.copy(trackerListLevel = TrackerListLevel.valueOf(id)))
-            },
-            modifier = Modifier.padding(start = CliSpacing.md),
+        CliToggleRow(
+            label = stringResource(R.string.cli_cfg_dns_block_ads),
+            icon = R.drawable.lin_forbidden,
+            checked = dns.blockAds,
+            onToggle = { viewModel.onDnsSettingsChanged(dns.copy(blockAds = it)) },
         )
-    }
-    CliRowDivider()
-    CliToggleRow(
-        label = stringResource(R.string.cli_cfg_dns_block_telemetry),
-        icon = R.drawable.pix_stats,
-        checked = dns.blockAppTelemetry,
-        onToggle = { viewModel.onDnsSettingsChanged(dns.copy(blockAppTelemetry = it)) },
-    )
-    CliRowDivider()
-    CliToggleRow(
-        label = stringResource(R.string.cli_cfg_dns_block_malicious),
-        icon = R.drawable.pix_shield,
-        checked = dns.blockMaliciousDomains,
-        onToggle = { viewModel.onDnsSettingsChanged(dns.copy(blockMaliciousDomains = it)) },
-    )
-    if (dnsThreatLevelVisible(dns)) {
         CliRowDivider()
-        CliDropdownRow(
-            label = stringResource(R.string.cli_cfg_dns_threat_level),
-            icon = R.drawable.pix_up,
-            value = dns.threatListLevel.name.lowercase(),
-            options = ThreatListLevel.entries.map { level ->
-                CliDropdownOption(id = level.name, label = level.name.lowercase())
-            },
-            selectedId = dns.threatListLevel.name,
-            onSelect = { id ->
-                viewModel.onDnsSettingsChanged(dns.copy(threatListLevel = ThreatListLevel.valueOf(id)))
-            },
-            modifier = Modifier.padding(start = CliSpacing.md),
+        CliToggleRow(
+            label = stringResource(R.string.cli_cfg_dns_block_trackers),
+            icon = R.drawable.lin_incognito,
+            checked = dns.blockTrackers,
+            onToggle = { viewModel.onDnsSettingsChanged(dns.copy(blockTrackers = it)) },
         )
-    }
-    if (dnsInterceptWarningVisible(dns)) {
-        CliElbowLine(
-            text = stringResource(R.string.cli_cfg_dns_intercept_warn),
-            color = colors.warn,
+        CliSettingsAnimatedRows(visible = dnsTrackerLevelVisible(dns)) {
+            CliRowDivider()
+            CliDropdownRow(
+                label = stringResource(R.string.cli_cfg_dns_tracker_level),
+                icon = R.drawable.lin_up,
+                value = dns.trackerListLevel.name.lowercase(),
+                options = TrackerListLevel.entries.map { level ->
+                    CliDropdownOption(id = level.name, label = level.name.lowercase())
+                },
+                selectedId = dns.trackerListLevel.name,
+                onSelect = { id ->
+                    viewModel.onDnsSettingsChanged(dns.copy(trackerListLevel = TrackerListLevel.valueOf(id)))
+                },
+                modifier = Modifier.padding(start = CliSpacing.md),
+            )
+        }
+        CliRowDivider()
+        CliToggleRow(
+            label = stringResource(R.string.cli_cfg_dns_block_telemetry),
+            icon = R.drawable.lin_stats,
+            checked = dns.blockAppTelemetry,
+            onToggle = { viewModel.onDnsSettingsChanged(dns.copy(blockAppTelemetry = it)) },
         )
+        CliRowDivider()
+        CliToggleRow(
+            label = stringResource(R.string.cli_cfg_dns_block_malicious),
+            icon = R.drawable.lin_shield,
+            checked = dns.blockMaliciousDomains,
+            onToggle = { viewModel.onDnsSettingsChanged(dns.copy(blockMaliciousDomains = it)) },
+        )
+        CliSettingsAnimatedRows(visible = dnsThreatLevelVisible(dns)) {
+            CliRowDivider()
+            CliDropdownRow(
+                label = stringResource(R.string.cli_cfg_dns_threat_level),
+                icon = R.drawable.lin_up,
+                value = dns.threatListLevel.name.lowercase(),
+                options = ThreatListLevel.entries.map { level ->
+                    CliDropdownOption(id = level.name, label = level.name.lowercase())
+                },
+                selectedId = dns.threatListLevel.name,
+                onSelect = { id ->
+                    viewModel.onDnsSettingsChanged(dns.copy(threatListLevel = ThreatListLevel.valueOf(id)))
+                },
+                modifier = Modifier.padding(start = CliSpacing.md),
+            )
+        }
+        CliSettingsAnimatedRows(visible = dnsInterceptWarningVisible(dns)) {
+            CliElbowLine(
+                text = stringResource(R.string.cli_cfg_dns_intercept_warn),
+                color = colors.warn,
+            )
+        }
     }
 }
 
@@ -254,51 +254,81 @@ internal fun dnsFilteringEnableConfirmationRequired(
 private fun CliDnsFilterEnableSheet(
     phase: FoxholeUpdatePhase,
     refreshInProgress: Boolean,
+    verifiedSuccess: Boolean,
+    downloadProgress: RemoteDownloadProgress?,
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     val colors = LocalCliColors.current
     CliBottomSheet(
         title = stringResource(R.string.cli_dns_filter_enable_title),
-        icon = R.drawable.pix_dns,
+        icon = R.drawable.lin_dns,
         onDismiss = onDismiss,
+        autoDismissAfterMillis = DNS_FILTER_SUCCESS_AUTO_DISMISS_MS.takeIf { verifiedSuccess },
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            CliPixIcon(
-                id = R.drawable.pix_info,
-                contentDescription = null,
-                size = 12.dp,
-                tint = colors.note,
-            )
-            Spacer(modifier = Modifier.width(CliSpacing.xs))
-            Text(
-                text = stringResource(R.string.cli_dns_filter_enable_info),
-                style = CliType.small,
-                color = colors.note,
-            )
+        val runningPhase = phase.takeIf { it.isRunning } ?: FoxholeUpdatePhase.CHECKING
+        when {
+            refreshInProgress || phase.isRunning -> {
+                CliVerifiedUpdateProgress(
+                    phase = runningPhase,
+                    downloadProgress = downloadProgress,
+                    verifiedSuccess = false,
+                )
+                Spacer(modifier = Modifier.height(CliSpacing.md))
+                CliSheetActionsRow(actions = emptyList())
+            }
+            verifiedSuccess -> {
+                CliVerifiedUpdateProgress(
+                    phase = phase,
+                    downloadProgress = downloadProgress,
+                    verifiedSuccess = true,
+                )
+            }
+            phase == FoxholeUpdatePhase.DONE || phase == FoxholeUpdatePhase.NO_UPDATE -> {
+                CliVerifiedUpdateProgress(
+                    phase = phase,
+                    downloadProgress = downloadProgress,
+                    verifiedSuccess = false,
+                )
+            }
+            phase == FoxholeUpdatePhase.FAILED -> {
+                Text(
+                    text = stringResource(R.string.dns_filter_refresh_failed),
+                    style = CliType.body,
+                    color = colors.err,
+                )
+                Spacer(modifier = Modifier.height(CliSpacing.md))
+                CliSheetActionsRow(
+                    actions = listOf(
+                        CliSheetAction(
+                            label = stringResource(R.string.cli_tor_bridges_update_retry),
+                            onClick = onConfirm,
+                        ),
+                    ),
+                )
+            }
+            else -> CliDnsFilterEnablePrompt(onConfirm)
         }
-        Spacer(modifier = Modifier.height(CliSpacing.sm))
-        Text(
-            text = stringResource(R.string.cli_dns_filter_enable_body),
-            style = CliType.body,
-            color = colors.fg,
-        )
-        Spacer(modifier = Modifier.height(CliSpacing.md))
-        if (phase.foxholeUpdateStage() != null) {
-            CliFoxholeUpdateProgress(phase = phase)
-            Spacer(modifier = Modifier.height(CliSpacing.md))
-        }
-        CliSheetActionsRow(
-            onCancel = onDismiss,
-            actions = listOf(
-                CliSheetAction(
-                    label = stringResource(R.string.cli_common_yes_confirm),
-                    onClick = onConfirm,
-                    enabled = !refreshInProgress,
-                ),
-            ),
-        )
     }
+}
+
+@Composable
+private fun CliDnsFilterEnablePrompt(onConfirm: () -> Unit) {
+    val colors = LocalCliColors.current
+    Text(
+        text = stringResource(R.string.cli_dns_filter_enable_body),
+        style = CliType.body,
+        color = colors.fg,
+    )
+    Spacer(modifier = Modifier.height(CliSpacing.md))
+    CliSheetActionsRow(
+        actions = listOf(
+            CliSheetAction(
+                label = stringResource(R.string.cli_common_yes_confirm),
+                onClick = onConfirm,
+            ),
+        ),
+    )
 }
 
 @Composable
@@ -310,18 +340,18 @@ private fun CliDnsResolverGroup(
     val colors = LocalCliColors.current
     CliToggleRow(
         label = stringResource(R.string.cli_cfg_dns_use_vpn_provider),
-        icon = R.drawable.pix_link,
+        icon = R.drawable.lin_link,
         checked = dns.useVpnProviderDns,
         onToggle = { viewModel.onDnsSettingsChanged(dns.copy(useVpnProviderDns = it)) },
     )
     CliRowDivider()
     CliToggleRow(
         label = stringResource(R.string.cli_cfg_dns_through_vpn),
-        icon = R.drawable.pix_shield,
+        icon = R.drawable.lin_shield,
         checked = dns.dnsThroughVpn,
         onToggle = { viewModel.onDnsSettingsChanged(dns.copy(dnsThroughVpn = it)) },
     )
-    if (dnsLeakWarningVisible(dns)) {
+    CliSettingsAnimatedRows(visible = dnsLeakWarningVisible(dns)) {
         CliElbowLine(
             text = stringResource(R.string.cli_cfg_dns_leak_warn),
             color = colors.warn,
@@ -330,21 +360,21 @@ private fun CliDnsResolverGroup(
     CliRowDivider()
     CliToggleRow(
         label = stringResource(R.string.cli_cfg_dns_block_outside),
-        icon = R.drawable.pix_forbidden,
+        icon = R.drawable.lin_forbidden,
         checked = dns.blockOutsideTunnel,
         onToggle = { viewModel.onDnsSettingsChanged(dns.copy(blockOutsideTunnel = it)) },
     )
     CliRowDivider()
     CliToggleRow(
         label = stringResource(R.string.cli_cfg_dns_intercept),
-        icon = R.drawable.pix_import,
+        icon = R.drawable.lin_import,
         checked = dns.interceptDnsRequests,
         onToggle = { viewModel.onDnsSettingsChanged(dns.copy(interceptDnsRequests = it)) },
     )
     CliRowDivider()
     CliToggleRow(
         label = stringResource(R.string.cli_cfg_dns_sniff),
-        icon = R.drawable.pix_status,
+        icon = R.drawable.lin_status,
         checked = sniff,
         onToggle = viewModel::onSniffChanged,
     )
@@ -360,7 +390,7 @@ private fun CliDnsServerRows(
     val preset = dnsResolverPresetFor(dns.server)
     CliDropdownRow(
         label = stringResource(R.string.cli_cfg_dns_server),
-        icon = R.drawable.pix_dns,
+        icon = R.drawable.lin_dns,
         value = preset?.label?.lowercase() ?: dns.server,
         options = DnsResolverPreset.entries
             .filter { it != DnsResolverPreset.CUSTOM }
@@ -386,7 +416,7 @@ private fun CliDnsServerRows(
     if (customOpen) {
         CliInputModal(
             title = stringResource(R.string.cli_input_value_title),
-            icon = R.drawable.pix_dns,
+            icon = R.drawable.lin_dns,
             prompt = "dns",
             value = customServer,
             onValueChange = { customServer = it.take(MAX_SERVER_LENGTH) },
@@ -411,16 +441,16 @@ private fun CliDnsBypassRows(
     var newDomain by rememberSaveable { mutableStateOf("") }
     CliSelectRow(
         label = stringResource(R.string.cli_cfg_dns_bypass),
-        icon = R.drawable.pix_link,
+        icon = R.drawable.lin_link,
         value = dns.domainBypassRules.size.toString(),
         expanded = open,
         onExpandToggle = { open = !open },
     )
-    if (open) {
+    CliSettingsAnimatedRows(visible = open) {
         dns.domainBypassRules.forEach { rule ->
             CliActionRow(
                 label = rule,
-                icon = R.drawable.pix_link,
+                icon = R.drawable.lin_link,
                 value = "✗",
                 onTap = {
                     viewModel.onDnsDomainBypassRulesChanged(dns.domainBypassRules - rule)
@@ -430,14 +460,14 @@ private fun CliDnsBypassRows(
         }
         CliActionRow(
             label = stringResource(R.string.cli_input_domain_add),
-            icon = R.drawable.pix_add,
+            icon = R.drawable.lin_add,
             onTap = { addOpen = true },
         )
     }
     if (addOpen) {
         CliInputModal(
             title = stringResource(R.string.cli_input_domain_title),
-            icon = R.drawable.pix_globe,
+            icon = R.drawable.lin_globe,
             prompt = "+",
             value = newDomain,
             onValueChange = { newDomain = it.take(MAX_SERVER_LENGTH) },
@@ -469,6 +499,7 @@ internal fun dnsReplaceSystemIpv6WarningVisible(dns: DnsSettings): Boolean =
     dns.replaceSystemDns
 
 private const val MAX_SERVER_LENGTH = 253
+private const val DNS_FILTER_SUCCESS_AUTO_DISMISS_MS = 900L
 
 private fun secureModeDetail(mode: SecureDnsMode): String = when (mode) {
     SecureDnsMode.DOH -> "dns-over-https"

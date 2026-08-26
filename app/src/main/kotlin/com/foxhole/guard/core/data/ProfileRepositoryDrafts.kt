@@ -8,12 +8,6 @@ import com.foxhole.core.model.StoredProfileSecret
 import kotlinx.coroutines.sync.withLock
 import java.util.UUID
 
-/**
- * Persists an intentionally incomplete local profile for the structured editor. A draft must not
- * go through the strict import parser: it correctly rejects an empty server, while the editor needs
- * that exact empty field as its starting point. Runtime updates still pass through the ordinary
- * sanitizer, so an unfinished draft cannot become a tunnel by bypassing validation here.
- */
 suspend fun ProfileRepository.createDraftProfile(
     name: String,
     protocolHint: ProtocolHint,

@@ -14,8 +14,8 @@ import com.foxhole.core.model.Settings
 import com.foxhole.guard.R
 import com.foxhole.guard.core.sentinel.anomaly.userFacingMessage
 import com.foxhole.guard.ui.HomeRouteUiState
+import com.foxhole.guard.ui.PublicDnsIdentityPhase
 import com.foxhole.guard.ui.confirmedTorIdentityOrNull
-import com.foxhole.guard.ui.defaultDnsServerFor
 import java.util.Locale
 
 private const val MAX_EXTENDED_EVENTS = 3
@@ -83,13 +83,20 @@ internal fun extendedRouteIdentityInfo(
 private fun dnsServerRow(
     home: HomeRouteUiState,
 ): CliTerminalRow {
-    val server = home.settings.dns.server.trim().takeIf { it.isNotBlank() }
-        ?: defaultDnsServerFor(home.settings.dns.secureMode)
-    val value = "$server · ${cliSecureDnsLabel(home.settings.dns.secureMode)}"
+    val identity = home.publicDnsIdentity
+    val updating = cliHomeDnsUpdating(home.connection.state, identity.phase)
+    val resolved = !updating && identity.phase == PublicDnsIdentityPhase.RESOLVED
     return CliTerminalRow(
         key = stringResource(R.string.cli_home_status_dns_server),
-        value = value,
+        value = when {
+            updating -> stringResource(R.string.cli_common_updating)
+            identity.phase == PublicDnsIdentityPhase.FAILED ->
+                stringResource(R.string.cli_home_dns_not_determined)
+            else ->
+                cliPublicDnsIdentityValue(identity.serverAddress, identity.countryCode)
+        },
         tone = CliLineTone.INFO,
+        flagCountry = identity.countryCode.takeIf { resolved },
     )
 }
 
@@ -145,7 +152,6 @@ private fun extendedJournalRows(extras: CliStatusExtras): List<CliTerminalRow> {
     return journalRows + anomalyRows
 }
 
-/** Event details stay on one wrapping line; the terminal already provides their timestamp. */
 internal fun cliEventColumnRow(
     event: String,
     text: String,

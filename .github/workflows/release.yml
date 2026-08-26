@@ -188,8 +188,8 @@ jobs:
           while IFS= read -r asset; do
             assets+=("$asset")
           done < <(find "$candidate_dir" -mindepth 1 -maxdepth 1 -type f | LC_ALL=C sort)
-          [[ ${#assets[@]} -eq 6 ]] || {
-            echo "Expected exactly six verified release files." >&2
+          [[ ${#assets[@]} -eq 7 ]] || {
+            echo "Expected exactly seven verified release files." >&2
             exit 1
           }
 

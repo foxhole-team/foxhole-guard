@@ -28,6 +28,7 @@ import com.foxhole.guard.runtime.FoxholeConnectionServiceContract
 import com.foxhole.guard.ui.HomeViewModel
 import com.foxhole.guard.ui.onDnsSettingsChanged
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeoutOrNull
 import org.junit.Assert.assertEquals
@@ -219,7 +220,14 @@ class VpnRuntimeSmokeTest {
             val container = context.appGraph
             val profile = prepareLiveVpnSmoke(context)
             val viewModel = HomeViewModel(context)
-            fun trafficMapState() = viewModel.trafficMapUiState.value
+            var latestTrafficMapState = viewModel.trafficMapUiState.value
+            val trafficMapCollectionJob =
+                launch {
+                    viewModel.trafficMapUiState.collect { state ->
+                        latestTrafficMapState = state
+                    }
+                }
+            fun trafficMapState() = latestTrafficMapState
 
             try {
                 container.settingsRepository.updateTrafficMapEnabled(true)
@@ -246,6 +254,7 @@ class VpnRuntimeSmokeTest {
                     trafficMapState().isAvailable,
                 )
             } finally {
+                trafficMapCollectionJob.cancel()
                 disconnectAndWait(context)
             }
         }

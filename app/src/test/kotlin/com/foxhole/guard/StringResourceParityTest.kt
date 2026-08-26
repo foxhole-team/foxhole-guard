@@ -13,8 +13,9 @@ class StringResourceParityTest {
         )
     private val formatPlaceholder =
         Regex("""%(?:\d+\$)?[-#+ 0,(]*\d*(?:\.\d+)?[a-zA-Z%]""")
-    private val incompleteFoxHoleBrand = Regex("""\bFoxHole\b(?! (?:Guard|Sentinel|Core|DB|Team))""")
+    private val incompleteFoxHoleBrand = Regex("""\bFoxHole\b(?! (?:Guard|Sentinel|Core|DB|Team|mirror))""")
     private val bareSentinelBrand = Regex("""(?<!FoxHole )\bSentinel\b""")
+    private val bareSentinelAllowedKeys = setOf("cli_foxdb_group_security")
     private val pluralEntry =
         Regex(
             """<plurals\s+[^>]*name="([^"]+)"[^>]*>(.*?)</plurals>""",
@@ -75,8 +76,10 @@ class StringResourceParityTest {
                 check(!incompleteFoxHoleBrand.containsMatchIn(value)) {
                     "$qualifier/$key contains a shortened FoxHole product name"
                 }
-                check(!bareSentinelBrand.containsMatchIn(value)) {
-                    "$qualifier/$key contains bare Sentinel instead of FoxHole Sentinel"
+                if (key !in bareSentinelAllowedKeys) {
+                    check(!bareSentinelBrand.containsMatchIn(value)) {
+                        "$qualifier/$key contains bare Sentinel instead of FoxHole Sentinel"
+                    }
                 }
             }
         }

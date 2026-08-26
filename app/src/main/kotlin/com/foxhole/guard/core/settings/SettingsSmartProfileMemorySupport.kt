@@ -41,12 +41,6 @@ internal fun smartStartEnabledProtocolSetHash(optionIds: Collection<String>): St
     return digest.joinToString(separator = "") { byte -> "%02x".format(byte) }
 }
 
-// UI-facing remembered-memory readers deliberately ignore per-network memories: the writers always
-// record every probe/ping into the global [SmartProfilePreference.protocolMemories], so the global
-// entry IS the latest measurement regardless of which network it was taken on. Reading scoped-first
-// here used to let a stale per-network snapshot shadow a fresher global one (latency icon stuck on
-// an old color after the fingerprint changed). Network-scoped memories remain in use where they
-// belong: auto-connect ranking and last-known-good selection.
 internal fun Settings.rememberedSmartStartLatencyByProfileId(
     now: Long = System.currentTimeMillis(),
 ): Map<Long, Map<String, Long>> =

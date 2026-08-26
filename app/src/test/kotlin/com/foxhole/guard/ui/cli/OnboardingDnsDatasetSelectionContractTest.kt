@@ -6,18 +6,24 @@ import java.io.File
 
 class OnboardingDnsDatasetSelectionContractTest {
     @Test
-    fun `enabling DNS filtering auto-selects its FoxHole DB data set`() {
+    fun `first run hides DNS and Sentinel enable switches but keeps data downloads`() {
         val wizard =
             sequenceOf(
                 File("src/main/kotlin/com/foxhole/guard/ui/cli/onboarding/CliOnboardingWizard.kt"),
                 File("app/src/main/kotlin/com/foxhole/guard/ui/cli/onboarding/CliOnboardingWizard.kt"),
             ).first(File::isFile).readText()
-        val dnsChoice =
+        val components =
             wizard
-                .substringAfter("onDnsFilterChange = { enabled ->")
-                .substringBefore("},\n            )")
+                .substringAfter("private fun WizardComponentsStep")
+                .substringBefore("private fun WizardAppearancePanel")
 
-        assertTrue(dnsChoice.contains("dnsFilterEnabled = enabled"))
-        assertTrue(dnsChoice.contains("dnsDownload = if (enabled) true else choices.dnsDownload"))
+        assertTrue(components.contains("cli_wizard_component_tor"))
+        assertTrue(components.contains("cli_wizard_component_i2p"))
+        assertTrue(!components.contains("cli_wizard_component_dns"))
+        assertTrue(!components.contains("cli_cfg_more_anomaly"))
+        assertTrue(wizard.contains("label = stringResource(R.string.cli_wizard_download_dns)"))
+        assertTrue(wizard.contains("label = stringResource(R.string.cli_wizard_download_sentinel)"))
+        assertTrue(wizard.contains("OnboardingDownload.DNS_FILTER"))
+        assertTrue(wizard.contains("OnboardingDownload.THREAT_INTEL"))
     }
 }

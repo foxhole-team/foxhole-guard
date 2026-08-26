@@ -1,7 +1,6 @@
 package com.foxhole.guard.ui.cli.stats
 
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -40,23 +39,18 @@ import com.foxhole.core.model.I2pTrafficBucket
 import com.foxhole.core.model.LOCAL_GUARD_PROFILE_ID
 import com.foxhole.core.model.StatisticsWindow
 import com.foxhole.core.model.TrafficWindow
-import com.foxhole.core.model.VisualStyle
 import com.foxhole.core.model.VpnMode
 import com.foxhole.guard.ui.cli.CliFormat
+import com.foxhole.guard.ui.cli.CliMotion
 import com.foxhole.guard.ui.cli.CliSpacing
 import com.foxhole.guard.ui.cli.CliType
 import com.foxhole.guard.ui.cli.LocalCliColors
-import com.foxhole.guard.ui.cli.LocalCliVisualStyle
 import com.foxhole.guard.ui.cli.cliScaledDp
 import java.time.Instant
 import java.time.ZoneId
 import java.time.temporal.ChronoUnit
 import kotlin.math.roundToInt
 
-/**
- * Lanes are split by what the device windows recorded, not by current settings, so history cannot change shape when the mode does.
- * I2P is carved out of the aggregate first because FoxCore also attributes those bytes to the originating apps; transit relay bytes stay out.
- */
 internal fun cliStatsTrafficBuckets(
     samples: List<AppTrafficWindow>,
     windowMs: Long,
@@ -142,13 +136,6 @@ internal fun cliStatsSparklineBucketCount(window: StatisticsWindow): Int = when 
 @Immutable
 internal data class CliStatsAxisTick(val bucketIndex: Int, val label: String)
 
-/**
- * The chart's time axis. Buckets are one real unit wide - an hour for the day window, a day for
- * the others - and the window ends on the next such boundary rather than on "now", so every
- * bucket edge is a clock boundary and the ticks land on round times instead of drifting with
- * the current minute. Labels are formatted from each bucket's own start instant, so they stay
- * truthful across a DST shift even though the buckets themselves are fixed-length.
- */
 @Immutable
 internal data class CliStatsChartAxis(
     val endMs: Long,
@@ -288,7 +275,7 @@ internal fun CliStatsSparkline(
     LaunchedEffect(Unit) { chartEntered = true }
     val reveal by animateFloatAsState(
         targetValue = if (chartEntered) 1f else 0f,
-        animationSpec = tween(durationMillis = 480),
+        animationSpec = CliMotion.enter(CliMotion.DurationEmphasis),
         label = "statsChartReveal",
     )
     val visibleLanes = lanes.visibleLaneIndexes()
@@ -356,13 +343,6 @@ internal fun CliStatsSparkline(
     }
 }
 
-/**
- * Canvas and axis row under one width measurement.
- *
- * They have to agree on two things — the slot pitch and which boundaries are named — so both are
- * derived once here and handed down, rather than each half computing its own from its own
- * constraints.
- */
 @Composable
 private fun CliStatsSparklineChart(
     buckets: List<CliStatsTrafficBucket>,
@@ -440,12 +420,9 @@ private fun CliStatsSparklineCanvas(
     gridlineBuckets: Set<Int>,
 ) {
     val colors = LocalCliColors.current
-    val plain = LocalCliVisualStyle.current == VisualStyle.PLAIN
     Canvas(modifier = Modifier.fillMaxWidth().height(SPARKLINE_HEIGHT)) {
         if (buckets.isEmpty() || bucketCount <= 0) return@Canvas
         val gap = SPARKLINE_GAP.toPx()
-        val cell = SPARKLINE_CELL.toPx()
-        val step = cell + gap
         val slotWidth = cliStatsSlotWidthPx(size.width, bucketCount, gap)
         gridlineBuckets.forEach { index ->
             if (index in buckets.indices) {
@@ -466,7 +443,6 @@ private fun CliStatsSparklineCanvas(
         if (scaleMax <= 0L || visibleLanes.isEmpty()) return@Canvas
         val laneCount = visibleLanes.size
         val barWidth = ((slotWidth - gap * (laneCount - 1)) / laneCount).coerceAtLeast(1f)
-        val totalCells = (size.height / step).toInt().coerceAtLeast(1)
         val laneColors = listOf(colors.vpn, colors.tor, colors.i2p, colors.firewall)
         buckets.forEachIndexed { index, bucket ->
             if (!bucket.sampled) return@forEachIndexed
@@ -474,33 +450,19 @@ private fun CliStatsSparklineCanvas(
             val bytesByLane = bucket.laneBytes()
             visibleLanes.forEachIndexed { visibleIndex, lane ->
                 val x = slotX + visibleIndex * (barWidth + gap)
-                if (plain) {
-                    drawPlainBar(
-                        x = x,
-                        width = barWidth,
-                        bytes = bytesByLane[lane],
-                        maxLane = scaleMax,
-                        color = laneColors[lane],
-                    )
-                } else {
-                    val cells = laneCells(bytesByLane[lane], scaleMax, totalCells)
-                    repeat(cells) { row ->
-                        drawCell(
-                            x = x,
-                            row = row,
-                            width = barWidth,
-                            cell = cell,
-                            step = step,
-                            color = laneColors[lane],
-                        )
-                    }
-                }
+                drawBar(
+                    x = x,
+                    width = barWidth,
+                    bytes = bytesByLane[lane],
+                    maxLane = scaleMax,
+                    color = laneColors[lane],
+                )
             }
         }
     }
 }
 
-private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawPlainBar(
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawBar(
     x: Float,
     width: Float,
     bytes: Long,
@@ -520,31 +482,6 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawPlainBar(
 
 private fun CliStatsTrafficBucket.laneBytes(): LongArray =
     longArrayOf(vpnBytes, torBytes, i2pBytes, firewallBytes)
-
-private fun laneCells(
-    bytes: Long,
-    maxLane: Long,
-    totalCells: Int,
-): Int {
-    if (bytes <= 0L) return 0
-    val cells = (bytes.toDouble() / maxLane.toDouble() * totalCells).toInt()
-    return cells.coerceIn(1, totalCells)
-}
-
-private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawCell(
-    x: Float,
-    row: Int,
-    width: Float,
-    cell: Float,
-    step: Float,
-    color: Color,
-) {
-    drawRect(
-        color = color,
-        topLeft = Offset(x, size.height - (row * step) - cell),
-        size = Size(width, cell),
-    )
-}
 
 @Composable
 private fun CliStatsLegendEntry(
@@ -568,7 +505,6 @@ private const val GRIDLINE_ALPHA = 0.35f
 private const val GAP_BASELINE_ALPHA = 0.25f
 
 private val SPARKLINE_HEIGHT = 56.dp
-private val SPARKLINE_CELL = 3.dp
 private val SPARKLINE_GAP = 1.dp
 private val SPARKLINE_SCALE_WIDTH = cliScaledDp(58f)
 

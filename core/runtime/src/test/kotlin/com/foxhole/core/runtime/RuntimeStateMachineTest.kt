@@ -6,7 +6,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class RuntimeStateMachineTest {
-    // Mirrors RuntimeSupervisor.beginTransition: mint from the shared clock, adopt on the machine.
     private fun RuntimeStateMachine.beginTestTransition(
         reason: String,
         phase: RuntimePhase,

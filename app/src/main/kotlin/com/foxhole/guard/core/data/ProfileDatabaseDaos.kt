@@ -6,9 +6,6 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import kotlinx.coroutines.flow.Flow
 
-// Room DAOs for ProfileDatabase (profiles, routing presets/rules/catalog, anomaly/stats).
-// Split out of ProfileDatabase.kt (behaviour-preserving); the @Database references them same-package.
-
 @Dao
 interface ProfileDao {
     @Query("select * from profiles order by isActive desc, id desc")
@@ -276,12 +273,6 @@ interface AnomalyDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAnomalyEvent(entity: AnomalyEventEntity): Long
 
-    /**
-     * Detections that were persisted but never reached the notification shade — the usual cause is
-     * POST_NOTIFICATIONS not being granted yet. Ordered oldest first so a retry pass delivers them
-     * in the order they were found, and bounded because a device that has been denying the
-     * permission for a week must not produce a week of notifications the moment it is granted.
-     */
     @Query(
         """
         select * from anomaly_events
@@ -364,8 +355,6 @@ interface AnomalyDao {
         limit: Int,
     ): List<AppTrafficWindowEntity>
 
-    // Bounded on purpose: under the "forever" retention the cutoff is 0, so an unlimited select
-    // would stream the entire table into memory on every change.
     @Query("select * from app_traffic_windows where startedAtMs >= :cutoff order by startedAtMs desc limit :limit")
     fun observeRecentAppTrafficWindows(
         cutoff: Long,
@@ -455,8 +444,6 @@ interface AnomalyDao {
     @Query("delete from app_traffic_windows where startedAtMs < :cutoff")
     suspend fun deleteAppTrafficWindowsBefore(cutoff: Long)
 
-    // Row caps: the "forever" retention has no time cutoff, so age-based pruning alone lets these
-    // tables (and the unbounded observe queries that feed the UI) grow without limit.
     @Query(
         """
         delete from traffic_windows where id not in (
@@ -521,14 +508,6 @@ interface AnomalyDao {
     suspend fun deleteAnomalyEventsBefore(cutoff: Long)
 }
 
-/**
- * The persisted I2P byte counters. Every write is an accumulate-in-place statement rather than a
- * read-modify-write: the recorder samples cumulative counters on a slow ticker, and letting SQLite
- * do the addition keeps a sample at two tiny statements that cannot race each other.
- *
- * `insert or ignore` + `update ... set x = x + :delta` is used instead of SQLite's UPSERT so the
- * queries stay valid on every SQLite build this app has ever shipped against.
- */
 @Dao
 interface I2pTrafficDao {
     @Query(
@@ -576,8 +555,6 @@ interface I2pTrafficDao {
     @Query("delete from i2p_traffic_buckets where hourStartMs < :cutoff")
     suspend fun deleteBucketsBefore(cutoff: Long)
 
-    // Row cap beside the age cutoff: a clock jumped far into the future would otherwise leave
-    // buckets that no cutoff can ever reach.
     @Query(
         """
         delete from i2p_traffic_buckets where hourStartMs not in (

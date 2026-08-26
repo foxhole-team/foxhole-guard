@@ -38,11 +38,6 @@ class PublicUrlPolicyTest {
         )
     }
 
-    /**
-     * The connect path resolves the profile's own server host while the tunnel it is rebuilding is
-     * already up, so the answer comes out of FoxCore's fake-IP pool. Refusing it as "private" is
-     * what killed a live tunnel on every per-app change (Pixel 2026-08-09).
-     */
     @Test
     fun `accepts hostname answered out of the fake ip pool`() {
         assertEquals(
@@ -65,7 +60,6 @@ class PublicUrlPolicyTest {
         )
     }
 
-    /** The exemption is for answers only: a literal in the pool is still not a public host. */
     @Test(expected = IllegalArgumentException::class)
     fun `still rejects a fake ip literal`() {
         "https://198.18.0.10/config".ensurePublicHttpsUrl()

@@ -103,8 +103,6 @@ class RuntimeWakeLock private constructor(
 
     @Synchronized
     fun release() {
-        // Clear ownership before cancelling or releasing. A watchdog refresh that was already
-        // scheduled cannot observe a stale "held" intent and resurrect the lease afterwards.
         desiredHeld = false
         watchdogJob?.cancel()
         watchdogJob = null

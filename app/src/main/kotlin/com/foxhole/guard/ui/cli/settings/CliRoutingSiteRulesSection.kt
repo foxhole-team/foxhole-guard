@@ -1,6 +1,8 @@
 package com.foxhole.guard.ui.cli.settings
 
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -15,6 +17,7 @@ import com.foxhole.core.model.RoutingRule
 import com.foxhole.guard.R
 import com.foxhole.guard.ui.HomeViewModel
 import com.foxhole.guard.ui.cli.CliColors
+import com.foxhole.guard.ui.cli.CliSpacing
 import com.foxhole.guard.ui.cli.LocalCliColors
 import com.foxhole.guard.ui.cli.components.CliButton
 import com.foxhole.guard.ui.cli.components.CliDashedInfoNote
@@ -54,7 +57,7 @@ internal fun CliSiteRulesSection(
     var addOpen by rememberSaveable { mutableStateOf(false) }
 
     CliPanel(
-        icon = R.drawable.pix_link,
+        icon = R.drawable.lin_link,
         title = stringResource(R.string.cli_route_sites_title),
         infoText = stringResource(R.string.cli_route_sites_note) + "\n" +
             stringResource(R.string.cli_route_sites_formats),
@@ -63,10 +66,15 @@ internal fun CliSiteRulesSection(
         if (rules.isEmpty()) {
             CliDashedInfoNote(
                 text = stringResource(R.string.cli_route_sites_empty),
+                icon = R.drawable.lin_info,
                 centered = true,
                 centeredIconLeading = true,
                 centeredIconFirstLine = true,
+                centeredIconGap = CliSpacing.sm,
+                outerVerticalPadding = CliSpacing.sm,
+                color = colors.firewall,
             )
+            Spacer(modifier = Modifier.height(CliSpacing.xs))
         }
         rules.forEachIndexed { index, rule ->
             if (index > 0) CliRowDivider()
@@ -84,7 +92,7 @@ internal fun CliSiteRulesSection(
         }
         CliButton(
             label = stringResource(R.string.cli_input_domain_add),
-            icon = R.drawable.pix_add,
+            icon = R.drawable.lin_add,
             color = colors.accent,
             onClick = { addOpen = true },
             modifier = Modifier.fillMaxWidth(),
@@ -92,7 +100,7 @@ internal fun CliSiteRulesSection(
         if (addOpen) {
             CliInputModal(
                 title = stringResource(R.string.cli_input_domain_title),
-                icon = R.drawable.pix_globe,
+                icon = R.drawable.lin_globe,
                 prompt = "add",
                 value = newDomain,
                 belowInput = {
@@ -152,7 +160,7 @@ private fun CliSiteRuleRow(
         options = siteLaneOptions(colors) + CliDropdownOption(
             id = SITE_OPT_REMOVE,
             label = stringResource(R.string.cli_route_remove),
-            icon = R.drawable.pix_cross,
+            icon = R.drawable.lin_cross,
         ),
         selectedId = lane.name,
         onSelect = { id ->
@@ -202,10 +210,10 @@ private fun siteLaneNote(lane: CliSiteLane): String? =
     stringResource(R.string.cli_route_sites_lane_tor_note).takeIf { lane == CliSiteLane.TOR }
 
 private fun siteLaneIcon(lane: CliSiteLane): Int = when (lane) {
-    CliSiteLane.TOR -> R.drawable.pix_tor
-    CliSiteLane.VPN -> R.drawable.pix_shield
-    CliSiteLane.DIRECT -> R.drawable.pix_globe
-    CliSiteLane.BLOCK -> R.drawable.pix_forbidden
+    CliSiteLane.TOR -> R.drawable.lin_tor
+    CliSiteLane.VPN -> R.drawable.lin_shield
+    CliSiteLane.DIRECT -> R.drawable.lin_globe
+    CliSiteLane.BLOCK -> R.drawable.lin_forbidden
 }
 
 private fun siteLaneColor(

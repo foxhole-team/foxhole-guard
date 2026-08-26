@@ -109,7 +109,7 @@ internal class FoxholeCoreGraphModule(
         SettingsRepository(
             context = appContext,
             onSecurityAnalysisFallback = { _, error ->
-                // Package name deliberately omitted from diagnostics; only the failure class matters.
+
                 diagnosticsLogger.record(
                     "app-inventory",
                     "security analysis fell back to blank facts: ${error.javaClass.simpleName}",
@@ -161,9 +161,6 @@ internal class FoxholeDataGraphModule(
     ) -> RuntimeDnsRuleSetInstallOutcome,
 ) {
     val profileDatabase: ProfileDatabase by lazy {
-        // The DB opens lazily; in password mode every pre-unlock touch is gated, so by the
-        // time this runs the session holds the dataKey. Otherwise the Keystore source serves
-        // the passphrase (and refuses to mint a new one while a keybox exists - fail closed).
         val components = security()
         val keySource =
             if (components.isPasswordProtectionActive()) {
@@ -185,10 +182,6 @@ internal class FoxholeDataGraphModule(
             candidates = ConnectivityNetworkRegistry.snapshot(appContext),
         )
 
-    // A budgeted resolver: this instance is also used outside an OkHttp call — by the resolved-config
-    // sanitiser on the connect path — where no call timeout covers it. Both the platform lookup and
-    // DoH bootstrap follow the latest physical network, so broken system DoT before tunnel startup
-    // cannot make every smart-profile candidate fail its session build.
     private val publicRemoteDns: PublicRemoteDns by lazy {
         PublicRemoteDns(
             delegate = BoundedSystemHostResolver(
@@ -244,9 +237,6 @@ internal class FoxholeDataGraphModule(
         )
     }
 
-    // Every FoxHole DB feed reads its manifest URL through this one provider, so the updates
-    // screen redirects all four data sets with a single write and none of them can be left behind
-    // on the previous repository.
     private val foxholeDbBase: () -> String = {
         core.settingsRepository.settings.value.updateSources.databaseBaseUrl
     }
@@ -345,8 +335,6 @@ internal class FoxholeDataGraphModule(
         )
     }
 
-    // One provider for both readers: the assembler decides whether a LAN surface belongs in the
-    // config, the service decides whether to publish it. Two instances would be two answers.
     val lanProxyAddressProvider: LanProxyAddressProvider by lazy {
         AndroidLanProxyAddressProvider(appContext)
     }
@@ -355,8 +343,7 @@ internal class FoxholeDataGraphModule(
         RuntimeConfigAssembler(
             core.json,
             lanProxyAddressProvider,
-            // The RUNNING package, not the release id baked into BuildConfig: the guard's own
-            // split has to exclude whichever variant is installed.
+
             selfPackageName = appContext.packageName,
         )
     }
@@ -450,17 +437,6 @@ internal class FoxholeRuntimeGraphModule(
         )
     }
 
-    /**
-     * The process-global WebView proxy switch and the routes it may install.
-     *
-     * A web app cannot be routed by the TUN: every frame lives in this process under one UID, and
-     * Android routes the tunnel by UID — so two apps can never take two routes there. The choice has
-     * to be made a storey up, at a proxy the core owns. What the core exposes today is one
-     * authenticated loopback HTTP proxy that egresses through the active session, so VPN is a real
-     * route and DIRECT is a real route; TOR and I2P need their own authenticated inbounds and
-     * deliberately return null here, which refuses the frame instead of quietly opening it on
-     * whatever network happens to be up.
-     */
     val webAppProxyController: WebAppProxyController by lazy {
         WebAppProxyController(appContext) { route, blockWithoutTunnel ->
             webAppProxyPlan(route, blockWithoutTunnel)
@@ -477,8 +453,7 @@ internal class FoxholeRuntimeGraphModule(
             WebAppRoute.DEFAULT ->
                 if (blockWithoutTunnel) tunnelWebAppProxyPlan() else WebAppProxyPlan.Direct
             WebAppRoute.VPN -> tunnelWebAppProxyPlan()
-            // Not "not implemented" — not routable through the single control proxy the core
-            // publishes. Opening the frame anyway would put a Tor-labelled app on the clearnet.
+
             WebAppRoute.TOR, WebAppRoute.I2P -> null
         }
 
@@ -487,8 +462,6 @@ internal class FoxholeRuntimeGraphModule(
         return WebAppProxyPlan.Http(core.settingsRepository.current().tunnelRuntimeProxyAccess())
     }
 
-    // Offline IP -> ISO country lookup for UI accents (e.g. the DNS-server flag on the network
-    // card). Loads the geo database lazily on first use - call off the main thread.
     val ipCountryCodeResolver: (String) -> String? get() = localGeoIpResolver::countryCodeForIpAddress
 
     val ipInfoRepository: IpInfoRepository by lazy {
@@ -536,9 +509,7 @@ internal class FoxholeRuntimeGraphModule(
             runtimeInstanceStore = runtimeInstanceStore,
             runtimeSupervisor = runtimeSupervisor,
             quarantineEnforcementTracker = quarantineEnforcementTracker,
-            // The store answers without creating a runtime and remembers the descriptor across
-            // clear(), so a connect arriving mid-teardown can still tell our own master TUN from a
-            // descriptor the core failed to close.
+
             ownMasterTunFd = { runtimeInstanceStore.nativeSnapshot().masterTunFd },
         )
     }

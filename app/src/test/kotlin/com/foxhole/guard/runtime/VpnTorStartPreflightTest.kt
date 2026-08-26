@@ -25,6 +25,35 @@ class VpnTorStartPreflightTest {
     }
 
     @Test
+    fun `stale TOR-only command is refused while the desired route is off`() {
+        val moduleAvailable = Settings(
+            privacyRoute = PrivacyRouteSettings(permitted = true, mode = PrivacyRouteMode.OFF),
+        )
+
+        assertEquals(
+            VpnTorStartBlockReason.TOR_PERMISSION_REQUIRED,
+            vpnTorStartBlockReason(moduleAvailable, null, null, torOnlyConnect = true),
+        )
+        assertEquals(
+            VpnTorStartBlockReason.TOR_PERMISSION_REQUIRED,
+            vpnTorStartBlockReason(Settings(), null, null, torOnlyConnect = true),
+        )
+    }
+
+    @Test
+    fun `stored TOR mode cannot pass preflight after module permission is revoked`() {
+        val invalid =
+            Settings(
+                privacyRoute = PrivacyRouteSettings(mode = PrivacyRouteMode.TOR_OVER_VPN),
+            )
+
+        assertEquals(
+            VpnTorStartBlockReason.TOR_PERMISSION_REQUIRED,
+            vpnTorStartBlockReason(invalid, profileWithHint(ProtocolHint.VLESS), null, torOnlyConnect = false),
+        )
+    }
+
+    @Test
     fun `direct TOR remains the supported profile-less route`() {
         assertNull(
             vpnTorStartBlockReason(
@@ -133,6 +162,7 @@ class VpnTorStartPreflightTest {
                 .withLane(AppTunnelLane.VPN, listOf("com.example.v1")),
             privacyRoute =
             PrivacyRouteSettings(
+                permitted = true,
                 mode = PrivacyRouteMode.TOR_OVER_VPN,
                 scope = PrivacyRouteScope.ALL_APPS,
             ),
@@ -142,6 +172,7 @@ class VpnTorStartPreflightTest {
         Settings(
             privacyRoute =
             PrivacyRouteSettings(
+                permitted = true,
                 mode = PrivacyRouteMode.TOR_OVER_VPN,
                 bypassVpnTunnel = bypassVpnTunnel,
             ),

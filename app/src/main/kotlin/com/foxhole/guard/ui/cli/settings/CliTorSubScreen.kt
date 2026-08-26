@@ -10,7 +10,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -21,6 +20,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.foxhole.core.model.PrivacyRouteSettings
 import com.foxhole.core.model.TorBridgeTransport
 import com.foxhole.guard.R
+import com.foxhole.guard.runtime.RemoteDownloadProgress
 import com.foxhole.guard.ui.FoxholeUpdatePhase
 import com.foxhole.guard.ui.HomeViewModel
 import com.foxhole.guard.ui.TorBridgePersistenceMarker
@@ -36,7 +36,6 @@ import com.foxhole.guard.ui.cli.components.CliPanel
 import com.foxhole.guard.ui.cli.components.CliScreenHeader
 import com.foxhole.guard.ui.cli.components.CliSheetAction
 import com.foxhole.guard.ui.cli.components.CliSheetActionsRow
-import com.foxhole.guard.ui.cli.components.CliStageProgress
 import com.foxhole.guard.ui.cli.components.CliToggleRow
 import com.foxhole.guard.ui.isRunning
 import com.foxhole.guard.ui.onAtomicConnectionChanged
@@ -47,10 +46,10 @@ import com.foxhole.guard.ui.onTorBridgeTransportSelected
 import com.foxhole.guard.ui.onTorBridgesAutoUpdateChanged
 import com.foxhole.guard.ui.onTorBridgesEnabledChanged
 import com.foxhole.guard.ui.onTorBridgesUseFoxholeSourceChanged
+import com.foxhole.guard.ui.torBridgeDownloadProgress
 import com.foxhole.guard.ui.torBridgePersistenceMarker
 import com.foxhole.guard.ui.torBridgeRefreshRequired
 import com.foxhole.guard.ui.torBridgeVerifiedSuccess
-import kotlinx.coroutines.delay
 
 private val ROTATE_INTERVAL_MINUTES = listOf(10, 15, 20, 30, 60)
 
@@ -61,6 +60,7 @@ internal fun CliTorSubScreen(
 ) {
     val state by viewModel.settingsRouteState.collectAsStateWithLifecycle()
     val bridgePhase by viewModel.torBridgeUpdatePhase.collectAsStateWithLifecycle()
+    val bridgeProgress by viewModel.torBridgeDownloadProgress.collectAsStateWithLifecycle()
     val privacyRoute = state.settings.privacyRoute
 
     Column(
@@ -68,7 +68,7 @@ internal fun CliTorSubScreen(
             .fillMaxSize()
             .padding(horizontal = CliSpacing.md),
     ) {
-        CliScreenHeader(label = stringResource(R.string.cli_cfg_more_tor), icon = R.drawable.pix_tor)
+        CliScreenHeader(label = stringResource(R.string.cli_cfg_more_tor), icon = R.drawable.lin_tor)
 
         Column(
 
@@ -80,13 +80,13 @@ internal fun CliTorSubScreen(
         ) {
             CliPanel(
                 title = stringResource(R.string.cli_tor_route_title),
-                icon = R.drawable.pix_tor,
+                icon = R.drawable.lin_tor,
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                if (!privacyRoute.permitted) {
+                CliSettingsAnimatedRows(visible = !privacyRoute.permitted) {
                     CliToggleRow(
                         label = stringResource(R.string.cli_cfg_atomic_connection),
-                        icon = R.drawable.pix_shield,
+                        icon = R.drawable.lin_shield,
                         checked = state.settings.connection.atomicConnection,
                         onToggle = viewModel::onAtomicConnectionChanged,
                         infoText = stringResource(R.string.cli_cfg_atomic_connection_note),
@@ -94,21 +94,21 @@ internal fun CliTorSubScreen(
                 }
                 CliToggleRow(
                     label = stringResource(R.string.cli_tor_bypass_vpn),
-                    icon = R.drawable.pix_export,
+                    icon = R.drawable.lin_export,
                     checked = privacyRoute.bypassVpnTunnel,
                     onToggle = viewModel::onPrivacyRouteBypassVpnTunnelConfigured,
                     infoText = stringResource(R.string.cli_tor_bypass_vpn_note),
                 )
                 CliToggleRow(
                     label = stringResource(R.string.cli_tor_rotate_exit),
-                    icon = R.drawable.pix_restart,
+                    icon = R.drawable.lin_restart,
                     checked = privacyRoute.autoRotateExit,
                     onToggle = viewModel::onPrivacyRouteAutoRotateExitChanged,
                 )
-                if (privacyRoute.autoRotateExit) {
+                CliSettingsAnimatedRows(visible = privacyRoute.autoRotateExit) {
                     CliDropdownRow(
                         label = stringResource(R.string.cli_tor_rotate_interval),
-                        icon = R.drawable.pix_clock,
+                        icon = R.drawable.lin_clock,
                         value = "${privacyRoute.autoRotateIntervalMinutes}m",
                         options = ROTATE_INTERVAL_MINUTES.map { minutes ->
                             CliDropdownOption(id = minutes.toString(), label = "${minutes}m")
@@ -125,6 +125,7 @@ internal fun CliTorSubScreen(
                 viewModel = viewModel,
                 privacyRoute = privacyRoute,
                 bridgePhase = bridgePhase,
+                bridgeProgress = bridgeProgress,
             )
             Spacer(modifier = Modifier.height(CliSpacing.sm))
         }
@@ -139,7 +140,7 @@ private fun CliBridgesToggleRow(
 ) {
     CliToggleRow(
         label = stringResource(R.string.cli_tor_bridges),
-        icon = R.drawable.pix_link,
+        icon = R.drawable.lin_link,
         checked = privacyRoute.bridgesEnabled,
         onToggle = { value ->
             viewModel.onTorBridgesEnabledChanged(value)
@@ -155,11 +156,12 @@ private fun CliTorBridgesPanel(
     viewModel: HomeViewModel,
     privacyRoute: PrivacyRouteSettings,
     bridgePhase: FoxholeUpdatePhase,
+    bridgeProgress: RemoteDownloadProgress?,
 ) {
     val colors = LocalCliColors.current
     var updateSheetOpen by rememberSaveable { mutableStateOf(false) }
     CliPanel(
-        icon = R.drawable.pix_tor,
+        icon = R.drawable.lin_tor,
         title = stringResource(R.string.cli_tor_bridges_title),
         modifier = Modifier.fillMaxWidth(),
     ) {
@@ -168,10 +170,10 @@ private fun CliTorBridgesPanel(
             privacyRoute = privacyRoute,
             onRefreshRequired = { updateSheetOpen = true },
         )
-        if (privacyRoute.bridgesEnabled) {
+        CliSettingsAnimatedRows(visible = privacyRoute.bridgesEnabled) {
             CliDropdownRow(
                 label = stringResource(R.string.cli_tor_bridge_transport),
-                icon = R.drawable.pix_shield,
+                icon = R.drawable.lin_shield,
                 value = privacyRoute.bridgeTransport.name.lowercase(),
                 options = TorBridgeTransport.entries.map { transport ->
                     CliDropdownOption(id = transport.name, label = transport.name.lowercase())
@@ -183,7 +185,7 @@ private fun CliTorBridgesPanel(
             )
             CliDropdownRow(
                 label = stringResource(R.string.cli_tor_bridge_source),
-                icon = R.drawable.pix_globe,
+                icon = R.drawable.lin_globe,
                 value = if (privacyRoute.bridgesUseFoxholeSource) "foxhole" else "torproject",
                 options = listOf(
                     CliDropdownOption(id = BRIDGE_SOURCE_TORPROJECT, label = "torproject"),
@@ -200,18 +202,20 @@ private fun CliTorBridgesPanel(
             )
             CliToggleRow(
                 label = stringResource(R.string.cli_tor_bridges_auto_update),
-                icon = R.drawable.pix_update,
+                icon = R.drawable.lin_update,
                 checked = privacyRoute.bridgesAutoUpdate,
                 onToggle = viewModel::onTorBridgesAutoUpdateChanged,
             )
-            if (torBridgeRefreshActionVisible(privacyRoute, bridgePhase)) {
+            CliSettingsAnimatedRows(
+                visible = torBridgeRefreshActionVisible(privacyRoute, bridgePhase),
+            ) {
                 val failed = bridgePhase == FoxholeUpdatePhase.FAILED ||
                     privacyRoute.bridgesLastUpdateSuccess == false
                 CliActionRow(
                     label = stringResource(R.string.cli_tor_bridges_list),
-                    icon = R.drawable.pix_update,
+                    icon = R.drawable.lin_update,
                     value = when {
-                        bridgePhase.isRunning -> stringResource(bridgePhase.bridgeProgressLabelRes())
+                        bridgePhase.isRunning -> stringResource(bridgePhase.verifiedUpdateProgressLabelRes())
                         failed -> stringResource(R.string.cli_common_failed)
                         else -> stringResource(R.string.cli_foxdb_status_required)
                     },
@@ -226,6 +230,7 @@ private fun CliTorBridgesPanel(
             viewModel = viewModel,
             privacyRoute = privacyRoute,
             phase = bridgePhase,
+            downloadProgress = bridgeProgress,
             onDismiss = { updateSheetOpen = false },
         )
     }
@@ -246,6 +251,7 @@ private fun CliTorBridgeUpdateSheet(
     viewModel: HomeViewModel,
     privacyRoute: PrivacyRouteSettings,
     phase: FoxholeUpdatePhase,
+    downloadProgress: RemoteDownloadProgress?,
     onDismiss: () -> Unit,
 ) {
     val colors = LocalCliColors.current
@@ -272,44 +278,34 @@ private fun CliTorBridgeUpdateSheet(
         baselineSuccess = marker.lastUpdateSuccess
         viewModel.onTorBridgeManualRefresh()
     }
-    LaunchedEffect(verifiedSuccess) {
-        if (verifiedSuccess) {
-            delay(BRIDGE_SUCCESS_AUTO_DISMISS_MS)
-            onDismiss()
-        }
-    }
     CliBottomSheet(
         title = stringResource(R.string.cli_tor_bridges_update_title),
-        icon = R.drawable.pix_update,
+        icon = R.drawable.lin_update,
         onDismiss = dismiss,
+        autoDismissAfterMillis = BRIDGE_SUCCESS_AUTO_DISMISS_MS.takeIf { verifiedSuccess },
     ) {
-        val completedStages = torBridgeStageProgress(phase, verifiedSuccess)
         when {
             phase.isRunning -> {
-                CliStageProgress(
-                    stageLabel = stringResource(phase.bridgeProgressLabelRes()),
-                    completedStages = checkNotNull(completedStages),
-                    totalStages = TOR_BRIDGE_STAGE_COUNT,
-                    running = true,
+                CliVerifiedUpdateProgress(
+                    phase = phase,
+                    downloadProgress = downloadProgress,
+                    verifiedSuccess = false,
                 )
                 Spacer(modifier = Modifier.height(CliSpacing.md))
-                CliSheetActionsRow(onCancel = dismiss, actions = emptyList())
+                CliSheetActionsRow(actions = emptyList())
             }
             verifiedSuccess -> {
-                CliStageProgress(
-                    stageLabel = stringResource(R.string.cli_wizard_phase_done),
-                    completedStages = checkNotNull(completedStages),
-                    totalStages = TOR_BRIDGE_STAGE_COUNT,
-                    running = false,
-                    color = colors.ok,
+                CliVerifiedUpdateProgress(
+                    phase = phase,
+                    downloadProgress = downloadProgress,
+                    verifiedSuccess = true,
                 )
             }
             phase == FoxholeUpdatePhase.DONE || phase == FoxholeUpdatePhase.NO_UPDATE -> {
-                CliStageProgress(
-                    stageLabel = stringResource(R.string.cli_wizard_phase_verifying),
-                    completedStages = checkNotNull(completedStages),
-                    totalStages = TOR_BRIDGE_STAGE_COUNT,
-                    running = true,
+                CliVerifiedUpdateProgress(
+                    phase = phase,
+                    downloadProgress = downloadProgress,
+                    verifiedSuccess = false,
                 )
             }
             failed -> {
@@ -320,7 +316,6 @@ private fun CliTorBridgeUpdateSheet(
                 )
                 Spacer(modifier = Modifier.height(CliSpacing.md))
                 CliSheetActionsRow(
-                    onCancel = dismiss,
                     actions = listOf(
                         CliSheetAction(
                             label = stringResource(R.string.cli_tor_bridges_update_retry),
@@ -337,7 +332,6 @@ private fun CliTorBridgeUpdateSheet(
                 )
                 Spacer(modifier = Modifier.height(CliSpacing.md))
                 CliSheetActionsRow(
-                    onCancel = dismiss,
                     actions = listOf(
                         CliSheetAction(
                             label = stringResource(R.string.cli_tor_bridges_update_run),
@@ -353,26 +347,8 @@ private fun CliTorBridgeUpdateSheet(
 internal fun torBridgeStageProgress(
     phase: FoxholeUpdatePhase,
     verifiedSuccess: Boolean,
-): Int? = when {
-    verifiedSuccess &&
-        (phase == FoxholeUpdatePhase.DONE || phase == FoxholeUpdatePhase.NO_UPDATE) -> {
-        TOR_BRIDGE_STAGE_COUNT
-    }
-    phase == FoxholeUpdatePhase.CHECKING -> 1
-    phase == FoxholeUpdatePhase.DOWNLOADING -> 2
-    phase == FoxholeUpdatePhase.VERIFYING -> 3
-    phase == FoxholeUpdatePhase.DONE || phase == FoxholeUpdatePhase.NO_UPDATE -> 3
-    else -> null
-}
-
-private fun FoxholeUpdatePhase.bridgeProgressLabelRes(): Int = when (this) {
-    FoxholeUpdatePhase.CHECKING -> R.string.cli_wizard_phase_checking
-    FoxholeUpdatePhase.DOWNLOADING -> R.string.cli_wizard_phase_downloading
-    FoxholeUpdatePhase.VERIFYING -> R.string.cli_wizard_phase_verifying
-    else -> R.string.cli_wizard_phase_verifying
-}
+): Int? = verifiedUpdateStageProgress(phase, verifiedSuccess)
 
 private const val BRIDGE_SOURCE_TORPROJECT = "torproject"
 private const val BRIDGE_SOURCE_FOXHOLE = "foxhole"
 private const val BRIDGE_SUCCESS_AUTO_DISMISS_MS = 900L
-private const val TOR_BRIDGE_STAGE_COUNT = 4

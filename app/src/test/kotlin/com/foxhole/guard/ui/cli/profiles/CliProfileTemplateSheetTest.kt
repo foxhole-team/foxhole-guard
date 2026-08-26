@@ -83,15 +83,21 @@ class CliProfileTemplateSheetTest {
     }
 
     @Test
-    fun `cancel owns the row until a template is picked and then shares it`() {
+    fun `continue appears only after selection while close stays in the shared sheet footer`() {
         val sheet =
             projectFile("app/src/main/kotlin/com/foxhole/guard/ui/cli/profiles/CliProfileTemplateSheet.kt")
                 .readText()
 
-        assertTrue(sheet.contains("targetValue = if (selectedType == null) 0f else 1f"))
-        assertTrue(sheet.contains("Modifier.weight(TEMPLATE_ACTION_FULL_WEIGHT - split)"))
-        assertTrue(sheet.contains("if (split > 0f)"))
+        assertTrue(sheet.contains("updateTransition(targetState = selectedType"))
         assertTrue(sheet.contains("R.string.cli_wizard_continue"))
+        val continueButton = sheet.substringAfter("R.string.cli_wizard_continue").substringBefore("}")
+        assertTrue(continueButton.contains("color = colors.ok"))
+        assertFalse(continueButton.contains("filled = true"))
+        assertTrue(sheet.contains("R.string.cli_common_no_cancel"))
+        assertTrue(sheet.contains("color = colors.ok"))
+        assertTrue(sheet.contains("dismissAfter { onContinue(type) }"))
+        assertTrue(sheet.contains("cliTemplateContinueWeight"))
+        assertTrue(sheet.contains("translationX = slide.toPx()"))
         assertTrue(sheet.contains(".graphicsLayer {"))
         assertTrue(sheet.contains("alpha = reveal"))
         assertTrue(sheet.contains("translationY = (1f - reveal)"))

@@ -1,7 +1,6 @@
 package com.foxhole.guard.ui.cli.onboarding
 
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
@@ -12,7 +11,6 @@ import com.foxhole.guard.R
 import com.foxhole.guard.ui.cli.CliSpacing
 import com.foxhole.guard.ui.cli.LocalCliColors
 import com.foxhole.guard.ui.cli.components.CliBottomSheet
-import com.foxhole.guard.ui.cli.components.CliButton
 import com.foxhole.guard.ui.cli.components.cliMarchingBorder
 
 @Composable
@@ -21,7 +19,7 @@ internal fun CliBetaNoticeSheet(onAcknowledge: () -> Unit) {
     CliBottomSheet(
         onDismiss = onAcknowledge,
         title = stringResource(R.string.cli_beta_notice_title),
-        icon = R.drawable.pix_info,
+        icon = R.drawable.lin_info,
     ) {
         val body = stringResource(R.string.cli_beta_notice_body)
         val dnsLimit = stringResource(R.string.cli_beta_notice_dns_protocols)
@@ -42,14 +40,6 @@ internal fun CliBetaNoticeSheet(onAcknowledge: () -> Unit) {
                 framed = true,
             )
         }
-        Spacer(modifier = Modifier.height(CliSpacing.md))
-        CliButton(
-            label = stringResource(R.string.cli_beta_notice_ack),
-            filled = true,
-            color = colors.ok,
-            onClick = onAcknowledge,
-            modifier = Modifier.fillMaxWidth(),
-        )
         Spacer(modifier = Modifier.height(CliSpacing.sm))
     }
 }
@@ -61,11 +51,11 @@ internal fun betaNoticeItems(body: String, dnsLimit: String): List<CliQuickStart
         .mapIndexed { index, text ->
             CliQuickStartItem(
                 text = text,
-                icon = BETA_NOTICE_ICONS.getOrElse(index) { R.drawable.pix_info },
+                icon = BETA_NOTICE_ICONS.getOrElse(index) { R.drawable.lin_info },
             )
         }
         .toList()
-        .let(::donationFirst) + CliQuickStartItem(dnsLimit.trim(), R.drawable.pix_dns)
+        .let(::donationFirst) + CliQuickStartItem(dnsLimit.trim(), R.drawable.lin_dns)
 
 private fun donationFirst(items: List<CliQuickStartItem>): List<CliQuickStartItem> {
     if (items.size <= DONATION_SOURCE_INDEX) return items
@@ -74,12 +64,12 @@ private fun donationFirst(items: List<CliQuickStartItem>): List<CliQuickStartIte
 }
 
 private val BETA_NOTICE_ICONS = listOf(
-    R.drawable.pix_forbidden,
-    R.drawable.pix_info,
-    R.drawable.pix_clock,
-    R.drawable.pix_settings,
-    R.drawable.pix_journal,
-    R.drawable.pix_star,
+    R.drawable.lin_forbidden,
+    R.drawable.lin_info,
+    R.drawable.lin_clock,
+    R.drawable.lin_settings,
+    R.drawable.lin_journal,
+    R.drawable.lin_star,
 )
 
 private const val DONATION_SOURCE_INDEX = 5

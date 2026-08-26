@@ -16,8 +16,7 @@ import kotlin.math.min
 internal sealed interface KeyboxUnlockOutcome {
     class Success(
         val session: UnlockedKeyboxSession,
-        // Failures recorded since the previous successful unlock (read before the
-        // reset), so the caller can surface "N failed attempts while you were away".
+
         val priorFailedAttempts: Int = 0,
         val priorLastFailedAt: Long = 0L,
     ) : KeyboxUnlockOutcome
@@ -34,12 +33,6 @@ internal sealed interface KeyboxUnlockOutcome {
     data object Missing : KeyboxUnlockOutcome
 }
 
-/**
- * Envelope keybox from task_new.md: Argon2id(password) -> masterKey wraps the random
- * dataKey (the SQLCipher passphrase) plus the guard journal's X25519 private key.
- * The X25519 public key stays plaintext so journal writers can seal entries while
- * the app is locked; reading them back requires the password.
- */
 @Suppress("TooManyFunctions")
 internal class SecureKeybox(
     private val keyboxFile: File,
@@ -108,17 +101,7 @@ internal class SecureKeybox(
         return unlockDocument(password, document)
     }
 
-    /**
-     * Opens the box with an already-derived master key (the biometric path: the key
-     * comes out of the hardware-bound `keybox.bio` blob, no Argon2 run). A verifier
-     * mismatch means the blob is stale (PIN changed underneath it) — reported as
-     * Corrupted for the caller to silently fall back to the PIN, never as a failed
-     * attempt.
-     */
     fun unlockWithMasterKey(masterKey: ByteArray): KeyboxUnlockOutcome {
-        // This method owns [masterKey] and its KDoc promises it is zeroed on every failure, so the
-        // early Missing / unreadable exits must wipe it too — not just the verifier-mismatch and
-        // GCM-failure branches below — or the hardware-unsealed key lingers in the heap.
         if (!exists()) {
             masterKey.zeroize()
             return KeyboxUnlockOutcome.Missing
@@ -136,11 +119,6 @@ internal class SecureKeybox(
         return openSecrets(masterKey, document)
     }
 
-    /**
-     * Confirms a credential WITHOUT opening the box or touching the attempt counter:
-     * the action gate re-asks for the PIN while the app is already unlocked, so a
-     * mistyped confirmation must not arm the unlock backoff.
-     */
     fun verifyPassword(password: ByteArray): Boolean {
         if (!exists()) {
             return false
@@ -308,10 +286,6 @@ internal class SecureKeybox(
     private fun readDocument(): KeyboxDocument {
         val raw = keyboxFile.readBytes()
         if (raw.isNotEmpty() && raw[0] == LEGACY_JSON_FIRST_BYTE) {
-            // Legacy v1 file: plain JSON on disk. Parse it and migrate to the
-            // hardware-wrapped format best-effort — if the Keystore write fails the
-            // plain file stays readable and we retry on the next read; the password
-            // path must never break because migration could not complete.
             val document = json.decodeFromString<KeyboxDocument>(raw.decodeToString())
             runCatching { writeDocument(document) }
             return document
@@ -346,13 +320,6 @@ internal class SecureKeybox(
         attemptsFile.delete()
     }
 
-    /**
-     * Backoff delay still owed, computed from the PERSISTED attempt state rather than in-process
-     * counters, so the exponential throttle survives a kill/restart instead of resetting to zero
-     * (the unlock UI seeds its countdown from this on cold start). A backwards wall clock — a naive
-     * rollback-the-clock bypass — yields the full window instead of 0. Returns 0 when nothing is
-     * owed. Root can still delete attempts.bin; this hardens the non-root/UI path per task_new.md.
-     */
     fun remainingBackoffMs(): Long {
         val attempts = readAttempts()
         if (attempts.failedAttempts <= 0) {
@@ -370,11 +337,6 @@ internal class SecureKeybox(
         }
     }
 
-    /**
-     * Canonical AAD string binding every password-independent field to the wrapped
-     * secrets. Built by hand (not a serializer) so its bytes never depend on library
-     * behavior; `wrappedSecrets` itself is excluded (it is what the AAD protects).
-     */
     private fun canonicalAad(document: KeyboxDocument): ByteArray =
         buildString {
             append("fhkb").append(document.version)
@@ -386,8 +348,7 @@ internal class SecureKeybox(
             append("|created=").append(document.createdAtWallClock)
             append("|cp=").append(document.checkpoint.seq)
             append(',').append(document.checkpoint.headHash)
-            // v1 documents were sealed without the credential field; appending it for
-            // them would break GCM on every pre-existing box.
+
             if (document.version >= CREDENTIAL_AAD_MIN_VERSION) {
                 append("|cred=").append(document.credential)
             }
@@ -434,8 +395,6 @@ internal class SecureKeybox(
         const val KEYBOX_VERSION = 2
         const val CREDENTIAL_AAD_MIN_VERSION = 2
 
-        // Legacy v1 keyboxes are bare JSON; the Keystore envelope starts with a
-        // version byte (0x01), so '{' unambiguously identifies the old format.
         private const val LEGACY_JSON_FIRST_BYTE = '{'.code.toByte()
         const val DATA_KEY_BYTES = 32
         const val SECRETS_BYTES = 64
@@ -458,10 +417,6 @@ internal class SecureKeybox(
     }
 }
 
-/**
- * Live unlocked state: retains the master key so checkpoint updates and password
- * changes can re-authenticate the box without re-running Argon2. Zeroed by destroy().
- */
 internal class UnlockedKeyboxSession internal constructor(
     private val keybox: SecureKeybox,
     private val masterKey: ByteArray,
@@ -473,7 +428,6 @@ internal class UnlockedKeyboxSession internal constructor(
     val checkpoint: KeyboxCheckpoint
         get() = document.checkpoint
 
-    /** Private copy for the biometric enrolment path; the caller must zero it. */
     internal fun copyMasterKey(): ByteArray = masterKey.copyOf()
 
     fun updateJournalCheckpoint(

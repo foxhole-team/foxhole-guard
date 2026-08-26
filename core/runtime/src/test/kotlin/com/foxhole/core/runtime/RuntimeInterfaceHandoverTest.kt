@@ -19,7 +19,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.util.Collections
 
-/** The native worker stops before replacement start while the old master TUN stays held. */
 class RuntimeInterfaceHandoverTest {
     @Test
     fun `the incoming interface is established before the retired one is closed`() =
@@ -98,8 +97,7 @@ class RuntimeInterfaceHandoverTest {
                 }
 
             assertTrue(result.isFailure)
-            // Still last, and still present: a switch that failed must not leave the device bare,
-            // and must not leave the retired runtime holding a TUN nobody owns either.
+
             assertEquals(listOf("guard:quiesce", "tunnel:establish", "guard:close"), operations.toList())
             assertFalse(store.hasRetired())
         }
@@ -186,7 +184,7 @@ class RuntimeInterfaceHandoverTest {
 
             store.get()
             assertTrue(store.quiesceAndRetireCurrent())
-            // A second switch begins on top of an abandoned one: neither runtime may be dropped.
+
             store.get()
             assertTrue(store.quiesceAndRetireCurrent())
 
@@ -232,10 +230,6 @@ class RuntimeInterfaceHandoverTest {
     }
 }
 
-/**
- * Records the two operations that matter for the ordering: `start` is where a runtime establishes
- * its TUN, `stop` is where it closes one.
- */
 private class RecordingRuntime(
     private val name: String,
     val operations: MutableList<String>,

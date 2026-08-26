@@ -1,8 +1,9 @@
 package com.foxhole.guard.ui.cli
 
+import androidx.compose.material3.darkColorScheme
 import androidx.compose.ui.graphics.Color
 import com.foxhole.core.model.AccentColor
-import com.foxhole.core.model.PanelAppearance
+import com.foxhole.core.model.ThemeMode
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
@@ -12,80 +13,125 @@ import java.io.File
 import kotlin.math.pow
 
 class CliAccentColorTest {
-
-    private val palettes = listOf(PanelAppearance.STANDARD, PanelAppearance.LIGHT)
+    private val fixedPalettes = ThemeMode.entries.filterNot { it == ThemeMode.SYSTEM }
     private val fixedAccents = AccentColor.entries.filterNot { it == AccentColor.AUTO }
 
     @Test
-    fun `orange returns the canonical palettes unchanged`() {
-        assertEquals(cliColorsFor(PanelAppearance.STANDARD), cliColorsFor(PanelAppearance.STANDARD, AccentColor.ORANGE))
-        assertEquals(cliColorsFor(PanelAppearance.LIGHT), cliColorsFor(PanelAppearance.LIGHT, AccentColor.ORANGE))
+    fun `automatic fixed accent is the one green family`() {
+        fixedPalettes.forEach { mode ->
+            assertEquals(
+                mode.name,
+                cliColorsFor(mode, AccentColor.GREEN),
+                cliColorsFor(mode, AccentColor.AUTO),
+            )
+        }
     }
 
     @Test
-    fun `accents swap only the accent family`() {
-        palettes.forEach { palette ->
-            val base = cliColorsFor(palette)
-            fixedAccents.filter { it != AccentColor.ORANGE }.forEach { accent ->
-                val accented = cliColorsFor(palette, accent)
-                assertNotEquals("$palette/$accent accent unchanged", base.accent, accented.accent)
+    fun `manual accents swap only the accent family`() {
+        fixedPalettes.forEach { mode ->
+            val base = cliColorsFor(mode)
+            fixedAccents.filterNot { it == AccentColor.GREEN }.forEach { accent ->
+                val accented = cliColorsFor(mode, accent)
+                assertNotEquals("$mode/$accent accent unchanged", base.accent, accented.accent)
                 assertEquals(base.bg, accented.bg)
                 assertEquals(base.fg, accented.fg)
-                assertEquals(base.vpn, accented.vpn)
-                assertEquals(base.tor, accented.tor)
-                assertEquals(base.i2p, accented.i2p)
-                assertEquals(base.firewall, accented.firewall)
-                assertEquals(base.dnsFilter, accented.dnsFilter)
+                assertEquals(base.status, accented.status)
+                assertEquals(base.channel, accented.channel)
+                assertEquals(base.map, accented.map)
                 assertEquals(base.onAccent, accented.onAccent)
             }
         }
     }
 
     @Test
-    fun `every accent hue is distinct within a palette`() {
-        palettes.forEach { palette ->
-            val hues = fixedAccents.map { accent -> cliColorsFor(palette, accent).accent }
-            assertEquals("$palette accents must stay distinct", hues.size, hues.toSet().size)
-        }
-    }
-
-    @Test
-    fun `every accent holds four and a half to one against its background`() {
-        palettes.forEach { palette ->
-            val bg = cliColorsFor(palette).bg
-            AccentColor.entries.forEach { accent ->
-                val hue = cliColorsFor(palette, accent).accent
-                val ratio = contrast(hue, bg)
-                assertTrue("$palette/$accent contrast %.2f below 4.5".format(ratio), ratio >= 4.5)
+    fun `every manual accent is distinct and readable within a fixed palette`() {
+        fixedPalettes.forEach { mode ->
+            val palette = cliColorsFor(mode)
+            val hues = fixedAccents.map { accent -> cliColorsFor(mode, accent).accent }
+            assertEquals("$mode accents must stay distinct", hues.size, hues.toSet().size)
+            fixedAccents.forEach { accent ->
+                val ratio = contrast(cliColorsFor(mode, accent).accent, palette.bg)
+                assertTrue(
+                    "$mode/$accent contrast %.2f below 4.5".format(ratio),
+                    ratio >= 4.5,
+                )
             }
         }
     }
 
     @Test
-    fun `swatch matches the accent the palette would apply`() {
-        palettes.forEach { palette ->
-            AccentColor.entries.forEach { accent ->
-                assertEquals(cliColorsFor(palette, accent).accent, cliAccentSwatch(palette, accent))
+    fun `system auto keeps exact Material You primary and dynamic surfaces`() {
+        val scheme =
+            darkColorScheme(
+                primary = Color(0xFFABCDEF),
+                onPrimary = Color(0xFF102030),
+                primaryContainer = Color(0xFF234567),
+                background = Color(0xFF010203),
+                surface = Color(0xFF040506),
+                surfaceVariant = Color(0xFF070809),
+                secondary = Color(0xFF91A2B3),
+                tertiary = Color(0xFFC4D5E6),
+                error = Color(0xFFFEDCBA),
+            )
+
+        val colors =
+            cliColorsFromDynamicScheme(
+                scheme = scheme,
+                light = false,
+            )
+
+        assertEquals(scheme.background, colors.bg)
+        assertEquals(scheme.surface, colors.panel)
+        assertEquals(scheme.surfaceVariant, colors.panelAlt)
+        assertEquals(scheme.primary, colors.accent)
+        assertEquals(scheme.onPrimary, colors.onAccent)
+        assertEquals(scheme.error, colors.status.error)
+        assertEquals(CliWarmDarkColors.status.success, colors.status.success)
+        assertEquals(CliWarmDarkColors.channel.vpn, colors.channel.vpn)
+    }
+
+    @Test
+    fun `system manual accent cannot replace Material You primary`() {
+        val scheme =
+            darkColorScheme(
+                primary = Color(0xFFABCDEF),
+                background = Color(0xFF010203),
+                surface = Color(0xFF040506),
+            )
+        val colors =
+            cliColorsFromDynamicScheme(
+                scheme = scheme,
+                light = false,
+            )
+
+        assertEquals(scheme.background, colors.bg)
+        assertEquals(scheme.surface, colors.panel)
+        assertEquals(scheme.primary, colors.accent)
+    }
+
+    @Test
+    fun `swatch matches the fixed accent the selected style would apply`() {
+        fixedPalettes.forEach { mode ->
+            fixedAccents.forEach { accent ->
+                assertEquals(
+                    cliColorsFor(mode, accent).accent,
+                    cliAccentSwatch(mode, accent),
+                )
             }
         }
     }
 
     @Test
-    fun `auto accent is delegated to the Android dynamic scheme`() {
-        val theme = source("CliTheme.kt")
-        assertTrue(theme.contains("dynamicLightColorScheme(context)"))
-        assertTrue(theme.contains("dynamicDarkColorScheme(context)"))
-        assertTrue(theme.contains("accent == AccentColor.AUTO"))
+    fun `dns and data use one blue semantic family in fixed palettes`() {
+        fixedPalettes.forEach { mode ->
+            val colors = cliColorsFor(mode)
+            assertEquals(mode.name, colors.status.data, colors.channel.dns)
+        }
     }
 
     @Test
-    fun `dns filter is the blue family in both palettes`() {
-        assertEquals(CliNoteBlue, cliColorsFor(PanelAppearance.STANDARD).dnsFilter)
-        assertEquals(cliColorsFor(PanelAppearance.LIGHT).note, cliColorsFor(PanelAppearance.LIGHT).dnsFilter)
-    }
-
-    @Test
-    fun `retro enabled controls follow the selected accent instead of legacy green`() {
+    fun `enabled controls follow the selected accent instead of status success`() {
         val rows = source("components/CliRows.kt")
         val checkGlyph =
             rows.substringAfter("internal fun CliCheckGlyph(")
@@ -95,7 +141,8 @@ class CliAccentColorTest {
                 .substringBefore("internal fun CliRowInfoGlyph")
         val module = source("settings/CliModuleBlock.kt")
 
-        assertTrue(checkGlyph.contains("color = if (checked) colors.accent else colors.faint"))
+        assertTrue(checkGlyph.contains("checkedTrackColor = colors.accent"))
+        assertTrue(checkGlyph.contains("checkedBorderColor = colors.accent"))
         assertTrue(toggleRow.contains("tint = if (checked) colors.accent else colors.dim"))
         assertFalse(checkGlyph.contains("colors.ok"))
         assertFalse(toggleRow.contains("colors.ok"))

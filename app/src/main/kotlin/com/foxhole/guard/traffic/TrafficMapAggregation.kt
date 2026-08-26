@@ -13,6 +13,7 @@ import com.foxhole.core.model.TrafficMapPeriodSnapshots
 import com.foxhole.core.model.TrafficMapPoint
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.update
 import java.util.Locale
 import kotlin.math.sqrt
 
@@ -164,28 +165,49 @@ internal data class TrafficMapDnsResolverAggregate(
     val bytes: Long get() = bytesByConnectionId.values.sumOf { value -> value.coerceAtLeast(0L) }
 }
 
-internal fun MutableStateFlow<TrafficMapDnsResolverAggregate?>.updateDnsResolverAggregate(
+internal data class TrafficMapDnsResolverSnapshot(
+    val generation: Long? = null,
+    val aggregate: TrafficMapDnsResolverAggregate? = null,
+)
+
+internal fun MutableStateFlow<TrafficMapDnsResolverSnapshot>.replaceDnsResolverSnapshot(
+    generation: Long,
     samples: List<TrafficMapConnectionSample>,
 ) {
-    if (samples.isEmpty()) {
-        return
-    }
-    val current = value ?: TrafficMapDnsResolverAggregate()
-    val totalsById = LinkedHashMap(current.bytesByConnectionId)
-    var countryCode = current.countryCode
+    val totalsById = LinkedHashMap<String, Long>()
     samples.forEach { sample ->
         totalsById[sample.connectionId] = sample.bytes.coerceAtLeast(0L)
-        countryCode = sample.countryCode
     }
     while (totalsById.size > TrafficMapRepository.MaxRetainedConnectionSamples) {
         totalsById.remove(totalsById.keys.first())
     }
-    value =
-        TrafficMapDnsResolverAggregate(
-            countryCode = countryCode,
-            bytesByConnectionId = totalsById,
-            connections = maxOf(current.connections, totalsById.size),
-        )
+    val countryCode =
+        samples
+            .map { sample -> sample.countryCode.uppercase(Locale.US) }
+            .distinct()
+            .singleOrNull()
+    update { current ->
+        if (current.generation != null && generation < current.generation) {
+            current
+        } else {
+            TrafficMapDnsResolverSnapshot(
+                generation = generation,
+                aggregate = if (samples.isEmpty()) {
+                    null
+                } else {
+                    TrafficMapDnsResolverAggregate(
+                        countryCode = countryCode,
+                        bytesByConnectionId = totalsById,
+                        connections = totalsById.size,
+                    )
+                },
+            )
+        }
+    }
+}
+
+internal fun MutableStateFlow<TrafficMapDnsResolverSnapshot>.clearDnsResolverAggregate() {
+    update { current -> current.copy(aggregate = null) }
 }
 
 internal data class TrafficMapDestinationSnapshot(
@@ -230,6 +252,7 @@ internal data class TrafficMapDestinationBundle(
     val liveSnapshot: TrafficMapDestinationSnapshot,
     val periodSnapshots: TrafficMapPeriodSnapshots,
     val countryDetailsByCode: Map<String, TrafficMapCountryDetail>,
+    val dnsResolver: TrafficMapDnsResolverAggregate?,
 )
 
 internal fun Map<String, Long>.addTrafficMapCountryBytes(next: Map<String, Long>): Map<String, Long> {

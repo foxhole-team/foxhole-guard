@@ -1,6 +1,12 @@
 package com.foxhole.guard.ui.cli.profiles
 
+import com.foxhole.guard.ui.cli.CliColors
+import com.foxhole.guard.ui.cli.components.CLI_CONNECT_NORMAL_MAX_MS
+import com.foxhole.guard.ui.cli.components.CliLatencyKind
+import com.foxhole.guard.ui.cli.components.CliLatencyTone
+import com.foxhole.guard.ui.cli.components.cliLatencyTone
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Test
 
 class CliProtocolTablePresentationTest {
@@ -81,6 +87,63 @@ class CliProtocolTablePresentationTest {
     fun `testing and down override any remembered value in the metric cells`() {
         assertEquals("…", cliProtocolMetricCell(CliProtocolStatus.TESTING, 42L))
         assertEquals("—", cliProtocolMetricCell(CliProtocolStatus.DOWN, 42L))
+    }
+
+    @Test
+    fun `two seconds is green only for the T connect column`() {
+        assertEquals(
+            CliLatencyTone.NORMAL,
+            cliLatencyTone(CLI_CONNECT_NORMAL_MAX_MS, CliLatencyKind.CONNECT),
+        )
+        assertEquals(
+            CliLatencyTone.DEGRADED,
+            cliLatencyTone(CLI_CONNECT_NORMAL_MAX_MS + 1L, CliLatencyKind.CONNECT),
+        )
+        assertEquals(CliLatencyTone.POOR, cliLatencyTone(2_000L, CliLatencyKind.PROTOCOL))
+        assertEquals(CliLatencyTone.POOR, cliLatencyTone(2_000L, CliLatencyKind.HOME))
+        assertEquals(CliLatencyTone.UNAVAILABLE, cliLatencyTone(null, CliLatencyKind.CONNECT))
+        assertEquals(CliLatencyTone.UNAVAILABLE, cliLatencyTone(-1L, CliLatencyKind.CONNECT))
+    }
+
+    @Test
+    fun `protocol metric colors use status semantics and preserve state overrides`() {
+        val colors = CliColors()
+
+        assertEquals(
+            colors.err,
+            protocolMetricColor(
+                CLI_CONNECT_NORMAL_MAX_MS,
+                CliProtocolStatus.DOWN,
+                CliLatencyKind.CONNECT,
+                colors,
+            ),
+        )
+        assertEquals(
+            colors.warn,
+            protocolMetricColor(
+                CLI_CONNECT_NORMAL_MAX_MS,
+                CliProtocolStatus.TESTING,
+                CliLatencyKind.CONNECT,
+                colors,
+            ),
+        )
+        assertEquals(
+            colors.ok,
+            protocolMetricColor(
+                CLI_CONNECT_NORMAL_MAX_MS,
+                CliProtocolStatus.READY,
+                CliLatencyKind.CONNECT,
+                colors,
+            ),
+        )
+        assertEquals(
+            colors.err,
+            protocolMetricColor(2_000L, CliProtocolStatus.READY, CliLatencyKind.PROTOCOL, colors),
+        )
+        val elevated =
+            protocolMetricColor(301L, CliProtocolStatus.READY, CliLatencyKind.PROTOCOL, colors)
+        assertEquals(colors.alert, elevated)
+        assertNotEquals(colors.tor, elevated)
     }
 
     private fun status(

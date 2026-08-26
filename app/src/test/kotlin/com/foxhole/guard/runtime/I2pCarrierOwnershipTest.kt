@@ -32,6 +32,19 @@ class I2pCarrierOwnershipTest {
         assertFalse(carrierCurrent(appliedRuntimeFingerprint = 24))
     }
 
+    @Test
+    fun `cold readiness retries only while the original runtime owns the carrier`() {
+        assertTrue(readinessProbeOwned())
+        assertFalse(readinessProbeOwned(currentRuntimeGeneration = 102L))
+        assertFalse(readinessProbeOwned(currentEndpointGeneration = 18L))
+        assertFalse(readinessProbeOwned(currentEndpointGeneration = null))
+        assertFalse(readinessProbeOwned(activeVpnNetworkHandle = 362L))
+        assertFalse(readinessProbeOwned(activeVpnNetworkHandle = null))
+        assertFalse(readinessProbeOwned(appliedRuntimeFingerprint = 24))
+        assertFalse(readinessProbeOwned(appliedRuntimeFingerprint = null))
+        assertFalse(readinessProbeOwned(sessionOwned = false))
+    }
+
     private fun carrierCurrent(
         activeVpnNetworkHandle: Long? = 361L,
         currentVpnNetworkHandle: Long? = 361L,
@@ -45,6 +58,25 @@ class I2pCarrierOwnershipTest {
             expectedVpnNetworkHandle = 361L,
             activeVpnNetworkHandle = activeVpnNetworkHandle,
             currentVpnNetworkHandle = currentVpnNetworkHandle,
+            expectedRuntimeFingerprint = 23,
+            appliedRuntimeFingerprint = appliedRuntimeFingerprint,
+            sessionOwned = sessionOwned,
+        )
+
+    private fun readinessProbeOwned(
+        currentRuntimeGeneration: Long = 101L,
+        currentEndpointGeneration: Long? = 17L,
+        activeVpnNetworkHandle: Long? = 361L,
+        appliedRuntimeFingerprint: Int? = 23,
+        sessionOwned: Boolean = true,
+    ): Boolean =
+        isI2pReadinessProbeOwned(
+            expectedRuntimeGeneration = 101L,
+            currentRuntimeGeneration = currentRuntimeGeneration,
+            expectedEndpointGeneration = 17L,
+            currentEndpointGeneration = currentEndpointGeneration,
+            expectedVpnNetworkHandle = 361L,
+            activeVpnNetworkHandle = activeVpnNetworkHandle,
             expectedRuntimeFingerprint = 23,
             appliedRuntimeFingerprint = appliedRuntimeFingerprint,
             sessionOwned = sessionOwned,

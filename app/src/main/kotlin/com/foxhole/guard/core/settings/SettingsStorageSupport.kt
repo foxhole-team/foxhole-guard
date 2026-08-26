@@ -46,10 +46,7 @@ internal fun readEncryptedSettingsResult(
     return runCatching {
         val payload = readPayload()
         val settings = decodePayload(sanitizePayload(payload))
-        // One rewrite predicate covers both theme sanitization and normalization/schema drift:
-        // persist only when the on-disk bytes differ from the canonical encoding we just decoded.
-        // An already-canonical file (the common cold-start case) is left untouched — no encrypt,
-        // no atomic write.
+
         if (encodeCanonical(settings) != payload) {
             rewriteCanonical(settings)
         }

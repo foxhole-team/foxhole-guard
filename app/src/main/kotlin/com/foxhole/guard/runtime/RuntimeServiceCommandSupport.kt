@@ -265,8 +265,6 @@ private fun dispatchKillCommand(
     val reason = if (killTor) "kill_tor" else "kill"
     val command = RuntimeCommand.Kill(reason = reason, source = RuntimeCommandSource.SERVICE)
     handlers.dispatch(command) {
-        // Stopping TOR alone must not tear down a guard something else still wants: if I2P is
-        // engaged with outside-tunnel (or the firewall is on), disconnect re-raises its guard.
         handlers.disconnect(startId, !killTor, false)
     }
 }
@@ -445,8 +443,6 @@ private suspend fun restoreLastActiveConnection(
         } catch (error: kotlinx.coroutines.CancellationException) {
             throw error
         } catch (error: Exception) {
-            // Tile or restore before the database is unlocked: unhandled, the exception was
-            // swallowed in runCommandSafely and the service stayed resident in CONNECTING.
             container.diagnosticsLogger.recordFailure(
                 "connection",
                 "restore failed: ${error.javaClass.simpleName}",
@@ -471,9 +467,7 @@ private suspend fun restoreLastActiveConnection(
         disconnect(startId, false)
         return
     }
-    // RESTORE means "resume this profile", not "force this exact stale option". A mandatory
-    // subscription refresh may rename/remove the stored option; null lets the refreshed persisted
-    // selection (or its safe fallback) win instead of failing a boot/tile/widget restore.
+
     connect(
         active.id,
         startId,
@@ -491,8 +485,7 @@ internal fun shouldSkipRestoreForActiveProfileRuntime(activeProfileSessionPresen
 
 private val KNOWN_RUNTIME_SERVICE_ACTIONS =
     setOf(
-        // Android may start the authorized VPN service with its manifest interface action.
-        // It is a framework lifecycle signal, not an app command; the dispatcher leaves it as a no-op.
+
         VpnService.SERVICE_INTERFACE,
         FoxholeConnectionServiceContract.ACTION_CONNECT,
         FoxholeConnectionServiceContract.ACTION_DISCONNECT,

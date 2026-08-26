@@ -16,7 +16,7 @@ import java.nio.file.Files
 class CliTerminalJournalWiringTest {
 
     private val history = listOf(
-        CliTerminalLine(timestampMs = 1L, text = "yesterday: reconnect", tone = CliLineTone.WARN),
+        CliTerminalLine(timestampMs = 1L, text = "yesterday: reconnect", tone = CliLineTone.PENDING),
         CliTerminalLine(timestampMs = 2L, text = "yesterday: tunnel up", tone = CliLineTone.OK),
     )
 
@@ -41,7 +41,7 @@ class CliTerminalJournalWiringTest {
         val terminal = CliTerminalState(strings = strings(), onCommitted = recorded::add)
 
         terminal.welcome("1.2.3")
-        terminal.onBootStage(profilesLoaded = false)
+        terminal.onBootStage(ready = false)
 
         assertTrue(terminal.lines.isEmpty())
         assertEquals("loading", terminal.bootProgress?.text)
@@ -52,7 +52,7 @@ class CliTerminalJournalWiringTest {
     fun `the log stays held until both the journal and the profile store report in`() {
         val terminal = CliTerminalState(strings = strings())
         terminal.welcome("1.2.3")
-        terminal.onBootStage(profilesLoaded = false)
+        terminal.onBootStage(ready = false)
 
         terminal.onJournalRestored(history)
 
@@ -64,10 +64,10 @@ class CliTerminalJournalWiringTest {
     fun `the whole log appears at once when the profile store opens`() {
         val terminal = CliTerminalState(strings = strings())
         terminal.welcome("1.2.3")
-        terminal.onBootStage(profilesLoaded = false)
+        terminal.onBootStage(ready = false)
         terminal.onJournalRestored(history)
 
-        terminal.onBootStage(profilesLoaded = true)
+        terminal.onBootStage(ready = true)
 
         assertEquals(
             listOf("yesterday: reconnect", "yesterday: tunnel up", "FoxHole Guard · v1.2.3", "ready"),
@@ -111,7 +111,7 @@ class CliTerminalJournalWiringTest {
             startsHeld = false,
         )
         terminal.welcome("1.2.3")
-        terminal.onBootStage(profilesLoaded = true)
+        terminal.onBootStage(ready = true)
         terminal.note("visible")
         terminal.command("typing", output = "queued output")
 
@@ -148,7 +148,7 @@ class CliTerminalJournalWiringTest {
             startsHeld = false,
         )
         terminal.welcome("1.2.3")
-        terminal.onBootStage(profilesLoaded = true)
+        terminal.onBootStage(ready = true)
         terminal.note("old history")
 
         terminal.clearHistory()
@@ -175,7 +175,7 @@ class CliTerminalJournalWiringTest {
     }
 
     private fun CliTerminalState.publishColdStart(restored: List<CliTerminalLine> = emptyList()) {
-        onBootStage(profilesLoaded = true)
+        onBootStage(ready = true)
         onJournalRestored(restored)
     }
 

@@ -313,9 +313,6 @@ internal class ProfileImportSmartConfigParserTest : ProfileImportParserTestSuppo
 
     @Test
     fun `sample smart config file stays parseable`() {
-        // The final server-issued shape: a flat share-URI list (no route-group headings) — one
-        // profile whose protocol options cover the whole matrix, with the MTProto line the only
-        // ignored entry (FoxCore has no MTProto outbound).
         val samplePath =
             listOf(
                 Path.of("foxhole-sample-smart-config", "foxhole-smart-config.sample.txt"),
@@ -327,8 +324,6 @@ internal class ProfileImportSmartConfigParserTest : ProfileImportParserTestSuppo
 
         val parsed = parser.parseSubscriptionProfiles(payload, "Foxhole")
 
-        // Nine accepted share URIs become nine profiles; only the MTProto (tg://) line is dropped,
-        // since FoxCore ships no MTProto outbound.
         assertEquals(9, parsed.profiles.size)
         val ignored = parsed.entryReports.filter { report -> report.status == SubscriptionEntryStatus.IGNORED_UNSUPPORTED }
         assertEquals(listOf("MTPROTO"), ignored.map { report -> report.protocolLabel })
@@ -432,11 +427,10 @@ internal class ProfileImportSmartConfigParserTest : ProfileImportParserTestSuppo
                 "Foxhole",
             )
 
-        // Outline IS Shadowsocks — the same server imported both ways is one profile, not two.
         assertEquals(1, parsed.profiles.size)
-        // The surviving representation prefers the plain Shadowsocks label over the cosmetic Outline one.
+
         assertEquals(ProtocolHint.SHADOWSOCKS, parsed.profiles.single().protocolHint)
-        // Both source lines are still reported as accepted (nothing was a parse error).
+
         assertEquals(2, parsed.entryReports.count { report -> report.status == SubscriptionEntryStatus.ACCEPTED })
     }
 

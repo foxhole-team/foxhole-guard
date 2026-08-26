@@ -6,11 +6,6 @@ import java.nio.file.AtomicMoveNotSupportedException
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 
-/**
- * Same temp-file + fsync + ATOMIC_MOVE discipline as AndroidKeystoreFileCipher, for
- * files that are not Keystore-encrypted (the keybox must stay openable by password
- * alone, surviving a Keystore wipe).
- */
 internal object AtomicFileWrites {
     fun writeBytesAtomic(
         file: File,

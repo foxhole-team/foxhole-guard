@@ -46,6 +46,7 @@ import com.foxhole.guard.core.security.UnlockOutcome
 import com.foxhole.guard.ui.cli.CliSpacing
 import com.foxhole.guard.ui.cli.CliType
 import com.foxhole.guard.ui.cli.LocalCliColors
+import com.foxhole.guard.ui.cli.cliDisplayStyle
 import com.foxhole.guard.ui.cli.components.CliButton
 import com.foxhole.guard.ui.cli.components.CliChip
 import com.foxhole.guard.ui.cli.components.CliPanel
@@ -99,13 +100,14 @@ internal fun CliUnlockScreen(
             Text(text = "  /\\_/\\\n ( o.o )\n  > ^ <", style = CliType.title, color = colors.accent)
             Spacer(modifier = Modifier.height(CliSpacing.md))
             CliPanel(
-                icon = R.drawable.pix_lock,
+                icon = R.drawable.lin_lock,
                 title = stringResource(R.string.cli_unlock_title),
                 modifier = Modifier.fillMaxWidth()
             ) {
+                val shownTitle = stringResource(R.string.unlock_title).uppercase()
                 Text(
-                    text = stringResource(R.string.unlock_title).uppercase(),
-                    style = CliType.display,
+                    text = shownTitle,
+                    style = cliDisplayStyle(shownTitle),
                     color = colors.fg,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth(),

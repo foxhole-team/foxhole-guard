@@ -7,9 +7,6 @@ import com.foxhole.core.model.RoutingRuleAction
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 
-// The assembler's shared vocabulary: route-rule helpers, tags, hosts and port grammar.
-// Split from RuntimeConfigAssembler.kt.
-
 internal data class NormalizedRoutePort(
     val ports: List<Int>,
     val portRanges: List<String>,
@@ -36,8 +33,6 @@ internal const val MANAGED_SELECTED_SITE_RULE_PREFIX = "Foxhole selected site:"
 
 internal fun JsonArray?.orEmpty(): List<JsonElement> = this?.toList().orEmpty()
 
-// Hoisted from RuntimeConfigAssembler's private companion so the extracted
-// per-responsibility collaborators can reference them (module-internal, same package).
 internal val LOCAL_HOSTS = setOf("127.0.0.1", "localhost", "::1")
 
 internal val FOXHOLE_ROUTE_KEYS =

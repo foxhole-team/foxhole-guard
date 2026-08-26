@@ -9,9 +9,6 @@ import com.foxhole.core.model.SmartProfilePreference
 import com.foxhole.core.model.SmartProfileProtocolMemory
 import com.foxhole.core.model.TransportProtocol
 
-// Smart-profile protocol memory: probe results, server pings, baselines and per-profile
-// traffic accumulation. Extracted from SettingsRepository (class split by domain).
-
 suspend fun SettingsRepository.removeSmartProfilePreference(profileId: Long) = update { current ->
     current.copy(
         smartProfilePreferences = current.smartProfilePreferences.filterNot { it.profileId == profileId },

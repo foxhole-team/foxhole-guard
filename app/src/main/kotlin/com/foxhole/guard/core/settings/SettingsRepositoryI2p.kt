@@ -6,18 +6,12 @@ import com.foxhole.core.model.I2pAddressBookEntry
 import com.foxhole.core.model.I2pTransitBandwidth
 import java.util.Locale
 
-// Independent I2P (i2pd) toggle + local addressbook. Extracted from SettingsRepository (class
-// split by domain).
-
 suspend fun SettingsRepository.updateI2pEnabled(value: Boolean) =
     update { current ->
         current.copy(
-            // Enabling from settings only grants the permission — it never starts the router. The
-            // start is the home button (onI2pEngagedChanged): switching a setting must not raise a
-            // network core on its own. Disabling leaves engaged as-is (it is gated behind enabled).
+
             i2p = current.i2p.copy(enabled = value, engaged = if (value) false else current.i2p.engaged),
-            // Enable-order stamp, mirroring updatePrivacyRoutePermitted: the TOR/I2P settings
-            // entry names/orders itself by whichever core came on first.
+
             ui =
             current.ui.copy(
                 i2pEnabledAtMs =
@@ -30,8 +24,6 @@ suspend fun SettingsRepository.updateI2pEnabled(value: Boolean) =
         )
     }
 
-/** Runtime pause/resume from the dashboard window — flips engagement without touching the
- * persisted permission, so the pill stays and the router resumes on the next toggle. */
 suspend fun SettingsRepository.updateI2pEngaged(value: Boolean) =
     update { current ->
         current.copy(i2p = current.i2p.copy(engaged = value))
@@ -68,10 +60,6 @@ suspend fun SettingsRepository.updateI2pTransitTunnelsLimit(value: Int) =
         current.copy(i2p = current.i2p.copy(transitTunnelsLimit = clamped))
     }
 
-/**
- * Adds or replaces one local addressbook entry. [originalHost] carries the pre-edit host so a
- * rename replaces the old row instead of duplicating it; hosts are unique keys.
- */
 suspend fun SettingsRepository.upsertI2pAddressBookEntry(
     originalHost: String?,
     entry: I2pAddressBookEntry,

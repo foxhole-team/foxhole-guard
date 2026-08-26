@@ -10,50 +10,55 @@ import com.foxhole.core.model.packages
 import com.foxhole.core.model.withLane
 import com.foxhole.guard.BuildConfig
 
-// Privacy route (Tor) settings. Extracted from SettingsRepository (class split by domain).
-
 suspend fun SettingsRepository.updatePrivacyRouteMode(value: PrivacyRouteMode) =
-    update { current ->
-        current.copy(
-            connection =
-            current.connection.copy(
-                safeModeEnabled = current.connection.safeModeEnabled && value == PrivacyRouteMode.OFF,
-            ),
-            traffic =
-            if (value == PrivacyRouteMode.TOR_OVER_VPN) {
-                current.traffic.copy(mode = TrafficMode.TUNNEL)
-            } else {
-                current.traffic
-            },
-            privacyRoute = current.privacyRoute.copy(mode = value),
-        )
-    }
+    update { current -> updatePrivacyRouteModeIn(current, value) }
 
-// Permission-only flag: flipping it never touches mode/runtime here — the caller is
-// responsible for stopping an engaged Tor before revoking (see onTorRoutePermittedChanged).
-// Granting exits safe mode like the other Tor switches do: with safe mode on, normalized()
-// resets the whole privacyRoute block, which used to turn this grant into a silent no-op.
+internal fun updatePrivacyRouteModeIn(
+    current: Settings,
+    value: PrivacyRouteMode,
+): Settings =
+    current.copy(
+        connection =
+        current.connection.copy(
+            safeModeEnabled = current.connection.safeModeEnabled && value == PrivacyRouteMode.OFF,
+        ),
+        traffic =
+        if (value == PrivacyRouteMode.TOR_OVER_VPN) {
+            current.traffic.copy(mode = TrafficMode.TUNNEL)
+        } else {
+            current.traffic
+        },
+        privacyRoute = current.privacyRoute.copy(mode = value),
+    )
+
 suspend fun SettingsRepository.updatePrivacyRoutePermitted(value: Boolean) =
-    update { current ->
-        current.copy(
-            connection =
-            current.connection.copy(
-                safeModeEnabled = current.connection.safeModeEnabled && !value,
-            ),
-            privacyRoute = current.privacyRoute.copy(permitted = value),
-            // Enable-order stamp: the TOR/I2P settings entry names/orders itself by whichever
-            // core came on first. A re-grant while already stamped keeps the original stamp.
-            ui =
-            current.ui.copy(
-                torEnabledAtMs =
-                when {
-                    !value -> 0L
-                    current.ui.torEnabledAtMs != 0L -> current.ui.torEnabledAtMs
-                    else -> System.currentTimeMillis()
-                },
-            ),
-        )
-    }
+    update { current -> updatePrivacyRoutePermissionIn(current, value) }
+
+internal fun updatePrivacyRoutePermissionIn(
+    current: Settings,
+    permitted: Boolean,
+    enabledAtMs: Long = System.currentTimeMillis(),
+): Settings =
+    current.copy(
+        connection =
+        current.connection.copy(
+            safeModeEnabled = current.connection.safeModeEnabled && !permitted,
+        ),
+        privacyRoute =
+        current.privacyRoute.copy(
+            permitted = permitted,
+            mode = if (permitted) current.privacyRoute.mode else PrivacyRouteMode.OFF,
+        ),
+        ui =
+        current.ui.copy(
+            torEnabledAtMs =
+            when {
+                !permitted -> 0L
+                current.ui.torEnabledAtMs != 0L -> current.ui.torEnabledAtMs
+                else -> enabledAtMs
+            },
+        ),
+    )
 
 suspend fun SettingsRepository.updatePrivacyRouteScope(value: PrivacyRouteScope) =
     update { current ->
@@ -71,31 +76,44 @@ suspend fun SettingsRepository.updatePrivacyRouteScope(value: PrivacyRouteScope)
     }
 
 suspend fun SettingsRepository.updatePrivacyRouteBypassVpnTunnel(value: Boolean) =
-    update { current ->
-        current.copy(
-            connection =
-            current.connection.copy(
-                safeModeEnabled = current.connection.safeModeEnabled && !value,
-            ),
-            traffic =
-            if (value && current.privacyRoute.enabled) {
-                current.traffic.copy(mode = TrafficMode.TUNNEL)
-            } else {
-                current.traffic
-            },
-            privacyRoute =
-            current.privacyRoute.copy(
-                bypassVpnTunnel = value,
-            ),
-        )
-    }
+    update { current -> updatePrivacyRouteBypassVpnTunnelIn(current, value) }
 
-// Tor tuning below carries NO safe-mode clause on purpose: safe mode governs only the four fields
-// that engage the Tor lane (mode / permitted / scope / bypass), and Settings.normalized() disarms
-// only those. The transforms are extracted as pure `...In` functions (same idiom as
-// updateTunStackIn) so the regression suite can prove each value survives normalization plus a
-// reread — the write path drops any update whose normalized result equals the current one, which is
-// how every one of these toggles used to be a silent no-op on a fresh install.
+internal fun updatePrivacyRouteBypassVpnTunnelIn(
+    current: Settings,
+    value: Boolean,
+): Settings =
+    current.copy(
+        connection =
+        current.connection.copy(
+            safeModeEnabled = current.connection.safeModeEnabled && !value,
+        ),
+        traffic =
+        if (value && current.privacyRoute.enabled) {
+            current.traffic.copy(mode = TrafficMode.TUNNEL)
+        } else {
+            current.traffic
+        },
+        privacyRoute =
+        current.privacyRoute.copy(
+            bypassVpnTunnel = value,
+        ),
+    )
+
+suspend fun SettingsRepository.updatePrivacyRouteModeAndBypassVpnTunnel(
+    mode: PrivacyRouteMode,
+    bypassVpnTunnel: Boolean,
+) =
+    update { current -> updatePrivacyRouteModeAndBypassVpnTunnelIn(current, mode, bypassVpnTunnel) }
+
+internal fun updatePrivacyRouteModeAndBypassVpnTunnelIn(
+    current: Settings,
+    mode: PrivacyRouteMode,
+    bypassVpnTunnel: Boolean,
+): Settings =
+    updatePrivacyRouteBypassVpnTunnelIn(
+        current = updatePrivacyRouteModeIn(current, mode),
+        value = bypassVpnTunnel,
+    )
 
 suspend fun SettingsRepository.updatePrivacyRouteAutoRotateExit(value: Boolean) =
     update { current -> updatePrivacyRouteAutoRotateExitIn(current, value) }
@@ -124,8 +142,7 @@ internal fun updatePrivacyRouteAutoRotateIntervalIn(
 suspend fun SettingsRepository.updatePrivacyRouteSelectedPackages(value: List<String>) =
     update { current ->
         val selectedPackages = value.filterNot { it == BuildConfig.APPLICATION_ID }
-        // The Tor window edits the TOR lane directly. Apps dropped from the Tor scope stay in the
-        // tunnel selection (VPN lane) — leaving the Tor list must not silently unselect the app.
+
         val demoted =
             current.expert.packages(AppTunnelLane.TOR).filterNot { it in selectedPackages }
         current.copy(
@@ -152,9 +169,6 @@ suspend fun SettingsRepository.rotatePrivacyRouteIdentity() =
             ),
         )
     }
-
-// Tor bridge settings. bridgesEnabled/bridgeTransport change the generated torrc (a live Tor
-// reloads via updateRuntimeSettingAndMaybeReload); the rest is bookkeeping only.
 
 suspend fun SettingsRepository.updatePrivacyRouteBridgesEnabled(value: Boolean) =
     update { current -> updatePrivacyRouteBridgesEnabledIn(current, value) }

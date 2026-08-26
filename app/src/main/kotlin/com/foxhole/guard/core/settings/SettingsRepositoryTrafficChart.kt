@@ -5,9 +5,6 @@ import com.foxhole.core.model.TRAFFIC_CHART_RANGE_MIN_MINUTES
 import com.foxhole.core.model.TrafficCardView
 import com.foxhole.core.model.TrafficChartPage
 
-// The traffic-widget chart settings (view, split pager, live-window range). Chart monochrome
-// rides the app-wide monochrome toggle (updateMonochromeTorTheme) since the appearance merge.
-
 suspend fun SettingsRepository.updateTrafficCardView(value: TrafficCardView) =
     update { it.copy(ui = it.ui.copy(trafficCardView = value)) }
 

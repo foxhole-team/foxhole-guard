@@ -5,8 +5,6 @@ import com.foxhole.core.network.testRemoteHostResolver
 import kotlinx.serialization.json.Json
 import org.junit.Assert.fail
 
-// Shared fixture of the ProfileImportParserTest suites (fields and builders every slice uses).
-// Split from ProfileImportParserTest.kt.
 internal open class ProfileImportParserTestSupport {
     protected val json =
         Json {

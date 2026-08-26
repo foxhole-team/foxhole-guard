@@ -144,10 +144,6 @@ class InstalledAppRiskScorerTest {
 
     @Test
     fun `a sha-1 certificate match raises the app to a known threat`() {
-        // Every public stalkerware dataset publishes SHA-1 fingerprints, and SHA-1 to SHA-256 is a
-        // second preimage rather than a conversion — so without this band the certificate half of
-        // such a feed is unusable and only the package name, which an author renames for free,
-        // could ever match.
         val intel = InstalledAppThreatIntel(maliciousCertSha1 = setOf("31A6ECECD97CF39BC4126B8745CD94A7C30BF81C"))
         val assessment =
             scoreInstalledApp(
@@ -207,7 +203,7 @@ class InstalledAppRiskScorerTest {
                 ),
             ),
         )
-        // Blank entries are dropped, so a document of only blanks yields empty intel.
+
         assertTrue(ThreatIntelDocument(packages = listOf(""), certs = listOf("")).toThreatIntel().isEmpty)
     }
 
@@ -244,7 +240,7 @@ class InstalledAppRiskScorerTest {
         assertTrue(InstalledAppRiskSignal.OVERLAY_PERMISSION in assessment.riskSignals)
         assertTrue(InstalledAppRiskSignal.BATTERY_OPTIMIZATION_IGNORE in assessment.riskSignals)
         assertTrue(InstalledAppRiskSignal.AUTOSTART in assessment.riskSignals)
-        // OVERLAY_PERMISSION alone already forces HIGH.
+
         assertEquals(InstalledAppRiskLevel.HIGH, assessment.riskLevel)
     }
 }

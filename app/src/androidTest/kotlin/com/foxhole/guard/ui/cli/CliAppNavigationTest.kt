@@ -47,12 +47,12 @@ class CliAppNavigationTest {
         waitForScreen(CliScreen.HOME)
         composeRule.onNodeWithTag(CLI_APP_ROOT_TAG).assertIsDisplayed()
         composeRule.onNodeWithTag(CLI_DOCK_TAG).assertIsDisplayed()
+        composeRule.onAllNodesWithTag(cliDockItemTag(CliScreen.STATS)).assertCountEquals(0)
 
         listOf(
             CliScreen.PROFILES,
             CliScreen.APPS,
             CliScreen.MAP,
-            CliScreen.STATS,
             CliScreen.SETTINGS,
             CliScreen.HOME,
         ).forEach { screen ->

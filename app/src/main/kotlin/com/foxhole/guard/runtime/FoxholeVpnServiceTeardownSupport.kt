@@ -1,6 +1,7 @@
 package com.foxhole.guard.runtime
 
 import android.Manifest
+import android.app.ActivityManager
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -21,6 +22,7 @@ import com.foxhole.core.runtime.FailClosedEvent
 import com.foxhole.core.runtime.FoxholeRuntime
 import com.foxhole.core.runtime.I2pTunnelTransition
 import com.foxhole.core.runtime.LocalGuardMode
+import com.foxhole.core.runtime.NativeForceStopOutcome
 import com.foxhole.core.runtime.NativeRuntimeSnapshot
 import com.foxhole.core.runtime.RevokeOutcome
 import com.foxhole.core.runtime.RuntimeChildProcessReaper
@@ -29,18 +31,22 @@ import com.foxhole.core.runtime.RuntimeStopPolicy
 import com.foxhole.core.runtime.RuntimeStopResult
 import com.foxhole.core.runtime.applyKillSwitch
 import com.foxhole.core.runtime.establishNextInterfaceThenStopRetired
+import com.foxhole.core.runtime.nativeForceStopOutcomeOrNull
 import com.foxhole.core.runtime.stopEveryRetiredRuntime
 import com.foxhole.core.runtime.stopFailClosed
 import com.foxhole.guard.R
 import com.foxhole.guard.core.diagnostics.DiagnosticsLoggerRuntimeDiagnosticsSink
 import com.foxhole.guard.ui.cli.CliMainActivity
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.withContext
+import java.util.concurrent.atomic.AtomicBoolean
 
 /** Runtime stop / fail-closed teardown helpers for [FoxholeVpnService]. */
 
-/** Whether teardown closes the TUN or parks a quiesced owner for replacement. */
 internal enum class RuntimeInterfaceDisposition {
     STOP,
     RETIRE_FOR_HANDOVER,
@@ -54,7 +60,7 @@ internal data class RuntimeHandoverPreparation(
 
 internal data class RuntimeHandoverCompletion<T>(
     val value: T,
-    /** True only when every retired native owner proved that its retained master TUN was closed. */
+
     val retiredTunClosed: Boolean,
 )
 
@@ -71,7 +77,6 @@ private fun FoxholeVpnService.activeVpnNetworkIdentity(): ActiveVpnNetworkIdenti
     )
 }
 
-/** Shared teardown for disconnects and interface handoffs. */
 internal suspend fun FoxholeVpnService.closeRuntimeSession(
     reason: String,
     cancelHeal: Boolean = true,
@@ -106,8 +111,7 @@ internal suspend fun FoxholeVpnService.closeRuntimeSession(
     activeSession = null
     activeLocalGuardMode = null
     activeVpnNetworkHandle = null
-    // Session-scoped leftovers: nothing reset these before, so a pending Tor upgrade outlived
-    // its session and the ignored-loss handles piled up across reconnects.
+
     pendingTorRouteUpgradeSessionId = null
     ignoredVpnNetworkLossHandles.clear()
     upstreamNetworkHandles.clear()
@@ -119,7 +123,6 @@ internal suspend fun FoxholeVpnService.closeRuntimeSession(
     return true
 }
 
-/** Stops native packet processing, retains the master TUN, then parks the runtime. */
 internal suspend fun FoxholeVpnService.retireRuntimeForInterfaceHandover(reason: String): Boolean {
     if (!runtimeInstanceStore.quiesceAndRetireCurrent()) {
         container.diagnosticsLogger.recordFailure(
@@ -136,7 +139,6 @@ internal suspend fun FoxholeVpnService.retireRuntimeForInterfaceHandover(reason:
     return true
 }
 
-/** Prepares local guard → tunnel without releasing the old master TUN. */
 internal suspend fun FoxholeVpnService.retireActiveLocalGuardForTunnelHandover(): RuntimeHandoverPreparation {
     val localGuardMode =
         activeLocalGuardMode
@@ -163,8 +165,7 @@ internal suspend fun FoxholeVpnService.retireActiveLocalGuardForTunnelHandover()
             previousVpnInterfaceName = previousVpnIdentity.interfaceName,
         )
     }
-    // AFTER the close, which wipes the set: the guard's own tun is about to be replaced and its
-    // loss must not read as the user losing the network.
+
     localGuardVpnNetworkHandle?.let(ignoredVpnNetworkLossHandles::add)
     container.diagnosticsLogger.record("runtime", "network activity logging suspended for vpn handoff validation")
     return RuntimeHandoverPreparation(
@@ -174,7 +175,6 @@ internal suspend fun FoxholeVpnService.retireActiveLocalGuardForTunnelHandover()
     )
 }
 
-/** Mirror of [retireActiveLocalGuardForTunnelHandover] for the tunnel → local guard direction. */
 internal suspend fun FoxholeVpnService.retireActiveTunnelForLocalGuardHandover(
     mode: LocalGuardMode,
 ): RuntimeHandoverPreparation {
@@ -190,10 +190,7 @@ internal suspend fun FoxholeVpnService.retireActiveTunnelForLocalGuardHandover(
         "tunnel handoff to local guard mode=${mode.name.lowercase()}",
     )
     persistProfileTraffic(session, trafficSampler.sample())
-    // The retired tunnel may have been routing TOR_OVER_VPN and the local guard never uses Tor, so
-    // its Tor process must not survive the switch. It cannot be stopped here any more: the tunnel
-    // is still carrying traffic. [stopRetiredRuntimes] stops the runtime and reaps its transports
-    // in one step, once the guard's interface is up.
+
     val prepared = closeRuntimeSession(
         reason = "local_guard_handoff_from_tunnel",
         interfaceDisposition = RuntimeInterfaceDisposition.RETIRE_FOR_HANDOVER,
@@ -205,9 +202,7 @@ internal suspend fun FoxholeVpnService.retireActiveTunnelForLocalGuardHandover(
             previousVpnInterfaceName = previousVpnIdentity.interfaceName,
         )
     }
-    // Mirror of the guard→tunnel path (also AFTER the close, which wipes the set): the tunnel tun
-    // going away before guard-network tracking must not read as network loss — that produced a
-    // false RECONNECTING over the starting guard and a parasitic heal.
+
     tunnelVpnNetworkHandle?.let(ignoredVpnNetworkLossHandles::add)
     applyI2pCarrierPlan(I2pTunnelTransition.TUNNEL_STOPPED)
     return RuntimeHandoverPreparation(
@@ -251,14 +246,6 @@ internal suspend fun FoxholeVpnService.retireActiveTunnelForTunnelHandover(): Ru
     )
 }
 
-/**
- * Runs [establishNextInterface] while every retired runtime still owns its established interface,
- * and stops them only afterwards — the break half of make-before-break, and the one place the old
- * TUN is closed.
- *
- * The stop runs on every outcome, a failed or cancelled switch included, so a runtime can never be
- * left holding a TUN with no owner able to close it.
- */
 internal suspend fun <T> FoxholeVpnService.establishNextInterfaceThenStopRetiredRuntimes(
     reason: String,
     establishNextInterface: suspend () -> T,
@@ -268,7 +255,6 @@ internal suspend fun <T> FoxholeVpnService.establishNextInterfaceThenStopRetired
         establishNextInterface = establishNextInterface,
     )
 
-/** Same handover, but exposes the old-TUN close proof needed before publishing CONNECTED. */
 internal suspend fun <T> FoxholeVpnService.establishNextInterfaceThenStopRetiredRuntimesWithProof(
     reason: String,
     establishNextInterface: suspend () -> T,
@@ -284,11 +270,6 @@ internal suspend fun <T> FoxholeVpnService.establishNextInterfaceThenStopRetired
     return RuntimeHandoverCompletion(value = value, retiredTunClosed = retiredTunClosed)
 }
 
-/**
- * Protocol tests keep a quiesced master TUN parked when a candidate cannot establish. The open,
- * non-processing interface freezes device traffic until the next candidate or the restore tunnel
- * succeeds; teardown still drains it through [stopRetiredRuntimes].
- */
 internal suspend fun <T : Any> FoxholeVpnService.establishProtocolTestInterfaceThenStopRetiredOnSuccess(
     reason: String,
     establishNextInterface: suspend () -> T?,
@@ -305,7 +286,6 @@ internal suspend fun <T : Any> FoxholeVpnService.establishProtocolTestInterfaceT
     return result
 }
 
-/** Drains the retirement park; a no-op when no handover is in flight. */
 internal suspend fun FoxholeVpnService.stopRetiredRuntimes(reason: String) {
     runtimeInstanceStore.stopEveryRetiredRuntime { retired -> stopRetiredRuntime(retired, reason) }
 }
@@ -315,10 +295,8 @@ private suspend fun FoxholeVpnService.stopRetiredRuntime(
     reason: String,
 ): Boolean {
     val result = stopRuntimeFailClosed(reason = reason, target = retired)
-    // A native close that times out can leave a managed pluggable transport behind. Reaped after
-    // the stop, never before it: while the retired runtime still carries traffic its transports are
-    // in use, not orphaned.
-    val reaped = reapTorTransportOrphans()
+    val reapHelpers = shouldReapTorHelpersAfterRetiredStop(activeSession)
+    val reaped = if (reapHelpers) reapTorTransportOrphans() else 0
     container.diagnosticsLogger.recordStructured(
         "runtime",
         "retired runtime stopped after interface handover",
@@ -326,14 +304,18 @@ private suspend fun FoxholeVpnService.stopRetiredRuntime(
         "graceful=${result.graceful}",
         "tun_closed=${result.tunClosed}",
         "transport_orphans_reaped=$reaped",
+        "transport_reap_deferred=${!reapHelpers}",
     )
     return result.tunClosed
 }
 
+internal fun shouldReapTorHelpersAfterRetiredStop(activeReplacement: VpnSession?): Boolean =
+    activeReplacement?.torActive != true && activeReplacement?.profileId != TOR_ONLY_PROFILE_ID
+
 internal suspend fun FoxholeVpnService.stopRuntimeFailClosed(
     reason: String,
     policy: RuntimeStopPolicy? = null,
-    /** The runtime to stop; defaults to the live one. Set only for a retired runtime. */
+
     target: FoxholeRuntime? = null,
 ): RuntimeStopResult {
     val currentRuntime = target ?: runtimeInstanceStore.current()
@@ -378,6 +360,10 @@ internal suspend fun FoxholeVpnService.stopRuntimeFailClosed(
         event = event,
         async = false,
     )
+    terminateProcessIfNativeForceStopPoisoned(
+        forceStopOutcome = result.forceStopOutcome,
+        reason = reason,
+    )
     return result
 }
 
@@ -397,16 +383,54 @@ internal fun FoxholeVpnService.cutEveryFlowIfKillSwitchArmed(
     )
 }
 
+internal suspend fun FoxholeVpnService.terminateProcessIfNativeForceStopPoisoned(
+    forceStopOutcome: NativeForceStopOutcome,
+    reason: String,
+) {
+    val settleMs = nativeForceStopTerminationSettleMs(forceStopOutcome)
+    if (settleMs == 0L || !NativeForceStopProcessTerminationGate.tryClaim(forceStopOutcome)) return
+    withContext(NonCancellable + Dispatchers.IO) {
+        delay(settleMs)
+        terminateProcessIfTunnelStillUp(
+            handle = currentVpnNetworkOrNull()?.networkHandle,
+            reason = reason,
+            forceStopOutcome = forceStopOutcome,
+        )
+    }
+}
+
+internal class NativeForceStopTerminationGate {
+    private val claimed = AtomicBoolean(false)
+
+    fun tryClaim(outcome: NativeForceStopOutcome): Boolean =
+        outcome.processPoisoned && claimed.compareAndSet(false, true)
+}
+
+private object NativeForceStopProcessTerminationGate {
+    private val gate = NativeForceStopTerminationGate()
+
+    fun tryClaim(outcome: NativeForceStopOutcome): Boolean = gate.tryClaim(outcome)
+}
+
+internal suspend fun handleNativeForceStopPoison(
+    result: Result<*>,
+    onTerminate: suspend (NativeForceStopOutcome) -> Unit,
+): Boolean {
+    val outcome = result.nativeForceStopOutcomeOrNull() ?: return false
+    onTerminate(outcome)
+    return true
+}
+
+internal fun nativeForceStopTerminationSettleMs(outcome: NativeForceStopOutcome): Long =
+    if (outcome.processPoisoned) NATIVE_FORCE_STOP_SETTLE_MS else 0L
+
 @Suppress("ReturnCount")
 internal suspend fun FoxholeVpnService.awaitStoppedVpnNetworkTeardown(
     previousVpnNetworkHandle: Long?,
     reason: String,
 ): Boolean {
     val handle = previousVpnNetworkHandle ?: return true
-    // ConnectivityManager's handle is the acceptance boundary: FoxCore owns a dup of the
-    // VpnService descriptor, so a closed Kotlin ParcelFileDescriptor proves nothing about the
-    // NetworkAgent. That shortcut once left a validated tun0 with full-device routes installed
-    // indefinitely after a rare Tor-only Stop. Wait for the actual old handle to go.
+
     if (awaitVpnNetworkTeardownGracefulSettle(handle, reason)) {
         return true
     }
@@ -420,10 +444,7 @@ internal suspend fun FoxholeVpnService.awaitStoppedVpnNetworkTeardown(
         "previous_handle=$handle",
         "timeout_ms=${FoxholeVpnService.VPN_NETWORK_TEARDOWN_SETTLE_TIMEOUT_MS}",
     )
-    // Fail-closed escalation: the VPN network survived the graceful stop, so the tun fd is still
-    // open (e.g. the native engine holds an unreachable dup). Force-kill runs the native close,
-    // then re-poll. Only fires on a genuinely stuck teardown — a reconnect installs a new handle
-    // and settles the loop above first.
+
     forceKillRuntimeForStuckVpnTeardown(reason)
     if (awaitVpnNetworkTeardownAfterForceKill(handle, reason)) {
         return true
@@ -456,13 +477,20 @@ private suspend fun FoxholeVpnService.awaitVpnNetworkTeardownGracefulSettle(
 
 private suspend fun FoxholeVpnService.forceKillRuntimeForStuckVpnTeardown(reason: String) {
     runtimeInstanceStore.current()?.let { runtime ->
-        runCatching { runtime.forceKill("vpn_network_teardown_pending:$reason") }
-            .onFailure {
-                container.diagnosticsLogger.recordFailure(
-                    "connection",
-                    "vpn network teardown force-kill failed: ${it.message.orEmpty()}",
-                )
-            }
+        val result =
+            runCatching { runtime.forceKill("vpn_network_teardown_pending:$reason") }
+                .onFailure {
+                    container.diagnosticsLogger.recordFailure(
+                        "connection",
+                        "vpn network teardown force-kill failed: ${it.message.orEmpty()}",
+                    )
+                }.getOrNull()
+        result?.let { kill ->
+            terminateProcessIfNativeForceStopPoisoned(
+                forceStopOutcome = kill.forceStopOutcome,
+                reason = reason,
+            )
+        }
     }
 }
 
@@ -487,31 +515,23 @@ private suspend fun FoxholeVpnService.awaitVpnNetworkTeardownAfterForceKill(
     return false
 }
 
-// Last resort: Android still owns the same VPN NetworkAgent after both bounded close windows.
-// A LIVE tun retains full-device routes after Stop, so terminate the process — Android then
-// revokes every descriptor, including FoxCore's dup. The kill is the fail-closed guarantee,
-// but only for state it can actually fix.
 private fun FoxholeVpnService.terminateProcessIfTunnelStillUp(
-    handle: Long,
+    handle: Long?,
     reason: String,
+    forceStopOutcome: NativeForceStopOutcome = NativeForceStopOutcome.NOT_ATTEMPTED,
 ): Boolean {
-    if (currentVpnNetworkOrNull()?.networkHandle != handle) {
+    if (!forceStopOutcome.processPoisoned && currentVpnNetworkOrNull()?.networkHandle != handle) {
         return true
     }
     val nativeSnapshot = runtimeInstanceStore.nativeSnapshot()
     val tunDescriptorProbe = processTunFileDescriptorProbe(nativeSnapshot.masterTunFd)
-    // Live dev.60-opt repro: a fully clean native close with ConnectivityManager still reporting
-    // the old VPN network for 8+ s. Killing there releases nothing (only NetworkAgent bookkeeping
-    // lags) — it just crashes the app in the user's hands. The kill is reserved for a positively
-    // observed foreign descriptor in THIS process. The native snapshot is diagnostic only: it can
-    // remain stale after close, and treating it as ownership turns harmless framework lag into
-    // SIGKILL.
-    if (!shouldTerminateProcessForStuckTunnel(nativeSnapshot, tunDescriptorProbe)) {
+
+    if (!shouldTerminateProcessForStuckTunnel(nativeSnapshot, tunDescriptorProbe, forceStopOutcome)) {
         container.diagnosticsLogger.recordStructured(
             "connection",
             "vpn network teardown lagging without held tun fd; skipping process kill",
             "reason=$reason",
-            "previous_handle=$handle",
+            "previous_handle=${handle ?: "none"}",
             "tun_probe=${tunDescriptorProbe.name.lowercase()}",
             "native_engine=${nativeSnapshot.hasEngineHandle}",
             "native_tun=${nativeSnapshot.hasTunFileDescriptor}",
@@ -522,22 +542,46 @@ private fun FoxholeVpnService.terminateProcessIfTunnelStillUp(
     }
     container.diagnosticsLogger.recordStructured(
         "connection",
-        "vpn network teardown unresolved; terminating process to guarantee tunnel teardown",
+        if (forceStopOutcome.processPoisoned) {
+            "native force stop poisoned process; terminating after bounded settle"
+        } else {
+            "vpn network teardown unresolved; terminating process to guarantee tunnel teardown"
+        },
         "reason=$reason",
-        "previous_handle=$handle",
+        "previous_handle=${handle ?: "none"}",
+        "force_stop=${forceStopOutcome.name.lowercase()}",
         "tun_probe=${tunDescriptorProbe.name.lowercase()}",
         "native_engine=${nativeSnapshot.hasEngineHandle}",
         "native_tun=${nativeSnapshot.hasTunFileDescriptor}",
         "master_fd=${nativeSnapshot.masterTunFd ?: "none"}",
         "foreign_fd=${lastForeignTunDescriptor ?: "none"}",
     )
-    // The user must learn WHY the app vanished: the foreground notification dies with the process,
-    // but a regular posted notification survives it.
+    setFailClosedProcessStateSummary()
+    container.diagnosticsLogger.recordProcessTerminationTombstoneSync(
+        "fail-closed process termination",
+        "reason=$reason",
+        "force_stop=${forceStopOutcome.name.lowercase()}",
+        "tun_probe=${tunDescriptorProbe.name.lowercase()}",
+        "native_engine=${nativeSnapshot.hasEngineHandle}",
+        "native_tun=${nativeSnapshot.hasTunFileDescriptor}",
+    )
+
     runCatching { postAbnormalTeardownNotification() }
     runCatching { removeForegroundNotification() }
     android.os.Process.killProcess(android.os.Process.myPid())
     return false
 }
+
+private fun FoxholeVpnService.setFailClosedProcessStateSummary() {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return
+    runCatching {
+        getSystemService(ActivityManager::class.java)
+            ?.setProcessStateSummary(failClosedProcessStateSummaryBytes())
+    }
+}
+
+internal fun failClosedProcessStateSummaryBytes(): ByteArray =
+    FAIL_CLOSED_PROCESS_STATE_SUMMARY.toByteArray(Charsets.UTF_8)
 
 private fun FoxholeVpnService.postAbnormalTeardownNotification() {
     if (
@@ -589,28 +633,15 @@ private fun FoxholeVpnService.postAbnormalTeardownNotification() {
 private const val ABNORMAL_TEARDOWN_CHANNEL_ID = "foxhole_connection_alerts"
 private const val ABNORMAL_TEARDOWN_NOTIFICATION_ID = 9440
 private const val ABNORMAL_TEARDOWN_REQUEST_CODE_OPEN = 214
+internal const val NATIVE_FORCE_STOP_SETTLE_MS = 500L
+private const val FAIL_CLOSED_PROCESS_STATE_SUMMARY = "foxhole_fail_closed_teardown"
 
-/**
- * Process-local diagnostic for rapid-reconnect admission; deliberately not sufficient to accept
- * a completed disconnect — Android's NetworkAgent is the actual teardown boundary.
- */
 internal enum class ProcessTunDescriptorProbe {
     OPEN,
     CLOSED,
     UNKNOWN,
 }
 
-/**
- * Is a `/dev/tun` descriptor open in this process besides the one held on purpose?
- * [ownMasterFd] is the master fd FoxCoreRuntime keeps while native code owns a duplicate (what
- * lets an outbound change replace the engine without dropping the OS VPN). Without excluding it
- * the probe reports the design as a leak — and the caller's answer to a leak is killing the
- * process (Pixel-diagnosed: a smart-profile protocol switch killed the app on candidate #3).
- */
-/**
- * What the last OPEN verdict saw (`fd->target`). Diagnostic only: the kill decision must not
- * depend on a string.
- */
 @Volatile
 internal var lastForeignTunDescriptor: String? = null
     private set
@@ -632,9 +663,6 @@ internal fun processTunFileDescriptorProbe(ownMasterFd: Int? = null): ProcessTun
                 ?: return@forEach
         readableDescriptors += 1
         if (target.startsWith("/dev/tun") && descriptor.name.toIntOrNull() != ownMasterFd) {
-            // Remembered so the caller can log WHICH descriptor it found: three diagnoses in a
-            // row went wrong because the log said only "open" — the number is the one fact that
-            // separates a leaked core dup from our own master.
             lastForeignTunDescriptor = "${descriptor.name}->$target"
             return ProcessTunDescriptorProbe.OPEN
         }
@@ -650,15 +678,14 @@ internal fun shouldTerminateProcessForStuckTunnel(
     @Suppress("UNUSED_PARAMETER")
     nativeSnapshot: NativeRuntimeSnapshot,
     tunDescriptorProbe: ProcessTunDescriptorProbe,
+    forceStopOutcome: NativeForceStopOutcome = NativeForceStopOutcome.NOT_ATTEMPTED,
 ): Boolean =
-    tunDescriptorProbe == ProcessTunDescriptorProbe.OPEN
+    forceStopOutcome.processPoisoned || tunDescriptorProbe == ProcessTunDescriptorProbe.OPEN
 
 internal suspend fun FoxholeVpnService.stopRuntimeHelpersIfNeeded(
     reason: String,
     onTeardownPhase: ((RuntimeTeardownPhase) -> Unit)? = null,
 ) {
-    // A native close that times out can still leave a managed pluggable transport behind. Reap
-    // only the executable copied into this app's private native-library directory.
     onTeardownPhase?.invoke(RuntimeTeardownPhase.TOR)
     val reaped = reapTorTransportOrphans()
     container.diagnosticsLogger.recordStructured(
@@ -687,30 +714,34 @@ internal fun runtimeTeardownPhases(
         if (previousVpnNetworkHandle != null) add(RuntimeTeardownPhase.ANDROID_TUNNEL)
     }
 
-/**
- * Kills any surviving FoxCore-managed Tor transport. Executable and data root are app-private,
- * so the scan cannot match another application's process.
- */
-private fun FoxholeVpnService.reapTorTransportOrphans(): Int {
-    val executablePath = java.io.File(applicationInfo.nativeLibraryDir, TOR_TRANSPORT_LIBRARY_NAME).absolutePath
+internal fun FoxholeVpnService.reapTorTransportOrphans(): Int {
+    val executablePaths =
+        TOR_TRANSPORT_LIBRARY_NAMES
+            .mapTo(linkedSetOf()) { name -> java.io.File(applicationInfo.nativeLibraryDir, name).absolutePath }
     val dataDirectoryRoot = java.io.File(filesDir, ARTI_DATA_ROOT_DIR_NAME).absolutePath
     return RuntimeChildProcessReaper(
         selfPid = android.os.Process.myPid(),
         killProcess = { pid -> android.os.Process.killProcess(pid) },
         diagnosticsLogger = DiagnosticsLoggerRuntimeDiagnosticsSink(container.diagnosticsLogger),
-    ).reapOrphans(executablePath = executablePath, dataDirectoryRoot = dataDirectoryRoot)
+    ).reapOrphans(executablePaths = executablePaths, dataDirectoryRoot = dataDirectoryRoot)
 }
 
-private const val TOR_TRANSPORT_LIBRARY_NAME = "liblyrebird.so"
+internal fun FoxholeVpnService.reapTorTransportOrphansAfterServiceDestroy(owner: String) {
+    val reaped = reapTorTransportOrphans()
+    container.diagnosticsLogger.recordStructured(
+        "runtime",
+        "arti transport cleanup after service destroy",
+        "owner=$owner",
+        "transport_orphans_reaped=$reaped",
+    )
+}
+
+private val TOR_TRANSPORT_LIBRARY_NAMES = setOf("liblyrebird.so", "libconjure_client.so")
 private const val ARTI_DATA_ROOT_DIR_NAME = "foxcore/arti"
 
 internal suspend fun FoxholeVpnService.stopI2pdProcessIfNeeded(reason: String) {
-    // Same fail-closed teardown for the i2pd child: stop() is a safe no-op when nothing runs, so
-    // it also clears an i2pd process orphaned by an earlier session.
     container.i2pdManager.stop()
-    // Belt-and-suspenders: framework-kill any surviving i2pd child by its own executable / data-dir
-    // identity. i2pd's SIGTERM handler could wedge the JVM destroy ladder and leave an orphan alive
-    // (device-confirmed), which then blocked the next runtime start.
+
     val reaped = reapI2pdOrphans()
     container.diagnosticsLogger.recordStructured(
         "runtime",

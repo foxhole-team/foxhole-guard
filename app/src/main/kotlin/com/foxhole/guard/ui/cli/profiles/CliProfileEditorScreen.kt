@@ -3,6 +3,7 @@ package com.foxhole.guard.ui.cli.profiles
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -44,6 +45,7 @@ import com.foxhole.guard.ui.cli.LocalCliType
 import com.foxhole.guard.ui.cli.components.CliButton
 import com.foxhole.guard.ui.cli.components.CliElbowLine
 import com.foxhole.guard.ui.cli.components.CliInputRow
+import com.foxhole.guard.ui.cli.components.CliModalCloseButton
 import com.foxhole.guard.ui.cli.components.CliScreenHeader
 import com.foxhole.guard.ui.cli.components.cliModalSurfaceColor
 import kotlinx.serialization.json.JsonObject
@@ -76,52 +78,60 @@ internal fun CliProfileEditorScreen(
     LaunchedEffect(profile.id, controller.reloadKey) {
         controller.load(profile = profile, onUnreadable = onDismiss)
     }
-    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        val manualRef = controller.rawEditor
-        if (manualRef != null) {
-            CliManualProfileEditor(
-                initialText = controller.manualConfigText(manualRef),
-                busy = controller.busy,
-                onCancel = controller::closeManualEditor,
-                onSave = { text ->
-                    controller.saveManualConfig(
-                        profileName = name,
-                        ref = manualRef,
-                        text = text,
-                        onSaved = onDismiss,
-                    )
-                },
-            )
-        } else {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(cliModalSurfaceColor(LocalCliPanelAppearance.current, colors.panel))
-                    .padding(CliSpacing.md),
-            ) {
-                CliProfileEditorHeader(
-                    name = name,
-                    onNameChange = { name = it },
-                    creating = !allowAddProtocol,
-                )
-                CliProfileEditorList(
-                    profile = profile,
-                    controller = controller,
-                    onAddProtocol = if (allowAddProtocol) {
-                        { templateSheetOpen = true }
-                    } else {
-                        null
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            decorFitsSystemWindows = true,
+        ),
+    ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            val manualRef = controller.rawEditor
+            if (manualRef != null) {
+                CliManualProfileEditor(
+                    initialText = controller.manualConfigText(manualRef),
+                    busy = controller.busy,
+                    onCancel = controller::closeManualEditor,
+                    onSave = { text ->
+                        controller.saveManualConfig(
+                            profileName = name,
+                            ref = manualRef,
+                            text = text,
+                            onSaved = onDismiss,
+                        )
                     },
-                    modifier = Modifier.fillMaxWidth().weight(1f),
                 )
-                Spacer(modifier = Modifier.height(CliSpacing.sm))
-                CliProfileEditorFooter(
-                    dirty = cliProfileEditorHasChanges(profile.name, name, controller.slots),
-                    busy = controller.busy || controller.slots == null,
-                    onSave = { controller.save(profileName = name, onSaved = onDismiss) },
-                    onOpenManual = controller::openManualEditor,
-                    onCancel = onDismiss,
-                )
+            } else {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(cliModalSurfaceColor(LocalCliPanelAppearance.current, colors.panel))
+                        .padding(CliSpacing.md),
+                ) {
+                    CliProfileEditorHeader(
+                        name = name,
+                        onNameChange = { name = it },
+                        creating = !allowAddProtocol,
+                    )
+                    CliProfileEditorList(
+                        profile = profile,
+                        controller = controller,
+                        onAddProtocol = if (allowAddProtocol) {
+                            { templateSheetOpen = true }
+                        } else {
+                            null
+                        },
+                        modifier = Modifier.fillMaxWidth().weight(1f),
+                    )
+                    Spacer(modifier = Modifier.height(CliSpacing.sm))
+                    CliProfileEditorFooter(
+                        dirty = cliProfileEditorHasChanges(profile.name, name, controller.slots),
+                        busy = controller.busy || controller.slots == null,
+                        onSave = { controller.save(profileName = name, onSaved = onDismiss) },
+                        onOpenManual = controller::openManualEditor,
+                        onCancel = onDismiss,
+                    )
+                }
             }
         }
         if (allowAddProtocol && templateSheetOpen) {
@@ -146,11 +156,13 @@ private fun CliProfileEditorHeader(
     onNameChange: (String) -> Unit,
     creating: Boolean,
 ) {
+    val colors = LocalCliColors.current
     CliScreenHeader(
         label = stringResource(
             if (creating) R.string.cli_prof_create_title else R.string.cli_prof_edit_title,
         ),
-        icon = R.drawable.pix_edit,
+        icon = R.drawable.lin_edit,
+        titleColor = colors.fg,
     )
     CliInputRow(
         prompt = stringResource(R.string.cli_prof_rename_prompt),
@@ -206,7 +218,7 @@ private fun CliProfileEditorList(
             item(key = "add_protocol") {
                 CliButton(
                     label = stringResource(R.string.cli_prof_edit_add),
-                    icon = R.drawable.pix_add,
+                    icon = R.drawable.lin_add,
                     color = colors.info,
                     enabled = !controller.busy,
                     onClick = onAddProtocol,
@@ -243,10 +255,7 @@ private fun CliProfileEditorFooter(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(CliSpacing.sm),
         ) {
-            CliButton(
-                label = stringResource(R.string.cli_common_no_cancel),
-                color = colors.err,
-                dashed = true,
+            CliModalCloseButton(
                 enabled = !busy,
                 dimWhenDisabled = false,
                 onClick = onCancel,
@@ -255,7 +264,7 @@ private fun CliProfileEditorFooter(
             CliButton(
                 label = stringResource(R.string.cli_prof_edit_raw),
                 color = colors.accent,
-                icon = R.drawable.pix_edit,
+                icon = R.drawable.lin_edit,
                 enabled = !busy,
                 dimWhenDisabled = false,
                 onClick = onOpenManual,

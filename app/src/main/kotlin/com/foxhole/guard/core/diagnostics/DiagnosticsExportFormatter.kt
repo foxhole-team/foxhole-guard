@@ -6,7 +6,7 @@ import com.foxhole.core.model.RetentionPreset
 import java.time.Instant
 import java.time.format.DateTimeFormatter
 
-internal fun formatDiagnosticsExport(
+internal fun formatSanitizedAboutDiagnosticsExport(
     metadata: DiagnosticsExportMetadata,
     entries: List<DiagnosticEntry>,
     formatter: DateTimeFormatter,

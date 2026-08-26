@@ -91,9 +91,7 @@ internal class RuntimeConfigAssemblerFingerprintTest : RuntimeConfigAssemblerTes
         assertEquals("com.bank.app", splitRule["package_name"]!!.jsonArray[0].jsonPrimitive.content)
         assertFalse(splitRule.containsKey("invert"))
         assertEquals("direct", splitRule["outbound"]!!.jsonPrimitive.content)
-        // ...and ONLY in route rules. The split used to carry a matching "resolve on dns-direct"
-        // rule, which FoxCore cannot express (one interceptor, one upstream lane) and therefore
-        // refuses — taking the whole profile down with it. The split separates traffic, not DNS.
+
         assertFalse(config["dns"]!!.jsonObject.containsKey("rules"))
     }
 
@@ -118,8 +116,6 @@ internal class RuntimeConfigAssemblerFingerprintTest : RuntimeConfigAssemblerTes
         val rules = config["route"]!!.jsonObject["rules"]!!.jsonArray
         val blockRule = rules[0].jsonObject
 
-        // Ф-ГА2: blocked apps no longer need forcing into the tun — it is always full-device,
-        // and the block rule (first in order) wins over the split's inverted direct rule.
         assertFalse(tunInbound.containsKey("include_package"))
         assertEquals("com.example.blocked", blockRule["package_name"]!!.jsonArray[0].jsonPrimitive.content)
         assertEquals("block", blockRule["outbound"]!!.jsonPrimitive.content)
@@ -225,8 +221,6 @@ internal class RuntimeConfigAssemblerFingerprintTest : RuntimeConfigAssemblerTes
         val remote =
             servers.first { it.jsonObject["tag"]!!.jsonPrimitive.content == "dns-remote" }.jsonObject
 
-        // App queries resolve through the tunnel by default; dns-local/dns-direct exist only as the
-        // bootstrap resolver (VPN endpoint + DoH hostnames), never as the final for app queries.
         assertEquals("dns-remote", dns["final"]!!.jsonPrimitive.content)
         assertEquals("dns-local", servers[0].jsonObject["tag"]!!.jsonPrimitive.content)
         assertEquals("local", servers[0].jsonObject["type"]!!.jsonPrimitive.content)
@@ -317,13 +311,10 @@ internal class RuntimeConfigAssemblerFingerprintTest : RuntimeConfigAssemblerTes
         val rules = config["route"]!!.jsonObject["rules"]!!.jsonArray.map { it.jsonObject }
 
         assertEquals(false, tunInbound["strict_route"]!!.jsonPrimitive.content.toBoolean())
-        // Hijack is strictly opt-in now: with intercept and system-DNS replacement both off the
-        // app carries hard-coded-resolver traffic through the tunnel untouched. System queries
-        // still resolve via the tunnel resolver (TUN DNS server), so nothing leaks off-tunnel.
+
         assertTrue(rules.none { rule -> rule["action"]?.jsonPrimitive?.content == "hijack-dns" })
         assertTrue(rules.any { rule -> rule.stringArray("domain").contains("profile.example") })
 
-        // The intercept toggle or the system-DNS replacement brings the hijack rules back.
         val intercepted =
             parse(
                 assembler.assemble(
@@ -373,8 +364,6 @@ internal class RuntimeConfigAssemblerFingerprintTest : RuntimeConfigAssemblerTes
         val route = config["route"]!!.jsonObject
         val rules = route["rules"]!!.jsonArray.map { it.jsonObject }
 
-        // The unverified list must fail open ONLY for filtering — hijack + strict_route (the
-        // leak controls) keep their configured values instead of being silently dropped.
         assertEquals(true, tunInbound["strict_route"]!!.jsonPrimitive.content.toBoolean())
         assertFalse(config["dns"]!!.jsonObject.containsKey("rules"))
         assertFalse(route.containsKey("rule_set"))
@@ -401,8 +390,7 @@ internal class RuntimeConfigAssemblerFingerprintTest : RuntimeConfigAssemblerTes
         assertEquals("tls", remote["type"]!!.jsonPrimitive.content)
         assertEquals("dns.example", remote["server"]!!.jsonPrimitive.content)
         assertEquals("853", remote["server_port"]!!.jsonPrimitive.content)
-        // The tunnelled resolver is addressed by hostname, so its bootstrap A/AAAA lookup must stay
-        // in the tunnel: domain_resolver points at the in-tunnel IP-literal bootstrap resolver.
+
         assertEquals("dns-bootstrap", remote["domain_resolver"]!!.jsonPrimitive.content)
         assertFalse(remote.containsKey("path"))
         assertEquals("proxy", remote["detour"]!!.jsonPrimitive.content)
@@ -431,7 +419,6 @@ internal class RuntimeConfigAssemblerFingerprintTest : RuntimeConfigAssemblerTes
         val dns = config["dns"]!!.jsonObject
         val remote = dns["servers"]!!.jsonArray[2].jsonObject
 
-        // The confirmed opt-out resolves off-tunnel: encrypted resolver, no proxy detour.
         assertEquals("dns-remote", dns["final"]!!.jsonPrimitive.content)
         assertEquals("tls", remote["type"]!!.jsonPrimitive.content)
         assertFalse(remote.containsKey("detour"))
@@ -467,11 +454,10 @@ internal class RuntimeConfigAssemblerFingerprintTest : RuntimeConfigAssemblerTes
         assertEquals("tls", remote["type"]!!.jsonPrimitive.content)
         assertEquals("one.one.one.one", remote["server"]!!.jsonPrimitive.content)
         assertEquals("853", remote["server_port"]!!.jsonPrimitive.content)
-        // Strict-private-DNS hostname also rides the tunnel, so its bootstrap lookup goes through
-        // the in-tunnel bootstrap resolver rather than leaking on the underlying network.
+
         assertEquals("dns-bootstrap", remote["domain_resolver"]!!.jsonPrimitive.content)
         assertFalse(remote.containsKey("path"))
-        // Provider mode is still on, so even the strict-private-DNS upstream rides the tunnel.
+
         assertEquals("proxy", remote["detour"]!!.jsonPrimitive.content)
 
         val servers = config["dns"]!!.jsonObject["servers"]!!.jsonArray.map { it.jsonObject }
@@ -497,8 +483,6 @@ internal class RuntimeConfigAssemblerFingerprintTest : RuntimeConfigAssemblerTes
                 .firstOrNull { it.jsonObject["tag"]?.jsonPrimitive?.content == "dns-remote" }
                 ?.jsonObject
 
-        // Explicit out-of-tunnel + plain: the system resolver answers (dns-direct final) and no
-        // remote resolver is emitted at all unless filtering needs one.
         assertEquals("dns-direct", config["dns"]!!.jsonObject["final"]!!.jsonPrimitive.content)
         assertEquals(null, remote)
 
@@ -570,10 +554,7 @@ internal class RuntimeConfigAssemblerFingerprintTest : RuntimeConfigAssemblerTes
                     dnsFilterRuntimePaths = DnsFilterRuntimePaths(adGuardDnsFilterPath = filterPath),
                 ),
             )
-        // Every category is off in `settings`, so no rule set is attached — and a bypass with
-        // nothing to be an exception to is a document FoxCore refuses outright, which killed the
-        // session before the tun existed. This state is reachable from the settings screen, so the
-        // rules must not be emitted at all.
+
         assertFalse(config["dns"]!!.jsonObject.containsKey("rules"))
 
         val filtering =
@@ -644,7 +625,7 @@ internal class RuntimeConfigAssemblerFingerprintTest : RuntimeConfigAssemblerTes
 
         assertRuntimeProxyRoute(rules[0].jsonObject)
         assertSniffRule(rules[1].jsonObject)
-        // Hands-off default: no hijack rules unless the user opted into interception/replacement.
+
         assertTrue(
             rules.none { rule -> rule.jsonObject["action"]?.jsonPrimitive?.content == "hijack-dns" },
         )

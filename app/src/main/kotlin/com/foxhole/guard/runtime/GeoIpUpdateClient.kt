@@ -26,13 +26,6 @@ import java.security.DigestInputStream
 import java.security.MessageDigest
 import java.time.Instant
 
-/**
- * Downloads the IP→country database from the FoxHole DB geo group (upstream: ip-location-db's
- * dbip-country dataset, DB-IP Lite, CC BY 4.0 — the UI must keep the DB-IP attribution). A signed
- * manifest carries the dataset version and pins both range CSVs by size and sha256; the version
- * makes the probe cheap, and [GeoIpDatabaseStore.install] re-validates the ranges before anything
- * replaces the active database.
- */
 enum class GeoIpUpdateStatus {
     UPDATED,
     UP_TO_DATE,
@@ -95,8 +88,7 @@ class GeoIpUpdateClient(
     private val httpClient: OkHttpClient,
     private val json: Json,
     private val resolver: RemoteHostResolver? = null,
-    // Read per call — see TorBridgeUpdateClient: the configured repository may change under a
-    // client that is already built.
+
     private val manifestUrl: () -> String = { FOXHOLE_GEOIP_MANIFEST_URL },
     private val currentVersionName: String = BuildConfig.VERSION_NAME,
     private val now: () -> Instant = Instant::now,
@@ -105,11 +97,6 @@ class GeoIpUpdateClient(
 
     private val installedStamp = File(appContext.filesDir, INSTALLED_STAMP_FILE)
 
-    /**
-     * Check-only version probe (the same verified manifest read the full update starts with):
-     * true when the published version differs from the installed one, null when the source is
-     * unreachable. No range CSV downloads.
-     */
     suspend fun checkForUpdate(store: GeoIpDatabaseStore): Boolean? =
         withContext(Dispatchers.IO) {
             runCatching {
@@ -242,7 +229,6 @@ class GeoIpUpdateClient(
         return artifact
     }
 
-    /** Streams the artifact to a temp file and rejects any size or sha256 divergence. */
     private fun OkHttpClient.downloadVerified(
         manifestUrl: HttpUrl,
         artifact: FoxholeGeoIpArtifact,
@@ -303,14 +289,12 @@ class GeoIpUpdateClient(
         DigestInputStream(inputStream().buffered(), digest).use { input ->
             val buffer = ByteArray(DOWNLOAD_BUFFER_BYTES)
             while (input.read(buffer) != -1) {
-                // The digest accumulates inside the stream.
+                // DigestInputStream updates the digest.
             }
         }
         return digest.digest().joinToString(separator = "") { byte -> "%02x".format(byte) }
     }
 
-    // Streams straight to a cache file: the two range CSVs are ~10-20MB each and must not be
-    // buffered in the heap of a process we just finished shrinking.
     private fun OkHttpClient.downloadToTempFile(
         url: HttpUrl,
         maxBytes: Long,
@@ -341,8 +325,6 @@ class GeoIpUpdateClient(
         return target
     }
 
-    // Streams the response body into [target] in fixed-size chunks and returns the byte count,
-    // aborting as soon as the running total would exceed [maxBytes].
     private fun ResponseBody.streamCappedTo(
         target: File,
         maxBytes: Long,
@@ -382,7 +364,6 @@ class GeoIpUpdateClient(
         const val SOURCE_REPO = "https://github.com/sapics/ip-location-db"
         const val SOURCE_LICENSE = "CC BY 4.0 (DB-IP Lite)"
 
-        // The FoxHole DB geo group: one signed manifest, artifacts resolved relative to it.
         const val FOXHOLE_GEOIP_MANIFEST_URL = "$FOXHOLE_DB_PAGES_BASE_URL/geoip-manifest.json"
         private const val EXPECTED_MANIFEST_SCHEMA = 1
         private const val EXPECTED_MANIFEST_NAME = "foxhole-geoip"

@@ -9,8 +9,6 @@ class ProfileImportParser(
     json: Json,
     remoteHostResolver: RemoteHostResolver? = null,
 ) {
-    // The memo also covers the no-resolver default: requirePublicRemoteHost used to fall back to
-    // InetAddress.getAllByName inline, which the cache could not see.
     private val engine =
         ProfileImportEngine(
             json,

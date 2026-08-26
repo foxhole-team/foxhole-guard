@@ -71,6 +71,21 @@ class CliTerminalStateTest {
         CliTerminalState(strings(), retentionHours = { retentionHours }, startsHeld = false)
 
     @Test
+    fun `manual geo refresh uses the default animated pending row until completion`() {
+        val terminal = state()
+
+        terminal.beginGeoRefresh("updating network geodata")
+
+        assertEquals("updating network geodata", terminal.progress?.text)
+        assertEquals(CliLineTone.PENDING, terminal.progress?.tone)
+        assertTrue(terminal.progress?.animated == true)
+
+        terminal.finishGeoRefresh()
+
+        assertNull(terminal.progress)
+    }
+
+    @Test
     fun `welcome prints once`() {
         val terminal = state()
         terminal.welcome("1.0")
@@ -105,13 +120,13 @@ class CliTerminalStateTest {
     @Test
     fun `cold boot narrates loading then ready exactly once`() {
         val terminal = state()
-        terminal.onBootStage(profilesLoaded = false)
-        terminal.onBootStage(profilesLoaded = false)
+        terminal.onBootStage(ready = false)
+        terminal.onBootStage(ready = false)
         assertTrue(terminal.lines.isEmpty())
         assertEquals("loading environment", terminal.bootProgress?.text)
         terminal.updateCurrentStatus("connected", CliLineTone.OK)
-        terminal.onBootStage(profilesLoaded = true)
-        terminal.onBootStage(profilesLoaded = true)
+        terminal.onBootStage(ready = true)
+        terminal.onBootStage(ready = true)
         assertEquals(null, terminal.bootProgress)
         assertEquals(listOf("connected"), terminal.lines.map { it.text })
     }
@@ -120,7 +135,7 @@ class CliTerminalStateTest {
     fun `warm entry with loaded profiles prints only the ready line`() {
         val terminal = state()
         terminal.updateCurrentStatus("disconnected", CliLineTone.DIM)
-        terminal.onBootStage(profilesLoaded = true)
+        terminal.onBootStage(ready = true)
         assertEquals(listOf("disconnected"), terminal.lines.map { it.text })
     }
 
@@ -128,7 +143,7 @@ class CliTerminalStateTest {
     fun `the current status is shown only on cold start and immediately after clear`() {
         val terminal = state()
         terminal.updateCurrentStatus("connected", CliLineTone.OK)
-        terminal.onBootStage(profilesLoaded = true)
+        terminal.onBootStage(ready = true)
         assertEquals(listOf("connected"), terminal.lines.map { it.text })
 
         terminal.command(CliCommands.STATUS)
@@ -137,7 +152,7 @@ class CliTerminalStateTest {
         assertEquals(listOf(CliCommands.STATUS), terminal.lines.map { it.text })
 
         terminal.updateCurrentStatus("disconnected", CliLineTone.DIM)
-        terminal.onBootStage(profilesLoaded = true)
+        terminal.onBootStage(ready = true)
         assertEquals(listOf(CliCommands.STATUS), terminal.lines.map { it.text })
 
         terminal.clearHistory()
@@ -264,13 +279,26 @@ class CliTerminalStateTest {
         assertEquals(listOf(false, false, true, true), terminal.lines.map { it.footnote })
         val ipLine = terminal.lines.single { it.text == "ip" }
         assertEquals(CliLineTone.DIM, ipLine.tone)
+        assertEquals(CliLineIcon.IP, ipLine.icon)
         assertEquals(CliLineTone.OK, ipLine.valueTone)
         assertTrue(ipLine.valueLeading)
         assertFalse(ipLine.typed)
         val geoLine = terminal.lines.single { it.text == "geo" }
+        assertEquals(CliLineIcon.LOCATION, geoLine.icon)
         assertEquals("de", geoLine.flagCountry)
         assertEquals(CliLineTone.OK, geoLine.valueTone)
         assertNull(terminal.progress)
+    }
+
+    @Test
+    fun `ordinary footnotes keep their blank lead slot`() {
+        val terminal = state()
+
+        terminal.footnote("plain note")
+
+        val line = terminal.lines.single()
+        assertNull(line.icon)
+        assertNull(cliTerminalFootnoteIcon(line))
     }
 
     @Test
@@ -1169,8 +1197,17 @@ class CliTerminalStateTest {
         val progressId = terminal.progress?.id
         terminal.onI2pPhase(I2pPhaseSnapshot(phase = I2pNetworkPhase.DISCOVERING_PEERS))
         assertEquals(progressId, terminal.progress?.id)
-        terminal.onI2pPhase(I2pPhaseSnapshot(phase = I2pNetworkPhase.BUILDING_TUNNELS))
+        terminal.onI2pPhase(
+            I2pPhaseSnapshot(phase = I2pNetworkPhase.BUILDING_TUNNELS, tunnelsBuilt = 2),
+        )
         assertEquals(progressId, terminal.progress?.id)
+        assertFalse(requireNotNull(terminal.progress).animated)
+        terminal.onI2pPhase(
+            I2pPhaseSnapshot(phase = I2pNetworkPhase.BUILDING_TUNNELS, tunnelsBuilt = 3),
+        )
+        assertEquals(progressId, terminal.progress?.id)
+        assertFalse(requireNotNull(terminal.progress).animated)
+        assertTrue(requireNotNull(terminal.progress).text.endsWith("3"))
         terminal.onI2pPhase(I2pPhaseSnapshot(phase = I2pNetworkPhase.CONNECTED))
 
         assertEquals(listOf("connection established · I2P"), terminal.lines.map { it.text })

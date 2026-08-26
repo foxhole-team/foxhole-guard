@@ -2,19 +2,14 @@ package com.foxhole.core.runtime
 
 import android.content.Context
 import android.os.Build
-import android.system.Os
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.nio.file.Files
+import java.nio.file.attribute.PosixFilePermissions
 
-/**
- * App-side inputs for FoxCore's in-process Arti outbound.
- *
- * No Tor executable or public SOCKS listener exists. The only executable paths are optional
- * managed-transport helpers, and the Rust core owns their lifetime.
- */
 data class TorRuntimePaths(
     val dataDirectory: String,
     val bridges: List<String> = emptyList(),
@@ -40,7 +35,7 @@ fun TorRuntimePaths.withIdentityVersion(identityVersion: Long): TorRuntimePaths 
         return this
     }
     val rootDirectory = File(dataDirectory)
-    val identityDirectory = File(rootDirectory, "identity-$identityVersion").apply { ensurePrivateDirectory() }
+    val identityDirectory = File(rootDirectory, "identity-$identityVersion").apply { ensurePrivateArtiDataDirectory() }
     rootDirectory
         .listFiles { file -> file.isDirectory && file.name.startsWith("identity-") && file.name != identityDirectory.name }
         .orEmpty()
@@ -50,11 +45,6 @@ fun TorRuntimePaths.withIdentityVersion(identityVersion: Long): TorRuntimePaths 
 
 internal class TorRuntimeUnavailableException(message: String) : IllegalStateException(message)
 
-/**
- * Prepares writable Arti state and translates the bundled/downloaded bridge inventory into the
- * strict FoxCore transport plan. Architecture-specific assets are used only to discover which
- * managed transports are executable on this device.
- */
 class TorRuntimeInstaller(
     context: Context,
     private val diagnosticsLogger: RuntimeDiagnosticsSink? = null,
@@ -77,16 +67,13 @@ class TorRuntimeInstaller(
                         )
                 val assetVersion = readAssetText("tor/$assetAbi/$TOR_BUNDLE_VERSION_FILE_NAME").orEmpty().trim()
                 val bridgeFingerprint = bridgePolicy.fingerprint(bridgeStore?.payloadFingerprint())
+                val stateDirectory = preparePrivateArtiDataDirectory(assetAbi)
                 cachedPaths
                     ?.takeIf { cachedVersion == assetVersion }
                     ?.takeIf { cachedBridgeFingerprint == bridgeFingerprint }
                     ?.takeIf { paths -> paths.filesReady() }
                     ?.let { return@withContext it }
 
-                val stateDirectory =
-                    File(appContext.filesDir, "$ARTI_STATE_ROOT/$assetAbi").apply {
-                        ensurePrivateDirectory()
-                    }
                 val transportLines =
                     readAssetText(torrcAssetPath(assetAbi))
                         .orEmpty()
@@ -124,6 +111,13 @@ class TorRuntimeInstaller(
                 }
             }
         }
+
+    private fun preparePrivateArtiDataDirectory(assetAbi: String): File {
+        val filesDirectory = appContext.filesDir.apply { ensurePrivateDirectory() }
+        val foxCoreDirectory = File(filesDirectory, FOXCORE_STATE_DIRECTORY).apply { ensurePrivateDirectory() }
+        val artiDirectory = File(foxCoreDirectory, ARTI_STATE_DIRECTORY).apply { ensurePrivateDirectory() }
+        return File(artiDirectory, assetAbi).apply { ensurePrivateArtiDataDirectory() }
+    }
 
     @Suppress("ReturnCount")
     private fun normalizedTransportLine(line: String): String? {
@@ -185,8 +179,7 @@ class TorRuntimeInstaller(
                 }.toSet()
         val transports =
             mapNotNull(::parseFoxCorePluggableTransport)
-                .filter { transport -> transport.protocols.any(requiredProtocols::contains) }
-                .coalesceByProcess()
+                .restrictToRequiredProtocols(requiredProtocols)
         val configuredProtocols = transports.flatMap(TorPluggableTransport::protocols).toSet()
         if (!configuredProtocols.containsAll(requiredProtocols)) {
             throw TorRuntimeUnavailableException("TOR bridge transport is unavailable for this device ABI")
@@ -243,7 +236,8 @@ class TorRuntimeInstaller(
         "tor/$abi/tor/pluggable_transports/$PT_CONFIG_FILE_NAME"
 
     private companion object {
-        const val ARTI_STATE_ROOT = "foxcore/arti"
+        const val FOXCORE_STATE_DIRECTORY = "foxcore"
+        const val ARTI_STATE_DIRECTORY = "arti"
         const val TOR_BUNDLE_VERSION_FILE_NAME = "bundle.version"
         const val TORRC_DEFAULTS_FILE_NAME = "torrc-defaults"
         const val PT_CONFIG_FILE_NAME = "pt_config.json"
@@ -266,13 +260,6 @@ internal fun isArtiCompatibleBridgeLine(bridge: String): Boolean =
 
 private val TOR_RSA_IDENTITY = Regex("[0-9A-Fa-f]{40}")
 
-/**
- * One managed-transport process can advertise several protocols. The bundled inventory has
- * separate ClientTransportPlugin lines for Lyrebird and Snowflake even though both resolve to the
- * same executable and arguments. Starting them as separate Arti transports duplicates the helper,
- * state directory and startup handshake; coalescing keeps startup parallel and process ownership
- * unambiguous while preserving genuinely different commands as separate helpers.
- */
 internal fun List<TorPluggableTransport>.coalesceByProcess(): List<TorPluggableTransport> {
     val processes = linkedMapOf<Pair<String, List<String>>, TorPluggableTransport>()
     for (transport in this) {
@@ -288,6 +275,17 @@ internal fun List<TorPluggableTransport>.coalesceByProcess(): List<TorPluggableT
     return processes.values.toList()
 }
 
+internal fun List<TorPluggableTransport>.restrictToRequiredProtocols(
+    requiredProtocols: Set<String>,
+): List<TorPluggableTransport> =
+    mapNotNull { transport ->
+        transport.protocols
+            .filter(requiredProtocols::contains)
+            .distinct()
+            .takeIf { protocols -> protocols.isNotEmpty() }
+            ?.let { protocols -> transport.copy(protocols = protocols) }
+    }.coalesceByProcess()
+
 private data class FoxCoreBridgePlan(
     val bridges: List<String> = emptyList(),
     val transports: List<TorPluggableTransport> = emptyList(),
@@ -297,10 +295,24 @@ private fun looksLikeDirectTorBridgeAddress(value: String): Boolean =
     value.contains(':') || value.startsWith('[')
 
 private fun File.ensurePrivateDirectory() {
-    if ((!isDirectory && !mkdirs()) || !canWrite()) {
+    if (!preparePrivateDirectory()) {
         throw TorRuntimeUnavailableException("Arti state directory is unavailable")
     }
-    runCatching { Os.chmod(absolutePath, PRIVATE_DIRECTORY_MODE) }
 }
 
-private const val PRIVATE_DIRECTORY_MODE = 448 // 0700
+private fun File.preparePrivateDirectory(): Boolean {
+    if (!exists() && !mkdirs()) return false
+    if (!isDirectory || Files.isSymbolicLink(toPath())) return false
+    return runCatching {
+        Files.setPosixFilePermissions(toPath(), PRIVATE_DIRECTORY_PERMISSIONS)
+        Files.getPosixFilePermissions(toPath()) == PRIVATE_DIRECTORY_PERMISSIONS && canWrite()
+    }.getOrDefault(false)
+}
+
+private fun File.ensurePrivateArtiDataDirectory() {
+    ensurePrivateDirectory()
+    File(this, ARTI_CLIENT_STATE_DIRECTORY).ensurePrivateDirectory()
+    File(this, ARTI_CLIENT_CACHE_DIRECTORY).ensurePrivateDirectory()
+}
+
+private val PRIVATE_DIRECTORY_PERMISSIONS = PosixFilePermissions.fromString("rwx------")

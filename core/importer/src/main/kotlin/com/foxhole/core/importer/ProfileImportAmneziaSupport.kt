@@ -56,7 +56,6 @@ internal const val AMNEZIAWG_PROTOCOL_LABEL = "AMNEZIAWG"
 internal fun ProfileImportCoreSupport.ProxyNode.carriesAmneziaObfuscation(): Boolean =
     endpoint?.containsKey("amnezia") == true
 
-// Both awg:// and wg-quick forms reach this parser so templates are interpreted once.
 internal fun amneziaBlockFromInterface(
     interfaceSection: Map<String, List<String>>,
     peerSection: Map<String, List<String>>,
@@ -64,7 +63,7 @@ internal fun amneziaBlockFromInterface(
 ): JsonObject? {
     val values = lowercasedFirstValues(interfaceSection)
     val peerValues = lowercasedFirstValues(peerSection)
-    // Ignoring the shared header key creates a silent tunnel; refuse unsupported 3.0 encryption.
+
     require(AMNEZIA_HEADER_PROTECTION_KEY !in values && AMNEZIA_HEADER_PROTECTION_KEY !in peerValues) {
         "AmneziaWG HeaderProtectionKey (3.0 header encryption) is not supported"
     }
@@ -73,7 +72,7 @@ internal fun amneziaBlockFromInterface(
     if (present.isEmpty() && !hasExtensions) {
         return null
     }
-    // The 1.5 obfuscation fields are an all-or-none wire contract.
+
     require(present.isEmpty() || present.size == AMNEZIA_OBFUSCATION_KEYS.size) {
         val missing = AMNEZIA_OBFUSCATION_KEYS.filterNot { it in present }
         "AmneziaWG config is incomplete, missing: ${missing.joinToString(", ")}"
@@ -124,7 +123,7 @@ private fun junkParameters(
     }
     if (count > 0) {
         require(minSize <= maxSize) { "AmneziaWG Jmin must not exceed Jmax" }
-        // Empty or fragmented junk is a fingerprint of its own.
+
         require(maxSize > 0) { "AmneziaWG Jmax must be at least 1 byte when Jc is set" }
         require(maxSize < mtu) {
             "AmneziaWG Jmax ($maxSize) must stay below the profile MTU ($mtu) or every junk packet fragments"
@@ -168,7 +167,7 @@ private fun kotlinx.serialization.json.JsonObjectBuilder.putAmneziaHeaders(
         defaults.map { (key, fallback) ->
             if (obfuscated) amneziaHeaderRange(values, key) else fallback to fallback
         }
-    // Overlapping type ranges make received datagrams intermittently ambiguous.
+
     ranges.indices.forEach { index ->
         ranges.drop(index + 1).forEach { other ->
             require(ranges[index].first > other.second || other.first > ranges[index].second) {
@@ -300,7 +299,6 @@ private fun requireRendersBytes(
     rendered: Int,
     key: String,
 ) {
-    // amneziawg-go#141 sends zero-length UDP datagrams for zero-width templates.
     require(rendered > 0) { "AmneziaWG $key renders no bytes, which would be sent as an empty datagram" }
 }
 
@@ -330,7 +328,7 @@ private fun amneziaInitTag(
         "r" -> sizedTag("random", length()) to length()
         "rc" -> sizedTag("random_letters", length()) to length()
         "rd" -> sizedTag("random_digits", length()) to length()
-        // Init packets have no payload, so these tags are deliberately zero-width.
+
         "d" -> buildJsonObject { put("tag", "payload") } to 0
         "ds" -> buildJsonObject { put("tag", "payload_base64") } to 0
         "dz" -> sizedTag("payload_size", length()) to length()

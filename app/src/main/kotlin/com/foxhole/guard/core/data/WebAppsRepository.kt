@@ -19,18 +19,12 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
 
-/** Preview of an app being added: normalised https URL, name and optionally icon bytes. */
 class WebAppPreview(
     val url: String,
     val name: String,
     val iconBytes: ByteArray?,
 )
 
-/**
- * The single source of the app list and badges for the screen, watchdog, notifications and widget.
- * Site metadata comes through the bounded fetch (SSRF guard, body cap) and icons are cached on disk
- * so they survive offline.
- */
 class WebAppsRepository(
     private val context: Context,
     private val daoProvider: () -> WebAppDao,
@@ -42,7 +36,6 @@ class WebAppsRepository(
     private val changesMutable =
         MutableSharedFlow<Unit>(extraBufferCapacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
 
-    /** Change pulse for CRUD and badges; the widget refreshes on it. */
     val changes: SharedFlow<Unit> = changesMutable.asSharedFlow()
 
     fun observeWebApps(): Flow<List<WebAppEntity>> =
@@ -61,14 +54,11 @@ class WebAppsRepository(
         return daoProvider().byId(id)
     }
 
-    /** Fetch the site and build a preview: manifest, then og/title, then host; first icon wins. */
     suspend fun preview(rawUrl: String): Result<WebAppPreview> =
         withContext(Dispatchers.IO) {
             runCatching {
                 val url = requireNotNull(normalizeWebAppInputUrl(rawUrl)) { "invalid url" }
-                // Only the URL has to be valid. A site that refuses the probe — 403 behind a CDN, a
-                // redirect chain that leaves public space, no route while the tunnel settles — still
-                // yields a usable app named after its host, so the add never fails on metadata.
+
                 val html = runCatching { fetchText(url, WEB_APP_PAGE_MAX_BYTES) }.getOrNull().orEmpty()
                 val meta = parseWebAppHtml(url, html)
                 val manifest =
@@ -168,7 +158,7 @@ class WebAppsRepository(
                 initialUrl = url.toHttpUrl(),
                 allowHttp = false,
                 maxBytes = maxBytes,
-                // Large sites exceed the body limit, so take the head of the document for <head>.
+
                 truncateOversizedBody = true,
             ) { target ->
                 Request.Builder()
@@ -194,7 +184,6 @@ class WebAppsRepository(
         }
 }
 
-// The default okhttp agent is rejected outright by common CDNs, which cost every probe its metadata.
 private const val WEB_APP_USER_AGENT = "FoxHole/${BuildConfig.VERSION_NAME}"
 
 private const val WEB_APP_PAGE_MAX_BYTES = 512L * 1024L

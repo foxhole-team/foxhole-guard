@@ -25,8 +25,6 @@ internal fun normalizedDnsServer(value: String): String {
     return url?.host ?: trimmed
         .removePrefix("https://")
         .removePrefix("tls://")
-        // udp:// and quic:// carry no host for toHttpUrlOrNull, so strip them too — otherwise the
-        // scheme survives into the resolver's server field and is misread as a hostname.
         .removePrefix("udp://")
         .removePrefix("quic://")
         .removeSuffix("/dns-query")
@@ -36,7 +34,7 @@ internal fun normalizedDnsServer(value: String): String {
 
 internal fun normalizeDnsFilterUpdateUrl(value: String): String =
     runCatching {
-        val url = value.trim().ensurePublicHttpsUrl()
+        val url = value.trim().ensurePublicHttpsUrl().collapseDuplicateManifestPath()
         when {
             url.isOfficialFoxholeDnsRepositoryUrl() -> DEFAULT_DNS_FILTER_UPDATE_URL
             url.isOfficialFoxholeDnsPagesDirectoryUrl() -> DEFAULT_DNS_FILTER_UPDATE_URL
@@ -44,6 +42,15 @@ internal fun normalizeDnsFilterUpdateUrl(value: String): String =
             else -> url.newBuilder().addPathSegment("manifest.json").build().toString()
         }
     }.getOrDefault(DEFAULT_DNS_FILTER_UPDATE_URL)
+
+private fun HttpUrl.collapseDuplicateManifestPath(): HttpUrl {
+    val path = encodedPath.trimEnd('/')
+    return if (path.endsWith(DUPLICATE_MANIFEST_PATH_SUFFIX, ignoreCase = true)) {
+        newBuilder().encodedPath(path.dropLast(MANIFEST_PATH_SUFFIX.length)).build()
+    } else {
+        this
+    }
+}
 
 private fun HttpUrl.isOfficialFoxholeDnsRepositoryUrl(): Boolean {
     val normalizedPath = encodedPath.trim('/').removeSuffix(".git")
@@ -58,3 +65,5 @@ private fun HttpUrl.isOfficialFoxholeDnsPagesDirectoryUrl(): Boolean {
 }
 
 private const val DEFAULT_DNS_SERVER = "1.1.1.1"
+private const val MANIFEST_PATH_SUFFIX = "/manifest.json"
+private const val DUPLICATE_MANIFEST_PATH_SUFFIX = "$MANIFEST_PATH_SUFFIX$MANIFEST_PATH_SUFFIX"

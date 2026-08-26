@@ -10,6 +10,111 @@ import java.io.File
 import java.util.regex.Pattern
 
 abstract class HomeMacrobenchmarkRobot {
+    protected fun prepareBenchmarkState(ensureMapEnabled: Boolean = false) {
+        prepareBenchmarkTargetState(ensureMapEnabled = ensureMapEnabled)
+    }
+
+    protected fun assertDashboardVisible() {
+        check(waitForDashboardVisible()) {
+            "Dashboard did not become visible; ${visibleSettingsState()}"
+        }
+    }
+
+    protected fun profileSelectorRoundTrip() {
+        assertDashboardVisible()
+        val facts = findByTestTag(CLI_HOME_FACTS_TAG) ?: findByAnyText(HOME_PRIMARY_ANCHOR_LABELS)
+        check(facts != null && clickCenter(facts)) {
+            "Home profile facts did not open; ${visibleSettingsState()}"
+        }
+        device.waitForIdle()
+        check(waitForAnyText(PROFILE_SELECTOR_TITLE_LABELS)) {
+            "Home profile selector did not appear; ${visibleSettingsState()}"
+        }
+        device.pressBack()
+        device.waitForIdle()
+        assertDashboardVisible()
+    }
+
+    protected fun openProfilesAndReturn() {
+        clickDockItem(
+            tag = CLI_DOCK_PROFILES_TAG,
+            labels = PROFILES_DOCK_LABELS,
+            fallbackXRatio = 0.25f,
+        )
+        check(waitForScreen(CLI_SCREEN_PROFILES_TAG, PROFILE_SCREEN_ANCHOR_LABELS)) {
+            "Profiles screen did not open; ${visibleSettingsState()}"
+        }
+        device.pressBack()
+        device.waitForIdle()
+        assertDashboardVisible()
+    }
+
+    protected fun openRootMapAndReturn(stressScroll: Boolean = false) {
+        clickDockItem(
+            tag = CLI_DOCK_MAP_TAG,
+            labels = MAP_DOCK_LABELS,
+            fallbackXRatio = 0.58f,
+        )
+        check(
+            waitForScreenHandlingStartupSheets(
+                CLI_SCREEN_MAP_TAG,
+                MAP_DISABLED_LABELS + MAP_CONTENT_ANCHOR_LABELS,
+            ),
+        ) {
+            "Map screen did not open; ${visibleSettingsState()}"
+        }
+        findByAnyText(MAP_DISABLED_LABELS)?.let {
+            val enable = waitForObjectByText(MAP_ENABLE_LABELS)
+            check(enable != null && clickCenter(enable)) {
+                "Map enable action was unavailable; ${visibleSettingsState()}"
+            }
+            device.waitForIdle()
+        }
+        check(waitForScreenHandlingStartupSheets(CLI_SCREEN_MAP_TAG, MAP_CONTENT_ANCHOR_LABELS)) {
+            "Map content did not render; ${visibleSettingsState()}"
+        }
+        if (stressScroll) {
+            repeat(3) {
+                val centerX = device.displayWidth / 2
+                val upperY = (device.displayHeight * UPPER_SWIPE_Y_RATIO).toInt()
+                val lowerY = (device.displayHeight * LOWER_SWIPE_Y_RATIO).toInt()
+                check(device.swipe(centerX, lowerY, centerX, upperY, SWIPE_STEPS)) {
+                    "Map stress swipe was rejected"
+                }
+                check(device.swipe(centerX, upperY, centerX, lowerY, SWIPE_STEPS)) {
+                    "Map stress return swipe was rejected"
+                }
+                device.waitForIdle()
+            }
+        }
+        device.pressBack()
+        device.waitForIdle()
+        assertDashboardVisible()
+    }
+
+    protected fun rootNavigationMemoryStress() {
+        openProfilesAndReturn()
+        openRootMapAndReturn(stressScroll = true)
+        openDockScreenAndReturn(
+            tag = CLI_DOCK_APPS_TAG,
+            labels = APPS_DOCK_LABELS,
+            fallbackXRatio = 0.42f,
+            screenTag = CLI_SCREEN_APPS_TAG,
+            screenLabels = APP_SCREEN_ANCHOR_LABELS,
+        )
+        openDockScreenAndReturn(
+            tag = CLI_DOCK_STATS_TAG,
+            labels = STATS_DOCK_LABELS,
+            fallbackXRatio = 0.75f,
+            screenTag = CLI_SCREEN_STATS_TAG,
+            screenLabels = STATS_SCREEN_ANCHOR_LABELS,
+        )
+        openSettingsHome()
+        device.pressBack()
+        device.waitForIdle()
+        assertDashboardVisible()
+    }
+
     protected fun openSettingsHome() {
         ensureFoxholeForeground()
         repeat(OPEN_SETTINGS_ATTEMPTS) { attempt ->
@@ -57,10 +162,16 @@ abstract class HomeMacrobenchmarkRobot {
         isDashboardVisible() || isSettingsHomeVisible()
 
     protected fun openSettingsDetail(target: SettingsDetailTarget): Boolean {
+        if (target.tag == "settings_statistics_action") {
+            clickDockItem(
+                tag = CLI_DOCK_STATS_TAG,
+                labels = STATS_DOCK_LABELS,
+                fallbackXRatio = 0.75f,
+            )
+            return waitForScreen(CLI_SCREEN_STATS_TAG, STATS_SCREEN_ANCHOR_LABELS)
+        }
         repeat(SETTINGS_FIND_ATTEMPTS) { attempt ->
-            val row =
-                findByTestTag(target.tag)
-                    ?: target.labels.firstNotNullOfOrNull { label -> device.findObject(By.text(label)) }
+            val row = findSettingsTarget(target)
             row?.let {
                 if (clickCenter(row)) {
                     device.waitForIdle()
@@ -94,7 +205,32 @@ abstract class HomeMacrobenchmarkRobot {
     }
 
     private fun waitForSettingsDetail(target: SettingsDetailTarget): Boolean =
-        waitForAnyText(target.labels) || waitForTestTag(target.detailTag)
+        waitForScreen(target.detailTag, currentSettingsExpandedLabels(target))
+
+    private fun findSettingsTarget(target: SettingsDetailTarget): UiObject2? =
+        findByTestTag(target.tag) ?: findByAnyText(currentSettingsTargetLabels(target))
+
+    private fun currentSettingsTargetLabels(target: SettingsDetailTarget): List<String> =
+        when (target.tag) {
+            "settings_traffic_action" -> SETTINGS_NETWORK_SECTION_LABELS
+            "settings_dns_action" -> SETTINGS_DNS_SECTION_LABELS
+            "settings_security_action" -> SETTINGS_SECURITY_SECTION_LABELS
+            "settings_application_action" -> SETTINGS_APPLICATION_SECTION_LABELS
+            "settings_expert_action" -> SETTINGS_MODULES_SECTION_LABELS
+            "settings_diagnostics_action" -> SETTINGS_JOURNALS_LABELS
+            else -> target.labels
+        }
+
+    private fun currentSettingsExpandedLabels(target: SettingsDetailTarget): List<String> =
+        when (target.tag) {
+            "settings_traffic_action" -> SETTINGS_NETWORK_EXPANDED_LABELS
+            "settings_dns_action" -> SETTINGS_DNS_EXPANDED_LABELS
+            "settings_security_action" -> SETTINGS_SECURITY_EXPANDED_LABELS
+            "settings_application_action" -> SETTINGS_APPLICATION_EXPANDED_LABELS
+            "settings_expert_action" -> SETTINGS_MODULES_EXPANDED_LABELS
+            "settings_diagnostics_action" -> LOGS_SCREEN_ANCHOR_LABELS
+            else -> target.labels
+        }
 
     protected fun waitForTestTag(tag: String): Boolean {
         if (!RESOURCE_TEST_TAGS_AVAILABLE) {
@@ -119,7 +255,67 @@ abstract class HomeMacrobenchmarkRobot {
         }
 
     private fun findByAnyText(labels: List<String>) =
-        labels.firstNotNullOfOrNull { label -> device.findObject(By.text(label)) }
+        labels.firstNotNullOfOrNull { label -> device.findObject(By.text(caseInsensitiveExactPattern(label))) }
+
+    private fun findByAnyDesc(labels: List<String>) =
+        labels.firstNotNullOfOrNull { label -> device.findObject(By.desc(caseInsensitiveExactPattern(label))) }
+
+    private fun waitForObjectByText(labels: List<String>): UiObject2? {
+        repeat(DETAIL_OPEN_POLL_COUNT) {
+            findByAnyText(labels)?.let { return it }
+            Thread.sleep(DETAIL_OPEN_POLL_DELAY_MS)
+        }
+        return null
+    }
+
+    private fun waitForAnyTextOrDesc(labels: List<String>): Boolean {
+        repeat(DETAIL_OPEN_POLL_COUNT) {
+            if (findByAnyText(labels) != null || findByAnyDesc(labels) != null) {
+                return true
+            }
+            Thread.sleep(DETAIL_OPEN_POLL_DELAY_MS)
+        }
+        return false
+    }
+
+    private fun waitForScreen(tag: String, labels: List<String>): Boolean {
+        repeat(DETAIL_OPEN_POLL_COUNT) {
+            if (
+                findByTestTag(tag) != null ||
+                findByAnyText(labels) != null ||
+                findByAnyDesc(labels) != null
+            ) {
+                return true
+            }
+            Thread.sleep(DETAIL_OPEN_POLL_DELAY_MS)
+        }
+        return false
+    }
+
+    private fun waitForScreenHandlingStartupSheets(tag: String, labels: List<String>): Boolean {
+        repeat(DETAIL_OPEN_POLL_COUNT) {
+            findByAnyText(STARTUP_SHEET_CLOSE_LABELS)?.let { close ->
+                if (clickCenter(close)) {
+                    device.waitForIdle()
+                }
+            }
+            if (
+                findByTestTag(tag) != null ||
+                findByAnyText(labels) != null ||
+                findByAnyDesc(labels) != null
+            ) {
+                return true
+            }
+            Thread.sleep(DETAIL_OPEN_POLL_DELAY_MS)
+        }
+        return false
+    }
+
+    private fun caseInsensitiveExactPattern(label: String): Pattern =
+        Pattern.compile(
+            "^${Pattern.quote(label)}$",
+            Pattern.CASE_INSENSITIVE or Pattern.UNICODE_CASE,
+        )
 
     protected fun waitForAnyText(labels: List<String>): Boolean {
         repeat(DETAIL_OPEN_POLL_COUNT) {
@@ -140,6 +336,62 @@ abstract class HomeMacrobenchmarkRobot {
             device.waitForIdle()
             Thread.sleep(APP_PICKER_ROW_FIND_DELAY_MS)
         }
+        error("No tappable app row was found after filtering; ${visibleSettingsState()}")
+    }
+
+    protected fun appsPickerSearchRoundTrip() {
+        assertDashboardVisible()
+        clickDockItem(
+            tag = CLI_DOCK_APPS_TAG,
+            labels = APPS_DOCK_LABELS,
+            fallbackXRatio = 0.42f,
+        )
+        check(waitForScreen(CLI_SCREEN_APPS_TAG, APP_SCREEN_ANCHOR_LABELS)) {
+            "Scenarios screen did not open; ${visibleSettingsState()}"
+        }
+        val addApps = waitForObjectByText(APP_PICKER_OPEN_LABELS)
+        check(addApps != null && clickCenter(addApps)) {
+            "App picker action did not open; ${visibleSettingsState()}"
+        }
+        device.waitForIdle()
+        val search = waitForEditableField()
+        check(search != null) {
+            "App picker filter field did not appear; ${visibleSettingsState()}"
+        }
+        search.setText(APP_PICKER_SEARCH_QUERY)
+        device.waitForIdle()
+        Thread.sleep(200L)
+        toggleFirstUnlockedAppInPicker()
+        device.waitForIdle()
+        toggleFirstUnlockedAppInPicker()
+        device.waitForIdle()
+        device.pressBack()
+        device.waitForIdle()
+        check(waitForScreen(CLI_SCREEN_APPS_TAG, APP_SCREEN_ANCHOR_LABELS)) {
+            "Scenarios screen did not return after app picker; ${visibleSettingsState()}"
+        }
+        device.pressBack()
+        device.waitForIdle()
+        assertDashboardVisible()
+    }
+
+    private fun waitForEditableField(): UiObject2? {
+        repeat(DETAIL_OPEN_POLL_COUNT) {
+            device.findObject(By.clazz("android.widget.EditText"))?.let { return it }
+            Thread.sleep(DETAIL_OPEN_POLL_DELAY_MS)
+        }
+        return null
+    }
+
+    private fun waitForExternalActivity(): Boolean {
+        repeat(DETAIL_OPEN_POLL_COUNT) {
+            val currentPackage = device.currentPackageName
+            if (currentPackage != null && currentPackage != PACKAGE_NAME) {
+                return true
+            }
+            Thread.sleep(DETAIL_OPEN_POLL_DELAY_MS)
+        }
+        return false
     }
 
     private fun findFirstAppPickerRow(): UiObject2? =
@@ -158,7 +410,8 @@ abstract class HomeMacrobenchmarkRobot {
         }
 
     private fun isSettingsHomeVisible() =
-        findByTestTag("settings_screen") != null ||
+        findByTestTag(CLI_SCREEN_SETTINGS_TAG) != null ||
+            findByTestTag("settings_screen") != null ||
             (
                 findByAnyText(SETTINGS_HOME_PRIMARY_LABELS) != null &&
                     findByAnyText(SETTINGS_HOME_SECONDARY_LABELS) != null
@@ -169,7 +422,12 @@ abstract class HomeMacrobenchmarkRobot {
             )
 
     private fun isDashboardVisible() =
-        findByTestTag("home_dashboard_list") != null || findByAnyText(DASHBOARD_ANCHOR_LABELS) != null
+        findByTestTag(CLI_SCREEN_HOME_TAG) != null ||
+            findByTestTag("home_dashboard_list") != null ||
+            (
+                findByAnyText(HOME_PRIMARY_ANCHOR_LABELS) != null &&
+                    findByAnyText(HOME_SECONDARY_ANCHOR_LABELS) != null
+            )
 
     protected fun waitForDashboardVisible(): Boolean {
         repeat(DETAIL_OPEN_POLL_COUNT) {
@@ -227,64 +485,132 @@ abstract class HomeMacrobenchmarkRobot {
         }
 
     protected fun clickSettingsBottomNav() {
-        findByAnyText(BOTTOM_NAV_SETTINGS_LABELS)?.let { node ->
-            if (clickCenter(node)) {
-                return
-            }
-        }
-        val settingsNavX = (device.displayWidth * SETTINGS_NAV_X_RATIO).toInt()
-        val bottomNavY = (device.displayHeight * BOTTOM_NAV_Y_RATIO).toInt()
-        device.click(settingsNavX, bottomNavY)
+        clickDockItem(
+            tag = CLI_DOCK_SETTINGS_TAG,
+            labels = BOTTOM_NAV_SETTINGS_LABELS,
+            fallbackXRatio = SETTINGS_NAV_X_RATIO,
+        )
     }
 
     protected fun clickDashboardBottomNav() {
-        findByAnyText(BOTTOM_NAV_DASHBOARD_LABELS)?.let { node ->
-            if (clickCenter(node)) {
-                return
-            }
+        clickDockItem(
+            tag = CLI_DOCK_HOME_TAG,
+            labels = BOTTOM_NAV_DASHBOARD_LABELS,
+            fallbackXRatio = DASHBOARD_NAV_X_RATIO,
+        )
+    }
+
+    private fun clickDockItem(
+        tag: String,
+        labels: List<String>,
+        fallbackXRatio: Float,
+    ) {
+        val node = findByTestTag(tag) ?: findByAnyDesc(labels) ?: findByAnyText(labels)
+        if (node != null && clickCenter(node)) {
+            return
         }
-        val dashboardNavX = (device.displayWidth * DASHBOARD_NAV_X_RATIO).toInt()
-        val bottomNavY = (device.displayHeight * BOTTOM_NAV_Y_RATIO).toInt()
-        device.click(dashboardNavX, bottomNavY)
+        check(device.currentPackageName == PACKAGE_NAME) {
+            "Cannot use dock coordinate fallback outside FoxHole; ${visibleSettingsState()}"
+        }
+        val x = (device.displayWidth * fallbackXRatio).toInt()
+        val y = (device.displayHeight * BOTTOM_NAV_Y_RATIO).toInt()
+        check(device.click(x, y)) {
+            "Dock coordinate fallback was rejected for $tag"
+        }
+    }
+
+    private fun openDockScreenAndReturn(
+        tag: String,
+        labels: List<String>,
+        fallbackXRatio: Float,
+        screenTag: String,
+        screenLabels: List<String>,
+    ) {
+        assertDashboardVisible()
+        clickDockItem(tag = tag, labels = labels, fallbackXRatio = fallbackXRatio)
+        device.waitForIdle()
+        check(waitForScreen(screenTag, screenLabels)) {
+            "Dock screen $screenTag did not open; ${visibleSettingsState()}"
+        }
+        device.pressBack()
+        device.waitForIdle()
+        assertDashboardVisible()
+    }
+
+    private fun dismissStartupSheets() {
+        repeat(BENCHMARK_SETUP_DISMISS_ATTEMPTS) {
+            val close = findByAnyText(STARTUP_SHEET_CLOSE_LABELS) ?: return
+            check(clickCenter(close)) {
+                "Startup sheet close action went stale; ${visibleSettingsState()}"
+            }
+            device.waitForIdle()
+        }
     }
 
     protected fun openImportFilePickerAndReturn() {
-        if (!clickTestTag("home_import_action")) {
-            return
+        if (clickTestTag("home_import_action")) {
+            device.waitForIdle()
+            check(clickTestTag("home_import_from_file_action")) {
+                "Legacy import file action did not appear; ${visibleSettingsState()}"
+            }
+        } else {
+            clickDockItem(
+                tag = CLI_DOCK_PROFILES_TAG,
+                labels = PROFILES_DOCK_LABELS,
+                fallbackXRatio = 0.25f,
+            )
+            check(waitForScreen(CLI_SCREEN_PROFILES_TAG, PROFILE_SCREEN_ANCHOR_LABELS)) {
+                "Profiles screen did not open for file permission flow; ${visibleSettingsState()}"
+            }
+            val fileAction = waitForObjectByText(PROFILE_IMPORT_FILE_LABELS)
+            check(fileAction != null && clickCenter(fileAction)) {
+                "Profile file picker action was unavailable; ${visibleSettingsState()}"
+            }
         }
         device.waitForIdle()
-        if (clickTestTag("home_import_from_file_action")) {
-            device.waitForIdle()
-            device.pressBack()
-            device.waitForIdle()
-        } else {
+        check(waitForExternalActivity()) {
+            "System document picker did not open; ${visibleSettingsState()}"
+        }
+        device.pressBack()
+        device.waitForIdle()
+        if (!isDashboardVisible()) {
             device.pressBack()
             device.waitForIdle()
         }
+        assertDashboardVisible()
     }
 
     protected fun clickConnectAndReturnFromVpnPermission() {
-        val connectButton = findByTestTag("home_connect_button") ?: return
-        if (clickCenter(connectButton)) {
-            device.waitForIdle()
+        assertDashboardVisible()
+        val connectButton =
+            findByTestTag("home_connect_button")
+                ?: findByTestTag(CLI_HOME_PRIMARY_ACTION_TAG)
+                ?: findByAnyText(HOME_PRIMARY_ACTION_LABELS)
+        check(connectButton != null && clickCenter(connectButton)) {
+            "Home primary action was unavailable; ${visibleSettingsState()}"
+        }
+        device.waitForIdle()
+        if (device.currentPackageName != PACKAGE_NAME) {
             handleRuntimePermissionDialog(approve = false)
+            if (device.currentPackageName != PACKAGE_NAME) {
+                device.pressBack()
+                device.waitForIdle()
+            }
+        }
+        if (!isDashboardVisible()) {
             device.pressBack()
             device.waitForIdle()
         }
+        assertDashboardVisible()
     }
 
     protected fun openTrafficMapDetailsAndReturn() {
-        if (findTrafficMapDetailsActionAfterScroll() == null) {
-            check(waitForDashboardVisible()) {
-                "Dashboard unavailable before traffic map benchmark fallback; ${visibleSettingsState()}"
-            }
+        if (findTrafficMapDetailsAction() == null) {
+            openRootMapAndReturn()
             return
         }
         if (!clickTrafficMapDetailsAction() && !waitForTrafficMapDetailVisible()) {
-            check(waitForDashboardVisible()) {
-                "Dashboard unavailable after traffic map details click fallback; ${visibleSettingsState()}"
-            }
-            return
+            error("Traffic map details action did not navigate; ${visibleSettingsState()}")
         }
         device.waitForIdle()
         check(waitForTrafficMapDetailVisible()) {
@@ -457,4 +783,160 @@ abstract class HomeMacrobenchmarkRobot {
 
     protected val device: UiDevice
         get() = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
+}
+
+internal fun prepareBenchmarkTargetState(ensureMapEnabled: Boolean = false) {
+    BenchmarkTargetSetup(
+        UiDevice.getInstance(InstrumentationRegistry.getInstrumentation()),
+    ).prepare(ensureMapEnabled = ensureMapEnabled)
+}
+
+private class BenchmarkTargetSetup(
+    private val device: UiDevice,
+) {
+    fun prepare(ensureMapEnabled: Boolean) {
+        device.pressHome()
+        device.executeShellCommand("am force-stop $PACKAGE_NAME")
+        device.executeShellCommand(
+            "am start -W -a android.intent.action.MAIN " +
+                "-c android.intent.category.LAUNCHER -n $PACKAGE_NAME/$MAIN_ACTIVITY_CLASS_NAME",
+        )
+        device.waitForIdle()
+        waitForStableScreen(
+            allowOnboardingSkip = true,
+            ready = ::homeReady,
+            failureMessage = "Benchmark setup could not settle on Home after first-run UI",
+        )
+        if (ensureMapEnabled) {
+            enableAndWarmMapThroughUi()
+        }
+        device.pressHome()
+        device.waitForIdle()
+    }
+
+    private fun enableAndWarmMapThroughUi() {
+        clickDock(labels = MAP_DOCK_LABELS, fallbackXRatio = 0.58f)
+        waitForStableScreen(
+            ready = {
+                findText(MAP_DISABLED_LABELS) != null ||
+                    findText(MAP_CONTENT_ANCHOR_LABELS) != null
+            },
+            failureMessage = "Benchmark setup could not open Map",
+        )
+        findText(MAP_DISABLED_LABELS)?.let {
+            val enable = waitForText(MAP_ENABLE_LABELS)
+            check(enable != null && clickCenter(enable)) {
+                "Benchmark setup could not enable Map"
+            }
+            device.waitForIdle()
+        }
+        waitForStableScreen(
+            ready = { findText(MAP_CONTENT_ANCHOR_LABELS) != null },
+            failureMessage = "Benchmark setup enabled Map but its content did not render",
+        )
+        clickDock(labels = HOME_DOCK_LABELS, fallbackXRatio = DASHBOARD_NAV_X_RATIO)
+        waitForStableScreen(
+            ready = ::homeReady,
+            failureMessage = "Benchmark setup could not return from Map to Home",
+        )
+    }
+
+    private fun waitForStableScreen(
+        allowOnboardingSkip: Boolean = false,
+        ready: () -> Boolean,
+        failureMessage: String,
+    ) {
+        var stablePolls = 0
+        var lastState = "target not ready"
+        repeat(BENCHMARK_SETUP_POLL_COUNT) {
+            val handledAction = handleTransientUi(allowOnboardingSkip)
+            if (handledAction != null) {
+                stablePolls = 0
+                lastState = "handled $handledAction"
+            } else if (ready()) {
+                stablePolls += 1
+                lastState = "ready $stablePolls/$BENCHMARK_SETUP_STABLE_POLL_COUNT"
+                if (stablePolls >= BENCHMARK_SETUP_STABLE_POLL_COUNT) {
+                    return
+                }
+            } else {
+                stablePolls = 0
+                lastState = "target not ready"
+            }
+            Thread.sleep(BENCHMARK_UI_POLL_DELAY_MS)
+        }
+        error("$failureMessage; package=${device.currentPackageName}; lastState=$lastState")
+    }
+
+    private fun handleTransientUi(allowOnboardingSkip: Boolean): String? {
+        if (allowOnboardingSkip) {
+            findText(ONBOARDING_SKIP_LABELS)?.let { skip ->
+                clickTransientAction(skip)
+                return "onboarding skip"
+            }
+        }
+        findText(RUNTIME_PERMISSION_DENY_LABELS)?.let { deny ->
+            clickTransientAction(deny)
+            return "runtime permission"
+        }
+        findText(STARTUP_SHEET_CLOSE_LABELS)?.let { close ->
+            clickTransientAction(close)
+            return "startup sheet"
+        }
+        return null
+    }
+
+    private fun clickTransientAction(node: UiObject2) {
+        if (clickCenter(node)) {
+            device.waitForIdle()
+        }
+    }
+
+    private fun clickDock(labels: List<String>, fallbackXRatio: Float) {
+        val node = findDesc(labels) ?: findText(labels)
+        if (node != null && clickCenter(node)) {
+            device.waitForIdle()
+            return
+        }
+        val x = (device.displayWidth * fallbackXRatio).toInt()
+        val y = (device.displayHeight * BOTTOM_NAV_Y_RATIO).toInt()
+        check(device.click(x, y)) { "Benchmark dock coordinate fallback was rejected" }
+        device.waitForIdle()
+    }
+
+    private fun homeReady(): Boolean =
+        device.currentPackageName == PACKAGE_NAME &&
+            findText(HOME_PRIMARY_ANCHOR_LABELS) != null &&
+            findText(HOME_SECONDARY_ANCHOR_LABELS) != null
+
+    private fun waitForText(labels: List<String>): UiObject2? {
+        repeat(BENCHMARK_SETUP_POLL_COUNT) {
+            findText(labels)?.let { return it }
+            Thread.sleep(BENCHMARK_UI_POLL_DELAY_MS)
+        }
+        return null
+    }
+
+    private fun findText(labels: List<String>): UiObject2? =
+        device.findObject(By.text(exactPattern(labels)))
+
+    private fun findDesc(labels: List<String>): UiObject2? =
+        device.findObject(By.desc(exactPattern(labels)))
+
+    private fun exactPattern(labels: List<String>): Pattern =
+        Pattern.compile(
+            labels.joinToString(prefix = "^(?:", postfix = ")$", separator = "|") { label ->
+                Pattern.quote(label)
+            },
+            Pattern.CASE_INSENSITIVE or Pattern.UNICODE_CASE,
+        )
+
+    private fun clickCenter(node: UiObject2): Boolean =
+        try {
+            val center = node.visibleCenter
+            device.click(center.x, center.y)
+            true
+        } catch (_: StaleObjectException) {
+            false
+        }
 }

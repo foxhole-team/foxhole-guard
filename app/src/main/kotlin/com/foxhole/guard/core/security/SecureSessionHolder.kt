@@ -5,12 +5,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 
-/**
- * Process-scoped home for the unlocked key material. When the app UI re-locks we
- * zero the Java-side copies here and flip [dataKeyAvailable]; the live SQLCipher
- * connection stays open (its key is already in native memory - decision #8), so the
- * VPN keeps running while the UI is locked.
- */
 class SecureSessionHolder {
     private val availableState = MutableStateFlow(false)
     val dataKeyAvailable: StateFlow<Boolean> = availableState.asStateFlow()
@@ -40,7 +34,6 @@ class SecureSessionHolder {
         availableState.value = true
     }
 
-    /** Returns a private copy of the dataKey; caller must zero it after use. */
     @Synchronized
     fun copyDataKeyOrNull(): ByteArray? = dataKey?.copyOf()
 
@@ -62,8 +55,6 @@ class SecureSessionHolder {
     }
 
     suspend fun awaitDataKey(): ByteArray {
-        // Loop rather than recurse: a clear() racing between the flow emit and the copy makes the
-        // copy null, and a tail-recursive retry would grow the stack under a persistent race.
         while (true) {
             dataKeyAvailable.first { it }
             copyDataKeyOrNull()?.let { key -> return key }

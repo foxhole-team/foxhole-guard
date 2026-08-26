@@ -28,16 +28,18 @@
             android:layout_height="wrap_content"
             android:layout_marginStart="4dp"
             android:layout_weight="1"
-            android:fontFamily="@font/lanapixel"
+            android:fontFamily="@font/tiny5_regular"
             android:text="FoxHole Guard"
+            android:textAllCaps="true"
             android:textColor="@color/cli_accent"
             android:textSize="11sp" />
 
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:fontFamily="@font/lanapixel"
+            android:fontFamily="@font/tiny5_regular"
             android:text="@string/cli_webapps_widget_label"
+            android:textAllCaps="true"
             android:textColor="@color/cli_dim"
             android:textSize="11sp" />
     </LinearLayout>

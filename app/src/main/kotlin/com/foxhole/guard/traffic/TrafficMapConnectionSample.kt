@@ -8,6 +8,11 @@ data class TrafficMapConnectionSample(
     val kind: TrafficMapConnectionSampleKind = TrafficMapConnectionSampleKind.DESTINATION,
 )
 
+data class TrafficMapRuntimeSnapshotSamples(
+    val generation: Long,
+    val samples: List<TrafficMapConnectionSample>,
+)
+
 enum class TrafficMapConnectionSampleKind {
     DESTINATION,
     DNS_SERVER,

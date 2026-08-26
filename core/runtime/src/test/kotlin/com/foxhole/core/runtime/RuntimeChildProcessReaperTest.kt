@@ -53,6 +53,36 @@ class RuntimeChildProcessReaperTest {
     }
 
     @Test
+    fun `reaps every bundled tor transport executable in one process scan`() {
+        val conjureExecutablePath = "/data/app/com.foxhole.guard/lib/arm64/libconjure_client.so"
+        val killed = mutableListOf<Int>()
+        var scans = 0
+        val reaper =
+            RuntimeChildProcessReaper(
+                selfPid = 1000,
+                killProcess = { pid -> killed += pid },
+                listProcesses = {
+                    scans += 1
+                    listOf(
+                        RunningProcessInfo(1234, listOf(executablePath, "-f", "-")),
+                        RunningProcessInfo(5678, listOf(conjureExecutablePath, "-registerURL", "https://example.test")),
+                        RunningProcessInfo(9012, listOf("/system/bin/tor")),
+                    )
+                },
+            )
+
+        val count =
+            reaper.reapOrphans(
+                executablePaths = setOf(executablePath, conjureExecutablePath),
+                dataDirectoryRoot = dataDirectoryRoot,
+            )
+
+        assertEquals(2, count)
+        assertEquals(listOf(1234, 5678), killed)
+        assertEquals(1, scans)
+    }
+
+    @Test
     fun `never reaps our own pid even when argv matches`() {
         val killed = mutableListOf<Int>()
         val reaper =

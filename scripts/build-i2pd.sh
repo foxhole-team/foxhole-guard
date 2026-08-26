@@ -10,6 +10,12 @@ version_file="$repo_root/third_party/i2pd.version"
 read -r -a abis <<< "${I2PD_ABIS:-arm64-v8a armeabi-v7a x86_64}"
 api="${I2PD_ANDROID_API:-26}"
 work="$i2pd_work_dir"
+build_root="${I2PD_BUILD_ROOT:-$repo_root/build/i2pd}"
+output_root="${I2PD_OUTPUT_ROOT:-$repo_root/app/src/main/jniLibs}"
+verify_host_paths="$repo_root/scripts/verify-native-host-paths.sh"
+openssl_recipe="canonical-prefix-v1"
+boost_recipe="path-remap-v1"
+openssl_prefix="/usr/local/foxhole-openssl"
 
 log() { printf '[build-i2pd] %s\n' "$*"; }
 
@@ -39,6 +45,30 @@ toolbin="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/$host_tag/bin"
 sysroot="$toolbin/../sysroot"
 jobs="$( (command -v nproc >/dev/null 2>&1 && nproc) || sysctl -n hw.ncpu )"
 mkdir -p "$work"
+
+source_date_epoch="${SOURCE_DATE_EPOCH:-$(git -C "$i2pd_dir" show -s --format=%ct HEAD)}"
+export SOURCE_DATE_EPOCH="$source_date_epoch"
+export ZERO_AR_DATE=1
+
+remap_flags=(
+  "-ffile-prefix-map=$i2pd_dir=/usr/src/i2pd"
+  "-fmacro-prefix-map=$i2pd_dir=/usr/src/i2pd"
+  "-fdebug-prefix-map=$i2pd_dir=/usr/src/i2pd"
+  "-ffile-prefix-map=$work=/usr/src/i2pd-deps"
+  "-fmacro-prefix-map=$work=/usr/src/i2pd-deps"
+  "-fdebug-prefix-map=$work=/usr/src/i2pd-deps"
+  "-ffile-prefix-map=$build_root=/usr/src/i2pd-build"
+  "-fmacro-prefix-map=$build_root=/usr/src/i2pd-build"
+  "-fdebug-prefix-map=$build_root=/usr/src/i2pd-build"
+  "-ffile-prefix-map=$repo_root=/usr/src/foxhole-guard"
+  "-fmacro-prefix-map=$repo_root=/usr/src/foxhole-guard"
+  "-fdebug-prefix-map=$repo_root=/usr/src/foxhole-guard"
+)
+remap_cflags="${remap_flags[*]}"
+boost_remap_flags=""
+for remap_flag in "${remap_flags[@]}"; do
+  boost_remap_flags+=" <compileflags>$remap_flag"
+done
 
 fetch_verified "$openssl_url" "$work/openssl.tgz" "$openssl_sha256" "OpenSSL $openssl_ver"
 fetch_verified "$boost_url" "$work/$boost_us.tar.bz2" "$boost_sha256" "Boost $boost_ver"
@@ -76,20 +106,39 @@ b2arch_for() { case "$1" in arm64-v8a|armeabi-v7a) echo arm ;; x86|x86_64) echo 
 b2bits_for() { case "$1" in arm64-v8a|x86_64) echo 64 ;; armeabi-v7a|x86) echo 32 ;; esac; }
 b2abi_for()  { case "$1" in arm64-v8a|armeabi-v7a) echo aapcs ;; x86|x86_64) echo sysv ;; esac; }
 
+normalize_i2pd_build_id() {
+  local binary="$1" scratch_dir="$2" without_id note digest build_id
+  without_id="$scratch_dir/i2pd.without-build-id"
+  note="$scratch_dir/i2pd.build-id.note"
+
+  # LLD hashes input paths into its build ID even when the linked payload is byte-identical.
+  cp "$binary" "$without_id"
+  "$toolbin/llvm-objcopy" --remove-section=.note.gnu.build-id "$without_id"
+  digest="$(sha256_file "$without_id")"
+  build_id="${digest:0:40}"
+  perl -e 'my $hex = shift; print pack("V3a4H*", 4, 20, 3, "GNU\0", $hex)' "$build_id" > "$note"
+  "$toolbin/llvm-objcopy" --update-section ".note.gnu.build-id=$note" "$binary"
+  rm -f "$without_id" "$note"
+}
+
 log "building i2pd $(awk -F= '$1=="ref"{print $2}' "$version_file") for: ${abis[*]}"
 for abi in "${abis[@]}"; do
   ssl_target="$(ssl_target_for "$abi")"; clang="$(clang_for "$abi")"; triple="$(triple_for "$abi")"
-  openssl_out="$work/openssl-$abi"; boost_out="$work/boost-$abi"
+  openssl_stage="$work/openssl-$openssl_recipe-$abi"
+  openssl_out="$openssl_stage$openssl_prefix"
+  boost_out="$work/boost-$boost_recipe-$abi"
 
   if [[ ! -f "$openssl_out/lib/libcrypto.a" && ! -f "$openssl_out/lib64/libcrypto.a" ]]; then
     log "[$abi] OpenSSL"
-    rm -rf "$work/openssl-src-$abi"; mkdir -p "$work/openssl-src-$abi"
-    tar xf "$work/openssl.tgz" -C "$work/openssl-src-$abi" --strip-components=1
-    ( cd "$work/openssl-src-$abi"
+    openssl_source="$work/openssl-src-$openssl_recipe-$abi"
+    rm -rf "$openssl_source" "$openssl_stage"; mkdir -p "$openssl_source"
+    tar xf "$work/openssl.tgz" -C "$openssl_source" --strip-components=1
+    ( cd "$openssl_source"
       ANDROID_NDK_ROOT="$ANDROID_NDK_HOME" PATH="$toolbin:$PATH" \
-        ./Configure "$ssl_target" -D__ANDROID_API__="$api" no-shared no-tests no-apps --prefix="$openssl_out"
+        ./Configure "$ssl_target" -D__ANDROID_API__="$api" no-shared no-tests no-apps \
+          --prefix="$openssl_prefix" --openssldir=/etc/ssl --libdir=lib
       PATH="$toolbin:$PATH" make -j"$jobs" build_libs >/dev/null
-      PATH="$toolbin:$PATH" make install_dev >/dev/null )
+      PATH="$toolbin:$PATH" make DESTDIR="$openssl_stage" install_dev >/dev/null )
   fi
   [[ -d "$openssl_out/lib64" ]] && ln -sfn lib64 "$openssl_out/lib" 2>/dev/null || true
 
@@ -102,11 +151,11 @@ for abi in "${abis[@]}"; do
       cat > "$work/user-config-$abi.jam" <<EOF
 using clang : ndk${abi//[-_]/}
   : $toolbin/$clang
-  : <archiver>$toolbin/llvm-ar <ranlib>$toolbin/llvm-ranlib <compileflags>-fPIC
+  : <archiver>$toolbin/llvm-ar <ranlib>$toolbin/llvm-ranlib <compileflags>-fPIC$boost_remap_flags
   ;
 EOF
       ./b2 -q -j"$jobs" --user-config="$work/user-config-$abi.jam" \
-        --prefix="$boost_out" --build-dir="$work/boost-build-$abi" \
+        --prefix="$boost_out" --build-dir="$work/boost-build-$boost_recipe-$abi" \
         toolset="$b2tag" target-os=android architecture="$(b2arch_for "$abi")" \
         address-model="$(b2bits_for "$abi")" abi="$(b2abi_for "$abi")" binary-format=elf \
         link=static runtime-link=shared threading=multi variant=release cxxstd=17 --layout=system \
@@ -114,12 +163,13 @@ EOF
   fi
 
   log "[$abi] i2pd"
-  build_dir="$repo_root/build/i2pd/$abi"; out_dir="$repo_root/app/src/main/jniLibs/$abi"
+  build_dir="$build_root/$abi"; out_dir="$output_root/$abi"
   rm -rf "$build_dir"; mkdir -p "$build_dir" "$out_dir"
   cmake -S "$i2pd_dir/build" -B "$build_dir" -G Ninja \
     -DCMAKE_TOOLCHAIN_FILE="$toolchain" \
     -DANDROID_ABI="$abi" -DANDROID_PLATFORM="android-$api" -DANDROID_STL=c++_static \
     -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_C_FLAGS="$remap_cflags" -DCMAKE_CXX_FLAGS="$remap_cflags" \
     -DWITH_STATIC=OFF -DWITH_UPNP=OFF -DWITH_LIBRARY=OFF -DWITH_BINARY=ON -DWITH_ADDRSANITIZER=OFF \
     -DCMAKE_FIND_PACKAGE_PREFER_CONFIG=TRUE -DCMAKE_FIND_ROOT_PATH_MODE_PACKAGE=BOTH \
     -DOPENSSL_ROOT_DIR="$openssl_out" -DOPENSSL_USE_STATIC_LIBS=ON \
@@ -130,6 +180,8 @@ EOF
   cmake --build "$build_dir" --target i2pd -j"$jobs"
   cp "$build_dir/i2pd" "$out_dir/libi2pd.so"
   "$toolbin/llvm-strip" "$out_dir/libi2pd.so" 2>/dev/null || true
+  normalize_i2pd_build_id "$out_dir/libi2pd.so" "$build_dir"
+  "$verify_host_paths" "$out_dir/libi2pd.so"
   log "wrote $out_dir/libi2pd.so"
 done
 

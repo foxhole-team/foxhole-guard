@@ -5,15 +5,9 @@ import android.os.ParcelFileDescriptor
 import com.foxhole.core.model.FoxCoreSessionConfig
 import com.foxhole.core.model.VpnSession
 import kotlinx.serialization.json.Json
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 
-/**
- * Owns direct JNI engine operations, including their bounded blocking-call policy.
- *
- * [FoxCoreRuntime] remains the state/TUN owner. Keeping translation, preflight, start, policy
- * reload and stop calls here makes the boundary explicit: callers must invoke these operations
- * outside their transition mutex and commit the result separately under generation ownership.
- */
 internal class FoxCoreNativeEngineOperations(
     private val native: FoxCoreNativeApi,
     private val diagnostics: RuntimeDiagnosticsSink,
@@ -94,7 +88,7 @@ internal class FoxCoreNativeEngineOperations(
     ): NativeStopOutcome {
         val result = AtomicInteger(FoxholeNativeEngine.STOP_PANICKED)
         val completed =
-            runBlockingRuntimeClose(policy.totalGracefulTimeoutMs) {
+            runBlockingRuntimeClose(nativeStopCallTimeoutMs(policy)) {
                 result.set(native.stop(handle))
             }
         val stopped =
@@ -106,26 +100,37 @@ internal class FoxCoreNativeEngineOperations(
                     FoxholeNativeEngine.STOP_UNKNOWN_HANDLE,
                 )
         return if (stopped || !policy.forceKillAfterTimeout) {
-            NativeStopOutcome(stopped = stopped, escalated = false)
-        } else {
             NativeStopOutcome(
-                stopped = forceKill(handle),
+                stopped = stopped,
+                escalated = false,
+            )
+        } else {
+            val forceStopOutcome = forceKill(handle)
+            NativeStopOutcome(
+                stopped = forceStopOutcome.handleReleased,
                 escalated = true,
+                forceStopOutcome = forceStopOutcome,
             )
         }
     }
 
-    /**
-     * STOP_TIMED_OUT means native already removed the handle before quarantining its worker.
-     * Kotlin timeout and STOP_PANICKED remain failures because ownership was never released.
-     */
-    suspend fun forceKill(handle: Long): Boolean {
+    suspend fun forceKill(handle: Long): NativeForceStopOutcome {
         val result = AtomicInteger(FoxholeNativeEngine.STOP_PANICKED)
+        val callFailed = AtomicBoolean(false)
         val completed =
             runBlockingRuntimeClose(RUNTIME_FORCE_KILL_TIMEOUT_MS) {
-                result.set(native.forceKill(handle))
+                try {
+                    result.set(native.forceKill(handle))
+                } catch (error: Throwable) {
+                    callFailed.set(true)
+                    throw error
+                }
             }
-        return completed && forceKillReleasedHandle(result.get())
+        if (callFailed.get()) return NativeForceStopOutcome.FAILED
+        return nativeForceStopOutcome(
+            callCompleted = completed,
+            code = result.get(),
+        )
     }
 
     fun recordUnavailableOutbounds(handle: Long) {

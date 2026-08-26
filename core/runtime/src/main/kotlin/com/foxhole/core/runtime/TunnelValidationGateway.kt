@@ -43,13 +43,6 @@ class TunnelValidationGateway(
             forceRuntimeProxyOnly = false,
         )
 
-    /**
-     * Refreshes the physical upstream identity even while this process owns Android's VPN.
-     *
-     * Map origin/direct-lane flags must describe Wi-Fi or cellular, never the VPN/Tor exit. The
-     * request is therefore pinned to the current non-VPN network and has no unbound fallback while
-     * a tunnel is present.
-     */
     suspend fun refreshDeviceIpInfo(fetchMode: IpInfoFetchMode): IpInfo {
         val settings = settingsRepository.current()
         val upstreamNetwork = currentUpstreamNetwork() ?: error("upstream network unavailable")
@@ -66,9 +59,6 @@ class TunnelValidationGateway(
     }
 
     suspend fun refreshTorRouteIpInfo(fetchMode: IpInfoFetchMode): IpInfo {
-        // A generic tunnel/runtime proxy cannot prove Tor for selected-app or proxy scope: it can
-        // egress through VPN and used to lend the Tor row the VPN IP/country. The only accepted
-        // path is the service-owned authenticated TOR upstream.
         val lease = currentTorProbeProxy()
             ?: throw TorProbeProxyUnavailableException(
                 currentTorProbeIssue()?.failure ?: TorProbeProxyFailure.NOT_READY,
@@ -129,19 +119,15 @@ class TunnelValidationGateway(
         val proxyAccess = if (trafficMode == TrafficMode.PROXY) settings.preferredAppProxyAccess() else null
         val upstreamNetwork = currentUpstreamNetwork()
         val localGuardRuntimeActive = localGuardActive || (!tunnelConnected && settings.localGuardModeOrNull() != null)
-        // Device truth must never be read through our own tun. The presence of the VPN network is
-        // checked directly (data plane) because during connect/stop the tun can already be up while
-        // the control-plane snapshot still says IDLE — that exact race let a Tor/tunnel egress into
-        // deviceIpInfo, and the traffic-map origin latch then pinned the phone to the Tor exit
-        // country until process death. When bypass is required and the upstream network is missing,
-        // fetchDeviceIpInfo fails with "upstream network unavailable" instead of silently falling
-        // back to the (tunnel-routed) default network.
-        val mustBypassRuntimeTunnel =
-            deviceIpRefreshMustBypassRuntimeTunnel(
+        val localGuardAppExcluded = localGuardActive && !settings.webApps.enabled
+
+        val mustBindUpstreamNetwork =
+            deviceIpRefreshRequiresExplicitUpstreamNetwork(
                 trafficMode = trafficMode,
                 vpnNetworkPresent = currentVpnNetwork() != null,
                 sessionEngaged = currentSnapshot.state in ACTIVE_CONNECTION_STATES,
                 localGuardRuntimeActive = localGuardRuntimeActive,
+                localGuardAppExcluded = localGuardAppExcluded,
             )
         val dnsNetwork =
             when {
@@ -151,15 +137,15 @@ class TunnelValidationGateway(
         val requestNetwork =
             when {
                 trafficMode != TrafficMode.TUNNEL -> null
-                mustBypassRuntimeTunnel -> upstreamNetwork
-                // App-owned requests run unbound (explicit binding EPERMs on several vendors).
+                mustBindUpstreamNetwork -> upstreamNetwork
+
                 else -> null
             }
         return fetchDeviceIpInfo(
             endpoint = endpoint,
             fetchMode = fetchMode,
             requestNetwork = requestNetwork,
-            requireRequestNetwork = mustBypassRuntimeTunnel,
+            requireRequestNetwork = mustBindUpstreamNetwork,
             proxy = proxyAccess,
         ).withDnsServers(
             localDnsServers = connectivityManager.dnsServerAddresses(dnsNetwork),
@@ -322,12 +308,7 @@ class TunnelValidationGateway(
                 fetchMode = effectiveFetchMode,
                 vpnNetwork = vpnNetwork,
                 preferIpv4Validation = preferIpv4Validation,
-                // Allow the vpn-bound fallback even for the forced Tor-route probe. In tunnel mode
-                // there is no runtime proxy port listening (it belongs to PROXY mode), so the forced
-                // runtime-proxy probe always hits ECONNREFUSED; the vpn-bound path goes through the
-                // tunnel -> runtime -> Tor and returns the real Tor exit. The caller's
-                // canAcceptTorRouteIpRefresh guard (info != current VPN IP) prevents mislabeling the
-                // VPN exit as the Tor exit in the bypass case where vpn-bound is the VPN exit.
+
                 allowVpnBoundFallback = true,
             )
         }
@@ -652,11 +633,6 @@ class TunnelValidationGateway(
         }
 
     private companion object {
-        // These probes also run through the Tor circuit (Tor-route exit refresh), where a TLS
-        // handshake alone routinely takes 1-4s. The old 1.2s/2.5s windows timed out on nearly
-        // every Tor fetch, so the exit geo (country/city) never resolved and the map could not
-        // plot the Tor node. Geo enrichment races its candidates in parallel, so a longer
-        // per-call timeout does not stack.
         const val DASHBOARD_IP_REFRESH_CALL_TIMEOUT_MS = 4_000L
         const val DASHBOARD_GEO_ENRICHMENT_CALL_TIMEOUT_MS = 8_000L
         const val ACTIVE_TUNNEL_VPN_BOUND_IP_REFRESH_TOTAL_TIMEOUT_MS = 15_000L

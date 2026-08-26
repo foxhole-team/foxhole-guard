@@ -76,6 +76,14 @@ sealed class TorTransitionPrompt {
 
     object StartTorBesideUdpVpn : TorTransitionPrompt()
 
+    data class VpnTorStop(
+        val scope: PrivacyRouteScope,
+    ) : TorTransitionPrompt()
+
+    data class VpnTorModeChoice(
+        val scope: PrivacyRouteScope,
+    ) : TorTransitionPrompt()
+
     data class LiveModeSwitch(
         val target: RoutingModePreset,
         val scope: PrivacyRouteScope,
@@ -258,12 +266,14 @@ internal enum class PendingConnectAction {
     MANUAL,
     RECONNECT,
     LOCAL_GUARD,
+    TOR_ONLY_QUICK_START,
 }
 
 internal data class PendingConnectRequest(
     val profileId: Long = 0L,
     val protocolOptionId: String? = null,
     val action: PendingConnectAction,
+    val routingModeScope: PrivacyRouteScope? = null,
 )
 
 data class ProfileImportConfirmationState(

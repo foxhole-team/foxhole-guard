@@ -14,12 +14,6 @@ object RobustStats {
         }
     }
 
-    /**
-     * Median absolute deviation with a floor. The floor prevents a near-constant history from
-     * exploding the z-score, but it is scale-dependent: the default of 1.0 assumes metrics in the
-     * hundreds or larger (bytes/min, latency ms, ratio x100). Metrics on a smaller scale must pass
-     * their own [floor].
-     */
     fun mad(
         values: List<Double>,
         median: Double,
@@ -44,7 +38,6 @@ object RobustStats {
         return robustZFromStats(value, median, mad(history, median, madFloor), madFloor)
     }
 
-    /** z from already-computed robust stats, e.g. a persisted baseline that outlived raw windows. */
     fun robustZFromStats(
         value: Double,
         median: Double,

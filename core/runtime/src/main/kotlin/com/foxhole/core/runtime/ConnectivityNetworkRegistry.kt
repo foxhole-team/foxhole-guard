@@ -19,12 +19,6 @@ object ConnectivityNetworkRegistry {
 
     fun snapshot(context: Context): List<Network> = ensureTracker(context.applicationContext).snapshot()
 
-    /**
-     * Bumps whenever the set of known networks changes — including the VPN networks the plain
-     * [snapshot] can only be polled for. Flows that decide something from a snapshot (say "is a
-     * foxhole VPN network up?") must fold this in, or they only re-read on whatever unrelated
-     * signal happens to emit next.
-     */
     fun revision(context: Context): StateFlow<Long> = ensureTracker(context.applicationContext).revision
 
     @Synchronized
@@ -42,9 +36,6 @@ object ConnectivityNetworkRegistry {
                 .addCapability(NetworkCapabilities.NET_CAPABILITY_NOT_RESTRICTED)
                 .build()
 
-        // NetworkRequest.Builder() implies NET_CAPABILITY_NOT_VPN, so the request above never
-        // matches our own tunnel. Watching it explicitly is what turns "a VPN network appeared"
-        // into an event instead of something callers can only discover by polling.
         private val vpnRequest =
             NetworkRequest.Builder()
                 .addTransportType(NetworkCapabilities.TRANSPORT_VPN)
@@ -79,8 +70,6 @@ object ConnectivityNetworkRegistry {
                 }
             }
 
-        // VPN networks are never added to trackedNetworks (the upstream selection filters them out
-        // anyway and snapshot() enumerates them): this callback exists purely to publish the edge.
         private val vpnCallback =
             object : ConnectivityManager.NetworkCallback() {
                 override fun onAvailable(network: Network) {
@@ -152,7 +141,7 @@ object ConnectivityNetworkRegistry {
 
         @Suppress("DEPRECATION")
         private fun ConnectivityManager.snapshotAllNetworks(): Array<Network> =
-            // There is no public replacement for enumerating currently known networks.
+
             allNetworks
     }
 }
@@ -181,10 +170,6 @@ fun ConnectivityManager.isNonVpnInternetNetwork(network: Network): Boolean {
         !capabilities.hasTransport(NetworkCapabilities.TRANSPORT_VPN)
 }
 
-// An AP hop / DHCP renew / captive re-check strips VALIDATED from Wi-Fi for a moment; without a
-// grace window the score flips the upstream to cellular (and the device identity fetch follows),
-// then flips back — the classic "Wi-Fi shows cellular geo" report. A network keeps its validation
-// credit for this long after the flag last seen; a genuinely captive network loses it for real.
 private const val VALIDATION_GRACE_MS = 12_000L
 private const val VALIDATION_SIGHTING_MAX_ENTRIES = 32
 private val validationSightingsByHandle = ConcurrentHashMap<Long, Long>()

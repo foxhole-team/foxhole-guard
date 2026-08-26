@@ -19,6 +19,7 @@ import java.util.concurrent.atomic.AtomicInteger
 
 internal const val RUNTIME_STOP_TIMEOUT_MS = 3_000L
 internal const val RUNTIME_FORCE_KILL_TIMEOUT_MS = 1_500L
+private const val RUNTIME_NATIVE_STOP_COMPLETION_MARGIN_MS = 750L
 private const val RUNTIME_STOP_SUPERVISION_MARGIN_MS = 500L
 const val RUNTIME_START_TIMEOUT_MS = 20_000L
 const val TOR_RUNTIME_START_TIMEOUT_MS = 240_000L
@@ -38,15 +39,75 @@ data class RuntimeStopPolicy(
     val forceKillAfterTimeout: Boolean = true,
 )
 
+enum class NativeForceStopOutcome(
+    val handleReleased: Boolean,
+    val processPoisoned: Boolean,
+) {
+    NOT_ATTEMPTED(handleReleased = false, processPoisoned = false),
+    RELEASED(handleReleased = true, processPoisoned = false),
+    QUARANTINED(handleReleased = true, processPoisoned = true),
+    FAILED(handleReleased = false, processPoisoned = true),
+    CALL_TIMED_OUT(handleReleased = false, processPoisoned = true),
+}
+
+interface NativeForceStopPoisonSignal {
+    val forceStopOutcome: NativeForceStopOutcome
+}
+
+class NativeForceStopPoisonedException(
+    override val forceStopOutcome: NativeForceStopOutcome,
+    operation: String,
+) : IllegalStateException("android: native force stop poisoned process during $operation"),
+    NativeForceStopPoisonSignal {
+    init {
+        require(forceStopOutcome.processPoisoned)
+    }
+}
+
+class NativeForceStopPoisonedCancellationException(
+    override val forceStopOutcome: NativeForceStopOutcome,
+    operation: String,
+    cause: CancellationException,
+) : CancellationException("android: native force stop poisoned process during $operation"),
+    NativeForceStopPoisonSignal {
+    init {
+        require(forceStopOutcome.processPoisoned)
+        initCause(cause)
+    }
+}
+
+fun Throwable?.nativeForceStopOutcomeOrNull(): NativeForceStopOutcome? {
+    var current = this
+    while (current != null) {
+        val throwable = current
+        val outcome = (throwable as? NativeForceStopPoisonSignal)?.forceStopOutcome
+        if (outcome?.processPoisoned == true) return outcome
+        current = throwable.cause?.takeUnless { cause -> cause === throwable }
+    }
+    return null
+}
+
+fun Result<*>.nativeForceStopOutcomeOrNull(): NativeForceStopOutcome? =
+    exceptionOrNull().nativeForceStopOutcomeOrNull()
+
+internal fun nativeForceStopPoisonedFailure(
+    outcome: NativeForceStopOutcome,
+    operation: String,
+): Result<Unit> = Result.failure(NativeForceStopPoisonedException(outcome, operation))
+
 data class RuntimeStopResult(
     val closeServiceOk: Boolean,
     val closeServerOk: Boolean,
     val tunClosed: Boolean,
     val escalatedToKill: Boolean,
     val elapsedMs: Long,
+    val forceStopOutcome: NativeForceStopOutcome = NativeForceStopOutcome.NOT_ATTEMPTED,
 ) {
     val graceful: Boolean
-        get() = closeServiceOk && closeServerOk && tunClosed && !escalatedToKill
+        get() = closeServiceOk && closeServerOk && tunClosed && !escalatedToKill && !processPoisoned
+
+    val processPoisoned: Boolean
+        get() = forceStopOutcome.processPoisoned
 }
 
 data class RuntimeKillResult(
@@ -54,7 +115,11 @@ data class RuntimeKillResult(
     val tunClosed: Boolean,
     val serverDetached: Boolean,
     val closeDetached: Boolean = false,
-)
+    val forceStopOutcome: NativeForceStopOutcome = NativeForceStopOutcome.NOT_ATTEMPTED,
+) {
+    val processPoisoned: Boolean
+        get() = forceStopOutcome.processPoisoned
+}
 
 data class NativeRuntimeSnapshot(
     val hasEngineHandle: Boolean,
@@ -67,11 +132,7 @@ data class NativeRuntimeSnapshot(
     val cleanupDraining: Boolean,
     val lastStopReason: String?,
     val lastCloseDetached: Boolean,
-    /**
-     * FD number of the master TUN this process holds on purpose (null = none). A master stays in
-     * Java while native owns a duplicate — anything scanning /proc/self/fd for a leaked tunnel
-     * must be told which descriptor is intended, or it finds the design and calls it a leak.
-     */
+
     val masterTunFd: Int? = null,
 ) {
     companion object {
@@ -118,14 +179,6 @@ internal data class RuntimeGeneration(
     val profileId: Long?,
 )
 
-/**
- * Native closes are isolated: a coroutine timeout cannot stop a JNI method that ignores
- * cancellation, and a shared executor lets one wedged call starve every later native operation.
- * Each close gets its own ONE-SHOT daemon thread; on timeout the thread is abandoned (recorded
- * in [RuntimeAbandonedCloseRegistry]) and the next close spawns fresh — the retired
- * single-threaded quarantine queued closes behind the wedged one and spuriously timed out ALL
- * of them, a dead-end only a process restart could clear.
- */
 internal suspend fun runBlockingRuntimeClose(
     timeoutMs: Long,
     registry: RuntimeNativeCallRegistry = RuntimeAbandonedCloseRegistry,
@@ -166,17 +219,6 @@ internal suspend fun runBlockingRuntimeClose(
         }
     }
 
-/**
- * Bounded, ABANDONABLE execution of a whole native start/reload — the containment closes get,
- * applied to the operations that actually wedge in production. A timeout around a child
- * coroutine is no bound once JNI stops returning: the parent cannot finish before its children,
- * so the timeout cancels a coroutine parked in an uncancellable native frame and then waits for
- * it anyway — forever, on the process-global native thread, swallowing every queued operation.
- * So the operation runs on its own ONE-SHOT daemon thread outside the coroutine hierarchy; the
- * caller awaits a standalone [CompletableDeferred] (a genuinely cancellable suspension) and a
- * wedged thread is simply left behind, recorded in [RuntimeAbandonedCloseRegistry].
- * Returns null when abandoned; exceptions from [block] are rethrown unchanged.
- */
 internal suspend fun <T : Any> runAbandonableNativeRuntimeCall(
     operation: String,
     timeoutMs: Long,
@@ -213,11 +255,6 @@ internal suspend fun <T : Any> runAbandonableNativeRuntimeCall(
     }
 }
 
-/**
- * Bounded ledger of native calls whose thread outlived its timeout window. A wedged JNI frame
- * cannot be cancelled; this registry is how a later diagnosis tells "finished late" from
- * "never returned".
- */
 internal open class RuntimeNativeCallRegistry(
     private val maxOwnedThreads: Int,
 ) {
@@ -308,8 +345,7 @@ suspend fun FoxholeRuntime.startFailClosed(
     timeoutMs: Long = RUNTIME_START_TIMEOUT_MS,
 ): Result<Unit> {
     val fencedRuntime = this as? RuntimeNativeStartFenceOwner
-    // Open before the one-shot thread exists. Otherwise an immediate command cancellation can
-    // advance the fence first and the not-yet-scheduled native start can mint a newer generation.
+
     val permit = fencedRuntime?.openNativeStartPermit("start:$owner")
     try {
         val result =
@@ -339,8 +375,7 @@ suspend fun FoxholeRuntime.startFailClosed(
                     "sessionId=${session.correlationId}",
                     "timeout_ms=$timeoutMs",
                 )
-                // Never let a timed-out predecessor kill a successor that already owns a newer
-                // permit. The predecessor's eventual handle is discarded by startWithNativePermit.
+
                 diagnosticsLogger.recordStructured(
                     "runtime",
                     "native runtime fenced after wedged start",
@@ -351,22 +386,29 @@ suspend fun FoxholeRuntime.startFailClosed(
                     RuntimeAbandonedCloseRegistry.describe(),
                 )
             }
-            Result.failure(IllegalStateException(timeoutMessage))
+            kill?.forceStopOutcome
+                ?.takeIf(NativeForceStopOutcome::processPoisoned)
+                ?.let { outcome -> nativeForceStopPoisonedFailure(outcome, "start_timeout") }
+                ?: Result.failure(IllegalStateException(timeoutMessage))
         }
     } catch (cancelled: CancellationException) {
-        if (fencedRuntime != null && permit != null) {
-            withContext(NonCancellable + Dispatchers.IO) {
-                fencedRuntime.abortNativeTransition(permit, "${owner}_start_cancelled")
+        val kill =
+            if (fencedRuntime != null && permit != null) {
+                withContext(NonCancellable + Dispatchers.IO) {
+                    fencedRuntime.abortNativeTransition(permit, "${owner}_start_cancelled")
+                }
+            } else {
+                null
             }
-        }
+        kill?.forceStopOutcome
+            ?.takeIf(NativeForceStopOutcome::processPoisoned)
+            ?.let { outcome ->
+                throw NativeForceStopPoisonedCancellationException(outcome, "start_cancelled", cancelled)
+            }
         throw cancelled
     }
 }
 
-/**
- * Reload with the same fail-closed contract as [startFailClosed]. A native call cannot be cancelled
- * while it is inside JNI, so timeout fences its handle and TUN before a later runtime is created.
- */
 suspend fun FoxholeRuntime.reloadFailClosed(
     session: VpnSession,
     host: RuntimeServiceHost,
@@ -411,14 +453,25 @@ suspend fun FoxholeRuntime.reloadFailClosed(
                 "tun_closed=${kill?.tunClosed ?: false}",
                 RuntimeAbandonedCloseRegistry.describe(),
             )
-            Result.failure(IllegalStateException("android: runtime reload timed out"))
+            kill?.forceStopOutcome
+                ?.takeIf(NativeForceStopOutcome::processPoisoned)
+                ?.let { outcome -> nativeForceStopPoisonedFailure(outcome, "reload_timeout") }
+                ?: Result.failure(IllegalStateException("android: runtime reload timed out"))
         }
     } catch (cancelled: CancellationException) {
-        if (fencedRuntime != null && permit != null) {
-            withContext(NonCancellable + Dispatchers.IO) {
-                fencedRuntime.abortNativeTransition(permit, "${owner}_reload_cancelled")
+        val kill =
+            if (fencedRuntime != null && permit != null) {
+                withContext(NonCancellable + Dispatchers.IO) {
+                    fencedRuntime.abortNativeTransition(permit, "${owner}_reload_cancelled")
+                }
+            } else {
+                null
             }
-        }
+        kill?.forceStopOutcome
+            ?.takeIf(NativeForceStopOutcome::processPoisoned)
+            ?.let { outcome ->
+                throw NativeForceStopPoisonedCancellationException(outcome, "reload_cancelled", cancelled)
+            }
         throw cancelled
     }
 }
@@ -436,14 +489,11 @@ suspend fun FoxholeRuntime.stopFailClosed(
             forceKillAfterTimeout = true,
         ),
 ): RuntimeStopResult {
-    val nativeStopTimeoutMs = policy.totalGracefulTimeoutMs.coerceAtLeast(1L)
+    val nativeStopTimeoutMs = nativeStopCallTimeoutMs(policy)
     val supervisionTimeoutMs = runtimeStopSupervisionTimeoutMs(policy)
     return withTimeoutOrNull(supervisionTimeoutMs) {
         stop(policy)
     } ?: withContext(Dispatchers.IO) {
-        // The core's own account of the same three seconds: without it this line named only its
-        // own deadline, and "stuck in the engine loop or in Tokio shutdown?" needed a device
-        // round trip and a custom build to answer.
         diagnosticsLogger.recordStructured(
             "runtime",
             "$owner runtime stop timeout",
@@ -459,36 +509,31 @@ suspend fun FoxholeRuntime.stopFailClosed(
             tunClosed = killResult.tunClosed,
             escalatedToKill = true,
             elapsedMs = supervisionTimeoutMs,
+            forceStopOutcome = killResult.forceStopOutcome,
         )
     }
 }
 
-/**
- * The runtime owns a bounded graceful native stop and may then perform one bounded native
- * force-kill. The coroutine watchdog must cover both windows plus scheduling overhead. Giving it
- * only [RuntimeStopPolicy.totalGracefulTimeoutMs] cancels the owner at the exact instant JNI is
- * returning `STOP_TIMED_OUT`; on Pixel that left the TUN to the service watchdog and ended in a
- * process SIGKILL eight seconds later during an otherwise ordinary scenario change.
- */
-internal fun runtimeStopSupervisionTimeoutMs(policy: RuntimeStopPolicy): Long =
+internal fun nativeStopCallTimeoutMs(policy: RuntimeStopPolicy): Long =
     policy.totalGracefulTimeoutMs
         .coerceAtLeast(1L)
+        .saturatingAdd(RUNTIME_NATIVE_STOP_COMPLETION_MARGIN_MS)
+
+internal fun runtimeStopSupervisionTimeoutMs(policy: RuntimeStopPolicy): Long =
+    nativeStopCallTimeoutMs(policy)
         .saturatingAdd(RUNTIME_FORCE_KILL_TIMEOUT_MS)
         .saturatingAdd(RUNTIME_STOP_SUPERVISION_MARGIN_MS)
 
 private fun Long.saturatingAdd(other: Long): Long =
     if (this > Long.MAX_VALUE - other) Long.MAX_VALUE else this + other
 
-/**
- * Finishes the native stop after the owning Android component is gone. [scope] must OUTLIVE the
- * caller: a service cancels its own scope in onDestroy(), which would cancel this teardown
- * before FoxCore releases the TUN. This used to mint (and leak) an uncancellable scope per call.
- */
 fun stopRuntimeAfterServiceDestroy(
     scope: CoroutineScope,
     runtime: FoxholeRuntime,
     diagnosticsLogger: RuntimeDiagnosticsSink,
     owner: String,
+    onStopped: suspend (RuntimeStopResult) -> Unit = {},
+    onProcessPoisoned: suspend (RuntimeStopResult) -> Unit = {},
 ) {
     scope.launch(Dispatchers.IO) {
         val result = runtime.stopFailClosed(owner = owner, reason = "destroy", diagnosticsLogger = diagnosticsLogger)
@@ -505,5 +550,9 @@ fun stopRuntimeAfterServiceDestroy(
             stopped = result.graceful,
             diagnosticsLogger = diagnosticsLogger,
         )
+        onStopped(result)
+        if (result.processPoisoned) {
+            onProcessPoisoned(result)
+        }
     }
 }

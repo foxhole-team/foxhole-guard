@@ -31,8 +31,7 @@ internal class SettingsEncryptedStore(
         Json {
             ignoreUnknownKeys = true
             explicitNulls = false
-            // Unknown stored enum values fall back to the field default instead of poisoning the
-            // whole settings file (guards every enum against values from newer/older builds).
+
             coerceInputValues = true
         }
     private val fileCipher = AndroidKeystoreFileCipher("foxhole.settings")
@@ -51,8 +50,7 @@ internal class SettingsEncryptedStore(
                 }
 
                 is EncryptedSettingsLoadResult.Loaded ->
-                    // readEncryptedResult already rewrote the file if the on-disk bytes were not
-                    // canonical, so a normalized file needs no write here.
+
                     encryptedResult.settings
 
                 is EncryptedSettingsLoadResult.Corrupt -> {
@@ -64,10 +62,13 @@ internal class SettingsEncryptedStore(
             }
         }
 
-    // The single source of truth for what a settings file's plaintext looks like: the read path
-    // compares against this to decide whether a rewrite is even needed.
-    private fun encodeCanonical(value: Settings): String =
-        json.encodeToString(Settings.serializer(), value.normalized())
+    private fun encodeCanonical(value: Settings): String {
+        val normalized = value.normalized()
+        return ensureStoredThemeModePayload(
+            payload = json.encodeToString(Settings.serializer(), normalized),
+            themeMode = normalized.ui.themeMode,
+        )
+    }
 
     fun write(value: Settings) {
         fileCipher.writeBytesAtomic(settingsFile, encodeCanonical(value).encodeToByteArray())
@@ -114,8 +115,6 @@ internal class SettingsEncryptedStore(
             .recoverCatching { json.decodeFromString(LegacyFlatSettings.serializer(), payload).toCurrent() }
             .getOrThrow()
 
-    // Folds legacy per-app lists into the lane model before decoding (ignoreUnknownKeys would
-    // otherwise drop them). No-op once the store already carries `appAssignments`.
     private fun migratedPayload(payload: String): String {
         val root = json.parseToJsonElement(payload) as? JsonObject ?: return payload
         var migratedRoot = migrateLegacyCachedProfileTokens(root)

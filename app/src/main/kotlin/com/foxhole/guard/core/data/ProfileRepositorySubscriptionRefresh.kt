@@ -16,10 +16,6 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
-// Subscription refresh pipeline: fetches the subscription source, parses the fetched profiles
-// and applies them to the stored profile group. Extracted from ProfileRepository (class split
-// by responsibility).
-
 suspend fun ProfileRepository.refreshProfile(
     profileId: Long,
     excludeInsecureTlsOptions: Boolean = false,
@@ -173,8 +169,7 @@ internal suspend fun ProfileRepository.prepareProfileForConnection(
             if (refreshSubscription) {
                 refreshProfileWithReportLocked(
                     profileId = profileId,
-                    // Existing per-profile consent is preserved by the refresh planner. Passing
-                    // true here would also grant consent to a newly added insecure provider node.
+
                     allowInsecureTlsForProfile = false,
                 ).profile
             } else {
@@ -200,7 +195,6 @@ internal suspend fun ProfileRepository.prepareProfileForConnection(
         )
     }
 
-/** One representative per subscription URL; one refresh updates the complete URL group. */
 internal suspend fun ProfileRepository.subscriptionRefreshRepresentatives(): List<Profile> =
     profileImportMutex.withLock {
         val seenSources = linkedSetOf<String>()
@@ -228,11 +222,7 @@ internal suspend fun ProfileRepository.parseFetchedSubscriptionProfiles(
         "subscription parse started bodyBytes=${rawBody.toByteArray(Charsets.UTF_8).size}",
     )
     diagnosticsLogger.record("profile", redactedSubscriptionPayloadShape(rawBody))
-    // Single relaxed parse. Emitting an insecure-TLS marker into a node's config depends only on the
-    // node, not on `allowInsecureTls` (which merely gates the strict `require`), so a relaxed parse is
-    // byte-identical to a strict/effective parse for every strict-passable node. One parse therefore
-    // serves BOTH the consent decision and the applied output, collapsing the former
-    // strict-then-consent-probe-then-final triple parse to one. (Ф4b-2.)
+
     val parsedRelaxed =
         withContext(Dispatchers.IO) {
             runCatching {
@@ -255,10 +245,7 @@ internal suspend fun ProfileRepository.parseFetchedSubscriptionProfiles(
                 "subscription parse failed: ${error.javaClass.simpleName}: ${error.message.orEmpty()}",
             )
         }.getOrThrow()
-    // True exactly when a strict (allowInsecureTls=false) parse would have thrown the insecure-TLS
-    // policy error. The importer's strict gate recognizes the same key spellings as the detector
-    // (see ProfileImportCoreSupport.isInsecureTlsSettingKey) and canonicalizes them in the relaxed
-    // output, so the broad predicate on that output is the exact reconstruction.
+
     val strictParseFailedForInsecureTls = parsedRelaxed.requiresInsecureTls(json)
     val refreshInsecureTlsConsentResolved =
         settings.expert.allowInsecureTls ||

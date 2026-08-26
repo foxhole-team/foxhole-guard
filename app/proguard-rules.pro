@@ -25,3 +25,10 @@
     public boolean protectSocket(int);
     public java.lang.String signingDigestForPackage(java.lang.String);
 }
+
+# Glance identifies each provider by its concrete widget class name. R8 class merging made the
+# connection and Web Apps providers share one implementation, so an update for one could render
+# the other provider's content in an existing launcher widget.
+-keep class com.foxhole.guard.widget.StatusWidget { *; }
+-keep class com.foxhole.guard.widget.WebAppsWidget { *; }
+-keep class com.foxhole.guard.widget.FoxStatusWidget { *; }

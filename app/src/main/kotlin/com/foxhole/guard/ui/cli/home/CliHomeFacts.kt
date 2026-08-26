@@ -38,26 +38,26 @@ import com.foxhole.core.model.ConnectionState
 import com.foxhole.core.model.LOCAL_GUARD_PROFILE_ID
 import com.foxhole.core.model.TOR_ONLY_PROFILE_ID
 import com.foxhole.core.model.TorNetworkPhase
-import com.foxhole.core.model.TrafficMapUiState
 import com.foxhole.guard.R
 import com.foxhole.guard.ui.DashboardTrafficCardUiState
 import com.foxhole.guard.ui.HomeViewModel
+import com.foxhole.guard.ui.PublicDnsIdentityPhase
 import com.foxhole.guard.ui.TorIdentityProbeState
-import com.foxhole.guard.ui.cli.CLI_MODERN_METRIC_SCALE
 import com.foxhole.guard.ui.cli.CliFormat
 import com.foxhole.guard.ui.cli.CliSpacing
 import com.foxhole.guard.ui.cli.CliTypography
 import com.foxhole.guard.ui.cli.LocalCliColors
-import com.foxhole.guard.ui.cli.LocalCliMetricScale
 import com.foxhole.guard.ui.cli.LocalCliType
 import com.foxhole.guard.ui.cli.cliRowTextStyle
 import com.foxhole.guard.ui.cli.components.CliDisclosureGlyph
 import com.foxhole.guard.ui.cli.components.CliKeyValue
 import com.foxhole.guard.ui.cli.components.CliLoadingRow
+import com.foxhole.guard.ui.cli.components.CliMetricSpinner
 import com.foxhole.guard.ui.cli.components.CliPanel
 import com.foxhole.guard.ui.cli.components.CliRowDivider
+import com.foxhole.guard.ui.cli.components.CliShimmerText
+import com.foxhole.guard.ui.cli.components.cliFlagCode
 import com.foxhole.guard.ui.cli.components.rememberNowMsTicker
-import com.foxhole.guard.ui.defaultDnsServerFor
 import com.foxhole.guard.ui.resolveDashboardLatencyOptionId
 import java.util.Locale
 
@@ -67,6 +67,7 @@ internal fun CliHomeBootLoadingPanel(
     home: com.foxhole.guard.ui.HomeRouteUiState,
     modifier: Modifier = Modifier,
 ) {
+    val colors = LocalCliColors.current
     Box(modifier = modifier) {
         CliConnectionFactsPanel(
             viewModel = viewModel,
@@ -78,12 +79,20 @@ internal fun CliHomeBootLoadingPanel(
                 .alpha(0f)
                 .clearAndSetSemantics {},
         )
-        CliPanel(modifier = Modifier.matchParentSize()) {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center,
+        CliHomeSectionTypography {
+            CliPanel(
+                modifier = Modifier.matchParentSize(),
+                title = stringResource(R.string.cli_home_section_current_info),
+                titleModifier = Modifier.cliHomeStatusHeaderPlacement(),
+                titleColor = colors.accent,
+                icon = R.drawable.lin_status,
             ) {
-                CliLoadingRow(text = stringResource(R.string.cli_common_loading_data))
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    CliLoadingRow(text = stringResource(R.string.cli_common_loading_data))
+                }
             }
         }
     }
@@ -101,24 +110,25 @@ internal fun CliConnectionFactsPanel(
     modifier: Modifier = Modifier,
 ) {
     val trafficCard by viewModel.dashboardTrafficCardState.collectAsStateWithLifecycle()
-    val trafficMap by viewModel.trafficMapUiState.collectAsStateWithLifecycle()
-    val dnsServerCountry by viewModel.dnsServerCountryCode.collectAsStateWithLifecycle()
     val colors = LocalCliColors.current
-    val connection = home.connection
-    CliStatusSectionMetrics {
+    CliHomeSectionTypography {
         CliPanel(
             modifier = modifier.fillMaxWidth().testTag(CLI_HOME_FACTS_TAG),
+            title = stringResource(R.string.cli_home_section_current_info),
+            titleModifier = Modifier.cliHomeStatusHeaderPlacement(),
+            titleColor = colors.accent,
+            icon = R.drawable.lin_status,
             onClick = onProfileTap,
             onLongClick = onProfileHold,
         ) {
-            CliConnectionFactsRows(
-                home = home,
-                trafficCard = trafficCard,
-                trafficMap = trafficMap,
-                dnsServerCountry = dnsServerCountry,
-                torIdentityProbe = torIdentityProbe,
-                connected = connected,
-            )
+            CliHomeFactsMetrics {
+                CliConnectionFactsRows(
+                    home = home,
+                    trafficCard = trafficCard,
+                    torIdentityProbe = torIdentityProbe,
+                    connected = connected,
+                )
+            }
         }
     }
 }
@@ -128,8 +138,6 @@ internal fun CliConnectionFactsPanel(
 private fun ColumnScope.CliConnectionFactsRows(
     home: com.foxhole.guard.ui.HomeRouteUiState,
     trafficCard: DashboardTrafficCardUiState,
-    trafficMap: TrafficMapUiState,
-    dnsServerCountry: String?,
     torIdentityProbe: TorIdentityProbeState,
     connected: Boolean,
 ) {
@@ -142,12 +150,15 @@ private fun ColumnScope.CliConnectionFactsRows(
         key = stringResource(R.string.cli_home_key_profile),
         value = profileLabel,
         valueColor = colors.fg,
-        icon = R.drawable.pix_profiles,
+        icon = R.drawable.lin_profiles,
         valueTrailing = {
             CliDisclosureGlyph(
                 expanded = false,
                 color = colors.dim,
-                modifier = Modifier.offset(x = CliSpacing.xs),
+                modifier = Modifier.offset(
+                    x = CliSpacing.xs,
+                    y = CLI_HOME_VPN_DISCLOSURE_LIFT,
+                ),
             )
         },
         valueMaxLines = 2,
@@ -171,38 +182,41 @@ private fun ColumnScope.CliConnectionFactsRows(
             torIdentityProbePhase = torIdentityProbe.phase,
         )
         CliRowDivider()
-        CliDnsServerFact(
-            home = home,
-            dnsCountryCode = trafficMap.dnsServer?.countryCode ?: dnsServerCountry,
-            loading = identityLoading,
-        )
+        CliDnsServerFact(home = home)
     }
     CliRowDivider()
     val latencyMs = cliHomeLatencyMs(home, connected)
-    val latencyUnavailable = cliHomeLatencyUnavailable(home, connected)
-    val latencyLoading = cliHomeLatencyLoading(home, connected)
+    val latencySpinnerVisible = cliHomeLatencyLoading(home)
+    val latencyDetermining = cliHomeLatencyDetermining(home, connected, latencyMs)
+    val latencyValueContent: (@Composable () -> Unit)? = when {
+        latencySpinnerVisible -> {
+            { CliMetricSpinner() }
+        }
+        latencyDetermining -> {
+            {
+                CliShimmerText(
+                    text = stringResource(R.string.cli_home_latency_determining),
+                    style = cliRowTextStyle(),
+                    baseColor = colors.dim,
+                )
+            }
+        }
+        else -> null
+    }
     CliKeyValue(
         key = stringResource(R.string.cli_home_key_latency),
         value = when {
-            latencyLoading -> ""
-            latencyUnavailable -> stringResource(R.string.cli_lan_proxy_state_unavailable)
+            latencySpinnerVisible || latencyDetermining -> ""
             connected -> CliFormat.latency(latencyMs)
             else -> "—"
         },
         valueColor = when {
-            latencyUnavailable -> colors.dim
+            latencyDetermining -> colors.dim
             connected -> latencyColor(latencyMs)
             else -> Color.Unspecified
         },
-        icon = R.drawable.pix_up,
-        valueContent = cliRightAlignedLoadingContent(latencyLoading),
-        valueTrailing = if (latencyLoading) {
-            {
-                CliRightAlignedRefreshTrailing(loading = true)
-            }
-        } else {
-            null
-        },
+        icon = R.drawable.lin_up,
+        valueContent = latencyValueContent,
     )
     CliRowDivider()
     CliSpeedFact(
@@ -214,69 +228,88 @@ private fun ColumnScope.CliConnectionFactsRows(
     CliUptimeFact(startedAtMs = connection.lastChangeAt.takeIf { connected })
 }
 
-/**
- * The status section renders one notch below the rest of the app.
- *
- * These rows carry the longest values on the screen — a country, a city and a full address on one
- * line — and at the shared ladder's size they truncated or set their marquee scrolling. The notch
- * is the existing Modern one, re-provided the way the dock re-provides its own, so the section
- * follows the active style and the app-wide scale instead of pinning a size of its own.
- *
- * [LocalCliType] carries the text sizes and [LocalCliMetricScale] the icon and one-off sizes, so
- * both are stepped together and glyphs stay proportional to the text beside them.
- */
 @Composable
-private fun CliStatusSectionMetrics(content: @Composable () -> Unit) {
+private fun CliHomeFactsMetrics(content: @Composable () -> Unit) {
+    val typography = LocalCliType.current
+    val factsTypography = remember(typography) {
+        cliHomeFactsTypographyFor(typography)
+    }
     CompositionLocalProvider(
-        LocalCliType provides LocalCliType.current.steppedDown(),
-        LocalCliMetricScale provides LocalCliMetricScale.current * CLI_MODERN_METRIC_SCALE,
+        LocalCliType provides factsTypography,
         content = content,
     )
 }
 
-private fun CliTypography.steppedDown(): CliTypography =
-    copy(
-        body = body.steppedDown(),
-        small = small.steppedDown(),
-        title = title.steppedDown(),
-        display = display.steppedDown(),
-        button = button.steppedDown(),
-    )
+internal fun cliHomeFactsTypographyFor(
+    typography: CliTypography,
+): CliTypography {
+    val consoleStyle = cliHomeConsoleTextStyleFor(typography)
+    return typography.copy(body = consoleStyle, small = consoleStyle)
+}
 
-private fun TextStyle.steppedDown(): TextStyle =
-    copy(
-        fontSize = fontSize * CLI_MODERN_METRIC_SCALE,
-        lineHeight = lineHeight * CLI_MODERN_METRIC_SCALE,
-    )
+internal val CLI_HOME_VPN_DISCLOSURE_LIFT = (-1).dp
 
 @Composable
 private fun CliDnsServerFact(
     home: com.foxhole.guard.ui.HomeRouteUiState,
-    dnsCountryCode: String?,
-    loading: Boolean,
 ) {
-    val server = home.settings.dns.server.trim().takeIf { it.isNotBlank() }
-        ?: defaultDnsServerFor(home.settings.dns.secureMode)
-    val protocol = cliSecureDnsLabel(home.settings.dns.secureMode)
-    val value = cliDnsIdentityValue(
-        protocol = protocol,
-        countryCode = dnsCountryCode,
-        server = server,
-    )
+    val colors = LocalCliColors.current
+    val identity = home.publicDnsIdentity
+    val loading = cliHomeDnsUpdating(home.connection.state, identity.phase)
+    val resolved = !loading && identity.phase == PublicDnsIdentityPhase.RESOLVED
+    val dnsCountryCode = identity.countryCode.takeIf { resolved }
     CliKeyValue(
         key = stringResource(R.string.cli_home_status_dns_server),
-        value = if (loading) "" else value,
-        valueColor = Color.Unspecified,
-        icon = R.drawable.pix_globe,
-        valueContent = cliRightAlignedLoadingContent(loading),
-        valueTrailing = {
-            CliRightAlignedRefreshTrailing(
-                loading = loading,
-                countryCode = dnsCountryCode,
-            )
+        value = when {
+            loading -> ""
+            resolved -> cliPublicDnsIdentityValue(identity.serverAddress, dnsCountryCode)
+            else -> stringResource(R.string.cli_home_dns_not_determined)
+        },
+        valueColor = if (loading) colors.dim else Color.Unspecified,
+        icon = R.drawable.lin_globe,
+        valueContent = if (loading) {
+            {
+                CliShimmerText(
+                    text = stringResource(R.string.cli_common_updating),
+                    style = cliRowTextStyle(),
+                    baseColor = colors.dim,
+                )
+            }
+        } else {
+            null
+        },
+        valueTrailing = if (cliFlagCode(dnsCountryCode) != null) {
+            {
+                CliRightAlignedRefreshTrailing(
+                    loading = false,
+                    countryCode = dnsCountryCode,
+                )
+            }
+        } else {
+            null
         },
     )
 }
+
+internal fun cliHomeDnsUpdating(
+    connectionState: ConnectionState,
+    identityPhase: PublicDnsIdentityPhase,
+): Boolean =
+    connectionState == ConnectionState.CONNECTING ||
+        connectionState == ConnectionState.RECONNECTING ||
+        identityPhase == PublicDnsIdentityPhase.IDLE ||
+        identityPhase == PublicDnsIdentityPhase.LOADING
+
+internal fun cliPublicDnsIdentityValue(
+    serverAddress: String?,
+    countryCode: String?,
+): String = serverAddress?.takeIf(String::isNotBlank)?.let { server ->
+    cliDnsIdentityValue(
+        protocol = "",
+        countryCode = countryCode,
+        server = server,
+    )
+} ?: "—"
 
 internal fun cliDnsIdentityValue(
     protocol: String,
@@ -286,7 +319,7 @@ internal fun cliDnsIdentityValue(
     server.trim().takeIf(String::isNotBlank),
     protocol.takeIf(String::isNotBlank),
     countryCode?.trim()?.takeIf(String::isNotBlank)?.uppercase(Locale.US),
-).joinToString(" · ").ifEmpty { "—" }
+).joinToString(CLI_IDENTITY_SEGMENT_SEPARATOR).ifEmpty { "—" }
 
 internal fun cliHomeIdentityLoading(home: com.foxhole.guard.ui.HomeRouteUiState): Boolean =
     home.ipInfoLoading ||
@@ -295,11 +328,22 @@ internal fun cliHomeIdentityLoading(home: com.foxhole.guard.ui.HomeRouteUiState)
 
 internal fun cliHomeLatencyLoading(
     home: com.foxhole.guard.ui.HomeRouteUiState,
+): Boolean {
+    if (home.hasTorOnlyRoute()) return false
+    return home.connection.routeState() == ConnectionState.CONNECTING ||
+        home.connection.routeState() == ConnectionState.RECONNECTING
+}
+
+internal fun cliHomeLatencyDetermining(
+    home: com.foxhole.guard.ui.HomeRouteUiState,
     connected: Boolean,
-): Boolean =
-    connected &&
-        !home.hasTorOnlyRoute() &&
-        home.dashboardConnectionMetricsLoading
+    latencyMs: Long?,
+): Boolean = connected && (
+    home.ipInfoLoading ||
+        home.dashboardConnectionMetricsLoading ||
+        cliHomeLatencyUnavailable(home, connected) ||
+        latencyMs == null
+    )
 
 internal fun cliHomeLatencyMs(
     home: com.foxhole.guard.ui.HomeRouteUiState,
@@ -344,11 +388,11 @@ private fun CliSpeedFact(
     CliKeyValue(
         key = stringResource(R.string.cli_common_key_traffic),
         value = "",
-        icon = R.drawable.pix_stats,
+        icon = R.drawable.lin_stats,
         modifier = Modifier.testTag(CLI_HOME_TRAFFIC_TAG),
         valueContent = {
-            val down = if (available) "↓" + CliFormat.rate(rxBytesPerSec) else "↓—"
-            val up = if (available) "↑" + CliFormat.rate(txBytesPerSec) else "↑—"
+            val down = if (available) "↓" + CliFormat.rate(rxBytesPerSec) else "↓ —"
+            val up = if (available) "↑" + CliFormat.rate(txBytesPerSec) else "↑ —"
             CliSpeedValue(down = down, up = up, slotWidth = slotWidth)
         },
     )
@@ -363,7 +407,7 @@ private fun CliSpeedValue(
     val colors = LocalCliColors.current
     Text(
         text = buildAnnotatedString {
-            withStyle(SpanStyle(color = colors.note)) { append(down) }
+            withStyle(SpanStyle(color = colors.info)) { append(down) }
             append(' ')
             withStyle(SpanStyle(color = colors.ok)) { append(up) }
         },
@@ -374,13 +418,13 @@ private fun CliSpeedValue(
     )
 }
 
-private const val SPEED_SLOT_SAMPLE = "↓000.0MB/s ↑000.0MB/s"
+private const val SPEED_SLOT_SAMPLE = "↓ 000.0MB/s ↑ 000.0MB/s"
 
 @Composable
 private fun CliUptimeFact(startedAtMs: Long?) {
     val key = stringResource(R.string.cli_home_key_uptime)
     if (startedAtMs == null) {
-        CliKeyValue(key = key, value = "—", icon = R.drawable.pix_clock)
+        CliKeyValue(key = key, value = "—", icon = R.drawable.lin_clock)
         return
     }
     val nowMs by rememberNowMsTicker(startedAtMs)
@@ -392,7 +436,7 @@ private fun CliUptimeFact(startedAtMs: Long?) {
     CliKeyValue(
         key = key,
         value = "",
-        icon = R.drawable.pix_clock,
+        icon = R.drawable.lin_clock,
         valueContent = {
             CliUptimeValue(
                 days = days,
@@ -476,7 +520,7 @@ private fun CliConnectionStatusFact(
         key = stringResource(R.string.cli_home_key_status),
         value = connectionStatusLabel(home, torOnlyLive),
         valueColor = LocalCliColors.current.vpn,
-        icon = R.drawable.pix_status,
+        icon = R.drawable.lin_status,
         modifier = Modifier.fillMaxWidth(),
     )
 }

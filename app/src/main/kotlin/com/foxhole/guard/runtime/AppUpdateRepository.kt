@@ -6,14 +6,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import java.io.File
 
-/**
- * Drives [AppUpdateClient] for builds installed from GitHub: check, download, hand the verified APK
- * to the installer. F-Droid and Play builds never reach here — the caller gates on
- * [com.foxhole.guard.BuildConfig.UPDATE_CHANNEL].
- *
- * The downloaded APK lands in a dedicated cache directory that is wiped before each download, so a
- * stale package from an earlier attempt can never be the one that gets installed.
- */
 class AppUpdateRepository(
     private val client: AppUpdateClient,
     private val currentVersionCode: Long,
@@ -49,12 +41,6 @@ class AppUpdateRepository(
         return result
     }
 
-    /**
-     * Downloads [update] and returns the verified file. The digest is checked inside
-     * [AppUpdateClient.download] and the package identity/signature by [apkVerifier]; a failure in
-     * either means nothing installable was produced, so [AppUpdateState.Downloaded] — the only state
-     * the install action accepts — is unreachable for an artifact that did not pass both.
-     */
     suspend fun download(update: AppUpdateCheck.Available): Result<File> {
         if (!update.installable) {
             val refusal = IllegalStateException("release ${update.versionName} carries no installable package")

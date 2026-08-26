@@ -24,9 +24,6 @@ import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.Socket
 
-// The probes validation runs against a live tunnel: endpoint reachability, the notification health
-// check, the DNS-independent fallback, and resolving the session's own target.
-
 internal suspend fun FoxholeVpnService.probeConnectivityEndpointsInternal(
     callTimeoutMs: Long = FoxholeVpnService.CONNECTIVITY_PROBE_CALL_TIMEOUT_MS,
     network: Network? = null,

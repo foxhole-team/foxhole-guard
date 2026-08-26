@@ -26,8 +26,9 @@ internal fun CliTypewriterText(
 ) {
     var displayed by remember { mutableStateOf(if (instant) text else "") }
     LaunchedEffect(text, instant) {
-        if (instant) {
+        if (instant || !cliSystemMotionEnabled()) {
             displayed = text
+            onFullyTyped?.invoke()
             return@LaunchedEffect
         }
         val common = displayed.commonPrefixWith(text).length
@@ -58,7 +59,7 @@ internal fun rememberCliTypedText(
 ): String {
     var displayed by remember { mutableStateOf(text) }
     LaunchedEffect(text, enabled) {
-        if (!enabled) {
+        if (!enabled || !cliSystemMotionEnabled()) {
             displayed = text
             return@LaunchedEffect
         }

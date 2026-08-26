@@ -17,18 +17,19 @@ import com.foxhole.guard.ui.cli.components.CliPanel
 @Composable
 internal fun CliDatabaseDowngradeScreen(modifier: Modifier = Modifier) {
     val colors = LocalCliColors.current
+    val title = cliHeadingText(stringResource(R.string.database_downgrade_title))
     Column(
         modifier = modifier.fillMaxSize().background(colors.bg).padding(CliSpacing.lg),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         CliPanel(
-            icon = R.drawable.pix_forbidden,
+            icon = R.drawable.lin_forbidden,
             title = stringResource(R.string.cli_downgrade_title)
         ) {
             Text(
-                text = stringResource(R.string.database_downgrade_title),
-                style = CliType.display,
+                text = title,
+                style = cliDisplayStyle(title),
                 color = colors.err,
                 textAlign = TextAlign.Center,
             )

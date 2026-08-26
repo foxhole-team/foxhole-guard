@@ -10,7 +10,6 @@ import java.net.ServerSocket
 import java.net.Socket
 import java.util.concurrent.atomic.AtomicBoolean
 
-// i2pd accepts SOCKS auth unconditionally, so this loopback gate enforces it before forwarding.
 internal class I2pdSocksCredentialGate(
     private val routerSocksPort: Int,
     private val routerHttpProxyPort: Int,
@@ -83,7 +82,7 @@ internal class I2pdSocksCredentialGate(
             if (!negotiateUpstream(first)) {
                 return
             }
-            // Report auth success only after the router itself has answered.
+
             output.write(byteArrayOf(AUTH_VERSION, STATUS_SUCCESS))
             output.flush()
             val request = readSocksRequest(input) ?: return
@@ -109,7 +108,6 @@ internal class I2pdSocksCredentialGate(
         socksUpstream: Socket,
         clientOut: OutputStream,
     ): Socket? {
-        // i2pd's HTTP proxy performs address-helper lookup that its SOCKS proxy cannot.
         runCatching { socksUpstream.close() }
         val proxy = runCatching { upstreamFactory(routerHttpProxyPort) }.getOrElse { return null }
         return runCatching {
@@ -132,7 +130,7 @@ internal class I2pdSocksCredentialGate(
         while (true) {
             router.soTimeout = REQUEST_TIMEOUT_MS
             val reply = exchangeRequest(router, request)
-            // Only .i2p LeaseSet misses receive a bounded retry on a fresh upstream socket.
+
             val retryable = reply?.succeeded == false && request.retryable && clock() < deadline
             if (!retryable) {
                 reply ?: return null
@@ -198,7 +196,7 @@ internal class I2pdSocksCredentialGate(
         }
         val offeredUser = input.readLengthPrefixed() ?: return false
         val offeredPassword = input.readLengthPrefixed() ?: return false
-        // Evaluate both fields without an early-exit timing oracle.
+
         val matches =
             constantTimeEquals(offeredUser, username.toByteArray(Charsets.UTF_8)) and
                 constantTimeEquals(offeredPassword, password.toByteArray(Charsets.UTF_8))
@@ -269,7 +267,6 @@ internal data class SocksRequest(
 ) {
     val retryable: Boolean get() = host?.endsWith(I2P_DOMAIN_SUFFIX) == true
 
-    // Every request reaching this gate is already on the .i2p route; port 80 selects browsing.
     val browsable: Boolean get() = port == HTTP_PORT
 
     val port: Int
@@ -300,7 +297,6 @@ internal data class SocksReply(
 
 @Suppress("ReturnCount")
 internal fun readSocksRequest(input: InputStream): SocksRequest? {
-    // Read exactly one frame so pipelined payload bytes remain for the relay.
     val header = ByteArray(SOCKS_HEADER_BYTES)
     if (!input.readFully(header)) return null
     if (header[0].toInt() and 0xFF != SOCKS5_VERSION) return null
@@ -398,7 +394,6 @@ private fun constantTimeEquals(
     left: ByteArray,
     right: ByteArray,
 ): Boolean {
-    // Fold the length into the result instead of returning early.
     var difference = left.size xor right.size
     for (index in left.indices) {
         difference = difference or (left[index].toInt() xor right[index % right.size.coerceAtLeast(1)].toInt())

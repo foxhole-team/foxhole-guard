@@ -22,6 +22,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.foxhole.guard.ui.cli.CliSpacing
 import com.foxhole.guard.ui.cli.CliType
@@ -39,6 +40,7 @@ internal fun CliInputRow(
     autoFocus: Boolean = false,
     numeric: Boolean = false,
     password: Boolean = false,
+    rowMinHeight: Dp = 48.dp,
 ) {
     val colors = LocalCliColors.current
     val focusRequester = remember { FocusRequester() }
@@ -48,7 +50,7 @@ internal fun CliInputRow(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .defaultMinSize(minHeight = 48.dp),
+            .defaultMinSize(minHeight = rowMinHeight),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(text = "$prompt > ", style = CliType.body, color = colors.accent)

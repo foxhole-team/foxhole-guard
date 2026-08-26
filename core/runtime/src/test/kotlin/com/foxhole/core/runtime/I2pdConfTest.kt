@@ -138,7 +138,7 @@ class I2pdConfTest {
         assertTrue(text.contains("[socksproxy]"))
         assertTrue(text.contains("port = 14447"))
         assertTrue(text.contains("address = 127.0.0.1"))
-        // Every remote-control / management surface stays disabled.
+
         listOf("[sam]", "[bob]", "[i2cp]", "[i2pcontrol]", "[http]", "[upnp]").forEach { section ->
             val idx = conf.indexOf(section)
             assertTrue("$section present", idx >= 0)

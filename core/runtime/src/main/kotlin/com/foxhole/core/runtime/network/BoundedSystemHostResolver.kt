@@ -12,20 +12,7 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeoutException
 import java.util.concurrent.atomic.AtomicInteger
 
-/**
- * A time budget around system host resolution.
- *
- * `InetAddress.getAllByName` blocks with no budget and cannot be interrupted — neither by
- * `interrupt()` nor by coroutine cancellation. It is called synchronously on the connect path, and
- * with a jammed system resolver — exactly the network state right after a tunnel teardown — the
- * connect command hung in the supervisor forever: observed live, "connecting" for over four
- * minutes without a line of progress, the stack stuck in `Linux.android_getaddrinfo`.
- *
- * The blocking call cannot be interrupted, so it is abandoned instead: the work goes to its own
- * thread, the wait is bounded, and the stuck thread finishes on its own and dies. A timeout
- * surfaces as [UnknownHostException], which is what makes [PublicRemoteDns] fall back to DoH, so
- * the whole resolve chain stays finite.
- */
+// InetAddress lookup is uninterruptible; the bounded executor prevents stuck DNS calls exhausting connect work.
 class BoundedSystemHostResolver(
     private val delegate: (String) -> List<InetAddress>,
     private val timeoutMs: Long = DEFAULT_TIMEOUT_MS,
@@ -43,7 +30,6 @@ class BoundedSystemHostResolver(
         return try {
             task.get(timeoutMs, TimeUnit.MILLISECONDS)
         } catch (timeout: TimeoutException) {
-            // Cancels only our wait: getaddrinfo itself keeps running in the background.
             task.cancel(false)
             throw UnknownHostException("system dns lookup timed out: $hostname").apply { initCause(timeout) }
         } catch (interrupted: InterruptedException) {
@@ -51,9 +37,6 @@ class BoundedSystemHostResolver(
             Thread.currentThread().interrupt()
             throw UnknownHostException("system dns lookup interrupted: $hostname").apply { initCause(interrupted) }
         } catch (failure: ExecutionException) {
-            // ExecutionException is just FutureTask's wrapper around the delegate's failure:
-            // unwrap it so callers see the same type as without this bound — PublicRemoteDns
-            // branches on UnknownHostException and RuntimeException specifically.
             throw failure.cause?.apply { addSuppressed(failure) }
                 ?: UnknownHostException("system dns lookup failed: $hostname").apply { initCause(failure) }
         }
@@ -75,8 +58,7 @@ internal fun newBoundedSystemResolverExecutor(
         maxThreads,
         30L,
         TimeUnit.SECONDS,
-        // A queued lookup has already consumed its caller's budget while every worker is wedged.
-        // Reject immediately so PublicRemoteDns can use its finite DoH fallback instead.
+
         SynchronousQueue(),
         { runnable ->
             Thread(

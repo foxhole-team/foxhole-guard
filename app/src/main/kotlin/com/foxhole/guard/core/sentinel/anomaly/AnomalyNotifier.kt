@@ -24,7 +24,6 @@ class AnomalyNotifier(
     private val appContext get() = baseAppContext.withStoredAppLocale()
     private val notificationManager by lazy { appContext.getSystemService<NotificationManager>() }
 
-    /** Returns true only after NotificationManager accepted the notification. */
     fun notify(event: AnomalyEvent): Boolean {
         if (
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
@@ -64,8 +63,6 @@ class AnomalyNotifier(
             else -> R.string.anomaly_notification_yellow_flag_title
         }
 
-    // Also the locale refresh entry point ([refreshLocalizedNotificationChannels]): the system keeps
-    // the name a channel was created with, so it has to be handed the localized one again.
     internal fun ensureChannel() {
         notificationManager?.createNotificationChannel(
             NotificationChannel(

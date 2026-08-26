@@ -4,8 +4,29 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 
-/** The sample mirrors the vendored i2pd HTTPServer.cpp ShowStatus output (english labels). */
 class I2pdWebConsoleStatusTest {
+    @Test
+    fun `parses the authenticated lightweight status surface`() {
+        val status = requireNotNull(parseI2pdFoxHoleStatus(FOXHOLE_STATUS))
+
+        assertEquals("Firewalled", status.networkStatus)
+        assertEquals(321, status.knownRouters)
+        assertEquals(4, status.clientTunnels)
+        assertEquals(7, status.transitTunnels)
+        assertEquals(12_345L, status.rxTotalBytes)
+        assertEquals(67_890L, status.txTotalBytes)
+        assertEquals(1_025L, status.rxBytesPerSec)
+        assertEquals(513L, status.txBytesPerSec)
+        assertEquals(111L, status.transitTotalBytes)
+        assertEquals(3L, status.transitBytesPerSec)
+        assertEquals("2.61.0", status.version)
+    }
+
+    @Test
+    fun `rejects an unauthenticated or unrelated status body`() {
+        assertNull(parseI2pdFoxHoleStatus("known_routers=321"))
+    }
+
     @Test
     fun `parses external address, status, routers and transit tunnels`() {
         val status = parseI2pdWebConsoleStatus(PUBLISHED_PAGE)
@@ -44,7 +65,7 @@ class I2pdWebConsoleStatusTest {
         assertEquals("3.50 MiB (0.90 KiB/s)", status.transit)
         assertEquals(3_670_016L, status.transitTotalBytes)
         assertEquals(922L, status.transitBytesPerSec)
-        // The page also prints "Transit Tunnels: 14"; that is a tunnel count, not a byte counter.
+
         assertEquals(14, status.transitTunnels)
     }
 
@@ -75,6 +96,22 @@ class I2pdWebConsoleStatusTest {
     }
 
     private companion object {
+        val FOXHOLE_STATUS =
+            """
+            foxhole_status=1
+            network_status=1
+            known_routers=321
+            client_tunnels=4
+            transit_tunnels=7
+            received_bytes=12345
+            sent_bytes=67890
+            transit_bytes=111
+            received_bytes_per_sec=1024.6
+            sent_bytes_per_sec=512.5
+            transit_bytes_per_sec=2.5
+            version=2.61.0
+            """.trimIndent()
+
         val PUBLISHED_PAGE =
             """
             <b>Uptime:</b> 12 min<br>

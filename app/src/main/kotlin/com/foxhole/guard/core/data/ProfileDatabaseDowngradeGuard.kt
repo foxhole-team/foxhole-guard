@@ -6,15 +6,11 @@ import androidx.core.content.edit
 import net.zetetic.database.sqlcipher.SQLiteDatabase
 import java.io.File
 
-// Written after every successful open so the downgrade notice can be decided before anything
-// touches the (possibly newer) database. Plain preferences on purpose: the marker must be readable
-// pre-unlock and pre-SQLCipher, and it carries no secret - only a schema number.
 private const val DB_META_PREFERENCES = "foxhole_db_meta"
 private const val KEY_SCHEMA_VERSION = "profile_db_schema_version"
 
 private const val TAG = "FoxholeDbGuard"
 
-/** Thrown instead of letting Room's destructive fallback wipe a database written by a newer build. */
 internal class ProfileDatabaseDowngradeException(
     storedVersion: Int,
     supportedVersion: Int,
@@ -24,12 +20,7 @@ internal class ProfileDatabaseDowngradeException(
         "user's profiles)",
 )
 
-/**
- * Refuses to hand a newer-schema database to Room. Room is configured with a destructive fallback
- * as corruption recovery, which would also fire on a downgrade (an older APK installed over a
- * newer one - realistic with sideloaded builds) and silently wipe every saved profile. Reading
- * `user_version` costs one extra keyed open, paid once per process inside [ProfileDatabase.create].
- */
+// Refuse newer schemas before Room can apply its corruption-only destructive fallback during a downgrade.
 internal fun assertNoProfileDatabaseDowngrade(
     databaseFile: File,
     passphrase: ByteArray,
@@ -65,8 +56,7 @@ private fun readStoredSchemaVersion(
                 null,
             ).use { database -> database.version }
         }.getOrElse { failure ->
-            // Unreadable file (corruption, wrong key). Not a downgrade signal - let Room surface
-            // its canonical open error instead of guessing here.
+
             Log.w(TAG, "profile database version precheck skipped: ${failure.message}")
             null
         }
@@ -75,7 +65,6 @@ private fun readStoredSchemaVersion(
     }
 }
 
-/** Persisted from Room's onOpen callback; consumed by [profileDatabaseDowngradeDetected]. */
 internal fun recordProfileDatabaseSchemaVersion(
     context: Context,
     version: Int,
@@ -85,11 +74,6 @@ internal fun recordProfileDatabaseSchemaVersion(
         .edit { putInt(KEY_SCHEMA_VERSION, version) }
 }
 
-/**
- * Cheap pre-UI check for the fail-loud downgrade notice: true when the last successfully opened
- * database schema is newer than this build supports. Must stay free of database/keybox touches -
- * MainActivity consults it before the view-model (and its database-backed flows) exists.
- */
 fun profileDatabaseDowngradeDetected(context: Context): Boolean {
     val recorded =
         context.applicationContext

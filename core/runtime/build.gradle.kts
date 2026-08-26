@@ -9,8 +9,7 @@ android {
 
     defaultConfig {
         minSdk = 26
-        // Release-safe default; the debug build type flips diagnostics on below. Mirrors the
-        // app module so the engine (now living here) logs to logcat in debug exactly as before.
+
         buildConfigField("boolean", "ENABLE_DIAGNOSTIC_LOGCAT", "false")
         buildConfigField("String", "VERSION_NAME", "\"${project.version}\"")
         buildConfigField("String", "APPLICATION_ID", "\"com.foxhole.guard\"")
@@ -18,12 +17,9 @@ android {
     }
 
     buildTypes {
-        // `debug` and `release` always exist for a library module. Only override the debug field;
-        // release keeps the false default. The app's release/publicRelease keep matching `release`.
         getByName("debug") {
             buildConfigField("boolean", "ENABLE_DIAGNOSTIC_LOGCAT", "true")
-            // The app module's coverage gate reads this module's debug unit-test coverage
-            // (com/foxhole/core/runtime moved here out of :app).
+
             enableUnitTestCoverage = true
         }
     }
@@ -33,8 +29,6 @@ android {
     }
 
     testOptions {
-        // JVM tests drive real runtime error paths that end in android.util.Log; default-value
-        // stubs keep those paths testable without a device.
         unitTests.isReturnDefaultValues = true
     }
 

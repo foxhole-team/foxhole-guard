@@ -14,6 +14,7 @@ import com.foxhole.guard.runtime.publishManualIdentityRefresh
 import com.foxhole.guard.runtime.reconcileActiveVpnNetworkIfNeeded
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.async
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
@@ -21,7 +22,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.atomic.AtomicBoolean
 
 internal enum class StatusWidgetRefreshPhase { IDLE, LOADING, FAILED }
@@ -127,20 +130,32 @@ class StatusWidgetCommandReceiver : BroadcastReceiver() {
         StatusWidgetRefreshState.run(renderFrame = { StatusWidget().updateAll(application) }) {
             val profileVpn = expected.profileId?.let { it > 0L } == true
             val tor = expected.profileId == TOR_ONLY_PROFILE_ID || expected.torActive
-            val deviceInfo =
-                dependencies.connectionController.refreshDeviceIpInfo(IpInfoFetchMode.FULL)
-            val vpnInfo =
-                if (profileVpn) {
-                    dependencies.connectionController.refreshIpInfo(IpInfoFetchMode.FULL)
+            val (deviceInfo, vpnInfo, torInfo) = supervisorScope {
+                val device = async {
+                    refreshWidgetIdentity(dependencies, "device") {
+                        dependencies.connectionController.refreshDeviceIpInfo(WIDGET_IP_INFO_FETCH_MODE)
+                    }
+                }
+                val vpn = if (profileVpn) {
+                    async {
+                        refreshWidgetIdentity(dependencies, "vpn") {
+                            dependencies.connectionController.refreshIpInfo(WIDGET_IP_INFO_FETCH_MODE)
+                        }
+                    }
                 } else {
                     null
                 }
-            val torInfo =
-                if (tor) {
-                    dependencies.connectionController.refreshTorRouteIpInfo(IpInfoFetchMode.FULL)
+                val torExit = if (tor) {
+                    async {
+                        refreshWidgetIdentity(dependencies, "tor") {
+                            dependencies.connectionController.refreshTorRouteIpInfo(WIDGET_IP_INFO_FETCH_MODE)
+                        }
+                    }
                 } else {
                     null
                 }
+                Triple(device.await(), vpn?.await(), torExit?.await())
+            }
             dependencies.connectionController.publishManualIdentityRefresh(
                 expected = expected,
                 vpnInfo = vpnInfo,
@@ -149,6 +164,31 @@ class StatusWidgetCommandReceiver : BroadcastReceiver() {
             )
         }
         StatusWidget().updateAll(application)
+    }
+
+    private suspend fun refreshWidgetIdentity(
+        dependencies: FoxholeTileDependencies,
+        label: String,
+        block: suspend () -> com.foxhole.core.model.IpInfo,
+    ): com.foxhole.core.model.IpInfo? {
+        return try {
+            withTimeoutOrNull(STATUS_WIDGET_IDENTITY_TIMEOUT_MS) { block() }
+                ?: run {
+                    dependencies.diagnosticsLogger.recordFailure(
+                        "widget",
+                        "identity refresh timed out target=$label",
+                    )
+                    null
+                }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Exception) {
+            dependencies.diagnosticsLogger.recordFailure(
+                "widget",
+                "identity refresh failed target=$label error=${error.javaClass.simpleName}",
+            )
+            null
+        }
     }
 
     companion object {
@@ -160,6 +200,8 @@ class StatusWidgetCommandReceiver : BroadcastReceiver() {
     }
 }
 
-private const val STATUS_WIDGET_REFRESH_TIMEOUT_MS = 9_000L
+private const val STATUS_WIDGET_REFRESH_TIMEOUT_MS = 18_000L
+private const val STATUS_WIDGET_IDENTITY_TIMEOUT_MS = 16_000L
 private const val STATUS_WIDGET_REFRESH_FRAME_MS = 240L
 internal const val STATUS_WIDGET_REFRESH_FRAME_COUNT = 4
+private val WIDGET_IP_INFO_FETCH_MODE = IpInfoFetchMode.ENTRY_QUICK

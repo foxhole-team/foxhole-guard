@@ -78,7 +78,6 @@ class FoxholeConnectionController internal constructor(
     val torPhase: StateFlow<TorPhaseSnapshot> = FoxholeVpnRuntimeBridge.torPhase
     val i2pPhase: StateFlow<I2pPhaseSnapshot> = FoxholeVpnRuntimeBridge.i2pPhase
 
-    /** What the core says the LAN proxy is doing. Fronted here for the same reason as [i2pPhase]. */
     val lanProxyStatus: StateFlow<LanProxyStatusSnapshot> = FoxholeVpnRuntimeBridge.lanProxyStatus
     internal val runtimeUiState: StateFlow<RuntimeUiState> = FoxholeVpnRuntimeBridge.runtimeUiState
     private val appliedRuntimeSignatureMutable = MutableStateFlow<Int?>(null)
@@ -212,7 +211,6 @@ class FoxholeConnectionController internal constructor(
     suspend fun currentLocalGuardRuntimeFingerprint(mode: com.foxhole.core.runtime.LocalGuardMode): Int =
         lifecycle.currentLocalGuardRuntimeFingerprint(mode)
 
-    /** Publishes only the fingerprint/revision carried by the session native code actually applied. */
     fun markRuntimeApplied(
         session: com.foxhole.core.model.VpnSession,
         runtimeGeneration: Long,
@@ -255,15 +253,10 @@ class FoxholeConnectionController internal constructor(
 
     fun reload(profileId: Long? = snapshot.value.profileId): Boolean = lifecycle.reload(profileId)
 
-    // The whole sync runs off the main thread: it is launched from UI toggles
-    // (viewModelScope is Main.immediate), and its settings read, fingerprint hash,
-    // connectivity binder checks and startForegroundService binder calls starved input
-    // dispatch for >5s twice in the field (dropbox ANRs 07-12 20:13, 07-13 01:43).
     suspend fun syncLocalGuard(forceRestart: Boolean = false) = withContext(Dispatchers.Default) {
         val currentSnapshot = snapshot.value
         val localGuardSnapshot = currentSnapshot.profileId == FoxholeVpnService.LOCAL_GUARD_PROFILE_ID
-        // Every guard-relevant settings change funnels through here, so this is also where the
-        // out-of-process reconciler (the only thing that survives a process kill) is armed/disarmed.
+
         val desiredMode = settingsRepository.current().localGuardModeOrNull()
         context.applyGuardReconcileSchedule(enabled = desiredMode != null)
         if (
@@ -295,12 +288,6 @@ class FoxholeConnectionController internal constructor(
                 return@withContext
             }
             if (localGuardSnapshot && localGuardNetworkServing && !forceRestart) {
-                // Guard already live in the same mode and only its config/rules changed (blocked
-                // apps, DNS filter, activity logging …). Hot-reload the FoxCore policy in place —
-                // no tun teardown, no CONNECTING flash — instead of a full START_LOCAL_GUARD restart.
-                // A mode change (FIREWALL<->DNS) fails the network-serving check above and still
-                // restarts, because its tun parameters differ. reload() returns false when the live
-                // service can't take the reload (e.g. mid-transition), so we fall through to restart.
                 diagnosticsLogger.recordStructured(
                     "connection",
                     "local guard sync reload",
@@ -350,7 +337,6 @@ class FoxholeConnectionController internal constructor(
         }
     }
 
-    /** WebView may run only after the exact settings-derived runtime was applied. */
     suspend fun isConnectedRuntimeCurrent(): Boolean {
         val currentSnapshot = snapshot.value
         if (!isWebAppTunTransportReady(currentSnapshot)) return false
@@ -415,11 +401,6 @@ class FoxholeConnectionController internal constructor(
 
     fun hasActiveVpnNetwork(): Boolean = currentVpnNetwork() != null
 
-    /**
-     * Ticks whenever a network (ours included) comes or goes. [hasActiveVpnNetwork] is a poll, so
-     * a flow that folds it in only re-reads when one of its other sources emits — fold this in too
-     * and the answer follows the tunnel appearing, not the next unrelated state change.
-     */
     val networkRevision: StateFlow<Long> = ConnectivityNetworkRegistry.revision(context)
 
     internal fun currentVpnNetwork(): Network? =
@@ -433,7 +414,15 @@ class FoxholeConnectionController internal constructor(
         )
 }
 
-/** Stable handle projection kept outside the controller's already broad orchestration surface. */
+internal fun FoxholeConnectionController.currentDnsLookupNetwork(): Network {
+    val current = snapshot.value
+    return if (current.state == ConnectionState.CONNECTED && current.trafficMode == TrafficMode.TUNNEL) {
+        currentVpnNetwork() ?: error("vpn network unavailable")
+    } else {
+        currentUpstreamNetwork() ?: error("upstream network unavailable")
+    }
+}
+
 internal fun FoxholeConnectionController.currentVpnNetworkHandle(): Long? =
     currentVpnNetwork()?.networkHandle
 
@@ -586,11 +575,6 @@ internal fun FoxholeVpnService.currentVpnNetworkOrNullInternal(
             )
     }
 
-/**
- * Android may reuse one VPN [Network] handle while atomically replacing `tun0` with `tun1` inside
- * the same [android.net.VpnService]. The interface name is therefore part of handover identity:
- * rejecting by handle alone tears down a healthy replacement after the validation timeout.
- */
 internal fun vpnNetworkIdentityDiffersFrom(
     currentHandle: Long,
     currentInterfaceName: String?,

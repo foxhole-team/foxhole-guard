@@ -7,11 +7,6 @@ import com.foxhole.guard.FoxholeApplication
 import com.foxhole.guard.FoxholeThreatIntelUpdateDependencies
 import com.foxhole.guard.threatIntelBackgroundUpdateEnabled
 
-/**
- * Periodic refresh of the signed SENTINEL threat-intel feed, mirroring [DnsFilterUpdateWorker]. A
- * skipped refresh (e.g. the feed endpoint is not yet configured) is treated as success so the worker
- * stays cheap and quiet until the feed is activated.
- */
 class ThreatIntelUpdateWorker(
     context: Context,
     params: WorkerParameters,

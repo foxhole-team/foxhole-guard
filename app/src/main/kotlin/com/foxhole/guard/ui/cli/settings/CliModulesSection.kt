@@ -53,7 +53,7 @@ internal fun CliModulesSection(
     var sentinelActivation by remember { mutableStateOf<DatasetActivationState?>(null) }
     CliPanel(
         title = stringResource(R.string.cli_cfg_group_privacy),
-        icon = R.drawable.pix_incognito,
+        icon = R.drawable.lin_incognito,
         iconColor = colors.accent,
         modifier = Modifier.fillMaxWidth(),
         collapsible = true,
@@ -117,7 +117,8 @@ private fun CliTorModuleBlock(
 ) {
     CliModuleBlock(
         label = stringResource(R.string.cli_cfg_tor_core),
-        icon = R.drawable.pix_tor,
+        icon = R.drawable.lin_tor,
+        infoText = stringResource(R.string.cli_help_tor_body),
         checked = settings.privacyRoute.permitted,
         onToggle = { enabled ->
             if (enabled) {
@@ -169,11 +170,6 @@ private fun CliTorDatasetActivationSheet(
     )
 }
 
-/**
- * Permission only. The transparent-guard consent used to hang off this switch, which made
- * enabling a module the same act as opening a network; it now sits on the home connect button,
- * the press that actually starts the router.
- */
 @Composable
 private fun CliI2pModuleBlock(
     viewModel: HomeViewModel,
@@ -182,7 +178,12 @@ private fun CliI2pModuleBlock(
 ) {
     CliModuleBlock(
         label = stringResource(R.string.cli_cfg_i2p_core),
-        icon = R.drawable.pix_globe,
+        icon = R.drawable.lin_globe,
+        infoText = listOf(
+            stringResource(R.string.cli_i2p_start_body),
+            stringResource(R.string.cli_i2p_runtime_note),
+            stringResource(R.string.cli_i2p_allow_outside_tunnel_note),
+        ).joinToString("\n\n"),
         checked = settings.i2p.enabled,
         onToggle = viewModel::onI2pEnabledChanged,
         onOpenSettings = onOpenSettings,
@@ -200,7 +201,8 @@ private fun CliFirewallModuleBlock(
     var disableOpen by remember { mutableStateOf(false) }
     CliModuleBlock(
         label = stringResource(R.string.cli_cfg_firewall),
-        icon = R.drawable.pix_fire,
+        icon = R.drawable.lin_fire,
+        infoText = stringResource(R.string.cli_help_firewall_body),
         checked = settings.expert.firewallEnabled,
         note = if (actionRequired) {
             stringResource(R.string.cli_firewall_pending_disable_note)
@@ -226,7 +228,7 @@ private fun CliFirewallModuleBlock(
     if (consentOpen) {
         CliConfirmSheet(
             title = stringResource(R.string.cli_cfg_firewall),
-            icon = R.drawable.pix_fire,
+            icon = R.drawable.lin_fire,
             question = stringResource(R.string.cli_cfg_firewall_consent_body),
             confirmLabel = stringResource(R.string.cli_cfg_firewall_yes),
             onConfirm = {
@@ -239,7 +241,7 @@ private fun CliFirewallModuleBlock(
     if (disableOpen) {
         CliConfirmSheet(
             title = stringResource(R.string.cli_cfg_firewall),
-            icon = R.drawable.pix_fire,
+            icon = R.drawable.lin_fire,
             question = stringResource(R.string.cli_cfg_firewall_disable_body),
             confirmLabel = stringResource(R.string.cli_cfg_firewall_disable_yes),
             onConfirm = {
@@ -261,7 +263,8 @@ private fun CliAnomalyModuleBlock(
     val installedGeneratedAt = viewModel.threatIntelInstalledGeneratedAt()
     CliModuleBlock(
         label = stringResource(R.string.cli_cfg_more_anomaly),
-        icon = R.drawable.pix_shield,
+        icon = R.drawable.lin_shield,
+        infoText = stringResource(R.string.cli_help_sentinel_body),
         checked = settings.anomaly.enabled,
         onToggle = { value ->
             when {

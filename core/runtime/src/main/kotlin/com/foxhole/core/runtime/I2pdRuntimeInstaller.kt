@@ -55,8 +55,6 @@ class I2pdRuntimeInstaller(
 
     private fun File.ensureExecutable(): Boolean = canExecute() || setExecutable(true, true)
 
-    // i2pd verifies su3 reseed bundles against the shipped router certificates. Copy them into the
-    // data dir when the asset tree is present; absence is non-fatal (reseed just needs network).
     private fun copyBundledCertificates(dataDirectory: File): Boolean {
         val assetRoot = "$ASSET_DIR_NAME/certificates"
         if (appContext.assets.list(assetRoot).isNullOrEmpty()) {

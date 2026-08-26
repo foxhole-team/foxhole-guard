@@ -5,6 +5,9 @@ import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
@@ -72,6 +75,7 @@ class CliHomeRuntimeBehaviorTest {
 
     @Test
     fun connectingHidesThePreviousIpBehindTheRefreshIndicator() {
+        val viewModel = homeViewModel()
         seedIp(TEST_IP)
 
         composeRule.runOnUiThread {
@@ -84,14 +88,10 @@ class CliHomeRuntimeBehaviorTest {
         }
 
         composeRule.waitUntil(timeoutMillis = STATE_TIMEOUT_MS) {
-            composeRule
-                .onAllNodesWithText(
-                    TEST_IP,
-                    substring = true,
-                    useUnmergedTree = true,
-                )
-                .fetchSemanticsNodes()
-                .isEmpty()
+            viewModel.homeRouteState.value.connection.state == ConnectionState.CONNECTING
+        }
+        composeRule.waitUntil(timeoutMillis = STATE_TIMEOUT_MS) {
+            identityIpNodes(TEST_IP).isEmpty()
         }
         composeRule.onNodeWithTag(CLI_HOME_IP_TAG, useUnmergedTree = true).assertIsDisplayed()
     }
@@ -131,11 +131,7 @@ class CliHomeRuntimeBehaviorTest {
     }
 
     private fun seedIp(ip: String) {
-        val viewModel =
-            ViewModelProvider(
-                composeRule.activity,
-                HomeViewModel.factory(app()),
-            )[HomeViewModel::class.java]
+        val viewModel = homeViewModel()
         val info =
             IpInfo(
                 ip = ip,
@@ -159,16 +155,25 @@ class CliHomeRuntimeBehaviorTest {
             FoxholeVpnRuntimeBridge.updateDeviceIpInfo(info)
         }
         composeRule.waitUntil(timeoutMillis = STATE_TIMEOUT_MS) {
-            composeRule
-                .onAllNodesWithText(
-                    ip,
-                    substring = true,
-                    useUnmergedTree = true,
-                )
-                .fetchSemanticsNodes()
-                .isNotEmpty()
+            identityIpNodes(ip).isNotEmpty()
         }
     }
+
+    private fun identityIpNodes(ip: String) =
+        composeRule
+            .onAllNodes(
+                hasText(ip, substring = true).and(
+                    hasAnyAncestor(hasTestTag(CLI_HOME_IP_TAG)),
+                ),
+                useUnmergedTree = true,
+            )
+            .fetchSemanticsNodes()
+
+    private fun homeViewModel(): HomeViewModel =
+        ViewModelProvider(
+            composeRule.activity,
+            HomeViewModel.factory(app()),
+        )[HomeViewModel::class.java]
 
     private fun waitForInitialNetworkRefresh() {
         val viewModel =

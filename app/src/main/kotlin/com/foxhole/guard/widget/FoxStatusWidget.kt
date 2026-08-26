@@ -18,6 +18,7 @@ import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
 import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.action.actionSendBroadcast
+import androidx.glance.appwidget.cornerRadius
 import androidx.glance.appwidget.provideContent
 import androidx.glance.appwidget.state.getAppWidgetState
 import androidx.glance.appwidget.updateAll
@@ -35,10 +36,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import java.util.concurrent.atomic.AtomicLong
 
-/**
- * The image-only status control. Its height is fixed by provider metadata; horizontal resizing
- * changes only the centred scale. There is no decorative frame or label around the supplied art.
- */
 class FoxStatusWidget : GlanceAppWidget() {
     override val stateDefinition = PreferencesGlanceStateDefinition
 
@@ -67,6 +64,7 @@ class FoxStatusWidget : GlanceAppWidget() {
                 GlanceModifier
                     .fillMaxSize()
                     .padding(2.dp)
+                    .cornerRadius(WIDGET_SURFACE_CORNER_RADIUS)
                     .clickable(
                         actionSendBroadcast(
                             Intent(context, StatusWidgetCommandReceiver::class.java)
@@ -89,7 +87,6 @@ class FoxStatusWidgetReceiver : GlanceAppWidgetReceiver() {
     override val glanceAppWidget: GlanceAppWidget = FoxStatusWidget()
 }
 
-/** Continuous six-frame loop while a confirmed primary connection keeps the process alive. */
 internal object FoxStatusWidgetAnimation {
     private val frameMutable = MutableStateFlow(FOX_STATUS_DISCONNECTED_FRAME)
     private val generation = AtomicLong(0L)
@@ -112,8 +109,7 @@ internal object FoxStatusWidgetAnimation {
             FOX_STATUS_ANIMATION_FRAMES.forEach { frame ->
                 if (generation.get() != ownedGeneration) return
                 frameMutable.value = frame
-                // Glance's updateAll may be coalesced by the launcher. Updating each concrete id
-                // gives every animation-enabled widget one visible frame.
+
                 widgetIds.forEach { id -> FoxStatusWidget().update(context, id) }
                 delay(FOX_STATUS_FRAME_DURATION_MS)
             }
@@ -135,7 +131,6 @@ internal object FoxStatusWidgetAnimation {
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: Exception) {
-            // Launcher ids can disappear between discovery and state lookup.
             settingsDefault
         }
     }
@@ -168,7 +163,5 @@ internal val FOX_STATUS_ANIMATION_FRAMES =
 private val FOX_STATUS_WIDGET_HEIGHT = 110.dp
 internal const val FOX_STATUS_FRAME_DURATION_MS = 320L
 
-// Resource ids are intentionally read at runtime. Inlining Android's generated R constants into a
-// pure JVM caller makes local unit tests observe the stub value (0) instead of the packaged id.
 private val FOX_STATUS_CONNECTED_FRAME = R.drawable.fhg_status_frame_1
 private val FOX_STATUS_DISCONNECTED_FRAME = R.drawable.fhg_status_frame_4

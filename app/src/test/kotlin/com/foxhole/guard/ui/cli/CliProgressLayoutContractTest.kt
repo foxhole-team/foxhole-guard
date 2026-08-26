@@ -7,26 +7,24 @@ import java.io.File
 
 class CliProgressLayoutContractTest {
     @Test
-    fun `modern stage progress uses animated text while retro keeps the pixel slot`() {
+    fun `unified stage progress uses animated text and stable spinner slots`() {
         val spinner = source("components/CliSpinner.kt")
         val stageProgress = source("components/CliStageProgress.kt")
 
         assertTrue(spinner.contains("modifier = modifier.size(cliSpinnerSlotSize)"))
         assertTrue(spinner.contains("contentAlignment = Alignment.Center"))
         assertTrue(spinner.contains("if (visible)"))
-        assertTrue(stageProgress.contains("LocalCliVisualStyle.current == VisualStyle.PLAIN"))
         assertTrue(stageProgress.contains("CliShimmerText("))
-        assertTrue(stageProgress.contains("CliPixelProgressSegments("))
+        assertTrue(stageProgress.contains("CliPixelProgressBar("))
         assertTrue(stageProgress.contains("if (running)"))
+        assertFalse(stageProgress.contains("VisualStyle"))
     }
 
     @Test
-    fun `updates database note uses the canonical dashed info surface`() {
+    fun `updates database panel omits the redundant single database info block`() {
         val updates = source("settings/CliUpdatesSubScreen.kt")
 
-        assertTrue(updates.contains("infoText = stringResource(R.string.cli_foxdb_note)"))
-        assertFalse(updates.contains("CliElbowLine(text = stringResource(R.string.cli_foxdb_note))"))
-        assertFalse(updates.contains("CliDashedInfoNote(text = stringResource(R.string.cli_foxdb_note))"))
+        assertFalse(updates.contains("R.string.cli_foxdb_note"))
     }
 
     private fun source(relative: String): String =

@@ -4,11 +4,17 @@ import android.content.Context
 import com.foxhole.core.model.AppLocale
 import com.foxhole.core.model.AppLockMode
 import com.foxhole.core.model.AutoConnectReasonCode
+import com.foxhole.core.model.PanelAppearance
 import com.foxhole.core.model.Settings
 import com.foxhole.core.model.SmartProfileNetworkMemory
 import com.foxhole.core.model.SmartProfilePreference
 import com.foxhole.core.model.SmartProfileProtocolMemory
 import com.foxhole.core.model.ThemeMode
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
 
 internal fun Settings.withSmartProfilePreference(preference: SmartProfilePreference): Settings {
     val updatedPreferences =
@@ -310,6 +316,58 @@ internal fun readFastStoredAppLockScramble(context: Context): Boolean {
 }
 
 internal fun sanitizeStoredThemeModePayload(payload: String): String =
+    runCatching { migrateStoredAppearancePayload(payload) }
+        .getOrElse { sanitizeStoredThemeModeToken(payload) }
+
+internal fun migrateStoredAppearancePayload(payload: String): String {
+    val root = Json.parseToJsonElement(payload) as? JsonObject ?: return payload
+    val ui = root["ui"] as? JsonObject ?: return payload
+    val storedTheme = ui["themeMode"]
+    val resolvedTheme =
+        if (storedTheme != null) {
+            parseOptionalStoredThemeMode((storedTheme as? JsonPrimitive)?.contentOrNull)
+                ?: ThemeMode.SYSTEM
+        } else {
+            val legacyAppearance =
+                (ui["panelAppearance"] as? JsonPrimitive)
+                    ?.contentOrNull
+                    ?.trim()
+                    ?.uppercase()
+                    ?.let { value -> PanelAppearance.entries.firstOrNull { it.name == value } }
+            legacyAppearance?.let(::legacyPanelAppearanceThemeMode) ?: ThemeMode.DARK
+        }
+    return ensureStoredThemeModePayload(payload, resolvedTheme)
+}
+
+internal fun ensureStoredThemeModePayload(
+    payload: String,
+    themeMode: ThemeMode,
+): String {
+    val root = Json.parseToJsonElement(payload) as? JsonObject ?: return payload
+    val ui = root["ui"] as? JsonObject ?: buildJsonObject {}
+    if ((ui["themeMode"] as? JsonPrimitive)?.contentOrNull == themeMode.name) {
+        return payload
+    }
+    val migratedUi =
+        buildJsonObject {
+            ui.forEach { (key, value) ->
+                put(key, if (key == "themeMode") JsonPrimitive(themeMode.name) else value)
+            }
+            if ("themeMode" !in ui) {
+                put("themeMode", JsonPrimitive(themeMode.name))
+            }
+        }
+    val migratedRoot =
+        buildJsonObject {
+            root.forEach { (key, value) -> put(key, if (key == "ui") migratedUi else value) }
+            if ("ui" !in root) {
+                put("ui", migratedUi)
+            }
+        }
+    return Json.encodeToString(JsonObject.serializer(), migratedRoot)
+}
+
+private fun sanitizeStoredThemeModeToken(payload: String): String =
     STORED_THEME_MODE_REGEX.replace(payload) { match ->
         val storedValue = match.groupValues[2]
         val normalizedValue = parseOptionalStoredThemeMode(storedValue)?.name ?: ThemeMode.SYSTEM.name

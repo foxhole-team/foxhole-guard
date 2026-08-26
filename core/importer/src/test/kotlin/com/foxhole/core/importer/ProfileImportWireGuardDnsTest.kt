@@ -8,20 +8,9 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 
-/**
- * The resolver a WireGuard config declares.
- *
- * It is not an outbound endpoint: a packet-tunnel profile does not intercept DNS, so this address is
- * advertised on the TUN and reached as a packet inside the tunnel. That is why it is exempt from the
- * public-host rule that guards endpoints the device dials directly. While DNS silently fell back to
- * the managed remote resolver, screening a private address out here was invisible; now it would take
- * the profile's only resolver away and the runtime translator would refuse the profile.
- */
 internal class ProfileImportWireGuardDnsTest : ProfileImportParserTestSupport() {
     @Test
     fun `the private resolver a WireGuard peer pushes survives the import`() {
-        // 10.x is where a WireGuard provider's resolver normally lives — it exists only inside the
-        // peer's network and is unreachable, by design, from anywhere else.
         val wireGuardDns = wireGuardDnsServer(dns = "10.79.0.1")
 
         assertEquals("udp", wireGuardDns?.get("type")?.jsonPrimitive?.content)
@@ -39,15 +28,11 @@ internal class ProfileImportWireGuardDnsTest : ProfileImportParserTestSupport() 
 
     @Test
     fun `a loopback resolver is dropped rather than advertised back at the device`() {
-        // Advertising 127.0.0.1 on the TUN points the device at its own listeners, which is not a
-        // resolver any profile can have meant.
         assertNull(wireGuardDnsServer(dns = "127.0.0.1"))
     }
 
     @Test
     fun `a hostname resolver is dropped because a TUN takes numeric addresses only`() {
-        // Resolving that name would also have to happen outside the tunnel, which is the leak this
-        // whole shape exists to close.
         assertNull(wireGuardDnsServer(dns = "resolver.example.org"))
     }
 

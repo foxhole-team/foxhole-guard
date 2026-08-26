@@ -18,9 +18,7 @@ internal class LazySodiumGuardCrypto : GuardCrypto {
         require(salt.size == GuardCrypto.SALT_BYTES) { "argon2id salt must be ${GuardCrypto.SALT_BYTES} bytes" }
         require(password.isNotEmpty()) { "argon2id password must not be empty" }
         val output = ByteArray(outputLength)
-        // crypto_pwhash takes only opslimit + memlimit; its Argon2id parallelism is fixed at 1, so
-        // GuardKdfParams.parallelism is intentionally not passed here (see its doc). m/t alone still
-        // put this well above OWASP Argon2id minimums.
+
         val succeeded =
             sodium.cryptoPwHash(
                 output,

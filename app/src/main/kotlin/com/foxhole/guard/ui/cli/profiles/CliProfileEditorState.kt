@@ -167,7 +167,6 @@ internal fun cliBlankOutbound(type: String): JsonObject =
         }
     }
 
-/** Builds the packet-tunnel shape required by the runtime translator. */
 private fun cliBlankWireGuardEndpoint(amnezia: Boolean): JsonObject =
     buildJsonObject {
         put("type", CLI_WIREGUARD_TYPE)
@@ -190,7 +189,6 @@ private fun cliBlankWireGuardEndpoint(amnezia: Boolean): JsonObject =
         if (amnezia) put("amnezia", buildJsonObject {})
     }
 
-/** Keeps shared infrastructure while replacing protocol-owned endpoints. */
 internal fun cliNewProtocolConfig(
     template: JsonObject,
     outbound: JsonObject,

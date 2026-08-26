@@ -3,19 +3,15 @@ package com.foxhole.guard.runtime
 import com.foxhole.core.model.ConnectionState
 import com.foxhole.core.model.NotificationSnapshot
 import com.foxhole.core.model.PerAppRoutingMode
-import com.foxhole.core.model.PrivacyRouteMode
+import com.foxhole.core.model.PrivacyRouteScope
 import com.foxhole.core.model.Settings
 import com.foxhole.core.model.TrafficMode
 import com.foxhole.core.model.VpnSession
-import com.foxhole.core.model.isUdpTransport
 import com.foxhole.core.model.tunnelSelectedPackages
 import com.foxhole.core.runtime.FoxholeVpnRuntimeBridge
 import com.foxhole.core.runtime.LocalGuardMode
 import com.foxhole.core.runtime.i2pRuntimeActive
 import com.foxhole.guard.R
-
-// Top-level policies of the VPN service: restore/reload predicates, notification route
-// resolution and the per-feature runtime-stats gates. Split from FoxholeVpnService.kt.
 
 internal fun shouldAttemptRuntimeReloadRestore(
     previousSession: VpnSession?,
@@ -47,11 +43,8 @@ internal fun FoxholeVpnService.notificationSmallIconRes(snapshot: NotificationSn
     }
 
 private fun FoxholeVpnService.notificationTorRouteActive(): Boolean {
-    val settings = container.settingsRepository.settings.value
-    return activeSession?.profileId == FoxholeVpnService.TOR_ONLY_PROFILE_ID ||
-        settings.privacyRoute.mode == PrivacyRouteMode.TOR_OVER_VPN &&
-        settings.traffic.mode == TrafficMode.TUNNEL &&
-        (settings.privacyRoute.bypassVpnTunnel || activeSession?.protocolHint?.isUdpTransport() != true)
+    val session = activeSession
+    return session?.torActive == true || session?.profileId == FoxholeVpnService.TOR_ONLY_PROFILE_ID
 }
 
 internal enum class FoxholeNotificationRouteKind {
@@ -62,30 +55,17 @@ internal enum class FoxholeNotificationRouteKind {
     TOR_BESIDE_VPN,
 }
 
-/**
- * The per-app scope of whatever route is live — the second half of what the notification has to
- * say. "Only these apps" and "everything except these apps" are opposite guarantees, and a user
- * reading one line while the other is in force is the worst outcome this text can produce, so the
- * scope is carried explicitly instead of being folded into the route kind.
- */
 internal enum class FoxholeNotificationSplitScope {
-    /** Whole device: per-app rules exist but nothing is scoped by them. */
     NONE,
 
-    /** Only the selected apps take the route; everything else stays off it. */
     INCLUDE,
 
-    /** Everything takes the route except the selected apps. */
     EXCLUDE,
 }
 
-/**
- * The scope as the runtime actually applies it: a mode without a single selected package routes the
- * whole device whatever the switch says, so an empty selection reads NONE rather than promising a
- * split that is not in force.
- */
 internal fun FoxholeVpnService.notificationSplitScope(): FoxholeNotificationSplitScope {
     val expert = container.settingsRepository.settings.value.expert
+    appliedTorNotificationSplitScope(activeSession)?.let { return it }
     if (expert.tunnelSelectedPackages().none(String::isNotBlank)) {
         return FoxholeNotificationSplitScope.NONE
     }
@@ -96,22 +76,35 @@ internal fun FoxholeVpnService.notificationSplitScope(): FoxholeNotificationSpli
     }
 }
 
-// Text-layer counterpart to notificationTorRouteActive() (icon layer) — reuses the exact same
-// TOR_OVER_VPN/bypassVpnTunnel/TrafficMode.TUNNEL conditions rather than re-deriving them, so the
-// two can't drift apart, but distinguishes tunneled-vs-beside Tor and VPN tunnel-vs-proxy for text.
+internal fun appliedTorNotificationSplitScope(session: VpnSession?): FoxholeNotificationSplitScope? {
+    if (session?.torActive != true) {
+        return null
+    }
+    val route = session.appliedTorRoute ?: return null
+    return FoxholeNotificationSplitScope.INCLUDE.takeIf {
+        route.scope == PrivacyRouteScope.SELECTED_APPS &&
+            route.selectedPackages.any(String::isNotBlank)
+    }
+}
+
 internal fun FoxholeVpnService.notificationRouteKind(): FoxholeNotificationRouteKind? {
-    val settings = container.settingsRepository.settings.value
-    val session = activeSession
-    val torOverVpnActive =
-        settings.privacyRoute.mode == PrivacyRouteMode.TOR_OVER_VPN &&
-            settings.traffic.mode == TrafficMode.TUNNEL &&
-            (settings.privacyRoute.bypassVpnTunnel || session?.protocolHint?.isUdpTransport() != true)
+    return notificationRouteKind(
+        session = activeSession,
+        trafficMode = FoxholeVpnRuntimeBridge.snapshot.value.trafficMode,
+    )
+}
+
+internal fun notificationRouteKind(
+    session: VpnSession?,
+    trafficMode: TrafficMode,
+): FoxholeNotificationRouteKind? {
     return when {
         session?.profileId == FoxholeVpnService.TOR_ONLY_PROFILE_ID -> FoxholeNotificationRouteKind.TOR_ONLY
-        torOverVpnActive && settings.privacyRoute.bypassVpnTunnel -> FoxholeNotificationRouteKind.TOR_BESIDE_VPN
-        torOverVpnActive -> FoxholeNotificationRouteKind.TOR_IN_VPN
+        session?.torActive == true && session.appliedTorRoute?.bypassVpnTunnel == true ->
+            FoxholeNotificationRouteKind.TOR_BESIDE_VPN
+        session?.torActive == true -> FoxholeNotificationRouteKind.TOR_IN_VPN
         session == null -> null
-        settings.traffic.mode == TrafficMode.PROXY -> FoxholeNotificationRouteKind.VPN_PROXY
+        trafficMode == TrafficMode.PROXY -> FoxholeNotificationRouteKind.VPN_PROXY
         else -> FoxholeNotificationRouteKind.VPN_TUNNEL
     }
 }

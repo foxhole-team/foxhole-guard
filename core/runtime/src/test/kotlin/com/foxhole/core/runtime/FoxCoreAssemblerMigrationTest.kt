@@ -95,6 +95,7 @@ internal class FoxCoreAssemblerMigrationTest : RuntimeConfigAssemblerTestSupport
             Settings(
                 privacyRoute =
                 PrivacyRouteSettings(
+                    permitted = true,
                     mode = PrivacyRouteMode.TOR_OVER_VPN,
                     scope = PrivacyRouteScope.ALL_APPS,
                 ),
@@ -142,13 +143,6 @@ internal class FoxCoreAssemblerMigrationTest : RuntimeConfigAssemblerTestSupport
         assertTrue(translated.tunPlan.disallowedApplications.contains(BuildConfig.APPLICATION_ID))
     }
 
-    /**
-     * Standalone Tor can capture one selected application while every other application remains
-     * direct. The legacy document expresses that honestly as route.final=direct plus two
-     * package-qualified TCP/UDP rules for the Tor application. The outbound translator used to
-     * reject the direct final before the policy translator could preserve those rules, so the
-     * Pixel failed before establishing its TUN with POLICY_UNREPRESENTABLE at $.route.final.
-     */
     @Test
     fun `selected app tor only remains representable with a direct default`() {
         val torApp = "com.example.tor"
@@ -157,6 +151,7 @@ internal class FoxCoreAssemblerMigrationTest : RuntimeConfigAssemblerTestSupport
             Settings(
                 privacyRoute =
                 PrivacyRouteSettings(
+                    permitted = true,
                     mode = PrivacyRouteMode.TOR_OVER_VPN,
                     scope = PrivacyRouteScope.SELECTED_APPS,
                 ),
@@ -210,39 +205,6 @@ internal class FoxCoreAssemblerMigrationTest : RuntimeConfigAssemblerTestSupport
         assertFalse(translated.tunPlan.disallowedApplications.contains(vpnApp))
     }
 
-    /**
-     * A per-app split must survive the trip through the translator.
-     *
-     * The two halves of the split disagreed after the sing-box → FoxCore move: the route half was
-     * ported (`translateInvertedApplicationRule`), the DNS half was not. The assembler kept emitting
-     * the sing-box "these packages resolve on dns-direct" rule, which the translator refuses on
-     * purpose — FoxCore has one resolver lane, and refusing beats pretending. The refusal is not the
-     * bug; emitting the rule is. Because translation happens BEFORE the tun is built
-     * (`FoxCoreRuntime.start`), the whole session was rejected and a profile with any split — or
-     * merely one app on the EXCLUDE lane — could not connect at all. Measured on a Pixel: the
-     * include-split leg of LiveApplicationSplitAndroidTest never reached CONNECTED.
-     *
-     * The include split had a second, independent way of being refused: blocked packages ride
-     * inside the include set (their reject rule must be able to see them on a full-device tun), and
-     * the inverted rule demanded that nothing had been classified yet — so "split + firewall" was
-     * unrepresentable too. Both halves are covered below, because either one alone is enough to
-     * make a split unable to connect.
-     *
-     * So this is not an assertion about JSON shape but about the contract between the two: what the
-     * assembler produces for every split mode, the translator must accept.
-     */
-    /**
-     * The same trap one screen over: a DNS bypass emitted with no rule set behind it.
-     *
-     * `buildDnsRules` used to write the bypass rules whenever filtering was on, while the signed
-     * rule-set block needed at least one category enabled. Turn DNS filtering on, turn all four
-     * categories off, add one bypass package or domain — a state the settings screen reaches — and
-     * the assembler produced `{package_name, action: route, server: dns-remote}` with nothing to
-     * be an exception to. FoxCore has no shape for that, so the translator refused the document,
-     * and translation happens before the tun exists: the profile did not connect at all.
-     *
-     * A bypass of nothing means nothing, so it is no longer emitted.
-     */
     @Test
     fun `a dns bypass without a rule set never reaches the translator`() {
         val bypassApp = "app.dns.bypass"
@@ -270,8 +232,6 @@ internal class FoxCoreAssemblerMigrationTest : RuntimeConfigAssemblerTestSupport
         val assembledRules = parse(assembled).getValue("dns").jsonObject["rules"]?.jsonArray.orEmpty()
         assertTrue("assembler emitted a bypass with no rule set again", assembledRules.isEmpty())
 
-        // Throws if the document is not representable — which is how this failed one step before
-        // establishTun.
         translator.translate(
             VpnSession(
                 profileId = 12L,
@@ -423,6 +383,7 @@ internal class FoxCoreAssemblerMigrationTest : RuntimeConfigAssemblerTestSupport
             Settings(
                 dns = DnsSettings(filteringEnabled = true),
                 privacyRoute = PrivacyRouteSettings(
+                    permitted = true,
                     mode = PrivacyRouteMode.TOR_OVER_VPN,
                     scope = PrivacyRouteScope.ALL_APPS,
                 ),
@@ -493,8 +454,7 @@ internal class FoxCoreAssemblerMigrationTest : RuntimeConfigAssemblerTestSupport
                             appAssignments = mapOf(splitApp to AppTunnelLane.VPN),
                         ),
                     ),
-                // Full tunnel plus one EXCLUDE-lane app is a split too — and the one a user reaches
-                // without ever opening the per-app routing mode.
+
                 "full tunnel with an excluded lane" to
                     Settings(
                         expert =
@@ -503,8 +463,7 @@ internal class FoxCoreAssemblerMigrationTest : RuntimeConfigAssemblerTestSupport
                             appAssignments = mapOf(excludedApp to AppTunnelLane.EXCLUDE),
                         ),
                     ),
-                // The pair that has to hold together: the firewall's blocked apps ride inside the
-                // include set so their reject rule can see them at all.
+
                 "include with the firewall on" to
                     Settings(
                         expert =
@@ -529,8 +488,7 @@ internal class FoxCoreAssemblerMigrationTest : RuntimeConfigAssemblerTestSupport
                         activePreset = null,
                         vpnProtocolHint = ProtocolHint.VLESS,
                     )
-                // No per-app DNS rule may leave the assembler: it is the shape the translator
-                // refuses, and the refusal kills the session before the tun exists.
+
                 val assembledDns = parse(assembled).getValue("dns").jsonObject
                 assertTrue(
                     "$name: assembler emitted a per-app dns rule again",
@@ -538,8 +496,7 @@ internal class FoxCoreAssemblerMigrationTest : RuntimeConfigAssemblerTestSupport
                         ?.jsonArray
                         ?.none { rule -> rule.jsonObject.containsKey("package_name") } ?: true,
                 )
-                // Throws FoxCoreConfigTranslationException if the config is not representable —
-                // which is exactly how this failed on the device, one step before establishTun.
+
                 translator
                     .translate(
                         VpnSession(
@@ -558,7 +515,6 @@ internal class FoxCoreAssemblerMigrationTest : RuntimeConfigAssemblerTestSupport
                     }
             }
 
-        // The split itself survives, in the one place FoxCore keeps it: the traffic policy.
         val include = splitPolicies.getValue("include")
         assertEquals("direct", include.getValue("default_action").jsonPrimitive.content)
         assertEquals("vpn", include.applicationAction(splitApp))
@@ -571,7 +527,6 @@ internal class FoxCoreAssemblerMigrationTest : RuntimeConfigAssemblerTestSupport
         assertEquals("vpn", excludedLane.getValue("default_action").jsonPrimitive.content)
         assertEquals("direct", excludedLane.applicationAction(excludedApp))
 
-        // The blocked app is in the include set and must still come out blocked, not tunnelled.
         val firewalled = splitPolicies.getValue("include with the firewall on")
         assertEquals("direct", firewalled.getValue("default_action").jsonPrimitive.content)
         assertEquals("vpn", firewalled.applicationAction(splitApp))
@@ -587,7 +542,6 @@ internal class FoxCoreAssemblerMigrationTest : RuntimeConfigAssemblerTestSupport
             ?.jsonPrimitive
             ?.content
 
-    /** A base profile whose primary outbound the translator can actually carry. */
     private fun vlessBaseConfig(): String =
         baseConfigWithOutbounds(
             buildJsonArray {

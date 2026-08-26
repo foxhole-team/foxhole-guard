@@ -2,6 +2,7 @@ package com.foxhole.guard.ui.cli.settings
 
 import com.foxhole.core.model.PrivacyRouteSettings
 import com.foxhole.guard.TOR_BRIDGE_UPDATE_INTERVAL_HOURS
+import com.foxhole.guard.runtime.RemoteDownloadProgress
 import com.foxhole.guard.ui.FoxholeUpdatePhase
 import com.foxhole.guard.ui.torBridgePersistenceMarker
 import com.foxhole.guard.ui.torBridgeRefreshRequired
@@ -15,27 +16,52 @@ import java.util.concurrent.TimeUnit
 
 class CliTorBridgeAndDnsPromptTest {
     @Test
-    fun `FoxHole DB progress is inline on modern actions and pixel segmented in retro`() {
+    fun `FoxHole DB progress uses one inline action and progress contract`() {
         assertEquals(1, FoxholeUpdatePhase.CHECKING.foxholeUpdateStage())
         assertEquals(2, FoxholeUpdatePhase.DOWNLOADING.foxholeUpdateStage())
         assertEquals(3, FoxholeUpdatePhase.VERIFYING.foxholeUpdateStage())
         assertEquals(4, FoxholeUpdatePhase.DONE.foxholeUpdateStage())
         assertEquals(null, FoxholeUpdatePhase.FAILED.foxholeUpdateStage())
+        assertEquals(
+            0.25f,
+            verifiedUpdateProgressFraction(FoxholeUpdatePhase.CHECKING, null, verifiedSuccess = false),
+            0f,
+        )
+        assertEquals(
+            0.5f,
+            verifiedUpdateProgressFraction(
+                FoxholeUpdatePhase.DOWNLOADING,
+                RemoteDownloadProgress(downloadedBytes = 1L, totalBytes = 2L),
+                verifiedSuccess = false,
+            ),
+            0f,
+        )
+        assertEquals(
+            1f,
+            verifiedUpdateProgressFraction(FoxholeUpdatePhase.DONE, null, verifiedSuccess = true),
+            0f,
+        )
 
         val wizard = source("src/main/kotlin/com/foxhole/guard/ui/cli/onboarding/CliOnboardingWizard.kt")
         val dns = source("src/main/kotlin/com/foxhole/guard/ui/cli/settings/CliSettingsDnsSection.kt")
         val updates = source("src/main/kotlin/com/foxhole/guard/ui/cli/settings/CliUpdatesSubScreen.kt")
         val sheet = source("src/main/kotlin/com/foxhole/guard/ui/cli/settings/CliFoxholeDbUpdateSheet.kt")
+        val dataset = source("src/main/kotlin/com/foxhole/guard/ui/cli/settings/CliDatasetActivationSheet.kt")
+        val progress = source("src/main/kotlin/com/foxhole/guard/ui/cli/settings/CliFoxholeUpdateProgress.kt")
         val pixel = source("src/main/kotlin/com/foxhole/guard/ui/cli/components/CliStageProgress.kt")
 
         assertTrue(wizard.contains("color = if (verified) colors.ok else colors.accent"))
-        assertTrue(dns.contains("CliFoxholeUpdateProgress(phase = refreshPhase)"))
+        assertFalse(dns.contains("CliFoxholeUpdateProgress("))
+        assertTrue(dns.contains("CliVerifiedUpdateProgress("))
         assertFalse(updates.contains("CliFoxholeUpdateProgress(phase = phase)"))
         assertTrue(updates.contains("foxholeRefreshButtonLabel"))
         assertTrue(updates.contains("animatedLabel = refreshRunning"))
         assertTrue(updates.contains("R.string.cli_updates_progress"))
         assertTrue(sheet.contains("CliFoxholeUpdateProgress(phase = phase)"))
-        assertTrue(pixel.contains("repeat(safeTotal)"))
+        assertTrue(dataset.contains("CliVerifiedUpdateProgress("))
+        assertTrue(progress.contains("CliPixelProgressBar("))
+        assertTrue(progress.contains("verifiedUpdateProgressFraction("))
+        assertTrue(pixel.contains("fillMaxWidth(safeCompleted.toFloat() / safeTotal)"))
         assertTrue(pixel.contains("CliShimmerText("))
         assertFalse(wizard.contains("LinearProgressIndicator"))
         assertFalse(pixel.contains("LinearProgressIndicator"))
@@ -172,17 +198,27 @@ class CliTorBridgeAndDnsPromptTest {
         val stageProgress = source("src/main/kotlin/com/foxhole/guard/ui/cli/components/CliStageProgress.kt")
 
         assertTrue(torScreen.contains("CliBottomSheet("))
-        assertTrue(torScreen.contains("CliStageProgress("))
+        assertTrue(torScreen.contains("CliVerifiedUpdateProgress("))
+        assertTrue(torScreen.contains("torBridgeDownloadProgress.collectAsStateWithLifecycle()"))
         assertTrue(torScreen.contains("viewModel.onTorBridgeManualRefresh()"))
         assertTrue(torScreen.contains("torBridgeVerifiedSuccess(phase, privacyRoute, baseline)"))
         assertFalse(torScreen.contains("CliFoxholeDbUpdateSheet("))
         assertFalse(torScreen.contains("LinearProgressIndicator"))
-        assertTrue(stageProgress.contains("repeat(safeTotal)"))
-        assertTrue(stageProgress.contains("text = \"\$safeCompleted/\$safeTotal\""))
+        assertTrue(stageProgress.contains("fillMaxWidth(safeCompleted.toFloat() / safeTotal)"))
+        assertTrue(stageProgress.contains("\"\$stageLabel · \$safeCompleted/\$safeTotal\""))
         assertTrue(torSupport.contains("TOR_BRIDGE_UPDATE_INTERVAL_HOURS"))
         assertTrue(torSupport.contains("terminalPhase == FoxholeUpdatePhase.FAILED"))
         assertFalse(dnsScreen.contains("rememberSaveable(dns.filteringEnabled)"))
         assertTrue(dnsScreen.contains("rememberSaveable { mutableStateOf(false) }"))
+        assertTrue(dnsScreen.contains("downloadProgress = refreshProgress"))
+        assertTrue(
+            dnsScreen.contains(
+                "autoDismissAfterMillis = DNS_FILTER_SUCCESS_AUTO_DISMISS_MS.takeIf { verifiedSuccess }",
+            ),
+        )
+        assertTrue(dnsScreen.contains("viewModel.onDnsFilterEnablePreflightCancelled()"))
+        assertFalse(dnsScreen.contains("AnimatedContent("))
+        assertFalse(dnsScreen.contains("CliFoxholeUpdateProgress("))
 
         val keys = listOf(
             "cli_tor_bridges_update_title",

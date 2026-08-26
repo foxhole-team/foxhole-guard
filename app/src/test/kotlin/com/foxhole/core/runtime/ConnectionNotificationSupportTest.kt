@@ -1,15 +1,23 @@
 package com.foxhole.core.runtime
 
+import com.foxhole.core.model.AppliedTorRoute
 import com.foxhole.core.model.ConnectionState
 import com.foxhole.core.model.IpInfo
 import com.foxhole.core.model.NotificationSnapshot
+import com.foxhole.core.model.PrivacyRouteScope
+import com.foxhole.core.model.ProtocolHint
 import com.foxhole.core.model.RuntimeTeardownPhase
 import com.foxhole.core.model.TorNetworkPhase
+import com.foxhole.core.model.TrafficMode
 import com.foxhole.core.model.TrafficSnapshot
+import com.foxhole.core.model.VpnSession
 import com.foxhole.guard.R
 import com.foxhole.guard.runtime.FoxholeConnectionServiceContract
 import com.foxhole.guard.runtime.FoxholeNotificationRouteKind
+import com.foxhole.guard.runtime.FoxholeNotificationSplitScope
+import com.foxhole.guard.runtime.appliedTorNotificationSplitScope
 import com.foxhole.guard.runtime.notificationActionForState
+import com.foxhole.guard.runtime.notificationRouteKind
 import com.foxhole.guard.runtime.notificationTeardownBodyRes
 import com.foxhole.guard.runtime.notificationTorTransitionTitleRes
 import com.foxhole.guard.runtime.shouldShowConnectionNotificationAction
@@ -89,6 +97,40 @@ class ConnectionNotificationSupportTest {
                 TorNetworkPhase.CONNECTED,
             ),
         )
+    }
+
+    @Test
+    fun `notification route follows the applied TOR descriptor`() {
+        val inVpn = session().copy(torActive = true, appliedTorRoute = torRoute(bypassVpn = false))
+        val besideVpn = session().copy(torActive = true, appliedTorRoute = torRoute(bypassVpn = true))
+        val torOnly =
+            session().copy(profileId = com.foxhole.guard.runtime.FoxholeVpnService.TOR_ONLY_PROFILE_ID)
+
+        assertEquals(FoxholeNotificationRouteKind.TOR_IN_VPN, notificationRouteKind(inVpn, TrafficMode.TUNNEL))
+        assertEquals(FoxholeNotificationRouteKind.TOR_BESIDE_VPN, notificationRouteKind(besideVpn, TrafficMode.TUNNEL))
+        assertEquals(FoxholeNotificationRouteKind.TOR_ONLY, notificationRouteKind(torOnly, TrafficMode.TUNNEL))
+        assertEquals(FoxholeNotificationRouteKind.VPN_TUNNEL, notificationRouteKind(session(), TrafficMode.TUNNEL))
+        assertEquals(FoxholeNotificationRouteKind.VPN_PROXY, notificationRouteKind(session(), TrafficMode.PROXY))
+        assertNull(notificationRouteKind(null, TrafficMode.TUNNEL))
+    }
+
+    @Test
+    fun `notification scope follows the applied selected-app TOR descriptor`() {
+        val selected =
+            session().copy(
+                torActive = true,
+                appliedTorRoute =
+                AppliedTorRoute(
+                    scope = PrivacyRouteScope.SELECTED_APPS,
+                    bypassVpnTunnel = false,
+                    selectedPackages = listOf("org.example.browser"),
+                ),
+            )
+        val allApps = selected.copy(appliedTorRoute = torRoute(bypassVpn = false))
+
+        assertEquals(FoxholeNotificationSplitScope.INCLUDE, appliedTorNotificationSplitScope(selected))
+        assertNull(appliedTorNotificationSplitScope(allApps))
+        assertNull(appliedTorNotificationSplitScope(selected.copy(torActive = false)))
     }
 
     @Test
@@ -184,4 +226,19 @@ class ConnectionNotificationSupportTest {
             FoxholeVpnRuntimeBridge.updateIpInfo(previousIpInfo)
         }
     }
+
+    private fun session() =
+        VpnSession(
+            profileId = 42L,
+            profileName = "test",
+            protocolHint = ProtocolHint.VLESS,
+            configJson = "{}",
+            correlationId = "notification-route",
+        )
+
+    private fun torRoute(bypassVpn: Boolean) =
+        AppliedTorRoute(
+            scope = PrivacyRouteScope.ALL_APPS,
+            bypassVpnTunnel = bypassVpn,
+        )
 }

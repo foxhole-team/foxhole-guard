@@ -64,4 +64,27 @@ class TorRuntimeInstallerArtiCompatibilityTest {
 
         assertEquals(2, transports.size)
     }
+
+    @Test
+    fun `only required protocols survive before helpers are coalesced`() {
+        val transports =
+            listOf(
+                TorPluggableTransport(
+                    protocols = listOf("meek_lite", "obfs4", "webtunnel"),
+                    executablePath = "/native/liblyrebird.so",
+                ),
+                TorPluggableTransport(
+                    protocols = listOf("snowflake", "obfs4"),
+                    executablePath = "/native/liblyrebird.so",
+                ),
+                TorPluggableTransport(
+                    protocols = listOf("conjure"),
+                    executablePath = "/native/libconjure_client.so",
+                ),
+            ).restrictToRequiredProtocols(setOf("snowflake"))
+
+        assertEquals(1, transports.size)
+        assertEquals(listOf("snowflake"), transports.single().protocols)
+        assertEquals("/native/liblyrebird.so", transports.single().executablePath)
+    }
 }

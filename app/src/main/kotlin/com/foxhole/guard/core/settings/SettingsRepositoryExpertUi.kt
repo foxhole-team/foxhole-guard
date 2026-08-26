@@ -11,9 +11,6 @@ import com.foxhole.core.model.normalizedStatisticsWidgetOrder
 import com.foxhole.core.model.normalizedTrafficMapSectionOrder
 import com.foxhole.guard.BuildConfig
 
-// Expert flags, dashboard card toggles, diagnostics and anomaly settings. Extracted from
-// SettingsRepository (class split by domain).
-
 suspend fun SettingsRepository.unlockExpertSettings(timestamp: Long = System.currentTimeMillis()) =
     update {
         it.copy(
@@ -105,8 +102,7 @@ internal fun updateFirewallEnabledIn(
 ): Settings =
     current.copy(
         expert = current.expert.copy(
-            // Pending quarantine is fail-closed: the firewall remains its enforcement host until
-            // every app receives an explicit Allow or Block decision.
+
             firewallEnabled = value || current.expert.pendingQuarantinePackages.isNotEmpty(),
         ),
     )

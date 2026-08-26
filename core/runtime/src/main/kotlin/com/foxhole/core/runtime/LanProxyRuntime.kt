@@ -13,13 +13,6 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
 
-// The LAN proxy as a runtime object rather than a saved switch: what we ask the core for, what the
-// core says came of it, and the one place that turns the two into the snapshot the UI renders.
-//
-// Everything here is deliberately fail-closed. A LAN proxy is a listener on the phone's Wi-Fi
-// address that relays into the owner's VPN or Tor: raising one that "probably worked" is how a
-// flat becomes an open relay. So a refusal is a refusal — never a Ready with an asterisk.
-
 /** The Wi-Fi leg the listener is pinned to. Resolved once per arm, never guessed. */
 data class LanNetworkBinding(
     val networkHandle: Long,
@@ -28,10 +21,7 @@ data class LanNetworkBinding(
     val transport: String,
 )
 
-/**
- * A request to publish the LAN proxy. Ports are per-protocol and `0` means "do not offer this one",
- * so BOTH is genuinely two listeners on two ports rather than one surface pretending to be two.
- */
+// Missing authentication or network binding refuses the LAN surface; partial readiness would be an open relay.
 data class LanProxyRequest(
     val upstream: LanProxyUpstream,
     val socksPort: Int,
@@ -73,13 +63,6 @@ private fun coreUpstream(value: String?): LanProxyUpstream? =
         else -> null
     }
 
-/**
- * Maps the core's `LanProxyState` onto the phases the UI knows.
- *
- * The intermediate states (permission, resolve, acquire, bind) all collapse to ARMING on purpose:
- * they are a progress detail of one user-visible act — "the switch is on, nothing is serving yet" —
- * and splitting them across four labels only makes the screen flicker.
- */
 private fun phaseForCoreState(state: String?): LanProxyPhase =
     when (state?.trim()?.lowercase()) {
         "ready" -> LanProxyPhase.READY
@@ -88,45 +71,29 @@ private fun phaseForCoreState(state: String?): LanProxyPhase =
         "failed" -> LanProxyPhase.FAILED
         "checking_permission", "resolving_network", "acquiring_components", "binding_listeners" ->
             LanProxyPhase.ARMING
-        // `stopping` is still a live listener winding down, but for the owner it is already gone.
+
         "stopped", "stopping" -> LanProxyPhase.OFF
         else -> LanProxyPhase.OFF
     }
 
-/**
- * The core's refusal codes, typed. Anything the core does not have a code for lands on UNKNOWN
- * rather than being silently read as success.
- */
 fun lanProxyReasonForCode(code: Int): LanProxyUnavailableReason =
     when (code) {
         LAN_PROXY_NOT_LINKED -> LanProxyUnavailableReason.CORE_UNSUPPORTED
-        // A wildcard/cellular/unknown-interface bind, and a confirmation that no longer matches the
-        // network, are the same thing to the user: this network is not one the proxy may go up on.
+
         FoxholeNativeEngine.LAN_NETWORK_REFUSED,
         FoxholeNativeEngine.LAN_NETWORK_UNCONFIRMED,
         FoxholeNativeEngine.LAN_CAPACITY,
         -> LanProxyUnavailableReason.NETWORK_REFUSED
         FoxholeNativeEngine.LAN_BIND_FAILED -> LanProxyUnavailableReason.BIND_FAILED
-        // No engine, or an engine on its way down / without the lane the preset asked for: either
-        // way there is no tunnel to share right now.
+
         FoxholeNativeEngine.LAN_NO_ENGINE,
         FoxholeNativeEngine.LAN_RUNTIME_UNAVAILABLE,
         -> LanProxyUnavailableReason.NO_SESSION
         else -> LanProxyUnavailableReason.UNKNOWN
     }
 
-/**
- * Only a plain OK counts. Every other code is a refusal — including the ones that look benign —
- * because the whole point of this layer is that the screen never shows a proxy the core did not
- * actually bind.
- */
 private fun lanProxyCodeIsAccepted(code: Int): Boolean = code == FoxholeNativeEngine.LAN_OK
 
-/**
- * Parses the core's status document. A document that cannot be read is FAILED/UNKNOWN, never an
- * empty OFF: "I could not ask" and "nothing is running" are different facts and the second one is
- * the dangerous thing to invent.
- */
 fun parseLanProxyStatusJson(
     source: String,
     requested: LanProxyUpstream?,
@@ -166,10 +133,6 @@ fun parseLanProxyStatusJson(
     )
 }
 
-/**
- * The core reports its refusals as words, and the words are its own vocabulary — matching on
- * substrings keeps the Android side from having to be re-released whenever a message is reworded.
- */
 private fun reasonForCoreError(message: String): LanProxyUnavailableReason {
     val lowered = message.lowercase()
     return when {
@@ -188,14 +151,6 @@ private fun JsonObject.text(name: String): String? =
         ?.trim()
         ?.takeIf(String::isNotBlank)
 
-/**
- * Owns the LAN proxy across a session: it applies the request the app computed, remembers what it
- * applied so an unchanged request does not re-bind the listeners on every settings write, and reads
- * the state back from the core instead of assuming its own call worked.
- *
- * Single-threaded by contract — every caller is on the VPN service's control path — but the applied
- * request is volatile so the status reader can run from anywhere.
- */
 internal class LanProxyController(
     private val native: FoxCoreNativeApi,
     private val clock: () -> Long = System::currentTimeMillis,
@@ -203,16 +158,11 @@ internal class LanProxyController(
     @Volatile
     private var applied: LanProxyRequest? = null
 
-    /** Last published snapshot, so a status read without a session still answers honestly. */
     @Volatile
     private var lastStatus: LanProxyStatusSnapshot = LanProxyStatusSnapshot()
 
     fun status(): LanProxyStatusSnapshot = lastStatus
 
-    /**
-     * Brings the LAN proxy in line with [request]. A null request means "take it down"; a
-     * null [handle] means there is no session to share and the switch can only be armed.
-     */
     fun sync(
         handle: Long?,
         request: LanProxyRequest?,
@@ -263,7 +213,6 @@ internal class LanProxyController(
         return publish(readStatus(handle, request.upstream))
     }
 
-    /** Session teardown: the listener cannot outlive the tunnel it relays into. */
     fun onSessionGone() {
         applied = null
         publish(LanProxyStatusSnapshot(updatedAt = clock()))
@@ -274,11 +223,6 @@ internal class LanProxyController(
         requested: LanProxyUpstream,
     ): LanProxyStatusSnapshot = parseLanProxyStatusJson(native.lanProxyStatus(handle), requested, clock())
 
-    /**
-     * A refused call. The result code is coarse by design — it is the shared component ABI — so when
-     * it maps to nothing useful the core's own `last_error` sentence is consulted before settling for
-     * "unknown": the screen has to be able to tell the user what to change.
-     */
     private fun refusal(
         handle: Long,
         request: LanProxyRequest,

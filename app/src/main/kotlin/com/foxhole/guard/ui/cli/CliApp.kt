@@ -2,7 +2,9 @@ package com.foxhole.guard.ui.cli
 
 import android.content.res.Resources
 import android.os.SystemClock
-import androidx.activity.compose.PredictiveBackHandler
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.ReportDrawn
+import androidx.activity.compose.ReportDrawnWhen
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -12,6 +14,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
@@ -24,7 +27,6 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -35,7 +37,7 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -125,15 +127,20 @@ fun CliApp(viewModel: HomeViewModel) {
     )
 
     if (lockState != LockState.UNLOCKED) {
+        ReportDrawn()
         CliUnlockGate(viewModel = viewModel, lockState = lockState)
         return
     }
 
     val onboardingRequired by viewModel.onboardingRequired.collectAsStateWithLifecycle()
     if (onboardingRequired) {
+        ReportDrawn()
         CliOnboardingWizard(viewModel = viewModel)
         return
     }
+
+    val homeFrontendReady by viewModel.homeFrontendReady.collectAsStateWithLifecycle()
+    ReportDrawnWhen { homeFrontendReady }
 
     CliQuickStartSheet(viewModel = viewModel)
 
@@ -150,24 +157,17 @@ fun CliApp(viewModel: HomeViewModel) {
     val dockScreens = rememberDockScreens(
         viewModel = viewModel,
         screen = screen,
-        onResetToHome = { screen = CliScreen.HOME },
+        onScreenRemoved = { removed ->
+            screen = if (removed == CliScreen.STATS) CliScreen.SETTINGS else CliScreen.HOME
+        },
     )
 
-    var backPeek by remember { mutableFloatStateOf(0f) }
-    PredictiveBackHandler(enabled = screen != CliScreen.HOME) { events ->
-        try {
-            events.collect { event -> backPeek = event.progress }
-            screen = CliScreen.HOME
-        } catch (_: kotlin.coroutines.cancellation.CancellationException) {
-        } finally {
-            backPeek = 0f
-        }
-    }
+    BackHandler(enabled = screen != CliScreen.HOME) { screen = CliScreen.HOME }
 
     var bottomChromeHeightPx by remember { mutableIntStateOf(0) }
     val bottomChromeClearance = with(LocalDensity.current) { bottomChromeHeightPx.toDp() }
     CompositionLocalProvider(
-        // Blur stays dormant until the backdrop renderer is stable across supported devices.
+
         LocalCliGlassBlurEnabled provides false,
         LocalCliBottomChromeClearance provides bottomChromeClearance,
     ) {
@@ -180,12 +180,12 @@ fun CliApp(viewModel: HomeViewModel) {
             ) {
                 CliTabPager(
                     screen = screen,
-                    backPeek = backPeek,
                     viewModel = viewModel,
                     terminal = terminal,
                     terminalListState = terminalListState,
                     terminalFollowsOutput = terminalFollowsOutput,
                     onTerminalFollowsOutputChanged = { terminalFollowsOutput = it },
+                    onOpenMap = { screen = CliScreen.MAP },
                 )
             }
             Column(
@@ -214,24 +214,33 @@ val LocalCliBottomChromeClearance = staticCompositionLocalOf { 0.dp }
 private fun rememberDockScreens(
     viewModel: HomeViewModel,
     screen: CliScreen,
-    onResetToHome: () -> Unit,
+    onScreenRemoved: (CliScreen) -> Unit,
 ): List<CliScreen> {
     val settingsRouteState by viewModel.settingsRouteState.collectAsStateWithLifecycle()
     val webAppsVisible = settingsRouteState.settings.webApps.enabled &&
         settingsRouteState.settings.webApps.dockScreenEnabled
-    val dockScreens = remember(webAppsVisible) {
-        if (webAppsVisible) {
-            CliScreen.entries.toList()
-        } else {
-            CliScreen.entries.filter { it != CliScreen.WEBAPPS }
-        }
+    val statisticsDockIconEnabled = settingsRouteState.settings.ui.statisticsDockIconEnabled
+    val dockScreens = remember(webAppsVisible, statisticsDockIconEnabled) {
+        cliDockScreens(
+            webAppsVisible = webAppsVisible,
+            statisticsDockIconEnabled = statisticsDockIconEnabled,
+        )
     }
-    LaunchedEffect(webAppsVisible, screen) {
-        if (!webAppsVisible && screen == CliScreen.WEBAPPS) {
-            onResetToHome()
+    LaunchedEffect(webAppsVisible, statisticsDockIconEnabled, screen) {
+        when {
+            !webAppsVisible && screen == CliScreen.WEBAPPS -> onScreenRemoved(CliScreen.WEBAPPS)
+            !statisticsDockIconEnabled && screen == CliScreen.STATS -> onScreenRemoved(CliScreen.STATS)
         }
     }
     return dockScreens
+}
+
+internal fun cliDockScreens(
+    webAppsVisible: Boolean,
+    statisticsDockIconEnabled: Boolean,
+): List<CliScreen> = CliScreen.entries.filter { screen ->
+    (screen != CliScreen.WEBAPPS || webAppsVisible) &&
+        (screen != CliScreen.STATS || statisticsDockIconEnabled)
 }
 
 @Composable
@@ -326,21 +335,22 @@ private fun CliUnlockGate(
 @Composable
 private fun CliTabPager(
     screen: CliScreen,
-    backPeek: Float,
     viewModel: HomeViewModel,
     terminal: CliTerminalState,
     terminalListState: LazyListState,
     terminalFollowsOutput: Boolean,
     onTerminalFollowsOutputChanged: (Boolean) -> Unit,
+    onOpenMap: () -> Unit,
 ) {
     AnimatedContent(
         targetState = screen,
-        transitionSpec = { cliSlide(forward = targetState.ordinal > initialState.ordinal) },
+        transitionSpec = {
+            cliSlide(
+                forward = targetState.ordinal > initialState.ordinal,
+            )
+        },
         modifier = Modifier
-            .fillMaxSize()
-            .graphicsLayer {
-                translationX = backPeek * size.width * BACK_PEEK_SHIFT
-            },
+            .fillMaxSize(),
         label = "cliTab",
     ) { target ->
         CliTabContent(
@@ -350,6 +360,7 @@ private fun CliTabPager(
             terminalListState = terminalListState,
             terminalFollowsOutput = terminalFollowsOutput,
             onTerminalFollowsOutputChanged = onTerminalFollowsOutputChanged,
+            onOpenMap = onOpenMap,
         )
     }
 }
@@ -362,6 +373,7 @@ private fun CliTabContent(
     terminalListState: LazyListState,
     terminalFollowsOutput: Boolean,
     onTerminalFollowsOutputChanged: (Boolean) -> Unit,
+    onOpenMap: () -> Unit,
 ) {
     Box(modifier = Modifier.fillMaxSize().testTag(cliScreenTag(target))) {
         when (target) {
@@ -371,12 +383,15 @@ private fun CliTabContent(
                 terminalListState = terminalListState,
                 terminalFollowsOutput = terminalFollowsOutput,
                 onTerminalFollowsOutputChanged = onTerminalFollowsOutputChanged,
-                modifier = Modifier.statusBarsPadding().padding(top = CliTopContentGap),
+                onOpenMap = onOpenMap,
+                modifier = Modifier
+                    .statusBarsPadding()
+                    .offset(y = -CliTopBarLift)
+                    .padding(top = CliTopContentGap),
             )
             CliScreen.PROFILES -> CliProfilesScreen(
                 viewModel = viewModel,
                 terminal = terminal,
-                modifier = Modifier.statusBarsPadding().padding(top = CliTopContentGap),
             )
             CliScreen.APPS -> CliRoutingScreen(viewModel = viewModel, onBack = null)
             CliScreen.MAP -> CliMapScreen(viewModel = viewModel)
@@ -389,7 +404,16 @@ private fun CliTabContent(
 
 internal const val CLI_APP_ROOT_TAG = "cli_app_root"
 
-internal val CliTopContentGap = 6.dp
+internal val CliTopContentGap = 0.dp
+internal val CliTopBarLift = 6.dp
+
+internal fun Modifier.cliTopBarLifted(): Modifier = layout { measurable, constraints ->
+    val placeable = measurable.measure(constraints)
+    val liftPx = CliTopBarLift.roundToPx().coerceAtMost(placeable.height)
+    layout(placeable.width, (placeable.height - liftPx).coerceAtLeast(0)) {
+        placeable.placeRelative(0, -liftPx)
+    }
+}
 
 internal fun cliScreenTag(screen: CliScreen): String = "cli_screen_${screen.name.lowercase()}"
 
@@ -403,8 +427,8 @@ private fun CliActionBannerRow(
     Row(
         modifier = Modifier
             .padding(horizontal = CliSpacing.sm, vertical = CliSpacing.xs)
-            .background(colors.panel, RoundedCornerShape(CliSpacing.md))
-            .border(1.dp, colors.border, RoundedCornerShape(CliSpacing.md))
+            .background(colors.panel, RoundedCornerShape(CliRadius.modal))
+            .border(1.dp, colors.border, RoundedCornerShape(CliRadius.modal))
             .padding(horizontal = CliSpacing.sm, vertical = CliSpacing.xs),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -531,8 +555,6 @@ private fun cliTerminalStrings(resources: Resources) = CliTerminalStrings(
             resources.getString(R.string.cli_home_term_reason_restored_last_good),
     ),
 )
-
-private const val BACK_PEEK_SHIFT = 0.15f
 
 private fun bannerTone(tone: FoxholeBannerTone): CliLineTone = when (tone) {
     FoxholeBannerTone.ERROR -> CliLineTone.ERR

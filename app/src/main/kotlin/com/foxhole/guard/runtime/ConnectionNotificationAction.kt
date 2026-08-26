@@ -70,8 +70,6 @@ internal fun Service.removeForegroundNotification() {
     stopForeground(Service.STOP_FOREGROUND_REMOVE)
 }
 
-// Context, not Service: the same channel is re-registered from the app context when the app
-// language changes, and only the localized name/description of an existing channel changes.
 internal fun Context.ensureConnectionNotificationChannel(notificationManager: NotificationManager) {
     notificationManager.createNotificationChannel(
         NotificationChannel(
@@ -92,17 +90,6 @@ internal fun Context.ensureConnectionNotificationChannel(notificationManager: No
     )
 }
 
-/**
- * Claims the foreground slot the moment the service is created, with a notification that touches
- * nothing but the channel and one string.
- *
- * Android gives a service a few seconds between `startForegroundService()` and `startForeground()`
- * and kills the whole PROCESS with ForegroundServiceDidNotStartInTimeException when it misses the
- * window. Reaching the real notification means going through the app graph, the encrypted settings
- * and the connection snapshot — on a cold process (which is exactly the case after the system just
- * killed us, or on boot restore) that ran past the deadline. Claim the slot first; the true
- * notification replaces this one microseconds later in onStartCommand.
- */
 internal fun Service.claimForegroundSlotEarly(notificationManager: NotificationManager) {
     runCatching {
         ensureConnectionNotificationChannel(notificationManager)
@@ -135,7 +122,7 @@ internal fun Service.buildConnectionNotification(
         PendingIntent.getActivity(
             this,
             1,
-            // exp CLI copy: the launcher is the CLI activity - notifications open it.
+
             Intent(this, com.foxhole.guard.ui.cli.CliMainActivity::class.java),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
@@ -249,12 +236,6 @@ internal fun notificationTeardownBodyRes(phase: RuntimeTeardownPhase?): Int =
 internal fun FoxholeVpnService.notificationCollapsedTextInternal(snapshot: NotificationSnapshot): String =
     notificationHealthText(snapshot).orEmpty()
 
-/**
- * The expanded notification is the one place the whole runtime is visible without opening the app,
- * so it carries every live lane rather than the tunnel alone: the TOR exit with its country, the
- * I2P router's state, and the proxy surfaces — each from what the runtime reports, never from a
- * saved switch.
- */
 internal fun FoxholeVpnService.notificationExpandedTextInternal(snapshot: NotificationSnapshot): String? {
     val settings = container.settingsRepository.settings.value
     val lines =
@@ -270,10 +251,6 @@ internal fun FoxholeVpnService.notificationExpandedTextInternal(snapshot: Notifi
     return lines.takeIf(List<String>::isNotEmpty)?.joinToString(separator = "\n")
 }
 
-/**
- * The TOR exit as the runtime measured it — address plus country, the two facts that tell the user
- * their circuit is real. Absent while the circuit is still building, rather than guessed.
- */
 private fun FoxholeVpnService.notificationTorExitLine(): String? {
     if (FoxholeVpnRuntimeBridge.torPhase.value.phase != TorNetworkPhase.CONNECTED) return null
     val info = FoxholeVpnRuntimeBridge.torRouteIpInfo.value ?: return null
@@ -286,11 +263,6 @@ private fun FoxholeVpnService.notificationTorExitLine(): String? {
     return exit.takeIf(String::isNotBlank)?.let { getString(R.string.notification_body_tor_exit, it) }
 }
 
-/**
- * I2P: the router's own phase, and — when this device is relaying transit traffic for the network —
- * a thank-you that stays up for as long as the relay does. Relaying costs the owner bandwidth and
- * battery for someone else's anonymity; the notification is where that is acknowledged.
- */
 private fun FoxholeVpnService.notificationI2pLines(settings: Settings): List<String> {
     if (!settings.i2pRuntimeActive()) {
         return emptyList()
@@ -313,11 +285,6 @@ private fun FoxholeVpnService.notificationI2pLines(settings: Settings): List<Str
     }
 }
 
-/**
- * The proxy surfaces, from their real state. The LAN line used to render `allowLanAccess` — the
- * saved switch — so a proxy that never bound still announced itself as reachable to the whole
- * network; it now waits for the core to report bound listeners.
- */
 private fun FoxholeVpnService.notificationProxySurfaceLines(settings: Settings): List<String> =
     buildList {
         if (settings.traffic.mode == TrafficMode.PROXY) {
@@ -371,11 +338,6 @@ internal fun notificationTorTransitionTitleRes(
     }
 }
 
-/**
- * The headline: which route is up, and — when the route is scoped to a set of apps — that it is
- * scoped at all. A whole-device tunnel and a tunnel carrying three apps are different promises, and
- * the line that used to cover both said only "VPN tunnel connected".
- */
 private fun FoxholeVpnService.connectedNotificationStateLabelRes(): Int {
     val split = notificationSplitScope() != FoxholeNotificationSplitScope.NONE
     return when (notificationRouteKind()) {
@@ -403,11 +365,6 @@ private fun FoxholeVpnService.connectedNotificationStateLabelRes(): Int {
     }
 }
 
-/**
- * The body spells the scope out in words, because "only the selected apps" and "everything except
- * the selected apps" are the two answers a user actually needs and they are opposites. Scope NONE
- * keeps the original whole-device wording.
- */
 private fun FoxholeVpnService.connectedNotificationBodyRes(): Int {
     val scope = notificationSplitScope()
     return when (notificationRouteKind()) {
@@ -434,10 +391,6 @@ private fun FoxholeVpnService.connectedNotificationBodyRes(): Int {
     }
 }
 
-/**
- * The scope arm of every route, in one place: each route offers the same three sentences, so the
- * choice between them is written once rather than three times side by side.
- */
 @StringRes
 private fun FoxholeNotificationSplitScope.bodyRes(
     @StringRes include: Int,

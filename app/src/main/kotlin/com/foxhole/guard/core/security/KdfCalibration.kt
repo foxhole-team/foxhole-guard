@@ -2,11 +2,6 @@ package com.foxhole.guard.core.security
 
 import java.security.SecureRandom
 
-/**
- * Picks Argon2id parameters at enable-time: start at the task_new.md target
- * (64 MiB, ops=3) and step memory down only if this device cannot derive within
- * the 300-800 ms budget. The chosen params are pinned inside the keybox.
- */
 internal object KdfCalibration {
     const val TARGET_MAX_MS = 800L
     const val DEFAULT_OPS = 3

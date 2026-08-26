@@ -2,7 +2,6 @@ package com.foxhole.core.runtime
 
 import com.foxhole.core.component.FoxholeNativeShares
 
-/** Share operations remain tied to the one currently running native engine generation. */
 interface FoxCoreShareRuntime {
     fun openShareVault(root: String, key: ByteArray): Boolean
 

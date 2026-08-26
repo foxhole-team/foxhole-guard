@@ -49,9 +49,6 @@ internal class IpInfoRepositoryFallbackTest : IpInfoRepositoryTestSupport() {
 
     @Test
     fun `merge takes the ipv4 probe geo with its address when countries conflict`() {
-        // The primary fetch raced a network handover (cellular geo), the ipv4 probe answered from
-        // the current network: the published identity must be self-consistent — probe's IP + probe's
-        // geo, never probe's IP + the other network's city/country.
         val primary =
             IpInfo(
                 ip = "2a00:7b80:452:2000::44",
@@ -172,8 +169,6 @@ internal class IpInfoRepositoryFallbackTest : IpInfoRepositoryTestSupport() {
                 mode = IpInfoFetchMode.GEO_ENRICHMENT,
             )
 
-        // Every geo-enrichment candidate must be city-capable: the country-only Cloudflare trace is
-        // intentionally excluded so it can never win the parallel race and blank out the city.
         assertEquals("https://ipapi.co/json/", candidates[0])
         assertEquals("https://example.com/ip", candidates[1])
         assertEquals("https://ipinfo.io/json", candidates[2])

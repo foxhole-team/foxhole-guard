@@ -51,12 +51,7 @@ fun String.requirePublicRemoteHost(
         require(addresses.none { it.isPrivateOrLocalAddress() }) { "private or loopback hosts are not allowed" }
     } else if (resolveHost) {
         require(addresses.isNotEmpty()) { "unable to resolve remote host" }
-        // A synthesized answer is exempt, and only here — a literal in the pool is still refused
-        // above. While a fake-IP tunnel is up EVERY name this device resolves is answered out of
-        // the pool, so the address says nothing about where the host lives. Reading it as
-        // "private" is what made the connect path reject the profile's own server and tear a live
-        // tunnel down (Pixel, 2026-08-09: `session build failed ... UnknownHostException` followed
-        // by VPN DISCONNECTED one second later).
+
         require(addresses.none { it.isPrivateOrLocalAddress() && !it.isTunnelSynthesizedAddress() }) {
             "private or loopback hosts are not allowed"
         }
@@ -98,18 +93,6 @@ private fun String.isClearlyLocalHost(): Boolean {
 
 private fun String.isIpLiteral(): Boolean = contains(':') || IPV4_REGEX.matches(this)
 
-/**
- * Whether this address is a placeholder FoxCore's own resolver invented for a name.
- *
- * The engine's fake-IP pools — `198.18.0.0/15` (RFC 2544) and `fc00::/18` — are handed out by the
- * in-tunnel DNS interceptor whenever an overlay (Tor / I2P) is armed, and the userspace stack turns
- * them back into the name on the way out. They are therefore *this device's own tunnel answering*,
- * not evidence about the host: while such a tunnel is up, every hostname the app resolves through
- * the system resolver lands in the pool, its own profile server included.
- *
- * Both ranges are also inside [isPrivateOrLocalAddress], which is correct for a literal a user
- * typed and wrong for a resolution result. Callers that classify *answers* must subtract this.
- */
 fun InetAddress.isTunnelSynthesizedAddress(): Boolean =
     when (this) {
         is Inet4Address -> address.let { it.size == 4 && it[0].toUByte().toInt() == 198 && it[1].toUByte().toInt() in 18..19 }

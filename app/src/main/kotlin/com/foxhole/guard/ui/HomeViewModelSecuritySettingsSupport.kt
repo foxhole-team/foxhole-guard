@@ -4,7 +4,6 @@ import android.app.Application
 import androidx.lifecycle.viewModelScope
 import com.foxhole.core.model.ConnectionState
 import com.foxhole.core.model.NetworkRulesSettings
-import com.foxhole.core.model.PrivacyRouteMode
 import com.foxhole.core.model.StatisticsMetric
 import com.foxhole.core.runtime.PrivateDnsSettings
 import com.foxhole.core.runtime.isSupportedForSystemDnsProtection
@@ -185,11 +184,24 @@ internal fun HomeViewModel.onMonochromeTorThemeChanged(value: Boolean) {
 }
 
 internal fun HomeViewModel.onTorRoutePermittedChanged(value: Boolean) {
-    if (!value) {
-        onPrivacyRouteModeSelected(PrivacyRouteMode.OFF)
+    if (value) {
+        viewModelScope.launch {
+            container.settingsRepository.updatePrivacyRoutePermitted(true)
+        }
+        return
     }
-    viewModelScope.launch {
-        container.settingsRepository.updatePrivacyRoutePermitted(value)
+    cancelPendingTorQuickStartPermissionRequest()
+    val snapshot = container.connectionController.snapshot.value
+    val forceStopStandaloneTor =
+        snapshot.profileId == FoxholeVpnService.TOR_ONLY_PROFILE_ID ||
+            (controlUiState.value.torOperation.active && !snapshot.isPrimaryConnectionRuntime())
+    clearTorOperation()
+    torIpInfoMutable.value = null
+    updateRuntimeSettingAndMaybeReload(
+        forceRuntimeApply = true,
+        forceStopStandaloneTor = forceStopStandaloneTor,
+    ) {
+        container.settingsRepository.updatePrivacyRoutePermitted(false)
     }
 }
 

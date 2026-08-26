@@ -130,7 +130,7 @@ internal fun CliDataSubScreen(
             .fillMaxSize()
             .padding(horizontal = CliSpacing.md),
     ) {
-        CliScreenHeader(label = stringResource(R.string.cli_cfg_more_data), icon = R.drawable.pix_export)
+        CliScreenHeader(label = stringResource(R.string.cli_cfg_more_data), icon = R.drawable.lin_export)
 
         Column(
 
@@ -183,37 +183,37 @@ private fun CliDataBackupPanel(
 ) {
     CliPanel(
         title = stringResource(R.string.cli_data_backup_title),
-        icon = R.drawable.pix_export,
+        icon = R.drawable.lin_export,
         modifier = Modifier.fillMaxWidth(),
         infoText = stringResource(R.string.cli_data_encrypted_backup_note),
     ) {
         CliToggleRow(
             label = stringResource(R.string.cli_data_include_profiles),
-            icon = R.drawable.pix_profiles,
+            icon = R.drawable.lin_profiles,
             checked = includeProfiles,
             onToggle = onIncludeProfiles,
         )
         CliToggleRow(
             label = stringResource(R.string.cli_data_include_settings),
-            icon = R.drawable.pix_settings,
+            icon = R.drawable.lin_settings,
             checked = includeSettings,
             onToggle = onIncludeSettings,
         )
         CliActionRow(
             label = stringResource(R.string.cli_data_export),
-            icon = R.drawable.pix_export,
+            icon = R.drawable.lin_export,
             enabled = includeProfiles || includeSettings,
             onTap = onExport,
         )
         CliActionRow(
             label = stringResource(R.string.cli_data_import),
-            icon = R.drawable.pix_import,
+            icon = R.drawable.lin_import,
             onTap = onImport,
         )
         pendingRestore?.let { document ->
             CliConfirmSheet(
                 title = stringResource(R.string.cli_data_import),
-                icon = R.drawable.pix_import,
+                icon = R.drawable.lin_import,
                 question = stringResource(R.string.cli_data_restore_confirm),
                 note = stringResource(
                     R.string.cli_data_restore_preview,
@@ -236,12 +236,12 @@ private fun CliDataClearPanel(
 ) {
     CliPanel(
         title = stringResource(R.string.cli_data_clear_title),
-        icon = R.drawable.pix_trash,
+        icon = R.drawable.lin_trash,
         modifier = Modifier.fillMaxWidth(),
     ) {
         CliDestructiveRow(
             key = "reset_settings",
-            icon = R.drawable.pix_restart,
+            icon = R.drawable.lin_restart,
             label = stringResource(R.string.cli_data_reset_settings),
             confirmAction = confirmAction,
             onArm = onArm,
@@ -249,7 +249,7 @@ private fun CliDataClearPanel(
         )
         CliDestructiveRow(
             key = "clear_profiles",
-            icon = R.drawable.pix_trash,
+            icon = R.drawable.lin_trash,
             label = stringResource(R.string.cli_data_clear_profiles),
             confirmAction = confirmAction,
             onArm = onArm,
@@ -257,7 +257,7 @@ private fun CliDataClearPanel(
         )
         CliDestructiveRow(
             key = "factory_reset",
-            icon = R.drawable.pix_fire,
+            icon = R.drawable.lin_fire,
             label = stringResource(R.string.cli_data_factory_reset),
             confirmAction = confirmAction,
             onArm = onArm,
@@ -287,7 +287,7 @@ private fun CliBackupPasswordSheet(
         title = stringResource(
             if (exporting) R.string.cli_data_backup_password_title else R.string.cli_data_restore_password_title,
         ),
-        icon = if (exporting) R.drawable.pix_export else R.drawable.pix_import,
+        icon = if (exporting) R.drawable.lin_export else R.drawable.lin_import,
     ) {
         Text(
             text = if (exporting) {
@@ -330,7 +330,6 @@ private fun CliBackupPasswordSheet(
         }
         Spacer(modifier = Modifier.height(CliSpacing.md))
         CliSheetActionsRow(
-            onCancel = onDismiss,
             actions =
             listOf(
                 CliSheetAction(
@@ -348,6 +347,7 @@ private fun CliBackupPasswordSheet(
                             attempted = true
                         }
                     },
+                    dismissAfterClick = true,
                 ),
             ),
         )

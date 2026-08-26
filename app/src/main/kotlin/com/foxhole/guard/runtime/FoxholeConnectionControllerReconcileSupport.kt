@@ -19,26 +19,17 @@ import com.foxhole.core.runtime.tunnelValidationRequestNetwork
 import com.foxhole.guard.R
 import kotlinx.coroutines.delay
 
-// Foreground VPN-network reconciliation for FoxholeConnectionController: detects a stale tunnel
-// snapshot whose VPN network vanished (process restart, system kill) and either restores the
-// network binding or fails the session closed. Extracted from the controller body (split by
-// responsibility); behaviour-preserving extension functions on the same class.
-
-/**
- * Publishes a user-requested identity refresh only while the same runtime generation is still
- * active. Widgets and other peripheral surfaces must not own the legacy bridge directly.
- */
 fun FoxholeConnectionController.publishManualIdentityRefresh(
     expected: ConnectionSnapshot,
     vpnInfo: IpInfo?,
     torInfo: IpInfo?,
-    deviceInfo: IpInfo,
+    deviceInfo: IpInfo?,
 ): Boolean {
     val current = snapshot.value
     if (!expected.isSameIdentityRefreshRuntime(current)) return false
     vpnInfo?.let(FoxholeVpnRuntimeBridge::updateIpInfo)
     torInfo?.let(FoxholeVpnRuntimeBridge::updateTorRouteIpInfo)
-    FoxholeVpnRuntimeBridge.updateDeviceIpInfo(deviceInfo)
+    deviceInfo?.let(FoxholeVpnRuntimeBridge::updateDeviceIpInfo)
     return true
 }
 

@@ -8,9 +8,6 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
-// Route-rule classification predicates for RuntimeConfigAssembler: identify Foxhole-managed
-// route / hijack / udp / package rules so re-assembly is idempotent. Pure JSON predicates.
-
 internal fun isFoxholeManagedRoute(route: JsonObject): Boolean {
     if (!route.keys.all { it in FOXHOLE_ROUTE_KEYS }) {
         return false

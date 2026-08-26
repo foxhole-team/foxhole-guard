@@ -10,14 +10,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-/**
- * Owns the three Android network callback instances for one [FoxholeVpnService] lifetime.
- *
- * Registration and unregistration must receive the exact same callback object. Keeping those
- * identities in one owner also keeps Android network events out of the service's framework
- * lifecycle surface; the callbacks still delegate every state transition to the service-owned
- * runtime operations on the same main handler and coroutine scope.
- */
 internal class FoxholeVpnServiceNetworkCallbackOwner(
     private val service: FoxholeVpnService,
 ) {

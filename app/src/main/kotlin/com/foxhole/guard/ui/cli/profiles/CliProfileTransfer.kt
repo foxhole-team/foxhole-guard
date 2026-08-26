@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -37,6 +36,7 @@ import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.foxhole.core.model.ProfileSourceType
 import com.foxhole.guard.R
 import com.foxhole.guard.core.data.readLocalProfileImportUtf8Capped
 import com.foxhole.guard.ui.HomeViewModel
@@ -46,17 +46,17 @@ import com.foxhole.guard.ui.cli.CliType
 import com.foxhole.guard.ui.cli.LocalCliColors
 import com.foxhole.guard.ui.cli.LocalCliPanelAppearance
 import com.foxhole.guard.ui.cli.components.CliButton
-import com.foxhole.guard.ui.cli.components.CliChip
 import com.foxhole.guard.ui.cli.components.CliElbowLine
+import com.foxhole.guard.ui.cli.components.CliModalCloseButton
 import com.foxhole.guard.ui.cli.components.CliPanel
 import com.foxhole.guard.ui.cli.components.CliSpinner
-import com.foxhole.guard.ui.cli.components.cliDashedBorder
 import com.foxhole.guard.ui.cli.components.cliModalSurfaceColor
 import com.foxhole.guard.ui.emitInfo
 import com.foxhole.guard.ui.importProfileRaw
 import com.foxhole.guard.ui.isReady
 import com.foxhole.guard.ui.onPasteFromClipboard
 import com.foxhole.guard.ui.requests
+import com.foxhole.guard.ui.subscriptionQrProfileIdOrNull
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -79,7 +79,7 @@ internal fun CliProfileTransferRow(
     val scope = rememberCoroutineScope()
     val transferState = remember { CliProfileTransferState() }
     val exportMode = selection.isReady()
-    val selectedKeyCount = if (exportMode) selection.selectedKeyCount() else 0
+    val subscriptionQrProfileId = selection.subscriptionQrProfileIdOrNull()
     val importLauncher = rememberCliImportLauncher(viewModel)
     val jsonLauncher = rememberCliSingleExportLauncher("application/json", selection, viewModel, onSelectionCleared)
     val textLauncher = rememberCliSingleExportLauncher("text/plain", selection, viewModel, onSelectionCleared)
@@ -100,7 +100,13 @@ internal fun CliProfileTransferRow(
         },
         qr = {
             onInteraction()
-            handleQrTransfer(exportMode, transferState, viewModel, context, runExport)
+            handleQrTransfer(
+                exportMode = exportMode,
+                subscriptionQrProfileId = subscriptionQrProfileId,
+                state = transferState,
+                viewModel = viewModel,
+                scope = scope,
+            )
         },
         clipboard = {
             onInteraction()
@@ -109,7 +115,7 @@ internal fun CliProfileTransferRow(
     )
     CliProfileTransferControls(
         exportMode = exportMode,
-        selectedKeyCount = selectedKeyCount,
+        subscriptionQrReady = subscriptionQrProfileId != null,
         busy = transferState.exportBusy,
         buttonColor = if (exportMode) colors.info else colors.accent,
         actions = actions,
@@ -267,23 +273,50 @@ private fun handleFileTransfer(
 
 private fun handleQrTransfer(
     exportMode: Boolean,
+    subscriptionQrProfileId: Long?,
     state: CliProfileTransferState,
     viewModel: HomeViewModel,
-    context: Context,
-    runExport: CliRunExport,
+    scope: CoroutineScope,
 ) {
     if (!exportMode) {
         state.qrScannerVisible = true
         return
     }
-    runExport { exports ->
-        val single = exports.singleOrNull()?.takeIf { it.configs.size == 1 }
-        if (single == null) {
-            viewModel.emitInfo(context.getString(R.string.cli_prof_exp_failed))
-        } else {
-            state.qrExport = CliQrExport(single.profileName, single.configs.single())
+    if (subscriptionQrProfileId == null) return
+    launchSubscriptionQrExport(viewModel, subscriptionQrProfileId, state, scope)
+}
+
+private fun launchSubscriptionQrExport(
+    viewModel: HomeViewModel,
+    profileId: Long,
+    state: CliProfileTransferState,
+    scope: CoroutineScope,
+) {
+    if (state.exportBusy) return
+    state.exportBusy = true
+    scope.launch {
+        try {
+            viewModel.resolveSubscriptionQrExport(profileId)?.let { subscriptionQr ->
+                state.qrExport = subscriptionQr
+            }
+        } finally {
+            state.exportBusy = false
         }
     }
+}
+
+private suspend fun HomeViewModel.resolveSubscriptionQrExport(profileId: Long): CliQrExport? {
+    val repository = container.profileRepository
+    val profile = repository.getProfile(profileId)
+        ?.takeIf { candidate -> candidate.sourceType == ProfileSourceType.SUBSCRIPTION_URL }
+        ?: return null
+    val subscriptionUrl =
+        runCatching { repository.secretStore.read(profile.secretRef)?.subscriptionUrl }
+            .getOrNull()
+            ?.trim()
+            ?.takeIf(String::isNotEmpty)
+            ?: return null
+    return CliQrExport(name = profile.name, text = subscriptionUrl)
 }
 
 private fun handleClipboardTransfer(
@@ -307,21 +340,15 @@ private fun handleClipboardTransfer(
 @Composable
 private fun CliProfileTransferControls(
     exportMode: Boolean,
-    selectedKeyCount: Int,
+    subscriptionQrReady: Boolean,
     busy: Boolean,
     buttonColor: Color,
     actions: CliTransferActions,
 ) {
-    val colors = LocalCliColors.current
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .cliDashedBorder(if (exportMode) colors.info else colors.border)
-            .padding(CliSpacing.sm),
-    ) {
+    Column(modifier = Modifier.fillMaxWidth()) {
         CliProfileTransferButtons(
             exportMode = exportMode,
-            selectedKeyCount = selectedKeyCount,
+            subscriptionQrReady = subscriptionQrReady,
             busy = busy,
             buttonColor = buttonColor,
             actions = actions,
@@ -332,17 +359,17 @@ private fun CliProfileTransferControls(
 @Composable
 private fun CliProfileTransferButtons(
     exportMode: Boolean,
-    selectedKeyCount: Int,
+    subscriptionQrReady: Boolean,
     busy: Boolean,
     buttonColor: Color,
     actions: CliTransferActions,
 ) {
-    val directionIcon = if (exportMode) R.drawable.pix_export else R.drawable.pix_import
+    val directionIcon = if (exportMode) R.drawable.lin_export else R.drawable.lin_import
     if (!exportMode) {
         Column(verticalArrangement = Arrangement.spacedBy(CliSpacing.sm)) {
             CliButton(
                 label = stringResource(R.string.cli_prof_imp_qr),
-                icon = R.drawable.pix_qr,
+                icon = R.drawable.lin_qr,
                 color = buttonColor,
                 enabled = !busy,
                 onClick = actions.qr,
@@ -362,7 +389,7 @@ private fun CliProfileTransferButtons(
                 )
                 CliButton(
                     label = stringResource(R.string.cli_prof_imp_clip),
-                    icon = R.drawable.pix_copy,
+                    icon = R.drawable.lin_copy,
                     color = buttonColor,
                     enabled = !busy,
                     onClick = actions.clipboard,
@@ -373,13 +400,13 @@ private fun CliProfileTransferButtons(
         return
     }
 
-    val qrReady = selectedKeyCount == 1
+    val qrReady = subscriptionQrReady
     Column(verticalArrangement = Arrangement.spacedBy(CliSpacing.sm)) {
         CliButton(
             label = stringResource(
                 if (qrReady) R.string.cli_prof_exp_qr else R.string.cli_prof_exp_qr_pick_one,
             ),
-            icon = R.drawable.pix_qr,
+            icon = R.drawable.lin_qr,
             color = if (qrReady) buttonColor else LocalCliColors.current.faint,
             enabled = !busy && qrReady,
             onClick = actions.qr,
@@ -399,7 +426,7 @@ private fun CliProfileTransferButtons(
             )
             CliButton(
                 label = stringResource(R.string.cli_prof_exp_clip),
-                icon = R.drawable.pix_copy,
+                icon = R.drawable.lin_copy,
                 color = buttonColor,
                 enabled = !busy,
                 onClick = actions.clipboard,
@@ -454,6 +481,7 @@ private fun CliQrExportOverlay(
             usePlatformDefaultWidth = false,
             dismissOnBackPress = true,
             dismissOnClickOutside = true,
+            decorFitsSystemWindows = true,
         ),
     ) {
         Box(
@@ -464,9 +492,9 @@ private fun CliQrExportOverlay(
             contentAlignment = Alignment.Center,
         ) {
             CliPanel(
-                icon = R.drawable.pix_qr,
+                icon = R.drawable.lin_qr,
                 title = stringResource(R.string.cli_prof_exp_qr_title),
-                titleColor = colors.accent,
+                titleColor = colors.fg,
                 background = cliModalSurfaceColor(LocalCliPanelAppearance.current, Color.Unspecified),
                 modifier = Modifier.fillMaxWidth(),
             ) {
@@ -502,16 +530,10 @@ private fun CliQrExportOverlay(
                         }
                 }
                 Spacer(modifier = Modifier.height(CliSpacing.sm))
-                Row(
+                CliModalCloseButton(
+                    onClick = onDismiss,
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End,
-                ) {
-                    CliChip(
-                        label = stringResource(R.string.cli_common_no_cancel),
-                        color = colors.err,
-                        onClick = onDismiss,
-                    )
-                }
+                )
             }
         }
     }

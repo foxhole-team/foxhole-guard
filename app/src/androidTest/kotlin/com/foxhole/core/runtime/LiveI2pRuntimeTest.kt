@@ -1,5 +1,6 @@
 package com.foxhole.core.runtime
 
+import android.os.SystemClock
 import android.util.Log
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -15,8 +16,8 @@ import com.foxhole.guard.ProfileRuntimeSessionAndroidTestSupport
 import com.foxhole.guard.core.settings.updateI2pEnabled
 import com.foxhole.guard.core.settings.updateI2pEngaged
 import com.foxhole.guard.i2pSocksHttpGet
-import com.foxhole.guard.overlayHttpGet
 import com.foxhole.guard.runtime.FoxholeConnectionServiceContract
+import com.foxhole.guard.runtime.I2PD_COLD_READY_TOTAL_BUDGET_MS
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
@@ -26,11 +27,9 @@ import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.net.InetSocketAddress
+import java.net.Socket
 
-/**
- * Asserts i2pd's own webconsole counters (peers, client tunnels, bytes both ways), not the phase pill, which advances on any log line mentioning a tunnel.
- * Manual gate: -Pandroid.testInstrumentationRunnerArguments.foxhole.liveI2p=1; the eepsite leg needs foxhole.i2pTarget because only *.b32.i2p resolves.
- */
 @RunWith(AndroidJUnit4::class)
 internal class LiveI2pRuntimeTest : ProfileRuntimeSessionAndroidTestSupport() {
     @Test
@@ -52,6 +51,8 @@ internal class LiveI2pRuntimeTest : ProfileRuntimeSessionAndroidTestSupport() {
                 resetRelevantSettings(app)
                 baselineRuntimeSettings(app)
 
+                val i2pStartedAt = SystemClock.elapsedRealtime()
+                val i2pDeadline = i2pStartedAt + I2PD_COLD_READY_TOTAL_BUDGET_MS
                 settings.updateI2pEnabled(true)
                 settings.updateI2pEngaged(true)
                 assertEquals(
@@ -69,41 +70,56 @@ internal class LiveI2pRuntimeTest : ProfileRuntimeSessionAndroidTestSupport() {
                     },
                 )
 
-                val budgetMs = longArgument("foxhole.i2pBudgetMs", I2P_NETWORK_BUDGET_MS)
-                val startedAt = System.currentTimeMillis()
+                val requestedBuildingBudgetMs =
+                    longArgument("foxhole.i2pBudgetMs", I2P_NETWORK_BUDGET_MS)
+                        .coerceIn(0L, I2P_NETWORK_BUDGET_MS)
+                val buildingBudgetMs = minOf(requestedBuildingBudgetMs, remainingI2pBudgetMs(i2pDeadline))
                 var lastPhase: I2pNetworkPhase? = null
-                val networkUp =
-                    waitUntil(timeoutMs = budgetMs) {
+                var nextReadinessDiagnosticAt = 0L
+                val tunnelsBuilding =
+                    waitUntil(timeoutMs = buildingBudgetMs) {
                         val snapshot = app.container.connectionController.i2pPhase.value
                         if (snapshot.phase != lastPhase) {
                             lastPhase = snapshot.phase
                             Log.d(
                                 TEST_TAG,
                                 "liveI2p phase=${snapshot.phase} tunnelsBuilt=${snapshot.tunnelsBuilt} " +
-                                    "elapsedMs=${System.currentTimeMillis() - startedAt}",
+                                    "elapsedMs=${SystemClock.elapsedRealtime() - i2pStartedAt}",
                             )
                         }
-                        snapshot.phase.networkUp
+                        val now = SystemClock.elapsedRealtime()
+                        if (now >= nextReadinessDiagnosticAt) {
+                            logReadinessDiagnostic(app = app, startedAt = i2pStartedAt, now = now)
+                            nextReadinessDiagnosticAt = now + READINESS_DIAGNOSTIC_INTERVAL_MS
+                        }
+                        snapshot.phase == I2pNetworkPhase.BUILDING_TUNNELS || snapshot.phase.networkUp
                     }
                 assertTrue(
-                    "the I2P router never started building tunnels within ${budgetMs}ms " +
+                    "the I2P router never started building tunnels within ${buildingBudgetMs}ms " +
                         "(last phase=$lastPhase, i2pd state=${app.container.i2pdManager.snapshot().state})",
-                    networkUp,
+                    tunnelsBuilding,
+                )
+                val carrierConnected =
+                    waitForCarrierConnectedWithDiagnostics(
+                        app = app,
+                        deadline = i2pDeadline,
+                        startedAt = i2pStartedAt,
+                    )
+                assertTrue(
+                    "the service-owned I2P carrier never reached CONNECTED within the shared " +
+                        "${I2PD_COLD_READY_TOTAL_BUDGET_MS}ms cold-start budget " +
+                        "(last phase=${app.container.connectionController.i2pPhase.value.phase}, " +
+                        "i2pd state=${app.container.i2pdManager.snapshot().state})",
+                    carrierConnected,
                 )
 
-                val phaseBeforeProbe = app.container.connectionController.i2pPhase.value.phase
-                assertTrue(
-                    "the i2pd SOCKS proxy never accepted its per-start credentials",
-                    app.container.i2pdManager.awaitReady(SOCKS_READY_BUDGET_MS),
-                )
                 assertEquals(
-                    "the i2pd child is not running after a successful readiness probe",
+                    "the i2pd child is not running after the carrier reached CONNECTED",
                     I2pdState.RUNNING,
                     app.container.i2pdManager.snapshot().state,
                 )
-                Log.d(TEST_TAG, "liveI2p phaseBeforeReadinessProbe=$phaseBeforeProbe")
                 assertEquals(
-                    "the SOCKS readiness probe did not publish CONNECTED",
+                    "the authenticated SOCKS and service-owned carrier proof did not stay CONNECTED",
                     I2pNetworkPhase.CONNECTED,
                     app.container.connectionController.i2pPhase.value.phase,
                 )
@@ -179,23 +195,9 @@ internal class LiveI2pRuntimeTest : ProfileRuntimeSessionAndroidTestSupport() {
         var latest = I2pRouterStatus()
         val deadline = System.currentTimeMillis() + budgetMs
         while (System.currentTimeMillis() < deadline) {
-            val endpoint = I2pdWebConsole.endpoint
-            val html =
-                if (endpoint == null) {
-                    null
-                } else {
-                    withContext(Dispatchers.IO) {
-                        runCatching {
-                            overlayHttpGet(
-                                url = "http://127.0.0.1:${endpoint.port}/",
-                                timeoutMs = WEB_CONSOLE_TIMEOUT_MS,
-                                basicAuth = I2PD_WEB_CONSOLE_USER to endpoint.password,
-                            ).body.toString(Charsets.UTF_8)
-                        }.getOrNull()
-                    }
-                }
-            if (html != null) {
-                latest = parseI2pdWebConsoleStatus(html)
+            val status = readI2pdRouterStatus(timeoutMs = ROUTER_STATUS_TIMEOUT_MS)
+            if (status != null) {
+                latest = status
                 val joined =
                     (latest.knownRouters ?: 0) > 0 &&
                         (latest.clientTunnels ?: 0) > 0 &&
@@ -239,16 +241,121 @@ internal class LiveI2pRuntimeTest : ProfileRuntimeSessionAndroidTestSupport() {
         assertTrue("the eepsite answered with an empty body", response.body.isNotEmpty())
     }
 
+    private suspend fun waitForCarrierConnectedWithDiagnostics(
+        app: FoxholeApplication,
+        deadline: Long,
+        startedAt: Long,
+    ): Boolean {
+        var nextDiagnosticAt = 0L
+        while (SystemClock.elapsedRealtime() < deadline) {
+            if (app.container.connectionController.i2pPhase.value.phase.networkUp) {
+                return true
+            }
+            val now = SystemClock.elapsedRealtime()
+            if (now >= nextDiagnosticAt) {
+                logReadinessDiagnostic(app = app, startedAt = startedAt, now = now)
+                nextDiagnosticAt = now + READINESS_DIAGNOSTIC_INTERVAL_MS
+            }
+            delay(READINESS_POLL_MS)
+        }
+        return app.container.connectionController.i2pPhase.value.phase.networkUp
+    }
+
+    private suspend fun logReadinessDiagnostic(
+        app: FoxholeApplication,
+        startedAt: Long,
+        now: Long,
+    ) {
+        val diagnostic = collectReadinessDiagnostic()
+        val phase = app.container.connectionController.i2pPhase.value.phase
+        Log.d(
+            TEST_TAG,
+            "liveI2p readiness elapsedMs=${now - startedAt} " +
+                "phase=$phase manager=${app.container.i2pdManager.snapshot().state} " +
+                "socksPublished=${diagnostic.socksPublished} socksAuth=${diagnostic.socksAuth} " +
+                "consolePublished=${diagnostic.consolePublished} " +
+                "statusAvailable=${diagnostic.statusAvailable} " +
+                "routers=${diagnostic.knownRouters} clientTunnels=${diagnostic.clientTunnels} " +
+                "network=${diagnostic.networkStatus}",
+        )
+    }
+
+    private suspend fun collectReadinessDiagnostic(): I2pReadinessDiagnostic =
+        withContext(Dispatchers.IO) {
+            val socksEndpoint = I2pdSocksProxy.endpoint
+            val socksAuth = socksEndpoint?.let(::probeSocksAuthentication)
+            val console = I2pdWebConsole.endpoint
+            val status = readI2pdRouterStatus(console, READINESS_DIAGNOSTIC_TIMEOUT_MS)
+            I2pReadinessDiagnostic(
+                socksPublished = socksEndpoint != null,
+                socksAuth = socksAuth,
+                consolePublished = console != null,
+                statusAvailable = status != null,
+                knownRouters = status?.knownRouters,
+                clientTunnels = status?.clientTunnels,
+                networkStatus = status?.networkStatus.toSafeNetworkStatus(),
+            )
+        }
+
+    private fun probeSocksAuthentication(endpoint: I2pdSocksProxyEndpoint): Boolean =
+        runCatching {
+            Socket().use { socket ->
+                socket.soTimeout = READINESS_DIAGNOSTIC_TIMEOUT_MS
+                socket.connect(
+                    InetSocketAddress("127.0.0.1", endpoint.port),
+                    READINESS_DIAGNOSTIC_TIMEOUT_MS,
+                )
+                val input = socket.getInputStream()
+                val output = socket.getOutputStream()
+                output.write(byteArrayOf(0x05, 0x01, 0x02))
+                output.flush()
+                check(input.read() == 0x05 && input.read() == 0x02)
+                val username = endpoint.username.toByteArray(Charsets.UTF_8)
+                val password = endpoint.password.toByteArray(Charsets.UTF_8)
+                output.write(0x01)
+                output.write(username.size)
+                output.write(username)
+                output.write(password.size)
+                output.write(password)
+                output.flush()
+                input.read() == 0x01 && input.read() == 0x00
+            }
+        }.getOrDefault(false)
+
+    private fun String?.toSafeNetworkStatus(): String =
+        when (this?.trim()?.lowercase()) {
+            "ok" -> "OK"
+            "firewalled" -> "FIREWALLED"
+            "testing" -> "TESTING"
+            null -> "UNKNOWN"
+            else -> "OTHER"
+        }
+
+    private fun remainingI2pBudgetMs(deadline: Long): Long =
+        (deadline - SystemClock.elapsedRealtime()).coerceAtLeast(0L)
+
     private companion object {
         const val GUARD_START_TIMEOUT_MS = 40_000L
 
         const val I2P_NETWORK_BUDGET_MS = 300_000L
-        const val SOCKS_READY_BUDGET_MS = 120_000L
 
         const val ROUTER_STATUS_BUDGET_MS = 180_000L
         const val ROUTER_STATUS_POLL_MS = 5_000L
         const val RUNTIME_STOP_TIMEOUT_MS = 30_000L
-        const val WEB_CONSOLE_TIMEOUT_MS = 5_000
+        const val ROUTER_STATUS_TIMEOUT_MS = 5_000
         const val EEPSITE_TIMEOUT_MS = 180_000
+        const val READINESS_DIAGNOSTIC_INTERVAL_MS = 30_000L
+        const val READINESS_DIAGNOSTIC_TIMEOUT_MS = 2_000
+        const val READINESS_POLL_MS = 250L
     }
 }
+
+private data class I2pReadinessDiagnostic(
+    val socksPublished: Boolean,
+    val socksAuth: Boolean?,
+    val consolePublished: Boolean,
+    val statusAvailable: Boolean,
+    val knownRouters: Int?,
+    val clientTunnels: Int?,
+    val networkStatus: String,
+)

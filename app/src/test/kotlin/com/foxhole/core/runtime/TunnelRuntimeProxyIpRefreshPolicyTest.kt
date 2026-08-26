@@ -1,6 +1,7 @@
 package com.foxhole.core.runtime
 
 import com.foxhole.core.model.AppTunnelLane
+import com.foxhole.core.model.AppliedTorRoute
 import com.foxhole.core.model.ConnectionSnapshot
 import com.foxhole.core.model.ConnectionState
 import com.foxhole.core.model.ExpertSettings
@@ -59,19 +60,15 @@ class TunnelRuntimeProxyIpRefreshPolicyTest {
 
     @Test
     fun `tor over vpn all apps runtime proxy ip does not replace dashboard vpn ip`() {
-        val settings =
-            Settings(
-                privacyRoute = PrivacyRouteSettings(
-                    mode = PrivacyRouteMode.TOR_OVER_VPN,
-                    scope = PrivacyRouteScope.ALL_APPS,
-                ),
-            )
+        val settings = Settings()
         val snapshot =
             ConnectionSnapshot(
                 state = ConnectionState.CONNECTED,
                 trafficMode = TrafficMode.TUNNEL,
                 profileId = 42L,
                 protocolHint = ProtocolHint.VLESS,
+                torActive = true,
+                appliedTorRoute = AppliedTorRoute(PrivacyRouteScope.ALL_APPS, bypassVpnTunnel = false),
             )
 
         assertFalse(settings.shouldPublishRuntimeProxyIpInfoToDashboard(snapshot))
@@ -79,26 +76,48 @@ class TunnelRuntimeProxyIpRefreshPolicyTest {
 
     @Test
     fun `tor over vpn selected apps keeps publishing the vpn identity to the dashboard`() {
-        val settings =
-            Settings(
-                privacyRoute = PrivacyRouteSettings(
-                    mode = PrivacyRouteMode.TOR_OVER_VPN,
-                    scope = PrivacyRouteScope.SELECTED_APPS,
-                ),
-                expert =
-                ExpertSettings(
-                    appAssignments = mapOf("org.tor.browser" to AppTunnelLane.TOR),
-                ),
-            )
+        val settings = Settings()
         val snapshot =
             ConnectionSnapshot(
                 state = ConnectionState.CONNECTED,
                 trafficMode = TrafficMode.TUNNEL,
                 profileId = 42L,
                 protocolHint = ProtocolHint.VLESS,
+                torActive = true,
+                appliedTorRoute =
+                AppliedTorRoute(
+                    scope = PrivacyRouteScope.SELECTED_APPS,
+                    bypassVpnTunnel = false,
+                    selectedPackages = listOf("org.tor.browser"),
+                ),
             )
 
         assertTrue(settings.shouldPublishRuntimeProxyIpInfoToDashboard(snapshot))
+    }
+
+    @Test
+    fun `dashboard IP follows applied TOR scope during settings transition`() {
+        val persistedAllApps =
+            Settings(
+                privacyRoute =
+                PrivacyRouteSettings(
+                    permitted = true,
+                    mode = PrivacyRouteMode.TOR_OVER_VPN,
+                    scope = PrivacyRouteScope.ALL_APPS,
+                ),
+            )
+        val oldAppliedAllApps =
+            ConnectionSnapshot(
+                state = ConnectionState.RECONNECTING,
+                trafficMode = TrafficMode.TUNNEL,
+                profileId = 42L,
+                torActive = true,
+                appliedTorRoute = AppliedTorRoute(PrivacyRouteScope.ALL_APPS, bypassVpnTunnel = false),
+            )
+        val appliedWithoutTor = oldAppliedAllApps.copy(torActive = false, appliedTorRoute = null)
+
+        assertFalse(Settings().shouldPublishRuntimeProxyIpInfoToDashboard(oldAppliedAllApps))
+        assertTrue(persistedAllApps.shouldPublishRuntimeProxyIpInfoToDashboard(appliedWithoutTor))
     }
 
     @Test

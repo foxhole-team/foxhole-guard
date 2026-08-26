@@ -7,14 +7,6 @@ import android.os.Build
 import com.foxhole.core.model.KnownApplicationIdentity
 import java.security.MessageDigest
 
-/**
- * Produces the immutable Android package baseline consumed by FoxCore's native quarantine.
- *
- * A shared UID cannot be attributed to one signer without guessing which package opened the
- * socket. Such packages are therefore admitted only when every package reported for that UID is
- * present in the known set; their per-package digest is intentionally omitted. Unique UIDs are
- * always certificate-pinned, and a missing certificate makes the snapshot fail closed.
- */
 class AndroidApplicationIdentityResolver(
     context: Context,
 ) {

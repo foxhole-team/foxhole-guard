@@ -32,19 +32,10 @@ data class InstalledAppSecuritySummary(
     val riskSignals: List<InstalledAppRiskSignal>,
 )
 
-/**
- * Android collector for FoxHole Sentinel's installed-app risk scoring. It reads package metadata
- * from `PackageManager`/`PowerManager`, packages it into a platform-free [InstalledAppFacts], and
- * delegates the actual scoring to the security core (`scoreInstalledApp`). Keeping the heuristics
- * in `:core:sentinel` means they are unit-tested without Android and can later gain a threat-intel
- * feed without changing this collector.
- */
 class InstalledAppSecurityAnalyzer(
     context: Context,
     private val threatIntelProvider: () -> InstalledAppThreatIntel = { InstalledAppThreatIntel.EMPTY },
-    // Fires when the full collection fails and scoring degrades to blank facts (all capability
-    // signals lost). Silent degradation would under-report risk with no trace, so callers with a
-    // diagnostics journal should wire it in.
+
     private val onAnalysisFallback: (packageName: String, error: Throwable) -> Unit = { _, _ -> },
 ) {
     private val appContext = context.applicationContext
@@ -183,14 +174,6 @@ class InstalledAppSecurityAnalyzer(
         )
     }
 
-    /**
-     * Lower-cased hex digests of every signing certificate, for threat-intel matching.
-     *
-     * Both digests are computed from the same DER bytes because the two halves of the feed are
-     * published in different ones: our own curated entries carry SHA-256, and every public
-     * stalkerware dataset carries SHA-1. Computing the second one costs a hash over a few kilobytes
-     * of certificate that has already been read.
-     */
     private fun signingCertDigests(
         packageName: String,
         algorithm: String,
@@ -264,8 +247,7 @@ class InstalledAppSecurityAnalyzer(
         if (byAction) {
             return true
         }
-        // Fallback over the already-fetched component list: intent-filter matching can miss
-        // disabled or manifest-only components that still declare the sensitive bind permission.
+
         return packageInfo.services.orEmpty()
             .any { service -> requiredPermission != null && service.permission == requiredPermission }
     }

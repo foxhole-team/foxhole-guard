@@ -1,6 +1,7 @@
 package com.foxhole.guard.ui
 
 import com.foxhole.core.model.ConnectionSettings
+import com.foxhole.core.model.ConnectionState
 import com.foxhole.core.model.PrivacyRouteScope
 import com.foxhole.core.model.RoutingModePreset
 import com.foxhole.guard.R
@@ -168,14 +169,14 @@ class AtomicApplyScopeTest {
         ).forEach { key ->
             assertTrue(
                 "$key needs an icon",
-                Regex("label = stringResource\\(R.string.$key\\),\\s+icon = R.drawable.pix_[a-z_]+")
+                Regex("label = stringResource\\(R.string.$key\\),\\s+icon = R.drawable.lin_[a-z_]+")
                     .containsMatchIn(settings),
             )
         }
-        assertTrue(settings.contains("icon = R.drawable.pix_settings"))
-        assertTrue(settings.contains("label = \"mtu\",\n        icon = R.drawable.pix_up"))
-        assertTrue(rules.substringAfter("private fun wifiBinding").contains("iconRes = R.drawable.pix_link"))
-        assertTrue(rules.substringAfter("private fun cellularBinding").contains("iconRes = R.drawable.pix_device"))
+        assertTrue(settings.contains("icon = R.drawable.lin_settings"))
+        assertTrue(settings.contains("label = \"mtu\",\n        icon = R.drawable.lin_up"))
+        assertTrue(rules.substringAfter("private fun wifiBinding").contains("iconRes = R.drawable.lin_link"))
+        assertTrue(rules.substringAfter("private fun cellularBinding").contains("iconRes = R.drawable.lin_device"))
         listOf(
             "cli_cfg_nr_data_saver",
             "cli_cfg_nr_auto_connect",
@@ -184,7 +185,7 @@ class AtomicApplyScopeTest {
         ).forEach { key ->
             assertTrue(
                 "$key needs an icon",
-                Regex("label = stringResource\\(R.string.$key\\),\\s+icon = R.drawable.pix_[a-z_]+")
+                Regex("label = stringResource\\(R.string.$key\\),\\s+icon = R.drawable.lin_[a-z_]+")
                     .containsMatchIn(rules),
             )
         }
@@ -236,8 +237,15 @@ class AtomicApplyScopeTest {
             torSupport
                 .substringAfter("private suspend fun HomeViewModel.awaitConfirmedModeHandoffIdle")
                 .substringBefore("internal fun HomeViewModel.maybePromptStartTcpVpnWhileTorOnlyActive")
-        assertTrue(idleBarrier.contains("snapshot.state == ConnectionState.IDLE"))
-        assertTrue(idleBarrier.contains("snapshot.state == ConnectionState.ERROR"))
-        assertTrue(idleBarrier.contains("terminalState?.state == ConnectionState.IDLE"))
+        assertTrue(idleBarrier.contains("snapshot.state.isModeHandoffTerminal()"))
+        assertTrue(idleBarrier.contains("if (terminalState != null) return true"))
+    }
+
+    @Test
+    fun `mode handoff proceeds after either released terminal state`() {
+        assertTrue(ConnectionState.IDLE.isModeHandoffTerminal())
+        assertTrue(ConnectionState.ERROR.isModeHandoffTerminal())
+        assertFalse(ConnectionState.DISCONNECTING.isModeHandoffTerminal())
+        assertFalse(ConnectionState.CONNECTED.isModeHandoffTerminal())
     }
 }

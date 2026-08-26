@@ -18,6 +18,9 @@ fi
 go_bin="${go_bin:-go}"
 command -v "$go_bin" >/dev/null || { echo "go not found; set GO or run scripts/fetch-native-deps.sh" >&2; exit 1; }
 
+# An ambient GOROOT can point a pinned Go binary at another release's tools.
+unset GOROOT GOTOOLDIR
+
 go_have="$("$go_bin" env GOVERSION 2>/dev/null || true)"
 if [[ "$go_have" == "$go_version" ]]; then
   go_toolchain="local"

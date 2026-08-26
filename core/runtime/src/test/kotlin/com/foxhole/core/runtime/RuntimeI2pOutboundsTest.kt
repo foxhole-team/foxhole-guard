@@ -123,7 +123,7 @@ class RuntimeI2pOutboundsTest {
         val first = rules.first().jsonObject
         assertEquals("i2p", first["outbound"]!!.jsonPrimitive.content)
         assertEquals(".i2p", first["domain_suffix"]!!.jsonArray.first().jsonPrimitive.content)
-        // The original rule is preserved after it.
+
         assertTrue(rules.size >= 2)
     }
 

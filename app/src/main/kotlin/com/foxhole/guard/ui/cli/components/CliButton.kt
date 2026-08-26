@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
@@ -28,30 +29,23 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.PathEffect
-import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.foxhole.core.model.VisualStyle
 import com.foxhole.guard.ui.cli.CliMotion
+import com.foxhole.guard.ui.cli.CliRadius
 import com.foxhole.guard.ui.cli.CliSpacing
 import com.foxhole.guard.ui.cli.CliType
 import com.foxhole.guard.ui.cli.LocalCliColors
-import com.foxhole.guard.ui.cli.LocalCliVisualStyle
-import com.foxhole.guard.ui.cli.cliLabelText
+import com.foxhole.guard.ui.cli.LocalCliPixelArtEnabled
+import com.foxhole.guard.ui.cli.cliFontSizeForMode
+import com.foxhole.guard.ui.cli.cliHeadingText
 import com.foxhole.guard.ui.cli.cliScaledSp
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -64,7 +58,6 @@ internal fun CliButton(
     @DrawableRes icon: Int? = null,
     iconContent: (@Composable (Color) -> Unit)? = null,
     filled: Boolean = false,
-    dashed: Boolean = false,
     enabled: Boolean = true,
     dimWhenDisabled: Boolean = true,
     onLongClick: (() -> Unit)? = null,
@@ -72,49 +65,34 @@ internal fun CliButton(
 ) {
     val colors = LocalCliColors.current
     val tint = if (color == Color.Unspecified) colors.accent else color
-    val shape = RoundedCornerShape(6.dp)
+    val shape = RoundedCornerShape(CliRadius.control)
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()
-    val shade = lerp(tint, Color.Black, SHADE_TOWARD_BLACK)
     val pressBright = lerp(tint, Color.White, PRESS_TOWARD_WHITE)
     val emphasis = cliButtonEmphasis(enabled = enabled, dimWhenDisabled = dimWhenDisabled)
+    val renderFilled = filled && CLI_BUTTONS_USE_FILL
     val borderColor =
-        cliButtonBorder(filled, pressed, tint, pressBright)
+        cliButtonBorder(renderFilled, pressed, tint, pressBright)
             .scaledAlpha(emphasis.borderAlpha)
     val fillColor =
-        cliButtonFill(filled, pressed, tint)
+        cliButtonFill(renderFilled, pressed, tint)
             .scaledAlpha(emphasis.fillAlpha)
-    val plainPress = LocalCliVisualStyle.current == VisualStyle.PLAIN
     val pressScale by animateFloatAsState(
-        targetValue = if (plainPress && pressed) PLAIN_PRESS_SCALE else 1f,
+        targetValue = if (pressed) PRESS_SCALE else 1f,
         animationSpec = CliMotion.press(),
         label = "cliButtonPressScale",
     )
     Box(
         modifier = modifier
             .defaultMinSize(minHeight = 48.dp)
-            .offset {
-                if (pressed && !plainPress) {
-                    IntOffset(PIXEL_STEP.roundToPx(), PIXEL_STEP.roundToPx())
-                } else {
-                    IntOffset.Zero
-                }
-            }
             .graphicsLayer {
                 scaleX = pressScale
                 scaleY = pressScale
             }
-            .cliButtonElevation(filled = filled, pressed = pressed, shape = shape)
+            .cliButtonElevation(filled = renderFilled, pressed = pressed, shape = shape)
             .clip(shape)
             .background(fillColor)
-            .then(
-                if (dashed && !filled && !plainPress) {
-                    Modifier.drawBehind { dashedFrame(borderColor) }
-                } else {
-                    Modifier.border(1.dp, borderColor, shape)
-                },
-            )
-            .drawBehind { if (pressed && !plainPress) pixelInsetFrame(if (filled) shade else pressBright) }
+            .border(1.dp, borderColor, shape)
             .then(
                 if (onLongClick == null) {
                     Modifier.clickable(
@@ -141,7 +119,7 @@ internal fun CliButton(
             icon = icon,
             iconContent = iconContent,
             content = cliButtonContentColor(
-                filled = filled,
+                filled = renderFilled,
                 pressed = pressed,
                 bg = colors.bg,
                 pressBright = pressBright,
@@ -152,6 +130,8 @@ internal fun CliButton(
         )
     }
 }
+
+internal const val CLI_BUTTONS_USE_FILL = false
 
 private fun Modifier.cliButtonElevation(
     filled: Boolean,
@@ -180,29 +160,21 @@ private fun CliButtonLabelRow(
     contentAlpha: Float,
     animatedLabel: Boolean,
 ) {
-    val bracketed = LocalCliVisualStyle.current == VisualStyle.PIXEL
+    val shownLabel = cliHeadingText(label)
     Row(
         modifier = Modifier.alpha(contentAlpha),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (bracketed) {
-            Text(
-                text = "[ ",
-                style = CliType.button,
-                color = content,
-                maxLines = 1,
-            )
-        }
         CliButtonLeadingIcon(icon = icon, iconContent = iconContent, tint = content)
         when {
             animatedLabel -> CliShimmerText(
-                text = if (bracketed) "$label ]" else cliLabelText(label),
+                text = shownLabel,
                 style = CliType.button,
                 baseColor = content,
                 maxLines = 1,
             )
-            !bracketed -> BasicText(
-                text = cliLabelText(label),
+            else -> BasicText(
+                text = shownLabel,
                 style = CliType.button.copy(color = content),
                 maxLines = 1,
                 autoSize = TextAutoSize.StepBased(
@@ -211,12 +183,6 @@ private fun CliButtonLabelRow(
                     stepSize = BUTTON_LABEL_FONT_STEP,
                 ),
                 modifier = Modifier.weight(1f, fill = false),
-            )
-            else -> Text(
-                text = "$label ]",
-                style = CliType.button,
-                color = content,
-                maxLines = 1,
             )
         }
     }
@@ -228,21 +194,35 @@ private fun CliButtonLeadingIcon(
     iconContent: (@Composable (Color) -> Unit)?,
     tint: Color,
 ) {
+    val iconModifier = Modifier
+        .size(CLI_BUTTON_LEADING_ICON_SIZE)
+        .offset(y = CLI_BUTTON_LEADING_ICON_DROP)
     when {
         icon != null ->
-            CliPixIcon(
+            CliIcon(
                 id = icon,
                 contentDescription = null,
-                size = 16.dp,
+                size = CLI_BUTTON_LEADING_ICON_SIZE,
                 tint = tint,
-                modifier = Modifier.offset(y = (-1).dp),
+                modifier = iconModifier,
             )
 
-        iconContent != null -> iconContent(tint)
+        iconContent != null -> Box(
+            modifier = iconModifier.graphicsLayer {
+                scaleX = CLI_ICON_DRAW_SCALE
+                scaleY = CLI_ICON_DRAW_SCALE
+            },
+            contentAlignment = Alignment.Center,
+        ) {
+            iconContent(tint)
+        }
         else -> return
     }
     Spacer(modifier = Modifier.width(5.dp))
 }
+
+internal val CLI_BUTTON_LEADING_ICON_SIZE = 18.dp
+internal val CLI_BUTTON_LEADING_ICON_DROP = (-1).dp
 
 internal data class CliButtonEmphasis(
     val fillAlpha: Float,
@@ -282,12 +262,11 @@ internal fun CliChip(
     val colors = LocalCliColors.current
     val description = contentDescription
     val tint = if (color == Color.Unspecified) colors.dim else color
-    val shape = RoundedCornerShape(6.dp)
+    val shape = RoundedCornerShape(CliRadius.control)
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()
-    val plainPress = LocalCliVisualStyle.current == VisualStyle.PLAIN
     val chipScale by animateFloatAsState(
-        targetValue = if (plainPress && pressed) PLAIN_PRESS_SCALE else 1f,
+        targetValue = if (pressed) PRESS_SCALE else 1f,
         animationSpec = CliMotion.press(),
         label = "cliChipPressScale",
     )
@@ -304,13 +283,6 @@ internal fun CliChip(
     Box(
         modifier = modifier
             .defaultMinSize(minHeight = 48.dp)
-            .offset {
-                if (pressed && !plainPress) {
-                    IntOffset(CHIP_PRESS_STEP.roundToPx(), CHIP_PRESS_STEP.roundToPx())
-                } else {
-                    IntOffset.Zero
-                }
-            }
             .graphicsLayer {
                 scaleX = chipScale
                 scaleY = chipScale
@@ -341,8 +313,14 @@ internal fun CliChip(
             label = "cliChipLabel",
         )
         Text(
-            text = if (LocalCliVisualStyle.current == VisualStyle.PIXEL) "[$label]" else cliLabelText(label),
-            style = CliType.small,
+            text = cliHeadingText(label),
+            style = CliType.button.copy(
+                fontSize = cliFontSizeForMode(
+                    CliType.small.fontSize,
+                    LocalCliPixelArtEnabled.current,
+                ),
+                lineHeight = CliType.small.lineHeight,
+            ),
             color = labelColor,
             maxLines = 1,
         )
@@ -368,43 +346,12 @@ private fun cliButtonBorder(filled: Boolean, pressed: Boolean, tint: Color, brig
         else -> tint.copy(alpha = 0.65f)
     }
 
-private fun DrawScope.dashedFrame(color: Color) {
-    val stroke = 1.dp.toPx()
-    drawRoundRect(
-        color = color,
-        topLeft = Offset(stroke / 2f, stroke / 2f),
-        size = Size(size.width - stroke, size.height - stroke),
-        cornerRadius = CornerRadius(6.dp.toPx()),
-        style = Stroke(
-            width = stroke,
-            pathEffect = PathEffect.dashPathEffect(
-                floatArrayOf(4.dp.toPx(), 3.dp.toPx()),
-            ),
-        ),
-    )
-}
-
-private fun DrawScope.pixelInsetFrame(color: Color) {
-    val inset = PIXEL_STEP.toPx()
-    drawRect(
-        color = color,
-        topLeft = Offset(inset, inset),
-        size = Size(size.width - inset * 2, size.height - inset * 2),
-        style = Stroke(width = 1.dp.toPx()),
-    )
-}
-
-private val PIXEL_STEP = 2.dp
-
-private const val PLAIN_PRESS_SCALE = 0.97f
+private const val PRESS_SCALE = 0.97f
 
 private val BUTTON_LABEL_MIN_FONT = cliScaledSp(11f)
 private val BUTTON_LABEL_FONT_STEP = 0.5.sp
 
-private const val SHADE_TOWARD_BLACK = 0.45f
 private const val PRESS_TOWARD_WHITE = 0.30f
-
-private val CHIP_PRESS_STEP = 1.dp
 
 @Composable
 internal fun Modifier.cliPressable(
@@ -449,4 +396,4 @@ internal fun Modifier.cliCombinedPressable(
         )
 }
 
-private val CLI_PRESS_SHAPE = RoundedCornerShape(6.dp)
+private val CLI_PRESS_SHAPE = RoundedCornerShape(CliRadius.control)

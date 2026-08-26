@@ -1,6 +1,9 @@
 package com.foxhole.guard.ui.cli
 
-import com.foxhole.core.model.VisualStyle
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.foxhole.guard.ui.cli.components.CLI_BUTTON_LEADING_ICON_DROP
+import com.foxhole.guard.ui.cli.components.CLI_BUTTON_LEADING_ICON_SIZE
 import com.foxhole.guard.ui.cli.components.cliStatusDotAnimates
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -56,13 +59,78 @@ internal class CliMotionAndScaleContractTest {
         val dock = cli("components/CliHintBar.kt")
         val swap = cli("CliMotion.kt")
 
-        listOf(button, dock, swap).forEach { source ->
+        listOf(button, dock).forEach { source ->
             assertTrue("every animated surface reads the tokens", source.contains("CliMotion."))
         }
         assertFalse("a local press duration is a second motion law", button.contains("PLAIN_PRESS_MS"))
+        assertTrue(button.contains("targetValue = if (pressed) PRESS_SCALE else 1f"))
+        assertFalse(button.contains("plainPress && pressed"))
         assertFalse(button.contains("animationSpec = tween("))
         assertFalse(dock.contains("animationSpec = spring("))
         assertFalse(swap.contains("fadeIn(tween("))
+        assertTrue(swap.contains("spring(stiffness = Spring.StiffnessLow)"))
+    }
+
+    @Test
+    fun `text button icons share a larger cap-height slot with a slight optical lift`() {
+        val button = cli("components/CliButton.kt")
+
+        assertEquals(18.dp, CLI_BUTTON_LEADING_ICON_SIZE)
+        assertEquals((-1).dp, CLI_BUTTON_LEADING_ICON_DROP)
+        assertTrue(button.contains(".size(CLI_BUTTON_LEADING_ICON_SIZE)"))
+        assertTrue(button.contains(".offset(y = CLI_BUTTON_LEADING_ICON_DROP)"))
+        assertTrue(button.contains("iconContent != null -> Box("))
+        assertTrue(button.contains("scaleX = CLI_ICON_DRAW_SCALE"))
+        assertTrue(button.contains("scaleY = CLI_ICON_DRAW_SCALE"))
+    }
+
+    @Test
+    fun `the interface uses one restrained Android navigation law`() {
+        val motion = cli("CliMotion.kt")
+        val app = cli("CliApp.kt")
+
+        assertTrue(motion.contains("NAVIGATION_SHIFT_DIVISOR"))
+        assertTrue(motion.contains("full * direction / NAVIGATION_SHIFT_DIVISOR"))
+        assertTrue(motion.contains("internal fun cliSlide("))
+        assertFalse(motion.contains("cliPanelSwap"))
+        assertFalse(motion.contains("plain: Boolean"))
+        assertFalse(motion.contains("initialOffsetX = { full -> full * direction }"))
+        assertTrue(app.contains("BackHandler(enabled = screen != CliScreen.HOME)"))
+        assertFalse(app.contains("PredictiveBackHandler"))
+        assertFalse(app.contains("backPeek"))
+    }
+
+    @Test
+    fun `terminal typing and placed rows share one clock`() {
+        val terminal = cli("home/CliHomeTerminal.kt")
+        val promptEffect = terminal
+            .substringAfter("LaunchedEffect(prompt)")
+            .substringBefore("Row(modifier = modifier")
+        val placedEntrance = terminal
+            .substringAfter("private fun Modifier.cliPlacedRowEntrance")
+            .substringBefore("private fun RowScope.CliTerminalKeyValueColumns")
+
+        assertTrue(promptEffect.contains("PROMPT_TYPE_STEP_MS"))
+        assertFalse(promptEffect.contains("plainStyle"))
+        assertFalse(promptEffect.contains("delay(40L)"))
+        assertTrue(placedEntrance.contains("CliMotion.enter"))
+        assertFalse(placedEntrance.contains("VisualStyle"))
+    }
+
+    @Test
+    fun `collapsible panels and sheet steps use the shared restrained motion`() {
+        val panel = cli("components/CliPanel.kt")
+        val help = cli("settings/CliHelpSubScreen.kt")
+        val dataset = cli("settings/CliDatasetActivationSheet.kt")
+
+        listOf(panel, help).forEach { source ->
+            assertTrue(source.contains("enter = cliVerticalEnter()"))
+            assertTrue(source.contains("exit = cliVerticalExit()"))
+            assertFalse(source.contains("expandVertically("))
+            assertFalse(source.contains("shrinkVertically("))
+        }
+        assertTrue(dataset.contains("cliSlide(forward = targetState.ordinal > initialState.ordinal)"))
+        assertFalse(dataset.contains("slideInHorizontally { width -> width }"))
     }
 
     @Test
@@ -87,31 +155,149 @@ internal class CliMotionAndScaleContractTest {
     }
 
     @Test
-    fun `modern renders one notch smaller and the dock opts out`() {
-        assertEquals(1f, cliMetricScaleFor(VisualStyle.PIXEL), 0f)
-        assertEquals(CLI_MODERN_METRIC_SCALE, cliMetricScaleFor(VisualStyle.PLAIN), 0f)
-        assertTrue("modern must be smaller than retro, not larger", CLI_MODERN_METRIC_SCALE < 1f)
-        assertTrue("a notch, not a redesign", CLI_MODERN_METRIC_SCALE > 0.85f)
+    fun `one unified reference ladder has one bilingual pixel heading face`() {
+        val type = cliTypography()
+        assertEquals(referenceSp(15f), type.body.fontSize)
+        assertEquals(referenceSp(13f), type.small.fontSize)
+        assertEquals(referenceSp(14f), type.title.fontSize)
+        assertEquals(referenceSp(16f), type.display.fontSize)
+        assertEquals(pixelHeadingSp(15f), type.button.fontSize)
+        assertEquals((-2).dp, cliHeadingOpticalOffsetFor("Settings"))
+        assertEquals((-2).dp, cliHeadingOpticalOffsetFor("Настройки"))
+        assertEquals((-2).dp, cliPanelHeadingOpticalOffsetFor("Настройки"))
+        assertEquals((-1).dp, cliHeadingGlyphOpticalOffsetFor("Настройки"))
+        assertEquals((-1).dp, cliHeadingGlyphOpticalOffsetFor("Settings", pixelArtEnabled = false))
+        assertEquals((-4).dp, cliScreenHeadingOpticalOffsetFor("Настройки"))
+        assertEquals((-2).dp, cliHeadingOpticalOffsetFor("Settings", pixelArtEnabled = false))
+        assertEquals((-2).dp, cliPanelHeadingOpticalOffsetFor("Settings", pixelArtEnabled = false))
+        assertEquals((-4).dp, cliScreenHeadingOpticalOffsetFor("Настройки", pixelArtEnabled = false))
+        assertEquals(pixelHeadingSp(16f), cliDisplayStyleFor("FoxHole Guard").fontSize)
+        assertEquals(pixelHeadingSp(16f), cliScreenTitleStyleFor("Settings").fontSize)
+        assertEquals(
+            referenceSp(16f),
+            cliScreenTitleStyleFor("Settings", pixelArtEnabled = false).fontSize,
+        )
+        assertEquals(
+            cliDisplayStyleFor("Settings").lineHeight,
+            cliScreenTitleStyleFor("Settings").lineHeight,
+        )
+        assertEquals(pixelHeadingSp(14f), cliTitleStyleFor("Settings").fontSize)
+        assertEquals(
+            cliTitleStyleFor("Settings").lineHeight,
+            cliTitleStyleFor("Settings", pixelArtEnabled = false).lineHeight,
+        )
+        assertEquals(
+            cliTitleStyleFor("Settings").fontSize.value * CLI_PIXEL_FONT_CAP_HEIGHT_RATIO,
+            cliTitleStyleFor("Settings", pixelArtEnabled = false).fontSize.value *
+                CLI_MONO_FONT_CAP_HEIGHT_RATIO,
+            0.001f,
+        )
+        assertEquals(
+            cliDisplayStyleFor("Settings").fontSize.value * CLI_PIXEL_FONT_CAP_HEIGHT_RATIO,
+            cliDisplayStyleFor("Settings", pixelArtEnabled = false).fontSize.value *
+                CLI_MONO_FONT_CAP_HEIGHT_RATIO,
+            0.001f,
+        )
+        assertEquals(cliTitleStyleFor("Settings").fontFamily, cliTitleStyleFor("Настройки").fontFamily)
 
         val theme = cli("CliTheme.kt")
-        val plainSet = theme.substringAfter("private val CliPlainTypography").substringBefore("\n)")
-        listOf("body", "small", "title", "display", "button").forEach { step ->
-            assertTrue("$step must take the notch", plainSet.contains("plainSize"))
-        }
-        assertFalse(plainSet.contains("= CliTypeBody.size"))
-        assertFalse(plainSet.contains("= CliTypeSmall.size"))
+        assertTrue(theme.contains("private val Tiny5Family"))
+        assertTrue(theme.contains("fontFamily = Tiny5Family"))
+        assertTrue(theme.contains("fontFamily = JetBrainsMonoBoldFamily"))
+        assertFalse(theme.contains("InterFamily"))
+        assertFalse(theme.contains("withWholeStringCyrillicFallback"))
 
-        val icon = cli("components/CliPixIcon.kt")
-        assertTrue(icon.contains("val drawnSize = size * LocalCliMetricScale.current"))
-        assertFalse(icon.contains("modifier.size(size)"))
+        val icon = cli("components/CliIcon.kt")
+        assertTrue(icon.contains("val drawnSize = size * CLI_ICON_DRAW_SCALE"))
+        assertTrue(icon.contains("painterResource(id)"))
+        assertFalse(icon.contains("cliLinIconRes"))
+        assertTrue(icon.contains("modifier = modifier.size(size).then(a11y)"))
+        assertTrue(icon.contains("modifier = Modifier.size(drawnSize)"))
 
         val dock = cli("components/CliHintBar.kt")
-        assertTrue(dock.contains("CompositionLocalProvider(LocalCliMetricScale provides CLI_DOCK_METRIC_SCALE)"))
-        assertTrue(dock.contains("private const val CLI_DOCK_METRIC_SCALE = 1f"))
+        assertTrue(dock.contains("CliType.button.copy("))
+        assertTrue(dock.contains("fontSize = cliFontSizeForMode("))
+        assertTrue(dock.contains("cliScaledSp(if (compact) 10f else 11f)"))
+        assertTrue(dock.contains("semanticLabel.uppercase()"))
     }
 
     @Test
-    fun `table headers keep the small step in both styles`() {
+    fun `home brand status and terminal footnotes use shared semantic roles`() {
+        val terminal = cli("home/CliHomeTerminal.kt")
+
+        assertTrue(terminal.contains("style = cliDisplayStyle(\"FOXHOLE GUARD\").copy("))
+        assertTrue(
+            terminal.contains("val baseStatusStyle = cliTypography(pixelArtEnabled = false).button.copy("),
+        )
+        assertFalse(terminal.contains("if (statusScale < 1f)"))
+        assertTrue(terminal.contains("fontSize = baseStatusStyle.fontSize * statusScale"))
+        assertTrue(terminal.contains("val style = CliType.small"))
+        assertTrue(terminal.contains("style = CliType.small"))
+        assertFalse(terminal.contains("TERMINAL_FOOTNOTE_FONT_SP"))
+        assertFalse(terminal.contains("STATUS_FONT_SIZE"))
+        assertFalse(terminal.contains("CliType.display.copy(fontSize"))
+    }
+
+    @Test
+    fun `buttons use uppercase pixel labels without legacy brackets`() {
+        val button = cli("components/CliButton.kt")
+
+        assertTrue(button.contains("val shownLabel = cliHeadingText(label)"))
+        assertTrue(button.contains("text = shownLabel"))
+        assertTrue(button.contains("style = CliType.button"))
+        assertFalse(button.contains("[${'$'}{cliLabelText(label)}]"))
+    }
+
+    @Test
+    fun `shared geometry follows one compact radius cascade`() {
+        assertEquals(1.dp, CliRadius.hairline)
+        assertEquals(2.dp, CliRadius.pixel)
+        assertEquals(4.dp, CliRadius.indicator)
+        assertEquals(6.dp, CliRadius.control)
+        assertEquals(8.dp, CliRadius.panel)
+        assertEquals(12.dp, CliRadius.modal)
+        assertEquals(24.dp, CliRadius.sheet)
+
+        val consumers = listOf(
+            "components/CliButton.kt" to "CliRadius.control",
+            "components/CliPanel.kt" to "CliRadius.panel",
+            "components/CliInputModal.kt" to "CliRadius.modal",
+            "components/CliBottomSheet.kt" to "CliRadius.sheet",
+            "components/CliStageProgress.kt" to "CliRadius.indicator",
+        )
+        consumers.forEach { (path, token) ->
+            assertTrue("$path must use $token", cli(path).contains(token))
+        }
+    }
+
+    @Test
+    fun `manual text and continuous clocks honor disabled system motion`() {
+        val clock = cli("components/CliMotionClock.kt")
+        val typewriter = cli("components/CliTypewriterText.kt")
+        val shimmer = cli("components/CliShimmerText.kt")
+        val terminal = cli("home/CliHomeTerminal.kt")
+
+        assertTrue(clock.contains("currentCoroutineContext()[MotionDurationScale]"))
+        assertTrue(clock.contains("phase.floatValue = 0f"))
+        listOf(typewriter, shimmer, terminal).forEach { source ->
+            assertTrue(source.contains("cliSystemMotionEnabled()"))
+        }
+        assertTrue(terminal.contains("terminal.promptTypedCount = prompt.length"))
+        assertTrue(terminal.contains("visibleChars = length"))
+    }
+
+    @Test
+    fun `outline icons share one optical alignment`() {
+        assertEquals(0.dp, CLI_ICON_OPTICAL_OFFSET)
+
+        val icon = cli("components/CliIcon.kt")
+        val flag = cli("components/CliFlagIcon.kt")
+        assertFalse(icon.contains("VisualStyle"))
+        assertFalse(flag.contains("VisualStyle"))
+    }
+
+    @Test
+    fun `table headers keep the small step`() {
         listOf(
             "logs/CliLogsScreen.kt" to "private fun CliJournalTableHeader",
             "stats/CliStatsVpnTablePanels.kt" to "private fun CliStatsTableHeader",
@@ -128,14 +314,51 @@ internal class CliMotionAndScaleContractTest {
         val dot = cli("components/CliStatusDot.kt")
 
         assertTrue(dot.contains("internal const val CLI_ATTENTION_PULSE_MS = 900"))
-        assertEquals(2, Regex("CLI_ATTENTION_PULSE_MS,").findAll(dot).count())
-        assertTrue("modern draws a circle, not the pixel disc", dot.contains("Modifier.clip(CircleShape)"))
+        assertEquals(1, Regex("CLI_ATTENTION_PULSE_MS,").findAll(dot).count())
+        assertEquals(2, Regex("\\.clip\\(CircleShape\\)").findAll(dot).count())
         assertTrue(dot.contains("RepeatMode.Reverse"))
-        assertTrue(dot.contains("STATUS_DOT_GRID"))
-        assertTrue(dot.contains("RepeatMode.Restart"))
-        assertTrue(dot.contains("if (!cliStatusDotAnimates(pulsing)) {"))
+        assertTrue(dot.contains("PIXEL_CAP_HEIGHT_RATIO"))
+        assertFalse(dot.contains("RepeatMode.Restart"))
+        assertTrue(dot.contains("private fun cliAttentionPulse(label: String): Float"))
         assertFalse(cliStatusDotAnimates(pulsing = false))
         assertTrue(cliStatusDotAnimates(pulsing = true))
+    }
+
+    private fun referenceSp(base: Float) = (base * 1.1f * CLI_UNIFIED_METRIC_SCALE).sp
+
+    private fun pixelHeadingSp(base: Float) =
+        cliPixelFontSizeForMonoSp(base * 1.1f * CLI_UNIFIED_METRIC_SCALE)
+
+    @Test
+    fun `selected vpn profile and protocol markers stay static`() {
+        val rows = cli("components/CliRows.kt")
+        val panel = cli("components/CliPanel.kt")
+        val homeSelector = cli("home/CliProfileQuickSelector.kt")
+        val protocolEditor = cli("profiles/CliProfileEditorProtocolForm.kt")
+        val activeDot = rows
+            .substringAfter("internal fun CliActiveDot(")
+            .substringBefore("internal fun CliColumnRule")
+
+        assertTrue(activeDot.contains("if (active)"))
+        assertTrue(activeDot.contains(".background(colors.accent)"))
+        assertFalse(activeDot.contains("rememberInfiniteTransition"))
+        assertFalse(activeDot.contains("animateFloat"))
+        assertFalse(activeDot.contains("graphicsLayer"))
+        assertFalse(activeDot.contains("CLI_ATTENTION_PULSE_MS"))
+        assertTrue(cli("profiles/CliProfileListItem.kt").contains("CliActiveDot(active = true)"))
+        assertTrue(cli("profiles/CliProtocolDropdown.kt").contains("CliActiveDot(active = true)"))
+        assertTrue(homeSelector.contains("CliActiveDot(active = active)"))
+        val profileRow = cli("profiles/CliProfileListItem.kt")
+            .substringAfter("private fun CliProfileRow(")
+            .substringBefore("private fun ProfileTableLeadingCell(")
+        assertTrue(profileRow.contains(".selectedProfileDecoration(selected, colors.accent)"))
+        assertFalse(profileRow.contains("cliAccentSweepBorder"))
+        assertTrue(panel.contains("Modifier.border(1.dp, accentBorderColor.copy(alpha = 0.65f), shape)"))
+        assertTrue(panel.contains(".then(accentEdge)"))
+        listOf(homeSelector, protocolEditor).forEach { source ->
+            assertTrue(source.contains("accentBorderColor = colors.accent"))
+            assertFalse(source.contains("cliAccentSweepBorder"))
+        }
     }
 
     @Test
@@ -155,14 +378,15 @@ internal class CliMotionAndScaleContractTest {
     }
 
     @Test
-    fun `expanded info blocks use the centred blue first-line frame`() {
+    fun `info sheets use the shared help frame with only the icon accented`() {
         val sheet = cli("components/CliInfoSheet.kt")
+        val help = cli("components/CliContextHelp.kt")
 
-        assertTrue(sheet.contains("CliDashedInfoNote("))
-        assertTrue(sheet.contains("centered = true"))
-        assertTrue(sheet.contains("centeredIconLeading = true"))
-        assertTrue(sheet.contains("centeredIconFirstLine = true"))
-        assertTrue(sheet.contains("color = colors.accent"))
+        assertTrue(sheet.contains("icon = R.drawable.lin_info.takeIf"))
+        assertTrue(sheet.contains("LocalCliInfoSheetBodyIconVisible.current"))
+        assertFalse(sheet.contains("CliDashedInfoNote("))
+        assertTrue(help.contains("tint = colors.info"))
+        assertTrue(help.contains("color = colors.fg"))
     }
 
     @Test
@@ -176,7 +400,7 @@ internal class CliMotionAndScaleContractTest {
         assertTrue(screen.contains("if (rejectionAttempt == attempt) missingAppsTarget = null"))
         assertTrue(section.contains("onMissingAppsRejected(CliMissingAppsTarget.VPN)"))
         assertTrue(section.contains("onMissingAppsRejected(CliMissingAppsTarget.TOR)"))
-        assertTrue(lanes.contains("if (missingAppsTarget != null) colors.err else colors.note"))
+        assertTrue(lanes.contains("if (missingAppsTarget != null) colors.err else colors.firewall"))
         assertTrue(lanes.contains("missingAppsTarget == CliMissingAppsTarget.VPN"))
         assertTrue(lanes.contains("missingAppsTarget == CliMissingAppsTarget.TOR"))
         assertTrue(lanes.contains("Modifier.cliRejectShake(missingAppsFeedback)"))
@@ -192,32 +416,38 @@ internal class CliMotionAndScaleContractTest {
 
         assertTrue(badge.contains("internal fun CliBadge("))
         assertTrue(badge.contains("internal fun CliBadgedText("))
-        assertTrue("raised like an exponent", badge.contains("private val BADGE_LIFT = (-3).dp"))
-        assertTrue(badge.contains("offset(y = BADGE_LIFT)"))
+        assertTrue(badge.contains("offset(y = CLI_BADGE_VERTICAL_OFFSET)"))
+        assertTrue(badge.contains("CLI_BADGE_VERTICAL_OFFSET = (-1).dp"))
         assertFalse("a badge colour is always semantic", badge.contains("Color(0xFF"))
-        assertTrue(badge.contains("if (round) BADGE_CORNER else 0.dp"))
+        assertTrue(badge.contains("RoundedCornerShape(BADGE_CORNER)"))
 
         assertTrue(sources.contains("CliBadge(text = officialLabel, color = colors.ok)"))
         assertTrue(sources.contains("verticalAlignment = Alignment.Top"))
-        assertTrue(sources.contains("trailing = { CliRowInfoGlyph(onTap = { noteOpen = true }) }"))
+        assertTrue(sources.contains("iconSize = cliModalHeaderIconSizeFor(CliSheetHeaderIconRole.DEFAULT)"))
         assertFalse(sources.contains("CliElbowLine(text = stringResource(R.string.cli_updates_sources_note))"))
     }
 
     @Test
-    fun `a stored secret is revealed only while held and copied without leaving a record`() {
+    fun `a stored proxy secret has persistent safe trailing actions`() {
         val secret = cli("components/CliSecretRow.kt")
         val routing = cli("settings/CliRoutingModeSection.kt")
+        val lan = cli("settings/CliLanProxySubScreen.kt")
 
-        assertTrue(secret.contains("collectIsPressedAsState()"))
-        assertFalse("a toggled reveal can be left on", secret.contains("revealed = !revealed"))
+        assertTrue(secret.contains("rememberSaveable(prompt, value.isBlank())"))
+        assertTrue(secret.contains("revealed = !revealed"))
         assertTrue(secret.contains("password = !revealed"))
         assertTrue(secret.contains("android.content.extra.IS_SENSITIVE"))
         assertFalse(secret.contains("emitInfo"))
         assertFalse(secret.contains("recordStructured"))
-        assertTrue(secret.contains("R.drawable.pix_edit"))
-        assertTrue(secret.contains("R.drawable.pix_copy"))
+        assertTrue(secret.contains("enabled = hasValue"))
+        assertTrue(secret.contains("SECRET_ACTION_SIZE = 48.dp"))
+        assertTrue(secret.contains("R.string.cli_secret_action_show"))
+        assertTrue(secret.contains("R.string.cli_secret_action_hide"))
+        assertTrue(secret.contains("R.drawable.lin_edit"))
+        assertTrue(secret.contains("R.drawable.lin_copy"))
 
         assertTrue("the proxy password uses it", routing.contains("CliSecretRow("))
+        assertTrue("the LAN proxy password uses it", lan.contains("CliSecretRow("))
     }
 
     @Test

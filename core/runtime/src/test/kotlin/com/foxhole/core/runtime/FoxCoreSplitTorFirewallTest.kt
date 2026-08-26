@@ -24,12 +24,6 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/**
- * Split, the Tor lane and the firewall enabled together: reported from the device as a config the
- * core refuses. With the fail-closed Tor lane armed, the Tor packages are rejected outright, so no
- * split rule may name them — in EXCLUDE mode the selected apps ARE the excluded set, which put one
- * package under both a reject and a direct-route rule (policy_unrepresentable).
- */
 internal class FoxCoreSplitTorFirewallTest : RuntimeConfigAssemblerTestSupport() {
     private val translator = FoxCoreConfigTranslator()
 
@@ -50,6 +44,7 @@ internal class FoxCoreSplitTorFirewallTest : RuntimeConfigAssemblerTestSupport()
                 .withLane(AppTunnelLane.EXCLUDE, listOf("com.example.excluded")),
             privacyRoute =
             PrivacyRouteSettings(
+                permitted = torEngaged,
                 mode = if (torEngaged) PrivacyRouteMode.TOR_OVER_VPN else PrivacyRouteMode.OFF,
                 scope = PrivacyRouteScope.SELECTED_APPS,
                 blockAppsWhenTorUnavailable = failClosed,
@@ -122,11 +117,6 @@ internal class FoxCoreSplitTorFirewallTest : RuntimeConfigAssemblerTestSupport()
         translate(settingsWithAllThree(PerAppRoutingMode.EXCLUDE_SELECTED_APPS, torEngaged = false, failClosed = true))
     }
 
-    /**
-     * Both reaches on «selected apps» at once — the pairing the beta notice listed as broken.
-     * The Tor app must reach Tor while the VPN split still carries its own selection, and no
-     * package may be named by two SPECIFIC rules (that config the core refuses outright).
-     */
     @Test
     fun `include split beside a selected-apps tor lane routes each lane to its own outbound`() {
         val settings =
@@ -138,8 +128,7 @@ internal class FoxCoreSplitTorFirewallTest : RuntimeConfigAssemblerTestSupport()
             rules.filter { it.packages() == listOf("com.example.tor") && it.string("network") == "tcp" }
                 .map { it.string("outbound") },
         )
-        // The VPN split is the inverted catch-all, so the Tor package keeps the verdict the tor
-        // rule above already gave it instead of colliding with a second specific rule.
+
         val vpnSplitRule = rules.single { it.string("outbound") == "direct" && it["invert"] != null }
         assertTrue("com.example.tor" in vpnSplitRule.packages())
         assertTrue("com.example.vpn" in vpnSplitRule.packages())
@@ -191,8 +180,6 @@ internal class FoxCoreSplitTorFirewallTest : RuntimeConfigAssemblerTestSupport()
             settingsWithAllThree(PerAppRoutingMode.EXCLUDE_SELECTED_APPS, torEngaged = true, failClosed = false)
         val rules = assembledRouteRules(settings)
 
-        // EXCLUDE means «selected apps leave the tunnel», but a Tor app has to stay in it to reach
-        // Tor at all, so buildSplitPlan subtracts it from the excluded set.
         val excludeRule =
             rules.single { rule ->
                 rule.string("outbound") == "direct" && rule["invert"] == null && rule.packages().isNotEmpty()
@@ -219,7 +206,6 @@ internal class FoxCoreSplitTorFirewallTest : RuntimeConfigAssemblerTestSupport()
             ?.map { it.jsonObject }
             .orEmpty()
 
-    /** Packages named by more than one non-inverted rule — what makes a config unrepresentable. */
     private fun duplicatePackagesAcrossSpecificRules(rules: List<JsonObject>): List<String> =
         rules
             .filter { it["invert"] == null }

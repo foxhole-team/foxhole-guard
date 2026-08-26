@@ -21,13 +21,6 @@ import java.io.File
 import java.io.IOException
 import java.time.Instant
 
-/**
- * Downloads a fresh Tor bridge list. The default source is the Tor Project's built-in bridges
- * endpoint; enabling the Foxhole mirror switches to the FoxHole DB bridges group, where a signed
- * manifest pins the artifact by size and sha256 before a byte of it is trusted. Both sources
- * carry the same bridge-groups JSON shape ({"obfs4":[…],"snowflake":[…],…}), and the payload is
- * additionally validated by [TorBridgeStore.install] before it can replace the active list.
- */
 enum class TorBridgeUpdateStatus {
     UPDATED,
     UP_TO_DATE,
@@ -44,9 +37,7 @@ class TorBridgeUpdateClient(
     private val httpClient: OkHttpClient,
     private val json: Json = Json { ignoreUnknownKeys = true },
     private val resolver: RemoteHostResolver? = null,
-    // Read per call, not per instance: the repository can be redirected from the updates screen
-    // while this client is already in the graph, and a captured value would keep the old mirror
-    // until the process restarted.
+
     private val manifestUrl: () -> String = { TOR_BRIDGES_FOXHOLE_MANIFEST_URL },
     private val currentVersionName: String = BuildConfig.VERSION_NAME,
     private val now: () -> Instant = Instant::now,
@@ -131,13 +122,6 @@ class TorBridgeUpdateClient(
         val generatedAt: Instant? = null,
     )
 
-    /**
-     * The FoxHole DB path: signed manifest first, artifact second, and the artifact's bytes must
-     * match the manifest's size and sha256 exactly. Nothing from the mirror is trusted raw.
-     *
-     * Null when the mirror is republishing the publication already installed — the artifact is not
-     * downloaded at all in that case.
-     */
     private fun OkHttpClient.fetchViaFoxholeDbManifest(
         onPhase: (RemoteUpdatePhase) -> Unit,
         onProgress: (RemoteDownloadProgress) -> Unit,
@@ -253,7 +237,6 @@ class TorBridgeUpdateClient(
     companion object {
         const val TOR_BRIDGES_TOR_SITE_URL = "https://bridges.torproject.org/moat/circumvention/builtin"
 
-        // The FoxHole DB bridges group (opt-in mirror): a signed manifest next to every other feed.
         const val TOR_BRIDGES_FOXHOLE_MANIFEST_URL = "$FOXHOLE_DB_PAGES_BASE_URL/bridges-manifest.json"
         private const val INSTALLED_STAMP_FILE = "bridges-manifest.generated-at"
         private const val EXPECTED_MANIFEST_SCHEMA = 1

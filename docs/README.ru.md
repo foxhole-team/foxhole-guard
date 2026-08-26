@@ -22,6 +22,10 @@
   <a href="https://f-droid.org/packages/com.foxhole.guard/">
     <img src="https://img.shields.io/f-droid/v/com.foxhole.guard?label=F-Droid&logo=f-droid&style=flat-square" alt="F-Droid Version">
   </a>
+  <a href="https://apps.obtainium.imranr.dev/redirect?r=obtainium://app/%7B%22id%22%3A%22com.foxhole.guard%22%2C%22url%22%3A%22https%3A%2F%2Fgithub.com%2Ffoxhole-team%2Ffoxhole-guard%22%2C%22author%22%3A%22FoxHole%20Team%22%2C%22name%22%3A%22FoxHole%20Guard%22%2C%22preferredApkIndex%22%3A0%2C%22additionalSettings%22%3A%22%7B%5C%22apkFilterRegEx%5C%22%3A%5C%22arm64-v8a.%2A%5C%5C%5C%5C.apk%24%5C%22%2C%5C%22invertAPKFilter%5C%22%3Afalse%2C%5C%22verifyLatestTag%5C%22%3Atrue%7D%22%2C%22overrideSource%22%3A%22GitHub%22%7D">
+    <img src="https://img.shields.io/badge/Obtainium-%D0%B4%D0%BE%D0%B1%D0%B0%D0%B2%D0%B8%D1%82%D1%8C-1A73E8?style=flat-square" alt="Установить через Obtainium">
+  </a>
+
 </p>
 
 # FoxHole Guard
@@ -41,7 +45,7 @@
 **FoxHole Guard** не содержит рекламы, аналитики использования или телеметрии. Списки приложений, статистика, журналы, правила маршрутизации и результаты локального анализа остаются на устройстве, если пользователь сам их не экспортирует.
 
 > [!IMPORTANT]
-> Текущая публичная бета — **0.0.2**. Проект активно развивается и проходит проверки перед релизом. Анализ FoxHole Sentinel и его уведомления по умолчанию выключены и запускаются только после включения модуля пользователем. Часть кода и документации создана с помощью ИИ.
+> Проект активно развивается и проходит проверки перед релизом. Часть кода и документации создаётся с помощью ИИ исключительно для ускорения разработки и тестирования.
 
 <p align="center">
   <img src="../fastlane/metadata/android/ru-RU/images/phoneScreenshots/00_main_ru.png" width="24%" alt="главный экран">
@@ -281,7 +285,7 @@ Outline рассматривается как вариант Shadowsocks.
 - SIP003 `v2ray-plugin` в WebSocket-режиме;
 - `simple-obfs` в режимах `http` и `tls`.
 
-`v2ray-plugin` и `simple-obfs` являются транспортами, а не отдельными VPN-протоколами.
+`v2ray-plugin` и `simple-obfs`
 
 ### 🚫 Не поддерживается
 

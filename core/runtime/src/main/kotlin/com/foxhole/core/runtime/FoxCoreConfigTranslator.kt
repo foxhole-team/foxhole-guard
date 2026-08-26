@@ -12,19 +12,6 @@ import kotlinx.serialization.json.put
 
 typealias FoxCoreTranslatedConfig = FoxCoreSessionConfig
 
-/**
- * A one-way preparation result. The normalized import document is deliberately not retained by the
- * native data plane: a successful preparation leaves only FoxCore's strict schema-v1 documents and
- * the address plan Android must use
- * when it establishes the TUN.
- */
-/**
- * Stable, non-secret refusal categories suitable for UI/error-code mapping.
- *
- * [FoxCoreConfigTranslationException] never includes values from the source document in its
- * message. Profile credentials, endpoints and arbitrary JSON therefore cannot leak if the caller
- * records the exception.
- */
 enum class FoxCoreConfigRejection {
     PREPARED_CONFIG_MISSING,
     MALFORMED_JSON,
@@ -40,49 +27,25 @@ enum class FoxCoreConfigRejection {
     OVERLAY_CONFIGURATION_UNSUPPORTED,
     POLICY_UNREPRESENTABLE,
 
-    /**
-     * A WireGuard/AmneziaWG profile that carries no resolver of its own.
-     *
-     * An L3 packet tunnel has no stream outbound to resolve through, so this app does not intercept
-     * DNS on such a profile at all: it hands the resolver the profile declares to Android and lets
-     * the device's queries ride the tunnel as ordinary IP packets. A profile that declares none
-     * leaves nothing to advertise, and the only remaining answers — resolving beside the tunnel on
-     * the underlying network, or inventing a public resolver — both put the user's lookups where
-     * the user did not ask for them. Refused instead.
-     */
     PACKET_TUNNEL_DNS_MISSING,
 }
 
 class FoxCoreConfigTranslationException internal constructor(
     val rejection: FoxCoreConfigRejection,
     val path: String,
-    /**
-     * A fixed sentence written by this repository, never a value read out of the source document.
-     * It exists because a rejection name and a JSON path say what was refused but not why, and the
-     * "why" is the part a user can act on.
-     */
+
     val explanation: String? = null,
 ) : IllegalArgumentException(
     "${rejection.name.lowercase()} at $path" + explanation?.let { ": $it" }.orEmpty(),
 )
 
-/**
- * Strict normalized-profile → FoxCore schema-v1 preparation.
- *
- * This is not a compatibility runtime and has no fallback. It accepts only shapes for which every
- * effect can be represented in FoxCore. Unknown fields and known-but-unrepresentable behaviour are
- * refused before a native engine is involved.
- */
+// Rejections contain repository-owned codes and schema paths only, never values from provider configs.
 class FoxCoreConfigTranslator(
     private val json: Json = Json {
         explicitNulls = false
         ignoreUnknownKeys = false
     },
 ) {
-    /**
-     * Runtime-only entry point. The native data plane must never parse the normalized import
-     * document carried for profile editing and diagnostics.
-     */
     fun requirePrepared(
         session: VpnSession,
         expectedPolicyRevision: Long? = null,
@@ -138,13 +101,6 @@ class FoxCoreConfigTranslator(
             )
         val advertisedDnsServers =
             if (outboundPlan.primaryIsPacketTunnel) {
-                // A packet tunnel carries IP packets and offers no stream outbound to resolve
-                // through, so the engine no longer intercepts DNS on this shape at all — see
-                // FoxCorePolicyTranslator. The resolver the profile itself declares is therefore
-                // the only one there is, and Android has to be told about it: it goes on the TUN,
-                // and the device's queries reach it as ordinary packets inside the tunnel, exactly
-                // as any WireGuard client behaves. The policy translator has already refused a
-                // profile that declares none, so this is never empty here.
                 listOfNotNull(policy.packetTunnelDnsAdvertise)
             } else {
                 tun.advertisedDnsServers.ifEmpty {

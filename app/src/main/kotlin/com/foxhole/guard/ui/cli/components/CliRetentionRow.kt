@@ -46,7 +46,7 @@ internal fun CliRetentionRow(
     if (customOpen) {
         CliInputModal(
             title = stringResource(R.string.cli_input_value_title),
-            icon = R.drawable.pix_clock,
+            icon = R.drawable.lin_clock,
             prompt = "d",
             value = customDays,
             onValueChange = { raw -> customDays = raw.filter(Char::isDigit).take(CUSTOM_DAYS_DIGITS) },
