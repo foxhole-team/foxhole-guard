@@ -880,8 +880,8 @@
     <string name="cli_lock_biometric">biometric protection</string>
     <string name="cli_common_failed">failed</string>
     <string name="cli_common_yes_confirm">confirm</string>
-    <string name="cli_terminal_clear_title">clear terminal history</string>
-    <string name="cli_terminal_clear_question">delete all saved terminal history?</string>
+    <string name="cli_terminal_clear_title">clear console history?</string>
+    <string name="cli_terminal_clear_question">delete saved command and connection history in the app console?</string>
     <string name="cli_home_section_console">console</string>
     <string name="cli_home_section_current_info">status</string>
     <string name="cli_home_current_info_help">For quick VPN profile selection, tap anywhere in this area of the app.</string>
@@ -1130,7 +1130,7 @@
     <string name="cli_route_sites_invalid">invalid web address</string>
     <string name="cli_home_key_protocol">VPN protocol</string>
     <string name="cli_cfg_latency_method">latency measurement method</string>
-    <string name="cli_cfg_terminal_clear">clear terminal history</string>
+    <string name="cli_cfg_terminal_clear">clear console history</string>
     <string name="cli_cfg_firewall">firewall</string>
     <string name="cli_firewall_quarantine_title">new app quarantine</string>
     <string name="cli_firewall_quarantine_needs_firewall">the quarantine works only with the firewall module on</string>

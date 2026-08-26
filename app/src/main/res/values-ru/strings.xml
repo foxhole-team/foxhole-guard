@@ -890,8 +890,8 @@
     <string name="cli_lock_biometric">биометрическая защита</string>
     <string name="cli_common_failed">не удалось</string>
     <string name="cli_common_yes_confirm">подтвердить</string>
-    <string name="cli_terminal_clear_title">очистить историю терминала</string>
-    <string name="cli_terminal_clear_question">удалить всю сохранённую историю терминала?</string>
+    <string name="cli_terminal_clear_title">очистить историю в консоли?</string>
+    <string name="cli_terminal_clear_question">удалить сохранённую историю команд и подключений в консоли приложения?</string>
     <string name="cli_home_section_console">консоль</string>
     <string name="cli_home_section_current_info">статус</string>
     <string name="cli_home_current_info_help">Для быстрого выбора профиля VPN нажмите на эту область приложения в любом месте.</string>
@@ -1145,7 +1145,7 @@
     <string name="cli_cfg_latency_method">метод определения задержки</string>
     <string name="cli_cfg_atomic_connection">атомарное переключение сценариев</string>
     <string name="cli_cfg_atomic_connection_note">если выключено, каждое переключение режима работы или сценария VPN/Tor требует подтверждения; правила сети всегда применяются атомарно</string>
-    <string name="cli_cfg_terminal_clear">очистка истории терминала</string>
+    <string name="cli_cfg_terminal_clear">очистка истории консоли</string>
     <string name="cli_cfg_firewall">фаервол</string>
     <string name="cli_firewall_quarantine_title">карантин новых приложений</string>
     <string name="cli_firewall_quarantine_needs_firewall">карантин доступен только с включенным модулем фаервола</string>

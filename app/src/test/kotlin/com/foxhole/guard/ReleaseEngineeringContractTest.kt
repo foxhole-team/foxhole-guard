@@ -454,6 +454,41 @@ class ReleaseEngineeringContractTest {
     }
 
     @Test
+    fun `CI seeds the native dependency tree before Gradle license generation`() {
+        val setup = projectFile("../.github/actions/setup-foxcore/action.yml").readText()
+
+        val fetchIndex = setup.indexOf("scripts/fetch-native-deps.sh")
+        val gradleIndex = setup.indexOf("install cargo-ndk and fetch locked Rust dependencies")
+        assertTrue(fetchIndex >= 0)
+        assertTrue(gradleIndex > fetchIndex)
+    }
+
+    @Test
+    fun `GitHub actions use Node 24 runtimes without the legacy override`() {
+        val workflowPaths =
+            listOf(
+                "../.github/workflows/android.yml",
+                "../.github/workflows/release.yml",
+                "../.github/actions/setup-foxcore/action.yml",
+            )
+        val workflows = workflowPaths.joinToString("\n") { path -> projectFile(path).readText() }
+
+        assertFalse(workflows.contains("FORCE_JAVASCRIPT_ACTIONS_TO_NODE24"))
+        assertFalse(workflows.contains("11d5960a326750d5838078e36cf38b85af677262"))
+        assertFalse(workflows.contains("cf277c60eb25467037889841efdb72551f06f6c3"))
+        assertFalse(workflows.contains("0b6dd653ba04f4f93bf581ec31e66cbd7dcb644d"))
+        assertFalse(workflows.contains("ea165f8d65b6e75b540449e92b4886f43607fa02"))
+        assertFalse(workflows.contains("d3f86a106a0bac45b974a628896c90dbdf5c8093"))
+        assertFalse(workflows.contains("96b4a1ef7235a096b17240c259729fdd70c83d45"))
+        assertTrue(workflows.contains("actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09"))
+        assertTrue(workflows.contains("actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961"))
+        assertTrue(workflows.contains("gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c"))
+        assertTrue(workflows.contains("actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f"))
+        assertTrue(workflows.contains("actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131"))
+        assertTrue(workflows.contains("actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8"))
+    }
+
+    @Test
     fun `signed candidate is built only on trusted dev push and main publishes those exact bytes`() {
         val androidWorkflow = projectFile("../.github/workflows/android.yml").readText()
         val releaseWorkflow = projectFile("../.github/workflows/release.yml").readText()

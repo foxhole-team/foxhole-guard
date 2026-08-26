@@ -32,9 +32,6 @@ on:
 permissions:
   contents: read
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
-
 concurrency:
   group: android-${{ github.ref }}
   cancel-in-progress: true
@@ -47,7 +44,7 @@ jobs:
     timeout-minutes: 90
     steps:
       - name: checkout
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           submodules: recursive
           persist-credentials: false
@@ -90,7 +87,7 @@ jobs:
     timeout-minutes: 90
     steps:
       - name: checkout verified dev commit
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           submodules: recursive
           persist-credentials: false
@@ -189,7 +186,7 @@ jobs:
               "$source_tree"
 
       - name: upload immutable candidate
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: foxhole-app-${{ github.sha }}
           path: ${{ runner.temp }}/foxhole-release-candidate/*
@@ -199,7 +196,7 @@ jobs:
 
       # Mapping and native symbols stay authenticated Actions artifacts, never attached to the public release.
       - name: retain private diagnostics
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: foxhole-private-diagnostics-${{ github.sha }}
           path: |
