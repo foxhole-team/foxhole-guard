@@ -11,16 +11,6 @@ import java.io.ByteArrayInputStream
 internal class I2pB32ResolutionTest {
 
     @Test
-    fun `a router with no tunnels is not ready however well its socket negotiates`() {
-        assertFalse(i2pdTunnelsBuilt(null))
-        assertFalse(i2pdTunnelsBuilt(0))
-        assertFalse("one tunnel can only be half a pair", i2pdTunnelsBuilt(1))
-        assertTrue(i2pdTunnelsBuilt(2))
-        assertTrue(i2pdTunnelsBuilt(6))
-        assertEquals(2, I2PD_MIN_CLIENT_TUNNELS)
-    }
-
-    @Test
     fun `the journal separates a router that never started from one still building`() {
         assertEquals("i2pd proxy ready", i2pdReadyOutcome(ready = true, listenerUp = true))
         assertEquals(

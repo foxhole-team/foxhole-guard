@@ -22,6 +22,9 @@
   <a href="https://f-droid.org/packages/com.foxhole.guard/">
     <img src="https://img.shields.io/f-droid/v/com.foxhole.guard?label=F-Droid&logo=f-droid&style=flat-square" alt="F-Droid Version">
   </a>
+  <a href="https://apps.obtainium.imranr.dev/redirect?r=obtainium://app/%7B%22id%22%3A%22com.foxhole.guard%22%2C%22url%22%3A%22https%3A%2F%2Fgithub.com%2Ffoxhole-team%2Ffoxhole-guard%22%2C%22author%22%3A%22FoxHole%20Team%22%2C%22name%22%3A%22FoxHole%20Guard%22%2C%22preferredApkIndex%22%3A0%2C%22additionalSettings%22%3A%22%7B%5C%22apkFilterRegEx%5C%22%3A%5C%22arm64-v8a.%2A%5C%5C%5C%5C.apk%24%5C%22%2C%5C%22invertAPKFilter%5C%22%3Afalse%2C%5C%22verifyLatestTag%5C%22%3Atrue%7D%22%2C%22overrideSource%22%3A%22GitHub%22%7D">
+    <img src="https://img.shields.io/badge/Obtainium-add%20app-1A73E8?style=flat-square" alt="Get it on Obtainium">
+  </a>
 </p>
 
 # FoxHole Guard
@@ -41,7 +44,7 @@ The core idea of the project is a single application for everyday network protec
 **FoxHole Guard** contains no advertising, usage analytics, or telemetry. Application lists, statistics, logs, routing rules, and local analysis results remain on the device unless the user explicitly exports them.
 
 > [!IMPORTANT]
-> The current public beta is **0.0.2**. The project is still under active development and production testing. FoxHole Sentinel analysis and its notifications are disabled by default and run only after the user enables the module. Part of the code and documentation was created with AI assistance.
+> The project is actively developed and undergoing release checks. Some code and documentation are created with AI solely to accelerate development and testing.
 
 <p align="center">
   <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/00_main_en.png" width="24%" alt="Main">
@@ -281,7 +284,7 @@ Supported:
 - SIP003 `v2ray-plugin` in WebSocket mode;
 - `simple-obfs` in `http` and `tls` modes.
 
-`v2ray-plugin` and `simple-obfs` are transports, not separate VPN protocols.
+`v2ray-plugin` and `simple-obfs`
 
 ### 🚫 Not supported
 

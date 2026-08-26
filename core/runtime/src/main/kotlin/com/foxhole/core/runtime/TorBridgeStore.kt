@@ -13,13 +13,6 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import java.io.File
 
-/**
- * On-disk home of the updatable Tor bridge list. The bundled `pt_config.json` is the fallback; a
- * successfully installed download (normalized groups JSON + metadata) takes precedence in
- * [TorRuntimeInstaller.writeRuntimeTorrcDefaults] via [buildBridgeTorrcLines]. Installation
- * validates every line and is atomic (temp file + rename); the "last updated / success" status is
- * tracked separately in settings (PrivacyRouteSettings.bridges*).
- */
 @Serializable
 data class TorBridgeMetadata(
     val source: String,
@@ -35,14 +28,12 @@ class TorBridgeStore(
 ) {
     private val appContext = context.applicationContext
 
-    /** The normalized groups JSON consumed by [buildBridgeTorrcLines], or null when none downloaded. */
     fun readGroupsJsonOrNull(): String? =
         bridgesFile()
             .takeIf(File::isFile)
             ?.let { file -> runCatching { file.readText() }.getOrNull() }
             ?.takeIf(String::isNotBlank)
 
-    // Content-derived key so a changed list forces a torrc-defaults rewrite; empty when no override.
     fun payloadFingerprint(): String = readGroupsJsonOrNull()?.hashCode()?.toString() ?: ""
 
     fun readMetadata(): TorBridgeMetadata? =
@@ -50,12 +41,6 @@ class TorBridgeStore(
             .takeIf(File::isFile)
             ?.let { file -> runCatching { json.decodeFromString<TorBridgeMetadata>(file.readText()) }.getOrNull() }
 
-    /**
-     * Validates a raw bridge payload (a bare group object, a `{"bridges": {...}}` wrapper, possibly
-     * with `recommendedDefault`) and, when it holds at least one well-formed bridge line, installs a
-     * normalized `{"recommendedDefault", "bridges"}` document. Throws when the payload is malformed
-     * or empty so a bad download never replaces a working list.
-     */
     fun install(
         rawPayload: String,
         source: String,
@@ -136,7 +121,6 @@ class TorBridgeStore(
         const val MIN_BRIDGE_LINES = 1
         const val MAX_PAYLOAD_BYTES = 256 * 1024
 
-        // A usable line is "<transport> <host:port> …", e.g. "obfs4 1.2.3.4:443 FINGERPRINT cert=…".
         private val BRIDGE_LINE_PREFIX = Regex("""^[A-Za-z0-9_-]+\s+\S+:\d+""")
 
         fun isBridgeLine(line: String): Boolean = BRIDGE_LINE_PREFIX.containsMatchIn(line.trim())

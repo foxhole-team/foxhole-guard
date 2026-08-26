@@ -3,13 +3,13 @@ package com.foxhole.guard.widget
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
@@ -23,6 +23,7 @@ import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
 import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.action.actionStartActivity
+import androidx.glance.appwidget.cornerRadius
 import androidx.glance.appwidget.provideContent
 import androidx.glance.currentState
 import androidx.glance.layout.Alignment
@@ -35,9 +36,6 @@ import androidx.glance.layout.fillMaxWidth
 import androidx.glance.layout.height
 import androidx.glance.layout.padding
 import androidx.glance.layout.size
-import androidx.glance.text.Text
-import androidx.glance.text.TextStyle
-import androidx.glance.unit.ColorProvider
 import com.foxhole.core.model.WidgetKindAppearance
 import com.foxhole.guard.FoxholeApplication
 import com.foxhole.guard.R
@@ -47,6 +45,7 @@ import com.foxhole.guard.core.webapps.decodeWebAppIcon
 import com.foxhole.guard.core.webapps.webAppBadgeBitmap
 import com.foxhole.guard.core.webapps.webAppLetterIconBitmap
 import com.foxhole.guard.ui.cli.CliColors
+import com.foxhole.guard.ui.cli.CliLightColors
 import com.foxhole.guard.ui.cli.CliMainActivity
 import kotlinx.coroutines.withTimeoutOrNull
 
@@ -82,19 +81,21 @@ class WebAppsWidget : GlanceAppWidget() {
             val defaults =
                 settings.widgets.webAppsAppearanceForWidget(
                     context = context,
-                    panelAppearance = settings.ui.panelAppearance,
+                    themeMode = settings.ui.themeMode,
                 )
             val background = widgetBackground(prefs, defaults)
             val outlined = widgetOutlineEnabled(prefs, defaults)
             val slots = webAppSlots(LocalSize.current)
-            WebAppsWidgetContent(
-                context = context,
-                apps = apps.take(slots),
-                icons = icons,
-                background = background,
-                outlined = outlined,
-                compact = LocalSize.current.height < TALL_HEIGHT_THRESHOLD,
-            )
+            CompositionLocalProvider(LocalWidgetPixelArtEnabled provides settings.ui.pixelArtEnabled) {
+                WebAppsWidgetContent(
+                    context = context,
+                    apps = apps.take(slots),
+                    icons = icons,
+                    background = background,
+                    outlined = outlined,
+                    compact = LocalSize.current.height < TALL_HEIGHT_THRESHOLD,
+                )
+            }
         }
     }
 }
@@ -112,7 +113,7 @@ private fun WebAppsWidgetContent(
     outlined: Boolean,
     compact: Boolean,
 ) {
-    WidgetPixelFrame(background = background, outlined = outlined) {
+    WidgetFrame(background = background, outlined = outlined) {
         WebAppsWidgetBody(
             context = context,
             apps = apps,
@@ -142,9 +143,12 @@ private fun WebAppsWidgetBody(
         )
         Spacer(modifier = GlanceModifier.height(4.dp))
         if (apps.isEmpty()) {
-            Text(
+            StyledWidgetText(
+                context = context,
                 text = context.getString(R.string.cli_webapps_empty),
-                style = TextStyle(color = ColorProvider(background.text), fontSize = 11.sp),
+                color = background.text,
+                fontSize = 11,
+                maxWidth = WEB_APP_EMPTY_TEXT_MAX_WIDTH,
             )
         } else {
             apps.chunked(WIDGET_APPS_PER_ROW).forEach { row ->
@@ -180,7 +184,9 @@ private fun WebAppWidgetCell(
             .putExtra(CliMainActivity.EXTRA_OPEN_WEB_APP_ID, app.id)
             .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
     Column(
-        modifier = modifier.clickable(actionStartActivity(openIntent)),
+        modifier = modifier
+            .cornerRadius(WIDGET_SURFACE_CORNER_RADIUS)
+            .clickable(actionStartActivity(openIntent)),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Box {
@@ -221,10 +227,12 @@ private fun WebAppWidgetCell(
                 }
             }
         }
-        Text(
+        StyledWidgetText(
+            context = context,
             text = app.name.lowercase(),
-            style = TextStyle(color = ColorProvider(textColor), fontSize = 9.sp),
-            maxLines = 1,
+            color = textColor,
+            fontSize = 9,
+            maxWidth = WEB_APP_LABEL_MAX_WIDTH,
         )
     }
 }
@@ -249,7 +257,7 @@ internal fun widgetBackground(prefs: Preferences, defaults: WidgetKindAppearance
     return WidgetBackground(
         fill = (if (isBlack) Color.Black else Color.White).copy(alpha = alpha),
         text = if (isBlack) Color.White else Color.Black,
-        secondaryText = if (isBlack) CliColors().dim else Color(0xFF5B6472),
+        secondaryText = if (isBlack) CliColors().dim else CliLightColors.faint,
         icon = if (isBlack) Color.White else Color.Black,
     )
 }
@@ -257,7 +265,9 @@ internal fun widgetBackground(prefs: Preferences, defaults: WidgetKindAppearance
 internal val WIDGET_ACCENT = CliColors().accent
 internal val WIDGET_OK = CliColors().ok
 internal val WIDGET_INFO = CliColors().info
+internal val WIDGET_VPN = CliColors().vpn
 internal val WIDGET_TOR = CliColors().tor
+internal val WIDGET_I2P = CliColors().i2p
 internal val WIDGET_ERROR = CliColors().err
 private val WIDGET_FALLBACK_TILE = WIDGET_ACCENT.copy(alpha = WIDGET_TILE_ALPHA)
 private val TALL_HEIGHT_THRESHOLD = 120.dp
@@ -266,5 +276,7 @@ private const val WIDGET_APPS_PER_ROW = 4
 private const val WIDGET_ICON_PX = 96
 private const val WIDGET_BADGE_PX = 40
 private val WIDGET_BADGE_DP = 16.dp
+private val WEB_APP_LABEL_MAX_WIDTH = 72.dp
+private val WEB_APP_EMPTY_TEXT_MAX_WIDTH = 220.dp
 private const val WIDGET_DB_TIMEOUT_MS = 2_000L
 private const val WIDGET_TILE_ALPHA = 0.2f

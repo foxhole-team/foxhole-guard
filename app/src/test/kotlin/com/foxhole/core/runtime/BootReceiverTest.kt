@@ -7,6 +7,7 @@ import com.foxhole.core.model.TrafficMode
 import com.foxhole.guard.runtime.BOOT_RECEIVER_TIMEOUT_MS
 import com.foxhole.guard.runtime.BootReceiverDispatch
 import com.foxhole.guard.runtime.BootRestoreAction
+import com.foxhole.guard.runtime.FoxholeVpnService
 import com.foxhole.guard.runtime.bootReceiverDispatch
 import com.foxhole.guard.runtime.bootRestorePlan
 import com.foxhole.guard.runtime.isPackageReplaceRuntimeIdleAfterKill
@@ -150,6 +151,31 @@ class BootReceiverTest {
         assertEquals("vless-main", plan.protocolOptionId)
         assertEquals(TrafficMode.PROXY, plan.profileTrafficMode)
         assertEquals(null, plan.localGuardMode)
+    }
+
+    @Test
+    fun `package replace cannot restore a forbidden TOR-only runtime`() {
+        val plan =
+            packageReplaceRecoveryPlan(
+                resumeState =
+                RuntimeResumeState(
+                    trafficMode = TrafficMode.TUNNEL,
+                    profileId = FoxholeVpnService.TOR_ONLY_PROFILE_ID,
+                    protocolOptionId = null,
+                    localGuardMode = null,
+                ),
+                hasActiveVpnNetwork = true,
+                activeProfileId = null,
+                settingsTrafficMode = TrafficMode.TUNNEL,
+                localGuardMode = LocalGuardMode.DNS,
+                torOnlyRestoreAllowed = false,
+            )
+
+        assertTrue(plan.killStaleRuntime)
+        assertEquals(TrafficMode.TUNNEL, plan.killTrafficMode)
+        assertEquals(LocalGuardMode.DNS, plan.localGuardMode)
+        assertNull(plan.profileId)
+        assertFalse(plan.reconnectRequired)
     }
 
     @Test

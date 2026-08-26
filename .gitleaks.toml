@@ -30,6 +30,14 @@ regexes = [
   '''amnezia-private-key''',
 ]
 
+# The F-Droid recipe publishes the APK certificate pin so clients can verify upgrades.
+[[allowlists]]
+description = "public APK certificate pin in F-Droid metadata"
+condition = "AND"
+paths = ['''^metadata/com\.foxhole\.guard\.yml$''']
+regexTarget = "line"
+regexes = ['''^\s*AllowedAPKSigningKeys:\s*e59de2486084c38f3c77e9df0eb5eff9a4559f3c68024f1208e0e9c04b0df665\s*$''']
+
 # The dead test infrastructure this repository used to carry in tests, fixtures, notes and docs.
 # Default gitleaks rules flag neither a bare hostname nor a UUID, so the scan was green while the
 # tree held a real endpoint and a real account UUID. These rules exist to fail a relapse.

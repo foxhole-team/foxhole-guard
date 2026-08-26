@@ -32,8 +32,7 @@ class RuntimeGenerationClockTest {
 
         val transition = RuntimeGenerationClock.next()
         stateMachine.adoptTransition(generation = transition, reason = "connect")
-        // Unrelated mints (commands, child-process lifecycles) must not invalidate the token:
-        // staleness is equality against the last generation THIS machine adopted.
+
         repeat(5) { RuntimeGenerationClock.next() }
 
         assertTrue(stateMachine.isCurrentGeneration(transition, owner = "test"))

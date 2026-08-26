@@ -1,7 +1,10 @@
 package com.foxhole.guard.ui.cli.home
 
+import com.foxhole.guard.R
+import com.foxhole.guard.ui.cli.CliCommands
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
@@ -76,6 +79,28 @@ class CliHomeButtonLayoutTest {
     }
 
     @Test
+    fun `start is outlined green while stop and cancel keep their own actions`() {
+        val start = mainButtonAction(connected = false, busy = false)
+        val stop = mainButtonAction(connected = true, busy = false)
+        val cancel = mainButtonAction(connected = false, busy = true)
+
+        assertEquals(R.string.cli_home_btn_connect, start.labelRes)
+        assertNull(start.command)
+        assertFalse(start.filled)
+        assertEquals(CliMainActionTone.START, start.tone)
+
+        assertEquals(R.string.cli_home_btn_disconnect, stop.labelRes)
+        assertEquals(CliCommands.STOP, stop.command)
+        assertFalse(stop.filled)
+        assertEquals(CliMainActionTone.STOP, stop.tone)
+
+        assertEquals(R.string.cli_home_btn_cancel, cancel.labelRes)
+        assertEquals(CliCommands.CANCEL, cancel.command)
+        assertFalse(cancel.filled)
+        assertEquals(CliMainActionTone.STOP, cancel.tone)
+    }
+
+    @Test
     fun `no state leaves an empty row`() {
         listOf(true, false).forEach { tor ->
             listOf(true, false).forEach { i2p ->
@@ -88,6 +113,36 @@ class CliHomeButtonLayoutTest {
                 }
             }
         }
+    }
+
+    @Test
+    fun `home buttons add no extra gap before the dock clearance`() {
+        val source = listOf(
+            File("src/main/kotlin/com/foxhole/guard/ui/cli/home/CliHomeScreen.kt"),
+            File("app/src/main/kotlin/com/foxhole/guard/ui/cli/home/CliHomeScreen.kt"),
+            File("../app/src/main/kotlin/com/foxhole/guard/ui/cli/home/CliHomeScreen.kt"),
+        ).first(File::isFile).readText()
+        val buttonsTail = source
+            .substringAfter("CliHomeButtonsArea(")
+            .substringBefore("@Composable\nprivate fun CliHomeAdditionalInfoSlot(")
+
+        assertTrue(buttonsTail.contains("CliChromeTailSpacer(extraGap = 0.dp)"))
+    }
+
+    @Test
+    fun `button count changes morph widths instead of replacing the whole row`() {
+        val source = listOf(
+            File("src/main/kotlin/com/foxhole/guard/ui/cli/home/CliHomeButtons.kt"),
+            File("app/src/main/kotlin/com/foxhole/guard/ui/cli/home/CliHomeButtons.kt"),
+            File("../app/src/main/kotlin/com/foxhole/guard/ui/cli/home/CliHomeButtons.kt"),
+        ).first(File::isFile).readText()
+
+        assertTrue(source.contains("private fun CliMorphingActionRow("))
+        assertTrue(source.contains("updateTransition(targetState = row"))
+        assertTrue(source.contains(".weight(weight)"))
+        assertTrue(source.contains("CliMotion.settle()"))
+        assertFalse(source.contains("cliHomeActionRowSwap"))
+        assertFalse(source.contains("AnimatedContent("))
     }
 
     @Test

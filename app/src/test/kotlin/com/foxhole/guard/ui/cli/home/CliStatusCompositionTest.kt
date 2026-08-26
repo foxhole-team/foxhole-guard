@@ -26,7 +26,16 @@ class CliStatusCompositionTest {
         tor: Boolean = false,
         torBesideVpn: Boolean = false,
         i2p: Boolean = false,
-    ) = CliActiveRuntimes(vpn = vpn, proxy = proxy, tor = tor, torBesideVpn = torBesideVpn, i2p = i2p)
+        torScope: PrivacyRouteScope? = PrivacyRouteScope.ALL_APPS.takeIf { tor },
+    ) =
+        CliActiveRuntimes(
+            vpn = vpn,
+            proxy = proxy,
+            tor = tor,
+            torBesideVpn = torBesideVpn,
+            i2p = i2p,
+            torScope = torScope,
+        )
 
     private fun settings(
         perApp: PerAppRoutingMode = PerAppRoutingMode.FULL_TUNNEL,
@@ -134,7 +143,7 @@ class CliStatusCompositionTest {
                 localSurfaceServing = false,
             ),
         )
-        assertNull(cliTorScenario(settings = settings(), torLive = false))
+        assertNull(cliTorScenario(torLive = false))
     }
 
     @Test
@@ -190,15 +199,15 @@ class CliStatusCompositionTest {
 
     @Test
     fun `the tor scenario is independent of the vpn one`() {
-        val perAppVpn = settings(
-            perApp = PerAppRoutingMode.INCLUDE_SELECTED_APPS,
-            torScope = PrivacyRouteScope.ALL_APPS,
+        assertEquals(
+            CliStatusScenario.WHOLE_DEVICE,
+            cliTorScenario(torLive = true, appliedScope = PrivacyRouteScope.ALL_APPS),
         )
-        assertEquals(CliStatusScenario.WHOLE_DEVICE, cliTorScenario(settings = perAppVpn, torLive = true))
         assertEquals(
             CliStatusScenario.PROXY_SELECTED,
-            cliTorScenario(settings = settings(torScope = PrivacyRouteScope.SELECTED_APPS), torLive = true),
+            cliTorScenario(torLive = true, appliedScope = PrivacyRouteScope.SELECTED_APPS),
         )
+        assertNull(cliTorScenario(torLive = true, appliedScope = null))
     }
 
     @Test
@@ -212,11 +221,20 @@ class CliStatusCompositionTest {
             Triple(vpnProxy, runtimes(vpn = true), CliCompactRouteStatus.VPN_PROXY),
             Triple(vpnWhole, runtimes(vpn = true, proxy = true), CliCompactRouteStatus.VPN_PROXY),
             Triple(torWhole, runtimes(tor = true), CliCompactRouteStatus.TOR),
-            Triple(torProxy, runtimes(tor = true), CliCompactRouteStatus.TOR_PROXY),
+            Triple(
+                torProxy,
+                runtimes(tor = true, torScope = PrivacyRouteScope.SELECTED_APPS),
+                CliCompactRouteStatus.TOR_PROXY,
+            ),
             Triple(vpnWhole, runtimes(vpn = true, tor = true, torBesideVpn = true), CliCompactRouteStatus.VPN_TOR),
             Triple(
                 torProxy,
-                runtimes(vpn = true, tor = true, torBesideVpn = true),
+                runtimes(
+                    vpn = true,
+                    tor = true,
+                    torBesideVpn = true,
+                    torScope = PrivacyRouteScope.SELECTED_APPS,
+                ),
                 CliCompactRouteStatus.VPN_TOR_PROXY,
             ),
             Triple(
@@ -229,18 +247,27 @@ class CliStatusCompositionTest {
                     perApp = PerAppRoutingMode.INCLUDE_SELECTED_APPS,
                     torScope = PrivacyRouteScope.SELECTED_APPS,
                 ),
-                runtimes(vpn = true, tor = true, torBesideVpn = true),
+                runtimes(
+                    vpn = true,
+                    tor = true,
+                    torBesideVpn = true,
+                    torScope = PrivacyRouteScope.SELECTED_APPS,
+                ),
                 CliCompactRouteStatus.VPN_PROXY_TOR_PROXY,
             ),
             Triple(vpnWhole, runtimes(vpn = true, tor = true), CliCompactRouteStatus.TOR_IN_VPN),
-            Triple(torProxy, runtimes(vpn = true, tor = true), CliCompactRouteStatus.TOR_PROXY_IN_VPN),
+            Triple(
+                torProxy,
+                runtimes(vpn = true, tor = true, torScope = PrivacyRouteScope.SELECTED_APPS),
+                CliCompactRouteStatus.TOR_PROXY_IN_VPN,
+            ),
             Triple(vpnProxy, runtimes(vpn = true, tor = true), CliCompactRouteStatus.TOR_IN_VPN_PROXY),
             Triple(
                 settings(
                     perApp = PerAppRoutingMode.INCLUDE_SELECTED_APPS,
                     torScope = PrivacyRouteScope.SELECTED_APPS,
                 ),
-                runtimes(vpn = true, tor = true),
+                runtimes(vpn = true, tor = true, torScope = PrivacyRouteScope.SELECTED_APPS),
                 CliCompactRouteStatus.TOR_PROXY_IN_VPN_PROXY,
             ),
         )

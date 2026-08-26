@@ -12,16 +12,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.foxhole.core.model.VisualStyle
 import com.foxhole.guard.R
 import com.foxhole.guard.ui.HomeViewModel
 import com.foxhole.guard.ui.cli.CliSpacing
-import com.foxhole.guard.ui.cli.LocalCliColors
 import com.foxhole.guard.ui.cli.components.CliBottomSheet
-import com.foxhole.guard.ui.cli.components.CliButton
 import com.foxhole.guard.ui.cli.components.CliPanel
+import com.foxhole.guard.ui.cli.components.CliRowDivider
 import com.foxhole.guard.ui.cli.components.CliToggleRow
-import com.foxhole.guard.ui.onRetroThemeRestored
 
 @Composable
 internal fun CliUpdateNoticeSheet(viewModel: HomeViewModel) {
@@ -29,47 +26,44 @@ internal fun CliUpdateNoticeSheet(viewModel: HomeViewModel) {
     val visible by viewModel.alphaNoticeVisible.collectAsStateWithLifecycle()
     if (!visible || !settings.ui.onboardingCompleted) return
     CliUpdateNoticeSheetContent(
-        retroInitiallyChecked = settings.ui.visualStyle == VisualStyle.PIXEL,
-        onDismiss = { retro ->
-            viewModel.onRetroThemeRestored(retro)
-            viewModel.dismissAlphaNotice()
-        },
+        onDismiss = viewModel::dismissAlphaNotice,
     )
 }
 
 @Composable
 internal fun CliUpdateNoticeSheetContent(
-    retroInitiallyChecked: Boolean,
-    onDismiss: (Boolean) -> Unit,
+    onDismiss: (Boolean, Boolean) -> Unit,
 ) {
-    val colors = LocalCliColors.current
-    var retro by rememberSaveable(retroInitiallyChecked) { mutableStateOf(retroInitiallyChecked) }
+    var showTrafficMap by rememberSaveable {
+        mutableStateOf(UPDATE_NOTICE_TRAFFIC_MAP_DEFAULT_ENABLED)
+    }
+    var useFoxholeStyle by rememberSaveable {
+        mutableStateOf(UPDATE_NOTICE_FOXHOLE_STYLE_DEFAULT_ENABLED)
+    }
     val body = stringResource(R.string.cli_update_notice_body)
     val items = remember(body) { updateNoticeItems(body) }
     CliBottomSheet(
-        onDismiss = { onDismiss(retro) },
+        onDismiss = { onDismiss(showTrafficMap, useFoxholeStyle) },
         title = stringResource(R.string.cli_update_notice_title),
-        icon = R.drawable.pix_update,
+        icon = R.drawable.lin_update,
     ) {
         CliIconTextItems(items = items, framed = true)
         Spacer(modifier = Modifier.height(CliSpacing.md))
         CliPanel(modifier = Modifier.fillMaxWidth()) {
             CliToggleRow(
-                label = stringResource(R.string.cli_update_notice_retro),
-                checked = retro,
-                onToggle = { retro = it },
-                note = stringResource(R.string.cli_update_notice_retro_note),
-                icon = R.drawable.pix_edit,
+                label = stringResource(R.string.cli_update_notice_home_map),
+                checked = showTrafficMap,
+                onToggle = { showTrafficMap = it },
+                icon = R.drawable.lin_map,
+            )
+            CliRowDivider()
+            CliToggleRow(
+                label = stringResource(R.string.cli_cfg_pixel_art),
+                checked = useFoxholeStyle,
+                onToggle = { useFoxholeStyle = it },
+                icon = R.drawable.lin_terminal,
             )
         }
-        Spacer(modifier = Modifier.height(CliSpacing.md))
-        CliButton(
-            label = stringResource(R.string.cli_wizard_finish),
-            filled = true,
-            color = colors.ok,
-            onClick = { onDismiss(retro) },
-            modifier = Modifier.fillMaxWidth(),
-        )
         Spacer(modifier = Modifier.height(CliSpacing.sm))
     }
 }
@@ -81,15 +75,16 @@ internal fun updateNoticeItems(body: String): List<CliQuickStartItem> =
         .mapIndexed { index, text ->
             CliQuickStartItem(
                 text = text,
-                icon = UPDATE_NOTICE_ICONS.getOrElse(index) { R.drawable.pix_info },
+                icon = UPDATE_NOTICE_ICONS.getOrElse(index) { R.drawable.lin_info },
             )
         }
         .toList()
 
 private val UPDATE_NOTICE_ICONS = listOf(
-    R.drawable.pix_edit,
-    R.drawable.pix_power,
-    R.drawable.pix_settings,
-    R.drawable.pix_import,
-    R.drawable.pix_update,
+    R.drawable.lin_star,
+    R.drawable.lin_map,
+    R.drawable.lin_shield,
 )
+
+internal const val UPDATE_NOTICE_TRAFFIC_MAP_DEFAULT_ENABLED = true
+internal const val UPDATE_NOTICE_FOXHOLE_STYLE_DEFAULT_ENABLED = true

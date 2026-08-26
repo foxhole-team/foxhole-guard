@@ -14,9 +14,11 @@ import com.foxhole.guard.userFacingErrorMessage
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 
 internal class RuntimeSettingUpdateBarrier {
@@ -112,6 +114,8 @@ internal fun HomeViewModel.updateRuntimeSettingAndMaybeReconnect(
 }
 
 internal fun HomeViewModel.updateRuntimeSettingAndMaybeReload(
+    forceRuntimeApply: Boolean = false,
+    forceStopStandaloneTor: Boolean = false,
     updateAction: suspend () -> Unit,
 ) {
     val ticket = runtimeSettingUpdates.reserve()
@@ -124,20 +128,137 @@ internal fun HomeViewModel.updateRuntimeSettingAndMaybeReload(
             if (shouldSuppressReconnectWarning) {
                 markRuntimeReloadPending()
             }
-            updateAction()
-            val reloadRequested = maybeReloadActiveRuntime()
+            val reloadRequested =
+                if (forceRuntimeApply) {
+                    runAuthoritativeRuntimeSettingUpdate(
+                        updateAction = updateAction,
+                        applyAction = { forceApplyTorRuntimeSetting(forceStopStandaloneTor) },
+                    )
+                } else {
+                    updateAction()
+                    maybeReloadActiveRuntime()
+                }
             if (shouldSuppressReconnectWarning && !reloadRequested) {
                 clearRuntimeReloadPending()
             }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Throwable) {
+            clearRuntimeReloadPending()
+            emitError(runtimeConnectionFailureMessage(error))
         } finally {
             ticket.complete()
         }
     }
 }
 
-internal suspend fun HomeViewModel.maybeReloadActiveRuntime(): Boolean {
+internal suspend fun runAuthoritativeRuntimeSettingUpdate(
+    updateAction: suspend () -> Unit,
+    applyAction: () -> Boolean,
+): Boolean {
+    updateAction()
+    return withContext(NonCancellable) { applyAction() }
+}
+
+internal suspend fun <T> runAuthoritativeRuntimeSettingUpdateThen(
+    updateAction: suspend () -> Unit,
+    applyAction: () -> Boolean,
+    followUpAction: suspend () -> T,
+): T {
+    runAuthoritativeRuntimeSettingUpdate(updateAction, applyAction)
+    return followUpAction()
+}
+
+internal suspend fun <T> runFailClosedRuntimeStart(
+    updateAction: suspend () -> Unit,
+    startAction: suspend () -> T,
+    rollbackAction: suspend () -> Unit,
+): T {
+    var updateCommitted = false
+    try {
+        updateAction()
+        updateCommitted = true
+        return startAction()
+    } catch (failure: Exception) {
+        if (updateCommitted) {
+            val rollbackFailure =
+                withContext(NonCancellable) {
+                    runCatching { rollbackAction() }.exceptionOrNull()
+                }
+            rollbackFailure?.let(failure::addSuppressed)
+        }
+        throw failure
+    }
+}
+
+internal fun HomeViewModel.forceApplyTorRuntimeSetting(forceStopStandaloneTor: Boolean): Boolean {
+    val targetProfileId =
+        resolveAuthoritativeRuntimeProfileIdForReload(container.connectionController.snapshot.value)
+    val settings = container.settingsRepository.settings.value
+    val torDesired = settings.privacyRoute.permitted && settings.privacyRoute.enabled
+    if (shouldStopTorRuntimeBeforeReload(targetProfileId, forceStopStandaloneTor, torDesired)) {
+        clearRuntimeReconnectRequired()
+        container.connectionController.disconnect(suppressLocalGuard = false, userInitiated = false)
+        return true
+    }
+    val reloadRequested = requestAuthoritativeRuntimeReload(targetProfileId)
+    if (!reloadRequested && container.connectionController.snapshot.value.torActive) {
+        clearRuntimeReconnectRequired()
+        container.diagnosticsLogger.recordFailure(
+            "tor",
+            "authoritative Tor apply could not reload; stopping runtime",
+        )
+        container.connectionController.disconnect(suppressLocalGuard = false, userInitiated = false)
+        snackbars.tryEmit(errorBanner(R.string.error_runtime_stopped))
+        return true
+    }
+    if (reloadRequested) {
+        clearRuntimeReconnectRequired()
+    }
+    return reloadRequested
+}
+
+private fun HomeViewModel.requestAuthoritativeRuntimeReload(targetProfileId: Long?): Boolean {
+    val snapshot = container.connectionController.snapshot.value
+    if (targetProfileId == null || snapshot.state !in ACTIVE_CONNECTION_STATES) {
+        container.diagnosticsLogger.record(
+            "runtime",
+            "authoritative reload skipped: profile=$targetProfileId state=${snapshot.state}",
+        )
+        return false
+    }
+    val reloaded = container.connectionController.reload(targetProfileId)
+    if (reloaded) {
+        scheduleDashboardRefreshAfterRuntimeReload()
+    } else {
+        container.diagnosticsLogger.record("runtime", "authoritative reload declined: profile=$targetProfileId")
+    }
+    return reloaded
+}
+
+internal fun shouldStopTorRuntimeBeforeReload(
+    targetProfileId: Long?,
+    forceStopStandaloneTor: Boolean,
+    torDesired: Boolean,
+): Boolean =
+    !torDesired &&
+        (targetProfileId == FoxholeVpnService.TOR_ONLY_PROFILE_ID || forceStopStandaloneTor)
+
+internal fun resolveAuthoritativeRuntimeProfileIdForReload(
+    snapshot: com.foxhole.core.model.ConnectionSnapshot,
+): Long? {
+    val profileId = snapshot.profileId
+    return when {
+        snapshot.state !in ACTIVE_CONNECTION_STATES -> null
+        profileId == FoxholeVpnService.TOR_ONLY_PROFILE_ID -> FoxholeVpnService.TOR_ONLY_PROFILE_ID
+        profileId != null && profileId > 0L -> profileId
+        else -> null
+    }
+}
+
+internal suspend fun HomeViewModel.maybeReloadActiveRuntime(forceRuntimeApply: Boolean = false): Boolean {
     val targetProfileId = activeRuntimeProfileIdForReload()
-    val declineReason = runtimeReloadDeclineReason(targetProfileId)
+    val declineReason = runtimeReloadDeclineReason(targetProfileId, forceRuntimeApply)
     if (declineReason != null) {
         container.diagnosticsLogger.record("runtime", "reload skipped: $declineReason")
         return false
@@ -151,8 +272,11 @@ internal suspend fun HomeViewModel.maybeReloadActiveRuntime(): Boolean {
     return reloaded
 }
 
-private suspend fun HomeViewModel.runtimeReloadDeclineReason(targetProfileId: Long?): String? {
-    if (runtimeReconnectRequiredMutable.value) {
+private suspend fun HomeViewModel.runtimeReloadDeclineReason(
+    targetProfileId: Long?,
+    forceRuntimeApply: Boolean,
+): String? {
+    if (pendingReconnectBlocksRuntimeReload(runtimeReconnectRequiredMutable.value, forceRuntimeApply)) {
         return "reconnect already required"
     }
     if (targetProfileId == null) {
@@ -171,15 +295,23 @@ private suspend fun HomeViewModel.runtimeReloadDeclineReason(targetProfileId: Lo
                 torOnlyRuntime = liveTorOnly,
             ),
         )
-    if (routingChange != RoutingChangeAction.HOT_RELOAD) {
+    if (!forceRuntimeApply && routingChange != RoutingChangeAction.HOT_RELOAD) {
         return "traffic mode switch requires a full transition"
     }
     val currentFingerprint = container.connectionController.currentRuntimeFingerprint()
-    if (container.connectionController.appliedRuntimeSignature.value == currentFingerprint) {
+    if (
+        !forceRuntimeApply &&
+        container.connectionController.appliedRuntimeSignature.value == currentFingerprint
+    ) {
         return "fingerprint unchanged ($currentFingerprint)"
     }
     return null
 }
+
+internal fun pendingReconnectBlocksRuntimeReload(
+    reconnectRequired: Boolean,
+    forceRuntimeApply: Boolean,
+): Boolean = reconnectRequired && !forceRuntimeApply
 
 internal fun HomeViewModel.activeRuntimeProfileIdForReload(): Long? {
     val snapshot = container.connectionController.snapshot.value

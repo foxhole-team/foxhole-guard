@@ -9,9 +9,6 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
-// What a validation attempt is allowed to say out loud: the DNS shape is redacted (tags, types and
-// detours only - never a resolver address) before it reaches the diagnostics journal.
-
 private val tunnelValidationJson =
     Json {
         ignoreUnknownKeys = true

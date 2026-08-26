@@ -28,7 +28,6 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.asComposeRenderEffect
 import androidx.compose.ui.graphics.drawscope.translate
@@ -48,6 +47,7 @@ import com.foxhole.guard.ui.cli.CliTopContentGap
 import com.foxhole.guard.ui.cli.LocalCliBottomChromeClearance
 import com.foxhole.guard.ui.cli.LocalCliColors
 import com.foxhole.guard.ui.cli.LocalCliPanelAppearance
+import com.foxhole.guard.ui.cli.cliTopBarLifted
 import kotlin.math.roundToInt
 
 internal class CliBackdropState(val layer: GraphicsLayer) {
@@ -82,9 +82,8 @@ internal fun cliGlassTint(): Color {
 internal fun cliGlassTintColor(appearance: PanelAppearance, panelColor: Color): Color =
     when (appearance) {
         PanelAppearance.LIGHT -> panelColor.copy(alpha = GLASS_TINT_LIGHT_ALPHA)
-        PanelAppearance.DARK,
+        PanelAppearance.DARK -> Color.Black.copy(alpha = GLASS_TINT_DARK_ALPHA)
         PanelAppearance.STANDARD,
-        -> Color.Black.copy(alpha = GLASS_TINT_DARK_ALPHA)
         PanelAppearance.AUTO,
         -> panelColor.copy(alpha = GLASS_TINT_DARK_ALPHA)
     }
@@ -96,7 +95,7 @@ internal fun cliGlassFallback(): Color {
 }
 
 internal fun cliGlassFallbackColor(appearance: PanelAppearance, panelColor: Color): Color =
-    if (appearance == PanelAppearance.DARK || appearance == PanelAppearance.STANDARD) {
+    if (appearance == PanelAppearance.DARK) {
         Color.Black
     } else {
         panelColor
@@ -172,30 +171,23 @@ internal fun CliGlassHeaderScreen(
     header: @Composable () -> Unit,
     content: @Composable (topInset: Dp) -> Unit,
 ) {
+    val colors = LocalCliColors.current
     var headerHeightPx by remember { mutableIntStateOf(0) }
     val topInset = with(LocalDensity.current) { headerHeightPx.toDp() }
-    val blurEnabled = LocalCliGlassBlurEnabled.current && cliGlassSupported()
-    val bodyBackdrop = if (blurEnabled) rememberCliBackdrop() else null
     Box(modifier = modifier.fillMaxSize()) {
-        Box(
-            modifier = if (bodyBackdrop == null) {
-                Modifier.fillMaxSize()
-            } else {
-                Modifier.fillMaxSize().cliBackdropSource(bodyBackdrop)
-            },
-        ) {
+        Box(modifier = Modifier.fillMaxSize()) {
             content(topInset)
         }
-        CliGlassSurface(
-            shape = RectangleShape,
-            backdrop = bodyBackdrop,
+        Box(
             modifier = Modifier
                 .align(Alignment.TopCenter)
                 .fillMaxWidth()
+                .background(colors.bg)
                 .onSizeChanged { size -> headerHeightPx = size.height },
         ) {
             Box(
                 modifier = Modifier
+                    .cliTopBarLifted()
                     .statusBarsPadding()
                     .padding(
                         start = CliSpacing.md,
@@ -210,8 +202,8 @@ internal fun CliGlassHeaderScreen(
 }
 
 @Composable
-internal fun CliChromeTailSpacer() {
-    Spacer(modifier = Modifier.height(LocalCliBottomChromeClearance.current + CliSpacing.xs))
+internal fun CliChromeTailSpacer(extraGap: Dp = CliSpacing.xs) {
+    Spacer(modifier = Modifier.height(LocalCliBottomChromeClearance.current + extraGap))
 }
 
 private val GLASS_BLUR_RADIUS = 24.dp

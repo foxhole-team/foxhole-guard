@@ -5,6 +5,7 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -22,7 +23,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -40,8 +43,14 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.glance.appwidget.state.getAppWidgetState
 import androidx.glance.appwidget.state.updateAppWidgetState
@@ -54,19 +63,18 @@ import com.foxhole.guard.ui.cli.CliTheme
 import com.foxhole.guard.ui.cli.CliType
 import com.foxhole.guard.ui.cli.LocalCliColors
 import com.foxhole.guard.ui.cli.cliDisplayStyle
+import com.foxhole.guard.ui.cli.cliHeadingText
+import com.foxhole.guard.ui.cli.cliTypography
 import com.foxhole.guard.ui.cli.components.CliButton
-import com.foxhole.guard.ui.cli.components.CliChip
-import com.foxhole.guard.ui.cli.components.CliPixIcon
+import com.foxhole.guard.ui.cli.components.CliDropdownOption
+import com.foxhole.guard.ui.cli.components.CliDropdownRow
+import com.foxhole.guard.ui.cli.components.CliIcon
 import com.foxhole.guard.ui.cli.components.CliToggleRow
 import com.foxhole.guard.ui.cli.components.cliDashedBorder
 import com.foxhole.guard.ui.cli.components.cliMarchingBorder
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
-/**
- * Shared configuration for both widgets: background black or white plus a discrete pixel slider.
- * Values live in that widgetId's Glance state, and cancelling before apply means the widget is not
- * added.
- */
 class WidgetConfigActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -92,17 +100,24 @@ class WidgetConfigActivity : ComponentActivity() {
             val settings by (application as FoxholeApplication)
                 .appGraph.settingsRepository.settings.collectAsState()
             CliTheme(
-                panelAppearance = settings.ui.panelAppearance,
-                visualStyle = settings.ui.visualStyle,
+                themeMode = settings.ui.themeMode,
                 accentColor = settings.ui.accentColor,
+                pixelArtEnabled = settings.ui.pixelArtEnabled,
             ) {
                 WidgetConfigScreen(
                     previewKind = provider.previewKind(),
                     loadInitial = { loadInitial(appWidgetId) },
-                    onApply = { isBlack, alphaPercent, outlined ->
-                        applyAndFinish(appWidgetId, provider, isBlack, alphaPercent, outlined)
+                    onApply = { isBlack, alphaPercent, outlined, layoutMode ->
+                        applyAndFinish(
+                            appWidgetId,
+                            provider,
+                            isBlack,
+                            alphaPercent,
+                            outlined,
+                            layoutMode,
+                        )
                     },
-                    // RESULT_CANCELED is already set: leaving through cancel means no widget.
+
                     onCancel = { finish() },
                 )
             }
@@ -110,8 +125,6 @@ class WidgetConfigActivity : ComponentActivity() {
     }
 
     private fun configuredProvider(appWidgetId: Int): ConfigurableWidgetProvider? {
-        // Reconfigure is launched by a third-party host. Treat a stale/rebound id or a broken
-        // launcher binder as cancellation; neither is a reason to crash the FoxHole process.
         val providerClass = runCatching {
             AppWidgetManager.getInstance(this).getAppWidgetInfo(appWidgetId)?.provider?.className
         }.getOrNull()
@@ -121,17 +134,18 @@ class WidgetConfigActivity : ComponentActivity() {
     private suspend fun loadInitial(appWidgetId: Int): WidgetInstanceAppearance {
         val settings =
             (application as FoxholeApplication).appGraph.settingsRepository.settings.value
+        val provider = configuredProvider(appWidgetId)
         val defaults =
-            when (configuredProvider(appWidgetId)) {
+            when (provider) {
                 ConfigurableWidgetProvider.WEB_APPS ->
                     settings.widgets.webAppsAppearanceForWidget(
                         context = this,
-                        panelAppearance = settings.ui.panelAppearance,
+                        themeMode = settings.ui.themeMode,
                     )
                 else ->
                     settings.widgets.statusAppearanceForWidget(
                         context = this,
-                        panelAppearance = settings.ui.panelAppearance,
+                        themeMode = settings.ui.themeMode,
                     )
             }
         val fallback =
@@ -139,6 +153,12 @@ class WidgetConfigActivity : ComponentActivity() {
                 isBlack = defaults.blackBackground,
                 alphaPercent = defaults.alphaPercent.coerceIn(0, 100),
                 outlined = defaults.outline,
+                layoutMode =
+                if (provider == ConfigurableWidgetProvider.CONNECTION) {
+                    activeStatusWidgetLayoutMode(settings.widgets.statusLayoutMode)
+                } else {
+                    StatusWidgetLayoutMode.SIMPLE
+                },
             )
         val glanceId =
             runCatching { GlanceAppWidgetManager(this).getGlanceIdBy(appWidgetId) }.getOrNull()
@@ -152,6 +172,15 @@ class WidgetConfigActivity : ComponentActivity() {
             alphaPercent =
             (prefs[WIDGET_ALPHA_KEY] ?: defaults.alphaPercent).coerceIn(0, 100),
             outlined = prefs[WIDGET_OUTLINE_KEY] ?: defaults.outline,
+            layoutMode =
+            if (provider == ConfigurableWidgetProvider.CONNECTION) {
+                initialStatusWidgetLayoutMode(
+                    preferences = prefs,
+                    durableDefault = settings.widgets.statusLayoutMode,
+                )
+            } else {
+                StatusWidgetLayoutMode.SIMPLE
+            },
         )
     }
 
@@ -161,11 +190,10 @@ class WidgetConfigActivity : ComponentActivity() {
         isBlack: Boolean,
         alphaPercent: Int,
         outlined: Boolean,
+        layoutMode: StatusWidgetLayoutMode,
     ) {
         lifecycleScope.launch {
             if (configuredProvider(appWidgetId) != provider) {
-                // The widget id was removed or rebound while its configure screen was open.
-                // Never render another provider into it.
                 finish()
                 return@launch
             }
@@ -174,8 +202,6 @@ class WidgetConfigActivity : ComponentActivity() {
                     GlanceAppWidgetManager(this@WidgetConfigActivity).getGlanceIdBy(appWidgetId)
                 }.getOrNull()
             if (glanceId == null) {
-                // Keep the initial RESULT_CANCELED. Reporting success without a Glance binding
-                // leaves a blank launcher tile that Android can only remove manually.
                 finish()
                 return@launch
             }
@@ -184,12 +210,14 @@ class WidgetConfigActivity : ComponentActivity() {
                     prefs[WIDGET_BG_BLACK_KEY] = isBlack
                     prefs[WIDGET_ALPHA_KEY] = alphaPercent.coerceIn(0, 100)
                     prefs[WIDGET_OUTLINE_KEY] = outlined
+                    if (provider == ConfigurableWidgetProvider.CONNECTION) {
+                        prefs[STATUS_WIDGET_LAYOUT_MODE_KEY] =
+                            activeStatusWidgetLayoutMode(layoutMode).persistedValue
+                    }
                 }
                 provider.createWidget().update(this@WidgetConfigActivity, glanceId)
             }
             if (rendered.isFailure) {
-                // A configured widget must have produced its first RemoteViews before the host is
-                // told to keep it. RESULT_CANCELED lets the launcher discard this allocation.
                 finish()
                 return@launch
             }
@@ -206,13 +234,14 @@ class WidgetConfigActivity : ComponentActivity() {
 private fun WidgetConfigScreen(
     previewKind: WidgetPreviewKind,
     loadInitial: suspend () -> WidgetInstanceAppearance,
-    onApply: (Boolean, Int, Boolean) -> Unit,
+    onApply: (Boolean, Int, Boolean, StatusWidgetLayoutMode) -> Unit,
     onCancel: () -> Unit,
 ) {
     val colors = LocalCliColors.current
     var isBlack by rememberSaveable { mutableStateOf(true) }
-    var alphaPercent by rememberSaveable { mutableIntStateOf(100) }
-    var outlined by rememberSaveable { mutableStateOf(true) }
+    var alphaPercent by rememberSaveable { mutableIntStateOf(WIDGET_DEFAULT_OPACITY_PERCENT) }
+    var outlined by rememberSaveable { mutableStateOf(false) }
+    var layoutMode by rememberSaveable { mutableStateOf(StatusWidgetLayoutMode.SIMPLE) }
     var loaded by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         if (!loaded) {
@@ -220,11 +249,11 @@ private fun WidgetConfigScreen(
             isBlack = initial.isBlack
             alphaPercent = initial.alphaPercent
             outlined = initial.outlined
+            layoutMode = activeStatusWidgetLayoutMode(initial.layoutMode)
             loaded = true
         }
     }
-    // Диалог-модалка поверх лаунчера: полупрозрачный скрим (тап по нему — отмена) и карточка
-    // с маршевым пунктиром — тем же, каким апп помечает свои модальные панели.
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -254,15 +283,15 @@ private fun WidgetConfigScreen(
                 .padding(CliSpacing.md),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                CliPixIcon(
-                    id = R.drawable.pix_power,
+                CliIcon(
+                    id = R.drawable.lin_power,
                     contentDescription = null,
                     size = 16.dp,
                     tint = colors.accent,
                 )
                 Spacer(modifier = Modifier.width(CliSpacing.xs))
                 Text(
-                    text = stringResource(R.string.cli_widget_config_title),
+                    text = cliHeadingText(stringResource(R.string.cli_widget_config_title)),
                     style = cliDisplayStyle(stringResource(R.string.cli_widget_config_title)),
                     color = colors.accent,
                     maxLines = 1,
@@ -274,8 +303,16 @@ private fun WidgetConfigScreen(
                 isBlack = isBlack,
                 alphaPercent = alphaPercent,
                 outlined = outlined,
+                layoutMode = activeStatusWidgetLayoutMode(layoutMode),
             )
             Spacer(modifier = Modifier.height(CliSpacing.md))
+            if (previewKind == WidgetPreviewKind.STATUS) {
+                WidgetStatusLayoutModeRow(
+                    layoutMode = activeStatusWidgetLayoutMode(layoutMode),
+                    onLayoutModeChange = { layoutMode = it },
+                )
+                Spacer(modifier = Modifier.height(CliSpacing.sm))
+            }
             WidgetBackgroundRow(isBlack = isBlack, onBlackChange = { isBlack = it })
             Spacer(modifier = Modifier.height(CliSpacing.sm))
             WidgetAlphaRow(
@@ -299,7 +336,14 @@ private fun WidgetConfigScreen(
                     label = stringResource(R.string.cli_common_yes_confirm),
                     filled = true,
                     color = colors.ok,
-                    onClick = { onApply(isBlack, alphaPercent, outlined) },
+                    onClick = {
+                        onApply(
+                            isBlack,
+                            alphaPercent,
+                            outlined,
+                            activeStatusWidgetLayoutMode(layoutMode),
+                        )
+                    },
                     modifier = Modifier.weight(1f),
                 )
             }
@@ -310,34 +354,42 @@ private fun WidgetConfigScreen(
 private const val WIDGET_CONFIG_SCRIM_ALPHA = 0.72f
 
 @Composable
+private fun WidgetStatusLayoutModeRow(
+    layoutMode: StatusWidgetLayoutMode,
+    onLayoutModeChange: (StatusWidgetLayoutMode) -> Unit,
+) {
+    val simple = stringResource(R.string.cli_widget_status_layout_simple)
+    CliDropdownRow(
+        label = stringResource(R.string.cli_widget_status_layout),
+        value = simple,
+        options = SELECTABLE_STATUS_WIDGET_LAYOUT_MODES.map { mode ->
+            CliDropdownOption(id = mode.persistedValue, label = simple)
+        },
+        selectedId = layoutMode.persistedValue,
+        onSelect = { id ->
+            SELECTABLE_STATUS_WIDGET_LAYOUT_MODES.firstOrNull { it.persistedValue == id }
+                ?.let(onLayoutModeChange)
+        },
+    )
+}
+
+@Composable
 private fun WidgetBackgroundRow(
     isBlack: Boolean,
     onBlackChange: (Boolean) -> Unit,
 ) {
-    val colors = LocalCliColors.current
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(CliSpacing.sm),
-    ) {
-        Text(
-            text = stringResource(R.string.cli_widget_bg_label),
-            style = CliType.body,
-            color = colors.dim,
-            modifier = Modifier.weight(1f),
-        )
-        CliChip(
-            label = stringResource(R.string.cli_widget_bg_black),
-            selected = isBlack,
-            color = if (isBlack) colors.accent else colors.dim,
-            onClick = { onBlackChange(true) },
-        )
-        CliChip(
-            label = stringResource(R.string.cli_widget_bg_white),
-            selected = !isBlack,
-            color = if (!isBlack) colors.accent else colors.dim,
-            onClick = { onBlackChange(false) },
-        )
-    }
+    val dark = stringResource(R.string.cli_widget_config_bg_dark)
+    val light = stringResource(R.string.cli_widget_config_bg_light)
+    CliDropdownRow(
+        label = stringResource(R.string.cli_widget_bg_label),
+        value = if (isBlack) dark else light,
+        options = listOf(
+            CliDropdownOption(id = true.toString(), label = dark),
+            CliDropdownOption(id = false.toString(), label = light),
+        ),
+        selectedId = isBlack.toString(),
+        onSelect = { id -> id.toBooleanStrictOrNull()?.let(onBlackChange) },
+    )
 }
 
 @Composable
@@ -346,6 +398,9 @@ private fun WidgetAlphaRow(
     onAlphaChange: (Int) -> Unit,
 ) {
     val colors = LocalCliColors.current
+    val opacityLabel = stringResource(R.string.cli_widget_alpha)
+    val normalizedPercent =
+        alphaPercent.coerceIn(WIDGET_OPACITY_MIN_PERCENT, WIDGET_OPACITY_MAX_PERCENT)
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -353,50 +408,36 @@ private fun WidgetAlphaRow(
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Text(
-                text = stringResource(R.string.cli_widget_alpha),
+                text = opacityLabel,
                 style = CliType.body,
                 color = colors.dim,
             )
-            Text(text = "$alphaPercent%", style = CliType.body, color = colors.accent)
+            Text(text = "$normalizedPercent%", style = CliType.body, color = colors.accent)
         }
         Spacer(modifier = Modifier.height(CliSpacing.xs))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(2.dp),
-        ) {
-            val selectedStep = alphaPercent.coerceIn(0, 100) / WIDGET_ALPHA_STEP_PERCENT
-            repeat(WIDGET_ALPHA_SEGMENTS) { index ->
-                val segmentColor = when {
-                    index == selectedStep -> colors.fg
-                    index < selectedStep -> colors.accent
-                    else -> colors.panel
-                }
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(WIDGET_ALPHA_SEGMENT_HEIGHT)
-                        .background(segmentColor)
-                        .border(
-                            width = 1.dp,
-                            color = if (index == selectedStep) colors.fg else colors.border,
-                        )
-                        .clickable { onAlphaChange(index * WIDGET_ALPHA_STEP_PERCENT) },
-                )
-            }
-        }
+        Slider(
+            value = normalizedPercent.toFloat(),
+            onValueChange = { value -> onAlphaChange(value.roundToInt()) },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(WIDGET_OPACITY_SLIDER_HEIGHT)
+                .semantics {
+                    contentDescription = opacityLabel
+                    stateDescription = "$normalizedPercent%"
+                },
+            valueRange = WIDGET_OPACITY_MIN_PERCENT.toFloat()..WIDGET_OPACITY_MAX_PERCENT.toFloat(),
+            steps = WIDGET_OPACITY_SLIDER_STEPS,
+        )
     }
 }
 
-/**
- * Live preview: the chosen background over a checkerboard, which shows alpha honestly as image
- * editors do, plus a frame and a mock-up of the contents.
- */
 @Composable
 private fun WidgetConfigPreview(
     kind: WidgetPreviewKind,
     isBlack: Boolean,
     alphaPercent: Int,
     outlined: Boolean,
+    layoutMode: StatusWidgetLayoutMode,
 ) {
     val colors = LocalCliColors.current
     val shape = RoundedCornerShape(8.dp)
@@ -434,20 +475,111 @@ private fun WidgetConfigPreview(
                     rowIndex++
                 }
             },
+        contentAlignment = Alignment.Center,
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(fill)
-                .let { base -> if (outlined) base.cliDashedBorder(colors.accent) else base }
-                .padding(CliSpacing.sm + CliSpacing.xs),
-        ) {
-            WidgetConfigPreviewHeader(kind = kind, textTone = textTone)
-            Spacer(modifier = Modifier.height(CliSpacing.xs))
-            when (kind) {
-                WidgetPreviewKind.STATUS -> WidgetStatusConfigPreview(textTone = textTone)
-                WidgetPreviewKind.WEB_APPS -> WidgetWebAppsConfigPreview(textTone = textTone)
+        if (kind == WidgetPreviewKind.STATUS && layoutMode == StatusWidgetLayoutMode.SIMPLE) {
+            WidgetSimpleStatusConfigPreview(
+                fill = fill,
+                textTone = textTone,
+                outlined = outlined,
+            )
+        } else {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(fill)
+                    .let { base -> if (outlined) base.cliDashedBorder(colors.accent) else base }
+                    .padding(CliSpacing.sm + CliSpacing.xs),
+            ) {
+                WidgetConfigPreviewHeader(kind = kind, textTone = textTone)
+                Spacer(modifier = Modifier.height(CliSpacing.xs))
+                when (kind) {
+                    WidgetPreviewKind.STATUS -> WidgetStatusConfigPreview(textTone = textTone)
+                    WidgetPreviewKind.WEB_APPS -> WidgetWebAppsConfigPreview(textTone = textTone)
+                }
             }
+        }
+    }
+}
+
+@Composable
+private fun WidgetSimpleStatusConfigPreview(
+    fill: Color,
+    textTone: Color,
+    outlined: Boolean,
+) {
+    val colors = LocalCliColors.current
+    val smallType = cliTypography().small
+    val pixelType = cliTypography().button
+    Row(
+        modifier =
+        Modifier
+            .fillMaxWidth()
+            .height(WIDGET_SIMPLE_PREVIEW_HEIGHT)
+            .background(fill)
+            .let { base -> if (outlined) base.cliDashedBorder(colors.accent) else base }
+            .padding(horizontal = CliSpacing.sm + CliSpacing.xs, vertical = CliSpacing.xs),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(34.dp)
+                .border(2.dp, textTone, CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
+            Image(
+                painter = painterResource(R.drawable.ic_qs_tile),
+                contentDescription = stringResource(R.string.app_name),
+                colorFilter = ColorFilter.tint(textTone),
+                modifier = Modifier.size(22.dp),
+            )
+        }
+        Spacer(modifier = Modifier.width(CliSpacing.sm))
+        Column(
+            modifier = Modifier.weight(1f),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text(
+                text = stringResource(R.string.cli_home_status_connected_vpn).uppercase(),
+                style = pixelType.copy(fontSize = 14.sp, lineHeight = 15.sp),
+                color = colors.ok,
+                maxLines = 1,
+            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Image(
+                    painter = painterResource(R.drawable.lin_device),
+                    contentDescription = stringResource(R.string.cli_rt_device),
+                    colorFilter = ColorFilter.tint(colors.vpn),
+                    modifier = Modifier.size(14.dp),
+                )
+                Spacer(modifier = Modifier.width(3.dp))
+                Image(
+                    painter = painterResource(R.drawable.flag_nl),
+                    contentDescription = WIDGET_PREVIEW_COUNTRY_CODE,
+                    modifier = Modifier.width(18.dp).height(11.dp),
+                )
+                Spacer(modifier = Modifier.width(3.dp))
+                Text(
+                    text = WIDGET_PREVIEW_COUNTRY_CODE,
+                    style = smallType.copy(fontSize = 13.sp, lineHeight = 15.sp),
+                    color = textTone,
+                )
+            }
+        }
+        Spacer(modifier = Modifier.width(CliSpacing.sm))
+        Box(
+            modifier =
+            Modifier
+                .size(34.dp)
+                .border(2.dp, colors.err, CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
+            Image(
+                painter = painterResource(R.drawable.lin_power),
+                contentDescription = stringResource(R.string.widget_status_turn_off),
+                colorFilter = ColorFilter.tint(colors.err),
+                modifier = Modifier.size(19.dp),
+            )
         }
     }
 }
@@ -459,7 +591,7 @@ private fun WidgetConfigPreviewHeader(
 ) {
     val colors = LocalCliColors.current
     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        CliPixIcon(
+        CliIcon(
             id = R.drawable.ic_qs_tile,
             contentDescription = null,
             size = 18.dp,
@@ -473,8 +605,8 @@ private fun WidgetConfigPreviewHeader(
             modifier = Modifier.weight(1f),
         )
         if (kind == WidgetPreviewKind.STATUS) {
-            CliPixIcon(
-                id = R.drawable.widget_refresh_pixel,
+            CliIcon(
+                id = R.drawable.lin_update,
                 contentDescription = null,
                 size = 16.dp,
                 tint = textTone,
@@ -507,8 +639,8 @@ private fun WidgetStatusConfigPreview(textTone: Color) {
         contentAlignment = Alignment.Center,
     ) {
         Text(
-            text = stringResource(R.string.widget_status_start),
-            style = CliType.small,
+            text = stringResource(R.string.widget_status_start).uppercase(),
+            style = CliType.button,
             color = colors.ok,
         )
     }
@@ -537,6 +669,7 @@ private data class WidgetInstanceAppearance(
     val isBlack: Boolean,
     val alphaPercent: Int,
     val outlined: Boolean,
+    val layoutMode: StatusWidgetLayoutMode,
 )
 
 private fun ConfigurableWidgetProvider.previewKind(): WidgetPreviewKind =
@@ -545,7 +678,7 @@ private fun ConfigurableWidgetProvider.previewKind(): WidgetPreviewKind =
         ConfigurableWidgetProvider.WEB_APPS -> WidgetPreviewKind.WEB_APPS
     }
 
-private const val WIDGET_ALPHA_STEP_PERCENT = 10
-private const val WIDGET_ALPHA_SEGMENTS = 11
-private val WIDGET_ALPHA_SEGMENT_HEIGHT = 12.dp
+private val WIDGET_OPACITY_SLIDER_HEIGHT = 48.dp
 private const val WIDGET_PREVIEW_WEB_APP_COUNT = 4
+private const val WIDGET_PREVIEW_COUNTRY_CODE = "NL"
+private val WIDGET_SIMPLE_PREVIEW_HEIGHT = 56.dp

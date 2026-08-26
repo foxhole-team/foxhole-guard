@@ -25,16 +25,9 @@ import com.foxhole.guard.withStoredAppLocale
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 
-/**
- * One-shot DNS notices flowing from the runtime side into the open UI. The system notification
- * (which must work with the app closed) is posted by the emitter itself; this bus only feeds the
- * in-app banner when a dashboard is around to show it.
- */
 internal sealed interface RuntimeDnsNotice {
-    /** The connected VPN profile advertises no resolver of its own — the configured server is used. */
     data class ProviderDnsFallback(val server: String) : RuntimeDnsNotice
 
-    /** The upstream network swapped its whole resolver set mid-life — possible DNS spoofing. */
     data class SystemDnsChanged(
         val previous: List<String>,
         val current: List<String>,
@@ -51,22 +44,12 @@ internal object RuntimeDnsNoticeBus {
     }
 }
 
-/**
- * Watches the DNS servers of upstream (non-VPN) networks for the whole process lifetime. A network
- * that REPLACES its entire resolver set mid-life (e.g. 1.1.1.1 quietly becoming an unknown
- * address after a rogue DHCP renewal) is the classic on-path DNS substitution signal — that fires
- * a system notification and an in-app banner. Ordinary events stay silent: joining a network
- * (first observation is the baseline), losing one, or a partial change that still keeps at least
- * one of the previous resolvers (an IPv6 resolver arriving next to the IPv4 one is routine).
- */
 internal class SystemDnsChangeMonitor(
     context: Context,
     private val clock: () -> Long = { SystemClock.elapsedRealtime() },
 ) {
     private val baseAppContext = context.applicationContext
 
-    // A getter rather than a snapshot: the notification must speak the app's current language even
-    // after a settings change without a process restart.
     private val appContext get() = baseAppContext.withStoredAppLocale()
     private val notificationManager by lazy { appContext.getSystemService<NotificationManager>() }
     private val lock = Any()
@@ -119,8 +102,6 @@ internal class SystemDnsChangeMonitor(
     ) {
         val normalized = servers.map(String::trim).filter(String::isNotBlank).distinct().sorted()
         if (normalized.isEmpty()) {
-            // A transient empty list (network re-provisioning) is not a change signal; keep the
-            // last known baseline so the real replacement is still caught.
             return
         }
         val alert: Pair<List<String>, List<String>>? =
@@ -130,7 +111,7 @@ internal class SystemDnsChangeMonitor(
                 when {
                     previous.isNullOrEmpty() -> null
                     previous == normalized -> null
-                    // Partial overlap = ordinary reconfiguration; a FULL replacement is the alarm.
+
                     previous.intersect(normalized.toSet()).isNotEmpty() -> null
                     !consumeAlertBudgetLocked() -> null
                     else -> previous to normalized

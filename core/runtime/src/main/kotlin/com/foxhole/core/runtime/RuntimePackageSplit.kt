@@ -13,10 +13,6 @@ internal data class VpnPackageSplitApplyCounts(
     val skippedCount: Int,
 )
 
-/**
- * Missing packages cannot emit traffic. Include mode fails closed only when none of the requested
- * applications can be applied; exclude mode stays safe when an application was uninstalled.
- */
 internal fun shouldFailClosedVpnPackageSplit(
     includeMode: Boolean,
     requestedCount: Int,

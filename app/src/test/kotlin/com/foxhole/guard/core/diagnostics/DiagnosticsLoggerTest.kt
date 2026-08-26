@@ -11,28 +11,21 @@ import org.junit.Test
 
 class DiagnosticsLoggerTest {
     @Test
-    fun `live diagnostic message sanitizer removes raw profile uris`() {
-        val sanitized =
-            liveDiagnosticMessage(
-                message = "import failed raw=vless://11111111-1111-1111-1111-111111111111@edge.example.com:443?security=tls#main",
-            )
+    fun `live diagnostic messages preserve safe marker values`() {
+        val message = "endpoint=SAFE_MARKER_ALPHA"
 
-        assertTrue(sanitized.contains("[profile-uri-redacted]"))
-        assertFalse(sanitized.contains("vless://"))
-        assertFalse(sanitized.contains("edge.example.com"))
-        assertFalse(sanitized.contains("11111111-1111-1111-1111-111111111111"))
+        assertEquals(message, rawDiagnosticMessage(message))
+        assertFalse(rawDiagnosticMessage(message).contains("[redacted]", ignoreCase = true))
     }
 
     @Test
-    fun `network journal opt in never makes general diagnostics raw`() {
-        val message =
-            "import failed raw=vless://11111111-1111-1111-1111-111111111111@edge.example.com:443?security=tls#main"
+    fun `network journal setting does not change general diagnostic content`() {
+        val message = "token=SAFE_MARKER_BETA"
 
-        val liveMessage = liveDiagnosticMessage(message = message)
+        val liveMessage = rawDiagnosticMessage(message = message)
 
-        assertTrue(liveMessage.contains("[profile-uri-redacted]"))
-        assertFalse(liveMessage.contains("edge.example.com"))
-        assertFalse(liveMessage.contains("11111111-1111-1111-1111-111111111111"))
+        assertEquals(message, liveMessage)
+        assertFalse(liveMessage.contains("[redacted]", ignoreCase = true))
     }
 
     @Test
@@ -101,16 +94,31 @@ class DiagnosticsLoggerTest {
     }
 
     @Test
-    fun `queued seed contract accepts only already sanitized content`() {
-        val raw = "vless://11111111-1111-1111-1111-111111111111@edge.example.com:443"
-        val sanitized = liveDiagnosticMessage(raw)
+    fun `queued seed keeps full diagnostic content`() {
+        val raw = "endpoint=SAFE_MARKER_GAMMA"
         val queue = BoundedDiagnosticRecordQueue(capacity = 1)
 
-        queue.offer(DiagnosticEntrySeed(1L, "profile", sanitized))
+        queue.offer(DiagnosticEntrySeed(1L, "profile", rawDiagnosticMessage(raw)))
 
         val queued = requireNotNull(queue.poll())
-        assertTrue(queued.message.contains("[profile-uri-redacted]"))
-        assertFalse(queued.message.contains("vless://"))
-        assertFalse(queued.message.contains("edge.example.com"))
+        assertEquals(raw, queued.message)
+        assertFalse(queued.message.contains("[redacted]", ignoreCase = true))
+    }
+
+    @Test
+    fun `process termination tombstone keeps full details for in-app diagnostics`() {
+        val message =
+            processTerminationTombstoneMessage(
+                headline = "fail-closed process termination",
+                details =
+                listOf(
+                    "reason=SAFE_MARKER_DELTA",
+                    "endpoint=SAFE_MARKER_EPSILON",
+                ),
+            )
+
+        assertTrue(message.contains("reason=SAFE_MARKER_DELTA"))
+        assertTrue(message.contains("endpoint=SAFE_MARKER_EPSILON"))
+        assertFalse(message.contains("[redacted]", ignoreCase = true))
     }
 }

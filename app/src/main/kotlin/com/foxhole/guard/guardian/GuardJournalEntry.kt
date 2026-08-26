@@ -59,10 +59,6 @@ data class GuardEvent(
     val attempt: Int? = null,
 )
 
-/**
- * Payload is crypto_box_seal'ed to the guard public key; the envelope stays plaintext so the chain can be walked while locked.
- * prevHash = SHA-256 hex of the previous line's exact bytes, seq strictly sequential, and the wallClock/elapsedRealtime/bootCount triple makes clock rollbacks and reboots visible to the verifier.
- */
 @Serializable
 data class GuardJournalRecord(
     val seq: Long,

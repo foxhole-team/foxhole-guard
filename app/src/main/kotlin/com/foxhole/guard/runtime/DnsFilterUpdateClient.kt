@@ -31,10 +31,6 @@ interface DnsFilterRuleSetStore {
     suspend fun installVerifiedDnsRuleSet(ruleSet: VerifiedDnsRuleSet): String
 }
 
-/**
- * Exact bytes that passed the Android-side channel checks and must be checked
- * again by FoxCore before activation.
- */
 data class VerifiedDnsRuleSet(
     val manifest: DnsFilterManifest,
     val manifestBytes: ByteArray,
@@ -59,7 +55,6 @@ data class VerifiedDnsRuleSet(
     }
 }
 
-/** Schema consumed verbatim by `foxcore-route::ruleset::verify_rule_set`. */
 @Serializable
 data class DnsFilterManifest(
     val schema: Int,
@@ -98,7 +93,6 @@ data class DnsFilterManifestCompatibility(
     @SerialName("core_schema") val coreSchema: Int,
 )
 
-/** Compatibility holder for settings/repository call sites during the schema cutover. */
 @Serializable
 data class InstalledDnsRuleSets(
     val ruleSets: Map<String, InstalledDnsRuleSet> = emptyMap(),
@@ -162,9 +156,6 @@ class DnsFilterUpdateClient(
         onProgress: (RemoteDownloadProgress) -> Unit = {},
     ): DnsFilterUpdateResult =
         withContext(Dispatchers.IO) {
-            // Kept in the signature so settings written by older builds migrate
-            // without a second repository API. FoxCore v1 publishes one merged,
-            // categorized FST and ignores old per-category artifact choices.
             @Suppress("UNUSED_VARIABLE")
             val ignoredLegacySelection = requestedTags
             runCatching {

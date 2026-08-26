@@ -8,10 +8,7 @@ import java.io.RandomAccessFile
 import java.security.MessageDigest
 import java.util.Base64
 
-/**
- * Append-only hash-chained sealed journal; the write path needs only the plaintext guard public key, so it works while locked, straight after boot and inside receiver budgets (no Argon2, no Keystore).
- * Rotation keeps the chain intact across files, and pre-checkpoint files may be pruned without looking like tampering to the verifier.
- */
+// Append-only sealed hash chain; recovery may discard only a trailing torn fragment, never valid later records.
 internal class GuardJournal(
     private val directory: File,
     private val crypto: GuardCrypto,
@@ -113,10 +110,6 @@ internal class GuardJournal(
 
     private fun File.isStillAppendable(): Boolean = isFile && length() < maxFileBytes && endsWithNewline(this)
 
-    /**
-     * Only the trailing fragment after the last newline may be dropped; an earlier decode failure is not a torn write, so repair refuses rather than deleting the later records a tampering report is built from.
-     * The rewrite is staged and renamed over the original so the repair itself can never leave a torn file.
-     */
     private fun repairTornTail(file: File): Boolean {
         val content = runCatching(file::readText).getOrNull() ?: return false
         val lines = content.split('\n')

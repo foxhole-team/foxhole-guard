@@ -1,8 +1,5 @@
 package com.foxhole.guard.ui
 
-import androidx.compose.foundation.layout.size
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
 import com.foxhole.guard.R
 
 internal fun normalizedSiteMaskToken(value: String): String? {
@@ -27,7 +24,7 @@ private fun isValidSiteMaskToken(token: String): Boolean =
         token.startsWith("cidr:") -> isValidCidr(token.removePrefix("cidr:"))
         token.startsWith("kw:") -> isValidKeywordMask(token.removePrefix("kw:"))
         token.startsWith("re:") -> isValidRegexMask(token.removePrefix("re:"))
-        token.startsWith("*.") -> isValidDomainName(token.removePrefix("*."))
+        token.startsWith("*.") -> isValidDomainName(token.removePrefix("*."), minimumLabels = 1)
         else -> isValidDomainName(token)
     }
 
@@ -63,14 +60,17 @@ private fun isValidIpv4Address(value: String): Boolean {
         }
 }
 
-private fun isValidDomainName(value: String): Boolean {
+private fun isValidDomainName(
+    value: String,
+    minimumLabels: Int = 2,
+): Boolean {
     val domain = value.trim().removeSuffix(".")
     return when {
-        domain.length !in 3..253 || domain.contains("..") -> false
+        domain.length !in 1..253 || domain.contains("..") -> false
         domain.any { it.isWhitespace() || it in "/:@," } -> false
         else -> {
             val labels = domain.split(".")
-            labels.size >= 2 && labels.all(::isValidDomainLabel)
+            labels.size >= minimumLabels && labels.all(::isValidDomainLabel)
         }
     }
 }

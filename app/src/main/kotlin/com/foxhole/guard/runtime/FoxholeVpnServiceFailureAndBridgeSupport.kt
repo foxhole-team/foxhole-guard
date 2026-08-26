@@ -24,19 +24,13 @@ import com.foxhole.guard.core.sentinel.anomaly.sentinelTrafficWindowCollectionEn
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
-// The service surface for failures, anomaly windows and the network/notification bridge
-// delegates: thin entry points the framework callbacks and sibling supports call into.
-// Split from FoxholeVpnService.kt (same extension-file pattern as the other supports).
 internal fun FoxholeVpnService.fail(
     message: String,
     commandStartId: Int? = null,
     reasonCode: AutoConnectReasonCode? = null,
 ) {
     container.diagnosticsLogger.recordFailure("connection", "runtime failure: $message")
-    // Failure cleanup owns the runtime until every native/TUN resource is released. A SWITCH has
-    // higher priority than plain STOP and used to preempt this block: the first retry then met the
-    // old FoxCore owner and failed, while an immediate second retry succeeded. USER_STOP keeps a
-    // new START queued behind cleanup, exactly like an explicit disconnect.
+
     launchPriorityCommand(RuntimeCommandPriority.USER_STOP, "fail_disconnect") {
         disconnect(message, commandStartId, reasonCode)
     }
@@ -152,12 +146,6 @@ private fun failClosedFinalState(
 ): ConnectionState =
     if (hadActiveRuntime || !androidTunnelReleased) ConnectionState.ERROR else ConnectionState.IDLE
 
-/**
- * Fail-closed publication after an unexpected stop. Returns false when another mode owns the
- * published snapshot (cross-mode handoff): the bridge rejects the stale writes centrally, and the
- * controller's applied-runtime record is left to the live mode — only the local session fields
- * reset in that case.
- */
 internal fun FoxholeVpnService.publishUnexpectedRuntimeStopSnapshot(): Boolean {
     container.i2pdManager.markCarrierUnavailable()
     activeSession = null
@@ -182,8 +170,6 @@ internal fun FoxholeVpnService.recordAnomalyTrafficWindow(sample: TrafficSnapsho
     val connection = FoxholeVpnRuntimeBridge.snapshot.value
     val settings = container.settingsRepository.settings.value
     if (!sentinelTrafficWindowCollectionEnabled(settings)) {
-        // Keep both delta baselines bounded while collection is off. Without this reset, enabling
-        // Sentinel later would turn the entire disabled interval into one artificial spike.
         anomalyTrafficAggregator.reset()
         DnsRuntimeStats.reset()
         return

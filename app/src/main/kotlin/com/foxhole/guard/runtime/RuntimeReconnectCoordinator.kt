@@ -33,8 +33,7 @@ private val vpnAutoReconnectStates = WeakHashMap<FoxholeVpnService, VpnAutoRecon
 internal fun FoxholeVpnService.scheduleAutoReconnect(reason: String) {
     val session = activeSession
     val reconnectState = autoReconnectState()
-    // job/attempts are touched by the IO health loop and Default-dispatcher commands at once;
-    // the whole decide+mutate must be atomic, not just the WeakHashMap getOrPut.
+
     synchronized(reconnectState) {
         if (reconnectState.job?.isActive == true || session == null || !defaultNetworkAvailable) {
             return
@@ -62,7 +61,6 @@ internal fun FoxholeVpnService.scheduleAutoReconnect(reason: String) {
     }
 }
 
-// Callers hold synchronized(reconnectState).
 private fun FoxholeVpnService.schedulePersistentSplitRecovery(
     reconnectState: VpnAutoReconnectState,
     session: VpnSession,
@@ -102,7 +100,6 @@ internal fun FoxholeVpnService.cancelScheduledAutoReconnect(resetAttempts: Boole
     }
 }
 
-// Callers hold synchronized(reconnectState).
 private fun FoxholeVpnService.scheduleAutoReconnectAttempt(
     reconnectState: VpnAutoReconnectState,
     session: VpnSession,
@@ -269,6 +266,13 @@ private suspend fun FoxholeVpnService.reloadSplitVpnRuntime(
             owner = "split_vpn_recovery",
             diagnosticsLogger = DiagnosticsLoggerRuntimeDiagnosticsSink(container.diagnosticsLogger),
         )
+    if (
+        handleNativeForceStopPoison(result) { outcome ->
+            terminateProcessIfNativeForceStopPoisoned(outcome, "split_vpn_reload")
+        }
+    ) {
+        return
+    }
     if (!isCurrentRuntimeTransition(transitionGeneration, "split_vpn_recovery_result")) return
     if (result.isFailure) {
         container.diagnosticsLogger.recordFailure(
@@ -375,13 +379,18 @@ private suspend fun FoxholeVpnService.stopActiveRuntimeForReconnect(
     container.connectionController.clearAppliedRuntime()
     bridgeWriter.updateTraffic(trafficSampler.reset())
     bridgeWriter.update(
-        FoxholeVpnRuntimeBridge.snapshot.value.copy(
-            state = ConnectionState.RECONNECTING,
-            message = getString(messageRes),
-        ),
+        FoxholeVpnRuntimeBridge.snapshot.value.detachedRuntimeReconnectSnapshot(getString(messageRes)),
     )
     updateNotification()
 }
+
+internal fun ConnectionSnapshot.detachedRuntimeReconnectSnapshot(message: String): ConnectionSnapshot =
+    copy(
+        state = ConnectionState.RECONNECTING,
+        message = message,
+        torActive = false,
+        appliedTorRoute = null,
+    )
 
 private fun FoxholeVpnService.clearDetachedReconnectSnapshot(reason: String) {
     val currentSnapshot = FoxholeVpnRuntimeBridge.snapshot.value

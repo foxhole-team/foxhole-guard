@@ -1,12 +1,19 @@
 package com.foxhole.guard.ui.cli
 
+import com.foxhole.guard.ui.cli.components.CLI_BUTTONS_USE_FILL
 import com.foxhole.guard.ui.cli.components.cliButtonEmphasis
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
 
 class CliButtonDisabledOutlineTest {
+    @Test
+    fun `legacy filled requests render through the same outline language as start`() {
+        assertFalse(CLI_BUTTONS_USE_FILL)
+    }
+
     @Test
     fun `disabled action dims its fill and content but never its outline`() {
         val emphasis = cliButtonEmphasis(enabled = false, dimWhenDisabled = true)

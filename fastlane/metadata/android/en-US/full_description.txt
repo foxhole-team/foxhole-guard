@@ -27,9 +27,9 @@ Supported protocols: VLESS, VMess, Hysteria2, WireGuard, AmneziaWG, Trojan, Shad
 
 DNS filters are built from the open AdGuard DNS filter. Downloaded data sets contain filtering data rather than executable code. Before use, the application verifies the signature, size, compatibility, and SHA-256 digest.
 
-FoxHole Sentinel is a local security-monitoring module, not an antivirus. The current version uses Echap and MVT indicators, a network IOC matcher, correlation of IOCs with the owning application, and integration with the firewall and quarantine.
+FoxHole Sentinel is a local security-monitoring module, not an antivirus. The current version uses Echap indicators, a network IOC matcher, correlation of IOCs with the owning application, and integration with the firewall and quarantine.
 
-The FoxHole DB repository is used for updatable application data. The application can download four signed data sets: DNS filters, Tor bridges, indicators for the IOC matcher, and a GeoIP database.
+The FoxHole DB repository is used for updatable application data. The application can download five independently signed data sets: DNS filters, Tor bridges, indicators for the IOC matcher, a GeoIP database, and TLS fingerprint tables.
 
 Android permissions are used only for the stated features. QUERY_ALL_PACKAGES is required for routing, the firewall, quarantine, DNS exclusions, and local auditing. PACKAGE_USAGE_STATS is used only for local statistics and analysis features enabled by the user.
 

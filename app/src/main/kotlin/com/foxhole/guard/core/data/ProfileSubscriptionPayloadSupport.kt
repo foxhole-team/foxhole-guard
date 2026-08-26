@@ -5,10 +5,6 @@ import java.net.URLDecoder
 import java.nio.charset.StandardCharsets
 import java.util.Base64
 
-// Subscription payload/query decoding + redacted-shape diagnostics for ProfileRepository
-// subscription import. Split out (behaviour-preserving); redactedSubscriptionPayloadShape is
-// the module-internal entry point the repository calls.
-
 private val SUBSCRIPTION_SHARE_LINK_REGEX = Regex("""(?i)\b([a-z][a-z0-9+.-]*)://[^\s<>"']+""")
 
 private val SUBSCRIPTION_SAFE_VALUE_KEYS =

@@ -81,6 +81,7 @@ data class HomeRouteUiState(
     val ipInfo: IpInfo? = null,
     val deviceIpInfo: IpInfo? = null,
     val torIpInfo: IpInfo? = null,
+    val publicDnsIdentity: PublicDnsIdentity = PublicDnsIdentity(),
     val ipInfoLoading: Boolean = false,
     val ipInfoRefreshReason: IpInfoRefreshReason? = null,
     val dashboardConnectionMetricsLoading: Boolean = false,

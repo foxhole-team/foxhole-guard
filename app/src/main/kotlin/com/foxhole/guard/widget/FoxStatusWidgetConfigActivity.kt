@@ -41,6 +41,7 @@ import com.foxhole.guard.ui.cli.CliSpacing
 import com.foxhole.guard.ui.cli.CliTheme
 import com.foxhole.guard.ui.cli.LocalCliColors
 import com.foxhole.guard.ui.cli.cliDisplayStyle
+import com.foxhole.guard.ui.cli.cliHeadingText
 import com.foxhole.guard.ui.cli.components.CliButton
 import com.foxhole.guard.ui.cli.components.CliPanel
 import com.foxhole.guard.ui.cli.components.CliToggleRow
@@ -66,9 +67,9 @@ class FoxStatusWidgetConfigActivity : ComponentActivity() {
             val settings by (application as FoxholeApplication)
                 .appGraph.settingsRepository.settings.collectAsState()
             CliTheme(
-                panelAppearance = settings.ui.panelAppearance,
-                visualStyle = settings.ui.visualStyle,
+                themeMode = settings.ui.themeMode,
                 accentColor = settings.ui.accentColor,
+                pixelArtEnabled = settings.ui.pixelArtEnabled,
             ) {
                 FoxStatusWidgetConfigScreen(
                     loadInitial = { loadInitial(widgetId) },
@@ -167,7 +168,7 @@ private fun FoxStatusWidgetConfigScreen(
                 ),
         ) {
             Text(
-                text = stringResource(R.string.fox_status_widget_label),
+                text = cliHeadingText(stringResource(R.string.fox_status_widget_label)),
                 style = cliDisplayStyle(stringResource(R.string.fox_status_widget_label)),
                 color = colors.info,
             )

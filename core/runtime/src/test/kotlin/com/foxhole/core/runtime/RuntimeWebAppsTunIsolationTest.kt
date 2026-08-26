@@ -129,6 +129,7 @@ internal class RuntimeWebAppsTunIsolationTest : RuntimeConfigAssemblerTestSuppor
             Settings(
                 privacyRoute =
                 PrivacyRouteSettings(
+                    permitted = true,
                     mode = PrivacyRouteMode.TOR_OVER_VPN,
                     scope = scope,
                 ),

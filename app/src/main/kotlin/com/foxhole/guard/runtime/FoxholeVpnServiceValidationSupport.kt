@@ -7,12 +7,6 @@ import com.foxhole.core.runtime.TunnelValidationGracePolicy
 import com.foxhole.core.runtime.VpnHealthProbeTarget
 import java.net.InetAddress
 
-/**
- * Tunnel-validation orchestration and connectivity-probe entry points for [FoxholeVpnService],
- * extracted from the service body in the Phase B split by responsibility. These delegate to the
- * validation/probe implementations in RuntimeValidationCoordinator and related support files.
- */
-
 internal fun FoxholeVpnService.scheduleValidation(
     session: VpnSession,
     failOnFailure: Boolean,

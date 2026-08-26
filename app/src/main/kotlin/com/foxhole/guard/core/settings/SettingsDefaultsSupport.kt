@@ -17,10 +17,6 @@ import com.foxhole.core.model.withLane
 import com.foxhole.core.model.withoutAssignments
 import com.foxhole.guard.BuildConfig
 
-// The two resets below deliberately keep the POSITIVE `ExpertSettings(...)` form, unlike
-// [disarmedBySafeMode]. They are factory resets: a field added later SHOULD come back as its
-// default, and only the three identity/consent fields listed here are meant to outlive the reset.
-// The negative-copy rule exists for disarming (where preserving is the expected default), not here.
 internal fun Settings.resetExpertSettingsToSafeDefaults(): Settings =
     copy(
         connection = connection.copy(safeModeEnabled = true),

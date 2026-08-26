@@ -4,11 +4,6 @@ import com.foxhole.core.network.RemoteHostResolver
 import com.foxhole.core.network.isPrivateOrLocalAddress
 import java.net.InetAddress
 
-// A subscription refresh resolves the same handful of hosts over and over: every node of a
-// multi-node subscription revalidates its server host, and the repository may re-parse the same
-// payload several times per refresh. DNS answers are stable on that timescale, so successful
-// all-public resolutions are memoized for a short window. Failures, empty answers and private
-// results are never cached — they keep their retry and rejection semantics.
 internal fun memoizedPublicHostResolver(
     delegate: RemoteHostResolver,
     ttlMs: Long = RESOLVER_CACHE_TTL_MS,

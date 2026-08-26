@@ -18,17 +18,6 @@ import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/**
- * DNS on a WireGuard/AmneziaWG profile.
- *
- * The engine refuses `dns.route='primary'` together with an L3 packet tunnel, because such a tunnel
- * carries IP packets and offers no stream outbound to resolve through — intercepted lookups would
- * leave beside the tunnel in the clear. Found on a Pixel: every WireGuard profile from a live
- * subscription ended in `terminalState=ERROR, fatal=native start rejected` while the other six
- * protocols carried traffic. The answer is not a different detour but no interception at all: the
- * profile's own resolver is declared to Android and the queries ride the tunnel as packets, exactly
- * as a WireGuard client behaves.
- */
 internal class FoxCorePacketTunnelDnsTest : FoxCoreConfigTranslatorTestSupport() {
     @Test
     fun `a WireGuard profile advertises its own resolver and asks the engine to intercept nothing`() {
@@ -40,15 +29,11 @@ internal class FoxCorePacketTunnelDnsTest : FoxCoreConfigTranslatorTestSupport()
             )
         val dns = engine(result).getValue("dns").jsonObject
 
-        // `intercepts()` in the engine is true when upstreams/upstream is set, or `advertise` is
-        // set, or the mode is fake_ip. All three have to stay out, or the refusal that started this
-        // fires again on the next start.
         assertEquals(setOf("mode"), dns.keys)
         assertEquals("real_ip", dns.getValue("mode").jsonPrimitive.content)
-        // The resolver from the WireGuard config goes on the TUN instead, so the device sends its
-        // queries to an address that is routed into the tunnel.
+
         assertEquals(listOf("10.17.0.1"), result.tunPlan.advertisedDnsServers)
-        // The policy document is the same DNS section, and it is validated by the same engine type.
+
         assertEquals(dns, policy(result).getValue("dns").jsonObject)
     }
 
@@ -65,17 +50,13 @@ internal class FoxCorePacketTunnelDnsTest : FoxCoreConfigTranslatorTestSupport()
 
         assertEquals(FoxCoreConfigRejection.PACKET_TUNNEL_DNS_MISSING, failure.rejection)
         assertEquals("$.dns.servers", failure.path)
-        // The refusal has to say why, because the two alternatives it rules out both look like
-        // success: resolving beside the tunnel, or advertising the managed public resolver this app
-        // put in `dns-remote` — an address the profile never asked for.
+
         assertNotNull(failure.explanation)
         assertFalse(failure.message.orEmpty().contains(FOXHOLE_REMOTE_DNS_SERVER))
     }
 
     @Test
     fun `a WireGuard resolver named by hostname is refused rather than silently dropped`() {
-        // Android's TUN builder takes a numeric address only. A hostname here cannot be advertised,
-        // and dropping it would land back on a profile that resolves outside its own tunnel.
         val failure =
             assertThrows(FoxCoreConfigTranslationException::class.java) {
                 translate(
@@ -90,9 +71,6 @@ internal class FoxCorePacketTunnelDnsTest : FoxCoreConfigTranslatorTestSupport()
 
     @Test
     fun `a DNS filter left switched on does not stop a WireGuard profile from starting`() {
-        // The price of not intercepting is that the filter and fake-IP do nothing here. That is a
-        // feature the user does not get, not a reason to refuse the profile — and the rule-set
-        // bootstrap this document would otherwise demand is deliberately absent.
         val result =
             translate(
                 hint = ProtocolHint.WIREGUARD,
@@ -110,9 +88,6 @@ internal class FoxCorePacketTunnelDnsTest : FoxCoreConfigTranslatorTestSupport()
 
     @Test
     fun `a WireGuard profile ignores which managed resolver the app selected as final`() {
-        // `dns.final` picks the interceptor's upstream, and on this shape there is no interceptor.
-        // A profile whose user turned DNS interception off points `final` at the system resolver,
-        // which the translator refuses everywhere else; here it is simply not read.
         val result =
             translate(
                 hint = ProtocolHint.WIREGUARD,

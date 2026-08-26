@@ -55,9 +55,6 @@ class RuntimeGenerationGuardTest {
     @Test
     fun `kill advancing generation between check and publish invalidates a stale start commit`() =
         runBlocking {
-            // Linearization stress: a start's commitIfCurrent must never resurrect the runtime once
-            // a fail-closed kill has advanced the generation. commitIfCurrent + next both mutate
-            // under transitionLock, so no interleaving lets a stale generation commit succeed.
             repeat(200) {
                 val guard = RuntimeGenerationGuard(RecordingDiagnosticsSink())
                 val startGeneration = guard.next("start")
@@ -74,8 +71,7 @@ class RuntimeGenerationGuardTest {
                     ).awaitAll()
 
                 val startCommitted = results[0] as Boolean
-                // If the kill won the race, the start commit must have failed (generation superseded);
-                // if the start won, its commit ran exactly once. Never both-and-stale.
+
                 if (!guard.isCurrent(startGeneration)) {
                     assertTrue(committedByStart.get() <= 1)
                 }

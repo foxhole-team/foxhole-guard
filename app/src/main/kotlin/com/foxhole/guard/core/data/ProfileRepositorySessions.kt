@@ -4,9 +4,6 @@ import com.foxhole.core.model.VpnSession
 import com.foxhole.core.runtime.PrivateDnsMode
 import com.foxhole.core.runtime.PrivateDnsState
 
-// Runtime session builders, split out of ProfileRepository (class split by domain; thin
-// delegations to the shared ProfileSessionFactory).
-
 internal suspend fun ProfileRepository.getSession(
     profileId: Long,
     protocolOptionIdOverride: String? = null,

@@ -7,10 +7,6 @@ import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
-// The watchdog's JS shim, injected before the page's own scripts (addDocumentStartJavaScript, with
-// evaluateJavascript in onPageStarted as fallback — hence the __fhgShim latch against double
-// installation). It intercepts Notification/showNotification for a call count and
-// navigator.setAppBadge for an exact number, sending each signal over the __fhgBridge.
 private const val WEB_APP_SHIM_TEMPLATE = """
 (function() {
   if (window.__fhgShim) return; window.__fhgShim = true;
@@ -150,10 +146,8 @@ internal fun webAppShimJs(
         .replace("__FHG_INITIAL_BADGE__", initialBadge.coerceIn(0, WEB_APP_BADGE_MAX).toString())
         .replace("__FHG_BRIDGED__", bridged.toString())
 
-/** Name of the bridge object addWebMessageListener publishes to the page. */
 internal const val WEB_APP_SHIM_BRIDGE_NAME = "__fhgBridge"
 
-/** Parses the bridge message `{"badge":N}`; junk from the page yields null, not an exception. */
 internal data class WebAppNotificationContent(
     val title: String?,
     val body: String?,
@@ -186,7 +180,6 @@ internal fun computeBadge(shimCount: Int?, title: String?, previous: Int): Int {
     return parseTitleBadge(title)?.coerceIn(0, WEB_APP_BADGE_MAX) ?: previous
 }
 
-/** A grown badge notifies unless that app's frame is open — the user is already looking at it. */
 internal fun shouldNotifyBadgeIncrease(
     previous: Int,
     updated: Int,

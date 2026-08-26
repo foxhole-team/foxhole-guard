@@ -1,9 +1,6 @@
 package com.foxhole.guard.ui.cli.settings
 
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -25,15 +22,15 @@ import com.foxhole.guard.ui.availableDatasetSources
 import com.foxhole.guard.ui.cli.CliSpacing
 import com.foxhole.guard.ui.cli.CliType
 import com.foxhole.guard.ui.cli.LocalCliColors
+import com.foxhole.guard.ui.cli.cliSlide
 import com.foxhole.guard.ui.cli.components.CliBottomSheet
 import com.foxhole.guard.ui.cli.components.CliDropdownOption
 import com.foxhole.guard.ui.cli.components.CliDropdownRow
-import com.foxhole.guard.ui.cli.components.CliPixelProgressBar
 import com.foxhole.guard.ui.cli.components.CliSheetAction
+import com.foxhole.guard.ui.cli.components.CliSheetActionTone
 import com.foxhole.guard.ui.cli.components.CliSheetActionsRow
 import com.foxhole.guard.ui.reduce
 import com.foxhole.guard.ui.selectSource
-import kotlinx.coroutines.delay
 
 @Composable
 internal fun CliDatasetActivationSheet(
@@ -58,8 +55,6 @@ internal fun CliDatasetActivationSheet(
     LaunchedEffect(state.step, state.source) {
         if (state.step == DatasetActivationStep.VERIFIED) {
             onActivate(state.source)
-            delay(DATASET_SUCCESS_HOLD_MS)
-            onDismiss()
         }
     }
 
@@ -71,13 +66,13 @@ internal fun CliDatasetActivationSheet(
         title = stringResource(state.feature.activationTitleRes()),
         icon = state.feature.activationIconRes(),
         onDismiss = dismiss,
+        autoDismissAfterMillis = DATASET_SUCCESS_HOLD_MS.takeIf {
+            state.step == DatasetActivationStep.VERIFIED
+        },
     ) {
         AnimatedContent(
             targetState = state.step,
-            transitionSpec = {
-                slideInHorizontally { width -> width } togetherWith
-                    slideOutHorizontally { width -> -width }
-            },
+            transitionSpec = { cliSlide(forward = targetState.ordinal > initialState.ordinal) },
             label = "dataset-activation-step",
         ) { step ->
             Column(modifier = Modifier.fillMaxWidth()) {
@@ -85,8 +80,13 @@ internal fun CliDatasetActivationSheet(
                     DatasetActivationStep.SOURCE -> DatasetSourceStep(state, onStateChange, onSkip, onDismiss)
                     DatasetActivationStep.DATASET_REQUIRED ->
                         DatasetRequiredStep(state, onStateChange, onSkip, onStartDownload, onDismiss)
-                    DatasetActivationStep.DOWNLOADING -> DatasetDownloadStep(phase, progress, dismiss)
-                    DatasetActivationStep.VERIFIED -> CliFoxholeUpdateProgress(phase = FoxholeUpdatePhase.DONE)
+                    DatasetActivationStep.DOWNLOADING -> DatasetDownloadStep(phase, progress)
+                    DatasetActivationStep.VERIFIED ->
+                        CliVerifiedUpdateProgress(
+                            phase = FoxholeUpdatePhase.DONE,
+                            downloadProgress = progress,
+                            verifiedSuccess = true,
+                        )
                     DatasetActivationStep.FAILED ->
                         DatasetFailedStep(state, onStateChange, onSkip, onStartDownload, onDismiss)
                 }
@@ -107,7 +107,7 @@ private fun DatasetSourceStep(
     Spacer(modifier = Modifier.height(CliSpacing.sm))
     CliDropdownRow(
         label = stringResource(R.string.cli_dataset_source),
-        icon = R.drawable.pix_globe,
+        icon = R.drawable.lin_globe,
         value = stringResource(state.source.labelRes()),
         options = state.feature.availableDatasetSources().map { source ->
             CliDropdownOption(source.name, stringResource(source.labelRes()))
@@ -120,9 +120,13 @@ private fun DatasetSourceStep(
     )
     Spacer(modifier = Modifier.height(CliSpacing.sm))
     CliSheetActionsRow(
-        cancelLabel = stringResource(R.string.cli_dataset_do_not_use),
-        onCancel = { onSkipAndDismiss(onSkip, onDismiss) },
         actions = listOf(
+            CliSheetAction(
+                label = stringResource(R.string.cli_dataset_do_not_use),
+                onClick = { onSkipAndDismiss(onSkip, onDismiss) },
+                tone = CliSheetActionTone.ACCENT,
+                dismissAfterClick = true,
+            ),
             CliSheetAction(
                 label = stringResource(R.string.cli_dataset_use),
                 onClick = { onStateChange(state.reduce(DatasetActivationEvent.USE)) },
@@ -145,8 +149,13 @@ private fun DatasetRequiredStep(
     Text(text = stringResource(R.string.cli_dataset_signature_note), style = CliType.small, color = colors.info)
     Spacer(modifier = Modifier.height(CliSpacing.md))
     CliSheetActionsRow(
-        onCancel = { onSkipAndDismiss(onSkip, onDismiss) },
         actions = listOf(
+            CliSheetAction(
+                label = stringResource(R.string.cli_dataset_do_not_use),
+                onClick = { onSkipAndDismiss(onSkip, onDismiss) },
+                tone = CliSheetActionTone.ACCENT,
+                dismissAfterClick = true,
+            ),
             CliSheetAction(
                 label = stringResource(R.string.cli_foxdb_sheet_download),
                 onClick = {
@@ -162,25 +171,12 @@ private fun DatasetRequiredStep(
 private fun DatasetDownloadStep(
     phase: FoxholeUpdatePhase,
     progress: RemoteDownloadProgress?,
-    onDismiss: () -> Unit,
 ) {
-    val colors = LocalCliColors.current
-    CliFoxholeUpdateProgress(phase = phase)
-    if (phase == FoxholeUpdatePhase.DOWNLOADING && progress != null) {
-        Spacer(modifier = Modifier.height(CliSpacing.xs))
-        CliPixelProgressBar(fraction = progress.fraction)
-        Spacer(modifier = Modifier.height(CliSpacing.xs))
-        Text(
-            text = stringResource(
-                R.string.cli_wizard_phase_downloading_percent,
-                (progress.fraction * 100f).toInt().coerceIn(0, 100),
-            ),
-            style = CliType.small,
-            color = colors.dim,
-        )
-    }
-    Spacer(modifier = Modifier.height(CliSpacing.md))
-    CliSheetActionsRow(onCancel = onDismiss, actions = emptyList())
+    CliVerifiedUpdateProgress(
+        phase = phase.takeUnless { it == FoxholeUpdatePhase.IDLE } ?: FoxholeUpdatePhase.CHECKING,
+        downloadProgress = progress,
+        verifiedSuccess = false,
+    )
 }
 
 @Composable
@@ -195,8 +191,13 @@ private fun DatasetFailedStep(
     Text(text = stringResource(R.string.cli_dataset_verification_failed), style = CliType.body, color = colors.err)
     Spacer(modifier = Modifier.height(CliSpacing.md))
     CliSheetActionsRow(
-        onCancel = { onSkipAndDismiss(onSkip, onDismiss) },
         actions = listOf(
+            CliSheetAction(
+                label = stringResource(R.string.cli_dataset_do_not_use),
+                onClick = { onSkipAndDismiss(onSkip, onDismiss) },
+                tone = CliSheetActionTone.ACCENT,
+                dismissAfterClick = true,
+            ),
             CliSheetAction(
                 label = stringResource(R.string.cli_tor_bridges_update_retry),
                 onClick = {
@@ -234,8 +235,8 @@ private fun DatasetActivationFeature.datasetDescriptionRes(): Int =
 
 private fun DatasetActivationFeature.activationIconRes(): Int =
     when (this) {
-        DatasetActivationFeature.TOR_BRIDGES -> R.drawable.pix_tor
-        DatasetActivationFeature.FOXHOLE_SENTINEL -> R.drawable.pix_shield
+        DatasetActivationFeature.TOR_BRIDGES -> R.drawable.lin_tor
+        DatasetActivationFeature.FOXHOLE_SENTINEL -> R.drawable.lin_shield
     }
 
 private fun DatasetActivationSource.labelRes(): Int =

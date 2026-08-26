@@ -6,13 +6,6 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 
-// Stores written before the lane model held two parallel per-app lists under `expert`
-// (`selectedPackages`, `blockedPackages`). The lane model keeps a single `appAssignments` map, and
-// `ignoreUnknownKeys` would silently drop the legacy lists — so fold them in at the JSON boundary,
-// before the payload is decoded, exactly once (a store that already has `appAssignments` is left
-// untouched). Mapping: blocked -> BLOCK; selected -> TOR when a Tor route over selected apps was
-// configured, otherwise VPN; a package in both lists keeps its routing lane (selected wins), which
-// mirrors the old normalization that stripped selected apps out of the block list.
 internal fun migrateLegacyAppAssignments(expert: JsonObject, privacyRoute: JsonObject?): JsonObject {
     if (expert.containsKey("appAssignments")) {
         return expert

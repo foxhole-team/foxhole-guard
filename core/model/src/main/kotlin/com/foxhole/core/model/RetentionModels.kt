@@ -3,9 +3,6 @@ package com.foxhole.core.model
 import androidx.compose.runtime.Immutable
 import kotlinx.serialization.Serializable
 
-// How long journals and statistics are kept: the one user-facing retention vocabulary, the legacy
-// enums it subsumes, and the policy every screen resolves through.
-
 @Serializable
 enum class DiagnosticsRetention(
     val retentionHours: Int,
@@ -28,12 +25,6 @@ enum class StatisticsRetention {
     FOREVER,
 }
 
-/**
- * The one user-facing retention vocabulary: day, week, month, forever, or a custom number of
- * days. Journals and statistics both keep their data exactly this long;
- * the legacy [DiagnosticsRetention]/[StatisticsRetention] enums survive only as
- * stored fallbacks and as the chart-range vocabulary.
- */
 @Serializable
 enum class RetentionPreset {
     DAY,
@@ -51,7 +42,6 @@ data class RetentionPolicy(
 ) {
     fun normalizedCustomDays(): Int = customDays.coerceIn(1, MAX_CUSTOM_DAYS)
 
-    /** null means forever: no time-based purge, only the entry cap. */
     fun retentionMillisOrNull(): Long? =
         when (preset) {
             RetentionPreset.DAY -> DAY_MILLIS
@@ -63,7 +53,6 @@ data class RetentionPolicy(
 
     fun cutoffOrNull(nowMs: Long): Long? = retentionMillisOrNull()?.let { millis -> nowMs - millis }
 
-    /** Hard ring/disk cap that holds even when retention is forever. */
     val maxEntries: Int
         get() {
             val millis = retentionMillisOrNull() ?: return MAX_ENTRIES_LARGE
@@ -112,7 +101,6 @@ fun ExpertSettings.effectiveDiagnosticsRetention(): RetentionPolicy =
 fun StatisticsSettings.effectiveRetention(): RetentionPolicy =
     retentionPolicy ?: retention.toRetentionPolicy()
 
-/** Chart-range clamp: the nearest legacy range that covers what the policy retains. */
 fun RetentionPolicy.toStatisticsDisplayRetention(): StatisticsRetention =
     when (preset) {
         RetentionPreset.DAY,

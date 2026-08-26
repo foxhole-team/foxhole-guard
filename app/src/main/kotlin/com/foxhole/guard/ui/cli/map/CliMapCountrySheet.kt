@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -33,11 +34,11 @@ import com.foxhole.guard.ui.cli.CliType
 import com.foxhole.guard.ui.cli.LocalCliColors
 import com.foxhole.guard.ui.cli.cliRowTextStyle
 import com.foxhole.guard.ui.cli.cliScaledDp
+import com.foxhole.guard.ui.cli.components.CLI_HEADER_ICON_LIFT
 import com.foxhole.guard.ui.cli.components.CliBottomSheet
 import com.foxhole.guard.ui.cli.components.CliDashedInfoNote
-import com.foxhole.guard.ui.cli.components.CliElbowLine
 import com.foxhole.guard.ui.cli.components.CliFlagIcon
-import com.foxhole.guard.ui.cli.components.CliPixIcon
+import com.foxhole.guard.ui.cli.components.CliIcon
 import com.foxhole.guard.ui.cli.components.CliRowDivider
 import com.foxhole.guard.ui.cli.settings.rememberCliAppIcon
 import kotlinx.coroutines.Dispatchers
@@ -58,7 +59,7 @@ internal fun CliMapCountrySheet(
     CliBottomSheet(
         onDismiss = onDismiss,
         title = label,
-        icon = R.drawable.pix_globe,
+        icon = R.drawable.lin_globe,
     ) {
         CliMapCountrySummaryRow(
             countryCode = countryCode,
@@ -68,15 +69,18 @@ internal fun CliMapCountrySheet(
         val appRows = detail?.appRows.orEmpty()
         val hostRows = detail?.hostRows.orEmpty()
         if (appRows.isEmpty() && hostRows.isEmpty()) {
-            CliDashedInfoNote(text = stringResource(R.string.cli_map_country_sheet_empty))
-            if (!journalEnabled) {
-                CliElbowLine(text = stringResource(R.string.cli_map_country_sheet_journal_hint))
+            val emptyText = stringResource(R.string.cli_map_country_sheet_empty)
+            val infoText = if (journalEnabled) {
+                emptyText
+            } else {
+                "$emptyText\n${stringResource(R.string.cli_map_country_sheet_journal_hint)}"
             }
+            CliDashedInfoNote(text = infoText)
         } else {
             if (appRows.isNotEmpty()) {
                 CliMapCountrySection(
                     title = stringResource(R.string.cli_stats_apps_title),
-                    icon = R.drawable.pix_apps,
+                    icon = R.drawable.lin_apps,
                 )
                 appRows.forEachIndexed { index, row ->
                     if (index > 0) CliRowDivider()
@@ -86,7 +90,7 @@ internal fun CliMapCountrySheet(
             if (hostRows.isNotEmpty()) {
                 CliMapCountrySection(
                     title = stringResource(R.string.cli_map_country_sheet_hosts),
-                    icon = R.drawable.pix_link,
+                    icon = R.drawable.lin_link,
                 )
                 hostRows.forEachIndexed { index, row ->
                     if (index > 0) CliRowDivider()
@@ -142,7 +146,13 @@ private fun CliMapCountrySection(
             modifier = Modifier.width(SHEET_LEADING_SLOT),
             contentAlignment = Alignment.CenterStart,
         ) {
-            CliPixIcon(id = icon, contentDescription = null, size = SHEET_APP_ICON_SIZE, tint = colors.dim)
+            CliIcon(
+                id = icon,
+                contentDescription = null,
+                size = SHEET_APP_ICON_SIZE,
+                tint = colors.dim,
+                modifier = Modifier.offset(y = CLI_HEADER_ICON_LIFT),
+            )
         }
         Spacer(modifier = Modifier.width(SHEET_LEADING_GAP))
         Text(
@@ -197,8 +207,8 @@ private fun CliMapCountryAppRow(row: TrafficMapCountryAppRow) {
                     modifier = Modifier.size(SHEET_APP_ICON_SIZE),
                 )
             } else {
-                CliPixIcon(
-                    id = R.drawable.pix_apps,
+                CliIcon(
+                    id = R.drawable.lin_apps,
                     contentDescription = null,
                     size = SHEET_APP_ICON_SIZE,
                     tint = colors.dim,
@@ -229,8 +239,8 @@ private fun CliMapCountryHostRow(row: TrafficMapCountryHostRow) {
             modifier = Modifier.width(SHEET_LEADING_SLOT),
             contentAlignment = Alignment.CenterStart,
         ) {
-            CliPixIcon(
-                id = R.drawable.pix_globe,
+            CliIcon(
+                id = R.drawable.lin_globe,
                 contentDescription = null,
                 size = SHEET_APP_ICON_SIZE,
                 tint = colors.dim,
@@ -316,4 +326,4 @@ private val SHEET_LEADING_SLOT = SHEET_APP_ICON_SIZE
 private val SHEET_LEADING_GAP = 6.dp
 private val SHEET_ROW_PADDING = 3.dp
 private val SHEET_TRAFFIC_COLUMN_WIDTH = cliScaledDp(74f)
-private val SHEET_CONNECTIONS_COLUMN_WIDTH = cliScaledDp(44f)
+private val SHEET_CONNECTIONS_COLUMN_WIDTH = cliScaledDp(72f)

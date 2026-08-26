@@ -5,7 +5,7 @@ import androidx.benchmark.macro.StartupMode
 import androidx.benchmark.macro.StartupTimingMetric
 import androidx.benchmark.macro.junit4.MacrobenchmarkRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import androidx.test.uiautomator.By
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -16,6 +16,11 @@ class HomeMacrobenchmark : HomeMacrobenchmarkRobot() {
     @get:Rule
     val benchmarkRule = MacrobenchmarkRule()
 
+    @Before
+    fun prepareTargetState() {
+        prepareBenchmarkState(ensureMapEnabled = true)
+    }
+
     @Test
     fun startup() =
         measureStartup(StartupMode.COLD)
@@ -24,12 +29,66 @@ class HomeMacrobenchmark : HomeMacrobenchmarkRobot() {
     fun warmStartup() =
         measureStartup(StartupMode.WARM)
 
-    private fun measureStartup(startupMode: StartupMode) =
+    @Test
+    fun profileSelectorForwardBackMotion() =
+        benchmarkRule.measureRepeated(
+            packageName = PACKAGE_NAME,
+            metrics = frameMetricsWithTrace(),
+            compilationMode = BENCHMARK_COMPILATION_MODE,
+            iterations = benchmarkIterations(),
+            startupMode = StartupMode.WARM,
+            setupBlock = {
+                pressHome()
+                startActivityAndWait(foxholeLauncherIntent())
+                device.waitForIdle()
+            },
+        ) {
+            profileSelectorRoundTrip()
+        }
+
+    @Test
+    fun mapColdOpenMemory() =
         benchmarkRule.measureRepeated(
             packageName = PACKAGE_NAME,
             metrics =
-                listOf(StartupTimingMetric()) +
-                    traceMetrics(HOME_FIRST_COMPOSITION_TRACE),
+                memoryFrameMetricsWithTrace(
+                    TRAFFIC_MAP_LOAD_SHAPES_TRACE,
+                    TRAFFIC_MAP_BUILD_COUNTRY_REGISTRY_TRACE,
+                    TRAFFIC_MAP_RENDER_LAND_BITMAP_TRACE,
+                    TRAFFIC_MAP_BUILD_ROUTES_TRACE,
+                    TRAFFIC_MAP_DRAW_TRACE,
+                ),
+            compilationMode = BENCHMARK_COMPILATION_MODE,
+            iterations = benchmarkIterations(),
+            startupMode = StartupMode.COLD,
+            setupBlock = { pressHome() },
+        ) {
+            startActivityAndWait(foxholeLauncherIntent())
+            assertDashboardVisible()
+            openRootMapAndReturn()
+        }
+
+    @Test
+    fun rootNavigationMemoryStressCuj() =
+        benchmarkRule.measureRepeated(
+            packageName = PACKAGE_NAME,
+            metrics = memoryFrameMetricsWithTrace(),
+            compilationMode = BENCHMARK_COMPILATION_MODE,
+            iterations = benchmarkIterations(),
+            startupMode = StartupMode.WARM,
+            setupBlock = {
+                pressHome()
+                startActivityAndWait(foxholeLauncherIntent())
+                device.waitForIdle()
+            },
+        ) {
+            rootNavigationMemoryStress()
+        }
+
+    private fun measureStartup(startupMode: StartupMode) =
+        benchmarkRule.measureRepeated(
+            packageName = PACKAGE_NAME,
+            metrics = listOf(StartupTimingMetric()),
             compilationMode = BENCHMARK_COMPILATION_MODE,
             iterations = benchmarkIterations(),
             startupMode = startupMode,
@@ -42,7 +101,7 @@ class HomeMacrobenchmark : HomeMacrobenchmarkRobot() {
     fun homeScroll() =
         benchmarkRule.measureRepeated(
             packageName = PACKAGE_NAME,
-            metrics = frameMetricsWithTrace(HOME_FIRST_COMPOSITION_TRACE),
+            metrics = frameMetricsWithTrace(),
             compilationMode = BENCHMARK_COMPILATION_MODE,
             iterations = benchmarkIterations(),
             startupMode = StartupMode.WARM,
@@ -55,16 +114,19 @@ class HomeMacrobenchmark : HomeMacrobenchmarkRobot() {
             val centerX = device.displayWidth / 2
             val upperY = (device.displayHeight * UPPER_SWIPE_Y_RATIO).toInt()
             val lowerY = (device.displayHeight * LOWER_SWIPE_Y_RATIO).toInt()
-            val dashboardNavX = (device.displayWidth * DASHBOARD_NAV_X_RATIO).toInt()
-            val settingsNavX = (device.displayWidth * SETTINGS_NAV_X_RATIO).toInt()
-            val bottomNavY = (device.displayHeight * BOTTOM_NAV_Y_RATIO).toInt()
-            device.click(settingsNavX, bottomNavY)
+            clickSettingsBottomNav()
             device.waitForIdle()
-            device.click(dashboardNavX, bottomNavY)
+            check(waitForSettingsHomeVisible()) { "Settings did not open during Home scroll CUJ" }
+            clickDashboardBottomNav()
             device.waitForIdle()
-            device.swipe(centerX, lowerY, centerX, upperY, SWIPE_STEPS)
+            assertDashboardVisible()
+            check(device.swipe(centerX, lowerY, centerX, upperY, SWIPE_STEPS)) {
+                "Home upward swipe was rejected"
+            }
             device.waitForIdle()
-            device.swipe(centerX, upperY, centerX, lowerY, SWIPE_STEPS)
+            check(device.swipe(centerX, upperY, centerX, lowerY, SWIPE_STEPS)) {
+                "Home downward swipe was rejected"
+            }
             device.waitForIdle()
         }
 
@@ -72,7 +134,7 @@ class HomeMacrobenchmark : HomeMacrobenchmarkRobot() {
     fun bottomNavigationRoundTrip() =
         benchmarkRule.measureRepeated(
             packageName = PACKAGE_NAME,
-            metrics = frameMetricsWithTrace(SETTINGS_NAVIGATION_TRACE),
+            metrics = frameMetricsWithTrace(),
             compilationMode = BENCHMARK_COMPILATION_MODE,
             iterations = benchmarkIterations(),
             startupMode = StartupMode.WARM,
@@ -84,8 +146,10 @@ class HomeMacrobenchmark : HomeMacrobenchmarkRobot() {
         ) {
             clickSettingsBottomNav()
             device.waitForIdle()
+            check(waitForSettingsHomeVisible()) { "Settings did not open during dock round trip" }
             clickDashboardBottomNav()
             device.waitForIdle()
+            assertDashboardVisible()
         }
 
     @Test
@@ -96,7 +160,6 @@ class HomeMacrobenchmark : HomeMacrobenchmarkRobot() {
                 detailTag = "traffic_settings_screen",
                 labels = listOf("Network", "Сеть"),
                 tapYRatio = 0.18f,
-                traceSections = listOf(TRAFFIC_SETTINGS_FIRST_COMPOSITION_TRACE),
             ),
         )
 
@@ -104,7 +167,7 @@ class HomeMacrobenchmark : HomeMacrobenchmarkRobot() {
     fun dashboardSettingsTrafficRoundTrip() =
         benchmarkRule.measureRepeated(
             packageName = PACKAGE_NAME,
-            metrics = frameMetricsWithTrace(SETTINGS_NAVIGATION_TRACE, TRAFFIC_SETTINGS_FIRST_COMPOSITION_TRACE),
+            metrics = frameMetricsWithTrace(),
             compilationMode = BENCHMARK_COMPILATION_MODE,
             iterations = benchmarkIterations(),
             startupMode = StartupMode.WARM,
@@ -114,27 +177,22 @@ class HomeMacrobenchmark : HomeMacrobenchmarkRobot() {
                 device.waitForIdle()
             },
         ) {
-            waitForDashboardVisible()
+            assertDashboardVisible()
             clickSettingsBottomNav()
-            waitForSettingsHomeVisible()
-            if (
-                !openSettingsDetail(
+            check(waitForSettingsHomeVisible()) { "Settings did not open during Network round trip" }
+            check(
+                openSettingsDetail(
                     SettingsDetailTarget(
                         tag = "settings_traffic_action",
                         detailTag = "traffic_settings_screen",
                         labels = listOf("Network", "Сеть"),
                         tapYRatio = 0.18f,
                     ),
-                )
-            ) {
-                return@measureRepeated
-            }
+                ),
+            ) { "Network settings CUJ performed no transition; ${visibleSettingsState()}" }
             device.pressBack()
             device.waitForIdle()
-            waitForSettingsHomeVisible()
-            clickDashboardBottomNav()
-            waitForDashboardVisible()
-            device.waitForIdle()
+            assertDashboardVisible()
         }
 
     @Test
@@ -152,7 +210,7 @@ class HomeMacrobenchmark : HomeMacrobenchmarkRobot() {
     fun settingsRoutingAppsPickerSearch() {
         benchmarkRule.measureRepeated(
             packageName = PACKAGE_NAME,
-            metrics = frameMetricsWithTrace(APP_PICKER_FILTER_TRACE, APP_ICON_LOAD_TRACE, SETTINGS_NAVIGATION_TRACE),
+            metrics = frameMetricsWithTrace(),
             compilationMode = BENCHMARK_COMPILATION_MODE,
             iterations = benchmarkIterations(),
             startupMode = StartupMode.WARM,
@@ -162,39 +220,7 @@ class HomeMacrobenchmark : HomeMacrobenchmarkRobot() {
                 device.waitForIdle()
             },
         ) {
-            openSettingsHome()
-            if (
-                !openSettingsDetail(
-                    SettingsDetailTarget(
-                        tag = "settings_routing_apps_action",
-                        detailTag = "routing_apps_screen",
-                        labels = listOf("Apps", "Приложения"),
-                        tapYRatio = 0.50f,
-                    ),
-                )
-            ) {
-                return@measureRepeated
-            }
-            val addButton =
-                findByTestTag("routing_apps_add_exception_action")
-                    ?: device.findObject(By.text("Add"))
-                    ?: device.findObject(By.text("Добавить"))
-                    ?: error("Routing app add button missing; ${visibleSettingsState()}")
-            clickCenter(addButton)
-            if (!waitForAnyText(APP_PICKER_ANCHOR_LABELS) && !waitForTestTag("routing_apps_picker_screen")) {
-                return@measureRepeated
-            }
-            findByTestTag("routing_apps_picker_search")?.setText(APP_PICKER_SEARCH_QUERY)
-                ?: return@measureRepeated
-            device.waitForIdle()
-            toggleFirstUnlockedAppInPicker()
-            device.waitForIdle()
-            toggleFirstUnlockedAppInPicker()
-            device.waitForIdle()
-            device.pressBack()
-            device.waitForIdle()
-            device.pressBack()
-            device.waitForIdle()
+            appsPickerSearchRoundTrip()
         }
     }
 
@@ -203,10 +229,7 @@ class HomeMacrobenchmark : HomeMacrobenchmarkRobot() {
         benchmarkRule.measureRepeated(
             packageName = PACKAGE_NAME,
             metrics =
-                frameMetricsWithTrace(
-                    TRAFFIC_MAP_LOAD_SHAPES_TRACE,
-                    TRAFFIC_MAP_RENDER_LAND_BITMAP_TRACE,
-                    TRAFFIC_MAP_RENDER_HIGHLIGHT_BITMAP_TRACE,
+                memoryFrameMetricsWithTrace(
                     TRAFFIC_MAP_BUILD_ROUTES_TRACE,
                     TRAFFIC_MAP_DRAW_TRACE,
                 ),
@@ -223,7 +246,7 @@ class HomeMacrobenchmark : HomeMacrobenchmarkRobot() {
             device.waitForIdle()
             clickDashboardBottomNav()
             device.waitForIdle()
-            waitForDashboardVisible()
+            assertDashboardVisible()
             val centerX = device.displayWidth / 2
             val upperY = (device.displayHeight * UPPER_SWIPE_Y_RATIO).toInt()
             val lowerY = (device.displayHeight * LOWER_SWIPE_Y_RATIO).toInt()
@@ -239,10 +262,7 @@ class HomeMacrobenchmark : HomeMacrobenchmarkRobot() {
         benchmarkRule.measureRepeated(
             packageName = PACKAGE_NAME,
             metrics =
-                frameMetricsWithTrace(
-                    TRAFFIC_MAP_LOAD_SHAPES_TRACE,
-                    TRAFFIC_MAP_RENDER_LAND_BITMAP_TRACE,
-                    TRAFFIC_MAP_RENDER_HIGHLIGHT_BITMAP_TRACE,
+                memoryFrameMetricsWithTrace(
                     TRAFFIC_MAP_BUILD_ROUTES_TRACE,
                     TRAFFIC_MAP_DRAW_TRACE,
                 ),
@@ -258,14 +278,14 @@ class HomeMacrobenchmark : HomeMacrobenchmarkRobot() {
             },
         ) {
             try {
-                waitForDashboardVisible()
+                assertDashboardVisible()
                 openTrafficMapDetailsAndReturn()
                 setNightMode("yes")
                 device.waitForIdle()
                 openTrafficMapDetailsAndReturn()
                 setBatterySaver(enabled = true)
                 device.waitForIdle()
-                scrollDashboardToTrafficMapDetailsAction()
+                openRootMapAndReturn()
             } finally {
                 setBatterySaver(enabled = false)
                 setNightMode("no")
@@ -278,10 +298,7 @@ class HomeMacrobenchmark : HomeMacrobenchmarkRobot() {
         benchmarkRule.measureRepeated(
             packageName = PACKAGE_NAME,
             metrics =
-                frameMetricsWithTrace(
-                    TRAFFIC_MAP_LOAD_SHAPES_TRACE,
-                    TRAFFIC_MAP_RENDER_LAND_BITMAP_TRACE,
-                    TRAFFIC_MAP_RENDER_HIGHLIGHT_BITMAP_TRACE,
+                memoryFrameMetricsWithTrace(
                     TRAFFIC_MAP_BUILD_ROUTES_TRACE,
                     TRAFFIC_MAP_DRAW_TRACE,
                 ),
@@ -297,10 +314,10 @@ class HomeMacrobenchmark : HomeMacrobenchmarkRobot() {
             },
         ) {
             try {
-                waitForDashboardVisible()
+                assertDashboardVisible()
                 clickConnectAndReturnFromVpnPermission()
                 ensureFoxholeForeground()
-                waitForDashboardVisible()
+                assertDashboardVisible()
                 device.waitForIdle()
                 openTrafficMapDetailsAndReturn()
             } finally {
@@ -369,7 +386,7 @@ class HomeMacrobenchmark : HomeMacrobenchmarkRobot() {
     fun permissionFlow() =
         benchmarkRule.measureRepeated(
             packageName = PACKAGE_NAME,
-            metrics = frameMetricsWithTrace(SETTINGS_NAVIGATION_TRACE),
+            metrics = frameMetricsWithTrace(),
             compilationMode = BENCHMARK_COMPILATION_MODE,
             iterations = benchmarkIterations(),
             startupMode = StartupMode.WARM,
@@ -381,7 +398,7 @@ class HomeMacrobenchmark : HomeMacrobenchmarkRobot() {
             },
         ) {
             handleRuntimePermissionDialog(approve = false)
-            waitForDashboardVisible()
+            assertDashboardVisible()
             openImportFilePickerAndReturn()
             clickConnectAndReturnFromVpnPermission()
             openSettingsHome()
@@ -392,7 +409,7 @@ class HomeMacrobenchmark : HomeMacrobenchmarkRobot() {
     private fun measureSettingsDetailTransition(target: SettingsDetailTarget) {
         benchmarkRule.measureRepeated(
             packageName = PACKAGE_NAME,
-            metrics = frameMetricsWithTrace(SETTINGS_NAVIGATION_TRACE, *target.traceSections.toTypedArray()),
+            metrics = frameMetricsWithTrace(*target.traceSections.toTypedArray()),
             compilationMode = BENCHMARK_COMPILATION_MODE,
             iterations = benchmarkIterations(),
             startupMode = StartupMode.WARM,
@@ -403,8 +420,8 @@ class HomeMacrobenchmark : HomeMacrobenchmarkRobot() {
             },
         ) {
             openSettingsHome()
-            if (!openSettingsDetail(target)) {
-                return@measureRepeated
+            check(openSettingsDetail(target)) {
+                "Settings CUJ performed no transition for ${target.tag}; ${visibleSettingsState()}"
             }
             device.pressBack()
             device.waitForIdle()

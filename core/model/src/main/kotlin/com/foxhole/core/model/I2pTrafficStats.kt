@@ -10,13 +10,6 @@ data class I2pTrafficSnapshot(
     val txBytesPerSec: Long = 0L,
 )
 
-/**
- * Session byte accounting for the I2P lane: connections libbox routed into the `i2p` outbound. The
- * Tor lane is identified by its outbound TYPE, but i2pd is reached through a plain SOCKS outbound,
- * so the lane is identified by its outbound TAG instead — the type alone would sweep in every other
- * socks outbound. Rates follow the Tor lane's math: delta over the time since the previous record,
- * with the first record pinned to zero (no elapsed baseline to divide by).
- */
 object I2pTrafficStats {
     private val state = MutableStateFlow(I2pTrafficSnapshot())
     private val lock = Any()

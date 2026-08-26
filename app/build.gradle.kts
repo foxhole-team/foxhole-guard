@@ -9,6 +9,7 @@ import org.gradle.api.tasks.TaskAction
 import org.gradle.api.tasks.bundling.Zip
 import org.gradle.testing.jacoco.tasks.JacocoCoverageVerification
 import org.gradle.testing.jacoco.tasks.JacocoReport
+import java.security.MessageDigest
 import java.util.Properties
 import java.util.zip.ZipFile
 
@@ -93,6 +94,101 @@ abstract class VerifyReleaseBaselineProfileInApkTask : DefaultTask() {
             }
             require(entries.any { it.startsWith("META-INF/androidx.profileinstaller_") }) {
                 "release APK ${apk.name} is missing ProfileInstaller metadata"
+            }
+        }
+    }
+}
+
+abstract class VerifyBundledLicenseAssetsInReleaseApkTask : DefaultTask() {
+    @get:InputDirectory
+    abstract val apkDirectory: DirectoryProperty
+
+    @TaskAction
+    fun verify() {
+        val apks =
+            apkDirectory
+                .asFileTree
+                .matching { include("*.apk") }
+                .files
+                .sortedBy { it.name }
+        require(apks.isNotEmpty()) { "release APK is missing from ${apkDirectory.get().asFile}" }
+        val required =
+            setOf(
+                "assets/licenses/FoxHole-Guard-GPL-3.0-or-later.txt",
+                "assets/licenses/MANIFEST.json",
+                "assets/licenses/THIRD_PARTY_NOTICES.md",
+                "assets/licenses/SHA256SUMS",
+                "assets/licenses/android/JNA-Apache-2.0.txt",
+                "assets/licenses/android/JNA-LGPL-2.1.txt",
+                "assets/licenses/android/JNA-LICENSE.txt",
+                "assets/licenses/android/SQLCipher-BSD-3-Clause.txt",
+                "assets/licenses/android/lazysodium-MPL-2.0.txt",
+                "assets/licenses/android/libsodium-ISC.txt",
+                "assets/licenses/flags/app-assets.sha256",
+                "assets/licenses/flags/flag-icons-LICENSE.txt",
+                "assets/licenses/fonts/JetBrainsMono-OFL.txt",
+                "assets/licenses/fonts/Tiny5-OFL.txt",
+                "assets/licenses/foxcore/FoxHole-Core-GPL-3.0-or-later.txt",
+                "assets/licenses/foxcore/THIRD_PARTY_NOTICES.md",
+                "assets/licenses/foxcore/foxcore-aarch64-linux-android.cdx.json",
+                "assets/licenses/i2pd/Android-NDK-29-NOTICE.txt",
+                "assets/licenses/i2pd/Android-NDK-29-NOTICE.toolchain.txt",
+                "assets/licenses/i2pd/Boost-1.84.0-BSL-1.0.txt",
+                "assets/licenses/i2pd/OpenSSL-3.5.4-Apache-2.0.txt",
+                "assets/licenses/i2pd/i2pd-BSD-3-Clause.txt",
+                "assets/licenses/icons/Tabler-MIT.txt",
+                "assets/licenses/tor/GO-MODULES.json",
+                "assets/licenses/tor/Go-1.25.8-BSD-3-Clause.txt",
+                "assets/licenses/tor/conjure-client-BSD-3-Clause.txt",
+                "assets/licenses/tor/lyrebird-BSD-3-Clause.txt",
+                "assets/licenses/tor/lyrebird-GPL-3.0-or-later.txt",
+                "assets/licenses/tor-config/PROVENANCE.txt",
+                "assets/licenses/tor-config/assets.sha256",
+                "assets/licenses/tor-config/upstream-members/README.CONJURE.md",
+                "assets/licenses/tor-config/upstream-members/pt_config.json",
+                "assets/licenses/tor-config/upstream-members/torrc-defaults.txt",
+            )
+        apks.forEach { apk ->
+            ZipFile(apk).use { zip ->
+                val entries = zip.entries().asSequence().map { it.name }.toSet()
+                require(entries.containsAll(required)) {
+                    "release APK ${apk.name} is missing license assets: ${(required - entries).joinToString()}"
+                }
+                val sums =
+                    zip.getInputStream(requireNotNull(zip.getEntry("assets/licenses/SHA256SUMS")))
+                        .bufferedReader()
+                        .readLines()
+                val checksumEntries =
+                    sums.map { line ->
+                        val match = requireNotNull(Regex("([0-9a-f]{64})  (.+)").matchEntire(line)) {
+                            "invalid license checksum line: $line"
+                        }
+                        val relative = match.groupValues[2]
+                        require(!relative.startsWith('/') && relative.split('/').none { segment -> segment == ".." }) {
+                            "unsafe license checksum path: $relative"
+                        }
+                        match.groupValues[1] to relative
+                    }
+                require(checksumEntries.map { (_, relative) -> relative }.distinct().size == checksumEntries.size) {
+                    "release APK ${apk.name} contains duplicate license checksum paths"
+                }
+                val expectedLicenseEntries =
+                    checksumEntries.map { (_, relative) -> "assets/licenses/$relative" }.toSet() +
+                        "assets/licenses/SHA256SUMS"
+                val actualLicenseEntries =
+                    entries.filter { entry -> entry.startsWith("assets/licenses/") && !entry.endsWith('/') }.toSet()
+                require(actualLicenseEntries == expectedLicenseEntries) {
+                    "release APK ${apk.name} license inventory does not match SHA256SUMS"
+                }
+                checksumEntries.forEach { (expected, relative) ->
+                    val entry = requireNotNull(zip.getEntry("assets/licenses/$relative")) {
+                        "license checksum references a missing APK asset: $relative"
+                    }
+                    val digest = MessageDigest.getInstance("SHA-256")
+                    val actual = zip.getInputStream(entry).use { input -> digest.digest(input.readBytes()) }
+                        .joinToString("") { byte -> "%02x".format(byte.toInt() and 0xff) }
+                    require(actual == expected) { "license asset checksum mismatch: $relative" }
+                }
             }
         }
     }
@@ -285,6 +381,7 @@ val publicReleaseNativeSymbolsArchive =
 val publicReleaseLocaleConfigFile =
     layout.buildDirectory.file("generated/res/localeConfig/publicRelease/xml/_generated_res_locale_config.xml")
 val filteredMainAssetsDir = layout.buildDirectory.dir("generated/filteredMainAssets")
+val generatedLicenseAssetsDir = layout.buildDirectory.dir("generated/licenseAssets")
 
 fun publicReleaseBundleFile(): File {
     val bundles =
@@ -304,20 +401,23 @@ val nativeBootstrapOffline =
 
 val prepareBundledI2pd = tasks.register("prepareBundledI2pd") {
     val buildI2pdScript = rootProject.file("scripts/build-i2pd.sh")
+    val nativeDepsScript = rootProject.file("scripts/native-deps.sh")
+    val i2pdPatches = rootProject.fileTree("scripts/patches") { include("i2pd-*.patch") }
     val i2pdLibraries = shippedAndroidAbis.map { abi -> file("src/main/jniLibs/$abi/libi2pd.so") }
 
-    inputs.file(buildI2pdScript)
+    inputs.files(buildI2pdScript, nativeDepsScript)
+    inputs.files(i2pdPatches)
     outputs.files(i2pdLibraries)
 
     doLast {
-        if (i2pdLibraries.all(File::isFile)) {
-            return@doLast
-        }
         require(buildI2pdScript.isFile) { "missing i2pd bootstrap script: ${buildI2pdScript.absolutePath}" }
         val process =
             ProcessBuilder(buildI2pdScript.absolutePath)
                 .directory(rootProject.projectDir)
-                .also { it.environment()["FOXHOLE_NATIVE_OFFLINE"] = if (nativeBootstrapOffline) "1" else "0" }
+                .also { builder ->
+                    builder.environment()["FOXHOLE_NATIVE_OFFLINE"] = if (nativeBootstrapOffline) "1" else "0"
+                    builder.environment()["I2PD_ABIS"] = shippedAndroidAbis.joinToString(" ")
+                }
                 .inheritIO()
                 .start()
         val exitCode = process.waitFor()
@@ -326,6 +426,29 @@ val prepareBundledI2pd = tasks.register("prepareBundledI2pd") {
         require(missing.isEmpty()) {
             "i2pd bootstrap did not produce: ${missing.joinToString { library -> library.path }}"
         }
+    }
+}
+
+val verifyBundledI2pdHostPaths = tasks.register("verifyBundledI2pdHostPaths") {
+    val verifyScript = rootProject.file("scripts/verify-native-host-paths.sh")
+    val i2pdLibraries = shippedAndroidAbis.map { abi -> file("src/main/jniLibs/$abi/libi2pd.so") }
+
+    group = "verification"
+    description = "Fail when a bundled i2pd binary embeds host-specific build paths."
+    dependsOn(prepareBundledI2pd)
+    inputs.file(verifyScript)
+    inputs.files(i2pdLibraries)
+
+    doLast {
+        require(verifyScript.isFile) { "missing native host-path verifier: ${verifyScript.absolutePath}" }
+        val command = listOf(verifyScript.absolutePath) + i2pdLibraries.map(File::getAbsolutePath)
+        val exitCode =
+            ProcessBuilder(command)
+                .directory(rootProject.projectDir)
+                .inheritIO()
+                .start()
+                .waitFor()
+        check(exitCode == 0) { "bundled i2pd host-path verification failed with exit code $exitCode" }
     }
 }
 
@@ -476,8 +599,54 @@ val preparePrivacyNativeLibs = tasks.register<Sync>("preparePrivacyNativeLibs") 
     into(layout.buildDirectory.dir("generated/privacyNativeLibs"))
 }
 
+val prepareBundledLicenseAssets = tasks.register("prepareBundledLicenseAssets") {
+    val generator = rootProject.file("scripts/generate-license-assets.py")
+    dependsOn(prepareBundledI2pd)
+    dependsOn(prepareBundledTorTransports)
+    inputs.files(
+        generator,
+        rootProject.file("LICENSE"),
+        rootProject.file("THIRD_PARTY_NOTICES.md"),
+        rootProject.file("scripts/native-deps.sh"),
+        rootProject.file("config/foxcore-revision.txt"),
+        rootProject.file("gradle/libs.versions.toml"),
+        fileTree(rootProject.file("third_party/fonts")),
+        fileTree(rootProject.file("third_party/flags")),
+        fileTree(rootProject.file("third_party/icons")),
+        fileTree(rootProject.file("third_party/licenses")),
+        fileTree(rootProject.file("third_party/tor-config")),
+        rootProject.file("third_party/i2pd.version"),
+        rootProject.file("third_party/i2pd/LICENSE"),
+        foxCoreSourceRoot.resolve("LICENSE"),
+        foxCoreSourceRoot.resolve("THIRD_PARTY_NOTICES.md"),
+        foxCoreSourceRoot.resolve("sbom/foxcore-aarch64-linux-android.cdx.json"),
+        rootProject.file("app/src/main/assets/tor/arm64-v8a/tor/pluggable_transports/lyrebird"),
+        rootProject.file("app/src/main/assets/tor/arm64-v8a/tor/pluggable_transports/conjure-client"),
+    )
+    outputs.dir(generatedLicenseAssetsDir)
+
+    doLast {
+        val output = generatedLicenseAssetsDir.get().asFile
+        delete(output)
+        val process =
+            ProcessBuilder(
+                "python3",
+                generator.absolutePath,
+                "--output",
+                output.absolutePath,
+                "--foxcore-root",
+                foxCoreSourceRoot.absolutePath,
+            ).directory(rootProject.projectDir)
+                .inheritIO()
+                .start()
+        val exitCode = process.waitFor()
+        check(exitCode == 0) { "license asset generator failed with exit code $exitCode" }
+    }
+}
+
 val prepareFilteredMainAssets = tasks.register<Sync>("prepareFilteredMainAssets") {
     dependsOn(prepareBundledTorTransports)
+    dependsOn(prepareBundledLicenseAssets)
     from("src/main/assets") {
         exclude("tor/**/tor/pluggable_transports/conjure-client")
         exclude("tor/**/tor/pluggable_transports/lyrebird")
@@ -491,17 +660,20 @@ val prepareFilteredMainAssets = tasks.register<Sync>("prepareFilteredMainAssets"
             segments.size > 1 && segments[0] == "tor" && segments[1] !in shipped
         }
     }
+    from(generatedLicenseAssetsDir) {
+        into("licenses")
+    }
     into(filteredMainAssetsDir)
 }
 
 tasks.matching { task -> task.name.endsWith("JniLibFolders") }.configureEach {
     dependsOn(preparePrivacyNativeLibs)
-    dependsOn(prepareBundledI2pd)
+    dependsOn(verifyBundledI2pdHostPaths)
     dependsOn(prepareFoxCoreNative)
 }
 
 tasks.matching { task -> task.name.startsWith("merge") && task.name.endsWith("NativeLibs") }.configureEach {
-    dependsOn(prepareBundledI2pd)
+    dependsOn(verifyBundledI2pdHostPaths)
     dependsOn(prepareFoxCoreNative)
 }
 
@@ -524,6 +696,12 @@ val verifyReleaseContainsBaselineProfile = tasks.register<VerifyReleaseBaselineP
     dependsOn("assembleRelease")
     apkDirectory.set(layout.buildDirectory.dir("outputs/apk/release"))
 }
+
+val verifyReleaseContainsLicenseAssets =
+    tasks.register<VerifyBundledLicenseAssetsInReleaseApkTask>("verifyReleaseContainsLicenseAssets") {
+        dependsOn("assembleRelease")
+        apkDirectory.set(layout.buildDirectory.dir("outputs/apk/release"))
+    }
 
 val verifyReleaseBuildConfigDefaults = tasks.register("verifyReleaseBuildConfigDefaults") {
     dependsOn("generateReleaseBuildConfig")
@@ -634,7 +812,7 @@ val collectPublicReleaseNativeSymbols = tasks.register<Zip>("collectPublicReleas
 
 val verifyReleaseSbom = tasks.register("verifyReleaseSbom") {
     group = "verification"
-    description = "Fail when the release SBOM is missing or does not include release-critical components."
+    description = "Fail when the release dependency inventory is missing or omits release-critical coordinates."
 
     if (rootProject.tasks.names.contains("cyclonedxBom")) {
         dependsOn(rootProject.tasks.named("cyclonedxBom"))
@@ -648,7 +826,6 @@ val verifyReleaseSbom = tasks.register("verifyReleaseSbom") {
         }
         val sbomFile = sbomJson.get().asFile
         require(sbomFile.isFile) { "Release SBOM is missing: ${sbomFile.absolutePath}" }
-        val sbom = sbomFile.readText()
         val sbomDocument = JsonSlurper().parse(sbomFile) as? Map<*, *>
         val sbomMetadata = sbomDocument?.get("metadata") as? Map<*, *>
         val sbomComponent = sbomMetadata?.get("component") as? Map<*, *>
@@ -659,13 +836,45 @@ val verifyReleaseSbom = tasks.register("verifyReleaseSbom") {
         require(sbomVersion == rootProject.version.toString()) {
             "Release SBOM metadata version $sbomVersion must match ${rootProject.version}"
         }
-        listOf(
-            "foxhole-android",
-            "sqlcipher-android",
-            "okhttp",
-            "zxing-android-embedded",
-        ).forEach { component ->
-            require(component in sbom) { "Release SBOM does not include required component: $component" }
+        val rawComponents = requireNotNull(sbomDocument?.get("components") as? List<*>) {
+            "Release SBOM has no dependency component array"
+        }
+        require(rawComponents.isNotEmpty()) { "Release SBOM has no dependency components" }
+        val inventory =
+            rawComponents.mapIndexed { index, rawComponent ->
+                val component = rawComponent as? Map<*, *>
+                    ?: error("Release SBOM component $index is not an object")
+                val reference = (component["bom-ref"] as? String).orEmpty()
+                val name = (component["name"] as? String).orEmpty()
+                val version = (component["version"] as? String).orEmpty()
+                val purl = (component["purl"] as? String).orEmpty()
+                require(reference.isNotBlank() && name.isNotBlank() && version.isNotBlank() && purl.isNotBlank()) {
+                    "Release SBOM component $index is missing bom-ref, name, version, or purl"
+                }
+                reference to Triple(name, version, purl)
+            }
+        require(inventory.map { (reference, _) -> reference }.distinct().size == inventory.size) {
+            "Release SBOM contains duplicate component references"
+        }
+        val requiredCoordinates =
+            mapOf(
+                "jna" to ("5.19.1" to "pkg:maven/net.java.dev.jna/jna@5.19.1"),
+                "lazysodium-android" to ("5.2.0" to "pkg:maven/com.goterl/lazysodium-android@5.2.0"),
+                "okhttp" to ("5.4.0" to "pkg:maven/com.squareup.okhttp3/okhttp@5.4.0"),
+                "sqlcipher-android" to ("4.17.0" to "pkg:maven/net.zetetic/sqlcipher-android@4.17.0"),
+                "zxing-android-embedded" to
+                    ("4.3.0" to "pkg:maven/com.journeyapps/zxing-android-embedded@4.3.0"),
+            )
+        requiredCoordinates.forEach { (requiredName, required) ->
+            val (requiredVersion, requiredPurl) = required
+            require(
+                inventory.any { (_, coordinate) ->
+                    val (name, version, purl) = coordinate
+                    name == requiredName && version == requiredVersion && purl.startsWith(requiredPurl)
+                },
+            ) {
+                "Release SBOM does not include required coordinate: $requiredName@$requiredVersion"
+            }
         }
     }
 }
@@ -677,6 +886,7 @@ val publicReleasePreflight = tasks.register("publicReleasePreflight") {
     dependsOn(
         "bundlePublicRelease",
         collectPublicReleaseNativeSymbols,
+        verifyBundledI2pdHostPaths,
         verifyPublicReleasePrivacy,
         verifyPublicReleaseNativeInventory,
         verifyReleaseSbom,
@@ -785,6 +995,7 @@ val verifyReleaseJniSurface = tasks.register("verifyReleaseJniSurface") {
 tasks.matching { task -> task.name == "assembleRelease" }.configureEach {
     finalizedBy(verifyReleaseContainsNativeRuntime)
     finalizedBy(verifyReleaseContainsBaselineProfile)
+    finalizedBy(verifyReleaseContainsLicenseAssets)
     finalizedBy(verifyReleaseBuildConfigDefaults)
     finalizedBy(verifyReleaseJniSurface)
 }
@@ -821,7 +1032,7 @@ android {
         applicationId = publicApplicationId
         minSdk = 26
         targetSdk = 37
-        versionCode = 90
+        versionCode = 117
         versionName = project.version.toString()
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
@@ -867,7 +1078,6 @@ android {
             buildConfigField("boolean", "ENABLE_STRICT_MODE", enableStrictMode.toString())
             if (!enableAbiSplitApks) {
                 ndk {
-                    // armeabi-v7a included: the exp test device (Realme RMX3690) is 32-bit only.
                     abiFilters += shippedAndroidAbis
                 }
             }
@@ -1211,7 +1421,6 @@ tasks.named("detekt") {
 }
 
 tasks.named("check") {
-    // Keep `check` from passing without running the analysis task.
     dependsOn("detekt")
     dependsOn("compileDebugAndroidTestKotlin")
 }

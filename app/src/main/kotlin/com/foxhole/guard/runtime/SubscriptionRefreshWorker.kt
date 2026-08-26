@@ -18,7 +18,6 @@ class SubscriptionRefreshWorker(
     override suspend fun doWork(): Result {
         val appGraph = (applicationContext as FoxholeApplication).appGraph
         if (appGraph.securityComponents.isDatabaseLockedForBackground()) {
-            // The DB (subscription profiles) is unreadable until the user unlocks; retry later.
             return Result.success()
         }
         val dependencies: FoxholeRefreshWorkerDependencies = appGraph

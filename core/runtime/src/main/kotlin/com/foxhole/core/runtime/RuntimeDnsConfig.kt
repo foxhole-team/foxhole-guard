@@ -45,9 +45,6 @@ internal fun buildFoxholeDnsConfig(
                     foxholeDirectDnsServer(),
                 )
                 if (includeRemote) {
-                    // The remote resolver rides the tunnel whenever DNS resolves through the VPN;
-                    // only an explicit opt-out (both toggles off) drops the detour. The standalone
-                    // tor-only runtime always forces the detour so apps can resolve over Tor.
                     val remoteDetour =
                         if (torSocksDetour) {
                             remoteDetourTag
@@ -63,9 +60,7 @@ internal fun buildFoxholeDnsConfig(
                             tunnelCarriesUdp = tunnelCarriesUdp,
                         ),
                     )
-                    // A tunnelled hostname-addressed resolver must resolve that hostname in-tunnel
-                    // too: add the IP-literal bootstrap resolver its domain_resolver points at, so
-                    // the bootstrap lookup does not leak on the underlying network.
+
                     if (remoteDetour != null &&
                         remoteResolverRequiresBootstrap(
                             dnsSettings,
@@ -102,9 +97,6 @@ internal data class ManagedDnsRoute(
     val includeRemote: Boolean,
 )
 
-// VPN_PROVIDER (default) and THROUGH_VPN both keep every query inside the tunnel. DIRECT is the
-// single explicit opt-out and the only mode that can leak plaintext DNS to the local network;
-// the UI gates it behind a confirmation.
 enum class DnsRouteMode {
     VPN_PROVIDER,
     THROUGH_VPN,
@@ -120,10 +112,6 @@ internal fun DnsSettings.dnsRouteMode(): DnsRouteMode =
 
 internal fun DnsSettings.resolvesThroughTunnel(): Boolean = dnsRouteMode() != DnsRouteMode.DIRECT
 
-// DNS is hijacked only when explicitly asked (intercept toggle, or "replace system DNS"). By
-// default an app querying a hard-coded resolver (8.8.8.8:53) has that packet carried through
-// the tunnel, not rewritten; system queries still hit the in-tunnel resolver via the TUN DNS
-// server, so nothing leaks off-tunnel.
 internal fun DnsSettings.shouldInterceptDns(): Boolean = interceptDnsRequests || replaceSystemDns
 
 internal fun managedDnsRoute(
@@ -137,8 +125,6 @@ internal fun managedDnsRoute(
     }
     val wireGuardSelected = selectedProxyEndpointType(base).equals("wireguard", ignoreCase = true)
     return when (dnsSettings.dnsRouteMode()) {
-        // Prefer the profile's own advertised resolver (a selected WireGuard endpoint pushes
-        // one), else the managed remote resolver. Either way DNS stays inside the VPN.
         DnsRouteMode.VPN_PROVIDER ->
             if (wireGuardSelected && wireGuardDnsPresent) {
                 ManagedDnsRoute(finalTag = WIREGUARD_DNS_TAG, includeRemote = true)
@@ -147,8 +133,7 @@ internal fun managedDnsRoute(
             }
         DnsRouteMode.THROUGH_VPN ->
             ManagedDnsRoute(finalTag = DNS_REMOTE_TAG, includeRemote = true)
-        // Explicit opt-out: resolve on the underlying network. A protected (DoH/DoT) resolver still
-        // resolves off-tunnel but stays encrypted; plain mode falls back to the system resolver.
+
         DnsRouteMode.DIRECT ->
             if (dnsSettings.secureMode == SecureDnsMode.PLAIN) {
                 ManagedDnsRoute(finalTag = DNS_DIRECT_TAG, includeRemote = dnsSettings.filteringEnabled)
@@ -189,14 +174,7 @@ internal fun foxholeDirectDnsServer(): JsonObject =
         put("type", "local")
     }
 
-// Deliberately NO per-app DNS rule for the VPN split. The sing-box-era assembler emitted one,
-// but FoxCore terminates DNS in ONE interceptor with ONE upstream lane (foxcore-tun/src/dns.rs):
-// the query is answered before any per-app decision exists, and the translator refuses the shape
-// (POLICY_UNREPRESENTABLE) — so EVERY config with a split was rejected before the tun was built
-// and the profile could not connect at all (Pixel: the include-split leg of
-// LiveApplicationSplitAndroidTest never reached CONNECTED). Stated cost: the split separates an
-// app's TRAFFIC, not its DNS — buildVpnSplitRouteRules remains the whole of the split.
-
+// No per-app DNS rule: FoxCore resolves before package attribution, so that policy is unrepresentable.
 internal fun DnsSettings.localGuardDnsSettings(forcePublicDoH: Boolean): DnsSettings =
     if (forcePublicDoH && secureMode == SecureDnsMode.PLAIN) {
         copy(
@@ -214,10 +192,7 @@ internal fun DnsSettings.torDetourSafeDnsSettings(
     torSocksDetour: Boolean = false,
     tunnelCarriesUdp: Boolean = true,
 ): DnsSettings =
-    // A plain UDP DNS query cannot survive an outbound that carries no UDP (ERR_NAME_NOT_RESOLVED
-    // for every app): upgrade the remote resolver to DoH, which rides any TCP outbound. Applies to
-    // the in-VPN Tor outbound, tor-only Tor SOCKS, AND a TCP-only proxy detour; a UDP-capable
-    // tunnel keeps the user's plain choice.
+
     if (secureMode == SecureDnsMode.PLAIN &&
         detourTag != null &&
         (detourTag == TOR_OVER_VPN_OUTBOUND_TAG || torSocksDetour || !tunnelCarriesUdp)
@@ -260,8 +235,7 @@ internal fun foxholeRemoteDnsServer(
             ?.takeIf { state -> state.mode == PrivateDnsMode.STRICT }
             ?.hostname
             ?.takeIf(String::isNotBlank)
-    // A tunnelled resolver bootstraps via the in-tunnel IP-literal resolver so its A/AAAA lookup
-    // is not leaked in cleartext; off-tunnel resolvers keep dns-direct.
+
     val bootstrapResolverTag = if (detourTag != null) DNS_BOOTSTRAP_TAG else DNS_DIRECT_TAG
     return buildJsonObject {
         put("tag", DNS_REMOTE_TAG)
@@ -287,8 +261,6 @@ internal fun foxholeRemoteDnsServer(
     }
 }
 
-// IP-literal DoH resolver pinned to the tunnel detour; only the domain_resolver bootstrap for a
-// tunnelled hostname-addressed upstream, keeping that lookup encrypted and in-tunnel.
 internal fun foxholeBootstrapDnsServer(detourTag: String): JsonObject =
     buildJsonObject {
         put("tag", DNS_BOOTSTRAP_TAG)
@@ -299,7 +271,6 @@ internal fun foxholeBootstrapDnsServer(detourTag: String): JsonObject =
         put("detour", detourTag)
     }
 
-// True when the tunnelled remote resolver is hostname-addressed and needs the bootstrap resolver.
 internal fun remoteResolverRequiresBootstrap(
     dnsSettings: DnsSettings,
     privateDnsState: PrivateDnsState?,
@@ -326,10 +297,7 @@ internal fun buildDnsRules(
         if (!dnsSettings.filteringEnabled) {
             return@buildList
         }
-        // A bypass only means something with a filter attached: FoxCore's schema has no shape for
-        // it outside a filtering config, so the translator refuses the whole document
-        // (POLICY_UNREPRESENTABLE on $.dns.rules) before the TUN exists and the profile cannot
-        // connect. Reachable from settings: filtering on, all categories off, one bypass entry.
+
         if (!dnsSettings.bundledAdGuardFilterEnabled() || dnsFilterRuntimePaths == null) {
             return@buildList
         }
@@ -379,8 +347,6 @@ internal fun buildDnsRules(
         run {
             val categoryRuleSets = dnsSettings.activeDnsFilterCategoryRuleSets(dnsFilterRuntimePaths)
             if (categoryRuleSets.isNotEmpty()) {
-                // One rule per category, in severity order: first match wins, so an overlapping
-                // domain logs the most severe category's tag.
                 categoryRuleSets.forEach { (tag, _) ->
                     add(
                         buildJsonObject {

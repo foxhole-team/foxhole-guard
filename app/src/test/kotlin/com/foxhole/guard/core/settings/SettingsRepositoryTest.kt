@@ -1,5 +1,6 @@
 package com.foxhole.guard.core.settings
 
+import com.foxhole.core.model.AccentColor
 import com.foxhole.core.model.AnomalySettings
 import com.foxhole.core.model.AppLocale
 import com.foxhole.core.model.AppTunnelLane
@@ -9,6 +10,7 @@ import com.foxhole.core.model.DashboardCard
 import com.foxhole.core.model.DiagnosticsRetention
 import com.foxhole.core.model.DnsSettings
 import com.foxhole.core.model.ExpertSettings
+import com.foxhole.core.model.HomeAdditionalInfoCategory
 import com.foxhole.core.model.I2pAddressBookEntry
 import com.foxhole.core.model.I2pSettings
 import com.foxhole.core.model.LatencyProbeMethod
@@ -356,6 +358,14 @@ internal class SettingsRepositoryTest : SettingsRepositoryTestSupport() {
             "https://example.org/rules/manifest.json",
             normalizeDnsFilterUpdateUrl("https://example.org/rules"),
         )
+        assertEquals(
+            "https://example.org/rules/manifest.json",
+            normalizeDnsFilterUpdateUrl("https://example.org/rules/manifest.json/manifest.json"),
+        )
+        assertEquals(
+            "https://example.org/rules/manifest.json",
+            normalizeDnsFilterUpdateUrl("https://example.org/rules/manifest.json/manifest.json/"),
+        )
     }
 
     @Test
@@ -369,6 +379,37 @@ internal class SettingsRepositoryTest : SettingsRepositoryTestSupport() {
         assertNull(parseOptionalStoredThemeMode(" "))
         assertNull(parseOptionalStoredThemeMode("BROKEN_THEME"))
         assertEquals(ThemeMode.DARK, parseOptionalStoredThemeMode("DARK"))
+        assertEquals(ThemeMode.OLED, parseOptionalStoredThemeMode(" oled "))
+    }
+
+    @Test
+    fun `fast appearance parsers accept canonical values case insensitively`() {
+        assertEquals(AccentColor.AUTO, parseFastAccentColor(" auto "))
+        assertEquals(AccentColor.GREEN, parseFastAccentColor("GREEN"))
+    }
+
+    @Test
+    fun `fast appearance parsers reject missing and unsupported values`() {
+        assertNull(parseFastAccentColor(null))
+        assertNull(parseFastAccentColor("BROKEN_ACCENT"))
+    }
+
+    @Test
+    fun `fast ui snapshot retires the legacy visual style key`() {
+        val source = listOf(
+            java.io.File("src/main/kotlin/com/foxhole/guard/core/settings/SettingsFastUiStore.kt"),
+            java.io.File("app/src/main/kotlin/com/foxhole/guard/core/settings/SettingsFastUiStore.kt"),
+            java.io.File("../app/src/main/kotlin/com/foxhole/guard/core/settings/SettingsFastUiStore.kt"),
+        ).first(java.io.File::isFile).readText()
+
+        assertTrue(source.contains("remove(RETIRED_VISUAL_STYLE_KEY)"))
+        assertTrue(source.contains("RETIRED_VISUAL_STYLE_KEY = \"visual_style\""))
+        assertTrue(source.contains("putBoolean(FAST_PIXEL_ART_ENABLED_KEY, value.pixelArtEnabled)"))
+        assertTrue(
+            source.contains(
+                "putBoolean(FAST_STATISTICS_DOCK_ICON_ENABLED_KEY, value.statisticsDockIconEnabled)",
+            ),
+        )
     }
 
     @Test
@@ -405,6 +446,20 @@ internal class SettingsRepositoryTest : SettingsRepositoryTestSupport() {
     }
 
     @Test
+    fun `fast home additional info category parser is case tolerant and fails closed`() {
+        assertEquals(
+            HomeAdditionalInfoCategory.MAP,
+            parseFastHomeAdditionalInfoCategory(" map "),
+        )
+        assertEquals(
+            HomeAdditionalInfoCategory.ROUTE,
+            parseFastHomeAdditionalInfoCategory("ROUTE"),
+        )
+        assertNull(parseFastHomeAdditionalInfoCategory(null))
+        assertNull(parseFastHomeAdditionalInfoCategory("BROKEN"))
+    }
+
+    @Test
     fun `support bot handle must match telegram bot pattern`() {
         assertEquals("@foxhole_support_bot", normalizeSupportBotHandle("  @foxhole_support_bot "))
         assertNull(normalizeSupportBotHandle("foxhole_support_bot"))
@@ -430,10 +485,10 @@ internal class SettingsRepositoryTest : SettingsRepositoryTestSupport() {
     }
 
     @Test
-    fun `keeps supported stored theme mode unchanged in payload`() {
+    fun `keeps the OLED theme mode in stored payload`() {
         assertEquals(
-            """{"ui":{"themeMode":"LIGHT"}}""",
-            sanitizeStoredThemeModePayload("""{"ui":{"themeMode":"LIGHT"}}"""),
+            """{"ui":{"themeMode":"OLED"}}""",
+            sanitizeStoredThemeModePayload("""{"ui":{"themeMode":"OLED"}}"""),
         )
     }
 
@@ -443,9 +498,46 @@ internal class SettingsRepositoryTest : SettingsRepositoryTestSupport() {
     }
 
     @Test
-    fun `ui defaults to system theme and hidden expert settings`() {
-        assertEquals(ThemeMode.SYSTEM, Settings().ui.themeMode)
+    fun `ui defaults to dark theme and hidden expert settings`() {
+        assertEquals(ThemeMode.DARK, Settings().ui.themeMode)
+        assertEquals(AccentColor.ORANGE, Settings().ui.accentColor)
         assertFalse(Settings().ui.showExpertSettings)
+    }
+
+    @Test
+    fun `upgrading an older settings schema keeps the selected theme and accent`() {
+        val normalized =
+            Settings(
+                schemaVersion = 15,
+                ui = UiSettings(themeMode = ThemeMode.LIGHT, accentColor = AccentColor.PINK),
+            ).normalized()
+
+        assertEquals(ThemeMode.LIGHT, normalized.ui.themeMode)
+        assertEquals(AccentColor.PINK, normalized.ui.accentColor)
+    }
+
+    @Test
+    fun `canonical settings always store the selected theme explicitly`() {
+        val darkPayload = ensureStoredThemeModePayload("{}", ThemeMode.DARK)
+        val lightPayload = ensureStoredThemeModePayload(
+            """{"ui":{"locale":"RU"}}""",
+            ThemeMode.LIGHT,
+        )
+
+        assertEquals(ThemeMode.DARK, json.decodeFromString<Settings>(darkPayload).ui.themeMode)
+        assertEquals(ThemeMode.LIGHT, json.decodeFromString<Settings>(lightPayload).ui.themeMode)
+        assertEquals(AppLocale.RU, json.decodeFromString<Settings>(lightPayload).ui.locale)
+        assertTrue(darkPayload.contains("\"themeMode\":\"DARK\""))
+        assertTrue(lightPayload.contains("\"themeMode\":\"LIGHT\""))
+    }
+
+    @Test
+    fun `missing current theme uses dark while explicit legacy appearance still migrates`() {
+        val current = sanitizeStoredThemeModePayload("""{"ui":{"locale":"RU"}}""")
+        val legacy = sanitizeStoredThemeModePayload("""{"ui":{"panelAppearance":"AUTO"}}""")
+
+        assertEquals(ThemeMode.DARK, json.decodeFromString<Settings>(current).ui.themeMode)
+        assertEquals(ThemeMode.SYSTEM, json.decodeFromString<Settings>(legacy).ui.themeMode)
     }
 
     @Test

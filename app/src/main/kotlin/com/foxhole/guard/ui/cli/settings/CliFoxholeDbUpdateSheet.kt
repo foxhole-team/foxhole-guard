@@ -4,7 +4,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import com.foxhole.guard.R
@@ -17,7 +16,6 @@ import com.foxhole.guard.ui.cli.components.CliSheetAction
 import com.foxhole.guard.ui.cli.components.CliSheetActionsRow
 import com.foxhole.guard.ui.cli.components.CliToggleRow
 import com.foxhole.guard.ui.isRunning
-import kotlinx.coroutines.delay
 
 @Composable
 internal fun CliFoxholeDbUpdateSheet(
@@ -30,17 +28,14 @@ internal fun CliFoxholeDbUpdateSheet(
     phase: FoxholeUpdatePhase = FoxholeUpdatePhase.IDLE,
 ) {
     val colors = LocalCliColors.current
-    LaunchedEffect(phase) {
-        if (phase == FoxholeUpdatePhase.DONE || phase == FoxholeUpdatePhase.NO_UPDATE) {
-            delay(FOXHOLE_UPDATE_SUCCESS_HOLD_MS)
-            onDismiss()
-        }
-    }
     CliBottomSheet(
         onDismiss = onDismiss,
         modifier = modifier,
         title = stringResource(R.string.cli_foxdb_sheet_title),
-        icon = R.drawable.pix_update,
+        icon = R.drawable.lin_update,
+        autoDismissAfterMillis = FOXHOLE_UPDATE_SUCCESS_HOLD_MS.takeIf {
+            phase == FoxholeUpdatePhase.DONE || phase == FoxholeUpdatePhase.NO_UPDATE
+        },
     ) {
         Text(
             text = stringResource(R.string.cli_foxdb_sheet_body, groupLabel),
@@ -50,7 +45,7 @@ internal fun CliFoxholeDbUpdateSheet(
         Spacer(modifier = Modifier.height(CliSpacing.xs))
         CliToggleRow(
             label = stringResource(R.string.cli_foxdb_sheet_auto),
-            icon = R.drawable.pix_restart,
+            icon = R.drawable.lin_restart,
             checked = autoUpdateEnabled,
             onToggle = onAutoUpdateChange,
             note = stringResource(R.string.cli_foxdb_sheet_auto_note),
@@ -61,7 +56,6 @@ internal fun CliFoxholeDbUpdateSheet(
             Spacer(modifier = Modifier.height(CliSpacing.sm))
         }
         CliSheetActionsRow(
-            onCancel = onDismiss,
             actions = listOf(
                 CliSheetAction(
                     label = stringResource(R.string.cli_foxdb_sheet_download),

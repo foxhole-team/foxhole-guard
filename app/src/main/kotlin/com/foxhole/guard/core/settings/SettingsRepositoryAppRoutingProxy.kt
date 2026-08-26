@@ -14,9 +14,6 @@ import com.foxhole.core.model.withBlockedSelection
 import com.foxhole.core.model.withTunnelSelection
 import com.foxhole.guard.BuildConfig
 
-// Per-app routing, proxy surfaces, local auth and reset/clear operations. Extracted from
-// SettingsRepository (class split by domain).
-
 suspend fun SettingsRepository.updatePerAppRoutingMode(value: PerAppRoutingMode) =
     update { current ->
         val nextMode =
@@ -36,11 +33,6 @@ suspend fun SettingsRepository.updatePerAppRoutingMode(value: PerAppRoutingMode)
         )
     }
 
-/**
- * Commits the VPN scenario dropdown as one encrypted-settings mutation. In particular, leaving the
- * device-local proxy and changing the tunnel reach cannot expose an intermediate half-scenario to
- * observers or the runtime reload coordinator.
- */
 suspend fun SettingsRepository.updateVpnRoutingScenario(
     perAppRoutingMode: PerAppRoutingMode,
     localHttpProxyEnabled: Boolean,
@@ -86,11 +78,7 @@ suspend fun SettingsRepository.updateSelectedPackages(value: List<String>) =
                 .distinct()
         val nextMode = selectedPackagesRoutingMode(it.expert.perAppRoutingMode, normalizedSelectedPackages)
         it.copy(
-            // Selecting apps is an expert customization: safe mode must end, or normalized() (applied
-            // by update() before persisting) drops the non-BLOCK lane assignments and resets
-            // perAppRoutingMode — after which the write usually equals the previous state and is
-            // skipped entirely, losing the selection on relaunch. An empty selection customizes
-            // nothing, so it may stay in safe mode.
+
             connection =
             it.connection.copy(
                 safeModeEnabled = it.connection.safeModeEnabled && normalizedSelectedPackages.isEmpty(),
@@ -138,10 +126,7 @@ internal fun Settings.withBlockAppsAlways(value: Boolean): Settings =
         connection = connection.copy(safeModeEnabled = connection.safeModeEnabled && !value),
         expert =
         expert.copy(
-            // Enabling the standalone rule also arms its enforcement host in this SAME
-            // encrypted-settings transaction. Publishing firewall=true first and the rule
-            // second exposed a half-scenario to observers, despite rule edits being promised
-            // as unconditionally atomic.
+
             firewallEnabled = expert.firewallEnabled || value,
             blockAppsAlways = value && expert.blockedPackagesEnabled && expert.blockedLanePackages().isNotEmpty(),
         ),
@@ -229,10 +214,6 @@ suspend fun SettingsRepository.updateLocalProxyAuth(value: LocalAuthSettings) =
         )
     }
 
-// NB: there is deliberately no `updateLanProxyAuthEnabled`. LAN proxy auth is mandatory — the
-// runtime forces it on in `mandatoryLanProxyAuthOrNull` (RuntimeLocalSurface.kt) and normalization
-// keeps it enabled, so a setter that could flip it off would only ever produce an unauthenticated
-// LAN listener. The UI toggle was removed for the same reason.
 suspend fun SettingsRepository.updateLanProxyAuth(value: LocalAuthSettings) =
     update {
         it.copy(
@@ -251,8 +232,7 @@ suspend fun SettingsRepository.updateLocalProxyLanAccessEnabled(value: Boolean) 
     update {
         it.copy(
             connection = it.connection.copy(safeModeEnabled = it.connection.safeModeEnabled && !value),
-            // Turning the LAN proxy on reveals its quick-access pill; turning it off leaves the pill
-            // (its visibility is owned by the show flag, so the user can re-arm from it).
+
             ui = if (value) it.ui.copy(showLanProxyQuickAccess = true) else it.ui,
             expert =
             it.expert.copy(

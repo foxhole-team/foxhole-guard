@@ -262,7 +262,7 @@ fun HomeViewModel.onConfirmSensitiveActionsChanged(enabled: Boolean) {
             journalSecuritySettingChange("confirmActions", (!enabled).toString(), enabled.toString())
         }
     }
-    // Turning the gate itself off must pass through the gate one last time.
+
     if (enabled) apply() else runConfirmedAction(apply)
 }
 

@@ -11,9 +11,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -26,13 +24,12 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import com.foxhole.core.model.VisualStyle
 import com.foxhole.guard.R
 import com.foxhole.guard.ui.cli.CliIconSize
+import com.foxhole.guard.ui.cli.CliRadius
 import com.foxhole.guard.ui.cli.CliSpacing
 import com.foxhole.guard.ui.cli.CliType
 import com.foxhole.guard.ui.cli.LocalCliColors
-import com.foxhole.guard.ui.cli.LocalCliVisualStyle
 import com.foxhole.guard.ui.cli.cliLabelText
 import com.foxhole.guard.ui.cli.cliRowTextStyle
 
@@ -50,6 +47,8 @@ internal fun CliKeyValue(
     valueContent: (@Composable () -> Unit)? = null,
     animateValue: Boolean = false,
     valueMaxLines: Int = 1,
+    keyColumnWeight: Float = 1f,
+    valueColumnWeight: Float = 1f,
 ) {
     val colors = LocalCliColors.current
     Row(
@@ -60,14 +59,14 @@ internal fun CliKeyValue(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Row(
-            modifier = Modifier.weight(1f, fill = false),
+            modifier = Modifier.weight(keyColumnWeight, fill = false),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             if (icon != null) {
-                CliPixIcon(
+                CliIcon(
                     id = icon,
                     contentDescription = null,
-                    size = 12.dp,
+                    size = CLI_KEY_VALUE_ICON_SIZE,
                     tint = if (iconColor == Color.Unspecified) colors.dim else iconColor,
                 )
                 Spacer(modifier = Modifier.width(6.dp))
@@ -81,7 +80,7 @@ internal fun CliKeyValue(
             )
         }
         Row(
-            modifier = Modifier.weight(1f, fill = false),
+            modifier = Modifier.weight(valueColumnWeight, fill = false),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             if (valueContent != null) {
@@ -122,10 +121,11 @@ internal fun CliKeyValue(
     }
 }
 
+internal val CLI_KEY_VALUE_ICON_SIZE = 16.dp
+
 @Composable
 @ReadOnlyComposable
 private fun cliKeyLabelText(key: String): String {
-    if (LocalCliVisualStyle.current != VisualStyle.PLAIN) return key
     val capital = key.replaceFirstChar { char -> char.uppercaseChar() }
     return if (capital.isEmpty() || capital.endsWith(":")) capital else "$capital:"
 }
@@ -139,7 +139,7 @@ internal fun CliElbowLine(
     val colors = LocalCliColors.current
     CliInfoLine(
         text = text,
-        color = if (color == Color.Unspecified) colors.note else color,
+        color = if (color == Color.Unspecified) colors.info else color,
         maxLines = 2,
         modifier = modifier,
     )
@@ -152,8 +152,8 @@ internal fun CliInfoNote(
 ) {
     val colors = LocalCliColors.current
     Column(modifier = modifier.fillMaxWidth()) {
-        CliRowDivider(color = colors.note)
-        CliInfoLine(text = text, color = colors.note, maxLines = 3)
+        CliRowDivider(color = colors.info)
+        CliInfoLine(text = text, color = colors.info, maxLines = 3)
     }
 }
 
@@ -161,20 +161,17 @@ internal fun CliInfoNote(
 internal fun CliDashedInfoNote(
     text: String,
     modifier: Modifier = Modifier,
-    @DrawableRes icon: Int = R.drawable.pix_info,
+    @DrawableRes icon: Int = R.drawable.lin_info,
     outerVerticalPadding: Dp = CliSpacing.xs,
     centered: Boolean = false,
     centeredIconLeading: Boolean = false,
     centeredIconFirstLine: Boolean = false,
+    centeredIconGap: Dp = CliSpacing.sm,
     color: Color = Color.Unspecified,
 ) {
     val colors = LocalCliColors.current
-    val noteColor = if (color == Color.Unspecified) colors.note else color
-    val frame = if (LocalCliVisualStyle.current == VisualStyle.PLAIN) {
-        Modifier.border(1.dp, noteColor.copy(alpha = 0.6f), RoundedCornerShape(8.dp))
-    } else {
-        Modifier.cliDashedBorder(noteColor)
-    }
+    val noteColor = if (color == Color.Unspecified) colors.info else color
+    val frame = Modifier.border(1.dp, noteColor.copy(alpha = 0.6f), RoundedCornerShape(CliRadius.panel))
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -189,15 +186,15 @@ internal fun CliDashedInfoNote(
                 icon = icon,
                 iconLeading = centeredIconLeading,
                 iconFirstLine = centeredIconFirstLine,
+                iconGap = centeredIconGap,
             )
         } else {
             Row(verticalAlignment = Alignment.Top) {
-                CliPixIcon(
+                CliFirstLineIcon(
                     id = icon,
-                    contentDescription = null,
                     size = CliIconSize.note,
+                    lineHeight = CliType.small.lineHeight,
                     tint = noteColor,
-                    modifier = Modifier.offset(y = 1.dp),
                 )
                 Spacer(modifier = Modifier.width(CliSpacing.sm))
                 Text(
@@ -224,7 +221,7 @@ internal fun CliCenteredEmptyNote(
     ) {
         CliCenteredInfoBlock(
             text = text,
-            color = if (color == Color.Unspecified) colors.note else color,
+            color = if (color == Color.Unspecified) colors.info else color,
         )
     }
 }
@@ -233,9 +230,10 @@ internal fun CliCenteredEmptyNote(
 private fun CliCenteredInfoBlock(
     text: String,
     color: Color,
-    @DrawableRes icon: Int = R.drawable.pix_info,
+    @DrawableRes icon: Int = R.drawable.lin_info,
     iconLeading: Boolean = false,
     iconFirstLine: Boolean = false,
+    iconGap: Dp = CliSpacing.sm,
 ) {
     if (iconLeading) {
         Row(
@@ -243,14 +241,22 @@ private fun CliCenteredInfoBlock(
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = if (iconFirstLine) Alignment.Top else Alignment.CenterVertically,
         ) {
-            CliPixIcon(
-                id = icon,
-                contentDescription = null,
-                size = CliIconSize.note,
-                tint = color,
-                modifier = if (iconFirstLine) Modifier.offset(y = 1.dp) else Modifier,
-            )
-            Spacer(modifier = Modifier.width(CliSpacing.sm))
+            if (iconFirstLine) {
+                CliFirstLineIcon(
+                    id = icon,
+                    size = CliIconSize.note,
+                    lineHeight = CliType.small.lineHeight,
+                    tint = color,
+                )
+            } else {
+                CliIcon(
+                    id = icon,
+                    contentDescription = null,
+                    size = CliIconSize.note,
+                    tint = color,
+                )
+            }
+            Spacer(modifier = Modifier.width(iconGap))
             Text(
                 text = cliLabelText(text),
                 style = CliType.small,
@@ -264,7 +270,7 @@ private fun CliCenteredInfoBlock(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        CliPixIcon(
+        CliIcon(
             id = icon,
             contentDescription = null,
             size = CliIconSize.note,
@@ -287,17 +293,15 @@ private fun CliInfoLine(
     maxLines: Int,
     modifier: Modifier = Modifier,
 ) {
-    val plain = LocalCliVisualStyle.current == VisualStyle.PLAIN
     Row(
         modifier = modifier.padding(vertical = CLI_INFO_LINE_VERTICAL_PADDING),
         verticalAlignment = Alignment.Top,
     ) {
-        CliPixIcon(
-            id = R.drawable.pix_info,
-            contentDescription = null,
+        CliFirstLineIcon(
+            id = R.drawable.lin_info,
             size = CliIconSize.glyph,
+            lineHeight = CliType.small.lineHeight,
             tint = color,
-            modifier = Modifier.offset(y = if (plain) 2.dp else (-1).dp),
         )
         Spacer(modifier = Modifier.width(CliSpacing.xs))
         Text(

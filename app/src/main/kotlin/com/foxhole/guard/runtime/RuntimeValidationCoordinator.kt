@@ -137,12 +137,6 @@ internal suspend fun FoxholeVpnService.tryAcceptEarlyValidatedVpnLiteralEndpoint
     context: TunnelValidationPolicyContext,
     session: VpnSession? = null,
 ): Boolean {
-    // The policy carries no rule for VALIDATED_VPN_LITERAL_IP_ENDPOINT, so `accepts` falls through
-    // to its fail-closed `?: false` and the predicate below can never become true. Without this
-    // guard every UDP-profile validation spent the whole early window polling a condition that
-    // structurally could not fire — 900 ms of latency on connect, bought for nothing. The check is
-    // deliberately a policy question rather than a hard `return false`: add a rule for the kind and
-    // the fast path comes back to life on its own.
     if (!acceptsTunnelValidationProbe(TunnelValidationProbeKind.VALIDATED_VPN_LITERAL_IP_ENDPOINT, context)) {
         return false
     }
@@ -431,9 +425,6 @@ internal suspend fun FoxholeVpnService.refreshValidatedTunnelIpInfoBestEffortInt
                     bridgeWriter.updateIpInfo(info)
                     container.diagnosticsLogger.record("ip", "validated tunnel ip refresh published to dashboard")
                 } else if (info.isDistinctTorRouteExit(FoxholeVpnRuntimeBridge.ipInfo.value)) {
-                    // Held out of the VPN dashboard IP because Tor is over the VPN: this validated
-                    // exit (probed through tunnel -> runtime -> Tor) is the real Tor exit, so route it
-                    // to the dedicated Tor channel for the map instead of dropping it.
                     bridgeWriter.updateTorRouteIpInfo(info)
                     container.diagnosticsLogger.record(
                         "ip",
@@ -484,12 +475,11 @@ internal fun FoxholeVpnService.onConnectionStartedInternal(
             protocolHint = session.protocolHint,
             protocolOptionId = session.protocolOptionId,
             torActive = session.torActive,
+            appliedTorRoute = session.appliedTorRoute,
             message = previousSnapshot.message
                 .takeIf { previousSnapshot.isSmartStartConnection && it == analysisStatus },
             isSmartStartConnection = previousSnapshot.isSmartStartConnection,
-            // The accepted IP belongs to this transition generation. Preserve its boundary when
-            // validation commits the session, otherwise the just-published identity is instantly
-            // classified as stale against a newer timestamp.
+
             lastChangeAt = previousSnapshot.lastChangeAt,
         ),
         refreshLastChangeAt = refreshLastChangeAt,
@@ -522,11 +512,6 @@ internal fun FoxholeVpnService.onTunnelValidatedInternal(
     activeVpnNetworkHandle = vpnNetwork.networkHandle
     registerVpnNetworkCallbackIfNeeded()
     if (snapshot.state != ConnectionState.CONNECTED || snapshot.inPlaceRuntimeReload) {
-        // A validated hot replacement is still CONNECTED by design. Commit its session and clear
-        // the in-place marker; otherwise the old session-shaped snapshot survives indefinitely.
-        // Validation has just published identity stamped after the original CONNECTING/hot-apply
-        // boundary. Preserve that boundary or the dashboard immediately rejects the new IpInfo as
-        // stale by a few milliseconds.
         onConnectionStarted(session, TrafficMode.TUNNEL, refreshLastChangeAt = false)
     }
     startI2pdReadinessProbe(
@@ -535,8 +520,7 @@ internal fun FoxholeVpnService.onTunnelValidatedInternal(
         vpnNetwork = vpnNetwork,
     )
     startGeoRefresh()
-    // VPN-first Tor ordering: a session that deferred its in-tunnel Tor route engages it now,
-    // after the tunnel has proven itself (and the network widget got its VPN identity window).
+
     scheduleDeferredTorRouteUpgrade(session)
 }
 

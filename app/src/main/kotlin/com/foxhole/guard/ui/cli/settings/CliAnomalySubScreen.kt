@@ -48,14 +48,15 @@ import com.foxhole.guard.ui.cli.LocalCliBottomChromeClearance
 import com.foxhole.guard.ui.cli.LocalCliColors
 import com.foxhole.guard.ui.cli.cliScaledDp
 import com.foxhole.guard.ui.cli.components.CLI_DISCLOSURE_GLYPH_SIZE
+import com.foxhole.guard.ui.cli.components.CLI_MENU_ROW_MIN_HEIGHT
 import com.foxhole.guard.ui.cli.components.CliBottomSheet
 import com.foxhole.guard.ui.cli.components.CliDisclosureGlyph
 import com.foxhole.guard.ui.cli.components.CliDropdownOption
 import com.foxhole.guard.ui.cli.components.CliDropdownRow
 import com.foxhole.guard.ui.cli.components.CliElbowLine
+import com.foxhole.guard.ui.cli.components.CliIcon
 import com.foxhole.guard.ui.cli.components.CliKeyValue
 import com.foxhole.guard.ui.cli.components.CliPanel
-import com.foxhole.guard.ui.cli.components.CliPixIcon
 import com.foxhole.guard.ui.cli.components.CliRowDivider
 import com.foxhole.guard.ui.cli.components.CliScreenHeader
 import com.foxhole.guard.ui.cli.components.CliToggleRow
@@ -95,7 +96,7 @@ internal fun CliAnomalySubScreen(
             .fillMaxSize()
             .padding(horizontal = CliSpacing.md),
     ) {
-        CliScreenHeader(label = stringResource(R.string.cli_cfg_more_anomaly), icon = R.drawable.pix_shield)
+        CliScreenHeader(label = stringResource(R.string.cli_cfg_more_anomaly), icon = R.drawable.lin_shield)
 
         Column(
 
@@ -107,12 +108,12 @@ internal fun CliAnomalySubScreen(
         ) {
             CliPanel(
                 title = stringResource(R.string.cli_anomaly_monitoring_title),
-                icon = R.drawable.pix_status,
+                icon = R.drawable.lin_status,
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 CliToggleRow(
                     label = stringResource(R.string.cli_anomaly_monitor_installs),
-                    icon = R.drawable.pix_journal,
+                    icon = R.drawable.lin_journal,
                     checked = settings.statistics.enabled && settings.statistics.appChangesEnabled,
                     onToggle = viewModel::onInstalledAppMonitoringChanged,
                 )
@@ -129,19 +130,19 @@ internal fun CliAnomalySubScreen(
             )
             Spacer(modifier = Modifier.height(CliSpacing.sm))
             CliPanel(
-                icon = R.drawable.pix_shield,
+                icon = R.drawable.lin_shield,
                 title = stringResource(R.string.cli_anomaly_title),
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 CliToggleRow(
                     label = stringResource(R.string.cli_anomaly_notify),
-                    icon = R.drawable.pix_info,
+                    icon = R.drawable.lin_info,
                     checked = settings.anomaly.notifyUnusualTraffic,
                     onToggle = viewModel::onNotifyUnusualTrafficChanged,
                 )
                 CliDropdownRow(
                     label = stringResource(R.string.cli_anomaly_sensitivity),
-                    icon = R.drawable.pix_up,
+                    icon = R.drawable.lin_up,
                     value = settings.anomaly.sensitivity.name.lowercase(),
                     options = AnomalySensitivity.entries.map { sensitivity ->
                         CliDropdownOption(id = sensitivity.name, label = sensitivity.name.lowercase())
@@ -153,19 +154,19 @@ internal fun CliAnomalySubScreen(
                 )
                 CliToggleRow(
                     label = stringResource(R.string.cli_anomaly_background),
-                    icon = R.drawable.pix_apps,
+                    icon = R.drawable.lin_apps,
                     checked = settings.anomaly.analyzeBackgroundTraffic,
                     onToggle = viewModel::onAnalyzeBackgroundTrafficChanged,
                 )
                 CliToggleRow(
                     label = stringResource(R.string.cli_anomaly_countries),
-                    icon = R.drawable.pix_map,
+                    icon = R.drawable.lin_map,
                     checked = settings.anomaly.analyzeDestinationCountries,
                     onToggle = viewModel::onAnalyzeDestinationCountriesChanged,
                 )
                 CliDropdownRow(
                     label = stringResource(R.string.cli_anomaly_retention),
-                    icon = R.drawable.pix_clock,
+                    icon = R.drawable.lin_clock,
                     value = retentionLabel(settings.anomaly.historyRetention),
                     options = AnomalyHistoryRetention.entries.map { retention ->
                         CliDropdownOption(id = retention.name, label = retentionLabel(retention))
@@ -258,7 +259,7 @@ private fun SentinelObservedAppRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .defaultMinSize(minHeight = 48.dp)
+            .defaultMinSize(minHeight = CLI_MENU_ROW_MIN_HEIGHT)
             .cliPressable(enabled = app != null, onClick = onSelect),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -306,12 +307,12 @@ private fun SentinelAppDetailSheet(
     CliBottomSheet(
         onDismiss = onDismiss,
         title = app.label,
-        icon = R.drawable.pix_apps,
+        icon = R.drawable.lin_apps,
     ) {
         CliKeyValue(
             key = stringResource(R.string.cli_sentinel_apps),
             value = app.label,
-            icon = R.drawable.pix_apps,
+            icon = R.drawable.lin_apps,
             valueLeading = {
                 SentinelAppIcon(
                     packageName = app.packageName,
@@ -324,21 +325,21 @@ private fun SentinelAppDetailSheet(
         CliKeyValue(
             key = stringResource(R.string.cli_sentinel_apps_package),
             value = app.packageName,
-            icon = R.drawable.pix_link,
+            icon = R.drawable.lin_link,
         )
         CliRowDivider()
         CliKeyValue(
             key = stringResource(R.string.cli_sentinel_apps_installed),
             value = sentinelLongDate(app.firstInstallTime),
             valueColor = colors.fg,
-            icon = R.drawable.pix_clock,
+            icon = R.drawable.lin_clock,
         )
         CliRowDivider()
         CliKeyValue(
             key = stringResource(R.string.cli_sentinel_apps_source),
             value = app.installerPackageName
                 ?: stringResource(R.string.installed_app_source_unknown),
-            icon = R.drawable.pix_import,
+            icon = R.drawable.lin_import,
         )
     }
 }
@@ -363,7 +364,7 @@ private fun SentinelDetectionsTable(
     val installed = remember(installedApps) { installedApps.associateBy(InstalledAppOption::packageName) }
     CliPanel(
         title = stringResource(R.string.cli_sentinel_detections_title),
-        icon = R.drawable.pix_status,
+        icon = R.drawable.lin_status,
         modifier = Modifier.fillMaxWidth(),
     ) {
         if (events.isEmpty()) {
@@ -480,8 +481,8 @@ private fun SentinelAppIcon(
             contentScale = ContentScale.Fit,
         )
     } else {
-        CliPixIcon(
-            id = R.drawable.pix_apps,
+        CliIcon(
+            id = R.drawable.lin_apps,
             contentDescription = app?.label ?: packageName,
             size = size,
             tint = colors.dim,

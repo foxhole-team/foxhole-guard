@@ -43,6 +43,7 @@ internal fun OkHttpClient.withBoundedRemoteFetchTimeouts(
         .callTimeout(callTimeoutMs.coerceAtLeast(1L), TimeUnit.MILLISECONDS)
         .build()
 
+// Revalidate and resolve every redirect so a public entry URL can never pivot to a private host.
 internal fun executeBoundedPublicGet(
     client: OkHttpClient,
     initialUrl: HttpUrl,
@@ -50,8 +51,7 @@ internal fun executeBoundedPublicGet(
     maxBytes: Long,
     maxRedirects: Int = REMOTE_FETCH_MAX_REDIRECTS,
     resolver: RemoteHostResolver? = null,
-    // For "read the start of the document" (a web app's <head>): an oversized body is truncated
-    // rather than failing the request. Subscriptions keep false, where overflow is a refusal.
+
     truncateOversizedBody: Boolean = false,
     requestFactory: (HttpUrl) -> Request,
 ): BoundedPublicHttpResponse {
@@ -94,11 +94,6 @@ internal fun executeBoundedPublicGet(
     error("too many redirects")
 }
 
-/**
- * Coroutine-aware twin used by the mandatory subscription refresh before a connection. Cancelling
- * the runtime command cancels the active OkHttp call, including a blocked response-body read, so a
- * STOP command never has to wait for the remote call timeout.
- */
 internal suspend fun executeBoundedPublicGetCancellable(
     client: OkHttpClient,
     initialUrl: HttpUrl,
@@ -190,7 +185,6 @@ private suspend fun OkHttpClient.executeCancellable(
         )
     }
 
-/** Small seam that makes the STOP -> Call.cancel contract executable without a live socket. */
 internal suspend fun <T> awaitCancellableHttpCall(
     cancelCall: () -> Unit,
     startCall: (((Result<T>) -> Unit) -> Unit),
@@ -200,9 +194,6 @@ internal suspend fun <T> awaitCancellableHttpCall(
         startCall(continuation::resumeWith)
     }
 
-// The binary twin of executeBoundedPublicGet, for web-app icons: same SSRF guard and body cap, but
-// the body comes back as bytes, since readUtf8Capped would corrupt a binary. The redirect loop is
-// duplicated deliberately — generalising the text path would touch audited security code.
 internal fun executeBoundedPublicGetBytes(
     client: OkHttpClient,
     initialUrl: HttpUrl,
@@ -277,8 +268,6 @@ internal fun ResponseBody.readBytesCapped(maxBytes: Long): ByteArray {
     return buffer.readByteArray()
 }
 
-// Reads at most maxBytes and stops silently on overflow, unlike readUtf8Capped which throws. For
-// web-app previews only <head> is needed, and a full page can be enormous.
 internal fun ResponseBody.readUtf8Truncated(maxBytes: Long): String {
     require(maxBytes > 0L) { "maxBytes must be positive" }
     val source = source()

@@ -11,21 +11,10 @@ import android.system.Os
 import android.system.OsConstants
 import com.foxhole.core.model.FoxCoreTunPlan
 
-/**
- * Android's side of the kernel TUN for one [FoxCoreRuntime]: it builds the interface from a
- * translated plan, closes the master descriptor, and keeps the descriptor number after the session
- * is gone. Extracted from FoxCoreRuntime unchanged (class split by domain) — the runtime remains
- * the only caller, so the master still has exactly one owner.
- */
+// Clears the recorded master descriptor only after that exact Android-owned TUN is confirmed closed.
 internal class FoxCoreTunOwner(
     private val diagnosticsLogger: RuntimeDiagnosticsSink,
 ) {
-    /**
-     * Master TUN descriptor number, kept after the session is cleared: the teardown watchdog runs
-     * when the session is gone and otherwise cannot tell the master we hold by design from a
-     * descriptor the core failed to close — and its answer to a leak is killing the process.
-     * Cleared only where the master is actually closed.
-     */
     @Volatile
     var masterTunFd: Int? = null
         private set
@@ -75,10 +64,6 @@ internal class FoxCoreTunOwner(
             tun.close()
             val closed = !tun.fileDescriptor.valid()
             if (closed && masterTunFd == closingFd) {
-                // Only here, and only on a close that took: while this points at a descriptor,
-                // the teardown watchdog must treat it as ours, not a leak. A timed-out start may
-                // finish after its successor established another TUN, so the old close must not
-                // erase the successor's ownership marker.
                 masterTunFd = null
             }
             closed
@@ -104,9 +89,7 @@ internal class FoxCoreTunOwner(
             "native_fd=${session.nativeTunFd}",
             "native_fd_state=${nativeTunProbe.name.lowercase()}",
             "native_fd_open=${nativeTunProbe == NativeTunDescriptorProbe.OPEN}",
-            // Only when something is still held: clean teardowns must not add a line per stop to
-            // an exportable journal; unclean ones need to say whether the core gave up waiting
-            // for its own descriptor.
+
             "core=${foxCoreLastStopDiagnostics()}"
                 .takeIf { nativeTunProbe == NativeTunDescriptorProbe.OPEN || !masterTunClosed },
         )

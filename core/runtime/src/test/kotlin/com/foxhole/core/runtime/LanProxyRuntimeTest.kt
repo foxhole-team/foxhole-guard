@@ -11,11 +11,6 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/**
- * The LAN proxy is the one surface where a wrong "it works" is a security bug: it publishes a
- * listener on the phone's Wi-Fi address that relays into the owner's VPN or Tor. These tests pin the
- * two halves of that contract — the request we send, and the fact that a refusal stays a refusal.
- */
 class LanProxyRuntimeTest {
     private val binding =
         LanNetworkBinding(
@@ -72,7 +67,7 @@ class LanProxyRuntimeTest {
         assertEquals(LanProxyPhase.READY, status.phase)
         assertEquals("192.168.1.24:10808", status.socksAddress)
         assertNull(status.httpAddress)
-        // The core's own answer wins over what we asked for: it is the one that bound the sockets.
+
         assertEquals(LanProxyUpstream.MIXED, status.upstream)
         assertNull(status.reason)
     }

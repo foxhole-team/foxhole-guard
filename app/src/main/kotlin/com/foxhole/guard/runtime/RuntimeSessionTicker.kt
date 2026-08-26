@@ -12,33 +12,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
-/**
- * One timer coroutine that drives every periodic session task, replacing a pile of independent
- * `while { work; delay(interval) }` loops (Ф3e). Each registered task keeps its own next-due
- * deadline; the single loop sleeps until the NEAREST deadline, fires the tasks that came due and
- * goes back to sleep — so N samplers cost one timer, and a slow-cadence task folded behind a
- * fast-cadence one adds zero extra wakeups.
- *
- * Scheduling parity with the loops this replaces: every old loop was sequential, so its period was
- * `work + delay(interval)` with the interval read AFTER the work. The ticker reproduces that
- * exactly — a task's next deadline is set when its action COMPLETES, from a fresh [Task.intervalMs]
- * read (adaptive intervals such as the health-probe backoff therefore see the state the action just
- * produced).
- *
- * Two task shapes:
- * - `runOn = null` — the action runs inline on the loop. Only for fast, non-blocking samplers: an
- *   inline action delays every later deadline until it returns, and is not cancelled by
- *   [unregister] once started (a sample is never torn mid-write).
- * - `runOn = dispatcher` — the action is launched into [scope] on that dispatcher; the loop never
- *   waits for it. The task cannot overlap itself (it is re-armed only on completion) and
- *   [unregister]/[stop] cancel an in-flight run, matching the `job.cancel()` semantics of the
- *   standalone loops this replaces. Use for anything that does I/O or can suspend for long
- *   (health probe, watchdog heal path).
- *
- * A task throwing is caught per-task ([onError]) and never stops the loop or the other tasks.
- * The loop parks on a conflated wake channel with a deadline timeout; register/unregister send a
- * wake, so schedule changes take effect immediately and an empty ticker costs nothing.
- */
+// One scheduler owns all session deadlines; tasks re-arm after completion and never overlap themselves.
 internal class RuntimeSessionTicker(
     private val scope: CoroutineScope,
     private val loopDispatcher: CoroutineDispatcher = Dispatchers.Default,
@@ -60,12 +34,6 @@ internal class RuntimeSessionTicker(
     private val wake = Channel<Unit>(Channel.CONFLATED)
     private var loopJob: Job? = null
 
-    /**
-     * Adds a periodic task; re-registering an id replaces the task (cancelling its in-flight run,
-     * if dispatched). [fireImmediately] mirrors the two loop shapes being replaced: `true` =
-     * "work then delay" (first run now); `false` = "delay then work" (first run one interval from
-     * now).
-     */
     fun register(
         id: String,
         fireImmediately: Boolean,
@@ -132,15 +100,11 @@ internal class RuntimeSessionTicker(
             }
             val sleepMs = sleepUntilNextDeadlineMs()
             if (sleepMs > 0L) {
-                // Parks until the nearest deadline OR a wake (register/unregister/task completion).
-                // The channel is conflated: a pending wake makes receive() return at once — one
-                // cheap recompute, never a busy spin, and a fresh schedule change is never missed.
                 withTimeoutOrNull(sleepMs) { wake.receive() }
             }
         }
     }
 
-    /** Marks due tasks running and returns them; null when the ticker has no tasks at all. */
     private fun claimDueTasks(): List<Task>? =
         synchronized(lock) {
             if (tasks.isEmpty()) {
@@ -159,8 +123,7 @@ internal class RuntimeSessionTicker(
                 tasks.values
                     .filter { task -> !task.running }
                     .minOfOrNull(Task::nextDueMs)
-                    // Every task is mid-run (or the map just emptied): nothing to time out for —
-                    // park until a completion/registration wake.
+
                     ?: return@synchronized Long.MAX_VALUE
             (nextDeadline - nowMs()).coerceAtLeast(0L)
         }
@@ -176,8 +139,6 @@ internal class RuntimeSessionTicker(
                 }
             }
         synchronized(lock) {
-            // Register-replace or unregister may have raced the launch; cancel instead of tracking
-            // a job for a task this ticker no longer owns.
             if (tasks[task.id] === task) {
                 task.runningJob = job
             } else {
@@ -186,7 +147,6 @@ internal class RuntimeSessionTicker(
         }
     }
 
-    /** Re-arms the task off its completion time — unless it was unregistered or replaced mid-run. */
     private fun finishTask(task: Task) {
         synchronized(lock) {
             task.running = false

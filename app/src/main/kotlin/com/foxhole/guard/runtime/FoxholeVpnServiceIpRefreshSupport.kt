@@ -11,15 +11,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-/**
- * Device/upstream IP and geo info refresh for [FoxholeVpnService], extracted from the service body
- * as part of the Phase B split by responsibility. Hosts the periodic geo refresh + IPv4 enrichment
- * jobs and the IP-info refresh entry points (the proxy/vpn variants delegate to their *Internal
- * implementations in RuntimeValidationCoordinator).
- */
-
-// App-owned identity fetches run unbound (explicit Network binding EPERMs on several vendors), so
-// no request network is threaded through this chain.
 internal fun FoxholeVpnService.startGeoRefresh() {
     stopGeoRefresh()
     if (container.settingsRepository.settings.value.connection.geoOfflineMode) {

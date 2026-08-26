@@ -136,6 +136,53 @@ class RuntimeInterfaceHandoverCallSiteTest {
         )
     }
 
+    @Test
+    fun `service destroy reaps tor helpers only after the full native drain`() {
+        val source = serviceSource.withoutComments()
+        val ownershipBody =
+            source
+                .substringAfter("private fun claimServiceDestroyOwnership()")
+                .substringBefore("override fun onDestroy()")
+        val destroyBody =
+            source
+                .substringAfter("override fun onDestroy()")
+                .substringBefore("override fun onRevoke()")
+        val begin = ownershipBody.indexOf("beginServiceDestroy(runtimeServiceOwner)")
+        val detach = ownershipBody.indexOf("detachCurrentForServiceDestroy(runtimeServiceOwner)")
+        val claim = destroyBody.indexOf("claimServiceDestroyOwnership()")
+        val frameworkDestroy = destroyBody.indexOf("super.onDestroy()")
+        val drainRetired = destroyBody.indexOf("stopRetiredRuntimesAfterServiceDestroy(runtimeServiceOwner)")
+        val seal = destroyBody.indexOf("sealServiceDestroy(runtimeServiceOwner)")
+        val orphanCleanup = destroyBody.indexOf("reapTorTransportOrphansAfterServiceDestroy(\"vpn\")")
+
+        assertTrue("the dying service must fence its owner generation", begin > 0)
+        assertTrue("the owner generation must be fenced before detaching", begin < detach)
+        assertTrue("the dying service must detach its exact runtime before returning", detach > 0)
+        listOf(
+            "stopTrafficUpdates()",
+            "stopAppTrafficStatsUpdates()",
+            "stopGeoRefresh()",
+            "stopNotificationHealthMonitoring()",
+            "stopChildProcessWatchdog()",
+            "cancelScheduledAutoReconnect(resetAttempts = true)",
+            "cancelLocalGuardHeal(resetAttempts = true, cancelSafetyNet = false)",
+            "invalidateValidationEpoch(\"service_destroy\")",
+            "runtimeSupervisor.closeCommandOwner(runtimeCommandOwner)",
+        ).forEach { cleanup ->
+            assertTrue(
+                "$cleanup must finish before the store drain begins",
+                destroyBody.indexOf(cleanup) in 1 until claim,
+            )
+        }
+        assertTrue("destroy ownership must be claimed before framework destruction", claim in 1 until frameworkDestroy)
+        assertTrue("the destroy drain must be sealed after every retired runtime is registered", seal > drainRetired)
+        assertTrue("orphan cleanup must belong to the sealed full-drain callback", orphanCleanup > seal)
+        assertEquals(0, destroyBody.occurrencesOf("runtimeInstanceStore.current()?.let"))
+        assertEquals(2, destroyBody.occurrencesOf("onStopped ="))
+        assertEquals(1, destroyBody.occurrencesOf("reapTorTransportOrphansAfterServiceDestroy("))
+        assertTrue(serviceSource.contains("prepareServiceOwnerForRuntime("))
+    }
+
     private fun String.occurrencesOf(needle: String): Int = split(needle).size - 1
 
     private fun String.withoutComments(): String =

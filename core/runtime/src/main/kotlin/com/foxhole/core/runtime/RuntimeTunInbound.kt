@@ -16,9 +16,6 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 
-// TUN inbound assembly + per-app split planning for RuntimeConfigAssembler.
-// Behaviour-preserving Phase B extraction; the shared RuntimeSplitPlan model lives here.
-
 internal data class RuntimeSplitPlan(
     val vpnMode: VpnAppSelectionMode,
     val vpnIncludedPackages: List<String>,
@@ -41,10 +38,7 @@ internal enum class SplitWarning {
     TOR_SELECTED_APPS_FORCE_TUN_INCLUDE,
 }
 
-// The tun inbound is always full-device — include_package/exclude_package are stripped and
-// never re-emitted. The VPN split lives in package_name route/dns rules instead (see
-// buildVpnSplitRouteRules), so membership changes alter the box config, not the kernel interface,
-// and a reload can reuse the live tun fd (RuntimeTunFingerprint).
+// Package splits stay in route rules, not TUN allowlists, so membership reloads reuse the kernel interface.
 internal fun patchTunInbound(
     tunInbound: JsonObject,
     dnsSettings: DnsSettings,
@@ -96,7 +90,6 @@ internal fun effectiveTunnelTunStack(
     configured: TunStack,
 ): TunStack =
     when (configured) {
-        // Android 16/system TUN can validate ICMP while dropping TCP; profile tunnels need TCP-stable delivery.
         TunStack.SYSTEM -> TunStack.GVISOR
         TunStack.GVISOR -> TunStack.GVISOR
     }
@@ -130,15 +123,7 @@ internal fun buildSplitPlan(
             emptyList()
         }
     val torAllApps = privacyRouteActive && settings.privacyRoute.scope == PrivacyRouteScope.ALL_APPS
-    // This package rides its own include split, always — not only when web apps are on.
-    //
-    // The app validates a tunnel by probing THROUGH it. In include mode it is not in the selection
-    // (the picker filters this package out, so a user cannot put it there), so it sat outside the
-    // tunnel it was validating: the probe went out on the underlying network, validation never
-    // confirmed, and the session never reached CONNECTED. Measured on the bench Pixel — "include
-    // one other app" left the VPN stuck below connected while the selected app would have been
-    // tunnelled correctly. Its own traffic following the tunnel it reports on is also the honest
-    // shape: the diagnostics the user reads are then about the path their apps take.
+
     val selfPackage = selfPackageName?.trim()?.takeIf(String::isNotEmpty)
     val excludedSelfPackage = selfPackage?.takeIf { settings.webApps.enabled }
     val baseIncluded = settings.expert.vpnIncludedPackages()
@@ -201,9 +186,7 @@ internal fun localGuardTunInbound(
         put("auto_route", true)
         put("strict_route", false)
         put("stack", effectiveTunnelTunStack(settings.traffic.tunStack).configValue)
-        // IPv4 stays DNS-only. IPv6 is captured in full and forwarded by the direct outbound:
-        // Android cannot express "all possible IPv6 DNS resolvers" as a narrow route, while
-        // allowFamily(AF_INET6) would let an app send DNS directly to any IPv6 resolver.
+
         val dnsNarrowRoutes = mode == LocalGuardMode.DNS && !dnsGuardFullCapture
         if (dnsNarrowRoutes) {
             putJsonArray("route_address") {
@@ -215,9 +198,7 @@ internal fun localGuardTunInbound(
             add(JsonPrimitive(LOCAL_GUARD_TUN_ADDRESS))
             add(JsonPrimitive(LOCAL_GUARD_TUN_INET6_ADDRESS))
         }
-        // A WebView cannot be protected socket-by-socket. When web apps are enabled, FoxHole's
-        // own UID therefore belongs inside this TUN; FoxCore's outbound sockets are protected at
-        // the runtime boundary, so they still leave without recursing into the VPN.
+
         if (!settings.webApps.enabled) {
             putJsonArray("exclude_package") {
                 localGuardExcludedPackages(selfPackageName).forEach { packageName ->
@@ -227,10 +208,6 @@ internal fun localGuardTunInbound(
         }
     }
 
-// Normally FoxHole stays out of a local/standalone-Tor TUN so its control-plane is independent.
-// Web apps are the explicit exception above: WebView has no per-socket VpnService.protect seam, so
-// the app UID must be captured to make the promised route real. Always use the package that is
-// actually running; BuildConfig.APPLICATION_ID is the release id and misses suffixed variants.
 internal fun localGuardExcludedPackages(selfPackageName: String): List<String> =
     listOf(selfPackageName)
         .map(String::trim)

@@ -12,8 +12,7 @@ class DnsFilterUpdateWorker(
 ) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
         val dependencies: FoxholeDnsFilterUpdateDependencies = (applicationContext as FoxholeApplication).appGraph
-        // Every run is a cheap manifest probe; the artifact downloads only when a newer list is
-        // published (or the installed one aged past the forced-refresh window).
+
         val result =
             dependencies.dnsFilterUpdateRepository.autoRefresh(
                 forcedRefreshIntervalMs = FORCED_REFRESH_INTERVAL_MS,

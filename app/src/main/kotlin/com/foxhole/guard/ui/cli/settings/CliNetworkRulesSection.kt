@@ -38,10 +38,10 @@ internal fun CliNetworkRulesRows(
         profiles = state.profiles,
         onUpdate = viewModel::onNetworkRulesChanged,
     )
-    if (rules.cellularRulesEnabled) {
+    CliSettingsAnimatedRows(visible = rules.cellularRulesEnabled) {
         CliToggleRow(
             label = stringResource(R.string.cli_cfg_nr_data_saver),
-            icon = R.drawable.pix_stats,
+            icon = R.drawable.lin_stats,
             checked = rules.skipSpeedTestsOnCellular && rules.skipSubscriptionRefreshOnCellular,
             onToggle = {
                 viewModel.onNetworkRulesChanged(
@@ -71,7 +71,7 @@ private class TransportRuleBinding(
 
 private fun wifiBinding(rules: NetworkRulesSettings) = TransportRuleBinding(
     labelRes = R.string.cli_cfg_nr_wifi,
-    iconRes = R.drawable.pix_link,
+    iconRes = R.drawable.lin_link,
     enabled = rules.wifiRulesEnabled,
     autoConnect = rules.wifiAutoConnect,
     profileId = rules.wifiProfileId.takeIf { rules.useWifiProfile },
@@ -90,7 +90,7 @@ private fun wifiBinding(rules: NetworkRulesSettings) = TransportRuleBinding(
 
 private fun cellularBinding(rules: NetworkRulesSettings) = TransportRuleBinding(
     labelRes = R.string.cli_cfg_nr_cellular,
-    iconRes = R.drawable.pix_device,
+    iconRes = R.drawable.lin_device,
     enabled = rules.cellularRulesEnabled,
     autoConnect = rules.cellularAutoConnect,
     profileId = rules.cellularProfileId.takeIf { rules.useCellularProfile },
@@ -119,55 +119,54 @@ private fun TransportRuleBlock(
         checked = binding.enabled,
         onToggle = { onUpdate(binding.setEnabled(it)) },
     )
-    if (!binding.enabled) {
-        return
-    }
-    CliRowDivider()
-    CliToggleRow(
-        label = stringResource(R.string.cli_cfg_nr_auto_connect),
-        icon = R.drawable.pix_power,
-        checked = binding.autoConnect,
-        onToggle = { onUpdate(binding.setAutoConnect(it)) },
-        infoText = stringResource(R.string.cli_cfg_nr_recommend_note),
-    )
-    CliRowDivider()
     val selectedProfile = profiles.firstOrNull { it.id == binding.profileId }
-    CliDropdownRow(
-        label = stringResource(R.string.cli_cfg_nr_profile),
-        icon = R.drawable.pix_profiles,
-        value = selectedProfile?.name ?: stringResource(R.string.cli_home_profile_none),
-        options = listOf(
-            CliDropdownOption(id = OPTION_NONE, label = stringResource(R.string.cli_home_profile_none)),
-        ) + profiles.map { profile ->
-            CliDropdownOption(id = profile.id.toString(), label = profile.name)
-        },
-        selectedId = selectedProfile?.id?.toString() ?: OPTION_NONE,
-        onSelect = { id ->
-            if (id == OPTION_NONE) {
-                onUpdate(binding.setProfile(null))
-            } else {
-                profiles.firstOrNull { it.id.toString() == id }
-                    ?.let { onUpdate(binding.setProfile(it)) }
-            }
-        },
-    )
     val smartOptions = selectedProfile?.protocolOptions.orEmpty()
-    if (smartOptions.size > 1) {
+    CliSettingsAnimatedRows(visible = binding.enabled) {
         CliRowDivider()
-        val selectedOption =
-            smartOptions.firstOrNull { it.id == binding.protocolOptionId }
-                ?: smartOptions.firstOrNull { it.id == selectedProfile?.selectedProtocolOptionId }
-                ?: smartOptions.first()
-        CliDropdownRow(
-            label = stringResource(R.string.cli_cfg_nr_protocol),
-            icon = R.drawable.pix_shield,
-            value = selectedOption.displayName,
-            options = smartOptions.map { option ->
-                CliDropdownOption(id = option.id, label = option.displayName)
-            },
-            selectedId = selectedOption.id,
-            onSelect = { id -> onUpdate(binding.setProtocol(id)) },
+        CliToggleRow(
+            label = stringResource(R.string.cli_cfg_nr_auto_connect),
+            icon = R.drawable.lin_power,
+            checked = binding.autoConnect,
+            onToggle = { onUpdate(binding.setAutoConnect(it)) },
+            infoText = stringResource(R.string.cli_cfg_nr_recommend_note),
         )
+        CliRowDivider()
+        CliDropdownRow(
+            label = stringResource(R.string.cli_cfg_nr_profile),
+            icon = R.drawable.lin_profiles,
+            value = selectedProfile?.name ?: stringResource(R.string.cli_home_profile_none),
+            options = listOf(
+                CliDropdownOption(id = OPTION_NONE, label = stringResource(R.string.cli_home_profile_none)),
+            ) + profiles.map { profile ->
+                CliDropdownOption(id = profile.id.toString(), label = profile.name)
+            },
+            selectedId = selectedProfile?.id?.toString() ?: OPTION_NONE,
+            onSelect = { id ->
+                if (id == OPTION_NONE) {
+                    onUpdate(binding.setProfile(null))
+                } else {
+                    profiles.firstOrNull { it.id.toString() == id }
+                        ?.let { onUpdate(binding.setProfile(it)) }
+                }
+            },
+        )
+        CliSettingsAnimatedRows(visible = smartOptions.size > 1) {
+            CliRowDivider()
+            val selectedOption =
+                smartOptions.firstOrNull { it.id == binding.protocolOptionId }
+                    ?: smartOptions.firstOrNull { it.id == selectedProfile?.selectedProtocolOptionId }
+                    ?: smartOptions.first()
+            CliDropdownRow(
+                label = stringResource(R.string.cli_cfg_nr_protocol),
+                icon = R.drawable.lin_shield,
+                value = selectedOption.displayName,
+                options = smartOptions.map { option ->
+                    CliDropdownOption(id = option.id, label = option.displayName)
+                },
+                selectedId = selectedOption.id,
+                onSelect = { id -> onUpdate(binding.setProtocol(id)) },
+            )
+        }
     }
 }
 

@@ -35,8 +35,7 @@ import kotlinx.serialization.json.putJsonObject
 class RuntimeConfigAssembler(
     private val json: Json,
     private val lanProxyAddressProvider: LanProxyAddressProvider = DisabledLanProxyAddressProvider,
-    // The package the app actually runs as. It is normally outside local/standalone-Tor TUNs, but
-    // web apps deliberately capture it because WebView has no per-socket protect seam.
+
     private val selfPackageName: String = BuildConfig.APPLICATION_ID,
 ) {
     @Serializable
@@ -78,13 +77,11 @@ class RuntimeConfigAssembler(
                     protocolTestTrafficFreeze = protocolTestTrafficFreeze,
                 ).withI2pRoutingApplied(i2pSocksPort, resolvedPrivateDnsState)
                     .let { json.encodeToString(JsonObject.serializer(), it) }
-            // PROXY mode has no tun, so there is no `.i2p` traffic to divert.
+
             TrafficMode.PROXY -> assembleProxy(base, runtimeSettings, activePreset, dnsFilterRuntimePaths)
         }
     }
 
-    // Diverts only `.i2p` names to the local i2pd proxy (see RuntimeI2pOutbounds), applied as a
-    // final pass on the assembled JsonObject before the single encode — no re-encode round-trip.
     private fun JsonObject.withI2pRoutingApplied(
         i2pSocksPort: Int?,
         privateDnsState: PrivateDnsState?,
@@ -97,21 +94,16 @@ class RuntimeConfigAssembler(
         settings: Settings,
         mode: LocalGuardMode,
         dnsFilterRuntimePaths: DnsFilterRuntimePaths? = null,
-        // DNS guard under always-on-VPN lockdown: narrow DNS-only routes would let the SYSTEM
-        // block everything else, so capture the full device and forward non-DNS traffic direct.
+
         dnsGuardFullCapture: Boolean = false,
-        // "Allow connections outside the tunnel": the firewall tun diverts `.i2p` to the local
-        // i2pd proxy exactly like the profile tunnel does, so i2p works without a VPN.
+
         i2pSocksPort: Int? = null,
     ): String {
         val runtimeSettings = settings.verifiedRuleSetRuntimeSettings(dnsFilterRuntimePaths)
-        // A transparent firewall raised only by I2P must not touch traffic: no DNS hijack, no app
-        // blocking. Only the `.i2p` diversion applied later carries anything.
+
         val transparentI2pGuard = runtimeSettings.i2pRaisesLocalGuard()
         val localDnsCaptureEnabled = !transparentI2pGuard && runtimeSettings.localGuardDnsCaptureEnabled(mode)
-        // System-DNS-replacement mode resolves with the user's chosen provider as configured; the
-        // firewall guard's incidental DNS capture still upgrades a plain resolver to DoH so ISP
-        // interception cannot rewrite it behind the user's back.
+
         val dnsSettings =
             runtimeSettings.dns
                 .localGuardVerifiedRuleSetSettings(dnsFilterRuntimePaths)
@@ -132,17 +124,6 @@ class RuntimeConfigAssembler(
             buildJsonObject {
                 val rules =
                     buildJsonArray {
-                        // App-block rules go FIRST (first match wins), like patchRoute: otherwise
-                        // a blocked app's port-53 traffic matches hijack-dns first and keeps a
-                        // working resolver — a DNS-exfiltration channel out of a no-network app.
-                        // `transparentI2pGuard` belongs here as much as it does to the DNS gate
-                        // above, and its absence was the second half of a promise kept only
-                        // halfway: a guard raised by I2P alone announced itself as touching
-                        // nothing and still emitted `package_name -> block`. The state is
-                        // ordinary — pinning an app to BLOCK arms `blockAppsAlways`, turning the
-                        // firewall off leaves it armed, and engaging I2P then captures the whole
-                        // device — so "enable I2P" quietly re-armed a firewall the user had
-                        // switched off.
                         if (
                             !transparentI2pGuard &&
                             mode != LocalGuardMode.DNS &&
@@ -215,7 +196,9 @@ class RuntimeConfigAssembler(
     ): String {
         validate(settings.expert)
         val runtimeSettings = settings.verifiedRuleSetRuntimeSettings(dnsFilterRuntimePaths)
-        require(runtimeSettings.privacyRoute.enabled) { "TOR route is disabled" }
+        require(runtimeSettings.privacyRoute.permitted && runtimeSettings.privacyRoute.enabled) {
+            "TOR route is disabled"
+        }
         require(
             runtimeSettings.privacyRoute.scope == PrivacyRouteScope.ALL_APPS ||
                 runtimeSettings.expert.torLanePackages().isNotEmpty(),
@@ -226,8 +209,7 @@ class RuntimeConfigAssembler(
                 dnsSettings = runtimeSettings.dns,
                 privateDnsState = privateDnsState ?: privateDnsMode?.let(::PrivateDnsState),
                 dnsFilterRuntimePaths = dnsFilterRuntimePaths,
-                // The tor-only "proxy" outbound is Tor SOCKS (no UDP): resolve names via DoH over Tor
-                // so every app routed through the tunnel can resolve (else ERR_NAME_NOT_RESOLVED).
+
                 torSocksDetour = true,
             )
         val route =
@@ -242,8 +224,7 @@ class RuntimeConfigAssembler(
                 putJsonArray("inbounds") {
                     add(torOnlyTunInbound(runtimeSettings, selfPackageName))
                     add(runtimeLoopbackProxyInbound(runtimeSettings.expert.localSurfaces))
-                    // Same as the tunnel path: the engine takes one non-tun inbound, and the LAN
-                    // listener is owned by the session-scoped JNI supervisor, not by this config.
+
                     buildLocalSurfaceInbounds(
                         runtimeSettings.expert.localSurfaces,
                         includeLocalProxy = false,
@@ -315,12 +296,7 @@ class RuntimeConfigAssembler(
             buildJsonArray {
                 add(patchedTun)
                 add(runtimeLoopbackProxyInbound(settings.expert.localSurfaces))
-                // `lanListenAddress = null` deliberately: the LAN listener is NOT config any more.
-                // It is raised on the live session through nativeStartLanProxy (see
-                // LanProxyController) and torn down with it, which is also the only way its real
-                // state can reach the UI. Emitting it here as well would put a second non-tun
-                // inbound in the document, and FoxCoreTunTranslator allows exactly one — the user
-                // saw "profile is invalid" on Wi-Fi and nowhere else.
+
                 buildLocalSurfaceInbounds(
                     settings.expert.localSurfaces,
                     includeLocalProxy = false,
@@ -487,12 +463,6 @@ class RuntimeConfigAssembler(
         }
     }
 
-    /**
-     * Fingerprint for a local-guard session. The general [runtimeFingerprint] zeroes fields that
-     * never change a profile-tunnel config (firewallEnabled, blockAppsAlways,
-     * networkActivityLogging) — but the guard config DOES depend on them. Folding them back in,
-     * plus the resolved [mode], makes toggling them on a live firewall actually restart it.
-     */
     fun localGuardRuntimeFingerprint(
         settings: Settings,
         mode: LocalGuardMode,
@@ -550,9 +520,6 @@ class RuntimeConfigAssembler(
             "outbound_shape unavailable error=${error.javaClass.simpleName}"
         }
 
-    // Ground-truth Tor placement from the assembled config: `in_vpn` = Tor detours through the
-    // tunnel (bridges dropped), `direct` = Tor dials from the device (bridges allowed). Lets a
-    // stuck Tor-over-VPN bootstrap be told apart from a bypass placement in device logs.
     private fun JsonObject.torPlacementShape(): String {
         val tor =
             this["outbounds"]?.jsonArray.orEmpty()
@@ -656,9 +623,6 @@ class RuntimeConfigAssembler(
         require(normalized in LOCAL_HOSTS) { "$label host must stay on a local loopback address" }
     }
 
-    // Bridge bookkeeping has no effect on the assembled config — stripping it keeps the 12h
-    // bridge refresh from silently flipping the fingerprint and prompting a reload.
-    // bridgesEnabled/bridgeTransport DO change the generated torrc, so they stay.
     private fun PrivacyRouteSettings.runtimeFingerprintSettings(): PrivacyRouteSettings =
         copy(
             bridgesAutoUpdate = false,
@@ -669,9 +633,6 @@ class RuntimeConfigAssembler(
         )
 
     private fun ExpertSettings.runtimeFingerprintSettings(): ExpertSettings {
-        // Lanes outside their effect are erased so irrelevant edits don't force a reload: the VPN
-        // lane only shapes a non-FULL split, the block lane only while armed. TOR and EXCLUDE
-        // always shape the config (tor route rules / tun bypass), so they always count.
         val runtimeAssignments =
             appAssignments.filterValues { lane ->
                 when (lane) {
@@ -719,9 +680,8 @@ class RuntimeConfigAssembler(
                     privacyRouteActive = privacyRouteActive,
                     wireGuardDnsPresent = wireGuardDnsServers.isNotEmpty(),
                 )
-            // A plain UDP resolver forced through a TCP-only proxy outbound would silently fail; the
-            // DNS builder upgrades it to DoH in that case so DNS keeps working inside the tunnel.
-            val tunnelCarriesUdp = !shouldBlockUnsupportedUdp(base, vpnProtocolHint)
+
+            val tunnelCarriesManagedDnsUdp = !shouldUseStreamSafeManagedDns(base, vpnProtocolHint)
             return buildFoxholeDnsConfig(
                 strategy = effectiveStrategy.configValue,
                 dnsSettings = dnsSettings,
@@ -731,7 +691,7 @@ class RuntimeConfigAssembler(
                 finalTag = dnsRoute.finalTag,
                 includeRemote = dnsRoute.includeRemote,
                 remoteDetourTag = if (privacyRouteActive) TOR_OVER_VPN_OUTBOUND_TAG else "proxy",
-                tunnelCarriesUdp = tunnelCarriesUdp,
+                tunnelCarriesUdp = tunnelCarriesManagedDnsUdp,
             )
         }
         val source = existing

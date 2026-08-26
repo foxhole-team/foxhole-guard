@@ -58,11 +58,6 @@ internal object FoxholeConnectionServiceContract {
     const val NOTIFICATION_ID = 1001
     const val NOTIFICATION_CHANNEL_ID = "foxhole-connection"
 
-    /**
-     * There is exactly one network-runtime service. [TrafficMode.PROXY] is accepted only as a
-     * persisted schema-18 compatibility token and is deliberately routed through VpnService so a
-     * stale command cannot resurrect an unprotected proxy-only runtime.
-     */
     fun serviceClass(): Class<out Service> = FoxholeVpnService::class.java
 
     fun serviceMode(
@@ -210,10 +205,6 @@ internal object FoxholeConnectionServiceContract {
         )
     }
 
-    /**
-     * A runtime service is CREATED by [markServiceCreated] and forgotten by [markServiceDestroyed],
-     * so [stopAllServices] can tell "alive, needs a fail-closed kill" from "not running at all".
-     */
     private val serviceLive = AtomicBoolean(false)
 
     internal fun markServiceCreated() {
@@ -229,11 +220,6 @@ internal object FoxholeConnectionServiceContract {
             // Alive: the KILL intent is how it tears its runtime down fail-closed.
             startForegroundService(context, TrafficMode.TUNNEL, ACTION_KILL)
         } else {
-            // NOT running: startForegroundService would CREATE it, and Android then demands a
-            // startForeground() within its window — during a teardown the main thread is busy
-            // enough to miss it, and the system kills the process with
-            // ForegroundServiceDidNotStartInTimeException. Never resurrect a service just to
-            // tell it to die; stopService is a no-op when it is already gone.
             context.stopService(Intent(context, serviceClass()))
         }
     }

@@ -26,7 +26,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
@@ -46,7 +45,6 @@ import com.foxhole.core.model.TOR_ONLY_PROFILE_ID
 import com.foxhole.core.model.TrafficMapI2pCarrier
 import com.foxhole.core.model.TrafficMapUiState
 import com.foxhole.core.model.TrafficMode
-import com.foxhole.core.model.VisualStyle
 import com.foxhole.core.model.packages
 import com.foxhole.guard.R
 import com.foxhole.guard.ui.TrafficMapAppRouteProjection
@@ -54,9 +52,8 @@ import com.foxhole.guard.ui.cli.CliColors
 import com.foxhole.guard.ui.cli.CliSpacing
 import com.foxhole.guard.ui.cli.CliType
 import com.foxhole.guard.ui.cli.LocalCliColors
-import com.foxhole.guard.ui.cli.LocalCliVisualStyle
 import com.foxhole.guard.ui.cli.components.CliFlagIcon
-import com.foxhole.guard.ui.cli.components.CliPixIcon
+import com.foxhole.guard.ui.cli.components.CliIcon
 import com.foxhole.guard.ui.cli.components.cliMotionPhase
 import com.foxhole.guard.ui.cli.settings.rememberCliAppIcon
 import com.foxhole.guard.ui.trafficMapAppRouteProjection
@@ -71,6 +68,7 @@ internal fun CliRouteScheme(
     vpnHopCountryCode: String?,
     vpnExitCountryCode: String?,
     torExitCountryCode: String?,
+    showHeader: Boolean = true,
     modifier: Modifier = Modifier,
 ) {
     val colors = LocalCliColors.current
@@ -100,7 +98,9 @@ internal fun CliRouteScheme(
     val driftPhase = cliMotionPhase()
     val drift = remember(driftPhase) { derivedStateOf { driftPhase.value * DRIFT_CYCLE } }
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(CliSpacing.sm)) {
-        Text(text = stringResource(R.string.cli_rt_header), style = CliType.small, color = colors.dim)
+        if (showHeader) {
+            Text(text = stringResource(R.string.cli_rt_header), style = CliType.small, color = colors.dim)
+        }
         Row(
             modifier = Modifier.height(IntrinsicSize.Min),
             verticalAlignment = Alignment.CenterVertically,
@@ -170,8 +170,8 @@ private fun CliRouteAppStrip(
                     modifier = Modifier.size(ROUTE_APP_ICON_SIZE),
                 )
             } else {
-                CliPixIcon(
-                    id = R.drawable.pix_apps,
+                CliIcon(
+                    id = R.drawable.lin_apps,
                     contentDescription = packageName,
                     size = ROUTE_APP_ICON_SIZE,
                     tint = color,
@@ -207,7 +207,7 @@ private fun CliRouteNodeBox(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = if (centerVertically) Arrangement.Center else Arrangement.Top,
     ) {
-        CliPixIcon(id = node.icon, contentDescription = node.label, tint = node.color)
+        CliIcon(id = node.icon, contentDescription = node.label, tint = node.color)
         Spacer(modifier = Modifier.height(2.dp))
         if (node.country != null) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -268,45 +268,9 @@ private fun CliRouteArrow(
                 }
             }
         }
-        val plain = LocalCliVisualStyle.current == VisualStyle.PLAIN
         Canvas(modifier = Modifier.fillMaxWidth().height(8.dp)) {
             val cell = 2.dp.toPx().roundToInt().coerceAtLeast(1).toFloat()
-            if (plain) {
-                drawPlainRouteArrow(segment, drift.value, cell)
-                return@Canvas
-            }
-            val midY = ((size.height / 2f / cell).roundToInt() * cell)
-            val headW = cell * 3
-            val lineEnd = size.width - headW
-            if (segment.tunnel) {
-                drawRect(
-                    color = segment.color,
-                    topLeft = Offset(0f, midY - cell / 2f),
-                    size = Size(lineEnd.coerceAtLeast(0f), cell),
-                )
-            } else {
-                val phase = (drift.value.toInt() % 4) * cell
-                var x = -4f * cell + phase
-                while (x < lineEnd) {
-                    val w = (2f * cell).coerceAtMost(lineEnd - x)
-                    if (x + w > 0f) {
-                        drawRect(
-                            color = segment.color,
-                            topLeft = Offset(x.coerceAtLeast(0f), midY - cell / 2f),
-                            size = Size(w - (0f - x).coerceAtLeast(0f), cell),
-                        )
-                    }
-                    x += 4f * cell
-                }
-            }
-            for (i in 0 until 3) {
-                val h = (3 - i) * cell
-                drawRect(
-                    color = segment.color,
-                    topLeft = Offset(lineEnd + i * cell, midY - h + cell / 2f),
-                    size = Size(cell, h * 2 - cell),
-                )
-            }
+            drawRouteArrow(segment, drift.value, cell)
         }
         Box(modifier = Modifier.height(ARROW_NOTE_SLOT_HEIGHT), contentAlignment = Alignment.Center) {
             if (appStrip != null) {
@@ -325,7 +289,7 @@ private fun CliRouteArrow(
     }
 }
 
-private fun DrawScope.drawPlainRouteArrow(
+private fun DrawScope.drawRouteArrow(
     segment: CliRouteSegmentModel,
     driftValue: Float,
     cell: Float,
@@ -617,7 +581,7 @@ private fun CliRouteParts.firewallLane(): List<CliRouteLaneModel> {
                 CliRouteNodeModel(
                     labels.firewall,
                     tone,
-                    icon = R.drawable.pix_forbidden,
+                    icon = R.drawable.lin_forbidden,
                     role = CliRouteNodeRole.FIREWALL,
                     caption = FIREWALL_CAPTION,
                 ),
@@ -637,7 +601,7 @@ private fun CliRouteParts.i2pLane(carrier: TrafficMapI2pCarrier): CliRouteLaneMo
         CliRouteNodeModel(
             "I2P",
             carrier.i2pRouteColor(colors),
-            icon = R.drawable.pix_incognito,
+            icon = R.drawable.lin_incognito,
             role = CliRouteNodeRole.I2P,
             caption = "i2p",
         ),
@@ -662,7 +626,7 @@ private fun CliRouteParts.proxyLanes(): List<CliRouteLaneModel> = listOf(
     directBranchLane(),
     CliRouteLaneModel(
         listOf(
-            CliRouteNodeModel(labels.proxy, colors.info, icon = R.drawable.pix_link),
+            CliRouteNodeModel(labels.proxy, colors.info, icon = R.drawable.lin_link),
             vpn,
             internetVpn,
         ),
@@ -720,7 +684,7 @@ private class CliRouteParts(
     val device = CliRouteNodeModel(
         labels.device,
         colors.fg,
-        icon = R.drawable.pix_device,
+        icon = R.drawable.lin_device,
         role = CliRouteNodeRole.DEVICE,
         country = physicalCountry,
     )
@@ -728,7 +692,7 @@ private class CliRouteParts(
     private fun internetNode(country: String?) = CliRouteNodeModel(
         labels.internet,
         colors.info,
-        icon = R.drawable.pix_globe,
+        icon = R.drawable.lin_globe,
         role = CliRouteNodeRole.INTERNET,
         country = country?.uppercase(),
     )
@@ -745,7 +709,7 @@ private class CliRouteParts(
     val vpn = CliRouteNodeModel(
         "VPN",
         colors.vpn,
-        icon = R.drawable.pix_shield,
+        icon = R.drawable.lin_shield,
         role = CliRouteNodeRole.VPN,
         country = cliVpnHopCountry(vpnHopCountryCode, state.vpnRoute?.countryCode),
     )
@@ -753,7 +717,7 @@ private class CliRouteParts(
     val tor = CliRouteNodeModel(
         "TOR",
         colors.tor,
-        icon = R.drawable.pix_tor,
+        icon = R.drawable.lin_tor,
         role = CliRouteNodeRole.TOR,
         country = torExitCountryCode?.uppercase(),
         caption = if (torExitCountryCode == null) "—" else null,
@@ -761,7 +725,6 @@ private class CliRouteParts(
     val vpnSegment = CliRouteSegmentModel(colors.vpn, tunnel = true, detail = state.vpnRoute?.protocolBadge)
     val vpnExit = CliRouteSegmentModel(colors.vpn, detail = state.exitLatencyMs?.let { "${it}ms" })
 
-    // Tor is the route's egress node. Its segment follows the same moving dotted exit grammar as
     val torSegment = CliRouteSegmentModel(colors.tor, detail = state.torExitLatencyMs?.let { "${it}ms" })
 }
 

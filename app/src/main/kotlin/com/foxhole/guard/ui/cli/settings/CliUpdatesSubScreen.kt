@@ -103,7 +103,7 @@ internal fun CliUpdatesSubScreen(
     ) {
         CliScreenHeader(
             label = stringResource(R.string.cli_cfg_more_updates),
-            icon = R.drawable.pix_settings,
+            icon = R.drawable.lin_settings,
             trailing = {
                 CliUpdateSourcesButton(
                     sources = settings.updateSources,
@@ -144,7 +144,7 @@ internal fun CliUpdatesSubScreen(
                 Spacer(modifier = Modifier.height(CliSpacing.sm))
                 CliPanel(
                     title = stringResource(R.string.cli_updates_app),
-                    icon = R.drawable.pix_update,
+                    icon = R.drawable.lin_update,
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     CliAppUpdatePanelBody(
@@ -166,7 +166,7 @@ private fun CliFdroidUpdateNotice() {
     CliPanel(
         title = stringResource(R.string.cli_updates_fdroid_title),
         titleColor = colors.err,
-        icon = R.drawable.pix_update,
+        icon = R.drawable.lin_update,
         iconColor = colors.err,
         attention = true,
         attentionColor = colors.err,
@@ -176,7 +176,7 @@ private fun CliFdroidUpdateNotice() {
             key = stringResource(R.string.cli_updates_app_version),
             value = BuildConfig.VERSION_NAME,
             valueColor = colors.err,
-            icon = R.drawable.pix_status,
+            icon = R.drawable.lin_status,
             iconColor = colors.err,
         )
         Spacer(modifier = Modifier.height(CliSpacing.xs))
@@ -258,9 +258,8 @@ private fun CliFoxholeDbPanel(
     val colors = LocalCliColors.current
     CliPanel(
         title = stringResource(R.string.cli_foxdb_title),
-        icon = R.drawable.pix_update,
+        icon = R.drawable.lin_update,
         modifier = Modifier.fillMaxWidth(),
-        infoText = stringResource(R.string.cli_foxdb_note),
     ) {
         val statusColor = when {
             groups.downloadRequired -> colors.err
@@ -273,21 +272,21 @@ private fun CliFoxholeDbPanel(
                 if (groups.needsUpdate) R.string.cli_foxdb_status_required else R.string.cli_foxdb_status_ok,
             ),
             valueColor = statusColor,
-            icon = R.drawable.pix_status,
+            icon = R.drawable.lin_status,
             iconColor = statusColor,
         )
         Spacer(modifier = Modifier.height(CliSpacing.sm))
         CliRowDivider()
         CliToggleRow(
             label = stringResource(R.string.cli_updates_check),
-            icon = R.drawable.pix_update,
+            icon = R.drawable.lin_update,
             checked = settings.connection.componentUpdateCheckEnabled,
             onToggle = viewModel::onComponentUpdateCheckChanged,
         )
         CliRowDivider()
         CliToggleRow(
             label = stringResource(R.string.cli_updates_auto),
-            icon = R.drawable.pix_restart,
+            icon = R.drawable.lin_restart,
             checked = settings.connection.componentUpdateCheckEnabled &&
                 settings.connection.componentAutoUpdateEnabled,
             enabled = settings.connection.componentUpdateCheckEnabled,
@@ -296,35 +295,35 @@ private fun CliFoxholeDbPanel(
         CliRowDivider()
         CliFoxholeDbGroupRow(
             label = stringResource(R.string.cli_foxdb_group_dns),
-            icon = R.drawable.pix_dns,
+            icon = R.drawable.lin_dns,
             group = groups.dns,
             phase = phases.dns,
         )
         CliRowDivider()
         CliFoxholeDbGroupRow(
             label = stringResource(R.string.cli_foxdb_group_bridges),
-            icon = R.drawable.pix_tor,
+            icon = R.drawable.lin_tor,
             group = groups.bridges,
             phase = phases.bridges,
         )
         CliRowDivider()
         CliFoxholeDbGroupRow(
             label = stringResource(R.string.cli_foxdb_group_security),
-            icon = R.drawable.pix_shield,
+            icon = R.drawable.lin_shield,
             group = groups.security,
             phase = phases.security,
         )
         CliRowDivider()
         CliFoxholeDbGroupRow(
             label = stringResource(R.string.cli_foxdb_group_geo),
-            icon = R.drawable.pix_map,
+            icon = R.drawable.lin_map,
             group = groups.geo,
             phase = phases.geo,
         )
         CliRowDivider()
         CliFoxholeDbGroupRow(
             label = stringResource(R.string.cli_foxdb_group_tls),
-            icon = R.drawable.pix_shield,
+            icon = R.drawable.lin_shield,
             group = groups.tlsFingerprints,
             phase = phases.tlsFingerprints,
         )
@@ -404,11 +403,6 @@ private fun foxholeAggregatePhase(vararg phases: FoxholeUpdatePhase): FoxholeUpd
         ?: phases.maxByOrNull { phase -> phase.foxholeUpdateStage() ?: 0 }
         ?: FoxholeUpdatePhase.IDLE
 
-/**
- * Holds the finished label on the button for a moment after the run ends, then lets the button
- * go back to its action. The only timer in the staged label: every stage before it is a phase
- * the updater actually publishes.
- */
 @Composable
 private fun rememberUpdateDoneHold(running: Boolean): Boolean {
     var holding by remember { mutableStateOf(false) }
@@ -469,7 +463,7 @@ private fun CliAppUpdatePanelBody(
         key = stringResource(R.string.cli_updates_app_version),
         value = appUpdateStatusValue(state),
         valueColor = statusColor,
-        icon = R.drawable.pix_status,
+        icon = R.drawable.lin_status,
         iconColor = colors.dim,
     )
     CliRowDivider()

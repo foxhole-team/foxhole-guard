@@ -9,9 +9,6 @@ import kotlinx.serialization.json.jsonPrimitive
 import java.net.InetAddress
 import java.util.Locale
 
-// IP-info response parsing and candidate selection: provider JSON/trace formats, country
-// name resolution, merge/stop-scan policies, and address-shape helpers.
-
 internal fun parseIpInfoResponse(
     body: String,
     json: Json,
@@ -24,9 +21,7 @@ internal fun parseIpInfoResponse(
     require(objectValue.boolean("success") != false) {
         objectValue.string("message") ?: "ip info request failed"
     }
-    // check.torproject.org/api/ip answers {"IsTor":true,"IP":"…"}. IsTor==false means the request
-    // did NOT egress through Tor (a leak or a direct probe): reject it so a non-Tor answer can never
-    // be accepted as the Tor exit. Endpoints that don't return IsTor are unaffected.
+
     val isTor = objectValue.boolean("IsTor")
     require(isTor != false) { "ip info response did not egress through tor" }
     if (requireTorExitProof) {
@@ -156,10 +151,6 @@ fun mergeIpInfo(
     ipv4: IpInfo?,
     ipv6: IpInfo?,
 ): IpInfo {
-    // Every endpoint is whoami-style, so two probes reporting different countries went out over
-    // different networks (e.g. the primary fetch raced a WiFi<->cell handover). When the ipv4
-    // probe's address wins the `ip` slot, its own geo must win with it — keeping the other
-    // network's city/country produced the "same IP, foreign geo" artifact on the dashboard.
     mergeWithConflictingIpv4Geo(primary, ipv4, ipv6)?.let { return it }
     mergeWithForeignSilentIpv4(primary, ipv4, ipv6)?.let { return it }
     return primary.copy(
@@ -173,10 +164,6 @@ fun mergeIpInfo(
     )
 }
 
-// Mirrors the geo-conflict guard: an ipv4 probe with no geolocation of its own returned a different
-// address than primary's v4 — the probes drifted across networks during a background handover. That
-// foreign address must not sit in the ip slot beside primary's geo; primary is internally
-// consistent, so it wins whole and the v6 slot is filled from the probe.
 private fun mergeWithForeignSilentIpv4(
     primary: IpInfo,
     ipv4: IpInfo?,

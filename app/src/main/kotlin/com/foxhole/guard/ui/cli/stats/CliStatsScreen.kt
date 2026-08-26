@@ -8,9 +8,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -47,19 +45,18 @@ import com.foxhole.guard.ui.cli.CliType
 import com.foxhole.guard.ui.cli.LocalCliColors
 import com.foxhole.guard.ui.cli.components.CliButton
 import com.foxhole.guard.ui.cli.components.CliChromeTailSpacer
-import com.foxhole.guard.ui.cli.components.CliDashedInfoNote
 import com.foxhole.guard.ui.cli.components.CliDropdownOption
 import com.foxhole.guard.ui.cli.components.CliDropdownRow
 import com.foxhole.guard.ui.cli.components.CliElbowLine
 import com.foxhole.guard.ui.cli.components.CliFlagIcon
 import com.foxhole.guard.ui.cli.components.CliGlassHeaderScreen
+import com.foxhole.guard.ui.cli.components.CliIcon
 import com.foxhole.guard.ui.cli.components.CliKeyValue
 import com.foxhole.guard.ui.cli.components.CliPanel
-import com.foxhole.guard.ui.cli.components.CliPixIcon
 import com.foxhole.guard.ui.cli.components.CliRowDivider
 import com.foxhole.guard.ui.cli.components.CliScreenHeader
 import com.foxhole.guard.ui.cli.components.CliSectionPreloader
-import com.foxhole.guard.ui.cli.components.cliPressable
+import com.foxhole.guard.ui.cli.components.CliTopBarSettingsButton
 import com.foxhole.guard.ui.cli.components.rememberNowMsTicker
 import com.foxhole.guard.ui.cli.home.activeRuntimes
 import com.foxhole.guard.ui.cli.home.isTorOnlyLive
@@ -108,7 +105,7 @@ internal fun CliStatsContent(
         header = {
             CliScreenHeader(
                 label = stringResource(R.string.cli_dock_stats),
-                icon = R.drawable.pix_stats,
+                icon = R.drawable.lin_stats,
                 trailing = {
                     CliStatsSettingsButton(
                         enabled = state.settingsHydrated,
@@ -150,11 +147,6 @@ internal fun CliStatsContent(
                             textAlign = TextAlign.Center,
                         )
                         Spacer(modifier = Modifier.height(CliSpacing.sm))
-                        CliDashedInfoNote(
-                            text = stringResource(R.string.cli_stats_consent_note),
-                            centered = true,
-                        )
-                        Spacer(modifier = Modifier.height(CliSpacing.sm))
                         CliButton(
                             label = stringResource(R.string.cli_stats_enable_module),
                             onClick = actions.enableStatistics,
@@ -188,20 +180,12 @@ private fun CliStatsSettingsButton(
     onClick: () -> Unit,
 ) {
     val colors = LocalCliColors.current
-    Box(
-        modifier = Modifier
-            .requiredSize(SETTINGS_BUTTON_SIZE)
-            .offset(x = SETTINGS_BUTTON_EDGE_SHIFT)
-            .cliPressable(enabled = enabled, onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        CliPixIcon(
-            id = R.drawable.pix_settings,
-            contentDescription = stringResource(R.string.cli_stats_settings_title),
-            size = SETTINGS_BUTTON_GLYPH_SIZE,
-            tint = if (enabled) colors.accent else colors.faint,
-        )
-    }
+    CliTopBarSettingsButton(
+        contentDescription = stringResource(R.string.cli_stats_settings_title),
+        onClick = onClick,
+        tint = if (enabled) colors.accent else colors.faint,
+        enabled = enabled,
+    )
 }
 
 @Composable
@@ -318,7 +302,7 @@ private fun CliStatsOverviewPanel(
     val monthLabel = stringResource(R.string.cli_stats_range_month)
     CliPanel(
         title = stringResource(R.string.cli_stats_overview_title),
-        icon = R.drawable.pix_stats,
+        icon = R.drawable.lin_stats,
         modifier = Modifier.fillMaxWidth(),
     ) {
         CliDropdownRow(
@@ -477,7 +461,7 @@ private fun CliStatsFirewallPanel(state: StatisticsRouteUiState) {
     val attempts = rows.sumOf { it.attempts }
     Spacer(modifier = Modifier.height(CliSpacing.sm))
     CliPanel(
-        icon = R.drawable.pix_fire,
+        icon = R.drawable.lin_fire,
         title = stringResource(R.string.cli_stats_firewall_title),
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -509,7 +493,7 @@ private fun CliStatsDnsPanel(state: StatisticsRouteUiState) {
     Spacer(modifier = Modifier.height(CliSpacing.sm))
     CliPanel(
         title = stringResource(R.string.cli_stats_dns_title),
-        icon = R.drawable.pix_dns,
+        icon = R.drawable.lin_dns,
         modifier = Modifier.fillMaxWidth(),
     ) {
         CliKeyValue(
@@ -560,7 +544,7 @@ private fun CliStatsTorPanel(
     Spacer(modifier = Modifier.height(CliSpacing.sm))
     CliPanel(
         title = stringResource(R.string.cli_stats_tor_title),
-        icon = R.drawable.pix_tor,
+        icon = R.drawable.lin_tor,
         modifier = Modifier.fillMaxWidth(),
     ) {
         CliKeyValue(
@@ -671,8 +655,8 @@ private fun CliStatsTorAppScopeRow(
                         modifier = Modifier.size(TOR_APP_ICON_SIZE),
                     )
                 } else {
-                    CliPixIcon(
-                        id = R.drawable.pix_apps,
+                    CliIcon(
+                        id = R.drawable.lin_apps,
                         contentDescription = packageName,
                         tint = colors.dim,
                         modifier = Modifier.size(TOR_APP_ICON_SIZE),
@@ -694,10 +678,6 @@ private fun CliStatsTorAppScopeRow(
 
 private fun appLabel(installedIndex: Map<String, InstalledAppOption>, packageName: String): String =
     installedIndex[packageName]?.label?.ifEmpty { packageName } ?: packageName
-
-private val SETTINGS_BUTTON_SIZE = 48.dp
-private val SETTINGS_BUTTON_GLYPH_SIZE = 20.dp
-private val SETTINGS_BUTTON_EDGE_SHIFT = 12.dp
 
 private const val DNS_APP_ROWS_MAX = 4
 private const val FIREWALL_ROWS_MAX = 4

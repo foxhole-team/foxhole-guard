@@ -13,17 +13,6 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/**
- * The LAN proxy leg binds the phone's Wi-Fi address, so an inbound without credentials is an open
- * SOCKS5/HTTP relay into the owner's VPN/Tor for the whole network (stage2 §8). Two invariants,
- * defence in depth on top of settings normalization:
- *
- *  - whenever a LAN inbound is published, it carries a non-empty `users` block; and
- *  - a blank password fails closed — no LAN inbound at all, never an anonymous one.
- *
- * The stored `enabled` flag is deliberately ignored for the LAN leg (forced on), so a stale
- * `enabled = false` payload can no longer produce an anonymous surface.
- */
 internal class RuntimeLanProxyAuthTest : RuntimeConfigAssemblerTestSupport() {
     private val lanAddress = "192.168.7.20"
 
@@ -45,8 +34,6 @@ internal class RuntimeLanProxyAuthTest : RuntimeConfigAssemblerTestSupport() {
 
     @Test
     fun `a stored disabled auth flag still yields an authenticated lan inbound`() {
-        // Old behaviour raised the inbound with no `users` when enabled == false. The flag no longer
-        // has that power for the LAN leg.
         val inbounds =
             buildLocalSurfaceInbounds(
                 localSurfaces =
@@ -105,16 +92,6 @@ internal class RuntimeLanProxyAuthTest : RuntimeConfigAssemblerTestSupport() {
                 inbound.tag().endsWith("-in-lan")
             }
 
-        // Stronger than the property this test used to assert, and for a reason
-        // the assertion could not see. The engine takes exactly one non-tun
-        // inbound — the loopback control proxy — so emitting a LAN listener
-        // beside it failed translation outright and the user was told the
-        // profile was invalid, on Wi-Fi only, on a profile that was fine. And
-        // there is no JNI entry point that could serve a LAN listener anyway:
-        // `foxcore-component::lan` is implemented, nothing exports it. So the
-        // config must not contain one, and "if present it must be
-        // authenticated" is now a property of `buildLocalSurfaceInbounds`
-        // rather than of the assembled config.
         assertTrue(lanInbounds.toString(), lanInbounds.isEmpty())
     }
 

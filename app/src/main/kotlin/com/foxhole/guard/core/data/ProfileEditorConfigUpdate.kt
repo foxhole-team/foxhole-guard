@@ -12,11 +12,6 @@ internal data class ProfileEditorConfigUpdate(
     val editedJson: String,
 )
 
-/**
- * Validates every edited protocol before mutating the encrypted secret, then commits the complete
- * editor session with one secret write. A bad second protocol therefore cannot leave the first one
- * saved. The old secret is restored if the following Room rename fails.
- */
 internal suspend fun ProfileRepository.updateProfileEditor(
     profileId: Long,
     profileName: String?,
@@ -66,7 +61,6 @@ internal suspend fun ProfileRepository.updateProfileEditor(
     return updated
 }
 
-/** Executable transaction seam used by the repository and its failure-order regression tests. */
 internal suspend fun persistValidatedProfileEditorChanges(
     originalSecret: StoredProfileSecret,
     edits: List<ProfileEditorConfigUpdate>,

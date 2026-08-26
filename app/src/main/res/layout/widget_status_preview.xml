@@ -6,327 +6,80 @@
     android:layout_height="match_parent"
     android:background="@drawable/widget_preview_bg"
     android:contentDescription="@string/cli_status_widget_label"
-    android:orientation="vertical"
-    android:padding="8dp"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:paddingHorizontal="10dp"
+    android:paddingVertical="6dp"
     tools:ignore="HardcodedText">
 
+    <FrameLayout
+        android:layout_width="36dp"
+        android:layout_height="36dp"
+        android:background="@drawable/widget_simple_logo_circle">
+
+        <ImageView
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:layout_gravity="center"
+            android:contentDescription="@string/widget_status_refresh"
+            android:src="@drawable/ic_qs_tile"
+            app:tint="@color/cli_fg" />
+    </FrameLayout>
+
     <LinearLayout
-        android:layout_width="match_parent"
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:gravity="center_vertical"
-        android:orientation="horizontal">
+        android:layout_marginHorizontal="8dp"
+        android:layout_weight="1"
+        android:gravity="center"
+        android:orientation="vertical">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:fontFamily="@font/tiny5_regular"
+            android:text="@string/widget_status_unprotected"
+            android:textAllCaps="true"
+            android:textColor="@color/cli_dim"
+            android:textSize="14sp" />
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="1dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <ImageView
+                android:layout_width="15dp"
+                android:layout_height="15dp"
+                android:importantForAccessibility="no"
+                android:src="@drawable/lin_device"
+                app:tint="@color/cli_dim" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="3dp"
+                android:fontFamily="@font/tiny5_regular"
+                android:text="—"
+                android:textAllCaps="true"
+                android:textColor="@color/cli_fg"
+                android:textSize="13sp" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <FrameLayout
+        android:layout_width="36dp"
+        android:layout_height="36dp"
+        android:background="@drawable/widget_simple_action_connect">
 
         <ImageView
             android:layout_width="20dp"
             android:layout_height="20dp"
-            android:importantForAccessibility="no"
-            android:src="@drawable/ic_qs_tile"
-            app:tint="@color/cli_fg" />
-
-        <TextView
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="4dp"
-            android:layout_weight="1"
-            android:fontFamily="@font/lanapixel"
-            android:text="@string/app_name"
-            android:textColor="@color/cli_accent"
-            android:textSize="12sp" />
-
-        <FrameLayout
-            android:layout_width="22dp"
-            android:layout_height="22dp">
-
-            <ImageView
-                android:layout_width="16dp"
-                android:layout_height="16dp"
-                android:layout_gravity="center"
-                android:importantForAccessibility="no"
-                android:src="@drawable/widget_refresh_pixel"
-                app:tint="@color/cli_fg" />
-        </FrameLayout>
-
-    </LinearLayout>
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="2dp"
-        android:gravity="center_vertical"
-        android:orientation="horizontal">
-
-        <ImageView
-            android:layout_width="10dp"
-            android:layout_height="10dp"
-            android:importantForAccessibility="no"
-            android:src="@drawable/pix_status"
-            app:tint="@color/cli_dim" />
-
-        <TextView
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="3dp"
-            android:layout_weight="1"
-            android:fontFamily="@font/lanapixel"
-            android:text="@string/widget_status_state"
-            android:textColor="@color/cli_dim"
-            android:textSize="11sp" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:fontFamily="@font/lanapixel"
-            android:text="@string/widget_status_disconnected"
-            android:textColor="@color/cli_err"
-            android:textSize="11sp" />
-    </LinearLayout>
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="2dp"
-        android:gravity="center_vertical"
-        android:orientation="horizontal">
-
-        <ImageView
-            android:layout_width="10dp"
-            android:layout_height="10dp"
-            android:importantForAccessibility="no"
-            android:src="@drawable/pix_profiles"
-            app:tint="@color/cli_dim" />
-
-        <TextView
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="3dp"
-            android:layout_weight="1"
-            android:fontFamily="@font/lanapixel"
-            android:text="@string/widget_status_vpn_profile"
-            android:textColor="@color/cli_dim"
-            android:textSize="11sp" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:fontFamily="@font/lanapixel"
-            android:text="—"
-            android:textColor="@color/cli_fg"
-            android:textSize="11sp" />
-    </LinearLayout>
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="2dp"
-        android:gravity="center_vertical"
-        android:orientation="horizontal">
-
-        <ImageView
-            android:layout_width="10dp"
-            android:layout_height="10dp"
-            android:importantForAccessibility="no"
-            android:src="@drawable/pix_shield"
-            app:tint="@color/cli_dim" />
-
-        <TextView
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="3dp"
-            android:layout_weight="1"
-            android:fontFamily="@font/lanapixel"
-            android:text="@string/widget_status_vpn_protocol"
-            android:textColor="@color/cli_dim"
-            android:textSize="11sp" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:fontFamily="@font/lanapixel"
-            android:text="—"
-            android:textColor="@color/cli_fg"
-            android:textSize="11sp" />
-    </LinearLayout>
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="2dp"
-        android:gravity="center_vertical"
-        android:orientation="horizontal">
-
-        <ImageView
-            android:layout_width="10dp"
-            android:layout_height="10dp"
-            android:importantForAccessibility="no"
-            android:src="@drawable/pix_dns"
-            app:tint="@color/cli_dim" />
-
-        <TextView
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="3dp"
-            android:layout_weight="1"
-            android:fontFamily="@font/lanapixel"
-            android:text="@string/widget_status_dns"
-            android:textColor="@color/cli_dim"
-            android:textSize="11sp" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:fontFamily="@font/lanapixel"
-            android:text="—"
-            android:textColor="@color/cli_fg"
-            android:textSize="11sp" />
-    </LinearLayout>
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="2dp"
-        android:gravity="center_vertical"
-        android:orientation="horizontal">
-
-        <ImageView
-            android:layout_width="10dp"
-            android:layout_height="10dp"
-            android:importantForAccessibility="no"
-            android:src="@drawable/pix_link"
-            app:tint="@color/cli_dim" />
-
-        <TextView
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="3dp"
-            android:layout_weight="1"
-            android:fontFamily="@font/lanapixel"
-            android:text="@string/widget_status_scenario"
-            android:textColor="@color/cli_dim"
-            android:textSize="11sp" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:fontFamily="@font/lanapixel"
-            android:text="—"
-            android:textColor="@color/cli_fg"
-            android:textSize="11sp" />
-    </LinearLayout>
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="2dp"
-        android:gravity="center_vertical"
-        android:orientation="horizontal">
-
-        <ImageView
-            android:layout_width="10dp"
-            android:layout_height="10dp"
-            android:importantForAccessibility="no"
-            android:src="@drawable/pix_settings"
-            app:tint="@color/cli_dim" />
-
-        <TextView
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="3dp"
-            android:layout_weight="1"
-            android:fontFamily="@font/lanapixel"
-            android:text="@string/widget_status_components"
-            android:textColor="@color/cli_dim"
-            android:textSize="11sp" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:fontFamily="@font/lanapixel"
-            android:text="—"
-            android:textColor="@color/cli_fg"
-            android:textSize="11sp" />
-    </LinearLayout>
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="2dp"
-        android:gravity="center_vertical"
-        android:orientation="horizontal">
-
-        <ImageView
-            android:layout_width="10dp"
-            android:layout_height="10dp"
-            android:importantForAccessibility="no"
-            android:src="@drawable/pix_map"
-            app:tint="@color/cli_dim" />
-
-        <TextView
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="3dp"
-            android:layout_weight="1"
-            android:fontFamily="@font/lanapixel"
-            android:text="@string/widget_status_ip_geo"
-            android:textColor="@color/cli_dim"
-            android:textSize="11sp" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:fontFamily="@font/lanapixel"
-            android:text="—"
-            android:textColor="@color/cli_fg"
-            android:textSize="11sp" />
-    </LinearLayout>
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="2dp"
-        android:gravity="center_vertical"
-        android:orientation="horizontal">
-
-        <ImageView
-            android:layout_width="10dp"
-            android:layout_height="10dp"
-            android:importantForAccessibility="no"
-            android:src="@drawable/pix_clock"
-            app:tint="@color/cli_dim" />
-
-        <TextView
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="3dp"
-            android:layout_weight="1"
-            android:fontFamily="@font/lanapixel"
-            android:text="@string/widget_status_latency"
-            android:textColor="@color/cli_dim"
-            android:textSize="11sp" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:fontFamily="@font/lanapixel"
-            android:text="—"
-            android:textColor="@color/cli_fg"
-            android:textSize="11sp" />
-    </LinearLayout>
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="22dp"
-        android:layout_marginTop="4dp"
-        android:orientation="horizontal">
-
-        <TextView
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:background="@drawable/widget_start_button"
-            android:fontFamily="@font/lanapixel"
-            android:gravity="center"
-            android:text="@string/widget_status_start"
-            android:textColor="@color/cli_ok"
-            android:textSize="11sp" />
-    </LinearLayout>
+            android:layout_gravity="center"
+            android:contentDescription="@string/widget_status_turn_on"
+            android:src="@drawable/lin_power"
+            app:tint="@color/cli_ok" />
+    </FrameLayout>
 </LinearLayout>

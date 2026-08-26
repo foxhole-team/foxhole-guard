@@ -6,18 +6,6 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
-/**
- * Identity of the VpnService interface a session would establish (hot routing).
- *
- * Built from the TUN subtree of the assembled config — the sole source used to derive the Android
- * interface plan — rather than from mutable runtime state.
- * Route *rules* deliberately stay outside the fingerprint: a per-app rule change alters where
- * connections go inside the box, not the kernel interface, so it must not force a re-establish.
- * DNS servers, the underlying network and metering do shape the Builder — they are included.
- *
- * A null fingerprint means "could not prove the interface is unchanged" and callers must fall
- * back to a full establish.
- */
 internal object RuntimeTunFingerprint {
     private val json =
         Json {
@@ -55,10 +43,6 @@ internal object RuntimeTunFingerprint {
         }
     }
 
-    // include_package/exclude_package become UID rows in the kernel tun filter at establish time.
-    // The package NAMES don't change across an uninstall+reinstall — its UID does, and a reused fd
-    // would keep filtering the dead UID while the reinstalled app bypasses the tun. Folding the
-    // live UIDs in makes a UID change re-establish instead of reusing the fd.
     private fun kernelFilterPackageUidSalt(
         tunInbound: JsonElement,
         packageUidResolver: (String) -> Int?,

@@ -1,10 +1,12 @@
 package com.foxhole.guard.ui
 
+import com.foxhole.core.model.AppliedTorRoute
 import com.foxhole.core.model.ConnectionSnapshot
 import com.foxhole.core.model.ConnectionState
 import com.foxhole.core.model.ExpertSettings
 import com.foxhole.core.model.IpInfo
 import com.foxhole.core.model.PrivacyRouteMode
+import com.foxhole.core.model.PrivacyRouteScope
 import com.foxhole.core.model.PrivacyRouteSettings
 import com.foxhole.core.model.Settings
 import com.foxhole.core.model.TrafficMode
@@ -68,11 +70,40 @@ internal class HomeDashboardTorIpHonestyTest {
                     trafficMode = TrafficMode.TUNNEL,
                     profileId = FoxholeVpnService.TOR_ONLY_PROFILE_ID,
                     torActive = true,
+                    appliedTorRoute =
+                    AppliedTorRoute(
+                        scope = PrivacyRouteScope.ALL_APPS,
+                        bypassVpnTunnel = true,
+                    ),
                 ),
                 torIpInfo = torExit,
                 deviceIpInfo = deviceIp,
             )
 
         assertEquals(torExit, state.dashboardVisibleIpInfo(visibleIpInfo = deviceIp))
+    }
+
+    @Test
+    fun `VPN-only applied snapshot drops a late TOR exit publication`() {
+        val vpnTor =
+            ConnectionSnapshot(
+                state = ConnectionState.CONNECTED,
+                profileId = 42L,
+                torActive = true,
+                appliedTorRoute =
+                AppliedTorRoute(
+                    scope = PrivacyRouteScope.SELECTED_APPS,
+                    bypassVpnTunnel = false,
+                ),
+            )
+
+        assertEquals(torExit, torIpInfoForAppliedRuntime(vpnTor, torExit))
+        assertEquals(
+            null,
+            torIpInfoForAppliedRuntime(
+                vpnTor.copy(torActive = false, appliedTorRoute = null),
+                torExit,
+            ),
+        )
     }
 }

@@ -2,13 +2,13 @@ package com.foxhole.guard.widget
 
 import android.content.Context
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.glance.ColorFilter
 import androidx.glance.GlanceModifier
 import androidx.glance.Image
 import androidx.glance.ImageProvider
+import androidx.glance.appwidget.cornerRadius
 import androidx.glance.background
 import androidx.glance.layout.Alignment
 import androidx.glance.layout.Box
@@ -19,38 +19,24 @@ import androidx.glance.layout.fillMaxWidth
 import androidx.glance.layout.padding
 import androidx.glance.layout.size
 import androidx.glance.layout.width
-import androidx.glance.text.FontFamily
-import androidx.glance.text.Text
-import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
 import com.foxhole.guard.R
-import com.foxhole.guard.ui.cli.components.cliLinIconRes
 
 internal val WIDGET_FRAME_INSET = 4.dp
-
-internal val LocalWidgetPlainIcons = staticCompositionLocalOf { false }
-
-@Composable
-internal fun widgetGlyph(id: Int): Int =
-    if (LocalWidgetPlainIcons.current) {
-        when (id) {
-            R.drawable.widget_refresh_spinner_90,
-            R.drawable.widget_refresh_spinner_180,
-            R.drawable.widget_refresh_spinner_270,
-            -> R.drawable.lin_update
-            else -> cliLinIconRes(id)
-        }
-    } else {
-        id
-    }
+internal val WIDGET_SURFACE_CORNER_RADIUS = 8.dp
 
 @Composable
-internal fun WidgetPixelFrame(
+internal fun WidgetFrame(
     background: WidgetBackground,
     outlined: Boolean,
+    modifier: GlanceModifier = GlanceModifier.fillMaxSize(),
     content: @Composable () -> Unit,
 ) {
-    Box(modifier = GlanceModifier.fillMaxSize().background(ColorProvider(background.fill))) {
+    Box(
+        modifier = modifier
+            .cornerRadius(WIDGET_SURFACE_CORNER_RADIUS)
+            .background(ColorProvider(background.fill)),
+    ) {
         if (outlined) {
             Image(
                 provider = ImageProvider(R.drawable.widget_frame),
@@ -79,15 +65,12 @@ internal fun WidgetBrandHeader(
             modifier = GlanceModifier.size(24.dp),
         )
         Spacer(modifier = GlanceModifier.width(4.dp))
-        Text(
+        StyledWidgetText(
+            context = context,
             text = context.getString(R.string.app_name),
-            style =
-            TextStyle(
-                color = ColorProvider(WIDGET_ACCENT),
-                fontSize = 12.sp,
-                fontFamily = FontFamily.Monospace,
-            ),
-            maxLines = 1,
+            color = WIDGET_ACCENT,
+            fontSize = 12,
+            maxWidth = WIDGET_BRAND_TEXT_MAX_WIDTH,
         )
         trailing?.let { content ->
             Spacer(modifier = GlanceModifier.defaultWeight())
@@ -95,3 +78,5 @@ internal fun WidgetBrandHeader(
         }
     }
 }
+
+private val WIDGET_BRAND_TEXT_MAX_WIDTH: Dp = 150.dp

@@ -183,6 +183,53 @@ internal class IpInfoRepositoryTest : IpInfoRepositoryTestSupport() {
         }
 
     @Test
+    fun `verified tor exit fetch accepts explicit positive proof`() =
+        runBlocking {
+            val requestedUrls = mutableListOf<String>()
+            val repository =
+                IpInfoRepository(
+                    client = torProofClient(requestedUrls, """{"IsTor":true,"IP":"198.51.100.44"}"""),
+                    json = json,
+                )
+
+            val info =
+                repository.fetchVerifiedTorExit(
+                    callTimeoutMs = 1_000L,
+                    proxy = testTorProxy(),
+                )
+
+            assertEquals("198.51.100.44", info.ip)
+            assertEquals(listOf(TOR_CHECK_IP_INFO_ENDPOINT), requestedUrls)
+        }
+
+    @Test
+    fun `verified tor exit timeout cannot fall back to a generic provider`() =
+        runBlocking {
+            val requestedUrls = mutableListOf<String>()
+            val repository =
+                IpInfoRepository(
+                    client = torProofClient(
+                        requestedUrls = requestedUrls,
+                        body = """{"IsTor":true,"IP":"198.51.100.44"}""",
+                        delayMs = 100L,
+                    ),
+                    json = json,
+                )
+
+            val result =
+                runCatching {
+                    repository.fetchVerifiedTorExit(
+                        callTimeoutMs = 10L,
+                        proxy = testTorProxy(),
+                    )
+                }
+
+            assertTrue(result.isFailure)
+            assertTrue(requestedUrls.size <= 1)
+            assertTrue(requestedUrls.all { it == TOR_CHECK_IP_INFO_ENDPOINT })
+        }
+
+    @Test
     fun `parses ifconfig schema`() {
         val parsed =
             parseIpInfoResponse(
@@ -207,6 +254,35 @@ internal class IpInfoRepositoryTest : IpInfoRepositoryTestSupport() {
         assertEquals("Amsterdam", parsed.city)
         assertEquals("Datacamp Limited", parsed.isp)
     }
+
+    private fun torProofClient(
+        requestedUrls: MutableList<String>,
+        body: String,
+        delayMs: Long = 0L,
+    ): OkHttpClient =
+        OkHttpClient.Builder()
+            .addInterceptor(
+                Interceptor { chain ->
+                    requestedUrls += chain.request().url.toString()
+                    if (delayMs > 0L) {
+                        Thread.sleep(delayMs)
+                    }
+                    Response.Builder()
+                        .request(chain.request())
+                        .protocol(Protocol.HTTP_1_1)
+                        .code(200)
+                        .message("OK")
+                        .body(body.toResponseBody("application/json".toMediaType()))
+                        .build()
+                },
+            ).build()
+
+    private fun testTorProxy(): HttpProxyAccess =
+        HttpProxyAccess(
+            host = "127.0.0.1",
+            port = 9,
+            type = ProxyAccessType.SOCKS,
+        )
 
     @Test
     fun `parses ipify schema`() {
@@ -511,9 +587,6 @@ internal class IpInfoRepositoryTest : IpInfoRepositoryTestSupport() {
 
     @Test
     fun `merge keeps primary identity when a geo-less ipv4 probe answers another network`() {
-        // Гонка WiFi<->cell: primary-фетч ушёл по одной сети (его адрес и гео из одного ответа),
-        // адресная ipv4-проба — по другой и БЕЗ своей геолокации. Чужой адрес не должен
-        // приклеиваться к гео primary («айпи wifi, гео с моб сети» на дашборде).
         val primary =
             IpInfo(
                 ip = "203.0.113.7",

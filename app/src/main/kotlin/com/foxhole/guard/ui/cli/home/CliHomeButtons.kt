@@ -1,18 +1,27 @@
 package com.foxhole.guard.ui.cli.home
 
-import androidx.compose.animation.animateContentSize
-import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.animation.core.animateDp
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.updateTransition
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.unit.dp
 import com.foxhole.core.model.ProfileSourceType
 import com.foxhole.core.model.ProtocolHint
 import com.foxhole.core.model.RoutingModePreset
@@ -21,6 +30,7 @@ import com.foxhole.guard.ui.ConnectModeSwitchRequestResult
 import com.foxhole.guard.ui.HomeViewModel
 import com.foxhole.guard.ui.TorTransitionPrompt
 import com.foxhole.guard.ui.cli.CliCommands
+import com.foxhole.guard.ui.cli.CliMotion
 import com.foxhole.guard.ui.cli.CliSpacing
 import com.foxhole.guard.ui.cli.LocalCliColors
 import com.foxhole.guard.ui.cli.components.CliButton
@@ -29,6 +39,7 @@ import com.foxhole.guard.ui.dismissPendingRoutingScenario
 import com.foxhole.guard.ui.dismissTorTransitionPrompt
 import com.foxhole.guard.ui.onConnectModeSwitchRequested
 import com.foxhole.guard.ui.onI2pEngagedChanged
+import com.foxhole.guard.ui.onVpnTorStopRequested
 import com.foxhole.guard.ui.startRoutingMode
 
 @Composable
@@ -48,7 +59,9 @@ internal fun CliPrimaryButtonsRow(
     val haptics = LocalHapticFeedback.current
     val displayedMode = configuredConnectMode(home.settings)
     val modePromptPending =
-        atomicModePromptPending || home.torTransitionPrompt is TorTransitionPrompt.LiveModeSwitch
+        atomicModePromptPending ||
+            home.torTransitionPrompt is TorTransitionPrompt.LiveModeSwitch ||
+            home.torTransitionPrompt is TorTransitionPrompt.VpnTorModeChoice
     LaunchedEffect(modePromptPending, displayedMode) {
         resetPendingModeCycle(modePromptPending, onPendingModeCycleChanged)
     }
@@ -86,64 +99,66 @@ internal fun CliPrimaryButtonsRow(
             mode = shownMode,
             profileSourceType = activeProfile?.sourceType,
         )
-    Row(
-        modifier = Modifier.fillMaxWidth().animateContentSize(),
-        horizontalArrangement = Arrangement.spacedBy(CliSpacing.sm),
-    ) {
-        CliButton(
-            label = stringResource(visibleMainAction.labelRes),
-            icon = visibleMainAction.iconRes,
-            filled = visibleMainAction.filled,
-            color =
-            when (mainAction.tone) {
-                CliMainActionTone.START -> colors.ok
-                CliMainActionTone.STOP -> colors.err
-            },
-            onClick = {
-                onInteraction()
-                if (subscriptionRefreshInProgress) return@CliButton
-                onPrimaryPressed()
-            },
-            onLongClick =
-            if (canRefreshSubscriptionOnStartHold && activeProfile != null) {
-                {
-                    onInteraction()
-                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                    terminal.command(CliCommands.refreshSubscription(activeProfile.name))
-                    viewModel.onRefreshProfile()
-                }
-            } else {
-                null
-            },
-            enabled = !subscriptionRefreshInProgress,
-            dimWhenDisabled = false,
-            modifier = Modifier
-                .weight(row.share)
-                .testTag(CLI_HOME_PRIMARY_ACTION_TAG),
-        )
-        if (CliHomeButton.MODE in row) {
-            CliButton(
-                label = shownMode.label,
-                icon = if (shownMode == CliConnectMode.VPN) R.drawable.pix_shield else R.drawable.pix_tor,
-                color = if (shownMode == CliConnectMode.VPN) colors.accent else colors.tor,
-                modifier = Modifier
-                    .weight(row.share)
-                    .testTag(CLI_HOME_MODE_ACTION_TAG)
-                    .semantics { stateDescription = shownMode.label },
-                onClick = {
-                    onInteraction()
-                    onPendingModeCycleChanged(
-                        cycleConnectMode(
-                            viewModel = viewModel,
-                            terminal = terminal,
-                            home = home,
-                            running = displayedMode,
-                            pending = pendingModeCycle,
-                            modePromptPending = modePromptPending,
-                        ),
-                    )
-                },
-            )
+    CliMorphingActionRow(
+        row = row,
+        order = PRIMARY_BUTTON_ORDER,
+        label = "homePrimaryActions",
+    ) { button, buttonModifier, interactive ->
+        when (button) {
+            CliHomeButton.MAIN ->
+                CliButton(
+                    label = stringResource(visibleMainAction.labelRes),
+                    icon = visibleMainAction.iconRes,
+                    filled = visibleMainAction.filled,
+                    color =
+                    when (mainAction.tone) {
+                        CliMainActionTone.START -> colors.ok
+                        CliMainActionTone.STOP -> colors.err
+                    },
+                    onClick = {
+                        onInteraction()
+                        if (subscriptionRefreshInProgress) return@CliButton
+                        onPrimaryPressed()
+                    },
+                    onLongClick =
+                    if (canRefreshSubscriptionOnStartHold && activeProfile != null) {
+                        {
+                            onInteraction()
+                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                            terminal.command(CliCommands.refreshSubscription(activeProfile.name))
+                            viewModel.onRefreshProfile()
+                        }
+                    } else {
+                        null
+                    },
+                    enabled = interactive && !subscriptionRefreshInProgress,
+                    dimWhenDisabled = false,
+                    modifier = buttonModifier.testTag(CLI_HOME_PRIMARY_ACTION_TAG),
+                )
+            CliHomeButton.MODE ->
+                CliButton(
+                    label = shownMode.label,
+                    icon = if (shownMode == CliConnectMode.VPN) R.drawable.lin_shield else R.drawable.lin_tor,
+                    color = if (shownMode == CliConnectMode.VPN) colors.accent else colors.tor,
+                    modifier = buttonModifier
+                        .testTag(CLI_HOME_MODE_ACTION_TAG)
+                        .semantics { stateDescription = shownMode.label },
+                    enabled = interactive,
+                    onClick = {
+                        onInteraction()
+                        onPendingModeCycleChanged(
+                            cycleConnectMode(
+                                viewModel = viewModel,
+                                terminal = terminal,
+                                home = home,
+                                running = displayedMode,
+                                pending = pendingModeCycle,
+                                modePromptPending = modePromptPending,
+                            ),
+                        )
+                    },
+                )
+            else -> Unit
         }
     }
 }
@@ -165,6 +180,7 @@ private fun performPrimaryAction(
         )
         if (accepted) terminal.command(command)
     } else {
+        if (connected && !busy && viewModel.onVpnTorStopRequested()) return
         terminal.command(command)
         viewModel.onToggleConnection()
     }
@@ -194,7 +210,7 @@ internal fun canRefreshSubscriptionOnStartHold(
 
 internal enum class CliMainActionTone { START, STOP }
 
-private data class CliMainButtonAction(
+internal data class CliMainButtonAction(
     val labelRes: Int,
     val command: String?,
     val filled: Boolean,
@@ -208,13 +224,13 @@ private fun CliMainButtonAction.visibleDuringSubscriptionRefresh(
     if (subscriptionRefreshInProgress && tone == CliMainActionTone.START) {
         copy(
             labelRes = R.string.cli_home_btn_subscription_refreshing,
-            iconRes = R.drawable.pix_update,
+            iconRes = R.drawable.lin_update,
         )
     } else {
         this
     }
 
-private fun mainButtonAction(
+internal fun mainButtonAction(
     connected: Boolean,
     busy: Boolean,
 ): CliMainButtonAction = when {
@@ -223,21 +239,21 @@ private fun mainButtonAction(
         command = CliCommands.CANCEL,
         filled = false,
         tone = CliMainActionTone.STOP,
-        iconRes = R.drawable.pix_cross,
+        iconRes = R.drawable.lin_cross,
     )
     connected -> CliMainButtonAction(
         labelRes = R.string.cli_home_btn_disconnect,
         command = CliCommands.STOP,
         filled = false,
         tone = CliMainActionTone.STOP,
-        iconRes = R.drawable.pix_power,
+        iconRes = R.drawable.lin_power,
     )
     else -> CliMainButtonAction(
         labelRes = R.string.cli_home_btn_connect,
         command = null,
-        filled = true,
+        filled = false,
         tone = CliMainActionTone.START,
-        iconRes = R.drawable.pix_power,
+        iconRes = R.drawable.lin_power,
     )
 }
 
@@ -324,12 +340,6 @@ private fun applyConnectModeSwitch(
 ): ConnectModeSwitchRequestResult =
     viewModel.onConnectModeSwitchRequested(next.preset, scope)
 
-/**
- * The transport protocol of the running option, never its name. A smart profile's
- * [com.foxhole.core.model.ProfileProtocolOption.displayName] is the free-form remark the
- * subscription shipped ("Amsterdam #3"), so reading it printed the profile name in a row
- * labelled "VPN protocol"; only [com.foxhole.core.model.ProtocolHint] names the protocol.
- */
 internal fun cliProfileProtocolLabel(profile: com.foxhole.core.model.Profile?): String? {
     val option = profile?.protocolOptions?.firstOrNull { it.id == profile.selectedProtocolOptionId }
         ?: profile?.protocolOptions?.firstOrNull { it.isSelected }
@@ -342,7 +352,7 @@ internal fun CliProfileProtocolFact(profile: com.foxhole.core.model.Profile?) {
     CliKeyValue(
         key = stringResource(R.string.cli_home_key_protocol),
         value = cliProfileProtocolLabel(profile)?.lowercase() ?: "—",
-        icon = R.drawable.pix_shield,
+        icon = R.drawable.lin_shield,
     )
 }
 
@@ -362,23 +372,24 @@ internal fun CliSecondaryButtonsRow(
         haptics.performHapticFeedback(HapticFeedbackType.LongPress)
         onStatusHold()
     }
-    val statusButton: @Composable (Modifier) -> Unit = { buttonModifier ->
+    val statusButton: @Composable (Modifier, Boolean) -> Unit = { buttonModifier, interactive ->
         CliButton(
             label = statusLabel,
-            icon = R.drawable.pix_status,
+            icon = R.drawable.lin_status,
             color = colors.accent,
-            enabled = home.settingsHydrated,
+            enabled = interactive && home.settingsHydrated,
             onClick = onStatus,
             onLongClick = statusHold,
             modifier = buttonModifier,
         )
     }
     val i2pEngaged = home.settings.i2p.enabled && home.settings.i2p.engaged
-    val i2pButton: @Composable (Modifier) -> Unit = { buttonModifier ->
+    val i2pButton: @Composable (Modifier, Boolean) -> Unit = { buttonModifier, interactive ->
         CliButton(
             label = if (home.settings.i2p.relayTransitTraffic) "I2P -R" else "I2P",
-            icon = R.drawable.pix_globe,
+            icon = R.drawable.lin_globe,
             color = if (i2pEngaged) colors.i2p else colors.dim,
+            enabled = interactive,
             onClick = {
                 val enable = !i2pEngaged
                 if (viewModel.onI2pEngagedChanged(enable)) {
@@ -393,25 +404,91 @@ internal fun CliSecondaryButtonsRow(
         i2pModuleEnabled = home.settings.i2p.enabled,
         connected = connected,
     ).secondary
-    Row(
-        modifier = Modifier.fillMaxWidth().animateContentSize(),
-        horizontalArrangement = Arrangement.spacedBy(CliSpacing.sm),
-    ) {
-        if (CliHomeButton.RESTART in row) {
-            CliButton(
-                label = stringResource(R.string.cli_home_btn_restart),
-                icon = R.drawable.pix_restart,
-                color = colors.accent,
-                onClick = {
-                    terminal.command(CliCommands.RESTART)
-                    viewModel.onRestartActiveProfile()
-                },
-                modifier = Modifier.weight(row.share),
-            )
-        }
-        statusButton(Modifier.weight(row.share))
-        if (CliHomeButton.I2P in row) {
-            i2pButton(Modifier.weight(row.share))
+    CliMorphingActionRow(
+        row = row,
+        order = SECONDARY_BUTTON_ORDER,
+        label = "homeSecondaryActions",
+    ) { button, buttonModifier, interactive ->
+        when (button) {
+            CliHomeButton.RESTART ->
+                CliButton(
+                    label = stringResource(R.string.cli_home_btn_restart),
+                    icon = R.drawable.lin_restart,
+                    color = colors.accent,
+                    enabled = interactive,
+                    onClick = {
+                        terminal.command(CliCommands.RESTART)
+                        viewModel.onRestartActiveProfile()
+                    },
+                    modifier = buttonModifier,
+                )
+            CliHomeButton.STATUS -> statusButton(buttonModifier, interactive)
+            CliHomeButton.I2P -> i2pButton(buttonModifier, interactive)
+            else -> Unit
         }
     }
 }
+
+@Composable
+private fun CliMorphingActionRow(
+    row: CliHomeButtonRow,
+    order: List<CliHomeButton>,
+    label: String,
+    content: @Composable (button: CliHomeButton, modifier: Modifier, interactive: Boolean) -> Unit,
+) {
+    val transition = updateTransition(targetState = row, label = label)
+    Row(modifier = Modifier.fillMaxWidth()) {
+        order.forEachIndexed { index, button ->
+            val composed = button in transition.currentState || button in transition.targetState
+            if (!composed) return@forEachIndexed
+            key(button) {
+                val weight by transition.animateFloat(
+                    transitionSpec = { CliMotion.settle() },
+                    label = "$label-${button.name}-weight",
+                ) { state ->
+                    if (button in state) VISIBLE_BUTTON_WEIGHT else HIDDEN_BUTTON_WEIGHT
+                }
+                val alpha by transition.animateFloat(
+                    transitionSpec = { CliMotion.standard() },
+                    label = "$label-${button.name}-alpha",
+                ) { state ->
+                    if (button in state) 1f else 0f
+                }
+                val hasLeadingGap = index > 0 &&
+                    order.take(index).any { previous -> previous in transition.currentState || previous in transition.targetState }
+                if (hasLeadingGap) {
+                    val gap by transition.animateDp(
+                        transitionSpec = { CliMotion.settle() },
+                        label = "$label-${button.name}-gap",
+                    ) { state ->
+                        if (button in state && order.take(index).any { it in state }) {
+                            CliSpacing.sm
+                        } else {
+                            HIDDEN_BUTTON_GAP
+                        }
+                    }
+                    Spacer(modifier = Modifier.width(gap))
+                }
+                Box(
+                    modifier = Modifier
+                        .weight(weight)
+                        .alpha(alpha)
+                        .clipToBounds(),
+                ) {
+                    content(
+                        button,
+                        Modifier.fillMaxWidth(),
+                        button in transition.targetState,
+                    )
+                }
+            }
+        }
+    }
+}
+
+private val PRIMARY_BUTTON_ORDER = listOf(CliHomeButton.MAIN, CliHomeButton.MODE)
+private val SECONDARY_BUTTON_ORDER =
+    listOf(CliHomeButton.RESTART, CliHomeButton.STATUS, CliHomeButton.I2P)
+private const val VISIBLE_BUTTON_WEIGHT = 1f
+private const val HIDDEN_BUTTON_WEIGHT = 0.001f
+private val HIDDEN_BUTTON_GAP = 0.dp

@@ -8,14 +8,6 @@ data class TunnelAppTrafficDelta(
     val txBytes: Long,
 )
 
-/**
- * Per-app byte accounting for traffic observed INSIDE the tunnel, accumulated from FoxCore flow
- * snapshots (which carry the requesting package via process info). This is the honest
- * per-app source while a VPN is active: the platform records tunneled per-app usage against the
- * VPN network ident (type 17), which the public NetworkStats WIFI/MOBILE summaries never match —
- * without this accumulator per-app statistics only ever see the trickle that bypasses the tunnel.
- * Drained by the app-traffic sampler each recording pass and merged with the NetworkStats windows.
- */
 object TunnelAppTrafficStats {
     private val rxByPackage = ConcurrentHashMap<String, AtomicLong>()
     private val txByPackage = ConcurrentHashMap<String, AtomicLong>()

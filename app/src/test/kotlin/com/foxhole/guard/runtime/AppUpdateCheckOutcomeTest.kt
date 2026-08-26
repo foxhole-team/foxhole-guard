@@ -61,6 +61,42 @@ class AppUpdateCheckOutcomeTest {
         }
 
     @Test
+    fun `an equal tag is up to date without touching an unavailable manifest`() =
+        runBlocking {
+            var requests = 0
+            val check =
+                client { chain ->
+                    requests++
+                    if (chain.request().url.encodedPath.endsWith(AppUpdateClient.MANIFEST_ASSET_NAME)) {
+                        respond(chain, 503, "unavailable")
+                    } else {
+                        respond(chain, 200, tagReleaseWithManifest("v0.0.2"))
+                    }
+                }.check(INSTALLED_CODE, INSTALLED_NAME)
+
+            assertEquals(AppUpdateCheck.UpToDate, check)
+            assertEquals("the manifest must not be fetched for an equal tag", 1, requests)
+        }
+
+    @Test
+    fun `a newer tag still reads the manifest`() =
+        runBlocking {
+            var requests = 0
+            val check =
+                client { chain ->
+                    requests++
+                    if (chain.request().url.encodedPath.endsWith(AppUpdateClient.MANIFEST_ASSET_NAME)) {
+                        respond(chain, 503, "unavailable")
+                    } else {
+                        respond(chain, 200, tagReleaseWithManifest("v0.0.3"))
+                    }
+                }.check(INSTALLED_CODE, INSTALLED_NAME)
+
+            assertEquals(AppUpdateFailure.NETWORK, (check as AppUpdateCheck.Failed).failure)
+            assertEquals("the manifest remains required for a newer tag", 2, requests)
+        }
+
+    @Test
     fun `a non-installable offer is refused by the repository instead of failing mid-transfer`() =
         runBlocking {
             var apkRequests = 0
@@ -199,6 +235,13 @@ class AppUpdateCheckOutcomeTest {
         """
         {"tag_name":"$tag","name":"$tag","html_url":"$BASE_URL/releases/tag/$tag","body":"notes",
          "assets":[{"name":"foxhole-guard.apk","browser_download_url":"$BASE_URL/foxhole-guard.apk","size":4096}]}
+        """.trimIndent()
+
+    private fun tagReleaseWithManifest(tag: String): String =
+        """
+        {"tag_name":"$tag","name":"$tag","html_url":"$BASE_URL/releases/tag/$tag","body":"notes",
+         "assets":[{"name":"${AppUpdateClient.MANIFEST_ASSET_NAME}",
+                    "browser_download_url":"$BASE_URL/${AppUpdateClient.MANIFEST_ASSET_NAME}","size":128}]}
         """.trimIndent()
 
     private fun createTempDir(): java.io.File =

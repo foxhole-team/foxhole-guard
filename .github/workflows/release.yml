@@ -12,9 +12,6 @@ permissions:
   contents: write
   id-token: write
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
-
 concurrency:
   group: release-main
   cancel-in-progress: false
@@ -27,7 +24,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: checkout main
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           persist-credentials: false
 
@@ -123,7 +120,7 @@ jobs:
         run: sdkmanager "build-tools;37.0.0"
 
       - name: download exact dev candidate
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
           name: ${{ steps.candidate.outputs.artifact_name }}
           path: ${{ runner.temp }}/foxhole-release-candidate
@@ -170,7 +167,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: attest exact release files
-        uses: actions/attest-build-provenance@96b4a1ef7235a096b17240c259729fdd70c83d45 # v2
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4
         with:
           subject-path: ${{ runner.temp }}/foxhole-release-candidate/*
 
@@ -188,8 +185,8 @@ jobs:
           while IFS= read -r asset; do
             assets+=("$asset")
           done < <(find "$candidate_dir" -mindepth 1 -maxdepth 1 -type f | LC_ALL=C sort)
-          [[ ${#assets[@]} -eq 6 ]] || {
-            echo "Expected exactly six verified release files." >&2
+          [[ ${#assets[@]} -eq 7 ]] || {
+            echo "Expected exactly seven verified release files." >&2
             exit 1
           }
 

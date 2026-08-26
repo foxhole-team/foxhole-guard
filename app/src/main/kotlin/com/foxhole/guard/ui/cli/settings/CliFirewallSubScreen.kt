@@ -53,8 +53,8 @@ import com.foxhole.guard.ui.cli.components.CliBottomSheet
 import com.foxhole.guard.ui.cli.components.CliCenteredEmptyNote
 import com.foxhole.guard.ui.cli.components.CliChip
 import com.foxhole.guard.ui.cli.components.CliElbowLine
+import com.foxhole.guard.ui.cli.components.CliIcon
 import com.foxhole.guard.ui.cli.components.CliPanel
-import com.foxhole.guard.ui.cli.components.CliPixIcon
 import com.foxhole.guard.ui.cli.components.CliScreenHeader
 import com.foxhole.guard.ui.cli.components.CliSheetAction
 import com.foxhole.guard.ui.cli.components.CliSheetActionTone
@@ -89,7 +89,7 @@ internal fun CliFirewallSubScreen(
             .fillMaxSize()
             .padding(horizontal = CliSpacing.md),
     ) {
-        CliScreenHeader(label = stringResource(R.string.cli_cfg_firewall), icon = R.drawable.pix_fire)
+        CliScreenHeader(label = stringResource(R.string.cli_cfg_firewall), icon = R.drawable.lin_fire)
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -100,12 +100,12 @@ internal fun CliFirewallSubScreen(
             Spacer(modifier = Modifier.height(CliSpacing.sm))
             CliPanel(
                 title = stringResource(R.string.cli_firewall_quarantine_title),
-                icon = R.drawable.pix_forbidden,
+                icon = R.drawable.lin_forbidden,
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 CliToggleRow(
                     label = stringResource(R.string.cli_anomaly_quarantine),
-                    icon = R.drawable.pix_forbidden,
+                    icon = R.drawable.lin_forbidden,
                     checked = settings.expert.newAppQuarantineEnabled,
                     onToggle = viewModel::onNewAppQuarantineChanged,
                     infoText = stringResource(R.string.cli_anomaly_quarantine_note),
@@ -134,12 +134,12 @@ private fun CliKillSwitchPanel(
     val context = LocalContext.current
     CliPanel(
         title = stringResource(R.string.cli_firewall_killswitch_title),
-        icon = R.drawable.pix_lock,
+        icon = R.drawable.lin_lock,
         modifier = Modifier.fillMaxWidth(),
     ) {
         CliToggleRow(
             label = stringResource(R.string.cli_firewall_killswitch_toggle),
-            icon = R.drawable.pix_lock,
+            icon = R.drawable.lin_lock,
             checked = settings.expert.killSwitchEnabled,
             onToggle = viewModel::onKillSwitchEnabledChanged,
             infoText = stringResource(R.string.cli_firewall_killswitch_info),
@@ -148,7 +148,7 @@ private fun CliKillSwitchPanel(
         CliElbowLine(text = stringResource(R.string.cli_firewall_killswitch_system))
         CliActionRow(
             label = stringResource(R.string.cli_help_killswitch_link),
-            icon = R.drawable.pix_settings,
+            icon = R.drawable.lin_settings,
             onTap = {
                 runCatching {
                     context.startActivity(Intent(android.provider.Settings.ACTION_VPN_SETTINGS))
@@ -173,7 +173,7 @@ private fun CliQuarantineQueue(
     val selectedItem = items.firstOrNull { item -> item.packageName == selectedPackage }
     CliPanel(
         title = stringResource(R.string.cli_quarantine_title),
-        icon = R.drawable.pix_forbidden,
+        icon = R.drawable.lin_forbidden,
         modifier = Modifier.fillMaxWidth(),
         attention = items.isNotEmpty(),
         attentionColor = colors.firewall,
@@ -313,8 +313,8 @@ private fun CliQuarantineAppIcon(item: CliQuarantineQueueItem) {
         contentAlignment = Alignment.Center,
     ) {
         if (icon == null) {
-            CliPixIcon(
-                id = R.drawable.pix_forbidden,
+            CliIcon(
+                id = R.drawable.lin_forbidden,
                 contentDescription = null,
                 size = 16.dp,
                 tint = colors.firewall,
@@ -368,7 +368,7 @@ private fun CliQuarantineDecisionSheet(
     CliBottomSheet(
         onDismiss = onDismiss,
         title = stringResource(R.string.cli_quarantine_confirm_title),
-        icon = R.drawable.pix_forbidden,
+        icon = R.drawable.lin_forbidden,
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             CliQuarantineAppIcon(item = item)
@@ -396,16 +396,17 @@ private fun CliQuarantineDecisionSheet(
         CliElbowLine(text = stringResource(R.string.cli_quarantine_signals_marker, signals))
         Spacer(modifier = Modifier.height(CliSpacing.md))
         CliSheetActionsRow(
-            onCancel = onDismiss,
             actions = listOf(
                 CliSheetAction(
                     label = stringResource(R.string.cli_quarantine_block),
                     onClick = { onResolve(true) },
                     tone = CliSheetActionTone.DESTRUCTIVE,
+                    dismissAfterClick = true,
                 ),
                 CliSheetAction(
                     label = stringResource(R.string.cli_quarantine_allow),
                     onClick = { onResolve(false) },
+                    dismissAfterClick = true,
                 ),
             ),
         )

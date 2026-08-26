@@ -22,3 +22,35 @@ DaemonUnix while leaving the rest of i2pd's Android behaviour intact.
 +    add_definitions("-DANDROID_BINARY")
 +  endif()
  endif()
+
+--- a/daemon/HTTPServer.cpp
++++ b/daemon/HTTPServer.cpp
+@@ -1306,6 +1306,28 @@ namespace http {
+ 			}
+ 		}
+ 
++		if (req.uri == "/foxhole-status")
++		{
++			auto clientTunnelCount = i2p::tunnel::tunnels.CountOutboundTunnels ();
++			clientTunnelCount += i2p::tunnel::tunnels.CountInboundTunnels ();
++			s << "foxhole_status=1\n"
++			  << "network_status=" << static_cast<int>(i2p::context.GetStatus ()) << "\n"
++			  << "known_routers=" << i2p::data::netdb.GetNumRouters () << "\n"
++			  << "client_tunnels=" << clientTunnelCount << "\n"
++			  << "transit_tunnels=" << i2p::tunnel::tunnels.CountTransitTunnels () << "\n"
++			  << "received_bytes=" << i2p::transport::transports.GetTotalReceivedBytes () << "\n"
++			  << "sent_bytes=" << i2p::transport::transports.GetTotalSentBytes () << "\n"
++			  << "transit_bytes=" << i2p::transport::transports.GetTotalTransitTransmittedBytes () << "\n"
++			  << "received_bytes_per_sec=" << i2p::transport::transports.GetInBandwidth15s () << "\n"
++			  << "sent_bytes_per_sec=" << i2p::transport::transports.GetOutBandwidth15s () << "\n"
++			  << "transit_bytes_per_sec=" << i2p::transport::transports.GetTransitBandwidth15s () << "\n"
++			  << "version=" VERSION "\n";
++			res.code = 200;
++			content = s.str ();
++			SendReply (res, content);
++			return;
++		}
++
+ 		// HTML head start
+ 		ShowPageHead (s);
+ 		if (req.uri.find("page=") != std::string::npos) {

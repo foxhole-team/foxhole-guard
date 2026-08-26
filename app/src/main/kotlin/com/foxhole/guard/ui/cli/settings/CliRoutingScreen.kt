@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -19,6 +20,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -39,21 +41,28 @@ import com.foxhole.guard.ui.HomeViewModel
 import com.foxhole.guard.ui.RoutingRouteUiState
 import com.foxhole.guard.ui.SettingsRouteUiState
 import com.foxhole.guard.ui.cli.CliSpacing
+import com.foxhole.guard.ui.cli.CliTopBarLift
 import com.foxhole.guard.ui.cli.CliTopContentGap
 import com.foxhole.guard.ui.cli.CliType
 import com.foxhole.guard.ui.cli.LocalCliColors
+import com.foxhole.guard.ui.cli.LocalCliPixelArtEnabled
+import com.foxhole.guard.ui.cli.LocalCliType
 import com.foxhole.guard.ui.cli.cliSlide
+import com.foxhole.guard.ui.cli.components.CLI_MENU_ROW_MIN_HEIGHT
 import com.foxhole.guard.ui.cli.components.CliBackRow
 import com.foxhole.guard.ui.cli.components.CliChromeTailSpacer
 import com.foxhole.guard.ui.cli.components.CliGlassHeaderScreen
 import com.foxhole.guard.ui.cli.components.CliRoutingChangeConfirmSheet
 import com.foxhole.guard.ui.cli.components.CliScreenHeader
 import com.foxhole.guard.ui.cli.components.CliTopBarHelpButton
+import com.foxhole.guard.ui.cli.components.CliTopBarHelpPresentation
+import com.foxhole.guard.ui.cli.components.LocalCliIconMetricOverrides
 import com.foxhole.guard.ui.cli.components.cliPressable
 import com.foxhole.guard.ui.cli.components.rememberCliRejectFeedback
 import com.foxhole.guard.ui.confirmPendingRoutingScenario
 import com.foxhole.guard.ui.dismissPendingRoutingScenario
 import com.foxhole.guard.ui.loadInstalledApps
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @Composable
@@ -65,6 +74,8 @@ internal fun CliRoutingScreen(
     val state by viewModel.settingsRouteState.collectAsStateWithLifecycle()
     val appState by viewModel.appPickerRouteState.collectAsStateWithLifecycle()
     val pendingRoutingScenario by viewModel.pendingRoutingScenarioConfirmation.collectAsStateWithLifecycle()
+    val pixelArtEnabled = LocalCliPixelArtEnabled.current
+    val settingsTypography = cliSettingsTypographyFor(LocalCliType.current, pixelArtEnabled)
     LaunchedEffect(Unit) { viewModel.loadInstalledApps() }
     var showPicker by rememberSaveable { mutableStateOf(false) }
 
@@ -77,27 +88,35 @@ internal fun CliRoutingScreen(
     }
 
     BackHandler(enabled = showPicker) { showPicker = false }
-    AnimatedContent(
-        targetState = showPicker,
-        transitionSpec = { cliSlide(forward = targetState) },
-        modifier = modifier,
-        label = "appsPicker",
-    ) { picker ->
-        if (picker) {
-            CliAppPickerScreen(
-                viewModel = viewModel,
-                state = appState,
-                onBack = { showPicker = false },
-                modifier = Modifier.statusBarsPadding().padding(top = CliTopContentGap),
-            )
-        } else {
-            CliRoutingRootColumn(
-                viewModel = viewModel,
-                state = state,
-                appState = appState,
-                onBack = onBack,
-                onAddApps = { showPicker = true },
-            )
+    CompositionLocalProvider(
+        LocalCliIconMetricOverrides provides cliSettingsIconMetrics(pixelArtEnabled),
+        LocalCliType provides settingsTypography,
+    ) {
+        AnimatedContent(
+            targetState = showPicker,
+            transitionSpec = { cliSlide(forward = targetState) },
+            modifier = modifier,
+            label = "appsPicker",
+        ) { picker ->
+            if (picker) {
+                CliAppPickerScreen(
+                    viewModel = viewModel,
+                    state = appState,
+                    onBack = { showPicker = false },
+                    modifier = Modifier
+                        .statusBarsPadding()
+                        .offset(y = -CliTopBarLift)
+                        .padding(top = CliTopContentGap),
+                )
+            } else {
+                CliRoutingRootColumn(
+                    viewModel = viewModel,
+                    state = state,
+                    appState = appState,
+                    onBack = onBack,
+                    onAddApps = { showPicker = true },
+                )
+            }
         }
     }
 }
@@ -117,8 +136,17 @@ private fun CliRoutingRootColumn(
             } else {
                 CliScreenHeader(
                     label = stringResource(R.string.cli_dock_apps),
-                    icon = R.drawable.pix_apps,
-                    trailing = { CliTopBarHelpButton(bodyRes = R.string.cli_help_routing_body) },
+                    icon = R.drawable.lin_apps,
+                    trailing = {
+                        CliTopBarHelpButton(
+                            bodyRes = R.string.cli_help_routing_body,
+                            presentation = CliTopBarHelpPresentation(
+                                titleRes = R.string.cli_help_routing_title,
+                                icon = R.drawable.lin_apps,
+                                itemIcons = ROUTING_HELP_ICONS,
+                            ),
+                        )
+                    },
                 )
             }
         },
@@ -160,8 +188,9 @@ private fun CliRoutingRootSections(
         rejectionAttempt += 1
         val attempt = rejectionAttempt
         missingAppsTarget = target
+        scope.launch { missingAppsFeedback.play() }
         scope.launch {
-            missingAppsFeedback.play()
+            delay(MISSING_APPS_WARNING_VISIBLE_MS)
             if (rejectionAttempt == attempt) missingAppsTarget = null
         }
     }
@@ -186,6 +215,15 @@ private fun CliRoutingRootSections(
     }
 }
 
+internal const val MISSING_APPS_WARNING_VISIBLE_MS = 6_000L
+
+private val ROUTING_HELP_ICONS = listOf(
+    R.drawable.lin_link,
+    R.drawable.lin_device,
+    R.drawable.lin_forbidden,
+    R.drawable.lin_incognito,
+)
+
 @Composable
 internal fun CliInstalledAppRow(
     app: InstalledAppOption,
@@ -196,7 +234,7 @@ internal fun CliInstalledAppRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .defaultMinSize(minHeight = 48.dp)
+            .defaultMinSize(minHeight = CLI_MENU_ROW_MIN_HEIGHT)
             .cliPressable(onClick = onTap),
         verticalAlignment = Alignment.CenterVertically,
     ) {

@@ -10,10 +10,6 @@ import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
-// The native seam: the JNI binding itself and the vocabulary that crosses it. Kept apart from the
-// runtime on purpose — everything the ABI dictates changes here, and nothing that session-ownership
-// logic dictates does.
-
 internal data class NativeUnavailableOutbound(
     val id: String,
     val kind: String,
@@ -107,11 +103,6 @@ internal interface FoxCoreNativeApi {
         policyJson: String,
     ): Long
 
-    /**
-     * The core's own words about the last refused reload. Empty when the last
-     * reload applied, when none was attempted, or when the handle is gone —
-     * never null.
-     */
     fun lastPolicyError(handle: Long): String
 
     fun stats(handle: Long): String
@@ -137,10 +128,6 @@ internal interface FoxCoreNativeApi {
         networkHandle: Long,
     )
 
-    /**
-     * Session-scoped trust for the Wi-Fi the LAN proxy will be published on. Returns
-     * [LAN_PROXY_NOT_LINKED] when the native library in this build predates the LAN proxy ABI.
-     */
     fun confirmLanNetwork(
         handle: Long,
         networkHandle: Long,
@@ -156,10 +143,6 @@ internal interface FoxCoreNativeApi {
 
     fun stopLanProxy(handle: Long): Int = LAN_PROXY_NOT_LINKED
 
-    /**
-     * Cuts the live flows matching the target document. Returns the number revoked, or a negative
-     * refusal; [LAN_PROXY_NOT_LINKED] when the native library predates the call.
-     */
     fun revokeFlows(
         handle: Long,
         targetJson: String,
@@ -168,11 +151,6 @@ internal interface FoxCoreNativeApi {
     /** Empty when the core cannot be asked; never null. */
     fun lanProxyStatus(handle: Long): String = ""
 
-    /**
-     * The device-local proxy: one named HTTP CONNECT listener on loopback, raised on the live
-     * session rather than described in the config document — the same shape as the LAN surface and
-     * for the same reason, that only the core knows which port was actually bound.
-     */
     fun startLoopbackInbound(
         handle: Long,
         configJson: String,
@@ -187,13 +165,6 @@ internal interface FoxCoreNativeApi {
     fun loopbackInbounds(handle: Long): String = ""
 }
 
-/**
- * Sentinel for "this native build has no LAN proxy entry point".
- *
- * A missing JNI symbol surfaces as [UnsatisfiedLinkError] on the *call*, not on library load, so a
- * Guard built against an older core must degrade to an honest "unavailable" rather than crash the
- * VPN service. Deliberately outside the core's own code range.
- */
 const val LAN_PROXY_NOT_LINKED: Int = Int.MIN_VALUE
 
 internal object JniFoxCoreNativeApi : FoxCoreNativeApi {
@@ -379,7 +350,11 @@ internal data class ActiveFoxCoreSession(
 internal data class NativeStopOutcome(
     val stopped: Boolean,
     val escalated: Boolean,
-)
+    val forceStopOutcome: NativeForceStopOutcome = NativeForceStopOutcome.NOT_ATTEMPTED,
+) {
+    val processPoisoned: Boolean
+        get() = forceStopOutcome.processPoisoned
+}
 
 enum class FoxCoreRuntimeFailure(
     val code: String,
@@ -396,31 +371,14 @@ enum class FoxCoreRuntimeFailure(
     NATIVE_STOP_FAILED("native_stop_failed"),
     POLICY_RELOAD_FAILED("policy_reload_failed"),
 
-    /**
-     * The core has no Tor in this build or this profile. Permanent: the switch
-     * that asked for it should come down rather than fail again on every
-     * change.
-     */
     POLICY_TOR_UNAVAILABLE("policy_tor_unavailable"),
 
-    /** The same for I2P. */
     POLICY_I2P_UNAVAILABLE("policy_i2p_unavailable"),
 
-    /** The policy names an outbound this generation does not have. */
     POLICY_UNKNOWN_OUTBOUND("policy_unknown_outbound"),
 
-    /**
-     * The core's revision moved under this write. Nothing is wrong; the caller
-     * retries once without the guard.
-     */
     POLICY_REVISION_CONFLICT("policy_revision_conflict"),
 
-    /**
-     * The route shape cannot be honoured here — an overlay route without
-     * fake-IP DNS, per-app routing with no platform attribution, or a packet
-     * tunnel that refuses fake-IP. All three are configuration the user can
-     * change, unlike a malformed policy.
-     */
     POLICY_ROUTE_UNSUPPORTED("policy_route_unsupported"),
     ROLLBACK_FAILED("rollback_failed"),
 }

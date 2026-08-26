@@ -18,13 +18,6 @@ sealed interface PasswordSetupResult {
     data object Failed : PasswordSetupResult
 }
 
-/**
- * Orchestrates enabling/disabling the custom password (task_new.md key migration).
- * Enabling wraps the existing SQLCipher passphrase into a keybox and deletes the
- * Keystore-backed copy - no SQLCipher rekey, the dataKey is unchanged. The crash-safe
- * ordering plus [reconcileKeySources] guarantee the keybox always wins if both stores
- * exist after an interrupted migration.
- */
 class AppLockSetupCoordinator internal constructor(
     context: Context,
     private val settingsRepository: SettingsRepository,
@@ -53,8 +46,7 @@ class AppLockSetupCoordinator internal constructor(
                 val kdf = KdfCalibration.calibrate(crypto)
                 val session = keybox.create(passwordBytes, dataKey, kdf)
                 journal(GuardEvent(type = GuardEventType.GUARD_ENABLED))
-                // Keybox now holds the dataKey: the old Keystore copy must go, and if we die
-                // here reconcileKeySources() deletes the stale passphrase (keybox wins).
+
                 keystoreSource.delete()
                 appLockManager.adoptFreshSession(session)
             }
@@ -62,8 +54,6 @@ class AppLockSetupCoordinator internal constructor(
             settingsRepository.markAppLockPasswordSet()
             PasswordSetupResult.Success
         } catch (cancelled: kotlinx.coroutines.CancellationException) {
-            // Cooperative cancellation must not be reported as a setup failure: rethrow so the
-            // caller's coroutine unwinds normally instead of surfacing a spurious error banner.
             throw cancelled
         } catch (_: Exception) {
             PasswordSetupResult.Failed
@@ -84,10 +74,6 @@ class AppLockSetupCoordinator internal constructor(
         }
     }
 
-    /**
-     * Disables the PIN with the master key the biometric prompt just unsealed — no PIN
-     * needed. Takes ownership of [masterKey].
-     */
     suspend fun disablePasswordProtectionWithMasterKey(masterKey: ByteArray): PasswordSetupResult {
         journal(GuardEvent(type = GuardEventType.GUARD_DISABLE_REQUESTED))
         return withContext(Dispatchers.Default) {
@@ -133,12 +119,9 @@ class AppLockSetupCoordinator internal constructor(
                 when (val outcome = keybox.unlock(currentBytes)) {
                     is KeyboxUnlockOutcome.Success -> {
                         outcome.session.changePassword(nextBytes)
-                        // The bio blob seals the OLD master key; a stale one must not
-                        // linger. The settings toggle is flipped off by the caller.
+
                         biometricGate.clear()
-                        // Adopt the rewrapped session: the manager's previous one still
-                        // holds the old master key and old document — a later checkpoint
-                        // rewrap through it would silently revert the PIN change.
+
                         appLockManager.adoptFreshSession(outcome.session)
                         PasswordSetupResult.Success
                     }
@@ -153,10 +136,6 @@ class AppLockSetupCoordinator internal constructor(
         }
     }
 
-    /**
-     * Resolves a crash between keybox creation and passphrase deletion: if both exist,
-     * the keybox is authoritative and the stale Keystore passphrase is removed.
-     */
     fun reconcileKeySources() {
         if (keybox.exists() && keystoreSource.exists()) {
             keystoreSource.delete()

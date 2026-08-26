@@ -20,9 +20,6 @@ class AppTrafficStatsRecorder(
 
     suspend fun recordSnapshot(minDurationMs: Long = AppTrafficSampler.DEFAULT_SAMPLE_WINDOW_MS) {
         if (!hasUsageAccess()) {
-            // This is the one signal support/self-diagnosis has for "the toggle is on but no app
-            // traffic ever shows up": the runtime gate silently skipped every sample. Surface it in
-            // the diagnostics journal instead of failing silently on every interval forever.
             diagnosticsLogger?.recordThrottled(
                 tag = "traffic",
                 throttleKey = "app_traffic_usage_access_missing",

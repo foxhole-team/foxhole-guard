@@ -1,6 +1,12 @@
-0.0.2 public beta
+0.1.0 public beta — consolidated changes since 0.0.2
 
-- Fixed dashboard DNS, IP and Tor refresh, cold-start status, profile motion, scenarios, traffic charts, and dialogs in the light theme.
-- Blur is off by default. Switching Sentinel off now stops its background analysis, and the costly encrypted database scan has been removed.
-- Added the AmneziaWG manual template. Signed DNS updates now activate live when filtering is running, and the app-to-core JNI seam is checked in release gates.
-- Updated the five signed FoxHole DB feeds and the public architecture documentation.
+- Delivers the unified Home redesign and performance pass: compact cards, aligned headers, stable widget heights, smoother settings expansion, and calmer native Material navigation and modal motion.
+- Resolves the public DNS resolver as IPv4 with country code and flag, keeps the current resolver visible across connection transitions, and prevents duplicate FoxHole DB manifest paths and 404 refreshes.
+- Keeps the simplified widget’s country identity visible while stably disconnected, shows status updates only for transitions and refreshes, and keeps Glance provider classes distinct from Web Apps after R8 shrinking.
+- Reworks Quick start and Help into aligned action and Smart-profile tables with Home-console icons, equal metric/color row heights, right-aligned values, readable scrolling content, and restored detailed guidance.
+- Preserves explicit theme and accent choices across upgrades while keeping dark/orange defaults for new installs; separates the warning yellow from orange.
+- Keeps DNS filtering and Sentinel implementations and data downloads intact while first-run setup exposes only Tor and I2P enable switches.
+- Adds progress feedback for DNS, Tor, and Sentinel data operations, resilient simplified-widget refreshes across VPN, Tor, and I2P, and faster Smart-profile selector return.
+- Clarifies map country tables and journal guidance, including the full “connections” label in both locales.
+- Mirrors the final Russian copy in English for beta information, update notes, web apps, routing, Quick start, Smart profiles, DNS, widgets, and map help.
+- Pins and verifies the public FoxCore 0.0.4 release.

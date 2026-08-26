@@ -29,6 +29,24 @@ internal class UpdateSourcesNormalizationTest {
     }
 
     @Test
+    fun `a manifest url is stored as a feed base`() {
+        val sources = normalize(
+            databaseBaseUrl = "https://mirror.example.org/foxhole-db/manifest.json",
+        )
+
+        assertEquals("https://mirror.example.org/foxhole-db", sources.databaseBaseUrl)
+    }
+
+    @Test
+    fun `a manifest url with a trailing slash is stored as a feed base`() {
+        val sources = normalize(
+            databaseBaseUrl = "https://mirror.example.org/foxhole-db/manifest.json/",
+        )
+
+        assertEquals("https://mirror.example.org/foxhole-db", sources.databaseBaseUrl)
+    }
+
+    @Test
     fun `an unusable database address falls back to the built-in source`() {
         assertEquals("", normalize(databaseBaseUrl = "not a url").databaseBaseUrl)
         assertEquals("", normalize(databaseBaseUrl = "http://mirror.example.org/db").databaseBaseUrl)

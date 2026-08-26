@@ -13,17 +13,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 
-// Consolidated runtime state machine: the UI-state model, the event/reducer/store, and the
-// generation-tracking state machine. Previously split across RuntimeUiState / RuntimeStateReducer /
-// RuntimeStateMachine. Behaviour is unchanged.
-
 internal class RuntimeStateMachine(
     private val diagnosticsLogger: RuntimeDiagnosticsSink?,
     initialState: RuntimeUiState = RuntimeUiState(),
 ) {
-    // Last transition token minted FOR this machine (by RuntimeSupervisor from the shared
-    // RuntimeGenerationClock). Staleness is equality against this value, so unrelated clock
-    // activity (commands, child-process lifecycles) never invalidates a live UI transition.
     @Volatile
     private var lastTransitionGeneration: Long = initialState.generation
 
@@ -466,19 +459,6 @@ internal fun runtimeUiStateFromBridge(
     )
 }
 
-/**
- * The published Tor state, derived from the bridge's live feed.
- *
- * It used to be `previous.tor`, which — with [RuntimeEvent.TorStateChanged] having no producer
- * anywhere — pinned it to [RuntimeTorUiState.Off] for the lifetime of the process: every Tor status
- * derived from it was a branch that could not be reached. The two inputs here are the ones the
- * runtime actually maintains: the bootstrap phase (log tail / control probe) and the Tor-route exit
- * observed by tunnel validation.
- *
- * CONNECTED without an exit yet stays [RuntimeTorUiState.Bootstrapping] rather than claiming
- * readiness: "Tor is up" and "traffic demonstrably leaves through Tor" are different statements,
- * and the second one is the one worth showing.
- */
 private fun bridgeTorState(
     previous: RuntimeTorUiState,
     phase: TorPhaseSnapshot,

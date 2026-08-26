@@ -12,23 +12,12 @@ import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
-/**
- * The biometric side door into the keybox: a hardware-bound copy of the Argon2id
- * master key (`keybox.bio`), sealed with a Keystore key that only releases after
- * BIOMETRIC_STRONG auth (BiometricPrompt + CryptoObject) and self-destructs when the
- * enrolled biometrics change. The PIN path stays fully independent — losing this file
- * or the Keystore key only removes the shortcut, never the data.
- */
 internal class BiometricKeyboxGate(
     private val bioFile: File,
     private val recordDiagnostic: (String) -> Unit = {},
 ) {
     fun isEnrolled(): Boolean = bioFile.isFile
 
-    /**
-     * ENCRYPT-mode cipher for the enrolment prompt; null when the Keystore refuses
-     * (no enrolled biometrics / no secure lock screen).
-     */
     fun encryptCipherOrNull(): Cipher? =
         runCatching {
             Cipher.getInstance(TRANSFORMATION).apply { init(Cipher.ENCRYPT_MODE, obtainKey()) }
@@ -36,7 +25,6 @@ internal class BiometricKeyboxGate(
             recordDiagnostic("bio enrol cipher unavailable: ${error.message ?: error.javaClass.simpleName}")
         }.getOrNull()
 
-    /** Seals the master key with the biometric-authorized cipher after prompt success. */
     fun store(
         masterKey: ByteArray,
         authorizedCipher: Cipher,
@@ -58,10 +46,6 @@ internal class BiometricKeyboxGate(
             recordDiagnostic("bio keybox store failed: ${error.message ?: error.javaClass.simpleName}")
         }.getOrDefault(false)
 
-    /**
-     * DECRYPT-mode cipher for the unlock prompt. A permanently invalidated key
-     * (biometric enrolment changed) clears the blob so callers fall back to the PIN.
-     */
     @Suppress("SwallowedException")
     fun decryptCipherOrNull(): Cipher? {
         val stored = readPayloadOrNull() ?: return null
@@ -79,7 +63,6 @@ internal class BiometricKeyboxGate(
         }
     }
 
-    /** Opens the sealed master key with the prompt-authorized cipher; caller zeroes it. */
     fun unsealMasterKeyOrNull(authorizedCipher: Cipher): ByteArray? {
         val stored = readPayloadOrNull() ?: return null
         return runCatching { authorizedCipher.doFinal(stored.ciphertext) }

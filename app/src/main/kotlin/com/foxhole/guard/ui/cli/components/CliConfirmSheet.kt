@@ -39,6 +39,7 @@ internal fun CliConfirmSheet(
         modifier = modifier,
         title = title,
         icon = icon,
+        closeActionTag = cancelTag,
     ) {
         Text(
             text = cliLabelText(question),
@@ -55,13 +56,12 @@ internal fun CliConfirmSheet(
         }
         Spacer(modifier = Modifier.height(CliSpacing.md))
         CliSheetActionsRow(
-            onCancel = onDismiss,
-            cancelTag = cancelTag,
             actions = listOf(
                 CliSheetAction(
                     label = confirmLabel ?: stringResource(R.string.cli_common_yes_confirm),
                     onClick = onConfirm,
                     testTag = confirmTag,
+                    dismissAfterClick = true,
                 ),
             ),
         )
@@ -74,51 +74,45 @@ internal data class CliSheetAction(
     val enabled: Boolean = true,
     val testTag: String? = null,
     val tone: CliSheetActionTone = CliSheetActionTone.CONFIRM,
+    val dismissAfterClick: Boolean = false,
 )
 
 internal enum class CliSheetActionTone { CONFIRM, DESTRUCTIVE, ACCENT }
 
 @Composable
 internal fun CliSheetActionsRow(
-    onCancel: () -> Unit,
     actions: List<CliSheetAction>,
     modifier: Modifier = Modifier,
-    cancelLabel: String = stringResource(R.string.cli_common_no_cancel),
-    cancelTag: String? = null,
+    horizontal: Boolean = false,
 ) {
     val colors = LocalCliColors.current
-    val cancelButton: @Composable (Modifier) -> Unit = { buttonModifier ->
-        CliButton(
-            label = cancelLabel,
-            color = colors.err,
-            dashed = true,
-            onClick = onCancel,
-            modifier = buttonModifier.cliOptionalTestTag(cancelTag),
-        )
-    }
+    val dismissAfter = LocalCliBottomSheetDismissAfter.current
     val actionButton: @Composable (CliSheetAction, Modifier) -> Unit = { action, buttonModifier ->
         CliButton(
             label = action.label,
-            filled = true,
             color = when (action.tone) {
                 CliSheetActionTone.CONFIRM -> colors.ok
                 CliSheetActionTone.DESTRUCTIVE -> colors.err
                 CliSheetActionTone.ACCENT -> colors.accent
             },
             enabled = action.enabled,
-            onClick = action.onClick,
+            onClick = if (action.dismissAfterClick) {
+                { dismissAfter(action.onClick) }
+            } else {
+                action.onClick
+            },
             modifier = buttonModifier.cliOptionalTestTag(action.testTag),
         )
     }
     when {
-        actions.isEmpty() -> cancelButton(modifier.fillMaxWidth())
-        actions.size == 1 ->
+        actions.isEmpty() -> Unit
+        actions.size == 1 -> actionButton(actions.single(), modifier.fillMaxWidth())
+        horizontal ->
             Row(
                 modifier = modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(CliSpacing.sm),
             ) {
-                cancelButton(Modifier.weight(1f))
-                actionButton(actions.single(), Modifier.weight(1f))
+                actions.forEach { action -> actionButton(action, Modifier.weight(1f)) }
             }
         else ->
             Column(
@@ -126,7 +120,6 @@ internal fun CliSheetActionsRow(
                 verticalArrangement = Arrangement.spacedBy(CliSpacing.sm),
             ) {
                 actions.forEach { action -> actionButton(action, Modifier.fillMaxWidth()) }
-                cancelButton(Modifier.fillMaxWidth())
             }
     }
 }

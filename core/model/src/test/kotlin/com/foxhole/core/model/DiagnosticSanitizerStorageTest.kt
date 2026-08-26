@@ -5,7 +5,6 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-// Moved from the app module: same subject (core DiagnosticSanitizer), no app dependencies.
 class DiagnosticSanitizerStorageTest {
     @Test
     fun `storage normalization keeps operator-visible runtime details`() {
@@ -293,7 +292,7 @@ class DiagnosticSanitizerStorageTest {
     private fun testSourceFile(relativePath: String): java.io.File =
         listOf(
             java.io.File("src/main/kotlin/com/foxhole/$relativePath"),
-            // Test runs from core/model — sibling core modules sit one level up ("core/runtime/…" -> "../runtime").
+
             java.io.File("../${relativePath.split('/')[1]}/src/main/kotlin/com/foxhole/$relativePath"),
             java.io.File("../core/runtime/src/main/kotlin/com/foxhole/$relativePath"),
             java.io.File("app/src/main/kotlin/com/foxhole/$relativePath"),

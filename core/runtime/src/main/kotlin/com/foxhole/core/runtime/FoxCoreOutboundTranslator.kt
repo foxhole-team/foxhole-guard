@@ -113,17 +113,9 @@ internal object FoxCoreOutboundTranslator {
         val acceptedFinalTags =
             when (protocolHint) {
                 ProtocolHint.LOCAL_GUARD -> setOf("direct")
-                // Standalone Tor with SELECTED_APPS is a mixed policy: the selected packages have
-                // explicit TCP/UDP rules to the primary Tor outbound and every other package is
-                // intentionally direct. Refusing route.final=direct here killed the session before
-                // the policy translator could preserve those package rules. VPN profiles still may
-                // not silently acquire a direct default through this exception.
+
                 ProtocolHint.TOR -> setOf("proxy", "direct", TOR_OVER_VPN_OUTBOUND_TAG, "tor")
-                // A protocol TEST keeps the selected primary outbound but freezes every other
-                // application with route.final=block. The policy translator represents that
-                // default independently from the outbound registry, so rejecting `block` here
-                // made every smart-profile TEST fail before native start while the same options
-                // connected normally one by one.
+
                 else -> setOf("proxy", "block", TOR_OVER_VPN_OUTBOUND_TAG, "tor")
             }
         if (finalTag !in acceptedFinalTags) {

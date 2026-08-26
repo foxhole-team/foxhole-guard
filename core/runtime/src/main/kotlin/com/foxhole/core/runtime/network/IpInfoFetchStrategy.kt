@@ -25,8 +25,6 @@ internal fun resolveIpInfoFetchStrategy(
             )
     }
 
-// A non-strict Tor display refresh leads with the Tor check and may use generic providers for
-// enrichment. Connectivity acceptance uses IpInfoRepository.fetchVerifiedTorExit instead.
 internal fun withTorExitEndpoint(
     candidates: List<String>,
     torExit: Boolean,

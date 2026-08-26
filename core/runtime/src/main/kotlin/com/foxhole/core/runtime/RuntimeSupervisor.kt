@@ -33,11 +33,7 @@ sealed interface RuntimeCommand {
     data class StartLocalGuard(
         val mode: LocalGuardMode,
         override val source: RuntimeCommandSource,
-        // A fingerprint of guard's config at dispatch time. Without it two StartLocalGuard
-        // commands with the same mode coalesced on an identical queueReason, and a setting changed
-        // while guard was still starting vanished: the start carried the *old* config while the
-        // "applied" fingerprint was written from the new settings, so every later syncLocalGuard
-        // saw a false no-op.
+
         val configStamp: Int = 0,
     ) : RuntimeCommand
 
@@ -80,11 +76,7 @@ val RuntimeCommand.priority: RuntimeCommandPriority
         when (this) {
             is RuntimeCommand.Kill -> RuntimeCommandPriority.KILL
             is RuntimeCommand.Stop -> RuntimeCommandPriority.USER_STOP
-            // Config reapply must never cross-preempt a live start. A running SWITCH (mode change) is
-            // atomic: another SWITCH queues behind it (latest wins) instead of force-killing it, and
-            // only USER_STOP/KILL preempt (see RuntimeSupervisorMailbox.shouldPreempt). NORMAL keeps a
-            // reload queued strictly behind an active start (and coalesced with other reloads), so it
-            // hot-reloads the live tunnel only once no start/stop is in flight, never as a force-kill.
+
             is RuntimeCommand.Reload -> RuntimeCommandPriority.NORMAL
             is RuntimeCommand.EnforceQuarantine -> RuntimeCommandPriority.NORMAL
             is RuntimeCommand.Restore -> RuntimeCommandPriority.NORMAL

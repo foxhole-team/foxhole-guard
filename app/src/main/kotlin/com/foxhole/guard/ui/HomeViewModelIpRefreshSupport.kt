@@ -110,6 +110,9 @@ internal fun HomeViewModel.startIpInfoRefresh(
         ipInfoRefreshReasonMutable.value = null
         ipInfoLoadingMutable.value = false
     }
+    if (shouldRefreshPublicDnsIdentity(fetchMode = fetchMode, reason = reason)) {
+        startPublicDnsIdentityRefresh(minimumLoadingDurationMs = minimumLoadingDurationMs)
+    }
     if (showLoading) {
         activeIpInfoRefreshReason = reason
         ipInfoRefreshReasonMutable.value = reason
@@ -222,7 +225,6 @@ internal fun shouldScheduleTorRouteAfterPrimaryRefresh(
     publishedInfo: Boolean,
 ): Boolean = !publishedInfo && reason != IpInfoRefreshReason.TOR_ROUTE
 
-/** Only a hard private-inbound refusal is actionable; NOT_READY is normal during Tor bootstrap. */
 internal fun shouldReportTorProbeStartupFailure(
     reason: IpInfoRefreshReason,
     error: Throwable,
@@ -454,6 +456,7 @@ internal fun HomeViewModel.invalidateIpInfoRefreshes(): Long {
     activeIpInfoRefreshReason = null
     ipInfoRefreshReasonMutable.value = null
     ipInfoLoadingMutable.value = false
+    invalidatePublicDnsIdentityRefresh()
     ipInfoRefreshToken = ipRefreshCoordinator.cancelAll()
     return ipInfoRefreshToken
 }

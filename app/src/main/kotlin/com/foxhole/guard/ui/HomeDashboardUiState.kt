@@ -124,9 +124,7 @@ internal data class DashboardActionsCardUiState(
             connection.profileId == FoxholeVpnService.TOR_ONLY_PROFILE_ID
 
     fun hasVpnAndTorBothActive(): Boolean =
-        hasPrimaryConnectionRuntime() &&
-            !hasTorOnlyRuntime() &&
-            connection.torActive
+        connection.appliedVpnTorRouteOrNull() != null
 
     fun hasTorOnlyEngagement(): Boolean =
         connection.profileId == FoxholeVpnService.TOR_ONLY_PROFILE_ID &&
@@ -337,10 +335,7 @@ internal fun HomeRouteUiState.toDashboardTrafficCardUiState(
 
 internal fun ConnectionSnapshot.hasConfirmedVpnAndTor(): Boolean =
     state == ConnectionState.CONNECTED &&
-        torActive &&
-        profileId != null &&
-        profileId != FoxholeVpnService.LOCAL_GUARD_PROFILE_ID &&
-        profileId != FoxholeVpnService.TOR_ONLY_PROFILE_ID
+        appliedVpnTorRouteOrNull() != null
 
 internal fun HomeRouteUiState.toDashboardMapCardUiState(): DashboardMapCardUiState =
     DashboardMapCardUiState(

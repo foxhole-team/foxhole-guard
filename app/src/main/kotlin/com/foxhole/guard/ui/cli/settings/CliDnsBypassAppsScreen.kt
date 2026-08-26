@@ -58,7 +58,7 @@ internal fun CliDnsBypassAppsScreen(
     Column(modifier = modifier.fillMaxSize().padding(horizontal = CliSpacing.md)) {
         CliScreenHeader(
             label = stringResource(R.string.cli_cfg_dns_app_bypass),
-            icon = R.drawable.pix_dns,
+            icon = R.drawable.lin_dns,
         )
         CliPanel(modifier = Modifier.fillMaxWidth()) {
             CliInputRow(

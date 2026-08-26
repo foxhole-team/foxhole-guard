@@ -170,10 +170,12 @@ private fun HomeViewModel.siteRuleName(
     return "$prefix: ${token ?: getApplication<Application>().getString(R.string.site_exception_default_name)}"
 }
 
-internal fun HomeViewModel.createDiagnosticsArchive(): File =
-    container.diagnosticsLogger.createExportFile()
+internal fun HomeViewModel.createSanitizedAboutDiagnosticsArchive(): File =
+    container.diagnosticsLogger.createSanitizedAboutExportFile()
 
-internal fun HomeViewModel.exportDiagnostics(file: File = createDiagnosticsArchive()): Intent {
+internal fun HomeViewModel.exportSanitizedDiagnosticsFromAbout(
+    file: File = createSanitizedAboutDiagnosticsArchive(),
+): Intent {
     val uri =
         FileProvider.getUriForFile(
             getApplication(),

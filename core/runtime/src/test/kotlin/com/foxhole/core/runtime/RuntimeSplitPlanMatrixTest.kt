@@ -11,12 +11,6 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/**
- * The full VPN×Tor mode matrix as one table: every UI preset compiles into exactly one immutable
- * [RuntimeSplitPlan] shape, and the forbidden combinations of the first release can not slip
- * through the compiler unnoticed. The blocked lane rides beside every mode (firewall before route
- * selection), and the Tor lane only bends tun policy in the split modes.
- */
 internal class RuntimeSplitPlanMatrixTest {
     private fun settings(
         mode: PerAppRoutingMode = PerAppRoutingMode.FULL_TUNNEL,
@@ -36,10 +30,6 @@ internal class RuntimeSplitPlanMatrixTest {
 
     @Test
     fun `include split carries this package even with web apps off`() {
-        // The app validates a tunnel by probing THROUGH it, and the picker filters this package out
-        // of the selection, so an include split used to leave the validator outside the tunnel it
-        // was validating: the session never reached CONNECTED. Measured on a Pixel with a live
-        // profile — including one other app left the VPN stuck below connected.
         val plan =
             buildSplitPlan(
                 settings(
@@ -55,7 +45,6 @@ internal class RuntimeSplitPlanMatrixTest {
 
     @Test
     fun `an empty include split stays empty rather than tunnelling this package alone`() {
-        // Nothing selected means "no split", not "a split of one app that happens to be ours".
         val plan =
             buildSplitPlan(
                 settings(mode = PerAppRoutingMode.INCLUDE_SELECTED_APPS),

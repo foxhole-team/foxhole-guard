@@ -20,11 +20,6 @@ import java.net.Socket
 import java.util.concurrent.TimeUnit
 
 interface I2pdManager {
-    /**
-     * Idempotent: starts i2pd if needed and returns the local proxy endpoints (same on re-entry).
-     * A change to any start-only field of [settings] (addressbook, relay/notransit, bandwidth,
-     * transit-tunnel cap) forces a cold restart — i2pd reads all of them only at startup.
-     */
     suspend fun ensureStarted(settings: I2pSettings = I2pSettings()): I2pdEndpoints
 
     suspend fun awaitReady(timeoutMs: Long): Boolean
@@ -32,7 +27,6 @@ interface I2pdManager {
     /** Publishes CONNECTED only for a probed endpoint generation carried by an applied Android TUN. */
     fun confirmCarrierReady(expectedGeneration: Long): Boolean
 
-    /** Revokes the carrier half of readiness while leaving a healthy i2pd child available to heal. */
     fun markCarrierUnavailable(): Unit
 
     suspend fun stop(policy: I2pdStopPolicy = I2pdStopPolicy()): Unit
@@ -41,7 +35,6 @@ interface I2pdManager {
 
     fun snapshot(): I2pdSnapshot
 
-    /** Fires only for an unexpected child exit; deliberate stop/kill clears it first. */
     fun setUnexpectedExitListener(listener: (() -> Unit)?) {}
 }
 
@@ -64,11 +57,6 @@ object I2pdSocksProxy {
     var endpoint: I2pdSocksProxyEndpoint? = null
 }
 
-/**
- * Loopback endpoint of the running i2pd webconsole (Basic-auth, per-start random password) — the
- * only status surface i2pd exposes that includes the router's external address. Published by the
- * process manager for the I2P window's router table; null whenever i2pd is down.
- */
 data class I2pdWebConsoleEndpoint(
     val port: Int,
     val password: String,
@@ -105,11 +93,9 @@ internal data class I2pdProcessManagerHooks(
     val generateWebConsolePassword: () -> String = ::newI2pdWebConsolePassword,
     val generateSocksPassword: () -> String = ::newI2pdSocksPassword,
     val socksProxyReady: ((I2pdEndpoints) -> Boolean)? = null,
-    val clientTunnelCount: suspend () -> Int? = ::i2pdClientTunnelCount,
     val reapStartupOrphans: (String, String) -> Int = ::reapI2pdOrphansByIdentity,
     val startSocksCredentialGate: (Int, Int, String, String) -> I2pdSocksGate = ::openI2pdSocksGate,
-    // Lifecycle generations mint from the shared control-plane clock (Ф3c); all staleness fences
-    // compare against the stored field, so the shared mint source changes nothing.
+
     val nextGeneration: () -> Long = RuntimeGenerationClock::next,
 ) {
     constructor() : this(
@@ -128,7 +114,6 @@ private fun reapI2pdOrphansByIdentity(
     ).reapOrphans(executablePath = executablePath, dataDirectoryRoot = dataDirectoryRoot)
 
 internal object I2pdStartupOrphanReap {
-    // A second scan could match and kill the child launched by this app process.
     private val claimed = java.util.concurrent.atomic.AtomicBoolean(false)
 
     fun claim(): Boolean = claimed.compareAndSet(false, true)
@@ -147,17 +132,10 @@ private object DefaultI2pdProcessLauncher : RuntimeChildProcessLauncher {
             .start()
 }
 
-/**
- * Runs i2pd as a supervised child process (ProcessBuilder): ephemeral loopback ports templated
- * into a generated i2pd.conf, a stdout drain that detects the Android phantom-process kill, and a
- * graceful/forcible stop ladder. i2pd exposes no control port, so readiness is an authenticated
- * SOCKS negotiation.
- */
 class I2pdProcessManager internal constructor(
     private val prepareRuntime: suspend () -> I2pdRuntimePaths,
     private val diagnosticsLogger: RuntimeDiagnosticsSink,
-    // Current-network metered check. Relaying is suppressed on a metered (cellular) network unless
-    // the user opted in, so a mobile node does not donate transit traffic over paid data.
+
     private val isMeteredNetwork: () -> Boolean,
     private val hooks: I2pdProcessManagerHooks,
 ) : I2pdManager {
@@ -187,13 +165,11 @@ class I2pdProcessManager internal constructor(
     private var processGeneration: Long = NO_GENERATION
     private var lifecycleGeneration: Long = 0L
     private var readyProxyGeneration: Long = NO_GENERATION
+    private var establishedNetworkTunnels = I2pdEstablishedNetworkTunnels()
 
     @Volatile
     private var currentSnapshot = I2pdSnapshot()
 
-    // Fingerprint of the start-only config the running child was started with (addressbook +
-    // notransit); a mismatch on re-entry forces a cold restart because i2pd imports hosts.txt and
-    // reads the notransit flag only at startup.
     @Volatile
     private var appliedConfigFingerprint: Int? = null
 
@@ -299,8 +275,7 @@ class I2pdProcessManager internal constructor(
                 retainIfTerminationFailed(started)
                 cancelI2pdStart()
             }
-            // The process identity is visible before the watcher starts, so an immediate stdout
-            // EOF cannot race ahead of publication and leave behind a false RUNNING snapshot.
+
             drainProcessOutput(started, generation)
             val running =
                 synchronized(stateLock) {
@@ -339,40 +314,31 @@ class I2pdProcessManager internal constructor(
                     endpoints = endpoints,
                 )
             }
-        var listenerUp = false
-        var lastTunnels: Int? = null
-        val ready =
-            withTimeoutOrNull(timeoutMs.coerceAtLeast(1L)) {
-                while (true) {
-                    if (!isCurrentProcess(session.process, session.generation) || !session.process.isAlive) {
-                        return@withTimeoutOrNull false
+        val outcome =
+            I2pdReadyProbe(
+                sessionCurrent = {
+                    isCurrentProcess(session.process, session.generation) && session.process.isAlive
+                },
+                listenerReady = {
+                    hooks.socksProxyReady?.invoke(session.endpoints)
+                        ?: hooks.localPortAccepts(session.endpoints.socksPort)
+                },
+                networkTunnelPairReady = {
+                    synchronized(stateLock) {
+                        isCurrentProcessLocked(session.process, session.generation) &&
+                            session.process.isAlive &&
+                            establishedNetworkTunnels.ready
                     }
-                    if (!listenerUp) {
-                        listenerUp =
-                            hooks.socksProxyReady?.invoke(session.endpoints)
-                                ?: hooks.localPortAccepts(session.endpoints.socksPort)
-                        if (!isCurrentProcess(session.process, session.generation)) {
-                            return@withTimeoutOrNull false
-                        }
-                    }
-                    if (listenerUp) {
-                        // A listening proxy is not usable until inbound and outbound tunnels exist.
-                        lastTunnels = hooks.clientTunnelCount()
-                        if (i2pdTunnelsBuilt(lastTunnels) && recordProxyReady(session)) {
-                            return@withTimeoutOrNull true
-                        }
-                    }
-                    delay(I2PD_READY_POLL_MS)
-                }
-                @Suppress("UNREACHABLE_CODE")
-                false
-            } == true
+                },
+                recordReady = { recordProxyReady(session) },
+            ).await(timeoutMs)
         diagnosticsLogger.recordStructured(
             "i2pd",
-            i2pdReadyOutcome(ready = ready, listenerUp = listenerUp),
-            "socks_port=${session.endpoints.socksPort} client_tunnels=${lastTunnels ?: "unknown"}",
+            i2pdReadyOutcome(ready = outcome.ready, listenerUp = outcome.listenerUp),
+            "socks_port=${session.endpoints.socksPort} " +
+                "network_tunnel_pair=${outcome.networkTunnelPairReady}",
         )
-        return ready
+        return outcome.ready
     }
 
     override fun confirmCarrierReady(expectedGeneration: Long): Boolean =
@@ -444,12 +410,6 @@ class I2pdProcessManager internal constructor(
             }
         val active = capture.process ?: return capture.generation
 
-        // i2pd installs a SIGTERM handler and runs a SLOW graceful shutdown (netdb save, tunnel
-        // teardown). Sending SIGTERM first (Process.destroy()) wedges the child so the follow-up
-        // destroyForcibly() can fail to reap it — device-confirmed orphan alive ~55 min, which then
-        // permanently disabled I2P and blocked TOR/VPN+TOR from connecting. Skip SIGTERM: go straight
-        // to destroyForcibly() (SIGKILL), exactly as the working kill() path does. A residual orphan
-        // (destroyForcibly not reaping) is caught by the app-layer /proc i2pd reaper on teardown.
         active.destroyForcibly()
         val terminated =
             active.waitFor(policy.processDestroyForciblyTimeoutMs, TimeUnit.MILLISECONDS) || !active.isAlive
@@ -460,8 +420,6 @@ class I2pdProcessManager internal constructor(
                     processGeneration = NO_GENERATION
                     currentSnapshot = I2pdSnapshot(I2pdState.IDLE)
                 } else {
-                    // Keep the live handle so a later kill/stop can still terminate the orphan and
-                    // ensureStarted cannot launch a second child over its bound ports.
                     currentSnapshot = I2pdSnapshot(I2pdState.ERROR)
                 }
             }
@@ -477,9 +435,17 @@ class I2pdProcessManager internal constructor(
             synchronized(stateLock) {
                 lifecycleGeneration = hooks.nextGeneration()
                 clearPublishedStateLocked()
-                currentSnapshot = I2pdSnapshot(I2pdState.KILLED)
-                process?.let { active ->
-                    I2pdStopSession(lifecycleGeneration, active)
+                val active = process
+                currentSnapshot =
+                    I2pdSnapshot(
+                        if (active == null && currentSnapshot.state == I2pdState.IDLE) {
+                            I2pdState.IDLE
+                        } else {
+                            I2pdState.KILLED
+                        },
+                    )
+                active?.let { running ->
+                    I2pdStopSession(lifecycleGeneration, running)
                 } ?: run {
                     processGeneration = NO_GENERATION
                     null
@@ -560,9 +526,6 @@ class I2pdProcessManager internal constructor(
         dataDirectory: File,
         entries: List<I2pAddressBookEntry>,
     ) {
-        // i2pd imports hosts.txt into <datadir>/addressbook/ at startup and keeps removed names
-        // there; wiping that directory (only — router keys live elsewhere in the datadir) makes
-        // the regenerated hosts.txt authoritative, so deletions actually stop resolving.
         File(dataDirectory, ADDRESSBOOK_DIR_NAME).deleteRecursively()
         val hostsFile = File(dataDirectory, HOSTS_FILE_NAME)
         if (entries.isEmpty()) {
@@ -571,7 +534,7 @@ class I2pdProcessManager internal constructor(
             hostsFile.parentFile?.mkdirs()
             hostsFile.writeText(buildI2pdHostsLines(entries).joinToString(separator = "\n", postfix = "\n"))
         }
-        // Destinations are sensitive-ish and huge; log only the entry count.
+
         diagnosticsLogger.recordStructured("i2pd", "i2pd addressbook applied", "hosts=${entries.size}")
     }
 
@@ -614,16 +577,14 @@ class I2pdProcessManager internal constructor(
                                 val current =
                                     synchronized(stateLock) {
                                         if (isCurrentProcessLocked(activeProcess, generation)) {
-                                            // Keep the generation check and phase mutation atomic:
-                                            // a stale stdout line cannot advance the next session.
+                                            establishedNetworkTunnels = establishedNetworkTunnels.after(message)
                                             advanceI2pPhaseFromLogLine(message)
                                             true
                                         } else {
                                             false
                                         }
                                     }
-                                // info-level i2pd output is chatty: only the categories that
-                                // explain the router's life reach the Журнал I2P.
+
                                 if (current && isJournalWorthyI2pdLine(message)) {
                                     diagnosticsLogger.record("i2pd", message)
                                 }
@@ -644,8 +605,6 @@ class I2pdProcessManager internal constructor(
         exitedProcess: Process,
         generation: Long,
     ) {
-        // stop()/kill() clear [process] first, so a surviving reference means the phantom-process
-        // killer (or a crash) took the child while our snapshot still said RUNNING.
         val unexpected =
             synchronized(stateLock) {
                 if (!isCurrentProcessLocked(exitedProcess, generation)) {
@@ -789,6 +748,7 @@ class I2pdProcessManager internal constructor(
         socksGate = null
         appliedConfigFingerprint = null
         readyProxyGeneration = NO_GENERATION
+        establishedNetworkTunnels = I2pdEstablishedNetworkTunnels()
         I2pdWebConsole.endpoint = null
         I2pdSocksProxy.endpoint = null
         FoxholeVpnRuntimeBridge.updateI2pPhase(I2pPhaseSnapshot())
@@ -798,7 +758,6 @@ class I2pdProcessManager internal constructor(
         const val CONF_FILE_NAME = "i2pd.conf"
         const val HOSTS_FILE_NAME = "hosts.txt"
         const val ADDRESSBOOK_DIR_NAME = "addressbook"
-        const val I2PD_READY_POLL_MS = 500L
         const val NO_GENERATION = -1L
     }
 }
@@ -808,6 +767,68 @@ private data class I2pdReadySession(
     val process: Process,
     val endpoints: I2pdEndpoints,
 )
+
+private data class I2pdReadyProbe(
+    val sessionCurrent: () -> Boolean,
+    val listenerReady: () -> Boolean,
+    val networkTunnelPairReady: () -> Boolean,
+    val recordReady: () -> Boolean,
+) {
+    suspend fun await(timeoutMs: Long): I2pdReadyProbeOutcome {
+        var listenerUp = false
+        var pairReady = false
+        val ready =
+            withTimeoutOrNull(timeoutMs.coerceAtLeast(1L)) {
+                while (sessionCurrent()) {
+                    if (!listenerUp) {
+                        listenerUp = listenerReady()
+                    }
+                    if (!sessionCurrent()) {
+                        return@withTimeoutOrNull false
+                    }
+                    if (listenerUp) {
+                        pairReady = networkTunnelPairReady()
+                        if (pairReady && recordReady()) {
+                            return@withTimeoutOrNull true
+                        }
+                    }
+                    delay(I2PD_READY_POLL_MS)
+                }
+                false
+            } == true
+        return I2pdReadyProbeOutcome(
+            ready = ready,
+            listenerUp = listenerUp,
+            networkTunnelPairReady = pairReady,
+        )
+    }
+}
+
+private data class I2pdReadyProbeOutcome(
+    val ready: Boolean,
+    val listenerUp: Boolean,
+    val networkTunnelPairReady: Boolean,
+)
+
+private data class I2pdEstablishedNetworkTunnels(
+    val inbound: Boolean = false,
+    val outbound: Boolean = false,
+) {
+    val ready: Boolean
+        get() = inbound && outbound
+
+    fun after(line: String): I2pdEstablishedNetworkTunnels =
+        when (i2pdEstablishedNetworkTunnelDirection(line)) {
+            I2pdNetworkTunnelDirection.INBOUND -> copy(inbound = true)
+            I2pdNetworkTunnelDirection.OUTBOUND -> copy(outbound = true)
+            null -> this
+        }
+}
+
+private enum class I2pdNetworkTunnelDirection {
+    INBOUND,
+    OUTBOUND,
+}
 
 private data class I2pdStartConfiguration(
     val bandwidthChar: String,
@@ -834,13 +855,6 @@ private data class I2pdStopCapture(
 
 private fun allocateI2pdLoopbackPort(): Int =
     ServerSocket(0, 1, InetAddress.getByName("127.0.0.1")).use { socket -> socket.localPort }
-
-private suspend fun i2pdClientTunnelCount(): Int? = readI2pdRouterStatus()?.clientTunnels
-
-internal fun i2pdTunnelsBuilt(clientTunnels: Int?): Boolean =
-    (clientTunnels ?: 0) >= I2PD_MIN_CLIENT_TUNNELS
-
-internal const val I2PD_MIN_CLIENT_TUNNELS = 2
 
 internal fun i2pdReadyOutcome(
     ready: Boolean,
@@ -896,13 +910,9 @@ private fun newI2pdWebConsolePassword(): String {
 private fun newI2pdSocksPassword(): String = newI2pdWebConsolePassword()
 
 private const val I2PD_READY_CONNECT_TIMEOUT_MS = 300
+private const val I2PD_READY_POLL_MS = 500L
 private const val WEB_CONSOLE_PASSWORD_BYTES = 16
 
-/**
- * Which i2pd info-level lines are worth journaling: reseed/netdb discovery, tunnel
- * life, transports and anything warned/errored — the rest of the info chatter stays
- * out of the ring.
- */
 internal fun isJournalWorthyI2pdLine(line: String): Boolean {
     val lower = line.lowercase()
     return I2PD_JOURNAL_MARKERS.any { marker -> lower.contains(marker) }
@@ -927,12 +937,6 @@ internal val I2PD_JOURNAL_MARKERS =
         "missing/unreadable config",
     )
 
-/**
- * Phase detection over the same output: reseed/netdb chatter means peer discovery and tunnel
- * creation means i2pd is still building. Only the generation-pinned HTTP proxy readiness probe may
- * publish CONNECTED. Transitions only move forward within one session (OFFLINE resets come from
- * stop/kill).
- */
 internal fun advanceI2pPhaseFromLogLine(line: String) {
     val previous = FoxholeVpnRuntimeBridge.i2pPhase.value
     if (previous.phase == I2pNetworkPhase.OFFLINE) {
@@ -948,8 +952,7 @@ private fun i2pPhaseAfterLogLine(
     previous: I2pPhaseSnapshot,
     lower: String,
 ): I2pPhaseSnapshot {
-    val tunnelCreated =
-        lower.contains("tunnel") && (lower.contains("created") || lower.contains("built"))
+    val tunnelCreated = i2pdEstablishedNetworkTunnelDirection(lower) != null
     return when {
         previous.phase == I2pNetworkPhase.CONNECTED && tunnelCreated ->
             previous.copy(tunnelsBuilt = previous.tunnelsBuilt + 1)
@@ -970,3 +973,13 @@ private fun i2pPhaseAfterLogLine(
         else -> previous
     }
 }
+
+private fun i2pdEstablishedNetworkTunnelDirection(line: String): I2pdNetworkTunnelDirection? =
+    when (I2PD_NETWORK_TUNNEL_CREATED_REGEX.find(line.lowercase())?.groupValues?.getOrNull(1)) {
+        "inbound" -> I2pdNetworkTunnelDirection.INBOUND
+        "outbound" -> I2pdNetworkTunnelDirection.OUTBOUND
+        else -> null
+    }
+
+private val I2PD_NETWORK_TUNNEL_CREATED_REGEX =
+    Regex("""tunnel:\s+(inbound|outbound)\s+tunnel\s+\d+\s+has\s+been\s+created""")

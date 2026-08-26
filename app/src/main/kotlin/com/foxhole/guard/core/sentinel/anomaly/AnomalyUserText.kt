@@ -6,7 +6,6 @@ import com.foxhole.core.model.AnomalyEvent
 import com.foxhole.core.model.AnomalyType
 import com.foxhole.guard.R
 
-/** One localized explanation shared by notifications, the security journal and extended STATUS. */
 internal fun AnomalyEvent.userFacingMessage(context: Context): String {
     val appLabel = packageName?.let(context::labelForPackageName) ?: packageName
     val subject = appLabel ?: context.getString(R.string.statistics_anomaly_whole_tunnel)
@@ -55,8 +54,7 @@ internal fun AnomalyEvent.userFacingMessage(context: Context): String {
                 evidence["latency_ms"].orEmpty().ifBlank { "0" },
                 evidence["robust_z"].orEmpty().ifBlank { context.getString(R.string.statistics_no_data) },
             )
-        // Legacy compatibility only: the retired destination-country heuristic wrote
-        // `route_share`; do not infer the current Tor/I2P state from these persisted events.
+
         AnomalyType.TOR_OR_I2P_ROUTE_MISMATCH ->
             context.getString(
                 R.string.anomaly_reason_privacy_route,

@@ -14,9 +14,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.util.Collections
 
-// A preempted command whose cleanup hangs past the switch-cleanup timeout must not eat the
-// user's transition: the stale runtime is already force-killed at preemption, so dropping the
-// switch would park the mailbox on a dead snapshot forever. Latest wins — the switch runs anyway.
 class RuntimeSupervisorMailboxCleanupTimeoutTest {
     @Test
     fun `switch still runs when preempted cleanup hangs past the timeout`() =

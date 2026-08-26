@@ -60,10 +60,9 @@ class CliLogsAndModulesLayoutContractTest {
 
         assertTrue(header.contains("trailing ="))
         assertTrue(header.contains("CliLogsActionsButton"))
-        assertTrue(gear.contains("R.drawable.pix_settings"))
         assertTrue(gear.contains("CLI_LOGS_ACTIONS_BUTTON_TAG"))
-        assertTrue(source.contains("LOG_ACTIONS_BUTTON_SIZE = 48.dp"))
-        assertTrue(!dock.contains("R.drawable.pix_info"))
+        assertTrue(gear.contains("CliTopBarSettingsButton("))
+        assertTrue(!dock.contains("R.drawable.lin_info"))
         assertTrue(!dock.contains("cli_logs_controls_hint"))
         assertTrue(!dock.contains("actions()"))
         assertTrue(!dock.contains("cli_logs_clear"))
@@ -82,15 +81,16 @@ class CliLogsAndModulesLayoutContractTest {
         assertTrue(sheet.contains("CliJournalClearConfirmation("))
         assertTrue(sheet.contains("ActivityResultContracts.CreateDocument(\"text/plain\")"))
         assertTrue(sheet.contains("documentLauncher.launch(exportFileName)"))
+        assertTrue(sheet.contains("formatRawJournalExport(exportTitle, exportEntries)"))
         assertTrue(sheet.contains("exporting = true"))
         assertTrue(sheet.contains("scope.launch { viewModel.emitError(saveFailedMessage) }"))
         assertTrue(!sheet.contains("Intent.createChooser"))
-        assertTrue(!source.contains("createDiagnosticsArchive"))
-        assertTrue(!source.contains("exportDiagnostics"))
+        assertTrue(!source.contains("createSanitizedAboutDiagnosticsArchive"))
+        assertTrue(!source.contains("exportSanitizedDiagnosticsFromAbout"))
 
         val saveHandler = sheet
             .substringAfter("onSave = {")
-            .substringBefore("onDismiss = onDismiss")
+            .substringBefore("CliJournalActionsPage.CONFIRM_CLEAR")
         assertFalse("SAF save must not remove its own action sheet", saveHandler.contains("onDismiss()"))
 
         val appTab = source.substringAfter("CliLogTab.APP ->").substringBefore("CliLogTab.NET ->")
@@ -100,7 +100,8 @@ class CliLogsAndModulesLayoutContractTest {
 
         val networkTab = source.substringAfter("ColumnScope.CliNetworkLog").substringBefore("SecJournalItem")
         assertTrue(networkTab.contains("foxhole-network-journal.txt"))
-        assertTrue(networkTab.contains("exportKind = CliJournalExportKind.NETWORK_ACTIVITY"))
+        assertTrue(networkTab.contains("exportEntries = formatted"))
+        assertFalse(networkTab.contains("CliJournalExportKind"))
 
         val securityTab = source.substringAfter("ColumnScope.CliSecurityLog")
         assertTrue(securityTab.contains("foxhole-security-journal.txt"))
@@ -114,7 +115,7 @@ class CliLogsAndModulesLayoutContractTest {
         assertTrue(primary.contains("R.string.cli_logs_save"))
         assertEquals(2, Regex("modifier = Modifier\\.weight\\(1f\\)").findAll(primary).count())
         assertTrue(primary.contains("horizontalArrangement = Arrangement.spacedBy(CliSpacing.sm)"))
-        assertTrue(primary.contains("R.string.cli_common_no_cancel"))
+        assertFalse(primary.contains("R.string.cli_common_no_cancel"))
 
         val confirmation = source.substringAfter("private fun CliJournalClearConfirmation")
         assertTrue(confirmation.contains("Column("))
@@ -153,7 +154,7 @@ class CliLogsAndModulesLayoutContractTest {
     }
 
     @Test
-    fun `module settings use a raised orange dashed elbow with separated affordances and dim text`() {
+    fun `module settings use a raised curved connector with separated affordances and dim text`() {
         val block = cli("settings/CliModuleBlock.kt")
         val modules = cli("settings/CliModulesSection.kt")
         val extras = cli("settings/CliExtrasSection.kt")
@@ -164,11 +165,10 @@ class CliLogsAndModulesLayoutContractTest {
         assertTrue(block.contains("CliModuleSettingsConnector(color = settingsActionColor)"))
         assertTrue(block.contains("Spacer(modifier = Modifier.width(MODULE_SETTINGS_CONNECTOR_GAP))"))
         assertTrue(block.contains("moveTo(x, 0f)"))
-        assertTrue(block.contains("lineTo(x, y)"))
-        assertTrue(block.contains("lineTo(endX, y)"))
+        assertTrue(block.contains("quadraticTo(x, y, x + corner, y)"))
+        assertTrue(block.contains("lineTo(endX - arrowLength / 2f, y)"))
         assertTrue(block.contains("lineTo(endX - arrowLength, y + arrowLength)"))
-        assertTrue(block.contains("PathEffect.dashPathEffect("))
-        assertEquals(1, Regex("PathEffect\\.dashPathEffect\\(").findAll(block).count())
+        assertFalse(block.contains("PathEffect.dashPathEffect("))
         assertTrue(block.contains("actionColor = settingsActionColor"))
         assertTrue(block.contains("labelColor = colors.dim"))
         assertTrue(block.contains("MODULE_SETTINGS_ROW_OFFSET = (-4).dp"))
@@ -184,13 +184,34 @@ class CliLogsAndModulesLayoutContractTest {
         val export = app("src/main/kotlin/com/foxhole/guard/ui/HomeViewModelConfigRulesSupport.kt")
 
         assertTrue(about.contains("infoText = stringResource(R.string.cli_about_log_share_note)"))
-        assertTrue(about.contains("withContext(Dispatchers.IO) { viewModel.exportDiagnostics() }"))
+        assertTrue(about.contains("viewModel.exportSanitizedDiagnosticsFromAbout()"))
         assertTrue(about.contains("Intent.createChooser("))
-        assertTrue(export.contains("container.diagnosticsLogger.createExportFile()"))
+        assertTrue(export.contains("HomeViewModel.createSanitizedAboutDiagnosticsArchive()"))
+        assertTrue(export.contains("container.diagnosticsLogger.createSanitizedAboutExportFile()"))
+        assertTrue(export.contains("HomeViewModel.exportSanitizedDiagnosticsFromAbout("))
         assertTrue(export.contains("type = \"application/gzip\""))
         assertTrue(export.contains("putExtra(Intent.EXTRA_STREAM, uri)"))
         assertTrue(export.contains("clipData = ClipData.newRawUri(subject, uri)"))
         assertTrue(export.contains("addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)"))
+    }
+
+    @Test
+    fun `only the About archive pipeline invokes the diagnostics sanitizer`() {
+        val logger = app("src/main/kotlin/com/foxhole/guard/core/diagnostics/DiagnosticsLogger.kt")
+        val store = app("src/main/kotlin/com/foxhole/guard/core/diagnostics/DiagnosticsSessionStore.kt")
+        val aboutFormatter = app("src/main/kotlin/com/foxhole/guard/core/diagnostics/DiagnosticsExportFormatter.kt")
+        val logsExport = cli("logs/CliJournalExport.kt")
+        val profileFailures = app("src/main/kotlin/com/foxhole/guard/ui/HomeViewModelProfileImportSupport.kt")
+            .substringAfter("internal suspend fun HomeViewModel.handleProfileRefreshFailure")
+            .substringBefore("private fun ClipData.firstTextItem")
+
+        assertFalse(logger.contains("DiagnosticSanitizer"))
+        assertFalse(store.contains("DiagnosticSanitizer"))
+        assertFalse(logsExport.contains("DiagnosticSanitizer"))
+        assertTrue(aboutFormatter.contains("formatSanitizedAboutDiagnosticsExport("))
+        assertEquals(2, Regex("DiagnosticSanitizer\\.sanitizeForExport").findAll(aboutFormatter).count())
+        assertFalse(profileFailures.contains("DiagnosticSanitizer"))
+        assertEquals(2, Regex("throwable\\.message\\.orEmpty\\(\\)").findAll(profileFailures).count())
     }
 
     @Test
@@ -210,6 +231,23 @@ class CliLogsAndModulesLayoutContractTest {
                 "settings.expert.effectiveDiagnosticsRetention().cutoffOrNull(nowMs) ?: 0L",
             ),
         )
+    }
+
+    @Test
+    fun `disabled network journal offers the centered enable action without the old waiting copy`() {
+        val source = cli("logs/CliLogsScreen.kt")
+        val network = source
+            .substringAfter("private fun androidx.compose.foundation.layout.ColumnScope.CliNetworkLog(")
+            .substringBefore("private sealed interface SecJournalItem")
+        assertTrue(network.contains("if (enabled)"))
+        assertTrue(network.contains("CliNetworkJournalEnablePrompt("))
+        assertTrue(network.contains("onNetworkActivityLoggingChanged(true)"))
+        assertTrue(network.contains("contentAlignment = Alignment.Center"))
+        assertTrue(network.contains("CLI_LOGS_ENABLE_BUTTON_TAG"))
+        assertTrue(network.contains("R.string.cli_logs_enable_network_journal"))
+        assertFalse(network.contains("cli_common_empty_run_traffic"))
+        assertFalse(source.contains("ожидание получения данных"))
+        assertFalse(source.contains("waiting for data"))
     }
 
     @Test

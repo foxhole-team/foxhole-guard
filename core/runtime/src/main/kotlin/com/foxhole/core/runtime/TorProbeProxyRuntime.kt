@@ -7,16 +7,11 @@ import com.foxhole.core.runtime.network.ProxyAccessType
 import java.security.SecureRandom
 import java.util.Base64
 
-/** Identity of the exact service-owned runtime generation allowed to use the private probe. */
 data class TorProbeProxyOwner(
     val sessionId: String,
     val runtimeGeneration: Long,
 )
 
-/**
- * Read-only, in-memory access to the authenticated Tor identity probe. Nothing here is part of
- * Settings, backup or any user/LAN proxy surface.
- */
 data class TorProbeProxyLease(
     val owner: TorProbeProxyOwner,
     val access: HttpProxyAccess,
@@ -51,15 +46,8 @@ internal fun requireCurrentTorProbeLease(
     return current
 }
 
-/** Dedicated inbound name: intentionally unrelated to the user-visible device-local proxy. */
 internal const val TOR_PROBE_INBOUND_NAME = "tor-identity-probe"
 
-/**
- * Owns one authenticated 127.0.0.1 HTTP CONNECT inbound for Tor identity lookups.
- *
- * Credentials are minted once per [TorProbeProxyOwner], retained only in this runtime object and
- * dropped with the owner. Repeated sync passes query status but never rebind an unchanged inbound.
- */
 internal class TorProbeProxyController(
     native: FoxCoreNativeApi,
     clock: () -> Long = System::currentTimeMillis,
@@ -126,9 +114,6 @@ internal class TorProbeProxyController(
         }
         val address = status.address?.toStrictLoopbackAddress()
         if (address == null) {
-            // A native report outside 127.0.0.1 is a security boundary failure, not a display-only
-            // mismatch. Tear the listener down immediately so a broken implementation can never
-            // leave the private credentials reachable from LAN while the ticker keeps retrying.
             runCatching { localProxy.sync(handle = handle, request = null) }
             clearMemory()
             return@synchronized ownerFailure(requestedOwner, TorProbeProxyFailure.INVALID_LOOPBACK_ADDRESS)

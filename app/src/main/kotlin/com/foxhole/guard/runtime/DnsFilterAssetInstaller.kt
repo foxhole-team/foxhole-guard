@@ -63,9 +63,6 @@ class DnsFilterAssetInstaller(
             val signature = File(targetDir, SIGNED_DNS_FILTER_SIGNATURE_NAME)
             val manifestFile = File(targetDir, SIGNED_DNS_FILTER_MANIFEST_NAME)
 
-            // The manifest is the commit marker and is replaced last. A crash
-            // before then leaves the previous complete bundle active; a crash
-            // after then sees all three new files.
             writeReplacing(targetDir, artifact, ruleSet.artifactBytes)
             writeReplacing(targetDir, signature, ruleSet.signatureBytes)
             writeReplacing(targetDir, manifestFile, ruleSet.manifestBytes)

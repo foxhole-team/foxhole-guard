@@ -17,9 +17,6 @@ import com.foxhole.guard.guardian.GuardEventType
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-// Installed-app monitoring, inventory and change auditing. Extracted from SettingsRepository
-// (class split by domain).
-
 suspend fun SettingsRepository.updateInstalledAppMonitoringEnabled(value: Boolean) =
     update { current ->
         val enabled = value && current.anomaly.enabled
@@ -44,8 +41,7 @@ suspend fun SettingsRepository.updateAppTrafficStatsEnabled(value: Boolean) =
     update { current ->
         current.copy(
             appTrafficStatsEnabled = value,
-            // This is the explicit user toggle, so it is also the consent boundary. Live Android
-            // Usage Access is checked separately and never writes either stored preference.
+
             appTrafficUsageAccessConsent = value,
         )
     }
@@ -275,11 +271,6 @@ internal data class InstalledAppChangeEnrichment(
     val outcome: QuarantineEnrichmentOutcome,
 )
 
-/**
- * Replaces preliminary install facts without ever creating a quarantine decision. The pending
- * membership check and the write share the repository lock, so a late FoxHole Sentinel result
- * cannot undo an Allow/Block decision or resurrect a package that was removed meanwhile.
- */
 internal suspend fun SettingsRepository.enrichInstalledAppChange(
     packageName: String,
     detectedAt: Long,
@@ -458,7 +449,6 @@ internal suspend fun SettingsRepository.incompleteQuarantineAnalyses(
         .toList()
 }
 
-/** Removes only the exact unfinished install observed by a retry; a reinstall gets a new timestamp. */
 internal suspend fun SettingsRepository.removeMissingIncompleteQuarantine(
     packageName: String,
     expectedDetectedAt: Long,
@@ -481,10 +471,6 @@ internal suspend fun SettingsRepository.removeMissingIncompleteQuarantine(
     return removed
 }
 
-/**
- * Closes the enable-time snapshot race: identities absent from the frozen baseline become pending
- * decisions. Assigned packages are already an explicit user decision and are left untouched.
- */
 internal suspend fun SettingsRepository.reconcileNewAppQuarantineGaps(
     detectedAt: Long = System.currentTimeMillis(),
 ): Int {
@@ -531,11 +517,6 @@ internal fun quarantineBaselineGapsIn(
 
 private const val MAX_PENDING_QUARANTINE_ANALYSIS_BATCH = 8
 
-/**
- * The lane/quarantine half of an install or removal: what the change does to the expert block.
- * Extracted from [recordInstalledAppChange] unchanged — the branches stay in the same order, so
- * quarantining a fresh install still wins over the known-identity refresh.
- */
 private fun ExpertSettings.afterInstalledAppChange(
     packageName: String,
     type: InstalledAppChangeType,
@@ -552,7 +533,6 @@ private fun ExpertSettings.afterInstalledAppChange(
         else -> this
     }
 
-/** The inventory half of an install or removal: the package list plus one dated history entry. */
 private fun InstalledAppInventoryAudit.withInstalledAppChange(
     entry: InstalledAppInventoryEntry,
     type: InstalledAppChangeType,

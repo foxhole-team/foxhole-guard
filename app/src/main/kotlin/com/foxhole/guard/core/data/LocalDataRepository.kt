@@ -76,14 +76,12 @@ internal fun factoryResetFileTargets(context: Context): List<File> =
     buildList {
         add(File(context.filesDir, PROFILE_SECRETS_DIR_NAME))
         add(File(context.filesDir, DIAGNOSTICS_JOURNAL_DIR_NAME))
-        // The home terminal's journal. It is persisted now, so a factory reset has to take it with
-        // it — a log of every connection the user made must not survive "erase my local data".
+
         add(File(context.filesDir, CLI_TERMINAL_JOURNAL_DIR_NAME))
         add(File(context.cacheDir, DIAGNOSTICS_EXPORT_DIR_NAME))
         add(File(context.filesDir, DNS_RULE_SETS_DIR_NAME))
         add(File(context.filesDir, PROFILE_DB_PASSPHRASE_PATH))
-        // App-lock keybox + guard journal + inventory snapshot: a factory reset is the
-        // "forgot the password" escape hatch, so these must go too.
+
         add(File(context.filesDir, SECURE_DIR_NAME))
         add(File(context.filesDir, GUARD_DIR_NAME))
         addAll(databaseFiles(context, PROFILE_SECURE_DB_NAME))
@@ -127,7 +125,6 @@ internal fun deleteLocalDataTarget(target: File): Int =
 private const val PROFILE_SECRETS_DIR_NAME = "profile-secrets"
 private const val DIAGNOSTICS_JOURNAL_DIR_NAME = "diagnostics-journal"
 
-// Mirrors CliTerminalStore.JOURNAL_DIR_NAME; kept as a literal so this file stays free of UI imports.
 private const val CLI_TERMINAL_JOURNAL_DIR_NAME = "cli-terminal-journal"
 private const val DIAGNOSTICS_EXPORT_DIR_NAME = "diagnostics-export"
 private const val DNS_RULE_SETS_DIR_NAME = "dns-rule-sets"

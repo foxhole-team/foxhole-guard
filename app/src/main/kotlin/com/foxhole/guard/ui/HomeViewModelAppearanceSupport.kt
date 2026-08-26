@@ -2,25 +2,12 @@ package com.foxhole.guard.ui
 
 import androidx.lifecycle.viewModelScope
 import com.foxhole.core.model.AccentColor
-import com.foxhole.core.model.AppLocale
-import com.foxhole.core.model.PanelAppearance
-import com.foxhole.core.model.VisualStyle
+import com.foxhole.core.model.HomeAdditionalInfoCategory
 import com.foxhole.guard.core.settings.updateAccentColor
-import com.foxhole.guard.core.settings.updatePanelAppearance
-import com.foxhole.guard.core.settings.updateVisualStyle
+import com.foxhole.guard.core.settings.updateHomeAdditionalInfoCategory
+import com.foxhole.guard.core.settings.updatePixelArtEnabled
+import com.foxhole.guard.core.settings.updateShowHomeAdditionalInfo
 import kotlinx.coroutines.launch
-
-internal fun HomeViewModel.onPanelAppearanceSelected(value: PanelAppearance) {
-    viewModelScope.launch {
-        container.settingsRepository.updatePanelAppearance(value)
-    }
-}
-
-internal fun HomeViewModel.onVisualStyleSelected(value: VisualStyle) {
-    viewModelScope.launch {
-        container.settingsRepository.updateVisualStyle(value)
-    }
-}
 
 internal fun HomeViewModel.onAccentColorSelected(value: AccentColor) {
     viewModelScope.launch {
@@ -28,14 +15,20 @@ internal fun HomeViewModel.onAccentColorSelected(value: AccentColor) {
     }
 }
 
-internal fun HomeViewModel.onRetroThemeRestored(restored: Boolean) {
+internal fun HomeViewModel.onPixelArtEnabledChanged(value: Boolean) {
     viewModelScope.launch {
-        if (restored) {
-            container.settingsRepository.updateVisualStyle(VisualStyle.PIXEL)
-            return@launch
-        }
-        container.settingsRepository.updateVisualStyle(VisualStyle.PLAIN)
-        container.settingsRepository.updatePanelAppearance(PanelAppearance.AUTO)
-        onLocaleSelected(AppLocale.SYSTEM)
+        container.settingsRepository.updatePixelArtEnabled(value)
+    }
+}
+
+internal fun HomeViewModel.onShowHomeAdditionalInfoChanged(value: Boolean) {
+    viewModelScope.launch {
+        container.settingsRepository.updateShowHomeAdditionalInfo(value)
+    }
+}
+
+internal fun HomeViewModel.onHomeAdditionalInfoCategorySelected(value: HomeAdditionalInfoCategory) {
+    viewModelScope.launch {
+        container.settingsRepository.updateHomeAdditionalInfoCategory(value)
     }
 }

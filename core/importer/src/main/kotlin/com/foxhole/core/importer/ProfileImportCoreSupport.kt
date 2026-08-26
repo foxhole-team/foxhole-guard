@@ -83,7 +83,6 @@ internal open class ProfileImportCoreSupport(
         value.contains("[Interface]", ignoreCase = true) && value.contains("[Peer]", ignoreCase = true)
 
     companion object {
-        // Eight-character stable identity suffix.
         private const val NODE_TAG_HASH_BYTES = 4
         internal val SMART_CONFIG_HEADING_REGEX = Regex("""#\s*===\s*(.+?)\s*/\s*(.+?)\s*===""")
         internal val SMART_CONFIG_EXPIRE_REGEX = Regex("""(?:^|[;\s])expire=(\d{10,13})(?:$|[;\s])""")
@@ -122,7 +121,6 @@ internal open class ProfileImportCoreSupport(
         return String(Base64.getDecoder().decode(normalized), StandardCharsets.UTF_8)
     }
 
-    // Deterministic tags keep unchanged subscriptions byte-identical across refreshes.
     internal fun tagFor(
         displayName: String,
         type: String,
@@ -143,7 +141,6 @@ internal open class ProfileImportCoreSupport(
         return "$prefix-${stableTagHash(seed)}"
     }
 
-    // Resolve tag collisions by stable first-seen ordinals.
     internal fun deduplicateNodeTags(nodes: List<ProxyNode>): List<ProxyNode> {
         val seenCounts = mutableMapOf<String, Int>()
         return nodes.map { node ->
@@ -154,8 +151,6 @@ internal open class ProfileImportCoreSupport(
         }
     }
 
-    // Deduplicate normalized servers independent of display-name-derived tags.
-    // Prefer plain Shadowsocks over an equivalent Outline representation.
     internal fun deduplicateNodeIdentities(nodes: List<ProxyNode>): List<ProxyNode> {
         val chosen = LinkedHashMap<JsonObject, ProxyNode>()
         nodes.forEach { node ->
@@ -170,7 +165,6 @@ internal open class ProfileImportCoreSupport(
         return chosen.values.toList()
     }
 
-    // Structural server identity excludes the tag.
     internal fun nodeIdentityBody(node: ProxyNode): JsonObject {
         val body = node.outbound ?: node.endpoint ?: return JsonObject(emptyMap())
         return JsonObject(body.filterKeys { key -> key != "tag" })
@@ -231,7 +225,6 @@ internal open class ProfileImportCoreSupport(
         return parameters
     }
 
-    // URLDecoder is form decoding; preserve literal '+' from share URIs.
     internal fun uriDecode(value: String): String =
         URLDecoder.decode(value.replace("+", "%2B"), StandardCharsets.UTF_8.name())
 
@@ -398,7 +391,6 @@ internal open class ProfileImportCoreSupport(
             else -> element
         }
 
-    // Must cover every spelling recognized by ProfileInsecureTlsSupport.
     internal fun String.isInsecureTlsSettingKey(): Boolean =
         equals("insecure", ignoreCase = true) ||
             equals("allowInsecure", ignoreCase = true) ||
@@ -429,7 +421,7 @@ internal open class ProfileImportCoreSupport(
         if (allowPrivateOutboundHosts) {
             return
         }
-        // TLS names and HTTP Host headers are presented on an existing connection, not dialled.
+
         val hosts = extractNormalizedRemoteHosts(config)
         hosts.dialled.distinct().forEach { host ->
             host.requirePublicRemoteHost(resolveHost = true, resolver = remoteHostResolver)
@@ -523,7 +515,6 @@ internal open class ProfileImportCoreSupport(
         when (element) {
             is JsonObject ->
                 if (element["tag"]?.jsonPrimitive?.contentOrNull == WIREGUARD_DNS_SERVER_TAG) {
-                    // Tunnel-internal WireGuard DNS addresses are not outbound endpoints.
                     null
                 } else {
                     element["server"]
@@ -667,10 +658,4 @@ internal const val MAX_SUBSCRIPTION_ENTRY_LINES = 4096
 internal const val MAX_NODE_DISPLAY_NAME_LENGTH = 256
 private const val MIN_BASE64_SUBSCRIPTION_LENGTH = 8
 
-/**
- * The managed tag for the resolver a WireGuard `DNS =` line becomes.
- *
- * Read by the runtime translator, which advertises this address on the TUN: a packet-tunnel profile
- * does not intercept DNS, so this entry is the only resolver such a profile has.
- */
 internal const val WIREGUARD_DNS_SERVER_TAG = "dns-wireguard"

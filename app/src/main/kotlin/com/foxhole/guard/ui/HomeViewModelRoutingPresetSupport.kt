@@ -11,6 +11,7 @@ import com.foxhole.core.runtime.torAllAppsCollidesWithVpnIncludeSplit
 import com.foxhole.guard.R
 import com.foxhole.guard.core.settings.applyRoutingModePreset
 import com.foxhole.guard.core.settings.applyRoutingModePresetTo
+import com.foxhole.guard.runtime.FoxholeVpnService
 import com.foxhole.guard.userFacingErrorMessage
 import kotlinx.coroutines.launch
 
@@ -21,7 +22,11 @@ internal fun HomeViewModel.onRoutingModePresetSelected(
     if (!routingModePresetSelectable(preset, scope)) {
         return false
     }
-    updateRuntimeSettingAndMaybeReload {
+    if (preset != RoutingModePreset.TOR && preset != RoutingModePreset.VPN_TOR) {
+        clearTorOperation()
+        torIpInfoMutable.value = null
+    }
+    updateRuntimeSettingAndMaybeReload(forceRuntimeApply = true) {
         container.settingsRepository.applyRoutingModePreset(preset, scope)
         emitRoutingScenarioSelected(preset.terminalLabelRes())
     }
@@ -36,17 +41,48 @@ internal fun HomeViewModel.startRoutingMode(
     if (!routingModePresetSelectable(preset, scope)) {
         return false
     }
+    if (preset == RoutingModePreset.TOR) {
+        return startTorRoutingMode(scope)
+    }
     viewModelScope.launch {
         container.settingsRepository.applyRoutingModePreset(preset, scope)
         emitRoutingScenarioSelected(preset.terminalLabelRes())
         when (preset) {
-            RoutingModePreset.TOR -> onEnableDirectTorQuickStart()
+            RoutingModePreset.TOR -> error("TOR start is handled before this coroutine")
             RoutingModePreset.VPN,
             RoutingModePreset.VPN_TOR,
             RoutingModePreset.SPLIT_INCLUDE,
             RoutingModePreset.SPLIT_EXCLUDE,
             -> startVpnConnectionInternal()
         }
+    }
+    return true
+}
+
+private fun HomeViewModel.startTorRoutingMode(scope: PrivacyRouteScope): Boolean {
+    val snapshot = container.connectionController.snapshot.value
+    if (snapshot.isPrimaryConnectionRuntime()) {
+        return onConnectModeSwitchRequested(RoutingModePreset.TOR, scope) != ConnectModeSwitchRequestResult.REJECTED
+    }
+    if (isTorOnlyRuntimeActive(snapshot)) return true
+    clearRuntimeReconnectRequired()
+    torIpInfoMutable.value = null
+    markTorOperation(HomeTorOperationKind.CONNECTING)
+    if (android.net.VpnService.prepare(getApplication<Application>()) != null) {
+        val accepted =
+            enqueueVpnPermissionRequest(
+                PendingConnectRequest(
+                    profileId = FoxholeVpnService.TOR_ONLY_PROFILE_ID,
+                    action = PendingConnectAction.TOR_ONLY_QUICK_START,
+                    routingModeScope = scope,
+                ),
+            )
+        if (!accepted) clearTorOperation()
+        return accepted
+    }
+    startStandaloneTorRuntime(warnWholeDevice = scope == PrivacyRouteScope.ALL_APPS) {
+        container.settingsRepository.applyRoutingModePreset(RoutingModePreset.TOR, scope)
+        emitRoutingScenarioSelected(R.string.cli_st_tor)
     }
     return true
 }
@@ -75,12 +111,17 @@ internal fun HomeViewModel.routingModePresetSelectable(
         snackbars.tryEmit(errorBanner(R.string.privacy_route_select_apps_first))
         return false
     }
-    if (usesTor && prospective.torAllAppsCollidesWithVpnIncludeSplit()) {
+    if (routingPresetCollidesWithVpnIncludeSplit(preset, prospective)) {
         snackbars.tryEmit(errorBanner(R.string.error_tor_all_apps_needs_full_tunnel))
         return false
     }
     return true
 }
+
+internal fun routingPresetCollidesWithVpnIncludeSplit(
+    preset: RoutingModePreset,
+    prospective: com.foxhole.core.model.Settings,
+): Boolean = preset == RoutingModePreset.VPN_TOR && prospective.torAllAppsCollidesWithVpnIncludeSplit()
 
 internal fun HomeViewModel.createPreset(name: String) {
     viewModelScope.launch {

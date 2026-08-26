@@ -85,7 +85,7 @@ private fun amneziaHeaderRanges(
         AMNEZIA_HEADER_KEYS.map { key ->
             source[key]?.let { amneziaHeaderRange(it, "$path.$key") } ?: AMNEZIA_HEADER_DEFAULTS.getValue(key)
         }
-    // Overlap makes the received AmneziaWG message type ambiguous.
+
     headers.indices.forEach { index ->
         headers.drop(index + 1).forEach { other ->
             if (headers[index].first <= other.second && other.first <= headers[index].second) {
@@ -106,7 +106,6 @@ private fun translateFoxCoreAmnezia(
     val junkMin = source.amneziaSize("junk_min_size", path, MAX_AMNEZIA_JUNK_SIZE)
     val junkMax = source.amneziaSize("junk_max_size", path, MAX_AMNEZIA_JUNK_SIZE)
     if (junkCount > 0) {
-        // Empty or always-fragmented junk defeats the obfuscation contract.
         val fragments = junkMax >= mtu
         if (junkMin > junkMax || junkMax == 0 || fragments) {
             rejectFoxCoreConfig(FoxCoreConfigRejection.INVALID_SHAPE, "$path.junk_max_size")
@@ -174,7 +173,6 @@ private fun requireAmneziaInitPacketRendersBytes(
             }
     }
     if (rendered == 0 || rendered > MAX_AMNEZIA_JUNK_SIZE) {
-        // Zero-width templates become empty UDP datagrams (amneziawg-go#141).
         rejectFoxCoreConfig(FoxCoreConfigRejection.INVALID_SHAPE, path)
     }
 }

@@ -14,8 +14,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -60,6 +60,7 @@ import com.foxhole.guard.ui.HomeViewModel
 import com.foxhole.guard.ui.NETWORK_ACTIVITY_TAG
 import com.foxhole.guard.ui.clearDiagnosticsLocalData
 import com.foxhole.guard.ui.clearNetworkActivityLocalData
+import com.foxhole.guard.ui.cli.CLI_FIRST_LINE_GLYPH_DROP
 import com.foxhole.guard.ui.cli.CliFormat
 import com.foxhole.guard.ui.cli.CliSpacing
 import com.foxhole.guard.ui.cli.CliType
@@ -72,18 +73,20 @@ import com.foxhole.guard.ui.cli.components.CliButton
 import com.foxhole.guard.ui.cli.components.CliChip
 import com.foxhole.guard.ui.cli.components.CliChromeTailSpacer
 import com.foxhole.guard.ui.cli.components.CliFlagIcon
+import com.foxhole.guard.ui.cli.components.CliIcon
 import com.foxhole.guard.ui.cli.components.CliLoadingRow
 import com.foxhole.guard.ui.cli.components.CliPanel
-import com.foxhole.guard.ui.cli.components.CliPixIcon
 import com.foxhole.guard.ui.cli.components.CliRetentionRow
 import com.foxhole.guard.ui.cli.components.CliRowDivider
 import com.foxhole.guard.ui.cli.components.CliScreenHeader
 import com.foxhole.guard.ui.cli.components.CliSectionPreloader
+import com.foxhole.guard.ui.cli.components.CliSemanticGlyph
 import com.foxhole.guard.ui.cli.components.CliSheetAction
 import com.foxhole.guard.ui.cli.components.CliSheetActionTone
 import com.foxhole.guard.ui.cli.components.CliSheetActionsRow
 import com.foxhole.guard.ui.cli.components.CliToggleRow
-import com.foxhole.guard.ui.cli.components.cliPressable
+import com.foxhole.guard.ui.cli.components.CliTopBarSettingsButton
+import com.foxhole.guard.ui.cli.components.cliSemanticIcon
 import com.foxhole.guard.ui.emitError
 import com.foxhole.guard.ui.emitSuccess
 import com.foxhole.guard.ui.fallbackNetworkDiagnosticEntries
@@ -103,8 +106,6 @@ private enum class CliLogTab(@StringRes val labelRes: Int) {
 
 private enum class CliJournalActionsPage { ACTIONS, CONFIRM_CLEAR }
 
-private enum class CliJournalExportKind { SANITIZED, NETWORK_ACTIVITY }
-
 internal const val CLI_LOGS_SCREEN_TAG = "cli_logs_screen"
 internal const val CLI_LOGS_EMPTY_TAG = "cli_logs_empty"
 internal const val CLI_LOGS_LIST_TAG = "cli_logs_list"
@@ -113,6 +114,7 @@ internal const val CLI_LOGS_CONTENT_TAG = "cli_logs_content"
 internal const val CLI_LOGS_DOCK_TAG = "cli_logs_dock"
 internal const val CLI_LOGS_ACTIONS_BUTTON_TAG = "cli_logs_actions_button"
 internal const val CLI_LOGS_ACTIONS_SHEET_TAG = "cli_logs_actions_sheet"
+internal const val CLI_LOGS_ENABLE_BUTTON_TAG = "cli_logs_enable_button"
 
 private val CliLogTabSaver = Saver<CliLogTab, String>(
     save = { it.name },
@@ -136,7 +138,7 @@ internal fun CliLogsScreen(
     ) {
         CliScreenHeader(
             label = stringResource(R.string.cli_cfg_more_journals),
-            icon = R.drawable.pix_journal,
+            icon = R.drawable.lin_journal,
             trailing = {
                 CliLogsActionsButton(onClick = { actionsOpen = true })
             },
@@ -170,7 +172,7 @@ internal fun CliLogsScreen(
                             settings = {
                                 CliRetentionRow(
                                     label = stringResource(R.string.cli_logs_retention),
-                                    icon = R.drawable.pix_clock,
+                                    icon = R.drawable.lin_clock,
                                     policy = state.settings.expert.effectiveDiagnosticsRetention(),
                                     onSelect = viewModel::onDiagnosticsRetentionSelected,
                                 )
@@ -207,7 +209,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.CliJournalLayout(
 ) {
     CliPanel(
         title = stringResource(tab.labelRes),
-        icon = R.drawable.pix_journal,
+        icon = R.drawable.lin_journal,
         modifier = Modifier.fillMaxWidth().weight(1f).testTag(CLI_LOGS_CONTENT_TAG),
         content = content,
     )
@@ -252,7 +254,6 @@ private fun CliJournalActionsSheet(
     exportEntries: List<DiagnosticEntry>,
     exportTitle: String,
     exportFileName: String,
-    exportKind: CliJournalExportKind = CliJournalExportKind.SANITIZED,
     settings: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit,
 ) {
     val context = LocalContext.current
@@ -273,12 +274,7 @@ private fun CliJournalActionsSheet(
             } else {
                 scope.launch {
                     val payload = withContext(Dispatchers.Default) {
-                        when (exportKind) {
-                            CliJournalExportKind.SANITIZED ->
-                                formatSanitizedJournalExport(exportTitle, exportEntries)
-                            CliJournalExportKind.NETWORK_ACTIVITY ->
-                                formatNetworkJournalExport(exportTitle, exportEntries)
-                        }
+                        formatRawJournalExport(exportTitle, exportEntries)
                     }
                     val written = writeJournalExport(context.contentResolver, uri, payload)
                     exporting = false
@@ -292,9 +288,15 @@ private fun CliJournalActionsSheet(
         }
     if (open) {
         CliBottomSheet(
-            onDismiss = onDismiss,
+            onDismiss = {
+                if (page == CliJournalActionsPage.CONFIRM_CLEAR) {
+                    page = CliJournalActionsPage.ACTIONS
+                } else {
+                    onDismiss()
+                }
+            },
             title = stringResource(R.string.cli_logs_settings),
-            icon = R.drawable.pix_settings,
+            icon = R.drawable.lin_settings,
             modifier = Modifier.testTag(CLI_LOGS_ACTIONS_SHEET_TAG),
         ) {
             AnimatedContent(
@@ -325,12 +327,10 @@ private fun CliJournalActionsSheet(
                                             scope.launch { viewModel.emitError(saveFailedMessage) }
                                         }
                                 },
-                                onDismiss = onDismiss,
                             )
                         }
                     CliJournalActionsPage.CONFIRM_CLEAR ->
                         CliJournalClearConfirmation(
-                            onBack = { page = CliJournalActionsPage.ACTIONS },
                             onConfirm = {
                                 onDismiss()
                                 onClear?.invoke()
@@ -348,7 +348,6 @@ private fun CliJournalPrimaryActions(
     saveEnabled: Boolean,
     onClear: () -> Unit,
     onSave: () -> Unit,
-    onDismiss: () -> Unit,
 ) {
     val colors = LocalCliColors.current
     Column(
@@ -360,7 +359,6 @@ private fun CliJournalPrimaryActions(
         ) {
             CliButton(
                 label = stringResource(R.string.cli_logs_clear),
-                filled = true,
                 color = colors.err,
                 enabled = clearEnabled,
                 onClick = onClear,
@@ -368,27 +366,17 @@ private fun CliJournalPrimaryActions(
             )
             CliButton(
                 label = stringResource(R.string.cli_logs_save),
-                filled = true,
                 color = colors.ok,
                 enabled = saveEnabled,
                 onClick = onSave,
                 modifier = Modifier.weight(1f),
             )
         }
-        Spacer(modifier = Modifier.height(CliSpacing.sm))
-        CliButton(
-            label = stringResource(R.string.cli_common_no_cancel),
-            color = colors.err,
-            dashed = true,
-            onClick = onDismiss,
-            modifier = Modifier.fillMaxWidth(),
-        )
     }
 }
 
 @Composable
 private fun CliJournalClearConfirmation(
-    onBack: () -> Unit,
     onConfirm: () -> Unit,
 ) {
     val colors = LocalCliColors.current
@@ -400,12 +388,12 @@ private fun CliJournalClearConfirmation(
         )
         Spacer(modifier = Modifier.height(CliSpacing.md))
         CliSheetActionsRow(
-            onCancel = onBack,
             actions = listOf(
                 CliSheetAction(
                     label = stringResource(R.string.cli_common_yes_confirm),
                     tone = CliSheetActionTone.DESTRUCTIVE,
                     onClick = onConfirm,
+                    dismissAfterClick = true,
                 ),
             ),
         )
@@ -415,23 +403,13 @@ private fun CliJournalClearConfirmation(
 @Composable
 private fun CliLogsActionsButton(onClick: () -> Unit) {
     val colors = LocalCliColors.current
-    Box(
-        modifier = Modifier
-            .requiredSize(LOG_ACTIONS_BUTTON_SIZE)
-            .testTag(CLI_LOGS_ACTIONS_BUTTON_TAG)
-            .cliPressable(onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        CliPixIcon(
-            id = R.drawable.pix_settings,
-            contentDescription = stringResource(R.string.cli_logs_settings),
-            size = 16.dp,
-            tint = colors.accent,
-        )
-    }
+    CliTopBarSettingsButton(
+        contentDescription = stringResource(R.string.cli_logs_settings),
+        onClick = onClick,
+        tint = colors.accent,
+        modifier = Modifier.testTag(CLI_LOGS_ACTIONS_BUTTON_TAG),
+    )
 }
-
-private val LOG_ACTIONS_BUTTON_SIZE = 48.dp
 
 @Composable
 internal fun androidx.compose.foundation.layout.ColumnScope.CliGroupedDiagnosticList(
@@ -542,11 +520,14 @@ private fun CliJournalTableRow(row: CliJournalRow) {
             modifier = Modifier.width(JOURNAL_EVENT_TYPE_WIDTH),
             verticalAlignment = Alignment.Top,
         ) {
-            CliPixIcon(
+            CliIcon(
                 id = journalToneIcon(row.tone),
                 contentDescription = null,
                 size = JOURNAL_GLYPH_SIZE,
                 tint = toneColor,
+                modifier = Modifier.offset(
+                    y = CLI_FIRST_LINE_GLYPH_DROP,
+                ),
             )
             Spacer(modifier = Modifier.width(JOURNAL_GLYPH_GAP))
             Text(
@@ -563,7 +544,11 @@ private fun CliJournalTableRow(row: CliJournalRow) {
             row.description.forEachIndexed { index, field ->
                 if (index == 0 && row.flagCountry != null) {
                     Row(verticalAlignment = Alignment.Top) {
-                        CliFlagIcon(countryCode = row.flagCountry, style = CliType.small)
+                        CliFlagIcon(
+                            countryCode = row.flagCountry,
+                            style = CliType.small,
+                            visualOffsetY = CLI_FIRST_LINE_GLYPH_DROP,
+                        )
                         Spacer(modifier = Modifier.width(JOURNAL_GLYPH_GAP))
                         CliJournalDescriptionLine(field = field, index = index, row = row)
                     }
@@ -576,7 +561,11 @@ private fun CliJournalTableRow(row: CliJournalRow) {
 }
 
 @Composable
-private fun CliJournalDescriptionLine(field: String, index: Int, row: CliJournalRow) {
+private fun CliJournalDescriptionLine(
+    field: String,
+    index: Int,
+    row: CliJournalRow,
+) {
     val colors = LocalCliColors.current
     Text(
         text = field,
@@ -592,11 +581,11 @@ private fun CliJournalDescriptionLine(field: String, index: Int, row: CliJournal
 }
 
 private fun journalToneIcon(tone: CliJournalRowTone): Int = when (tone) {
-    CliJournalRowTone.ERROR -> R.drawable.pix_forbidden
-    CliJournalRowTone.WARNING -> R.drawable.pix_info
-    CliJournalRowTone.SUCCESS -> R.drawable.pix_check
-    CliJournalRowTone.INFO -> R.drawable.pix_link
-    CliJournalRowTone.NORMAL, CliJournalRowTone.DIM -> R.drawable.pix_journal
+    CliJournalRowTone.ERROR -> cliSemanticIcon(CliSemanticGlyph.ERROR)
+    CliJournalRowTone.WARNING -> cliSemanticIcon(CliSemanticGlyph.WARNING)
+    CliJournalRowTone.SUCCESS -> cliSemanticIcon(CliSemanticGlyph.SUCCESS)
+    CliJournalRowTone.INFO -> cliSemanticIcon(CliSemanticGlyph.INFORMATION)
+    CliJournalRowTone.NORMAL, CliJournalRowTone.DIM -> R.drawable.lin_journal
 }
 
 @Composable
@@ -637,11 +626,17 @@ private fun androidx.compose.foundation.layout.ColumnScope.CliNetworkLog(
         tab = tab,
         onTabSelected = onTabSelected,
         content = {
-            CliDiagnosticList(
-                entries = formatted,
-                emptyText = stringResource(R.string.cli_common_empty_run_traffic),
-                networkActivity = true,
-            )
+            if (enabled) {
+                CliDiagnosticList(
+                    entries = formatted,
+                    emptyText = stringResource(R.string.cli_logs_empty),
+                    networkActivity = true,
+                )
+            } else {
+                CliNetworkJournalEnablePrompt(
+                    onEnable = { viewModel.onNetworkActivityLoggingChanged(true) },
+                )
+            }
         },
         actions = {
             CliJournalActionsSheet(
@@ -652,7 +647,6 @@ private fun androidx.compose.foundation.layout.ColumnScope.CliNetworkLog(
                 exportEntries = formatted,
                 exportTitle = stringResource(R.string.cli_logs_tab_net),
                 exportFileName = "foxhole-network-journal.txt",
-                exportKind = CliJournalExportKind.NETWORK_ACTIVITY,
                 settings = {
                     if (!state.settingsHydrated) {
                         CliLoadingRow(
@@ -668,7 +662,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.CliNetworkLog(
                         )
                         CliRetentionRow(
                             label = stringResource(R.string.cli_logs_retention),
-                            icon = R.drawable.pix_clock,
+                            icon = R.drawable.lin_clock,
                             policy = state.settings.expert.effectiveDiagnosticsRetention(),
                             onSelect = viewModel::onDiagnosticsRetentionSelected,
                         )
@@ -684,6 +678,22 @@ private fun androidx.compose.foundation.layout.ColumnScope.CliNetworkLog(
             )
         },
     )
+}
+
+@Composable
+private fun androidx.compose.foundation.layout.ColumnScope.CliNetworkJournalEnablePrompt(
+    onEnable: () -> Unit,
+) {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center,
+    ) {
+        CliButton(
+            label = stringResource(R.string.cli_logs_enable_network_journal),
+            onClick = onEnable,
+            modifier = Modifier.testTag(CLI_LOGS_ENABLE_BUTTON_TAG),
+        )
+    }
 }
 
 private sealed interface SecJournalItem {
@@ -778,7 +788,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.CliSecurityLog(
                     )
                     CliRetentionRow(
                         label = stringResource(R.string.cli_logs_retention),
-                        icon = R.drawable.pix_clock,
+                        icon = R.drawable.lin_clock,
                         policy = retention,
                         onSelect = viewModel::onDiagnosticsRetentionSelected,
                     )

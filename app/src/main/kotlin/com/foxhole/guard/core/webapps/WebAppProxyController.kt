@@ -33,10 +33,6 @@ internal data class WebAppProxyActivation(
 
 internal fun WebAppProxyPlan.mustBlockServiceWorkerNetwork(): Boolean = this is WebAppProxyPlan.Http
 
-/**
- * Serial process-global WebView proxy switch. A strict route is activated before its WebView is
- * created; an unavailable proxy never falls through to WebView's default network.
- */
 internal class WebAppProxyController(
     context: Context,
     private val planProvider: suspend (WebAppRoute, Boolean) -> WebAppProxyPlan?,
@@ -99,11 +95,6 @@ internal class WebAppProxyController(
             }
         }
 
-    /**
-     * Fail-closed gate for the process-global WebView override: every clause must hold before an
-     * HTTP plan may be installed — the right type, the loopback host only, a routable port, and
-     * both credentials present. A plan failing any one of them is not applied at all.
-     */
     private fun HttpProxyAccess.isUsableLoopbackHttpProxy(): Boolean =
         type == ProxyAccessType.HTTP &&
             host == LOOPBACK_HOST &&
@@ -129,7 +120,6 @@ internal class WebAppProxyController(
 
     private suspend fun clearOverride(): Boolean {
         if (!WebViewFeature.isFeatureSupported(WebViewFeature.PROXY_OVERRIDE)) {
-            // No override can have been installed through this class on an unsupported provider.
             return activeCredentials == null
         }
         return runCatching {

@@ -1,20 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Превью повторяет чёрный default и видимый внутренний pixel-outline. -->
-<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item>
-        <shape android:shape="rectangle">
-            <solid android:color="#000000" />
-        </shape>
-    </item>
-    <item android:left="4dp" android:top="4dp" android:right="4dp" android:bottom="4dp">
-        <shape android:shape="rectangle">
-            <stroke
-                android:width="2dp"
-                android:color="@color/cli_accent"
-                android:dashWidth="7dp"
-                android:dashGap="4dp" />
-            <corners android:radius="8dp" />
-            <solid android:color="@android:color/transparent" />
-        </shape>
-    </item>
-</layer-list>
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <corners android:radius="8dp" />
+    <solid android:color="#000000" />
+</shape>

@@ -16,9 +16,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
-import com.foxhole.core.model.VisualStyle
 import com.foxhole.guard.ui.cli.CliType
-import com.foxhole.guard.ui.cli.LocalCliVisualStyle
 import com.foxhole.guard.ui.cli.cliMetricSp
 
 @Composable
@@ -27,8 +25,7 @@ internal fun CliBadge(
     color: Color,
     modifier: Modifier = Modifier,
 ) {
-    val round = LocalCliVisualStyle.current == VisualStyle.PLAIN
-    val shape = RoundedCornerShape(if (round) BADGE_CORNER else 0.dp)
+    val shape = RoundedCornerShape(BADGE_CORNER)
     Text(
         text = text,
         style = CliType.small.copy(
@@ -38,7 +35,7 @@ internal fun CliBadge(
         color = color,
         maxLines = 1,
         modifier = modifier
-            .offset(y = BADGE_LIFT)
+            .offset(y = CLI_BADGE_VERTICAL_OFFSET)
             .clip(shape)
             .background(color.copy(alpha = BADGE_FILL_ALPHA))
             .border(1.dp, color.copy(alpha = BADGE_EDGE_ALPHA), shape)
@@ -71,4 +68,4 @@ private val BADGE_PADDING_H = 4.dp
 private val BADGE_PADDING_V = 1.dp
 private val BADGE_GAP = 3.dp
 
-private val BADGE_LIFT = (-3).dp
+internal val CLI_BADGE_VERTICAL_OFFSET = (-1).dp

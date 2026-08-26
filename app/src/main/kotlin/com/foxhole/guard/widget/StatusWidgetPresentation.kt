@@ -1,5 +1,6 @@
 package com.foxhole.guard.widget
 
+import com.foxhole.core.model.AppliedTorRoute
 import com.foxhole.core.model.ConnectionSnapshot
 import com.foxhole.core.model.ConnectionState
 import com.foxhole.core.model.IpInfo
@@ -12,6 +13,7 @@ import com.foxhole.core.model.Settings
 import com.foxhole.core.model.TOR_ONLY_PROFILE_ID
 import com.foxhole.core.model.TrafficMode
 import com.foxhole.core.model.tunnelKeptOutPackages
+import com.foxhole.guard.R
 import com.foxhole.guard.core.settings.activeRoutingModePreset
 import com.foxhole.guard.ui.cli.home.CliActiveRuntimes
 import com.foxhole.guard.ui.cli.home.CliCompactRouteStatus
@@ -29,6 +31,7 @@ internal data class StatusWidgetPresentation(
     val routeStatus: CliCompactRouteStatus?,
     val i2pConnected: Boolean,
     val components: List<StatusWidgetComponent>,
+    val deviceIdentity: IpInfo?,
     val vpnIdentity: IpInfo?,
     val vpnLatencyMs: Long?,
     val torIdentity: IpInfo?,
@@ -58,10 +61,37 @@ internal enum class StatusWidgetComponent { FIREWALL, TOR, I2P, SENTINEL }
 
 internal enum class StatusWidgetControlAction { START, STOP, RESTART }
 
+internal enum class StatusWidgetSimpleIdentityKind { DEVICE, VPN, TOR, I2P }
+
+internal data class StatusWidgetSimpleIdentityToken(
+    val kind: StatusWidgetSimpleIdentityKind,
+    val identity: IpInfo?,
+)
+
+internal enum class StatusWidgetSimpleDeviceTone { DISCONNECTED, VPN, TOR, VPN_TOR, I2P }
+
+internal enum class StatusWidgetSimplePowerAction { CONNECT, STOP }
+
+internal enum class StatusWidgetSimpleStatus(
+    val labelRes: Int,
+) {
+    VPN(R.string.cli_home_status_connected_vpn),
+    TOR(R.string.cli_home_status_connected_tor),
+    VPN_TOR(R.string.cli_home_status_connected_vpn_tor),
+    I2P(R.string.cli_home_status_i2p_connected),
+    FIREWALL(R.string.cli_home_status_firewall_active),
+    CONNECTING(R.string.cli_home_status_connecting),
+    RECONNECTING(R.string.cli_home_status_reconnecting),
+    DISCONNECTING(R.string.cli_home_state_disconnecting),
+    OFF(R.string.widget_status_unprotected),
+    ERROR(R.string.cli_home_status_error),
+}
+
 internal data class StatusWidgetRuntimeKey(
     val state: ConnectionState,
     val profileId: Long?,
     val torActive: Boolean,
+    val appliedTorRoute: AppliedTorRoute?,
     val trafficMode: TrafficMode,
     val profileName: String?,
     val protocolHint: ProtocolHint?,
@@ -72,6 +102,7 @@ internal fun ConnectionSnapshot.statusWidgetRuntimeKey(): StatusWidgetRuntimeKey
         state = state,
         profileId = profileId,
         torActive = torActive,
+        appliedTorRoute = appliedTorRoute,
         trafficMode = trafficMode,
         profileName = profileName,
         protocolHint = protocolHint,
@@ -90,6 +121,90 @@ internal fun statusWidgetControlActions(
                 ) -> listOf(StatusWidgetControlAction.STOP)
         primaryActive -> listOf(StatusWidgetControlAction.STOP, StatusWidgetControlAction.RESTART)
         else -> listOf(StatusWidgetControlAction.START)
+    }
+
+internal fun StatusWidgetPresentation.simpleStatus(): StatusWidgetSimpleStatus =
+    when (connection) {
+        StatusWidgetConnection.CONNECTING -> StatusWidgetSimpleStatus.CONNECTING
+        StatusWidgetConnection.RECONNECTING -> StatusWidgetSimpleStatus.RECONNECTING
+        StatusWidgetConnection.DISCONNECTING -> StatusWidgetSimpleStatus.DISCONNECTING
+        StatusWidgetConnection.ERROR -> StatusWidgetSimpleStatus.ERROR
+        StatusWidgetConnection.CONNECTED ->
+            when {
+                primaryActive && mode == StatusWidgetMode.VPN_TOR -> StatusWidgetSimpleStatus.VPN_TOR
+                primaryActive && mode == StatusWidgetMode.TOR -> StatusWidgetSimpleStatus.TOR
+                primaryActive -> StatusWidgetSimpleStatus.VPN
+                StatusWidgetComponent.I2P in components -> StatusWidgetSimpleStatus.I2P
+                StatusWidgetComponent.FIREWALL in components -> StatusWidgetSimpleStatus.FIREWALL
+                else -> StatusWidgetSimpleStatus.OFF
+            }
+        StatusWidgetConnection.DISCONNECTED ->
+            if (StatusWidgetComponent.FIREWALL in components) {
+                StatusWidgetSimpleStatus.FIREWALL
+            } else {
+                StatusWidgetSimpleStatus.OFF
+            }
+    }
+
+internal fun StatusWidgetPresentation.simpleIdentityTokens(): List<StatusWidgetSimpleIdentityToken> =
+    when {
+        connection == StatusWidgetConnection.CONNECTED &&
+            primaryActive &&
+            mode == StatusWidgetMode.VPN_TOR ->
+            listOf(
+                StatusWidgetSimpleIdentityToken(StatusWidgetSimpleIdentityKind.VPN, vpnIdentity),
+                StatusWidgetSimpleIdentityToken(StatusWidgetSimpleIdentityKind.TOR, torIdentity),
+            )
+        connection == StatusWidgetConnection.CONNECTED &&
+            primaryActive &&
+            mode == StatusWidgetMode.VPN ->
+            listOf(
+                StatusWidgetSimpleIdentityToken(StatusWidgetSimpleIdentityKind.VPN, vpnIdentity),
+            )
+        connection == StatusWidgetConnection.CONNECTED &&
+            primaryActive &&
+            mode == StatusWidgetMode.TOR ->
+            listOf(
+                StatusWidgetSimpleIdentityToken(StatusWidgetSimpleIdentityKind.TOR, torIdentity),
+            )
+        connection == StatusWidgetConnection.CONNECTED && i2pConnected ->
+            listOf(
+                StatusWidgetSimpleIdentityToken(StatusWidgetSimpleIdentityKind.I2P, deviceIdentity),
+            )
+        else ->
+            listOf(
+                StatusWidgetSimpleIdentityToken(StatusWidgetSimpleIdentityKind.DEVICE, deviceIdentity),
+            )
+    }
+
+internal fun StatusWidgetPresentation.simpleDeviceTone(): StatusWidgetSimpleDeviceTone =
+    when {
+        i2pConnected -> StatusWidgetSimpleDeviceTone.I2P
+        connection != StatusWidgetConnection.CONNECTED -> StatusWidgetSimpleDeviceTone.DISCONNECTED
+        !primaryActive -> StatusWidgetSimpleDeviceTone.DISCONNECTED
+        mode == StatusWidgetMode.VPN_TOR -> StatusWidgetSimpleDeviceTone.VPN_TOR
+        mode == StatusWidgetMode.TOR -> StatusWidgetSimpleDeviceTone.TOR
+        else -> StatusWidgetSimpleDeviceTone.VPN
+    }
+
+internal fun StatusWidgetPresentation.simplePowerAction(): StatusWidgetSimplePowerAction =
+    if (primaryActive) {
+        StatusWidgetSimplePowerAction.STOP
+    } else {
+        when (connection) {
+            StatusWidgetConnection.CONNECTING,
+            StatusWidgetConnection.RECONNECTING,
+            StatusWidgetConnection.DISCONNECTING,
+            -> StatusWidgetSimplePowerAction.STOP
+            else -> StatusWidgetSimplePowerAction.CONNECT
+        }
+    }
+
+internal fun StatusWidgetPresentation.expandedIdentity(): IpInfo? =
+    if (connection == StatusWidgetConnection.DISCONNECTED && !primaryActive) {
+        deviceIdentity
+    } else {
+        vpnIdentity
     }
 
 private data class StatusWidgetRoute(
@@ -112,20 +227,27 @@ internal fun statusWidgetPresentation(
     val route = snapshot.widgetRoute()
     val mode = route.liveMode ?: settings.configuredWidgetMode()
     val rememberedLatency = settings.rememberedWidgetLatency(snapshot.profileId)
-    val runtimes = route.widgetActiveRuntimes(snapshot, settings, i2pConnected)
+    val appliedTorRoute = snapshot.appliedTorRoute.takeIf { route.torLive }
+    val runtimes = route.widgetActiveRuntimes(snapshot, appliedTorRoute, i2pConnected)
     return StatusWidgetPresentation(
         connection = route.connection.withI2p(i2pConnected),
         primaryActive = route.vpnLive || route.torLive,
         vpnProfile = snapshot.widgetVpnProfile(route.vpnConnected),
         vpnProtocol = snapshot.protocolHint?.name.takeIfConnected(route.vpnConnected),
         mode = mode,
-        scenario = settings.widgetScenario(mode),
-        routeStatus = cliCompactRouteStatus(settings, runtimes),
+        scenario = settings.widgetScenario(mode, appliedTorRoute, route.torLive),
+        routeStatus = cliCompactRouteStatus(settings, runtimes).takeUnless {
+            route.torLive && appliedTorRoute == null
+        },
         i2pConnected = i2pConnected,
         components = widgetComponents(snapshot, settings, route.torConnected, i2pConnected),
+        deviceIdentity = deviceIpInfo,
         vpnIdentity =
-        vpnIpInfo.takeIfConnected(route.vpnConnected)
-            ?: deviceIpInfo.takeIfConnected(i2pConnected || route.torConnected),
+        if (route.vpnConnected) {
+            vpnIpInfo
+        } else {
+            deviceIpInfo.takeIfConnected(i2pConnected || route.torConnected)
+        },
         vpnLatencyMs = rememberedLatency.takeIfConnected(route.vpnConnected),
         torIdentity = resolvedTorIdentity(route, vpnIpInfo, torIpInfo),
         torLatencyMs = null,
@@ -175,15 +297,16 @@ private fun StatusWidgetConnection.withI2p(i2pConnected: Boolean): StatusWidgetC
 
 private fun StatusWidgetRoute.widgetActiveRuntimes(
     snapshot: ConnectionSnapshot,
-    settings: Settings,
+    appliedTorRoute: AppliedTorRoute?,
     i2pConnected: Boolean,
 ): CliActiveRuntimes =
     CliActiveRuntimes(
         vpn = vpnLive,
         proxy = vpnLive && snapshot.trafficMode == com.foxhole.core.model.TrafficMode.PROXY,
         tor = torLive,
-        torBesideVpn = vpnLive && torLive && settings.privacyRoute.bypassVpnTunnel,
+        torBesideVpn = vpnLive && torLive && appliedTorRoute?.bypassVpnTunnel == true,
         i2p = i2pConnected,
+        torScope = appliedTorRoute?.scope,
     )
 
 private fun widgetMode(
@@ -207,13 +330,19 @@ private fun Settings.configuredWidgetMode(): StatusWidgetMode =
         RoutingModePreset.VPN_TOR -> StatusWidgetMode.VPN_TOR
     }
 
-private fun Settings.widgetScenario(mode: StatusWidgetMode): StatusWidgetScenario =
+private fun Settings.widgetScenario(
+    mode: StatusWidgetMode,
+    appliedTorRoute: AppliedTorRoute? = null,
+    torLive: Boolean = false,
+): StatusWidgetScenario =
     StatusWidgetScenario(
         vpn = vpnWidgetScope().takeIf {
             mode == StatusWidgetMode.VPN || mode == StatusWidgetMode.VPN_TOR
         },
-        tor = torWidgetScope().takeIf {
-            mode == StatusWidgetMode.TOR || mode == StatusWidgetMode.VPN_TOR
+        tor = when {
+            mode != StatusWidgetMode.TOR && mode != StatusWidgetMode.VPN_TOR -> null
+            torLive -> appliedTorRoute?.scope?.toWidgetScope()
+            else -> torWidgetScope()
         },
     )
 
@@ -271,7 +400,10 @@ private fun Settings.vpnWidgetScope(): StatusWidgetScope =
     }
 
 private fun Settings.torWidgetScope(): StatusWidgetScope =
-    when (privacyRoute.scope) {
+    privacyRoute.scope.toWidgetScope()
+
+private fun PrivacyRouteScope.toWidgetScope(): StatusWidgetScope =
+    when (this) {
         PrivacyRouteScope.ALL_APPS -> StatusWidgetScope.WHOLE_DEVICE
         PrivacyRouteScope.SELECTED_APPS -> StatusWidgetScope.SELECTED_APPS
     }

@@ -8,15 +8,6 @@ import com.foxhole.core.model.TrafficMode
 import com.foxhole.core.model.TunStack
 import com.foxhole.guard.BuildConfig
 
-// Tunnel/traffic mode and DNS settings. Extracted from SettingsRepository (class split by
-// domain).
-
-// Tun stack / MTU / prefer-ipv6 / domain strategy carry NO safe-mode clause on purpose: safe mode
-// governs only TrafficMode (see updateTrafficMode below), and Settings.normalized() resets only that
-// one field. The transforms are extracted as pure `...In` functions (same idiom as updateAppLaneIn)
-// so the regression suite can prove the value survives normalization plus a reread — the write path
-// drops any update whose normalized result equals the current one.
-
 suspend fun SettingsRepository.updateTunStack(value: TunStack) =
     update { current -> updateTunStackIn(current, value) }
 
@@ -29,8 +20,7 @@ suspend fun SettingsRepository.updateTrafficMode(
     @Suppress("UNUSED_PARAMETER") value: TrafficMode,
 ) =
     update { current ->
-        // Compatibility API for callers compiled against schema <= 18. FoxCore intentionally has
-        // no proxy-only runtime: even a stale PROXY request is normalized to the protected TUN.
+
         val protectedMode = TrafficMode.TUNNEL
         current.copy(
             connection =
@@ -68,10 +58,7 @@ internal fun updateDomainStrategyIn(
 
 suspend fun SettingsRepository.updateDnsSettings(value: DnsSettings) =
     update { current ->
-        // Turning the DNS filter on auto-arms DNS interception: without intercept the filter is
-        // inert at the DNS layer (only sniff-reject fires, the block counters stay empty). This only
-        // forces intercept on the off->on filter transition — the user can turn intercept back off
-        // afterward (the DNS screen then warns the filter is running degraded).
+
         val filterJustEnabled = value.filteringEnabled && !current.dns.filteringEnabled
         val effectiveDns =
             if (filterJustEnabled && !value.interceptDnsRequests) {

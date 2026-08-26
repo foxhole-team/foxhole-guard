@@ -4,11 +4,8 @@ import android.content.Intent
 import androidx.lifecycle.viewModelScope
 import com.foxhole.core.model.PrivacyRouteMode
 import com.foxhole.core.model.PrivacyRouteScope
+import com.foxhole.core.model.RoutingModePreset
 import com.foxhole.guard.BuildConfig
-import com.foxhole.guard.core.settings.updatePrivacyRouteScope
-import com.foxhole.guard.core.settings.updatePrivacyRouteSelectedPackages
-import com.foxhole.guard.runtime.FoxholeVpnService
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 internal fun HomeViewModel.applyBenchmarkIntent(intent: Intent?) {
@@ -23,15 +20,13 @@ internal fun HomeViewModel.applyBenchmarkIntent(intent: Intent?) {
     }
     intent?.getStringExtra("foxhole_debug_connect")?.takeIf(String::isNotBlank)?.let(::debugDriveConnect)
     intent?.getStringExtra("foxhole_debug_tor_scope")?.takeIf(String::isNotBlank)?.let { scope ->
-        viewModelScope.launch {
-            if (scope.equals("all", ignoreCase = true)) {
-                container.settingsRepository.updatePrivacyRouteScope(PrivacyRouteScope.ALL_APPS)
-            } else if (scope.startsWith("apps:", ignoreCase = true)) {
-                container.settingsRepository.updatePrivacyRouteSelectedPackages(
-                    scope.substringAfter(':').split(',').map(String::trim).filter(String::isNotBlank),
-                )
-                container.settingsRepository.updatePrivacyRouteScope(PrivacyRouteScope.SELECTED_APPS)
-            }
+        if (scope.equals("all", ignoreCase = true)) {
+            onPrivacyRouteScopeConfigured(PrivacyRouteScope.ALL_APPS)
+        } else if (scope.startsWith("apps:", ignoreCase = true)) {
+            onPrivacyRouteSelectedPackagesConfigured(
+                scope.substringAfter(':').split(',').map(String::trim).filter(String::isNotBlank),
+            )
+            onPrivacyRouteScopeConfigured(PrivacyRouteScope.SELECTED_APPS)
         }
     }
     if (intent?.hasExtra("foxhole_debug_tor_permit") == true) {
@@ -81,15 +76,8 @@ private fun HomeViewModel.debugDumpControlState() {
 private fun HomeViewModel.debugDriveConnect(kind: String) {
     when (kind.lowercase()) {
         "disconnect" -> container.connectionController.disconnect(suppressLocalGuard = false)
-        "tor_off", "route_off", "direct" ->
-            viewModelScope.launch { onPrivacyRouteModeConfigured(PrivacyRouteMode.OFF) }
-        "tor_only", "tor" ->
-            viewModelScope.launch {
-                onPrivacyRouteScopeConfigured(PrivacyRouteScope.ALL_APPS)
-                onPrivacyRouteModeConfigured(PrivacyRouteMode.TOR_OVER_VPN)
-                delay(1200)
-                requestManualConnectPermissionOrConnect(FoxholeVpnService.TOR_ONLY_PROFILE_ID)
-            }
+        "tor_off", "route_off", "direct" -> onPrivacyRouteModeConfigured(PrivacyRouteMode.OFF)
+        "tor_only", "tor" -> startRoutingMode(RoutingModePreset.TOR, PrivacyRouteScope.ALL_APPS)
         "local_guard", "local", "guard" ->
             viewModelScope.launch { syncLocalGuardWithPermissionRequest() }
         "active", "profile" ->

@@ -50,10 +50,7 @@ class ProfileRepository(
     internal val json: Json,
     private val remoteHostResolver: RemoteHostResolver? = null,
     private val underlyingSocketFactory: () -> SocketFactory? = { null },
-    // Suspends until the SQLCipher key is installed. The profile flows open the DB the
-    // instant they are collected, so with PIN protection a collector that starts before
-    // unlock (a background supervisor, the dashboard state combine) would otherwise throw
-    // DatabaseKeyUnavailableException on its worker and crash the process.
+
     private val awaitDatabaseReady: suspend () -> Unit = {},
 ) {
     internal val database: ProfileDatabase by lazy(LazyThreadSafetyMode.SYNCHRONIZED, databaseProvider)
@@ -128,10 +125,7 @@ class ProfileRepository(
         if (rawInputSizeBytes > MAX_LOCAL_PROFILE_IMPORT_BYTES) {
             throw ProfileImportPayloadTooLargeException()
         }
-        // Never store a twin. The add-profile sheet already offers already-added with refresh, but
-        // the sheet is a courtesy, not a guarantee: importing the same source through any other
-        // path (file, QR, a re-run of the same paste) inserted a second identical profile. The
-        // repository is the last line — a duplicate re-activates what is already stored instead.
+
         findProfileMatchingRawImport(rawInput)?.let { existing ->
             if (existing.sourceType == ProfileSourceType.SUBSCRIPTION_URL) {
                 diagnosticsLogger.record("profile", "duplicate subscription import resolved to refresh")
@@ -479,7 +473,6 @@ class ProfileRepository(
         return updated
     }
 
-    /** Manual protocol switch: refuses anything that could not actually run (see the helpers below). */
     suspend fun selectProfileProtocolOption(
         profileId: Long,
         optionId: String,
@@ -501,13 +494,6 @@ class ProfileRepository(
         return updated
     }
 
-    /**
-     * Per-protocol on/off inside a smart profile (N1), policy in [protocolOptionEnabledUpdate]. The
-     * flag lives in the profile secret, so after persisting it we re-write the entity's protocolHint
-     * (its current value, or the re-selected option's) purely to fire Room's table invalidation —
-     * otherwise the DAO-backed `observeProfiles()` flow, which never sees the secret, would not
-     * re-emit and the toggle would look inert until the next reload.
-     */
     suspend fun setProfileProtocolOptionEnabled(
         profileId: Long,
         optionId: String,
@@ -668,24 +654,12 @@ class ProfileRepository(
         dao.getById(profileId)?.let { entity -> resolveDomainProfile(entity) } ?: error("profile not found")
 }
 
-/**
- * The insecure-TLS allowance a stored profile runs under: the same expert-global OR per-profile
- * consent pair `getResolvedConfig` sanitizes with, so a selection can never persist a protocol the
- * runtime would then reject.
- */
 private suspend fun ProfileRepository.allowsInsecureTlsForProfileRuntime(secret: StoredProfileSecret): Boolean =
     allowsInsecureTlsForStoredProfileRuntime(
         allowInsecureTlsGlobally = settingsRepository.current().expert.allowInsecureTls,
         secret = secret,
     )
 
-/**
- * Per-option insecure-TLS gate at selection time, mirroring the one `smartStartFullScanCandidates`
- * applies to scan candidates. Without it, manually picking an insecure-TLS protocol on a profile
- * without consent persists a selection whose every later connect throws in `sanitizeResolvedConfig`
- * (error_profile_invalid) and survives an app restart; failing here keeps the error immediate and
- * reversible, and leaves the existing consent semantics untouched.
- */
 private suspend fun ProfileRepository.requireSelectableInsecureTls(
     secret: StoredProfileSecret,
     option: StoredProfileProtocolOption,

@@ -31,16 +31,22 @@ private const val SELECTED_SCALE = 1.02f
 fun Modifier.cliSelectionEmphasis(
     selected: Boolean,
     cornerRadius: Dp = CLI_SELECTION_SHAPE_RADIUS,
+    color: Color = Color.Unspecified,
 ): Modifier {
     val colors = LocalCliColors.current
+    val selectionColor = if (color == Color.Unspecified) colors.accent else color
     val shape = RoundedCornerShape(cornerRadius)
     val fill by animateColorAsState(
-        targetValue = if (selected) colors.accent.copy(alpha = SELECTED_FILL_ALPHA) else Color.Transparent,
+        targetValue = if (selected) {
+            selectionColor.copy(alpha = SELECTED_FILL_ALPHA)
+        } else {
+            Color.Transparent
+        },
         animationSpec = CliMotion.standard(),
         label = "cliSelectionFill",
     )
     val edge by animateColorAsState(
-        targetValue = if (selected) colors.accent else Color.Transparent,
+        targetValue = if (selected) selectionColor else Color.Transparent,
         animationSpec = CliMotion.standard(),
         label = "cliSelectionEdge",
     )

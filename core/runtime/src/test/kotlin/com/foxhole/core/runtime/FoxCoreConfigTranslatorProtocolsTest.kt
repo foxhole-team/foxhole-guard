@@ -194,8 +194,7 @@ internal class FoxCoreConfigTranslatorProtocolsTest : FoxCoreConfigTranslatorTes
                     )
                 },
                 targetType = "wireguard",
-                // A packet-tunnel profile only translates when it carries a resolver of its own:
-                // nothing intercepts DNS on that shape, so this entry is what reaches the TUN.
+
                 dnsServers = managedDnsServers() + wireGuardDnsServer(),
             ) { outbound ->
                 assertEquals("198.51.100.20", outbound.getValue("server").jsonPrimitive.content)
@@ -378,7 +377,7 @@ internal class FoxCoreConfigTranslatorProtocolsTest : FoxCoreConfigTranslatorTes
         val hint: ProtocolHint,
         val source: JsonObject,
         val targetType: String,
-        /** Null keeps the managed default; only a packet tunnel needs a resolver of its own. */
+
         val dnsServers: List<JsonObject>? = null,
         val verify: (JsonObject) -> Unit,
     )

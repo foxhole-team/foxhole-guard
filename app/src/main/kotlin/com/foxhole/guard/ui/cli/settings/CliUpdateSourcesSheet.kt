@@ -1,10 +1,8 @@
 package com.foxhole.guard.ui.cli.settings
 
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -28,12 +26,13 @@ import com.foxhole.guard.ui.cli.components.CliChip
 import com.foxhole.guard.ui.cli.components.CliElbowLine
 import com.foxhole.guard.ui.cli.components.CliInfoSheet
 import com.foxhole.guard.ui.cli.components.CliInputRow
-import com.foxhole.guard.ui.cli.components.CliPixIcon
 import com.foxhole.guard.ui.cli.components.CliRowDivider
 import com.foxhole.guard.ui.cli.components.CliRowInfoGlyph
 import com.foxhole.guard.ui.cli.components.CliSheetAction
 import com.foxhole.guard.ui.cli.components.CliSheetActionsRow
-import com.foxhole.guard.ui.cli.components.cliPressable
+import com.foxhole.guard.ui.cli.components.CliSheetHeaderIconRole
+import com.foxhole.guard.ui.cli.components.CliTopBarSettingsButton
+import com.foxhole.guard.ui.cli.components.cliModalHeaderIconSizeFor
 
 @Composable
 internal fun CliUpdateSourcesButton(
@@ -44,19 +43,12 @@ internal fun CliUpdateSourcesButton(
 ) {
     val colors = LocalCliColors.current
     var open by rememberSaveable { mutableStateOf(false) }
-    Box(
-        modifier = modifier
-            .requiredSize(SOURCES_BUTTON_SIZE)
-            .cliPressable(onClick = { open = true }),
-        contentAlignment = Alignment.Center,
-    ) {
-        CliPixIcon(
-            id = R.drawable.pix_settings,
-            contentDescription = stringResource(R.string.cli_updates_sources_title),
-            size = 16.dp,
-            tint = colors.accent,
-        )
-    }
+    CliTopBarSettingsButton(
+        contentDescription = stringResource(R.string.cli_updates_sources_title),
+        onClick = { open = true },
+        modifier = modifier,
+        tint = colors.accent,
+    )
     if (open) {
         CliUpdateSourcesSheet(
             sources = sources,
@@ -85,6 +77,8 @@ private fun CliUpdateSourcesSheet(
     var releasesOpen by rememberSaveable { mutableStateOf(false) }
     var noteOpen by rememberSaveable { mutableStateOf(false) }
     val officialLabel = stringResource(R.string.cli_updates_sources_official)
+    val databaseRow = cliUpdateSourceRowPresentation(database)
+    val releasesRow = cliUpdateSourceRowPresentation(releases)
     if (noteOpen) {
         CliInfoSheet(
             text = stringResource(R.string.cli_updates_sources_note),
@@ -94,13 +88,18 @@ private fun CliUpdateSourcesSheet(
     CliBottomSheet(
         onDismiss = onDismiss,
         title = stringResource(R.string.cli_updates_sources_title),
-        icon = R.drawable.pix_settings,
-        trailing = { CliRowInfoGlyph(onTap = { noteOpen = true }) },
+        icon = R.drawable.lin_settings,
+        trailing = {
+            CliRowInfoGlyph(
+                onTap = { noteOpen = true },
+                iconSize = cliModalHeaderIconSizeFor(CliSheetHeaderIconRole.DEFAULT),
+            )
+        },
     ) {
         CliUpdateChannelRow(
             label = stringResource(R.string.cli_foxdb_title),
-            value = database.ifBlank { officialLabel },
-            official = database.isBlank(),
+            value = databaseRow.value,
+            official = databaseRow.official,
             officialLabel = officialLabel,
             editing = databaseOpen,
             onToggleEdit = { databaseOpen = !databaseOpen },
@@ -119,8 +118,8 @@ private fun CliUpdateSourcesSheet(
             CliRowDivider()
             CliUpdateChannelRow(
                 label = stringResource(R.string.cli_updates_app),
-                value = releases.ifBlank { officialLabel },
-                official = releases.isBlank(),
+                value = releasesRow.value,
+                official = releasesRow.official,
                 officialLabel = officialLabel,
                 editing = releasesOpen,
                 onToggleEdit = { releasesOpen = !releasesOpen },
@@ -151,7 +150,6 @@ private fun CliUpdateSourcesSheet(
         }
         Spacer(modifier = Modifier.height(CliSpacing.md))
         CliSheetActionsRow(
-            onCancel = onDismiss,
             actions = listOf(
                 CliSheetAction(
                     label = stringResource(R.string.cli_common_yes_confirm),
@@ -164,6 +162,7 @@ private fun CliUpdateSourcesSheet(
                             ),
                         )
                     },
+                    dismissAfterClick = true,
                 ),
             ),
         )
@@ -190,16 +189,18 @@ private fun CliUpdateChannelRow(
             modifier = Modifier.weight(1f),
             verticalAlignment = Alignment.Top,
         ) {
-            Text(
-                text = value,
-                style = CliType.body,
-                color = colors.fg,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f, fill = false),
-            )
+            if (value.isNotBlank()) {
+                Text(
+                    text = value,
+                    style = CliType.body,
+                    color = colors.fg,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+            }
             if (official) {
-                Spacer(modifier = Modifier.width(BADGE_GAP))
+                if (value.isNotBlank()) Spacer(modifier = Modifier.width(BADGE_GAP))
                 CliBadge(text = officialLabel, color = colors.ok)
             }
         }
@@ -212,8 +213,17 @@ private fun CliUpdateChannelRow(
     }
 }
 
-private val BADGE_GAP = 3.dp
+internal data class CliUpdateSourceRowPresentation(
+    val value: String,
+    val official: Boolean,
+)
 
-private val SOURCES_BUTTON_SIZE = 48.dp
+internal fun cliUpdateSourceRowPresentation(configuredValue: String): CliUpdateSourceRowPresentation =
+    CliUpdateSourceRowPresentation(
+        value = configuredValue.takeUnless(String::isBlank).orEmpty(),
+        official = configuredValue.isBlank(),
+    )
+
+private val BADGE_GAP = 3.dp
 
 private val CHANNEL_ROW_HEIGHT = 48.dp

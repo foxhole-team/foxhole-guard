@@ -64,14 +64,19 @@ internal fun CliAssignedAppsSection(
             ?: if (inventoryReady) packageName else "…"
     }
     val emptyNoteColor by animateColorAsState(
-        targetValue = if (missingAppsTarget != null) colors.err else colors.note,
+        targetValue = if (missingAppsTarget != null) colors.err else colors.firewall,
         animationSpec = CliMotion.standard(),
         label = "missingAppsNote",
     )
     val torAppsMissing = !state.settings.torScopeRunnable()
+    val emptyNoteIcon = when {
+        missingAppsTarget == CliMissingAppsTarget.VPN -> R.drawable.lin_shield
+        missingAppsTarget == CliMissingAppsTarget.TOR || torAppsMissing -> R.drawable.lin_tor
+        else -> R.drawable.lin_info
+    }
 
     CliPanel(
-        icon = R.drawable.pix_apps,
+        icon = R.drawable.lin_apps,
         title = stringResource(R.string.cli_route_apps_title),
         modifier = Modifier.fillMaxWidth(),
     ) {
@@ -85,9 +90,12 @@ internal fun CliAssignedAppsSection(
                         else -> R.string.cli_route_apps_empty
                     },
                 ),
+                icon = emptyNoteIcon,
                 centered = true,
                 centeredIconLeading = true,
                 centeredIconFirstLine = true,
+                centeredIconGap = CliSpacing.sm,
+                outerVerticalPadding = CliSpacing.sm,
                 color = emptyNoteColor,
                 modifier = Modifier.cliRejectShake(missingAppsFeedback),
             )
@@ -111,7 +119,7 @@ internal fun CliAssignedAppsSection(
         if (!showAll && assigned.size > LANES_COLLAPSED_MAX) {
             CliActionRow(
                 label = stringResource(R.string.cli_route_apps_show_all, assigned.size),
-                icon = R.drawable.pix_apps,
+                icon = R.drawable.lin_apps,
                 onTap = { showAll = true },
             )
         }
@@ -119,7 +127,7 @@ internal fun CliAssignedAppsSection(
         val hasCandidates = appState.installedApps.any { option -> option.packageName !in assignments }
         CliButton(
             label = stringResource(R.string.cli_route_add_apps),
-            icon = R.drawable.pix_add,
+            icon = R.drawable.lin_add,
             color = if (hasCandidates) colors.accent else colors.dim,
             onClick = onAddApps,
             modifier = Modifier.fillMaxWidth(),
@@ -173,7 +181,7 @@ private fun CliAssignedAppRow(
         } + CliDropdownOption(
             id = OPT_REMOVE,
             label = stringResource(R.string.cli_route_remove),
-            icon = R.drawable.pix_cross,
+            icon = R.drawable.lin_cross,
         ),
         selectedId = lane.name,
         onSelect = { id ->
@@ -205,10 +213,10 @@ private fun appLaneActionLabel(lane: AppTunnelLane): String = when (lane) {
 }
 
 private fun appLaneIcon(lane: AppTunnelLane): Int = when (lane) {
-    AppTunnelLane.TOR -> R.drawable.pix_tor
-    AppTunnelLane.VPN -> R.drawable.pix_shield
-    AppTunnelLane.BLOCK -> R.drawable.pix_forbidden
-    AppTunnelLane.EXCLUDE -> R.drawable.pix_globe
+    AppTunnelLane.TOR -> R.drawable.lin_tor
+    AppTunnelLane.VPN -> R.drawable.lin_shield
+    AppTunnelLane.BLOCK -> R.drawable.lin_forbidden
+    AppTunnelLane.EXCLUDE -> R.drawable.lin_globe
 }
 
 private fun appLaneColor(

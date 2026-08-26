@@ -12,10 +12,6 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
-// Bridges the profile store into the backup document and back. Export reads the Room rows plus
-// their encrypted secrets; restore replays each payload through the ordinary import pipeline so
-// every parser/validation/duplicate rule keeps applying.
-
 suspend fun ProfileRepository.collectBackupProfiles(): List<BackupProfilePayload> =
     withContext(Dispatchers.IO) {
         dao.getAllProfiles().map { entity ->
@@ -109,12 +105,6 @@ internal suspend fun <Checkpoint, Result> executeFailAtomicBackupRestore(
     }
 }
 
-/**
- * Replays the backup's profiles through [ProfileRepository.importProfile] from the stored
- * resolved config (offline, exact) with the subscription URL re-attached afterwards so manual
- * refresh keeps working; only legacy payloads without a stored config fall back to a network
- * fetch. Failures are collected per profile — one broken profile must not abort the rest.
- */
 suspend fun ProfileRepository.restoreBackupProfiles(
     document: BackupDocument,
 ): List<BackupProfileRestoreResult> =
@@ -133,8 +123,7 @@ suspend fun ProfileRepository.restoreBackupProfiles(
                 val profile =
                     importProfile(
                         rawInput = rawInput,
-                        // A network fetch names the profile from the fetched payload; any offline
-                        // restore keeps the backed-up name.
+
                         preferredName = payload.name.takeUnless { fetchesFromNetwork },
                         allowInsecureTlsForProfile = payload.insecureTlsConsentGranted,
                     )
@@ -176,12 +165,6 @@ suspend fun ProfileRepository.restoreBackupProfiles(
         }
     }
 
-/**
- * Re-attaches the subscription identity to a profile that was restored offline from its stored
- * resolved config: the secret regains the URL (so refresh re-fetches from the source) and the
- * row regains the SUBSCRIPTION_URL source type. Secret first — a crash between the two writes
- * leaves a refreshable local profile, never a subscription row without a URL.
- */
 private suspend fun ProfileRepository.relinkSubscription(
     profileId: Long,
     subscriptionUrl: String,

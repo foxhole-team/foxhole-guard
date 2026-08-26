@@ -35,8 +35,7 @@ internal class RuntimeConfigAssemblerLocalGuardDnsTest : RuntimeConfigAssemblerT
 
         assertFalse(dns.containsKey("rules"))
         assertFalse(route.containsKey("rule_set"))
-        // DNS capture (a firewall/journal feature gated by interceptDnsRequests) stays on: the
-        // unverified rule set disables only the filtering rules, not the capture itself.
+
         assertTrue(
             route["rules"]!!.jsonArray.any { rule ->
                 rule.jsonObject["action"]?.jsonPrimitive?.content == "hijack-dns"
@@ -160,8 +159,6 @@ internal class RuntimeConfigAssemblerLocalGuardDnsTest : RuntimeConfigAssemblerT
 
     @Test
     fun `transparent i2p firewall does not hijack dns or block apps`() {
-        // i2p raised the firewall (no manual firewall): it must be a pass-through — no DNS hijack
-        // even with intercept on, no block rules — only the .i2p diversion carries anything.
         val settings =
             Settings(
                 dns = DnsSettings(interceptDnsRequests = true),
@@ -174,15 +171,6 @@ internal class RuntimeConfigAssemblerLocalGuardDnsTest : RuntimeConfigAssemblerT
         assertTrue("no app block", rules.none { it["outbound"]?.jsonPrimitive?.content == "block" })
     }
 
-    /**
-     * И то же самое, когда блокировки РЕАЛЬНО взведены.
-     *
-     * Прошлый тест проходил по случайности: он строил настройки с `blockAppsAlways = false`, то
-     * есть проверял отсутствие правил там, где их не было бы в любом случае. Достижимое состояние
-     * другое и получается само: закрепление приложения в лейне BLOCK взводит `blockAppsAlways`,
-     * выключение фаервола снимает только свой флаг, нормализация блокировки не снимает — и тогда
-     * включение I2P поднимает прозрачный страж поверх взведённых блокировок.
-     */
     @Test
     fun `transparent i2p firewall blocks nothing even with app blocking armed`() {
         val settings =
@@ -211,13 +199,11 @@ internal class RuntimeConfigAssemblerLocalGuardDnsTest : RuntimeConfigAssemblerT
 
     @Test
     fun `engaged i2p raises the firewall guard when no manual firewall or vpn`() {
-        // I2P always needs a routing surface, so it raises the transparent firewall itself.
         val i2pOutside =
             Settings(i2p = com.foxhole.core.model.I2pSettings(enabled = true, allowOutsideTunnel = true))
         assertEquals(LocalGuardMode.FIREWALL, i2pOutside.localGuardModeOrNull())
         assertTrue(i2pOutside.i2pRaisesLocalGuard())
 
-        // Disabling i2p drops the guard again (nothing else keeps it up).
         assertEquals(null, i2pOutside.copy(i2p = i2pOutside.i2p.copy(enabled = false)).localGuardModeOrNull())
 
         assertEquals(
@@ -239,7 +225,6 @@ internal class RuntimeConfigAssemblerLocalGuardDnsTest : RuntimeConfigAssemblerT
             ).localGuardModeOrNull(),
         )
 
-        // A manually enabled firewall owns the guard; i2p is not the thing raising it then.
         val manualFirewall =
             Settings(
                 expert = ExpertSettings(firewallEnabled = true),
@@ -431,8 +416,6 @@ internal class RuntimeConfigAssemblerLocalGuardDnsTest : RuntimeConfigAssemblerT
             tunInbound["address"]!!.jsonArray.map { it.jsonPrimitive.content },
         )
 
-        // The guard resolves with the user's configured provider (Cloudflare plain by default),
-        // not a hard-coded filter DNS.
         val providerServer =
             dnsServers.single { server -> server["tag"]!!.jsonPrimitive.content == "dns-remote" }
         assertEquals("1.1.1.1", providerServer["server"]!!.jsonPrimitive.content)
@@ -475,8 +458,6 @@ internal class RuntimeConfigAssemblerLocalGuardDnsTest : RuntimeConfigAssemblerT
         )
     }
 
-    // Network-activity logging is a facet of the firewall guard, never a runtime of its own (the
-    // JOURNAL mode this once asserted was unreachable and is gone).
     @Test
     fun `firewall guard with activity logging captures DNS while app block rules stay active`() {
         val settings =
@@ -701,9 +682,6 @@ internal class RuntimeConfigAssemblerLocalGuardDnsTest : RuntimeConfigAssemblerT
 
     @Test
     fun `local guard tun excludes the package the app actually runs as`() {
-        // BuildConfig.APPLICATION_ID is the release id, so a suffixed variant (debug/internal) used
-        // to exclude a package that is not even installed and routed its own control plane through
-        // the guard it was running.
         val variantAssembler = RuntimeConfigAssembler(json, selfPackageName = "com.foxhole.guard.debug")
         val settings = Settings(expert = ExpertSettings(firewallEnabled = true))
 
@@ -721,6 +699,7 @@ internal class RuntimeConfigAssemblerLocalGuardDnsTest : RuntimeConfigAssemblerT
             Settings(
                 privacyRoute =
                 com.foxhole.core.model.PrivacyRouteSettings(
+                    permitted = true,
                     mode = PrivacyRouteMode.TOR_OVER_VPN,
                     scope = PrivacyRouteScope.ALL_APPS,
                 ),

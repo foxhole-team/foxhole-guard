@@ -65,7 +65,7 @@ internal open class ProfileImportNodeSupport(
         val port = uri.port.takeIf { it > 0 } ?: 443
         val displayName = displayNameFromUri(uri, host)
         val encryption = query["encryption"]?.trim()?.lowercase().orEmpty()
-        // sing-box supports plain VLESS only; dropping Xray encryption would change the handshake.
+
         require(encryption.isEmpty() || encryption == "none") { "unsupported vless encryption: $encryption" }
         val outbound =
             buildJsonObject {

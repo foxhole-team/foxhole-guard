@@ -35,72 +35,81 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.foxhole.core.model.AccentColor
 import com.foxhole.core.model.PanelAppearance
-import com.foxhole.core.model.VisualStyle
+import com.foxhole.core.model.ThemeMode
 import com.foxhole.guard.R
 
 internal val CliNeonBlue = Color(0xFF2FD9F2)
 
-internal val CliNoteBlue = Color(0xFF58A6FF)
+internal val CliDataBlue = Color(0xFF58A6FF)
+
+internal val CliAutoGreen = Color(0xFF7FB34A)
+
+@Immutable
+data class CliStatusColors(
+    val success: Color = CliAutoGreen,
+    val information: Color = CliNeonBlue,
+    val data: Color = CliDataBlue,
+    val warning: Color = Color(0xFFFFD447),
+    val attention: Color = Color(0xFFFF9A3D),
+    val error: Color = Color(0xFFE0562A),
+)
+
+@Immutable
+data class CliChannelColors(
+    val vpn: Color = CliAutoGreen,
+    val tor: Color = Color(0xFFFF7A1A),
+    val i2p: Color = Color(0xFFF45BC8),
+    val firewall: Color = CliNeonBlue,
+    val dns: Color = CliDataBlue,
+)
+
+@Immutable
+data class CliMapColors(
+    val water: Color = Color(0xFF1F1A12),
+    val land: Color = Color(0xFF3F3731),
+    val coast: Color = Color(0xFFA85210),
+    val route: Color = CliDataBlue,
+    val grid: Color = Color(0xFF423625),
+    val marker: Color = Color(0xFFF0E6D6),
+)
 
 @Immutable
 data class CliColors(
-    val bg: Color = Color(0xFF000000),
-    val panel: Color = Color(0xFF0D1117),
-    val panelAlt: Color = Color(0xFF151C29),
-    val border: Color = Color(0xFF2C374A),
-    val borderBright: Color = Color(0xFF4B5A74),
-    val fg: Color = Color(0xFFE8E4DC),
-    val dim: Color = Color(0xFF9CA3B0),
-    val faint: Color = Color(0xFF747D8C),
-    val accent: Color = Color(0xFFF07A14),
-    val accentBright: Color = Color(0xFFFFA23D),
-    val accentDim: Color = Color(0xFFC05808),
+    val bg: Color = Color(0xFF0B0A08),
+    val panel: Color = Color(0xFF15120D),
+    val panelAlt: Color = Color(0xFF1F1A12),
+    val border: Color = Color(0xFF4A3C29),
+    val borderBright: Color = Color(0xFF806548),
+    val fg: Color = Color(0xFFF0E6D6),
+    val dim: Color = Color(0xFFB49A76),
+    val faint: Color = Color(0xFF8B7A5E),
+    val accent: Color = CliAutoGreen,
+    val accentBright: Color = Color(0xFFA5CD7F),
+    val accentDim: Color = Color(0xFF5B8135),
     val onAccent: Color = Color(0xFF150A02),
-    val ok: Color = Color(0xFF6FE0B8),
-    val vpn: Color = Color(0xFF3FD96A),
-    val tor: Color = Color(0xFFFF8A1E),
-    val i2p: Color = Color(0xFFFF5FCF),
-    val firewall: Color = CliNeonBlue,
-    val dnsFilter: Color = CliNoteBlue,
-    val info: Color = CliNeonBlue,
-    val note: Color = CliNoteBlue,
-    val warn: Color = Color(0xFFFFC94D),
-    val alert: Color = Color(0xFFFF9A3D),
-    val err: Color = Color(0xFFFF6161),
-)
+    val status: CliStatusColors = CliStatusColors(),
+    val channel: CliChannelColors = CliChannelColors(),
+    val map: CliMapColors = CliMapColors(),
+) {
+    val ok: Color get() = status.success
+    val info: Color get() = status.information
+    val data: Color get() = status.data
+    val warn: Color get() = status.warning
+    val alert: Color get() = status.attention
+    val err: Color get() = status.error
+    val vpn: Color get() = channel.vpn
+    val tor: Color get() = channel.tor
+    val i2p: Color get() = channel.i2p
+    val firewall: Color get() = channel.firewall
+    val dnsFilter: Color get() = channel.dns
+}
 
 val LocalCliColors = staticCompositionLocalOf { CliColors() }
 
 val LocalCliPanelAppearance = staticCompositionLocalOf { PanelAppearance.STANDARD }
 
-val LocalCliVisualStyle = staticCompositionLocalOf { VisualStyle.PIXEL }
-
 val LocalCliDynamicColors = staticCompositionLocalOf { false }
 
-/**
- * The app's motion vocabulary: durations, easings and the three ready-made specs everything
- * animated is built from. One place, so the profile selector, the profile editor and the shared
- * components cannot each invent their own timing.
- *
- * The numbers are the Material 3 motion tokens, not taste. Durations are the M3 duration scale
- * (short2/short4/medium2/medium4); the easings are the M3 easing set as cubic-beziers, taken from
- * the Material Components for Android motion attributes:
- * `motionEasingStandardInterpolator` = (0.2, 0, 0, 1),
- * `motionEasingEmphasizedDecelerateInterpolator` = (0.05, 0.7, 0.1, 1),
- * `motionEasingEmphasizedAccelerateInterpolator` = (0.3, 0, 0.8, 0.15).
- *
- * Two rules follow from the shape of those curves, and they are the whole answer to "the
- * animations start abruptly":
- *
- * 1. **Nothing uses a default tween.** Compose's `tween()` defaults to FastOutSlowIn, which leaves
- *    the rest position at speed; over the 90–150 ms these controls were using, the eased head of
- *    the curve is too short to read and the motion registers as a jump. Enter decelerates
- *    ([EasingEnter], effectively zero initial acceleration), exit accelerates ([EasingExit]).
- * 2. **Anything a finger can retarget is a spring, not a clock.** A spring carries velocity across
- *    a target change, so a second tap mid-flight bends the motion instead of restarting it from
- *    zero — restarting from zero is itself an abrupt start. Use [press], [settle] or [emphasis]
- *    for press, selection and swap; keep the tweens for one-shot fades that cannot be interrupted.
- */
 object CliMotion {
     const val DurationShort = 100
 
@@ -135,28 +144,9 @@ object CliMotion {
         spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMediumLow)
 }
 
-val LocalCliMetricScale = staticCompositionLocalOf { 1f }
-
-const val CLI_MODERN_METRIC_SCALE = 0.92f
-
 private const val CLI_TYPE_SCALE = 1.1f
 
-private class CliTypeStep(baseSizeSp: Int, baseLineHeightSp: Int) {
-    val size = (baseSizeSp * CLI_TYPE_SCALE).sp
-    val lineHeight = (baseLineHeightSp * CLI_TYPE_SCALE).sp
-
-    val plainSize = (baseSizeSp * CLI_TYPE_SCALE * CLI_MODERN_METRIC_SCALE).sp
-    val plainLineHeight = (baseLineHeightSp * CLI_TYPE_SCALE * CLI_MODERN_METRIC_SCALE).sp
-}
-
-private val CliTypeBody = CliTypeStep(15, 19)
-private val CliTypeSmall = CliTypeStep(13, 16)
-private val CliTypeTitle = CliTypeStep(14, 21)
-private val CliTypeDisplay = CliTypeStep(16, 21)
-private val CliTypeButton = CliTypeStep(15, 20)
-
-private val CliCyrillicDisplaySize = (12 * CLI_TYPE_SCALE).sp
-private val CliCyrillicCaptionSize = (10 * CLI_TYPE_SCALE).sp
+internal const val CLI_UNIFIED_METRIC_SCALE = 0.92f
 
 object CliIconSize {
     val glyph = (12 * CLI_TYPE_SCALE).dp
@@ -177,28 +167,17 @@ object CliSpacing {
     val lg = 16.dp
 }
 
-// LanaPixel (OFL 1.1, (c) 2020 eishiya; subset: Latin + Cyrillic + punctuation + arrows).
-// An 11px design, legible from 13-15sp; carries body/small/button.
-private val LanaPixelFamily = FontFamily(Font(R.font.lanapixel))
+object CliRadius {
+    val hairline = 1.dp
+    val pixel = 2.dp
+    val indicator = 4.dp
+    val control = 6.dp
+    val panel = 8.dp
+    val modal = 12.dp
+    val sheet = 24.dp
+}
 
-// Press Start 2P (OFL 1.1, (c) 2012 The Press Start 2P Project Authors) — arcade caps for
-// fixed-width contexts (ASCII art, PIN dots) where every glyph shares one advance.
-// LanaPixel is second in the chain as the per-glyph fallback outside the arcade set.
-private val PressStart2PFamily = FontFamily(
-    Font(R.font.press_start_2p),
-    Font(R.font.lanapixel),
-)
-
-// Silkscreen Bold (OFL 1.1, (c) 2001 The Silkscreen Project Authors) — the display face
-// for the "FoxHole Guard" brand and screen titles. Latin-only, so Press Start 2P picks up
-// Cyrillic per glyph: equally bold and pixelated, keeping non-Latin titles in the style of
-// Latin ones (the thin LanaPixel broke the display grammar). LanaPixel remains the last
-// fallback for glyphs in neither set.
-private val SilkscreenFamily = FontFamily(
-    Font(R.font.silkscreen_bold),
-    Font(R.font.press_start_2p),
-    Font(R.font.lanapixel),
-)
+private val Tiny5Family = FontFamily(Font(R.font.tiny5_regular))
 
 @Immutable
 data class CliTypography(
@@ -209,150 +188,217 @@ data class CliTypography(
     val button: TextStyle,
 )
 
-private val InterFamily = FontFamily(Font(R.font.inter_regular))
-
-private val InterMediumFamily = FontFamily(Font(R.font.inter_medium, FontWeight.Medium))
-
-private val InterSemiBoldFamily = FontFamily(Font(R.font.inter_semibold, FontWeight.SemiBold))
-
 private val JetBrainsMonoBoldFamily = FontFamily(Font(R.font.jetbrains_mono_bold, FontWeight.Bold))
 
-private val CliPixelTypography = CliTypography(
-    body = TextStyle(
-        fontFamily = LanaPixelFamily,
-        fontSize = CliTypeBody.size,
-        lineHeight = CliTypeBody.lineHeight,
-    ),
-    small = TextStyle(
-        fontFamily = LanaPixelFamily,
-        fontSize = CliTypeSmall.size,
-        lineHeight = CliTypeSmall.lineHeight,
-    ),
-    title = TextStyle(
-        fontFamily = PressStart2PFamily,
-        fontSize = CliTypeTitle.size,
-        lineHeight = CliTypeTitle.lineHeight,
-    ),
-    display = TextStyle(
-        fontFamily = SilkscreenFamily,
-        fontSize = CliTypeDisplay.size,
-        lineHeight = CliTypeDisplay.lineHeight,
-    ),
-    button = TextStyle(
-        fontFamily = LanaPixelFamily,
-        fontSize = CliTypeButton.size,
-        lineHeight = CliTypeButton.lineHeight,
-    ),
-)
+private fun cliUnifiedSp(baseSp: Int): TextUnit =
+    (baseSp * CLI_TYPE_SCALE * CLI_UNIFIED_METRIC_SCALE).sp
 
-private val CliPlainTypography = CliTypography(
+private val CliUnifiedTypography = CliTypography(
     body = TextStyle(
-        fontFamily = InterFamily,
-        fontSize = CliTypeBody.plainSize,
-        lineHeight = CliTypeBody.plainLineHeight,
+        fontFamily = JetBrainsMonoBoldFamily,
+        fontWeight = FontWeight.Bold,
+        fontSize = cliUnifiedSp(15),
+        lineHeight = cliUnifiedSp(19),
     ),
     small = TextStyle(
-        fontFamily = InterFamily,
-        fontSize = CliTypeSmall.plainSize,
-        lineHeight = CliTypeSmall.plainLineHeight,
+        fontFamily = JetBrainsMonoBoldFamily,
+        fontWeight = FontWeight.Bold,
+        fontSize = cliUnifiedSp(13),
+        lineHeight = cliUnifiedSp(16),
     ),
     title = TextStyle(
         fontFamily = JetBrainsMonoBoldFamily,
         fontWeight = FontWeight.Bold,
-        fontSize = CliTypeTitle.plainSize,
-        lineHeight = CliTypeTitle.plainLineHeight,
+        fontSize = cliUnifiedSp(14),
+        lineHeight = cliUnifiedSp(21),
     ),
     display = TextStyle(
-        fontFamily = InterSemiBoldFamily,
-        fontWeight = FontWeight.SemiBold,
-        fontSize = CliTypeDisplay.plainSize,
-        lineHeight = CliTypeDisplay.plainLineHeight,
+        fontFamily = JetBrainsMonoBoldFamily,
+        fontWeight = FontWeight.Bold,
+        fontSize = cliUnifiedSp(16),
+        lineHeight = cliUnifiedSp(21),
     ),
     button = TextStyle(
-        fontFamily = InterMediumFamily,
-        fontWeight = FontWeight.Medium,
-        fontSize = CliTypeButton.plainSize,
-        lineHeight = CliTypeButton.plainLineHeight,
+        fontFamily = JetBrainsMonoBoldFamily,
+        fontWeight = FontWeight.Bold,
+        fontSize = cliUnifiedSp(15),
+        lineHeight = cliUnifiedSp(20),
     ),
 )
 
-internal fun cliTypographyFor(style: VisualStyle): CliTypography = when (style) {
-    VisualStyle.PIXEL -> CliPixelTypography
-    VisualStyle.PLAIN -> CliPlainTypography
+private val CliPixelArtTypography = CliUnifiedTypography.copy(
+    button = TextStyle(
+        fontFamily = Tiny5Family,
+        fontSize = cliPixelFontSizeForMonoSp(cliUnifiedSp(15).value),
+        lineHeight = cliUnifiedSp(20),
+    ),
+)
+
+private val CliHeadingLineHeight = cliUnifiedSp(23)
+
+private val CliHeadingTitle = TextStyle(
+    fontFamily = Tiny5Family,
+    fontSize = cliPixelHeadingSp(14),
+    lineHeight = CliHeadingLineHeight,
+)
+
+private val CliHeadingDisplay = TextStyle(
+    fontFamily = Tiny5Family,
+    fontSize = cliPixelHeadingSp(16),
+    lineHeight = CliHeadingLineHeight,
+)
+
+private val CliMonoHeadingTitle = CliUnifiedTypography.title.copy(
+    lineHeight = CliHeadingLineHeight,
+)
+
+private val CliMonoHeadingDisplay = CliUnifiedTypography.display.copy(
+    lineHeight = CliHeadingLineHeight,
+)
+
+private fun cliPixelHeadingSp(baseSp: Int): TextUnit =
+    cliPixelFontSizeForMonoSp(baseSp * CLI_TYPE_SCALE * CLI_UNIFIED_METRIC_SCALE)
+
+internal fun cliPixelFontSizeForMonoSp(monoFontSizeSp: Float): TextUnit =
+    (monoFontSizeSp * CLI_PIXEL_FONT_SIZE_SCALE).sp
+
+internal fun cliFontSizeForMode(
+    monoFontSize: TextUnit,
+    pixelArtEnabled: Boolean,
+): TextUnit = if (pixelArtEnabled) {
+    cliPixelFontSizeForMonoSp(monoFontSize.value)
+} else {
+    monoFontSize
 }
 
-internal fun cliMetricScaleFor(style: VisualStyle): Float = when (style) {
-    VisualStyle.PIXEL -> 1f
-    VisualStyle.PLAIN -> CLI_MODERN_METRIC_SCALE
-}
+internal const val CLI_PIXEL_FONT_CAP_HEIGHT_RATIO = 640f / 1024f
+internal const val CLI_MONO_FONT_CAP_HEIGHT_RATIO = 730f / 1000f
+internal const val CLI_PIXEL_FONT_SIZE_SCALE =
+    CLI_MONO_FONT_CAP_HEIGHT_RATIO / CLI_PIXEL_FONT_CAP_HEIGHT_RATIO
+
+internal fun cliTypography(pixelArtEnabled: Boolean = true): CliTypography =
+    if (pixelArtEnabled) CliPixelArtTypography else CliUnifiedTypography
+
+internal val CLI_ICON_OPTICAL_OFFSET = 0.dp
 
 @Composable
 @ReadOnlyComposable
-fun cliMetricSp(baseSp: Float): TextUnit = (baseSp * CLI_TYPE_SCALE * LocalCliMetricScale.current).sp
+fun cliMetricSp(baseSp: Float): TextUnit =
+    (baseSp * CLI_TYPE_SCALE * CLI_UNIFIED_METRIC_SCALE).sp
 
 @Composable
 @ReadOnlyComposable
-fun cliMetricDp(baseDp: Float): Dp = (baseDp * CLI_TYPE_SCALE * LocalCliMetricScale.current).dp
+fun cliMetricDp(baseDp: Float): Dp =
+    (baseDp * CLI_TYPE_SCALE * CLI_UNIFIED_METRIC_SCALE).dp
 
-val LocalCliType = staticCompositionLocalOf { CliPixelTypography }
+val LocalCliType = staticCompositionLocalOf { CliPixelArtTypography }
 
-private val CyrillicRange = 'Ѐ'..'ӿ'
+val LocalCliPixelArtEnabled = staticCompositionLocalOf { true }
 
-/**
- * Android does not fall back per glyph within a FontFamily style, so in the pixel set a
- * Cyrillic title moves wholesale to Press Start 2P (Silkscreen is Latin-only). Inter carries
- * Cyrillic natively, so the plain set never switches.
- */
 @Composable
 @ReadOnlyComposable
-fun cliDisplayStyle(text: String): TextStyle {
-    val display = LocalCliType.current.display
-    return if (LocalCliVisualStyle.current == VisualStyle.PIXEL &&
-        text.any { char -> char in CyrillicRange }
-    ) {
-        display.copy(fontFamily = PressStart2PFamily, fontSize = CliCyrillicDisplaySize)
-    } else {
-        display
-    }
-}
+fun cliDisplayStyle(text: String): TextStyle =
+    cliDisplayStyleFor(text, LocalCliPixelArtEnabled.current)
+
+@Composable
+@ReadOnlyComposable
+fun cliScreenTitleStyle(text: String): TextStyle =
+    cliScreenTitleStyleFor(text, LocalCliPixelArtEnabled.current)
+
+internal fun cliScreenTitleStyleFor(
+    @Suppress("UNUSED_PARAMETER") text: String,
+    pixelArtEnabled: Boolean = true,
+): TextStyle =
+    if (pixelArtEnabled) CliHeadingDisplay else CliMonoHeadingDisplay
+
+internal fun cliDisplayStyleFor(
+    @Suppress("UNUSED_PARAMETER") text: String,
+    pixelArtEnabled: Boolean = true,
+): TextStyle =
+    if (pixelArtEnabled) CliHeadingDisplay else CliMonoHeadingDisplay
+
+@Composable
+@ReadOnlyComposable
+fun cliTitleStyle(text: String): TextStyle =
+    cliTitleStyleFor(text, LocalCliPixelArtEnabled.current)
+
+internal fun cliTitleStyleFor(
+    @Suppress("UNUSED_PARAMETER") text: String,
+    pixelArtEnabled: Boolean = true,
+): TextStyle =
+    if (pixelArtEnabled) CliHeadingTitle else CliMonoHeadingTitle
+
+@Composable
+@ReadOnlyComposable
+fun cliPanelTitleStyle(text: String): TextStyle =
+    cliPanelTitleStyleFor(text, LocalCliPixelArtEnabled.current)
+
+internal fun cliPanelTitleStyleFor(
+    @Suppress("UNUSED_PARAMETER") text: String,
+    pixelArtEnabled: Boolean = true,
+): TextStyle =
+    if (pixelArtEnabled) CliHeadingTitle else CliMonoHeadingTitle
 
 @Composable
 @ReadOnlyComposable
 fun cliCaptionSpanStyle(text: String): SpanStyle =
-    if (LocalCliVisualStyle.current == VisualStyle.PIXEL &&
-        text.any { char -> char in CyrillicRange }
-    ) {
-        SpanStyle(fontFamily = PressStart2PFamily, fontSize = CliCyrillicCaptionSize)
-    } else {
-        SpanStyle(fontFamily = LocalCliType.current.display.fontFamily)
+    cliTitleStyle(text).let { style ->
+        SpanStyle(
+            fontFamily = style.fontFamily,
+            fontSize = style.fontSize,
+        )
     }
 
 @Composable
 @ReadOnlyComposable
 fun cliLabelText(text: String): String =
-    if (LocalCliVisualStyle.current == VisualStyle.PLAIN) {
-        text.replaceFirstChar { char -> char.uppercaseChar() }
-    } else {
-        text
-    }
+    cliTitleCaseLabel(text)
+
+internal fun cliTitleCaseLabel(text: String): String =
+    text.replaceFirstChar { char -> char.uppercaseChar() }
+
+internal fun cliHeadingText(text: String): String =
+    text.uppercase()
 
 @Composable
 @ReadOnlyComposable
 fun cliRowTextStyle(): TextStyle =
-    if (LocalCliVisualStyle.current == VisualStyle.PLAIN) {
-        LocalCliType.current.small
-    } else {
-        LocalCliType.current.body
-    }
+    LocalCliType.current.body
 
 @Composable
 @ReadOnlyComposable
 fun cliCaptionTextStyle(): TextStyle =
-    if (LocalCliVisualStyle.current == VisualStyle.PLAIN) {
-        LocalCliType.current.body
-    } else {
-        LocalCliType.current.small
-    }
+    LocalCliType.current.body
+
+internal fun cliHeadingOpticalOffsetFor(
+    @Suppress("UNUSED_PARAMETER") text: String,
+    @Suppress("UNUSED_PARAMETER") pixelArtEnabled: Boolean = true,
+): Dp = CLI_HEADING_LIFT
+
+internal fun cliPanelHeadingOpticalOffsetFor(
+    @Suppress("UNUSED_PARAMETER") text: String,
+    @Suppress("UNUSED_PARAMETER") pixelArtEnabled: Boolean = true,
+): Dp = CLI_PANEL_HEADING_LIFT
+
+internal fun cliHeadingGlyphOpticalOffsetFor(
+    @Suppress("UNUSED_PARAMETER") text: String,
+    @Suppress("UNUSED_PARAMETER") pixelArtEnabled: Boolean = true,
+): Dp = CLI_HEADING_GLYPH_LIFT
+
+internal fun cliScreenHeadingOpticalOffsetFor(
+    @Suppress("UNUSED_PARAMETER") text: String,
+    @Suppress("UNUSED_PARAMETER") pixelArtEnabled: Boolean = true,
+): Dp = CLI_SCREEN_HEADING_LIFT
+
+internal val CLI_HEADING_LIFT = (-2).dp
+
+internal val CLI_PANEL_HEADING_LIFT = (-2).dp
+
+internal val CLI_SCREEN_HEADING_LIFT = (-4).dp
+
+internal val CLI_HEADING_GLYPH_LIFT = (-1).dp
+
+internal val CLI_FIRST_LINE_GLYPH_DROP = 2.dp
 
 object CliType {
     val body: TextStyle
@@ -372,57 +418,88 @@ object CliType {
         get() = LocalCliType.current.button
 }
 
-private val CliCanonColors = CliColors()
+internal val CliWarmDarkColors = CliColors().withAccentHue(CliAutoGreen, light = false)
+
+internal val CliOledDarkColors = CliWarmDarkColors.copy(
+    bg = Color.Black,
+    panel = Color.Black,
+    panelAlt = Color.Black,
+    map = CliWarmDarkColors.map.copy(
+        water = Color.Black,
+        land = Color.Black,
+    ),
+)
 
 internal val CliLightColors = CliColors(
-    bg = Color(0xFFF4F1EA),
-    panel = Color(0xFFFDFCF9),
-    panelAlt = Color(0xFFE9E4D8),
-    border = Color(0xFFB8B0A0),
-    borderBright = Color(0xFF8E8674),
-    fg = Color(0xFF1F2328),
-    dim = Color(0xFF475059),
-    faint = Color(0xFF60696F),
-    accent = Color(0xFFAB5000),
-    accentBright = Color(0xFF8F4300),
-    accentDim = Color(0xFFD98A3D),
-    onAccent = Color(0xFFFFF8F0),
-    ok = Color(0xFF167445),
-    vpn = Color(0xFF117434),
-    tor = Color(0xFFC2410C),
-    i2p = Color(0xFFA82E7D),
-    firewall = Color(0xFF0E7490),
-    dnsFilter = Color(0xFF0969DA),
-    info = Color(0xFF0E7490),
-    note = Color(0xFF0969DA),
-    warn = Color(0xFF8F5F00),
-    alert = Color(0xFFB94A00),
-    err = Color(0xFFCF222E),
-)
+    bg = Color(0xFFF2E8D5),
+    panel = Color(0xFFFFF8EA),
+    panelAlt = Color(0xFFE7D8BE),
+    border = Color(0xFFB7A17D),
+    borderBright = Color(0xFF806542),
+    fg = Color(0xFF2A2118),
+    dim = Color(0xFF665440),
+    faint = Color(0xFF756149),
+    accent = Color(0xFF27723B),
+    onAccent = Color(0xFFFFF8EA),
+    status = CliStatusColors(
+        success = Color(0xFF27723B),
+        information = Color(0xFF0E7082),
+        data = Color(0xFF175CA8),
+        warning = Color(0xFF996600),
+        attention = Color(0xFFA44508),
+        error = Color(0xFFB83224),
+    ),
+    channel = CliChannelColors(
+        vpn = Color(0xFF27723B),
+        tor = Color(0xFFA94508),
+        i2p = Color(0xFF9D286F),
+        firewall = Color(0xFF087487),
+        dns = Color(0xFF175CA8),
+    ),
+    map = CliMapColors(
+        water = Color(0xFFE7D8BE),
+        land = Color(0xFFBBA991),
+        coast = Color(0xFFA94508),
+        route = Color(0xFF175CA8),
+        grid = Color(0xFFB7A17D),
+        marker = Color(0xFF2A2118),
+    ),
+).withAccentHue(Color(0xFF27723B), light = true)
 
 @Composable
 @ReadOnlyComposable
-fun cliResolvedPanelAppearance(appearance: PanelAppearance): PanelAppearance =
-    if (appearance == PanelAppearance.AUTO) {
-        if (isSystemInDarkTheme()) PanelAppearance.STANDARD else PanelAppearance.LIGHT
-    } else {
-        appearance
+fun cliResolvedThemeMode(themeMode: ThemeMode): ThemeMode =
+    when (themeMode) {
+        ThemeMode.SYSTEM -> if (isSystemInDarkTheme()) ThemeMode.DARK else ThemeMode.LIGHT
+        ThemeMode.DARK -> ThemeMode.DARK
+        ThemeMode.OLED -> ThemeMode.OLED
+        ThemeMode.LIGHT -> ThemeMode.LIGHT
+    }
+
+internal fun cliPanelAppearanceFor(themeMode: ThemeMode): PanelAppearance =
+    when (themeMode) {
+        ThemeMode.SYSTEM -> PanelAppearance.AUTO
+        ThemeMode.DARK -> PanelAppearance.STANDARD
+        ThemeMode.OLED -> PanelAppearance.STANDARD
+        ThemeMode.LIGHT -> PanelAppearance.LIGHT
     }
 
 private val DarkAccentHues = mapOf(
-    AccentColor.GREEN to Color(0xFF3FD96A),
+    AccentColor.ORANGE to Color(0xFFF07A14),
+    AccentColor.GREEN to CliAutoGreen,
     AccentColor.LIME to Color(0xFFA3E635),
-    AccentColor.BLUE to CliNoteBlue,
+    AccentColor.BLUE to CliDataBlue,
     AccentColor.PINK to Color(0xFFFF5FCF),
     AccentColor.CYAN to CliNeonBlue,
 )
 
 private val LightAccentHues = mapOf(
-    AccentColor.GREEN to Color(0xFF117434),
-    AccentColor.LIME to Color(0xFF4A780E),
-    AccentColor.BLUE to Color(0xFF0969DA),
-    AccentColor.PINK to Color(0xFFA82E7D),
-    AccentColor.CYAN to Color(0xFF0E7490),
+    AccentColor.ORANGE to Color(0xFFA94E00),
+    AccentColor.GREEN to Color(0xFF27723B),
+    AccentColor.LIME to Color(0xFF46740C),
+    AccentColor.BLUE to Color(0xFF175CA8),
+    AccentColor.PINK to Color(0xFF9D286F),
+    AccentColor.CYAN to Color(0xFF0C708C),
 )
 
 private fun CliColors.withAccentHue(hue: Color, light: Boolean): CliColors =
@@ -441,35 +518,35 @@ private fun CliColors.withAccentHue(hue: Color, light: Boolean): CliColors =
     }
 
 internal fun cliColorsFor(
-    appearance: PanelAppearance,
-    accent: AccentColor = AccentColor.ORANGE,
+    resolvedThemeMode: ThemeMode,
+    accent: AccentColor = AccentColor.AUTO,
 ): CliColors {
-    val light = appearance == PanelAppearance.LIGHT
-    val base = if (light) CliLightColors else CliCanonColors
-    val hue = (if (light) LightAccentHues else DarkAccentHues)[accent] ?: return base
+    require(resolvedThemeMode != ThemeMode.SYSTEM) { "theme mode must be resolved before selecting fixed colors" }
+    val light = resolvedThemeMode == ThemeMode.LIGHT
+    val base = when (resolvedThemeMode) {
+        ThemeMode.SYSTEM -> error("theme mode must be resolved before selecting fixed colors")
+        ThemeMode.DARK -> CliWarmDarkColors
+        ThemeMode.OLED -> CliOledDarkColors
+        ThemeMode.LIGHT -> CliLightColors
+    }
+    val resolvedAccent = if (accent == AccentColor.AUTO) AccentColor.GREEN else accent
+    val hues = if (light) LightAccentHues else DarkAccentHues
+    val hue = hues.getValue(resolvedAccent)
     return base.withAccentHue(hue, light)
 }
 
-internal fun cliAccentSwatch(appearance: PanelAppearance, accent: AccentColor): Color =
-    cliColorsFor(appearance, accent).accent
-
-@Composable
-fun cliDynamicAccentOrNull(): Color? {
-    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return null
-    val context = LocalContext.current
-    val dark = isSystemInDarkTheme()
-    return remember(context, dark) {
-        (if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)).primary
-    }
-}
-
-private fun cliColorsFromDynamicScheme(
-    scheme: ColorScheme,
+internal fun cliAccentSwatch(
+    resolvedThemeMode: ThemeMode,
     accent: AccentColor,
+): Color = cliColorsFor(resolvedThemeMode, accent).accent
+
+internal fun cliColorsFromDynamicScheme(
+    scheme: ColorScheme,
     light: Boolean,
 ): CliColors {
-    val base = if (light) CliLightColors else CliCanonColors
-    val dynamic = base.copy(
+    val resolvedMode = if (light) ThemeMode.LIGHT else ThemeMode.DARK
+    val base = cliColorsFor(resolvedMode)
+    return base.copy(
         bg = scheme.background,
         panel = scheme.surface,
         panelAlt = scheme.surfaceVariant,
@@ -478,20 +555,28 @@ private fun cliColorsFromDynamicScheme(
         fg = scheme.onBackground,
         dim = scheme.onSurfaceVariant,
         faint = lerp(scheme.onSurfaceVariant, scheme.surface, if (light) 0.28f else 0.42f),
-        info = scheme.secondary,
-        note = scheme.tertiary,
-        firewall = scheme.secondary,
-        dnsFilter = scheme.tertiary,
-        warn = if (light) base.warn else lerp(base.warn, scheme.onSurface, 0.12f),
-        err = scheme.error,
+        status = base.status.copy(
+            information = scheme.secondary,
+            data = scheme.tertiary,
+            error = scheme.error,
+        ),
+        channel = base.channel.copy(
+            firewall = scheme.secondary,
+            dns = scheme.tertiary,
+        ),
+        map = base.map.copy(
+            water = scheme.surface,
+            land = lerp(scheme.surface, scheme.secondary, 0.10f),
+            coast = lerp(scheme.surface, scheme.secondary, 0.45f),
+            route = scheme.primary,
+            grid = scheme.onSurfaceVariant,
+            marker = scheme.onSurface,
+        ),
+        accent = scheme.primary,
+        accentBright = scheme.primary,
+        accentDim = scheme.primaryContainer,
         onAccent = scheme.onPrimary,
     )
-    return if (accent == AccentColor.AUTO) {
-        dynamic.withAccentHue(scheme.primary, light)
-    } else {
-        val hues = if (light) LightAccentHues else DarkAccentHues
-        dynamic.withAccentHue(hues[accent] ?: dynamic.accent, light)
-    }
 }
 
 private fun cliSchemeFor(colors: CliColors, light: Boolean) = if (light) {
@@ -526,15 +611,16 @@ private fun cliSchemeFor(colors: CliColors, light: Boolean) = if (light) {
 
 @Composable
 fun CliTheme(
-    panelAppearance: PanelAppearance = PanelAppearance.STANDARD,
-    visualStyle: VisualStyle = VisualStyle.PIXEL,
+    themeMode: ThemeMode = ThemeMode.DARK,
     accentColor: AccentColor = AccentColor.AUTO,
+    pixelArtEnabled: Boolean = true,
     content: @Composable () -> Unit,
 ) {
-    val resolved = cliResolvedPanelAppearance(panelAppearance)
+    val resolvedThemeMode = cliResolvedThemeMode(themeMode)
+    val resolvedAppearance = cliPanelAppearanceFor(themeMode)
     val context = LocalContext.current
     val systemDark = isSystemInDarkTheme()
-    val dynamicPalette = panelAppearance == PanelAppearance.AUTO &&
+    val dynamicPalette = themeMode == ThemeMode.SYSTEM &&
         Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
     val dynamicScheme = remember(dynamicPalette, systemDark, context) {
         if (dynamicPalette) {
@@ -543,35 +629,21 @@ fun CliTheme(
             null
         }
     }
-    val light = resolved == PanelAppearance.LIGHT
-    val dynamicAccent = remember(accentColor, systemDark, context) {
-        if (accentColor == AccentColor.AUTO && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            val scheme = if (systemDark) {
-                dynamicDarkColorScheme(context)
-            } else {
-                dynamicLightColorScheme(context)
-            }
-            scheme.primary
-        } else {
-            null
-        }
+    val light = resolvedThemeMode == ThemeMode.LIGHT
+    val colors = remember(resolvedThemeMode, accentColor, dynamicScheme) {
+        dynamicScheme?.let { scheme ->
+            cliColorsFromDynamicScheme(scheme, light)
+        } ?: cliColorsFor(resolvedThemeMode, accentColor)
     }
-    val colors = remember(resolved, accentColor, dynamicScheme, dynamicAccent) {
-        dynamicScheme?.let { scheme -> cliColorsFromDynamicScheme(scheme, accentColor, light) }
-            ?: cliColorsFor(resolved, accentColor).let { base ->
-                if (dynamicAccent != null) base.withAccentHue(dynamicAccent, light) else base
-            }
-    }
-    val scheme = dynamicScheme ?: remember(resolved, accentColor, colors) {
-        cliSchemeFor(colors, light = light)
+    val scheme = dynamicScheme ?: remember(resolvedThemeMode, accentColor, colors) {
+        cliSchemeFor(colors, light)
     }
     CompositionLocalProvider(
         LocalCliColors provides colors,
-        LocalCliPanelAppearance provides resolved,
-        LocalCliVisualStyle provides visualStyle,
+        LocalCliPanelAppearance provides resolvedAppearance,
         LocalCliDynamicColors provides (dynamicScheme != null),
-        LocalCliType provides cliTypographyFor(visualStyle),
-        LocalCliMetricScale provides cliMetricScaleFor(visualStyle),
+        LocalCliType provides cliTypography(pixelArtEnabled),
+        LocalCliPixelArtEnabled provides pixelArtEnabled,
     ) {
         MaterialTheme(colorScheme = scheme, content = content)
     }

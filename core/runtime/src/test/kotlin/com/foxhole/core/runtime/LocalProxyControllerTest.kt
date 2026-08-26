@@ -9,14 +9,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/**
- * Устройство-локальный прокси: приложение просит, ядро отвечает, экран показывает ответ ядра.
- *
- * Проверяется именно это разделение. Порт может быть эфемерным, поэтому «запустилось» и «слушает
- * вот здесь» — разные факты, и второй знает только ядро.
- */
 class LocalProxyControllerTest {
-
     private class FakeNative(
         private val startCode: Int = 0,
         private var document: String = "",
@@ -122,7 +115,6 @@ class LocalProxyControllerTest {
         val native = FakeNative(document = ready(port = 47821))
         val controller = LocalProxyController(native) { 7L }
 
-        // Просили эфемерный порт — то есть в запросе адреса нет вовсе.
         val status = controller.sync(handle = 1L, request = request(port = 0))
 
         assertEquals(LocalProxyPhase.SERVING, status.phase)
@@ -130,7 +122,6 @@ class LocalProxyControllerTest {
         assertEquals(LocalProxyUpstream.PROFILE, status.upstream)
     }
 
-    /** Без учётных данных вход поднимается анонимным — это разрешено только на loopback. */
     @Test
     fun `an anonymous request carries no credentials into the document`() {
         val native = FakeNative(document = ready())
@@ -144,11 +135,6 @@ class LocalProxyControllerTest {
         assertTrue(document.contains("\"upstream\":\"profile\""))
     }
 
-    /**
-     * Повторный проход с тем же запросом ничего не пере-биндит: тикер сессии зовёт синхронизацию
-     * раз в несколько секунд, и слушатель, который поднимается заново на каждой записи настроек,
-     * рвал бы соединения приложения, которое им пользуется.
-     */
     @Test
     fun `an unchanged request does not rebind the listener`() {
         val native = FakeNative(document = ready())
@@ -161,7 +147,6 @@ class LocalProxyControllerTest {
         assertTrue(native.stopped.isEmpty())
     }
 
-    /** Смена запроса — это снять и поднять: ядро откажет второму входу с тем же именем. */
     @Test
     fun `a changed request takes the old listener down first`() {
         val native = FakeNative(document = ready())
@@ -186,7 +171,6 @@ class LocalProxyControllerTest {
         assertTrue(native.started.isEmpty())
     }
 
-    /** Отказ ядра — это UNAVAILABLE и никакого адреса, а не тихое «как будто работает». */
     @Test
     fun `a refused start reports unavailable`() {
         val native = FakeNative(startCode = -7, document = ready())
@@ -210,7 +194,6 @@ class LocalProxyControllerTest {
         assertEquals(listOf(LOCAL_PROXY_INBOUND_NAME), native.stopped)
     }
 
-    /** Документ от другого поколения движка не должен читаться как наш слушатель. */
     @Test
     fun `an inbound with another name is not ours`() {
         val other =

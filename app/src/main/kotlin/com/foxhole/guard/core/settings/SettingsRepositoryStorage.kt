@@ -6,11 +6,8 @@ import com.foxhole.core.model.AppLockMode
 import com.foxhole.core.model.AppLockSettings
 import com.foxhole.core.model.ConnectionSettings
 import com.foxhole.core.model.Settings
-import com.foxhole.core.model.ThemeMode
 import com.foxhole.core.model.UiSettings
 import com.foxhole.guard.BuildConfig
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 
 internal class SettingsRepositoryStorage(
     context: Context,
@@ -23,38 +20,18 @@ internal class SettingsRepositoryStorage(
         val defaults = defaultSettings()
         return defaults.copy(
             ui =
-            fastUiStore.readBootstrapDashboardUi(
+            fastUiStore.readBootstrapUi(
                 defaults = defaults.ui,
                 encryptedUiFallback = { encryptedStore.readStoredUiOrDefault(defaults.ui) },
-            ).copy(
-                themeMode = fastUiStore.readThemeMode() ?: ThemeMode.SYSTEM,
-                locale = fastUiStore.readLocale() ?: AppLocale.SYSTEM,
             ),
         )
     }
 
     suspend fun loadAndFinalizeInitialSettings(): Settings {
         val encryptedSettings = encryptedStore.loadInitialSettings()
-        val fastThemeMode = fastUiStore.readThemeMode()
-        val fastLocale = fastUiStore.readLocale()
-        val effectiveSettings =
-            fastThemeMode
-                ?.takeIf { it != encryptedSettings.ui.themeMode && encryptedSettings.ui.themeMode != ThemeMode.SYSTEM }
-                ?.let { themeMode -> encryptedSettings.copy(ui = encryptedSettings.ui.copy(themeMode = themeMode)).normalized() }
-                ?: encryptedSettings
-        if (fastThemeMode == null || encryptedSettings.ui.themeMode == ThemeMode.SYSTEM) {
-            fastUiStore.writeThemeMode(effectiveSettings.ui.themeMode)
-        }
-        if (fastLocale == null) {
-            fastUiStore.writeLocale(effectiveSettings.ui.locale)
-        }
-        fastUiStore.writeDashboardUi(effectiveSettings.ui)
-        if (effectiveSettings != encryptedSettings) {
-            withContext(Dispatchers.IO) {
-                writeEncrypted(effectiveSettings)
-            }
-        }
-        return effectiveSettings
+
+        fastUiStore.writeUiSnapshot(encryptedSettings.ui)
+        return encryptedSettings
     }
 
     fun defaultSettings(): Settings =
@@ -64,10 +41,6 @@ internal class SettingsRepositoryStorage(
 
     fun writeEncrypted(value: Settings) {
         encryptedStore.write(value)
-    }
-
-    fun writeFastThemeMode(value: ThemeMode) {
-        fastUiStore.writeThemeMode(value)
     }
 
     fun writeFastLocale(value: AppLocale) {

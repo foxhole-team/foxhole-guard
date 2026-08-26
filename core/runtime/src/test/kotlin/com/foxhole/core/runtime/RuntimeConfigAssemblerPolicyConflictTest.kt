@@ -10,15 +10,6 @@ import com.foxhole.core.model.Settings
 import com.foxhole.core.model.withLane
 import org.junit.Test
 
-/**
- * Split, Tor and the firewall each emit their own package rules, so only their combination produces
- * a configuration the core cannot express — the user saw "the profile configuration is invalid" with
- * nothing connecting at all.
- *
- * The assertion runs the real [FoxCorePolicyTranslator] over the assembled config rather than
- * re-deriving its rules: an approximation of what the translator accepts is exactly what sent an
- * earlier attempt at this fix down the wrong path.
- */
 internal class RuntimeConfigAssemblerPolicyConflictTest : RuntimeConfigAssemblerTestSupport() {
     private fun settings(torApps: List<String>): Settings {
         val expert =

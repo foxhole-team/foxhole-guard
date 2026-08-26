@@ -11,8 +11,10 @@ import com.foxhole.core.runtime.RevokeOutcome
 import com.foxhole.core.runtime.RevokeTarget
 import com.foxhole.core.runtime.RuntimeIpRefreshReason
 import com.foxhole.core.runtime.RuntimeStopPolicy
+import com.foxhole.core.runtime.appliedTorRouteOrNull
 import com.foxhole.core.runtime.describeVpnRuntimeFailure
 import com.foxhole.core.runtime.localGuardModeOrNull
+import com.foxhole.core.runtime.nativeForceStopOutcomeOrNull
 import com.foxhole.core.runtime.reloadFailClosed
 import com.foxhole.guard.R
 import com.foxhole.guard.core.data.getSession
@@ -27,18 +29,11 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
-/**
- * Runtime reload and post-reload-failure recovery for [FoxholeVpnService], extracted from the
- * service body in the Phase B split by responsibility. Hosts reload() and the restore/recover
- * helpers that roll back to the previous runtime or config when a reload fails.
- */
-
-@Suppress("ReturnCount") // Reload has several distinct early-exit guards before the reload proper.
+@Suppress("ReturnCount")
 internal suspend fun FoxholeVpnService.reload(profileIdHint: Long) {
     reloadRuntime(profileIdHint = profileIdHint, requestedQuarantineRevision = null)
 }
 
-/** Service-owned durable quarantine command; intent dispatch alone is deliberately not an ack. */
 internal suspend fun FoxholeVpnService.enforceQuarantine(requestedRevision: Long) {
     val persistedRevision = container.settingsRepository.current().expert.quarantinePolicyRevision
     if (persistedRevision < requestedRevision) {
@@ -57,8 +52,6 @@ private suspend fun FoxholeVpnService.reloadRuntime(
     profileIdHint: Long,
     requestedQuarantineRevision: Long?,
 ) {
-    // The local guard has no profile session (activeSession stays null), so it needs its own hot
-    // reload path: re-assemble the guard config and swap it in place, keeping the guard invariants.
     val localGuardMode = activeLocalGuardMode
     if (profileIdHint == FoxholeVpnService.LOCAL_GUARD_PROFILE_ID && localGuardMode != null) {
         reloadLocalGuardRuntime(localGuardMode, requestedQuarantineRevision)
@@ -70,7 +63,7 @@ private suspend fun FoxholeVpnService.reloadRuntime(
     val session = preparation.session
     val transitionGeneration = beginRuntimeTransition("reload")
     val reconnectingMessage = getString(R.string.status_reconnecting)
-    val coldRestartRequired = requiresColdRestartAfterTorRemoval(previousSession, session)
+    val coldRestartRequired = requiresColdRestartForTorRouteApply(previousSession, session)
     val pendingSnapshot =
         runtimeReloadPendingSnapshot(
             snapshot = snapshot,
@@ -79,20 +72,17 @@ private suspend fun FoxholeVpnService.reloadRuntime(
         )
     bridgeWriter.update(
         pendingSnapshot,
-        // A live policy replacement is not a route transition. Advancing this timestamp makes the
-        // already-proven VPN IpInfo look stale and turns the VPN identity row back into a spinner.
+
         refreshLastChangeAt = coldRestartRequired,
     )
     updateNotification()
     if (coldRestartRequired) {
-        // Removing the Tor lane must also tear down every native Tor resource. Use a cold native
-        // restart; the existing recovery path fences generations, revalidates the new TUN and
-        // fails closed on any restart error.
         val restarted =
             recoverRuntimeAfterReloadFailure(
                 session = session,
+                previousSession = previousSession,
                 previousSnapshot = snapshot,
-                message = "Tor route removed; cold restart required",
+                message = "Tor route TUN plan changed; cold restart required",
                 transitionGeneration = transitionGeneration,
             )
         if (!restarted) {
@@ -107,7 +97,12 @@ private suspend fun FoxholeVpnService.reloadRuntime(
             owner = "vpn",
             diagnosticsLogger = DiagnosticsLoggerRuntimeDiagnosticsSink(container.diagnosticsLogger),
         )
-    if (!isCurrentRuntimeTransition(transitionGeneration, "reload_result")) {
+    if (
+        handleNativeForceStopPoison(result) { outcome ->
+            terminateProcessIfNativeForceStopPoisoned(outcome, "vpn_reload")
+        } ||
+        !isCurrentRuntimeTransition(transitionGeneration, "reload_result")
+    ) {
         return
     }
     if (result.isSuccess) {
@@ -133,7 +128,10 @@ private suspend fun FoxholeVpnService.reloadRuntime(
         scheduleValidation(
             session = session,
             failOnFailure = true,
-            onSuccess = { vpnNetwork -> onTunnelValidated(session, vpnNetwork) },
+            onSuccess = { vpnNetwork ->
+                onTunnelValidated(session, vpnNetwork)
+                finalizeSuccessfulTorDetach(previousSession, session)
+            },
         )
     } else {
         handleRuntimeReloadFailure(
@@ -219,8 +217,6 @@ internal fun runtimeReloadPendingSnapshot(
 ): ConnectionSnapshot {
     val pending =
         if (inPlaceRuntimeReload && snapshot.state == ConnectionState.CONNECTED) {
-            // A hot policy/Tor-lane replacement keeps the same Android tunnel and its validated
-            // VPN identity. Expose the ownership marker, but never narrate a network reconnect.
             snapshot.copy(inPlaceRuntimeReload = true)
         } else {
             snapshot.copy(
@@ -231,9 +227,7 @@ internal fun runtimeReloadPendingSnapshot(
         }
     return if (
         session == null ||
-        // The replacement is not applied UI state until its validation succeeds. In particular,
-        // do not expose torActive=true here: that lets the Tor phase/identity outrun the VPN
-        // identity barrier even though the old validated tunnel is still what the UI owns.
+
         (inPlaceRuntimeReload && snapshot.state == ConnectionState.CONNECTED)
     ) {
         pending
@@ -244,6 +238,7 @@ internal fun runtimeReloadPendingSnapshot(
             protocolHint = session.protocolHint,
             protocolOptionId = session.protocolOptionId,
             torActive = session.torActive,
+            appliedTorRoute = session.appliedTorRoute,
         )
     }
 }
@@ -270,6 +265,20 @@ private suspend fun FoxholeVpnService.prepareRuntimeReload(
     val session =
         loadReloadSessionOrFail(targetProfileId)
             ?.takeIf { loaded -> loaded.includesQuarantineRevision(requestedQuarantineRevision) }
+            ?.takeIf { loaded ->
+                val matchesCurrentIntent =
+                    reloadSessionMatchesCurrentTorIntent(
+                        loaded,
+                        container.settingsRepository.current(),
+                    )
+                if (!matchesCurrentIntent) {
+                    container.diagnosticsLogger.record(
+                        "connection",
+                        "runtime reload discarded: Tor intent changed while session was built",
+                    )
+                }
+                matchesCurrentIntent
+            }
             ?: return null
     return RuntimeReloadPreparation(
         previousSession = previousSession,
@@ -286,20 +295,14 @@ private fun ConnectionState.acceptsRuntimeReload(): Boolean =
 private fun VpnSession.includesQuarantineRevision(requestedRevision: Long?): Boolean =
     requestedRevision == null || quarantinePolicyRevision >= requestedRevision
 
-/**
- * Cuts the connections of every app in the BLOCK lane, right after the policy that blocks them
- * lands.
- *
- * A reload deliberately preserves flows that are already open — a routing change must not kill a
- * download — so on its own it only stops a blocked app from opening anything NEW. Everything the
- * app already had stayed up until its sockets happened to close, which is not what "blocked"
- * means to the person who pressed it.
- *
- * Every blocked package is revoked rather than only the one that just changed: the core reports
- * the count and revoking an app that is not talking is a no-op, so this needs no diff of the
- * previous assignments to be correct — and a diff is exactly the thing that would silently miss a
- * package blocked while the runtime was down.
- */
+internal fun reloadSessionMatchesCurrentTorIntent(
+    session: VpnSession,
+    settings: com.foxhole.core.model.Settings,
+): Boolean {
+    val desiredRoute = settings.appliedTorRouteOrNull(session.protocolHint)
+    return session.torActive == (desiredRoute != null) && session.appliedTorRoute == desiredRoute
+}
+
 internal fun FoxholeVpnService.revokeBlockedAppFlows() {
     val blocked = container.settingsRepository.settings.value.expert.blockedLanePackages()
     if (blocked.isEmpty()) {
@@ -326,7 +329,61 @@ internal fun FoxholeVpnService.revokeBlockedAppFlows() {
 internal fun requiresColdRestartAfterTorRemoval(
     previousSession: VpnSession?,
     nextSession: VpnSession,
-): Boolean = previousSession?.torActive == true && !nextSession.torActive
+): Boolean =
+    previousSession.carriesTorRuntime() &&
+        !nextSession.carriesTorRuntime() &&
+        previousSession?.foxCoreConfig?.tunPlan != nextSession.foxCoreConfig?.tunPlan
+
+internal fun requiresColdRestartForTorRouteApply(
+    previousSession: VpnSession?,
+    nextSession: VpnSession,
+): Boolean {
+    if (
+        previousSession == null ||
+        (!previousSession.carriesTorRuntime() && !nextSession.carriesTorRuntime())
+    ) {
+        return false
+    }
+    return previousSession.foxCoreConfig?.tunPlan != nextSession.foxCoreConfig?.tunPlan
+}
+
+internal fun shouldFinalizeSuccessfulTorDetach(
+    previousSession: VpnSession?,
+    nextSession: VpnSession,
+    appliedSnapshot: ConnectionSnapshot,
+    nextSessionIsActive: Boolean,
+): Boolean =
+    previousSession.carriesTorRuntime() &&
+        !nextSession.carriesTorRuntime() &&
+        nextSessionIsActive &&
+        appliedSnapshot.state == ConnectionState.CONNECTED &&
+        !appliedSnapshot.inPlaceRuntimeReload &&
+        !appliedSnapshot.torActive &&
+        appliedSnapshot.appliedTorRoute == null
+
+private fun FoxholeVpnService.finalizeSuccessfulTorDetach(
+    previousSession: VpnSession?,
+    nextSession: VpnSession,
+) {
+    val applied = FoxholeVpnRuntimeBridge.snapshot.value
+    if (
+        !shouldFinalizeSuccessfulTorDetach(
+            previousSession = previousSession,
+            nextSession = nextSession,
+            appliedSnapshot = applied,
+            nextSessionIsActive = activeSession.matchesRuntimeValidationSession(nextSession),
+        )
+    ) {
+        return
+    }
+    bridgeWriter.updateTorRouteIpInfo(null)
+    val reaped = reapTorTransportOrphans()
+    container.diagnosticsLogger.recordStructured(
+        "runtime",
+        "tor detach replacement finalized",
+        "transport_orphans_reaped=$reaped",
+    )
+}
 
 private suspend fun FoxholeVpnService.loadReloadSessionOrFail(targetProfileId: Long): VpnSession? =
     runCatching {
@@ -341,70 +398,65 @@ private suspend fun FoxholeVpnService.loadReloadSessionOrFail(targetProfileId: L
             )
         }
     }.getOrElse { error ->
-        // A preempting stop/kill cancels this command mid-session-load; that is not a profile
-        // failure. Rethrow so the actor records cancellation instead of failing the whole runtime.
+
         if (error is CancellationException) {
             throw error
         }
-        // Was `error.message`, which is the one place a remote host or a provider fragment could
-        // reach an exportable journal verbatim. The label carries the message only for failures
-        // this repository writes, and the class name for everything else.
+
         container.diagnosticsLogger.recordFailure(
             "connection",
             "runtime reload session failed: ${diagnosticFailureLabel(error)}",
         )
         val message = userFacingErrorMessage(error, R.string.error_profile_invalid)
-        when (reloadSessionFailureAction(activeSession, FoxholeVpnRuntimeBridge.snapshot.value.state)) {
+        val desiredSettings = container.settingsRepository.current()
+        val authoritativeTorReconcile = requiresAuthoritativeTorReconcile(activeSession, desiredSettings)
+        when (
+            reloadSessionFailureAction(
+                activeSession = activeSession,
+                connectionState = FoxholeVpnRuntimeBridge.snapshot.value.state,
+                authoritativeTorReconcile = authoritativeTorReconcile,
+            )
+        ) {
             ReloadSessionFailureAction.KEEP_LIVE_ROUTE -> keepLiveRuntimeAfterReloadSessionFailure(message)
             ReloadSessionFailureAction.FAIL_CLOSED -> fail(message)
         }
         null
     }
 
-/** What a reload does when the session for the NEW config could not be built. */
 internal enum class ReloadSessionFailureAction {
-    /**
-     * Keep the route that is already up.
-     *
-     * Make before break: at the moment the session build fails nothing has been replaced — the old
-     * runtime, its TUN and its routes are all still live and still correct. Tearing them down was
-     * how pressing the MODE button on a healthy tunnel put the device on the open network under
-     * its real address (Pixel, 2026-08-10 21:59): a config that could not be BUILT took down the
-     * one that was already RUNNING, and the person who pressed one button ended up unprotected.
-     */
     KEEP_LIVE_ROUTE,
 
-    /**
-     * Fail closed.
-     *
-     * Nothing is running that this failure could preserve, so the fail-closed teardown of a failed
-     * start is still the right answer — there is no route to keep, only a service to shut down.
-     */
     FAIL_CLOSED,
 }
 
 internal fun reloadSessionFailureAction(
     activeSession: VpnSession?,
     connectionState: ConnectionState,
+    authoritativeTorReconcile: Boolean = false,
 ): ReloadSessionFailureAction =
-    if (activeSession != null && connectionState in LIVE_ROUTE_STATES) {
+    if (authoritativeTorReconcile) {
+        ReloadSessionFailureAction.FAIL_CLOSED
+    } else if (activeSession != null && connectionState in LIVE_ROUTE_STATES) {
         ReloadSessionFailureAction.KEEP_LIVE_ROUTE
     } else {
         ReloadSessionFailureAction.FAIL_CLOSED
     }
 
+internal fun requiresAuthoritativeTorReconcile(
+    activeSession: VpnSession?,
+    desiredSettings: com.foxhole.core.model.Settings,
+): Boolean {
+    val desiredRoute = desiredSettings.appliedTorRouteOrNull(activeSession?.protocolHint)
+    val activeTor = activeSession?.torActive == true
+    if (activeTor != (desiredRoute != null)) {
+        return true
+    }
+    return activeTor && activeSession.appliedTorRoute != desiredRoute
+}
+
 private val LIVE_ROUTE_STATES =
     setOf(ConnectionState.CONNECTING, ConnectionState.CONNECTED, ConnectionState.RECONNECTING)
 
-/**
- * Reports a refused reload without disturbing the runtime it refused to replace.
- *
- * The connection state is deliberately left alone — it still describes a tunnel that is up and
- * carrying traffic, and publishing ERROR here would be a lie the terminal, the notification and
- * the dashboard would all repeat. Only [ConnectionSnapshot.message] carries the reason, so the
- * refusal is visible where failures are read without any state machine believing the session
- * ended.
- */
 private fun FoxholeVpnService.keepLiveRuntimeAfterReloadSessionFailure(message: String) {
     container.diagnosticsLogger.recordFailure(
         "connection",
@@ -415,13 +467,6 @@ private fun FoxholeVpnService.keepLiveRuntimeAfterReloadSessionFailure(message: 
     updateNotification()
 }
 
-/**
- * Hot-reload the live local guard in place: rebuild its prepared FoxCore policy for the SAME mode
- * and apply it to the running engine, so blocked-app / DNS-filter / activity-logging changes
- * take effect without tearing down the TUN (no CONNECTING flash). A mode change is rejected here and
- * left to the full START_LOCAL_GUARD restart, because FIREWALL and DNS use different TUN parameters.
- * Unlike a profile reload this keeps activeSession == null and re-marks the GUARD fingerprint.
- */
 @Suppress("ReturnCount")
 private suspend fun FoxholeVpnService.reloadLocalGuardRuntime(
     mode: LocalGuardMode,
@@ -439,7 +484,6 @@ private suspend fun FoxholeVpnService.reloadLocalGuardRuntime(
     }
     val settings = container.settingsRepository.current()
     if (settings.localGuardModeOrNull() != mode) {
-        // Mode switched out from under us between dispatch and here — the restart path owns it.
         return
     }
     val session =
@@ -470,12 +514,17 @@ private suspend fun FoxholeVpnService.reloadLocalGuardRuntime(
             owner = "local_guard",
             diagnosticsLogger = DiagnosticsLoggerRuntimeDiagnosticsSink(container.diagnosticsLogger),
         )
+    if (
+        handleNativeForceStopPoison(result) { outcome ->
+            terminateProcessIfNativeForceStopPoisoned(outcome, "local_guard_reload")
+        }
+    ) {
+        return
+    }
     if (!isCurrentRuntimeTransition(transitionGeneration, "local_guard_reload_result")) {
         return
     }
     if (result.isSuccess) {
-        // Re-mark the guard fingerprint so the next syncLocalGuard sees the new rules as applied
-        // instead of looping into a restart; keep activeSession null (the guard has no profile).
         container.connectionController.markRuntimeApplied(session, transitionGeneration, mode)
         currentVpnNetworkOrNull()?.let { vpnNetwork ->
             startI2pdReadinessProbe(
@@ -484,18 +533,13 @@ private suspend fun FoxholeVpnService.reloadLocalGuardRuntime(
                 vpnNetwork = vpnNetwork,
             )
         }
-        // The stats/journal jobs are created from the settings that were live when the guard
-        // STARTED, so a guard booted with the journal off never grew journal jobs and the toggle
-        // stayed a no-op until a restart. Re-derive them from the settings we just applied
-        // (start... cancels the previous jobs, so this is idempotent when nothing changed).
+
         startRuntimeConnectionStatsUpdates(settings)
         reregisterGatedSessionTasks()
         FoxholeVpnRuntimeBridge.requestImmediateTrafficSample()
         updateNotification()
         container.diagnosticsLogger.record("connection", "local guard reloaded mode=${mode.name.lowercase()}")
     } else {
-        // Rare — the config was already assembled and checkConfig'd. Recover with a bounded restart
-        // so the new rules still take effect rather than silently keeping the stale config.
         container.diagnosticsLogger.recordFailure(
             "connection",
             "local guard reload failed, scheduling restart: ${result.exceptionOrNull()?.message.orEmpty()}",
@@ -511,9 +555,6 @@ private suspend fun FoxholeVpnService.handleRuntimeReloadFailure(
     snapshot: ConnectionSnapshot,
     transitionGeneration: Long,
 ) {
-    // A reload preempted by a higher-priority command (user stop, kill) is not a runtime
-    // failure: the preemptor owns the teardown/next state. Running restore/recovery/fail()
-    // here raced the disconnect and flashed a spurious "session ended result=error".
     if (error is CancellationException) {
         throw error
     }
@@ -527,6 +568,10 @@ private suspend fun FoxholeVpnService.handleRuntimeReloadFailure(
     val diagnosticMessage = error?.let(::describeVpnRuntimeFailure) ?: "unknown"
     container.diagnosticsLogger.recordFailure("connection", "runtime reload failed: $diagnosticMessage")
     val message = userFacingErrorMessage(error, R.string.error_runtime_stopped)
+    if (requiresAuthoritativeTorReconcile(previousSession, container.settingsRepository.current())) {
+        fail(message)
+        return
+    }
     if (
         restorePreviousRuntimeAfterReloadFailure(
             previousSession = previousSession,
@@ -538,7 +583,14 @@ private suspend fun FoxholeVpnService.handleRuntimeReloadFailure(
     ) {
         return
     }
-    if (!recoverRuntimeAfterReloadFailure(session, snapshot, message, transitionGeneration)) {
+    if (!recoverRuntimeAfterReloadFailure(
+            session = session,
+            previousSession = previousSession,
+            previousSnapshot = snapshot,
+            message = message,
+            transitionGeneration = transitionGeneration,
+        )
+    ) {
         fail(message)
     }
 }
@@ -560,6 +612,14 @@ private suspend fun FoxholeVpnService.restorePreviousRuntimeAfterReloadFailure(
                 message = message,
                 transitionGeneration = transitionGeneration,
             )
+        if (restored && shouldReapTorHelpersAfterReloadRestore(previousSession, failedSession)) {
+            val reaped = reapTorTransportOrphans()
+            container.diagnosticsLogger.recordStructured(
+                "runtime",
+                "arti transport helpers reaped after failed attach",
+                "count=$reaped",
+            )
+        }
     }
     return restored
 }
@@ -583,6 +643,13 @@ private suspend fun FoxholeVpnService.restorePreviousRuntimeConfigAfterReloadFai
                 owner = "vpn_restore",
                 diagnosticsLogger = DiagnosticsLoggerRuntimeDiagnosticsSink(container.diagnosticsLogger),
             )
+        if (
+            handleNativeForceStopPoison(restoreResult) { outcome ->
+                terminateProcessIfNativeForceStopPoisoned(outcome, "vpn_reload_restore")
+            }
+        ) {
+            return true
+        }
         val staleRestore = !isCurrentRuntimeTransition(transitionGeneration, "reload_restore_result")
         restored =
             staleRestore ||
@@ -629,6 +696,7 @@ private fun FoxholeVpnService.publishPreviousRuntimeConfigRestoreSuccess(
             protocolHint = restoreSession.protocolHint,
             protocolOptionId = restoreSession.protocolOptionId,
             torActive = restoreSession.torActive,
+            appliedTorRoute = restoreSession.appliedTorRoute,
             message = getString(R.string.status_reconnecting),
         ),
     )
@@ -642,6 +710,7 @@ private fun FoxholeVpnService.publishPreviousRuntimeConfigRestoreSuccess(
 
 private suspend fun FoxholeVpnService.recoverRuntimeAfterReloadFailure(
     session: VpnSession,
+    previousSession: VpnSession?,
     previousSnapshot: ConnectionSnapshot,
     message: String,
     transitionGeneration: Long,
@@ -660,20 +729,25 @@ private suspend fun FoxholeVpnService.recoverRuntimeAfterReloadFailure(
             reason = "reload_recovery",
             policy = PLANNED_RELOAD_STOP_POLICY,
         )
+        if (shouldReapTorHelpersAfterReloadStop(previousSession, session)) {
+            val reaped = reapTorTransportOrphans()
+            container.diagnosticsLogger.recordStructured(
+                "runtime",
+                "arti transport helpers reaped before reload restart",
+                "count=$reaped",
+            )
+        }
         activeVpnNetworkHandle = null
-        activeSession = session
-        bridgeWriter.updateActiveServerPingTarget(activeServerPingTarget(session))
+        activeSession = null
+        bridgeWriter.updateActiveServerPingTarget(null)
         bridgeWriter.updateTraffic(trafficSampler.reset())
         bridgeWriter.markIpInfoRefreshPending(RuntimeIpRefreshReason.POST_UPDATE)
         bridgeWriter.update(
-            previousSnapshot.copy(
-                state = ConnectionState.RECONNECTING,
+            previousSnapshot.detachedRuntimeReconnectSnapshot(getString(R.string.status_reconnecting)).copy(
                 profileId = session.profileId,
                 profileName = session.profileName,
                 protocolHint = session.protocolHint,
                 protocolOptionId = session.protocolOptionId,
-                torActive = session.torActive,
-                message = getString(R.string.status_reconnecting),
             ),
         )
         updateNotification()
@@ -682,6 +756,9 @@ private suspend fun FoxholeVpnService.recoverRuntimeAfterReloadFailure(
                 session = session,
                 owner = "vpn_reload_recovery",
             )
+        if (restartResult.nativeForceStopOutcomeOrNull() != null) {
+            return true
+        }
         val staleRecovery = !isCurrentRuntimeTransition(transitionGeneration, "reload_recovery_start_result")
         recovered =
             staleRecovery ||
@@ -689,6 +766,22 @@ private suspend fun FoxholeVpnService.recoverRuntimeAfterReloadFailure(
     }
     return recovered
 }
+
+internal fun shouldReapTorHelpersAfterReloadStop(
+    previousSession: VpnSession?,
+    nextSession: VpnSession,
+): Boolean = previousSession.carriesTorRuntime() || nextSession.carriesTorRuntime()
+
+internal fun shouldReapTorHelpersAfterReloadRestore(
+    restoredSession: VpnSession?,
+    failedSession: VpnSession,
+): Boolean =
+    restoredSession != null &&
+        !restoredSession.carriesTorRuntime() &&
+        failedSession.carriesTorRuntime()
+
+private fun VpnSession?.carriesTorRuntime(): Boolean =
+    this?.torActive == true || this?.profileId == FoxholeVpnService.TOR_ONLY_PROFILE_ID
 
 private val PLANNED_RELOAD_STOP_POLICY =
     RuntimeStopPolicy(
@@ -712,7 +805,16 @@ private suspend fun FoxholeVpnService.handleRuntimeReloadRecoveryRestartResult(
         )
         return false
     }
+    activeSession = session
+    bridgeWriter.updateActiveServerPingTarget(activeServerPingTarget(session))
     container.connectionController.markRuntimeApplied(session, transitionGeneration)
+    bridgeWriter.update(
+        FoxholeVpnRuntimeBridge.snapshot.value.copy(
+            torActive = session.torActive,
+            appliedTorRoute = session.appliedTorRoute,
+        ),
+    )
+    updateNotification()
     container.diagnosticsLogger.record(
         "connection",
         "runtime reload recovery restarted, tunnel validation required",

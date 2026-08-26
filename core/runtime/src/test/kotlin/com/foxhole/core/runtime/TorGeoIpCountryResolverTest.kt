@@ -39,7 +39,7 @@ class TorGeoIpCountryResolverTest {
             TorGeoIpCountryResolver.destinationCountryCacheSize() <=
                 TorGeoIpCountryResolver.DestinationCountryCacheLimit,
         )
-        // The most recent entry survives eviction, the oldest does not.
+
         assertEquals(
             "US",
             TorGeoIpCountryResolver.cachedDestinationCountry(

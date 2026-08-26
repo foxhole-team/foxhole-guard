@@ -6,12 +6,6 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/**
- * `indicatorKinds` was added the only way a shipped feed format can be changed: additively. A feed
- * built before it existed must still parse and still match — and the fields it lacks must read as
- * the quietest interpretation, because reading "the feed did not say" as "command-and-control" is
- * how a shared CDN address becomes a confident HIGH finding.
- */
 class ThreatIntelDocumentSchemaTest {
     private val json = Json { ignoreUnknownKeys = true }
 

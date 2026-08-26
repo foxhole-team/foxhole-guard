@@ -17,10 +17,7 @@ internal fun FoxholeVpnService.startNotificationHealthMonitoring() {
         resetFailures = true,
         force = true,
     )
-    // Dispatched, not inline: the egress probe blocks for seconds and must never delay the fast
-    // telemetry tasks sharing the ticker. The interval lambda is re-read after each probe, so the
-    // adaptive cadence (10s CHECKING / 60s ONLINE / exponential OFFLINE backoff) sees the state
-    // the probe just produced — same ordering as the old probe-then-delay loop.
+
     sessionTicker.register(
         id = FoxholeVpnService.TICKER_TASK_NOTIFICATION_HEALTH,
         fireImmediately = true,

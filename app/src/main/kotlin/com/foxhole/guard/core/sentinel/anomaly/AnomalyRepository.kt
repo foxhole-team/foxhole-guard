@@ -61,7 +61,7 @@ class AnomalyRepository(
     private val diagnosticsLogger: DiagnosticsLogger,
     private val notifier: SentinelDetectionNotifier,
     private val securityCore: FoxholeSentinel = FoxholeSentinel(),
-    // Production injects threat intel; the default matches nothing.
+
     private val networkIocMatcher: () -> NetworkIocMatcher = { EMPTY_NETWORK_MATCHER },
     private val nowProvider: () -> Long = System::currentTimeMillis,
     private val appCategoryResolver: (String) -> AppNetworkUsageCategory = { AppNetworkUsageCategory.STANDARD },
@@ -71,7 +71,6 @@ class AnomalyRepository(
     private val dao by lazy(LazyThreadSafetyMode.SYNCHRONIZED, daoProvider)
     private val baselineStore by lazy(LazyThreadSafetyMode.SYNCHRONIZED) { BaselineStore(dao) }
 
-    // Serialize the non-transactional read/evaluate/write pipeline.
     private val recordMutex = Mutex()
     private var lastNetworkActivityCleanupAt = 0L
 
@@ -170,11 +169,6 @@ class AnomalyRepository(
             )
         }.flowOn(Dispatchers.IO)
 
-    /**
-     * Persists one measured protocol outcome. No-ops while statistics collection is disabled and
-     * prunes the table to the statistics retention on every write, so the event stream can never
-     * outgrow the rest of the local statistics data.
-     */
     suspend fun recordProtocolMetricEvent(event: ProtocolMetricEvent) {
         val settings = settingsRepository.current()
         if (!settings.statistics.enabled) {
@@ -195,7 +189,7 @@ class AnomalyRepository(
         appWindows: List<AppTrafficWindow> = emptyList(),
     ): Unit = recordMutex.withLock {
         val settings = settingsRepository.current()
-        // Recheck settings at the persistence boundary to close toggle races.
+
         if (!sentinelTrafficWindowCollectionEnabled(settings)) {
             return@withLock
         }
@@ -218,7 +212,7 @@ class AnomalyRepository(
             ).map(TrafficWindowEntity::toDomain)
         val appHistories =
             batchedAppHistories(retainedAppWindows)
-        // Exclude the window under evaluation from its historical context.
+
         val seenCountries = dao.getSeenDestinationCountries().associateBy(SeenDestinationCountryEntity::country)
         val observedWindowCount = dao.getAnomalyCounter(COUNTER_TRAFFIC_WINDOWS) ?: 0L
         val presenceByPackage = loadAppNetworkPresence(retainedAppWindows)
@@ -426,11 +420,6 @@ class AnomalyRepository(
         recordNetworkIocFindings(retainedEvents, settings)
     }
 
-    /**
-     * Network IOC pass over a fresh event batch: destinations are matched against the threat-intel
-     * bundle, and a hit lands in the anomaly journal attributed to the app that opened the flow.
-     * Gated on the Sentinel anomaly switch — matching is analysis, not statistics retention.
-     */
     private suspend fun recordNetworkIocFindings(
         events: List<NetworkActivityEvent>,
         settings: Settings,
@@ -467,7 +456,7 @@ class AnomalyRepository(
         }
         val shouldNotify =
             settings.anomaly.notifyUnusualTraffic &&
-                // Journal shared-infrastructure matches without notifying.
+
                 severity.ordinal >= AnomalySeverity.NOTIFICATION.ordinal &&
                 canNotify(AnomalyType.KNOWN_THREAT_DESTINATION.name, finding.packageName)
         val event = networkIocAnomalyEvent(finding, nowMs = nowProvider(), notificationShown = false)
@@ -484,14 +473,6 @@ class AnomalyRepository(
         }
     }
 
-    /**
-     * Under [recordMutex], like every ingestion path.
-     *
-     * "Clear" and "record" used to be able to interleave: a detection reads the coalescing window,
-     * a clear wipes the table, and the detection then inserts the row the user just asked to be
-     * gone — it reappears with no trace of why. The lock makes the erase and the decide-then-write
-     * sequences one thing or the other, never halves of both.
-     */
     suspend fun clearTrafficStatistics() =
         recordMutex.withLock {
             dao.deleteTrafficWindowsBefore(Long.MAX_VALUE)
@@ -538,14 +519,13 @@ class AnomalyRepository(
         val strongest = assessment.signals.maxByOrNull(AnomalySignal::severity) ?: return
         val packageName = strongest.evidence["package"]
         if (anomalySuppressedForExcludedApp(settingsRepository.current().expert.appAssignments, packageName)) {
-            // EXCLUDE disables inspection for the app.
             diagnosticsLogger.record(
                 tag = ANOMALY_LOG_TAG,
                 message = "anomaly suppressed for excluded app",
             )
             return
         }
-        // Deduplicate adjacent windows; re-log only escalation.
+
         val previousSeverity =
             dao.latestAnomalyEventSince(
                 type = strongest.type.name,
@@ -607,28 +587,11 @@ class AnomalyRepository(
         ) == 0
     }
 
-    /**
-     * One explicit purge pass for app start: without it, retention is only enforced
-     * lazily on writes and an idle install never ages anything out.
-     */
     suspend fun cleanupExpiredNow() =
         recordMutex.withLock {
             cleanupExpired(settingsRepository.current())
         }
 
-    /**
-     * Re-attempts the notifications that never reached the shade.
-     *
-     * The notifier already refuses to mark an event as shown unless Android accepted the post, and
-     * the overwhelmingly common refusal is POST_NOTIFICATIONS not being granted yet — so without a
-     * retry the honest flag simply meant those detections were never told to anyone. This is that
-     * retry: at app start, the detections found while notifications were impossible get one more
-     * chance.
-     *
-     * Bounded twice over. Only events inside the retry window are eligible, so granting the
-     * permission after a quiet week does not produce a week of alarms at once; and the same
-     * per-type cooldown as the live path applies, so a burst collapses to one notification.
-     */
     suspend fun deliverPendingNotifications() =
         recordMutex.withLock {
             val settings = settingsRepository.current()
@@ -663,11 +626,6 @@ class AnomalyRepository(
         trimStatisticsRows()
     }
 
-    /**
-     * The age cutoff is 0 under the "forever" retention, so it prunes nothing and the statistics
-     * tables would grow without bound. The row caps are the backstop; they also match the limits
-     * the UI observes, so nothing visible is trimmed away.
-     */
     private suspend fun trimStatisticsRows() {
         dao.trimTrafficWindowsTo(MAX_TRAFFIC_WINDOW_ROWS)
         dao.trimAppTrafficWindowsTo(MAX_APP_TRAFFIC_WINDOW_ROWS)
@@ -685,7 +643,6 @@ class AnomalyRepository(
     }
 
     companion object {
-        // Caps bound forever retention without trimming rows visible to queries.
         internal const val MAX_TRAFFIC_WINDOW_ROWS = 20_000
         internal const val MAX_APP_TRAFFIC_WINDOW_ROWS = 60_000
         internal const val MAX_NETWORK_ACTIVITY_ROWS = 50_000
@@ -696,7 +653,6 @@ class AnomalyRepository(
         private const val HOUR_MS = 60L * 60L * 1000L
         private const val NOTIFICATION_COOLDOWN_MS = 6L * 60L * 60L * 1000L
 
-        // Do not notify for detections older than one day.
         private const val NOTIFICATION_RETRY_WINDOW_MS = 24L * 60L * 60L * 1000L
         private const val MAX_NOTIFICATION_RETRIES = 5
         private const val ONGOING_EVENT_COALESCE_MS = 45L * 60L * 1000L
@@ -706,19 +662,9 @@ class AnomalyRepository(
     }
 }
 
-/** One journal row per (package, indicator) within a batch: a chatty flow is one sighting. */
 internal fun dedupeNetworkIocFindings(findings: List<NetworkIocFinding>): List<NetworkIocFinding> =
     findings.distinctBy { finding -> finding.packageName to finding.hit.indicator }
 
-/**
- * The journal row for one indicator match. Severity and score follow what the feed says the
- * indicator IS: every indicator used to score alike, so a hit on a threat's shared CDN address —
- * which thousands of ordinary apps reach — produced the same confident HIGH as a hit on its
- * command-and-control endpoint.
- *
- * The wording still has to stay on the right side of the datasets' own caveat: a hit names a listed
- * destination, it does not prove the device is compromised.
- */
 internal fun networkIocAnomalyEvent(
     finding: NetworkIocFinding,
     nowMs: Long,
@@ -743,7 +689,6 @@ internal fun networkIocAnomalyEvent(
         notificationShown = notificationShown,
     )
 
-/** Describe only the threat classification asserted by the feed. */
 private fun networkIocReason(threatKind: ThreatIndicatorKind): String =
     when (threatKind) {
         ThreatIndicatorKind.COMMAND_AND_CONTROL ->
@@ -756,7 +701,6 @@ private fun networkIocReason(threatKind: ThreatIndicatorKind): String =
             "Traffic reached a destination from a published threat indicator list"
     }
 
-/** An ongoing anomaly is coalesced into the previous journal row unless it escalated. */
 internal fun anomalySuppressedForExcludedApp(
     assignments: Map<String, AppTunnelLane>,
     packageName: String?,

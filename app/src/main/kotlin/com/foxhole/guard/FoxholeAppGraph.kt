@@ -61,6 +61,7 @@ interface FoxholeHomeDependencies {
     val i2pTrafficRepository: I2pTrafficRepository
     val localDataRepository: LocalDataRepository
     val ipInfoRepository: IpInfoRepository
+    val ipCountryCodeResolver: (String) -> String?
     val webAppsRepository: WebAppsRepository
     val runtimeInstanceStore: RuntimeInstanceStore
 }
@@ -75,7 +76,6 @@ interface FoxholeRuntimeDependencies {
     val ipInfoRepository: IpInfoRepository
     val runtimeConfigAssembler: RuntimeConfigAssembler
 
-    /** Shared with the config assembler so the arming decision and the bind use the same network. */
     val lanProxyAddressProvider: LanProxyAddressProvider
     val dnsFilterAssetInstaller: DnsFilterAssetInstaller
     val i2pdManager: I2pdManager
@@ -192,8 +192,7 @@ class FoxholeAppGraph(
     internal val webAppsNotifier: WebAppsNotifier by lazy { coreModule.webAppsNotifier }
     internal val webAppsDataCleaner: WebAppsDataCleaner by lazy { coreModule.webAppsDataCleaner }
 
-    // Offline IP -> ISO country lookup (geo database); call off the main thread.
-    val ipCountryCodeResolver: (String) -> String? get() = runtimeModule.ipCountryCodeResolver
+    override val ipCountryCodeResolver: (String) -> String? get() = runtimeModule.ipCountryCodeResolver
     override val routingRepository: RoutingRepository by lazy { dataModule.routingRepository }
     override val runtimeConfigAssembler: RuntimeConfigAssembler by lazy { dataModule.runtimeConfigAssembler }
     override val lanProxyAddressProvider: LanProxyAddressProvider by lazy { dataModule.lanProxyAddressProvider }

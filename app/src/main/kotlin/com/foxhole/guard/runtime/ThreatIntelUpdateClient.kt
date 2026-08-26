@@ -24,22 +24,12 @@ import java.time.Instant
 import java.util.Base64
 import java.util.concurrent.TimeUnit
 
-/**
- * Persists a verified FoxHole Sentinel threat-intel document. The bytes handed in have already
- * passed signature, size, hash, and schema verification, so an implementation only needs to store
- * them atomically and expose them back to [SentinelThreatIntelProvider].
- */
 interface ThreatIntelStore {
     suspend fun installVerifiedThreatIntel(
         documentBytes: ByteArray,
         manifest: ThreatIntelManifest,
     ): String
 
-    /**
-     * `generated_at` of the feed already installed, or null when there is none. The client refuses
-     * anything not newer than this — a valid signature says a manifest is ours, not that it is the
-     * latest one, so without a floor an old feed can be replayed to drop recent indicators.
-     */
     fun installedGeneratedAt(): String? = null
 }
 
@@ -87,14 +77,6 @@ data class ThreatIntelUpdateResult(
     val reason: String? = null,
 )
 
-/**
- * Fetches and verifies the signed SENTINEL threat-intel feed, mirroring [DnsFilterUpdateClient]:
- * an ECDSA-P256 signed manifest gates a hash-pinned JSON artifact, which is only persisted after the
- * full chain (public-HTTPS host → signature → schema/identity → size → sha256 → parse) verifies.
- *
- * The live FoxHole DB endpoint and the repository-wide manifest key are pinned below. Callers may
- * still pass an empty URL to disable remote updates and retain the bundled seed only.
- */
 class ThreatIntelUpdateClient(
     private val httpClient: OkHttpClient,
     private val json: Json,
@@ -197,15 +179,6 @@ class ThreatIntelUpdateClient(
         }
     }
 
-    /**
-     * Refuses a feed that is not newer than the one already installed.
-     *
-     * The signature check above proves the manifest was issued by us; it says nothing about *when*.
-     * Replaying yesterday's correctly signed manifest is therefore a working downgrade: it drops
-     * every indicator added since, and the app reports the feed as freshly updated while doing it.
-     * An equal timestamp is the same feed and is refused as a no-op; an older one is refused as
-     * what it is. Both are non-retryable — retrying cannot make a manifest newer.
-     */
     private fun ThreatIntelManifest.requireNotARollbackOf(installedGeneratedAt: String?) {
         val installed =
             installedGeneratedAt
@@ -244,9 +217,7 @@ class ThreatIntelUpdateClient(
         val document =
             runCatching { json.decodeFromString<ThreatIntelDocument>(toString(Charsets.UTF_8)) }
                 .getOrElse { throw ThreatIntelUpdateException("threat intel is not valid JSON", retryable = false) }
-        // A range, not an equality: a signed feed still written for an older schema is accepted and
-        // read with the fields it has. A schema from the future is refused — this build cannot know
-        // what it would be agreeing to.
+
         require(ThreatIntelDocument.supportsSchema(document.schema)) { "unsupported threat intel schema" }
         return document
     }
@@ -298,11 +269,6 @@ class ThreatIntelUpdateClient(
     }
 }
 
-/**
- * The live SENTINEL threat-intel feed: the FoxHole DB "security lists" group. The manifest is
- * signed by the same repository key as every other feed ([FOXHOLE_DB_MANIFEST_PUBLIC_KEY_PEM]);
- * blanking the URL puts the feature back to dormant (bundled seed only).
- */
 const val FOXHOLE_THREAT_INTEL_MANIFEST_URL =
     "$FOXHOLE_DB_PAGES_BASE_URL/threat-intel-manifest.json"
 

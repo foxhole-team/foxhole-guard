@@ -1,27 +1,48 @@
 package com.foxhole.guard.core.settings
 
 import com.foxhole.core.model.AccentColor
-import com.foxhole.core.model.PanelAppearance
-import com.foxhole.core.model.VisualStyle
-
-// Appearance and dialog opt-out UI settings. Extracted from SettingsRepositoryExpertUi
-// (file split by domain).
-
-suspend fun SettingsRepository.updatePanelAppearance(value: PanelAppearance) =
-    update {
-        val accent = if (value != PanelAppearance.AUTO && it.ui.accentColor == AccentColor.AUTO) {
-            AccentColor.ORANGE
-        } else {
-            it.ui.accentColor
-        }
-        it.copy(ui = it.ui.copy(panelAppearance = value, accentColor = accent))
-    }
-
-suspend fun SettingsRepository.updateVisualStyle(value: VisualStyle) =
-    update { it.copy(ui = it.ui.copy(visualStyle = value)) }
+import com.foxhole.core.model.HomeAdditionalInfoCategory
+import com.foxhole.core.model.UiSettings
 
 suspend fun SettingsRepository.updateAccentColor(value: AccentColor) =
     update { it.copy(ui = it.ui.copy(accentColor = value)) }
+
+suspend fun SettingsRepository.updatePixelArtEnabled(value: Boolean) =
+    update { it.copy(ui = it.ui.copy(pixelArtEnabled = value)) }
+
+suspend fun SettingsRepository.updateShowHomeAdditionalInfo(value: Boolean) =
+    update { it.copy(ui = it.ui.copy(showHomeAdditionalInfo = value)) }
+
+suspend fun SettingsRepository.updateHomeAdditionalInfoCategory(value: HomeAdditionalInfoCategory) =
+    update { it.copy(ui = it.ui.copy(homeAdditionalInfoCategory = value)) }
+
+internal fun UiSettings.withUpdateNoticeTrafficMap(enabled: Boolean): UiSettings =
+    if (enabled) {
+        copy(
+            showHomeAdditionalInfo = true,
+            homeAdditionalInfoCategory = HomeAdditionalInfoCategory.MAP,
+        )
+    } else {
+        copy(showHomeAdditionalInfo = false)
+    }
+
+internal fun UiSettings.withUpdateNoticeChoices(
+    showTrafficMap: Boolean,
+    useFoxholeStyle: Boolean,
+    shownVersionCode: Int,
+): UiSettings =
+    withUpdateNoticeTrafficMap(showTrafficMap).copy(
+        pixelArtEnabled = useFoxholeStyle,
+        alphaNoticeShownVersionCode = shownVersionCode,
+    )
+
+suspend fun SettingsRepository.applyUpdateNoticeChoice(
+    showTrafficMap: Boolean,
+    useFoxholeStyle: Boolean,
+    shownVersionCode: Int,
+) = update {
+    it.copy(ui = it.ui.withUpdateNoticeChoices(showTrafficMap, useFoxholeStyle, shownVersionCode))
+}
 
 suspend fun SettingsRepository.updateSuppressProfileSwipeReconnectConfirm(value: Boolean) =
     update { it.copy(ui = it.ui.copy(suppressProfileSwipeReconnectConfirm = value)) }

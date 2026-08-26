@@ -13,12 +13,6 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 
-// I2P (.i2p) routing patch for RuntimeConfigAssembler. Applied to the final assembled config after
-// the standard build, so it never threads through the deep route/dns builders. i2pd only serves
-// eepsites, so ONLY `.i2p` names are diverted to the local i2pd SOCKS proxy; everything else keeps
-// its existing outbound. `.i2p` is not DNS-resolvable, so a fakeip DNS server hands the eepsite
-// hostname (via a mapped fake IP) to i2pd — which resolves it inside I2P. Pure JSON transform.
-
 internal const val I2P_OUTBOUND_TAG = "i2p"
 internal const val I2P_FAKEIP_DNS_TAG = "dns-fakeip"
 internal const val I2P_DOMAIN_SUFFIX = ".i2p"
@@ -58,13 +52,6 @@ internal fun i2pSocksOutbound(port: Int): JsonObject =
             }
         } ?: throw I2pEndpointUnavailableException()
 
-/**
- * Adds the i2p outbound, a `.i2p` route rule (ahead of every existing rule so it wins over the Tor
- * rules and the final outbound), and a fakeip DNS server + `.i2p` DNS rule. A null/out-of-range
- * port is a no-op. STRICT Private DNS is rejected explicitly because fakeip + an enforced DoT
- * resolver is a known-fatal combination. Idempotent: a config that already carries the i2p
- * outbound is returned unchanged.
- */
 internal fun JsonObject.withI2pRouting(
     i2pSocksPort: Int?,
     privateDnsMode: PrivateDnsMode?,
@@ -90,7 +77,6 @@ internal fun JsonObject.withI2pRouting(
 private fun JsonObject.tagEquals(tag: String): Boolean =
     this["tag"]?.jsonPrimitive?.contentOrNull == tag
 
-// Insert the i2p outbound just before the terminal direct/block outbounds so it reads naturally.
 private fun List<JsonElement>.withI2pOutbound(port: Int): JsonArray =
     buildJsonArray {
         var inserted = false

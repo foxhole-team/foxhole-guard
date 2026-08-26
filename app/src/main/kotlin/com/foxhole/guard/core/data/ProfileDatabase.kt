@@ -13,9 +13,6 @@ import com.foxhole.guard.core.security.DatabaseKeySource
 import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
 import java.util.concurrent.atomic.AtomicBoolean
 
-// Current schema version. Kept as a named constant so the migration-chain guard
-// (ProfileDatabaseMigrationsTest) can assert every step up to it exists — bumping it without adding
-// the matching migration then fails CI instead of destructively wiping user profiles at runtime.
 internal const val PROFILE_DATABASE_VERSION = 14
 
 @Database(
@@ -383,8 +380,6 @@ abstract class ProfileDatabase : RoomDatabase() {
         private val MIGRATION_7_8 =
             object : Migration(7, 8) {
                 override fun migrate(db: SupportSQLiteDatabase) {
-                    // The runtime timeline pipeline never shipped a writer; the table only ever
-                    // held zero rows. Dropped together with its dead entity and DAO scaffolding.
                     db.execSQL("drop table if exists `runtime_timeline_events`")
                 }
             }
@@ -428,8 +423,6 @@ abstract class ProfileDatabase : RoomDatabase() {
         private val MIGRATION_10_11 =
             object : Migration(10, 11) {
                 override fun migrate(db: SupportSQLiteDatabase) {
-                    // Data-only cutover: normalize the two retired enum tokens before the new
-                    // model reads the rows. Bind values instead of embedding them in SQL.
                     db.execSQL(
                         "update `profiles` set `sourceType` = ? where `sourceType` = ?",
                         arrayOf(
@@ -459,9 +452,6 @@ abstract class ProfileDatabase : RoomDatabase() {
         private val MIGRATION_12_13 =
             object : Migration(12, 13) {
                 override fun migrate(db: SupportSQLiteDatabase) {
-                    // Persisted I2P accounting: hourly buckets for the 24h/7d/30d rows plus a
-                    // single lifetime row that outlives their pruning. Byte counters only — no
-                    // destination, no peer, no per-connection trace.
                     db.execSQL(
                         "create table if not exists `i2p_traffic_buckets` " +
                             "(`hourStartMs` integer not null, `ownBytes` integer not null, " +
@@ -490,9 +480,6 @@ abstract class ProfileDatabase : RoomDatabase() {
                 }
             }
 
-        // Single source of truth for the migration chain: reused by create() and by the migration
-        // tests so a forgotten step is caught in CI (ProfileDatabaseMigrationsTest) instead of
-        // triggering the destructive fallback below and silently wiping the user's profiles.
         internal val ALL_MIGRATIONS: Array<Migration> =
             arrayOf(
                 MIGRATION_1_2,
@@ -517,8 +504,7 @@ abstract class ProfileDatabase : RoomDatabase() {
             val appContext = context.applicationContext
             ensureSqlCipherLoaded()
             val passphrase = keySource.acquirePassphrase()
-            // Downgrade check must run BEFORE Room sees the file: the destructive fallback below
-            // treats a newer on-disk schema like an unmigratable one and would wipe every profile.
+
             assertNoProfileDatabaseDowngrade(appContext.getDatabasePath(SECURE_DB_NAME), passphrase)
             val builder =
                 Room.databaseBuilder(
@@ -530,17 +516,12 @@ abstract class ProfileDatabase : RoomDatabase() {
             builder.addCallback(
                 object : Callback() {
                     override fun onOpen(db: SupportSQLiteDatabase) {
-                        // Feeds the pre-UI downgrade notice (profileDatabaseDowngradeDetected).
                         recordProfileDatabaseSchemaVersion(appContext, db.version)
                     }
                 },
             )
             val database =
                 builder
-                    // Last-resort recovery from an unmigratable on-disk schema. The contiguity guard
-                    // in ProfileDatabaseMigrationsTest keeps this from being reached by a forgotten
-                    // migration, and the downgrade precheck above keeps it from being reached by an
-                    // older build opening a newer database; it must never be relaxed to drop tables.
                     .fallbackToDestructiveMigration(false)
                     .build()
             migrateLegacyPlaintextDatabase(appContext, database)

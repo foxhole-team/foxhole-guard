@@ -7,8 +7,6 @@ import java.net.Inet4Address
 import java.net.Inet6Address
 import java.net.InetAddress
 
-// Endpoint resolution for the IP-info fetch: which hosts each mode races, in what order, and the
-// per-family narrowing, plus the endpoint tables. Split from IpInfoRepository.kt.
 internal enum class AddressFamilyPreference {
     ANY,
     IPV4,
@@ -73,8 +71,6 @@ internal fun primaryEndpoint(endpoint: String): String = endpoint.trim().ifBlank
     BuildConfig.DEFAULT_IP_INFO_ENDPOINT
 }
 
-// ipapi.co resolves cities noticeably better than ipwhois.app did; the old provider (and
-// its ipwho.is twin) stay in the race only as fallbacks.
 internal const val GEO_ENRICHMENT_PRIMARY_ENDPOINT = "https://ipapi.co/json/"
 internal val FALLBACK_ENDPOINTS =
     listOf(
@@ -95,9 +91,6 @@ internal val QUICK_FALLBACK_ENDPOINTS =
         "https://ipinfo.io/json",
     )
 
-// Geo enrichment races these in parallel and takes the first success, so every entry must be
-// city-capable — otherwise a fast country-only endpoint (e.g. the Cloudflare trace) wins the
-// race and the city stays blank. Only reliable HTTPS providers that return a city are listed.
 internal val GEO_ENRICHMENT_FALLBACK_ENDPOINTS =
     listOf(
         GEO_ENRICHMENT_PRIMARY_ENDPOINT,

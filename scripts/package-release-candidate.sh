@@ -16,6 +16,8 @@ Certificate source:
 
 prepare also reads the split release APKs from app/build/outputs/apk/release and the
 CycloneDX JSON from FOXHOLE_SBOM_PATH (default: build/reports/cyclonedx/bom.json).
+The generated license assets come from FOXHOLE_LICENSE_ASSETS_PATH
+(default: app/build/generated/licenseAssets).
 USAGE
   exit 2
 }
@@ -167,6 +169,173 @@ verify_apk() {
     die "GitHub release APK is missing REQUEST_INSTALL_PACKAGES: $(basename "$apk")"
 }
 
+package_license_notices() {
+  local source_dir=$1 output_file=$2
+  [[ -f "$source_dir/SHA256SUMS" ]] || die "generated license assets are missing: $source_dir"
+  if find "$source_dir" -mindepth 1 \( -type l -o \( ! -type f ! -type d \) \) -print -quit | grep -q .; then
+    die "license assets contain a directory symlink or special file"
+  fi
+  (
+    cd "$source_dir"
+    if command -v sha256sum >/dev/null 2>&1; then
+      sha256sum --check --strict SHA256SUMS >/dev/null
+    else
+      shasum -a 256 -c SHA256SUMS >/dev/null
+    fi
+  )
+  python3 - "$source_dir" "$output_file" <<'PY'
+import sys
+import zipfile
+from pathlib import Path
+
+source = Path(sys.argv[1])
+output = Path(sys.argv[2])
+with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
+    for path in sorted(candidate for candidate in source.rglob("*") if candidate.is_file()):
+        relative = path.relative_to(source).as_posix()
+        entry = zipfile.ZipInfo(relative, date_time=(1980, 1, 1, 0, 0, 0))
+        entry.compress_type = zipfile.ZIP_DEFLATED
+        entry.external_attr = 0o100644 << 16
+        archive.writestr(entry, path.read_bytes(), compress_type=zipfile.ZIP_DEFLATED, compresslevel=9)
+PY
+}
+
+verify_license_notices_archive() {
+  local archive=$1
+  python3 - "$archive" <<'PY' || die "license-notices archive verification failed"
+import hashlib
+import json
+import re
+import stat
+import sys
+import zipfile
+from pathlib import PurePosixPath
+
+with zipfile.ZipFile(sys.argv[1]) as archive:
+    infos = archive.infolist()
+    names = [info.filename for info in infos]
+    if len(names) != len(set(names)):
+        raise SystemExit("duplicate license archive entry")
+    for info in infos:
+        path = PurePosixPath(info.filename)
+        mode = info.external_attr >> 16
+        if path.is_absolute() or ".." in path.parts or info.is_dir():
+            raise SystemExit(f"unsafe license archive entry: {info.filename}")
+        if mode and not stat.S_ISREG(mode):
+            raise SystemExit(f"non-regular license archive entry: {info.filename}")
+    required = {
+        "FoxHole-Guard-GPL-3.0-or-later.txt",
+        "MANIFEST.json",
+        "THIRD_PARTY_NOTICES.md",
+        "SHA256SUMS",
+        "android/JNA-Apache-2.0.txt",
+        "android/JNA-LGPL-2.1.txt",
+        "android/JNA-LICENSE.txt",
+        "android/SQLCipher-BSD-3-Clause.txt",
+        "android/lazysodium-MPL-2.0.txt",
+        "android/libsodium-ISC.txt",
+        "flags/app-assets.sha256",
+        "flags/flag-icons-LICENSE.txt",
+        "fonts/JetBrainsMono-OFL.txt",
+        "fonts/Tiny5-OFL.txt",
+        "foxcore/FoxHole-Core-GPL-3.0-or-later.txt",
+        "foxcore/THIRD_PARTY_NOTICES.md",
+        "foxcore/foxcore-aarch64-linux-android.cdx.json",
+        "i2pd/Android-NDK-29-NOTICE.txt",
+        "i2pd/Android-NDK-29-NOTICE.toolchain.txt",
+        "i2pd/Boost-1.84.0-BSL-1.0.txt",
+        "i2pd/OpenSSL-3.5.4-Apache-2.0.txt",
+        "i2pd/i2pd-BSD-3-Clause.txt",
+        "icons/Tabler-MIT.txt",
+        "tor/GO-MODULES.json",
+        "tor/Go-1.25.8-BSD-3-Clause.txt",
+        "tor/conjure-client-BSD-3-Clause.txt",
+        "tor/lyrebird-BSD-3-Clause.txt",
+        "tor/lyrebird-GPL-3.0-or-later.txt",
+        "tor-config/PROVENANCE.txt",
+        "tor-config/assets.sha256",
+        "tor-config/upstream-members/README.CONJURE.md",
+        "tor-config/upstream-members/pt_config.json",
+        "tor-config/upstream-members/torrc-defaults.txt",
+    }
+    if not required.issubset(names):
+        raise SystemExit(f"missing license entries: {sorted(required - set(names))}")
+    checksums = {}
+    for line in archive.read("SHA256SUMS").decode().splitlines():
+        match = re.fullmatch(r"([0-9a-f]{64})  (.+)", line)
+        if match is None:
+            raise SystemExit(f"invalid license checksum line: {line}")
+        digest, name = match.groups()
+        path = PurePosixPath(name)
+        if path.is_absolute() or ".." in path.parts or name in checksums:
+            raise SystemExit(f"unsafe or duplicate license checksum path: {name}")
+        checksums[name] = digest
+    expected = set(names) - {"SHA256SUMS"}
+    if set(checksums) != expected:
+        raise SystemExit("license checksum inventory does not match archive entries")
+    for name, expected_digest in checksums.items():
+        if hashlib.sha256(archive.read(name)).hexdigest() != expected_digest:
+            raise SystemExit(f"license checksum mismatch: {name}")
+    manifest = json.loads(archive.read("MANIFEST.json"))
+    if manifest.get("schema") != 1 or not re.fullmatch(r"[0-9a-f]{40}", manifest.get("foxcoreRevision", "")):
+        raise SystemExit("invalid license manifest metadata")
+    manifest_entries = manifest.get("files")
+    if not isinstance(manifest_entries, list):
+        raise SystemExit("license manifest has no file inventory")
+    indexed = {}
+    for entry in manifest_entries:
+        if not isinstance(entry, dict):
+            raise SystemExit("invalid license manifest entry")
+        name = entry.get("path")
+        if not isinstance(name, str) or name in indexed:
+            raise SystemExit(f"invalid or duplicate license manifest path: {name}")
+        indexed[name] = entry
+    expected_manifest = set(names) - {"MANIFEST.json", "SHA256SUMS"}
+    if set(indexed) != expected_manifest:
+        raise SystemExit("license manifest inventory does not match archive entries")
+    for name, entry in indexed.items():
+        data = archive.read(name)
+        if entry.get("size") != len(data) or entry.get("sha256") != hashlib.sha256(data).hexdigest():
+            raise SystemExit(f"license manifest mismatch: {name}")
+PY
+}
+
+verify_android_sbom_inventory() {
+  local sbom=$1 version_name=$2
+  jq -e \
+    --arg versionName "$version_name" '
+      def exact_component($name; $version; $purl):
+        [.components[] |
+          select(
+            .name == $name and
+            .version == $version and
+            (.purl | startswith($purl))
+          )
+        ] | length == 1;
+      .bomFormat == "CycloneDX" and
+      .metadata.component.name == "foxhole-android" and
+      .metadata.component.version == $versionName and
+      (.components | type == "array" and length > 0) and
+      all(
+        .components[];
+        (."bom-ref" | type == "string" and length > 0) and
+        (.name | type == "string" and length > 0) and
+        (.version | type == "string" and length > 0) and
+        (.purl | type == "string" and length > 0)
+      ) and
+      ([.components[]."bom-ref"] | unique | length) == (.components | length) and
+      exact_component("jna"; "5.19.1"; "pkg:maven/net.java.dev.jna/jna@5.19.1") and
+      exact_component("lazysodium-android"; "5.2.0"; "pkg:maven/com.goterl/lazysodium-android@5.2.0") and
+      exact_component("okhttp"; "5.4.0"; "pkg:maven/com.squareup.okhttp3/okhttp@5.4.0") and
+      exact_component("sqlcipher-android"; "4.17.0"; "pkg:maven/net.zetetic/sqlcipher-android@4.17.0") and
+      exact_component(
+        "zxing-android-embedded";
+        "4.3.0";
+        "pkg:maven/com.journeyapps/zxing-android-embedded@4.3.0"
+      )
+    ' "$sbom" >/dev/null || die "Android CycloneDX dependency inventory is incomplete or malformed"
+}
+
 prepare_candidate() {
   local output_dir=$1
   local source_commit=$2
@@ -199,6 +368,12 @@ prepare_candidate() {
   [[ -f "$sbom_source" ]] || die "CycloneDX SBOM was not generated: $sbom_source"
   local sbom_name="FoxHole-${RELEASE_TAG}-sbom.cdx.json"
   cp "$sbom_source" "$output_dir/$sbom_name"
+  verify_android_sbom_inventory "$output_dir/$sbom_name" "$VERSION_NAME"
+
+  local license_source=${FOXHOLE_LICENSE_ASSETS_PATH:-app/build/generated/licenseAssets}
+  local license_name="FoxHole-${RELEASE_TAG}-license-notices.zip"
+  package_license_notices "$license_source" "$output_dir/$license_name"
+  verify_license_notices_archive "$output_dir/$license_name"
 
   local cert_report="$output_dir/release-certs.txt"
   : > "$cert_report"
@@ -229,6 +404,7 @@ prepare_candidate() {
     --arg coreRevision "$CORE_REVISION" \
     --arg arm64Apk "$arm64_name" \
     --arg sbom "$sbom_name" \
+    --arg licenseNotices "$license_name" \
     '{
       schema: 1,
       sourceCommit: $sourceCommit,
@@ -239,6 +415,7 @@ prepare_candidate() {
       coreRevision: $coreRevision,
       arm64Apk: $arm64Apk,
       sbom: $sbom,
+      licenseNotices: $licenseNotices,
       updateChannel: "github"
     }' > "$output_dir/CANDIDATE.json"
 
@@ -247,6 +424,7 @@ prepare_candidate() {
   for file in \
     "$arm64_name" \
     "$sbom_name" \
+    "$license_name" \
     release-certs.txt \
     update-manifest.json \
     CANDIDATE.json
@@ -266,12 +444,14 @@ verify_candidate() {
 
   local canonical_arm64_name="FoxHole-${RELEASE_TAG}-arm64-v8a-release.apk"
   local canonical_sbom_name="FoxHole-${RELEASE_TAG}-sbom.cdx.json"
+  local canonical_license_name="FoxHole-${RELEASE_TAG}-license-notices.zip"
   local expected_files actual_files
   expected_files="$(
     printf '%s\n' \
       CANDIDATE.json \
       SHA256SUMS \
       "$canonical_arm64_name" \
+      "$canonical_license_name" \
       "$canonical_sbom_name" \
       release-certs.txt \
       update-manifest.json |
@@ -296,17 +476,20 @@ verify_candidate() {
   )
 
   local metadata="$candidate_dir/CANDIDATE.json"
-  local source_commit source_tree arm64_name sbom_name
+  local source_commit source_tree arm64_name sbom_name license_name
   source_commit=$(jq -er '.sourceCommit' "$metadata")
   source_tree=$(jq -er '.sourceTree' "$metadata")
   arm64_name=$(jq -er '.arm64Apk' "$metadata")
   sbom_name=$(jq -er '.sbom' "$metadata")
+  license_name=$(jq -er '.licenseNotices' "$metadata")
   [[ "$source_commit" =~ ^[0-9a-f]{40}$ ]] || die "candidate source commit is invalid"
   [[ "$source_tree" =~ ^[0-9a-f]{40}$ ]] || die "candidate source tree is invalid"
   [[ "$arm64_name" == "$canonical_arm64_name" ]] ||
     die "candidate arm64 APK name is not canonical"
   [[ "$sbom_name" == "$canonical_sbom_name" ]] ||
     die "candidate SBOM name is not canonical"
+  [[ "$license_name" == "$canonical_license_name" ]] ||
+    die "candidate license-notices name is not canonical"
   [[ -z "$expected_source_commit" || "$source_commit" == "$expected_source_commit" ]] ||
     die "candidate source commit does not match the selected dev run"
   [[ -z "$expected_source_tree" || "$source_tree" == "$expected_source_tree" ]] ||
@@ -325,15 +508,12 @@ verify_candidate() {
       .updateChannel == "github"
     ' "$metadata" >/dev/null
 
-  for file in "$arm64_name" "$sbom_name" release-certs.txt update-manifest.json; do
+  for file in "$arm64_name" "$sbom_name" "$license_name" release-certs.txt update-manifest.json; do
     [[ -f "$candidate_dir/$file" ]] || die "candidate file is missing: $file"
   done
+  verify_license_notices_archive "$candidate_dir/$license_name"
 
-  jq -e \
-    --arg versionName "$VERSION_NAME" '
-      .metadata.component.name == "foxhole-android" and
-      .metadata.component.version == $versionName
-    ' "$candidate_dir/$sbom_name" >/dev/null
+  verify_android_sbom_inventory "$candidate_dir/$sbom_name" "$VERSION_NAME"
 
   local arm64_sha
   arm64_sha=$(sha256_file "$candidate_dir/$arm64_name")

@@ -3,7 +3,6 @@ import android.app.Application
 import android.content.ClipData
 import androidx.lifecycle.viewModelScope
 import com.foxhole.core.model.ACTIVE_CONNECTION_STATES
-import com.foxhole.core.model.DiagnosticSanitizer
 import com.foxhole.guard.R
 import com.foxhole.guard.core.data.InsecureTlsImportWarning
 import com.foxhole.guard.core.data.InsecureTlsProfileConsentRequiredException
@@ -428,10 +427,10 @@ internal suspend fun HomeViewModel.handleProfileRefreshFailure(
     throwable: Throwable,
 ) {
     val app = getApplication<Application>()
-    val sanitizedMessage = DiagnosticSanitizer.sanitize(throwable.message.orEmpty())
+    val diagnosticMessage = throwable.message.orEmpty()
     container.diagnosticsLogger.recordFailure(
         "profile",
-        "profile refresh failed profileId=$profileId: ${throwable.javaClass.simpleName}: $sanitizedMessage",
+        "profile refresh failed profileId=$profileId: ${throwable.javaClass.simpleName}: $diagnosticMessage",
     )
     emitError(app.getString(R.string.profile_refresh_failed))
 }
@@ -440,10 +439,10 @@ internal suspend fun HomeViewModel.handleProfileImportFailure(
     rawInput: String,
     throwable: Throwable,
 ) {
-    val sanitizedMessage = DiagnosticSanitizer.sanitize(throwable.message.orEmpty())
+    val diagnosticMessage = throwable.message.orEmpty()
     container.diagnosticsLogger.recordFailure(
         "profile",
-        "profile import failed: ${throwable.javaClass.simpleName}: $sanitizedMessage",
+        "profile import failed: ${throwable.javaClass.simpleName}: $diagnosticMessage",
     )
     emitError(profileImportFailureMessage(rawInput, throwable))
 }

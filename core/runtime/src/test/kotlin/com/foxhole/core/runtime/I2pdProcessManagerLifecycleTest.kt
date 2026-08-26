@@ -90,6 +90,26 @@ class I2pdProcessManagerLifecycleTest {
         }
 
     @Test
+    fun `service destroy kill after completed stop preserves idle state`() =
+        runBlocking {
+            val directory = Files.createTempDirectory("i2pd-idle-kill").toFile()
+            val child = ControllableChildProcess()
+            val manager = i2pdManager(directory, launch = { child })
+
+            manager.ensureStarted()
+            manager.stop()
+            assertEquals(I2pdState.IDLE, manager.snapshot().state)
+
+            manager.kill("service_destroy")
+
+            assertEquals(I2pdState.IDLE, manager.snapshot().state)
+            assertNull(manager.snapshot().endpoints)
+            assertEquals(1, child.destroyForciblyCalls.get())
+            directory.deleteRecursively()
+            Unit
+        }
+
+    @Test
     fun `awaitReady cannot accept probe from replaced generation`() =
         runBlocking {
             val directory = Files.createTempDirectory("i2pd-ready-generation").toFile()
@@ -162,17 +182,22 @@ class I2pdProcessManagerLifecycleTest {
                 )
             val endpoints = manager.ensureStarted()
 
-            child.emitStdout("Exploratory tunnel created")
+            child.emitStdout("Tunnel: Inbound tunnel 42 has been created")
+            child.emitStdout("Tunnel: Inbound tunnel 43 has been created")
             awaitCondition {
-                FoxholeVpnRuntimeBridge.i2pPhase.value.phase == I2pNetworkPhase.BUILDING_TUNNELS
+                FoxholeVpnRuntimeBridge.i2pPhase.value.tunnelsBuilt == 2
             }
 
             assertEquals(I2pNetworkPhase.BUILDING_TUNNELS, FoxholeVpnRuntimeBridge.i2pPhase.value.phase)
             assertFalse(FoxholeVpnRuntimeBridge.i2pPhase.value.phase.networkUp)
+            assertFalse(manager.awaitReady(100L))
+
+            child.emitStdout("Tunnel: Outbound tunnel 44 has been created")
+            awaitCondition {
+                FoxholeVpnRuntimeBridge.i2pPhase.value.tunnelsBuilt == 3
+            }
             assertTrue(manager.awaitReady(100L))
-            // An authenticated loopback proxy is only half of readiness: until the VPN service
-            // confirms that this exact endpoint generation is embedded in an applied TUN, the
-            // public phase must stay non-connected.
+
             assertEquals(I2pNetworkPhase.BUILDING_TUNNELS, FoxholeVpnRuntimeBridge.i2pPhase.value.phase)
             assertTrue(manager.confirmCarrierReady(endpoints.generation))
             assertEquals(I2pNetworkPhase.CONNECTED, FoxholeVpnRuntimeBridge.i2pPhase.value.phase)
@@ -184,6 +209,22 @@ class I2pdProcessManagerLifecycleTest {
             directory.deleteRecursively()
             Unit
         }
+
+    @Test
+    fun `startup tunnel config counts do not impersonate built network tunnels`() {
+        FoxholeVpnRuntimeBridge.updateI2pPhase(
+            I2pPhaseSnapshot(
+                phase = I2pNetworkPhase.STARTING,
+                startedAt = 1L,
+            ),
+        )
+
+        advanceI2pPhaseFromLogLine("Clients: 0 I2P client tunnels created")
+        advanceI2pPhaseFromLogLine("Clients: 0 I2P server tunnels created")
+
+        assertEquals(I2pNetworkPhase.STARTING, FoxholeVpnRuntimeBridge.i2pPhase.value.phase)
+        assertEquals(0, FoxholeVpnRuntimeBridge.i2pPhase.value.tunnelsBuilt)
+    }
 
     @Test
     fun `immediate exit clears endpoint phase and fingerprint before retry`() =
@@ -255,7 +296,6 @@ class I2pdProcessManagerLifecycleTest {
         directory: File,
         launch: () -> Process,
         localPortAccepts: (Int) -> Boolean = { false },
-        clientTunnels: Int = I2PD_MIN_CLIENT_TUNNELS,
     ): I2pdProcessManager {
         val nextPort = AtomicInteger(21_000)
         return I2pdProcessManager(
@@ -271,7 +311,6 @@ class I2pdProcessManagerLifecycleTest {
                 processLauncher = RuntimeChildProcessLauncher { _, _ -> launch() },
                 allocateLoopbackPort = nextPort::incrementAndGet,
                 localPortAccepts = localPortAccepts,
-                clientTunnelCount = { clientTunnels },
                 generateWebConsolePassword = { "test-password" },
             ),
         )

@@ -1,10 +1,5 @@
 package com.foxhole.core.runtime
 
-/**
- * Keeps abandonable native-start ownership out of [FoxCoreRuntime]'s engine lifecycle. The
- * generation check and publication share one linearization point; a handle returned after its
- * caller was cancelled is released here and never becomes the active session.
- */
 internal class RuntimeNativeStartOwnership(
     diagnosticsLogger: RuntimeDiagnosticsSink,
     private val tunOwner: FoxCoreTunOwner,

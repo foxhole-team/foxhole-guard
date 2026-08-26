@@ -8,12 +8,6 @@ import com.foxhole.core.model.excludedLanePackages
 import com.foxhole.core.model.packages
 import com.foxhole.core.model.tunnelSelectedPackages
 
-// Per-app package selection helpers shared by TUN inbound + route assembly.
-// Lane semantics: INCLUDE split carries the Tor/VPN lanes (+ blocked apps so the firewall rule
-// can see and drop them); EXCLUDE split keeps the selection OUT of the tun. The EXCLUDE lane is
-// out of the tun in every mode — no filtering, no inspection — except INCLUDE, where it simply
-// is not part of the include set.
-
 internal fun ExpertSettings.vpnIncludedPackages(): List<String> =
     when (perAppRoutingMode) {
         PerAppRoutingMode.INCLUDE_SELECTED_APPS ->
@@ -35,7 +29,6 @@ internal fun ExpertSettings.vpnExcludedPackages(): List<String> =
         -> normalizedRuntimePackages(excludedLanePackages())
     }
 
-/** The Tor lane as the runtime consumes it (trimmed, deduplicated, sorted). */
 internal fun ExpertSettings.torLanePackages(): List<String> =
     normalizedRuntimePackages(packages(AppTunnelLane.TOR))
 

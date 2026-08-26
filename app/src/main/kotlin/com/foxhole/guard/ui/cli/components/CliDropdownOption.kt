@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -42,12 +41,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
-import com.foxhole.core.model.VisualStyle
 import com.foxhole.guard.ui.cli.CliSpacing
 import com.foxhole.guard.ui.cli.CliType
 import com.foxhole.guard.ui.cli.LocalCliColors
 import com.foxhole.guard.ui.cli.LocalCliPanelAppearance
-import com.foxhole.guard.ui.cli.LocalCliVisualStyle
 import com.foxhole.guard.ui.cli.cliLabelText
 import com.foxhole.guard.ui.cli.cliRowTextStyle
 
@@ -95,9 +92,7 @@ internal fun CliDropdownRow(
     Column(modifier = modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier
-                .fillMaxWidth()
-                .defaultMinSize(minHeight = 48.dp)
-                .cliPressable(enabled = enabled, role = Role.DropdownList) {
+                .cliPanelRowPressable(enabled = enabled, role = Role.DropdownList) {
                     everOpened = true
                     open = !open
                 }
@@ -109,9 +104,8 @@ internal fun CliDropdownRow(
                 leading()
                 Spacer(modifier = Modifier.width(6.dp))
             } else if (icon != null) {
-                CliPixIcon(
+                CliRowLeadingIcon(
                     id = icon,
-                    contentDescription = null,
                     tint = if (enabled) colors.accent else colors.dim,
                 )
                 Spacer(modifier = Modifier.width(6.dp))
@@ -178,7 +172,9 @@ internal fun CliDropdownRow(
         note?.let {
             CliElbowLine(
                 text = it,
-                modifier = Modifier.padding(bottom = CliSpacing.xs),
+                modifier = Modifier
+                    .cliPanelRowContentPadding()
+                    .padding(bottom = CliSpacing.xs),
             )
         }
     }
@@ -212,13 +208,15 @@ private fun cliDropdownContainerColor(panel: Color): Color =
     cliModalSurfaceColor(LocalCliPanelAppearance.current, panel)
 
 @Composable
-internal fun CliSwatchDot(color: Color) {
-    val round = LocalCliVisualStyle.current == VisualStyle.PLAIN
+internal fun CliSwatchDot(
+    color: Color,
+    size: Dp = 10.dp,
+) {
     Box(
         modifier = Modifier
-            .width(10.dp)
-            .height(10.dp)
-            .then(if (round) Modifier.clip(CircleShape) else Modifier)
+            .width(size)
+            .height(size)
+            .clip(CircleShape)
             .background(color),
     )
 }
@@ -241,10 +239,10 @@ private fun CliSelectedOptionIcon(
     }
     val icon = option.icon ?: return
     val colors = LocalCliColors.current
-    CliPixIcon(
+    CliIcon(
         id = icon,
         contentDescription = null,
-        size = 12.dp,
+        size = CLI_DROPDOWN_OPTION_ICON_SIZE,
         tint = option.iconTint ?: colors.accent,
     )
     Spacer(modifier = Modifier.width(4.dp))
@@ -274,7 +272,7 @@ private fun rememberCliDropdownMenuWidth(
                 (
                     menuTextWidthPx.toDp() + CliDropdownItemPadding * 2 + 18.dp +
                         (if (hasSwatch) 16.dp else 0.dp) +
-                        (if (hasIcon) 18.dp else 0.dp)
+                        (if (hasIcon) CLI_DROPDOWN_OPTION_ICON_SIZE + 6.dp else 0.dp)
                     ).coerceAtMost(maxMenuWidth)
             }
         }
@@ -291,9 +289,7 @@ private fun CliDropdownOptionLine(
     val colors = LocalCliColors.current
     Row(
         modifier = Modifier
-            .fillMaxWidth()
-            .height(48.dp)
-            .cliPressable(onClick = onClick)
+            .cliMenuRowPressable(onClick = onClick)
             .semantics { this.selected = selected }
             .padding(horizontal = CliDropdownItemPadding),
         verticalAlignment = Alignment.CenterVertically,
@@ -309,10 +305,10 @@ private fun CliDropdownOptionLine(
         }
         if (option.flagCountry == null) {
             option.icon?.let { iconRes ->
-                CliPixIcon(
+                CliIcon(
                     id = iconRes,
                     contentDescription = null,
-                    size = 12.dp,
+                    size = CLI_DROPDOWN_OPTION_ICON_SIZE,
                     tint = option.iconTint ?: if (selected) colors.accent else colors.dim,
                 )
                 Spacer(modifier = Modifier.width(6.dp))
@@ -338,6 +334,8 @@ private fun CliDropdownOptionLine(
 }
 
 private val CliDropdownItemPadding = 12.dp
+
+internal val CLI_DROPDOWN_OPTION_ICON_SIZE = 16.dp
 
 private val CLI_DROPDOWN_WINDOW_CORNER = 14.dp
 

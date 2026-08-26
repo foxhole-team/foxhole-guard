@@ -17,12 +17,6 @@ import com.foxhole.guard.R
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
-/**
- * Connectivity-callback registration and VPN/default network-loss handling for [FoxholeVpnService],
- * extracted from the service body in the Phase B split by responsibility. The service's
- * lifecycle-owned callback objects call into these registration and loss-handling entry points.
- */
-
 internal fun FoxholeVpnService.registerNetworkCallbackIfNeeded() {
     if (networkCallbackRegistered) {
         return
@@ -82,8 +76,7 @@ internal fun FoxholeVpnService.handleI2pRelayNetworkClass(capabilities: NetworkC
         "network class changed; rebuilding I2P relay policy and runtime atomically",
         "metered=$metered",
     )
-    // Stop transit immediately. A lone respawn is forbidden because it mints a new authenticated
-    // endpoint; the serialized runtime command below rebuilds both child and native config.
+
     container.i2pdManager.kill("relay_network_class_changed")
     launchCommand("i2p_relay_network_class_changed") {
         when {
@@ -106,9 +99,6 @@ internal fun FoxholeVpnService.updateActiveVpnUnderlyingNetwork(network: Network
         return
     }
     runCatching {
-        // null (not an empty array) tells Android to fall back to the system default network for
-        // metered/validated accounting. An empty array marks the VPN as having no underlying
-        // network at all, which skews those signals while an upstream is briefly unavailable.
         setUnderlyingNetworks(network?.let { arrayOf(it) })
     }.onSuccess { updated ->
         container.diagnosticsLogger.recordStructured(
@@ -134,10 +124,7 @@ internal fun FoxholeVpnService.publishUpstreamNetworkChange(
     container.ipInfoRepository.markDefaultNetworkChanged()
     invalidateValidationEpoch("upstream_$reason")
     stopGeoRefresh()
-    // The published ip is deliberately NOT blanked from here. Clearing it belongs to the refresh
-    // path alone, which keeps the previous value on screen for a network change until the new one
-    // resolves; a service-side null makes the identity block flash empty on every wi-fi hop, and
-    // the runtime is not the owner of what the dashboard shows.
+
     scope.launch(Dispatchers.IO) { container.ipInfoRepository.evictStaleConnections() }
     val nextRevision = snapshot.upstreamNetworkRevision + 1L
     bridgeWriter.update(
@@ -283,10 +270,7 @@ private fun FoxholeVpnService.handleLocalGuardVpnNetworkLost(
         "lost_handle=$lostHandle",
         "mode=${mode.name.lowercase()}",
     )
-    // The firewall is always-on protection: instead of dropping straight to a silent ERROR, surface
-    // RECONNECTING and self-heal (bounded retries; terminal ERROR + tap-to-restart only on
-    // exhaustion). The scheduled restart re-issues ACTION_START_LOCAL_GUARD, which tears the dead
-    // guard runtime down and brings a fresh one up.
+
     bridgeWriter.update(
         snapshot.copy(
             state = ConnectionState.RECONNECTING,

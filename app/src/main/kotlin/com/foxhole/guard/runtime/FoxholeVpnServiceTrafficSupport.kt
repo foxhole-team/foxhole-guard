@@ -15,6 +15,7 @@ import com.foxhole.guard.guardian.GuardEventType
 import com.foxhole.guard.traffic.RuntimeAuditEvent
 import com.foxhole.guard.traffic.RuntimeConnectionSnapshot
 import com.foxhole.guard.traffic.RuntimeNetworkActivityContext
+import com.foxhole.guard.traffic.TrafficMapRuntimeSnapshotSamples
 import com.foxhole.guard.traffic.toTrafficMapConnectionSamples
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharedFlow
@@ -24,21 +25,13 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.launch
 
-/**
- * App-traffic telemetry sampling for [FoxholeVpnService]. Extracted from the service body (which is
- * being split by responsibility on the road to beta) as extension functions so the periodic
- * per-app usage sampling lives next to its own start/stop lifecycle rather than inside the already
- * large service class.
- */
 internal fun FoxholeVpnService.startAppTrafficStatsUpdates() {
     stopAppTrafficStatsUpdates()
     val settings = container.settingsRepository.settings.value
     if (!appTrafficStatsRuntimeEnabled(settings)) {
         return
     }
-    // fireImmediately mirrors the old "record then delay" loop (first sample at t=0); the runtime
-    // toggle is re-checked each fire and unregisters the task, matching the old loop's break.
-    // A throwing recordSnapshot is caught and logged by the ticker's onError.
+
     sessionTicker.register(
         id = FoxholeVpnService.TICKER_TASK_APP_TRAFFIC,
         fireImmediately = true,
@@ -56,30 +49,17 @@ internal fun FoxholeVpnService.stopAppTrafficStatsUpdates() {
     sessionTicker.unregister(FoxholeVpnService.TICKER_TASK_APP_TRAFFIC)
 }
 
-/**
- * Persisted I2P accounting — the statistics screen's I2P section outlives the session, so someone
- * has to move the two running counters into the store.
- *
- * The pass reads i2pd's cumulative received, sent, and transit totals rather than watching bytes go
- * by. That includes bootstrap and tunnel maintenance, so a connected router can no longer remain at
- * zero merely because no eepsite flow has crossed FoxCore's application lane yet.
- */
 internal fun FoxholeVpnService.startI2pTrafficStatsUpdates() {
     stopI2pTrafficStatsUpdates()
     if (!i2pTrafficSamplingPossible(container.settingsRepository.settings.value)) {
         scope.launch(Dispatchers.IO) { container.i2pTrafficRepository.resetSampleCursors() }
         return
     }
-    // No cursor reset here: the teardown below already recorded the previous session's tail and
-    // reset in one ordered step. Doing it again from a second coroutine would race that one.
+
     val startedAtMs = SystemClock.elapsedRealtime()
     sessionTicker.register(
         id = FoxholeVpnService.TICKER_TASK_I2P_TRAFFIC,
-        // Prime the cumulative cursors at session start. With the first pass delayed by 30 s,
-        // `sample()` treated everything already moved as a pre-consent gap and discarded it; a
-        // short I2P session therefore stayed at zero forever, while a long one appeared frozen for
-        // its first minute. The immediate pass sees the freshly reset session counter and records
-        // no bytes, then the first timed pass can persist the whole first interval.
+
         fireImmediately = true,
         intervalMs = {
             i2pTrafficSampleIntervalMs(SystemClock.elapsedRealtime() - startedAtMs)
@@ -92,10 +72,7 @@ internal fun FoxholeVpnService.startI2pTrafficStatsUpdates() {
             stopI2pTrafficStatsUpdates()
             return@register
         }
-        // Keep the cumulative cursor warm for the whole statistics-consent window, including while
-        // I2P is paused. The router counter stays stable while i2pd is down. If
-        // we reset the cursor on every paused tick, the first sample after a dashboard I2P toggle
-        // merely primed at an already non-zero value and discarded that entire first interval.
+
         container.i2pTrafficRepository.sample()
     }
 }
@@ -114,16 +91,10 @@ internal fun i2pTrafficSampleIntervalMs(sessionElapsedMs: Long): Long =
         FoxholeVpnService.I2P_TRAFFIC_SAMPLE_STEADY_INTERVAL_MS
     }
 
-/** Persisted I2P counters follow statistics consent; router engagement only changes the counter. */
 internal fun i2pTrafficStatsRuntimeEnabled(settings: Settings): Boolean =
     settings.statistics.enabled
 
-/**
- * Best-effort tail sample. The cursor intentionally survives VPN/local-guard handovers because i2pd
- * can survive them too; a real router restart is handled by the cumulative-counter restart rule.
- */
 private fun FoxholeVpnService.recordFinalI2pTrafficSample() {
-    // A paused router can still expose its final cumulative counters.
     if (!i2pTrafficSamplingPossible(container.settingsRepository.settings.value)) {
         return
     }
@@ -146,42 +117,27 @@ internal fun FoxholeVpnService.startTrafficUpdates() {
             null
         }
     if (destinationCountryTrackingRuntimeEnabled(settings) && runtimeConnectionSnapshots != null) {
-        // The geoip tables load lazily on the first lookup — a multi-second parse behind a lock.
-        // dnsServerCountryProvider below is invoked from INSIDE the traffic-map state flow, where a
-        // blocking call stalls the transform and freezes every later map emission (a connected
-        // tunnel then kept showing standby because the availability update queued behind the
-        // parse). Warm the tables off the flow and keep the provider itself non-blocking.
         scope.launch(Dispatchers.Default) { runtimeCountryResolver.warmUp() }
         trafficMapCountryTrackingJob =
             container.trafficMapRepository.startDestinationCountryTrackingFromSamples(
                 scope = scope,
-                connectionSamples =
-                runtimeConnectionSnapshots.map { snapshot ->
-                    snapshot.toTrafficMapConnectionSamples(
-                        maxConnections = FoxholeVpnService.MAX_TRAFFIC_MAP_RUNTIME_CONNECTIONS,
-                        countryCodeForDestination = runtimeCountryResolver::countryCodeForDestination,
-                        ownPackageName = packageName,
-                        dnsServerHost = { container.settingsRepository.settings.value.dns.server },
-                        // Firewall/journal local guard has no tunnel: `direct` is the real device
-                        // egress there, so its connections must populate the map instead of being
-                        // dropped by the split-tunnel direct filter.
-                        includeDirectOutbound = { activeLocalGuardMode != null },
+                connectionSamples = runtimeConnectionSnapshots.map { snapshot ->
+                    TrafficMapRuntimeSnapshotSamples(
+                        generation = snapshot.generation,
+                        samples = snapshot.toTrafficMapConnectionSamples(
+                            maxConnections = FoxholeVpnService.MAX_TRAFFIC_MAP_RUNTIME_CONNECTIONS,
+                            countryCodeForDestination = runtimeCountryResolver::countryCodeForDestination,
+                            ownPackageName = packageName,
+
+                            includeDirectOutbound = { activeLocalGuardMode != null },
+                        ),
                     )
                 },
-                // Session tunnel totals so the map's VPN node always matches the traffic widget.
+
                 sessionTrafficBytesProvider = {
                     FoxholeVpnRuntimeBridge.traffic.value.let { traffic ->
                         traffic.rxTotalBytes + traffic.txTotalBytes
                     }
-                },
-                // The DNS node shows from the first second of the session: country of the
-                // configured resolver until real DNS egress samples take over. Runs inside the map
-                // state flow, so it never waits on the geoip parse — until the warm-up above lands
-                // the node simply has no country yet, and the next map tick fills it in.
-                dnsServerCountryProvider = {
-                    container.settingsRepository.settings.value.dns.server
-                        .takeIf(String::isNotBlank)
-                        ?.let(runtimeCountryResolver::countryCodeForDestinationIfLoaded)
                 },
             )
     }
@@ -298,11 +254,6 @@ private fun FoxholeVpnService.journalRuntimeAuditEvents(
     }
 }
 
-/**
- * The journal row for one core audit event, or null for the two kinds journalled as grouped
- * counts above ([RuntimeAuditEvent.Blocked] and [RuntimeAuditEvent.DnsBlocked]) — those arrive by
- * the hundred and one row per packet would drown the journal.
- */
 internal fun ungroupedRuntimeAuditGuardEvent(event: RuntimeAuditEvent): GuardEvent? =
     when (event) {
         is RuntimeAuditEvent.Blocked,
@@ -332,20 +283,16 @@ internal fun ungroupedRuntimeAuditGuardEvent(event: RuntimeAuditEvent): GuardEve
                 GuardEventType.CORE_OUTBOUND_RESTORED,
                 detail = "id=${event.id} kind=${event.kind} attempts=${event.attempts}",
             )
-        // Never grouped and never filtered on count: cutting an app off the network is a single
-        // auditable request, and a request that cut nothing is exactly the case the journal has to
-        // be able to show.
+
         is RuntimeAuditEvent.FlowsRevoked ->
             GuardEvent(
                 GuardEventType.CORE_FLOWS_REVOKED,
-                // Attributed when the scope IS a package, so the row lands under the app the user
-                // blocked rather than only in the free-text detail.
+
                 packageName = event.scope.takeIf { event.target == REVOKE_TARGET_PACKAGE },
                 detail = "target=${event.target} scope=${event.scope ?: "none"} count=${event.count}",
             )
     }
 
-/** The revocation kind whose scope is a package name (see `RevokeTarget.Package`). */
 private const val REVOKE_TARGET_PACKAGE = "package"
 
 private fun FoxholeVpnService.runtimeConnectionStatsEnabled(settings: Settings): Boolean =
@@ -379,13 +326,6 @@ internal fun shouldIncludeRuntimeProcessInfo(
     appTrafficEnabled: Boolean,
 ): Boolean = networkActivityEnabled || appTrafficEnabled
 
-/**
- * DNS-replacement guard has no traffic widget (its TUN carries DNS only, and the UI deliberately
- * publishes an empty TrafficSnapshot), so it never ran the traffic job - and the traffic job is
- * what drains DnsRuntimeStats into persisted windows. Blocked-query counters therefore piled up
- * unread and the dashboard showed no DNS blocks at all in this mode. This job closes that hole:
- * it aggregates windows (which drains the counters) WITHOUT publishing traffic to the UI.
- */
 internal fun FoxholeVpnService.startDnsGuardWindowUpdates() {
     stopDnsGuardWindowUpdates()
     trafficSampler.start()

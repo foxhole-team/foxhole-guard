@@ -168,10 +168,6 @@ class GuardSentinel internal constructor(
     }
 }
 
-/**
- * One APK update fans out into several broadcasts that map onto the same event type: deciding against the stored inventory rather than the broadcast makes the second delivery a no-op in either arrival order.
- * A change that is news is re-read from the live package, never copied from the entry the update replaced.
- */
 internal fun guardPackageChangeEventOrNull(
     type: GuardEventType,
     packageName: String,

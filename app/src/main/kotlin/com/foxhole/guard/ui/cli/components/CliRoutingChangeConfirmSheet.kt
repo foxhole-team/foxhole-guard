@@ -22,11 +22,11 @@ internal fun CliRoutingChangeConfirmSheet(
         question = stringResource(R.string.cli_route_change_confirm_question),
         onConfirm = onConfirm,
         onDismiss = onDismiss,
-        icon = R.drawable.pix_globe,
+        icon = R.drawable.lin_globe,
     ) {
         CliElbowLine(
             text = stringResource(R.string.cli_route_change_confirm_info),
-            color = colors.note,
+            color = colors.info,
         )
         CliRowDivider()
         if (change is PendingRoutingScenarioChange.I2pRelay) {

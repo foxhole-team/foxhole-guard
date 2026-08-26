@@ -8,23 +8,21 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.foxhole.core.model.ACTIVE_CONNECTION_STATES
-import com.foxhole.core.model.AccentColor
+import com.foxhole.core.model.AppearanceUiState
 import com.foxhole.core.model.CachedActiveProfile
 import com.foxhole.core.model.ConnectionState
 import com.foxhole.core.model.InstalledAppOption
 import com.foxhole.core.model.LanProxyStatusSnapshot
-import com.foxhole.core.model.PanelAppearance
 import com.foxhole.core.model.PerAppRoutingMode
 import com.foxhole.core.model.Profile
 import com.foxhole.core.model.ProfileSourceType
-import com.foxhole.core.model.ThemeMode
+import com.foxhole.core.model.RoutingModePreset
 import com.foxhole.core.model.TrafficMapSectionId
 import com.foxhole.core.model.TrafficMapUiState
 import com.foxhole.core.model.TrafficMode
 import com.foxhole.core.model.TrafficSnapshot
-import com.foxhole.core.model.VisualStyle
+import com.foxhole.core.model.appearanceUiState
 import com.foxhole.core.model.normalizedTrafficMapSectionOrder
-import com.foxhole.core.runtime.TorGeoIpCountryResolver
 import com.foxhole.guard.BuildConfig
 import com.foxhole.guard.FoxholeApplication
 import com.foxhole.guard.FoxholeHomeDependencies
@@ -32,13 +30,15 @@ import com.foxhole.guard.R
 import com.foxhole.guard.core.data.WebAppEntity
 import com.foxhole.guard.core.settings.AppTrafficStatsRecorder
 import com.foxhole.guard.core.settings.acknowledgeBetaNotice
+import com.foxhole.guard.core.settings.applyUpdateNoticeChoice
 import com.foxhole.guard.core.settings.rotatePrivacyRouteIdentity
-import com.foxhole.guard.core.settings.updateAlphaNoticeShownVersionCode
 import com.foxhole.guard.core.settings.updatePrivacyRouteAutoRotateExit
 import com.foxhole.guard.core.settings.updatePrivacyRouteAutoRotateInterval
 import com.foxhole.guard.core.webapps.WebAppProxyCredentials
 import com.foxhole.guard.runtime.FoxholeVpnService
-import kotlinx.coroutines.Dispatchers
+import com.foxhole.guard.runtime.PublicDnsIdentityResolver
+import com.foxhole.guard.runtime.RemoteDownloadProgress
+import com.foxhole.guard.runtime.currentDnsLookupNetwork
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
@@ -49,7 +49,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
@@ -68,6 +67,11 @@ class HomeViewModel(
         )
     internal val initialSettings = container.settingsRepository.settings.value
     internal val clipboard = application.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+    internal val publicDnsIdentityResolver =
+        PublicDnsIdentityResolver(
+            networkProvider = { container.connectionController.currentDnsLookupNetwork() },
+            countryCodeForIpAddress = container.ipCountryCodeResolver,
+        )
 
     internal val trafficChartRecorder =
         TrafficChartRecorder(
@@ -103,6 +107,7 @@ class HomeViewModel(
     internal val ipInfoLoadingMutable = ipRefresh.ipInfoLoadingMutable
     internal val ipInfoRefreshReasonMutable = ipRefresh.ipInfoRefreshReasonMutable
     internal val torIpInfoMutable = ipRefresh.torIpInfoMutable
+    internal val publicDnsIdentityMutable = ipRefresh.publicDnsIdentityMutable
     internal val dashboardConnectionMetricsLoadingMutable = protocolMetrics.dashboardConnectionMetricsLoadingMutable
     internal val statisticsVisibleMutable = MutableStateFlow(false)
     internal val manualSubscriptionRefreshInProgressMutable = MutableStateFlow(false)
@@ -150,6 +155,8 @@ class HomeViewModel(
     val dnsFilterUpdateAvailable: kotlinx.coroutines.flow.StateFlow<Boolean> = dnsFilterUpdateAvailableMutable
     internal val dnsFilterUpdatePhaseMutable = componentUpdates.dnsFilterUpdatePhaseMutable
     val dnsFilterUpdatePhase: kotlinx.coroutines.flow.StateFlow<FoxholeUpdatePhase> = dnsFilterUpdatePhaseMutable
+    val dnsFilterDownloadProgress: StateFlow<RemoteDownloadProgress?> =
+        componentUpdates.dnsFilterDownloadProgressMutable
     internal val torBridgeRefreshInProgressMutable = componentUpdates.torBridgeRefreshInProgressMutable
     internal val torBridgeUpdatePhaseMutable = componentUpdates.torBridgeUpdatePhaseMutable
     val torBridgeUpdatePhase: kotlinx.coroutines.flow.StateFlow<FoxholeUpdatePhase> = torBridgeUpdatePhaseMutable
@@ -213,36 +220,14 @@ class HomeViewModel(
     val uiState: StateFlow<HomeUiState> = stateProducer.uiState
     private val statisticsUiState: StateFlow<HomeUiState> = stateProducer.statisticsUiState
 
-    val themeMode: StateFlow<ThemeMode> = container.settingsRepository.themeMode
-
-    val panelAppearance: StateFlow<PanelAppearance> =
+    val appearanceUiState: StateFlow<AppearanceUiState> =
         container.settingsRepository.settings
-            .map { settings -> settings.ui.panelAppearance }
+            .map { settings -> settings.ui.appearanceUiState() }
             .distinctUntilChanged()
             .stateIn(
                 viewModelScope,
                 SharingStarted.Eagerly,
-                initialSettings.ui.panelAppearance,
-            )
-
-    val visualStyle: StateFlow<VisualStyle> =
-        container.settingsRepository.settings
-            .map { settings -> settings.ui.visualStyle }
-            .distinctUntilChanged()
-            .stateIn(
-                viewModelScope,
-                SharingStarted.Eagerly,
-                initialSettings.ui.visualStyle,
-            )
-
-    val accentColor: StateFlow<AccentColor> =
-        container.settingsRepository.settings
-            .map { settings -> settings.ui.accentColor }
-            .distinctUntilChanged()
-            .stateIn(
-                viewModelScope,
-                SharingStarted.Eagerly,
-                initialSettings.ui.accentColor,
+                initialSettings.ui.appearanceUiState(),
             )
 
     val monochromeTorTheme: StateFlow<Boolean> =
@@ -280,19 +265,6 @@ class HomeViewModel(
     val blurEffectsEnabled: StateFlow<Boolean> =
         uiProjection(initialSettings.ui.blurEffectsEnabled) { it.settings.ui.blurEffectsEnabled }
 
-    private val dnsGeoResolver by lazy { TorGeoIpCountryResolver(getApplication()) }
-
-    val dnsServerCountryCode: StateFlow<String?> =
-        combine(
-            uiProjection(initialSettings.dns.server) { it.settings.dns.server },
-            uiProjection(initialSettings.dns.secureMode) { it.settings.dns.secureMode },
-        ) { server, secureMode ->
-            server.trim().takeIf(String::isNotBlank) ?: defaultDnsServerFor(secureMode)
-        }
-            .map { server -> dnsServerHostForGeo(server)?.let(dnsGeoResolver::countryCodeForIpAddress) }
-            .flowOn(Dispatchers.Default)
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
-
     val mapWidgetMapOnRight: StateFlow<Boolean> =
         uiProjection(initialSettings.ui.mapWidgetMapOnRight) { it.settings.ui.mapWidgetMapOnRight }
 
@@ -328,6 +300,7 @@ class HomeViewModel(
                 profileOptionLatencyUnavailable = profileOptionLatencyUnavailableMutable,
                 dnsFilterRefreshInProgress = dnsFilterRefreshInProgressMutable,
                 appTrafficUsageAccessGranted = appTrafficUsageAccessGrantedMutable,
+                publicDnsIdentity = publicDnsIdentityMutable,
                 statisticsVisible = statisticsVisibleMutable,
                 appPickerQuery = appPickerQueryFlowMutable,
             ),
@@ -351,6 +324,15 @@ class HomeViewModel(
         )
 
     val homeRouteState: StateFlow<HomeRouteUiState> = routeStateProducer.homeRouteState
+    val homeFrontendReady: StateFlow<Boolean> =
+        homeRouteState
+            .map { state -> state.profilesLoaded && state.settingsHydrated }
+            .distinctUntilChanged()
+            .stateIn(
+                viewModelScope,
+                SharingStarted.WhileSubscribed(5_000),
+                homeRouteState.value.profilesLoaded && homeRouteState.value.settingsHydrated,
+            )
 
     val lanProxyStatus: StateFlow<LanProxyStatusSnapshot> = container.connectionController.lanProxyStatus
     internal val dashboardLayoutState: StateFlow<DashboardLayoutUiState> = routeStateProducer.dashboardLayoutState
@@ -447,6 +429,8 @@ class HomeViewModel(
     internal var foregroundRefreshJob: Job? by ipRefresh::foregroundRefreshJob
     internal var pendingNetworkChangeRefreshJob: Job? by ipRefresh::pendingNetworkChangeRefreshJob
     internal var connectedIpRefreshJob: Job? by ipRefresh::connectedIpRefreshJob
+    internal var publicDnsIdentityRefreshJob: Job? by ipRefresh::publicDnsIdentityRefreshJob
+    internal var publicDnsIdentityRefreshGeneration: Long by ipRefresh::publicDnsIdentityRefreshGeneration
     internal var postConnectLatencyRefreshJob: Job? by protocolMetrics::postConnectLatencyRefreshJob
     internal var postConnectLatencyRefreshGeneration: Long? by protocolMetrics::postConnectLatencyRefreshGeneration
     internal var postConnectTorRouteRefreshJob: Job? by ipRefresh::postConnectTorRouteRefreshJob
@@ -541,6 +525,9 @@ class HomeViewModel(
         when (request.action) {
             PendingConnectAction.MANUAL -> connect(request.profileId, protocolOptionId = request.protocolOptionId)
             PendingConnectAction.RECONNECT -> reconnect(request.profileId)
+            PendingConnectAction.TOR_ONLY_QUICK_START ->
+                request.routingModeScope?.let { scope -> startRoutingMode(RoutingModePreset.TOR, scope) }
+                    ?: onEnableDirectTorQuickStart()
             PendingConnectAction.LOCAL_GUARD ->
                 viewModelScope.launch {
                     container.connectionController.syncLocalGuard()
@@ -610,9 +597,13 @@ class HomeViewModel(
             .distinctUntilChanged()
             .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
-    fun dismissAlphaNotice() {
+    fun dismissAlphaNotice(showTrafficMap: Boolean, useFoxholeStyle: Boolean) {
         viewModelScope.launch {
-            container.settingsRepository.updateAlphaNoticeShownVersionCode(BuildConfig.VERSION_CODE)
+            container.settingsRepository.applyUpdateNoticeChoice(
+                showTrafficMap = showTrafficMap,
+                useFoxholeStyle = useFoxholeStyle,
+                shownVersionCode = BuildConfig.VERSION_CODE,
+            )
         }
     }
 
@@ -796,7 +787,7 @@ class HomeViewModel(
         internal const val PROFILE_RECONNECT_PROMPT_WINDOW_MS = 13_000L
         internal const val RUNTIME_RELOAD_PENDING_TIMEOUT_MS = 1_500L
         internal const val TOR_OPERATION_MIN_VISIBLE_MS = 3_500L
-        internal const val STOP_VPN_KEEP_TOR_SETTLE_TIMEOUT_MS = 6_000L
+        internal const val STOP_VPN_KEEP_TOR_SETTLE_TIMEOUT_MS = 10_000L
         internal const val TOR_OPERATION_BOOTSTRAP_NOTICE_MS = 20_000L
         internal const val TOR_OPERATION_TIMEOUT_MS = 240_000L
         internal const val TOR_IP_REFRESH_ATTEMPTS = 6

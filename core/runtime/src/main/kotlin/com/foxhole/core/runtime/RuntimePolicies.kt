@@ -4,10 +4,6 @@ import android.os.Build
 import com.foxhole.core.model.ConnectivityHealthState
 import com.foxhole.core.model.DEFAULT_FOXHOLE_RUNTIME_LOG_LEVEL
 
-// Consolidated runtime policy constants and pure policy objects.
-// Previously split across RuntimeLogPolicy / RuntimeNativeClosePolicy /
-// RuntimeUpdatePolicy / RouteExcludePolicy. Behaviour is unchanged.
-
 internal const val FOXHOLE_RUNTIME_LOG_LEVEL: String = DEFAULT_FOXHOLE_RUNTIME_LOG_LEVEL
 
 internal object RuntimeNativeClosePolicy {

@@ -5,11 +5,6 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/**
- * The bucketing contract behind the statistics screen's I2P section: which hours a period covers,
- * what happens when the wall clock crosses an hour boundary, and why "all time" is not a sum of the
- * retained buckets.
- */
 class I2pTrafficHistoryTest {
     @Test
     fun `a bucket start is the wall-clock hour the sample fell into`() {
@@ -21,8 +16,6 @@ class I2pTrafficHistoryTest {
 
     @Test
     fun `each period covers exactly its own number of whole hours`() {
-        // One bucket per hour for the last 30 days plus the current one, all carrying 1 byte, so
-        // every sum is a plain count of the buckets the period reaches.
         val buckets = (0 until I2P_TRAFFIC_MONTH_BUCKETS).map { index ->
             bucket(NOW_HOUR - index * I2P_TRAFFIC_BUCKET_MS, ownBytes = 1L)
         }
@@ -38,13 +31,12 @@ class I2pTrafficHistoryTest {
         val oldest = NOW_HOUR - (I2P_TRAFFIC_DAY_BUCKETS - 1) * I2P_TRAFFIC_BUCKET_MS
         val buckets = listOf(bucket(oldest, ownBytes = 500L), bucket(NOW_HOUR, ownBytes = 7L))
 
-        // Still inside the same hour: the 24th bucket back is the last one the window covers.
         assertEquals(507L, i2pTrafficPeriods(buckets, I2pTrafficTotals(), NOW).day.ownBytes)
         assertEquals(
             507L,
             i2pTrafficPeriods(buckets, I2pTrafficTotals(), NOW_HOUR + I2P_TRAFFIC_BUCKET_MS - 1L).day.ownBytes,
         )
-        // One millisecond later the clock is in the next hour and the oldest bucket drops out.
+
         assertEquals(
             7L,
             i2pTrafficPeriods(buckets, I2pTrafficTotals(), NOW_HOUR + I2P_TRAFFIC_BUCKET_MS).day.ownBytes,
@@ -66,7 +58,6 @@ class I2pTrafficHistoryTest {
 
     @Test
     fun `all time comes from the lifetime aggregate and outlives pruned buckets`() {
-        // The store kept a single recent hour; everything older was pruned at thirty days.
         val periods =
             i2pTrafficPeriods(
                 buckets = listOf(bucket(NOW_HOUR, ownBytes = 3L, transitBytes = 4L)),
@@ -89,7 +80,7 @@ class I2pTrafficHistoryTest {
     fun `retention keeps exactly the hours the longest period can still show`() {
         val cutoff = i2pTrafficRetentionCutoffMs(NOW)
         assertEquals(NOW_HOUR - (I2P_TRAFFIC_MONTH_BUCKETS - 1) * I2P_TRAFFIC_BUCKET_MS, cutoff)
-        // The oldest bucket the 30-day row sums is the newest one retention may not delete.
+
         assertEquals(i2pTrafficPeriodCutoffMs(NOW, I2P_TRAFFIC_MONTH_BUCKETS), cutoff)
     }
 
@@ -97,7 +88,7 @@ class I2pTrafficHistoryTest {
     fun `a counter that restarted is read as a fresh start, never as a negative delta`() {
         assertEquals(400L, i2pCumulativeDelta(current = 1_400L, previous = 1_000L))
         assertEquals(0L, i2pCumulativeDelta(current = 1_000L, previous = 1_000L))
-        // The router restarted: its total went backwards, so the whole current reading is new.
+
         assertEquals(30L, i2pCumulativeDelta(current = 30L, previous = 9_999L))
     }
 

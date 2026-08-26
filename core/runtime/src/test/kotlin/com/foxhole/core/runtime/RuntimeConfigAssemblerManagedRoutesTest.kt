@@ -27,8 +27,7 @@ internal class RuntimeConfigAssemblerManagedRoutesTest : RuntimeConfigAssemblerT
 
         assertRuntimeProxyRoute(rules[0].jsonObject)
         assertSniffRule(rules[1].jsonObject)
-        // The stale managed hijack rule from the source config is stripped and, with the default
-        // hands-off DNS settings, not re-added.
+
         assertTrue(
             rules.none { rule -> rule.jsonObject["action"]?.jsonPrimitive?.content == "hijack-dns" },
         )

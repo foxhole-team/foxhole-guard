@@ -26,12 +26,7 @@ data class AnomalyAssessment(
 data class AnomalyHistory(
     val trafficWindows: List<TrafficWindow> = emptyList(),
     val appWindowsByPackage: Map<String, List<AppTrafficWindow>> = emptyMap(),
-    /**
-     * Long-horizon persisted context. Raw windows above are bucketed and expire with statistics
-     * retention; these aggregates survive both, so detectors keyed on "ever seen" or "how long
-     * learned" stay correct across retention cleanups and bucket switches. Null fields fall back
-     * to what the raw windows imply.
-     */
+
     val everSeenCountries: Set<String>? = null,
     val observedTrafficWindowCount: Long? = null,
     val appPresence: Map<String, AppNetworkPresence> = emptyMap(),
@@ -43,11 +38,9 @@ data class AnomalyHistory(
             .flatMap { window -> window.destinationCountries.keys }
             .mapTo(linkedSetOf()) { country -> country.uppercase(Locale.US) }
 
-    /** Countries considered already known: the persisted set when supplied, else the raw-window set. */
     val effectiveSeenCountries: Set<String>
         get() = everSeenCountries ?: knownDestinationCountries
 
-    /** How many traffic windows have ever been observed, surviving retention cleanup. */
     val learnedTrafficWindowCount: Long
         get() = observedTrafficWindowCount ?: trafficWindows.size.toLong()
 }
@@ -69,10 +62,7 @@ class AnomalyEngine(
                 severity = AnomalySeverity.SILENT,
             )
         }
-        // Full exclusion: excluded packages disappear from every per-app input, so per-app
-        // detectors can never signal on them. Device-wide detectors keep reading `current`
-        // totals unchanged — which also means TotalTrafficSpikeDetector loses content-heavy
-        // dampening from an excluded app's windows.
+
         val excluded = settings.excludedPackages.toSet()
         val analyzedAppWindows =
             if (excluded.isEmpty()) appWindows else appWindows.filterNot { it.packageName in excluded }
@@ -191,8 +181,7 @@ class AppUploadSpikeDetector : AnomalyDetector {
         val appShare = appWindow.totalBytes.toDouble() / totalBytes.toDouble()
         val uploadRatio = appWindow.txBytes.toDouble() / appWindow.totalBytes.coerceAtLeast(1L).toDouble()
         val learned = history.size >= LEARNING_SAMPLES || (baseline?.sampleCount ?: 0) >= LEARNING_SAMPLES
-        // The boost only amplifies an already-anomalous upload (z past the threshold); a heavy
-        // uploader running at its own baseline has z near 0 and must stay silent.
+
         val shareBoost =
             if (z >= zThreshold && appShare >= 0.55 && uploadRatio >= 0.55 && learned) {
                 0.28
@@ -200,9 +189,7 @@ class AppUploadSpikeDetector : AnomalyDetector {
                 0.0
             }
         var severity = (((z - zThreshold) / 6.0).coerceIn(0.0, 1.0) + shareBoost).coerceIn(0.0, 1.0)
-        // TCP acks scale with download volume, so a streaming binge inflates tx too. Soften
-        // content-heavy apps only while the window stays download-shaped; real upload keeps
-        // full sensitivity.
+
         val contentDampened =
             context.categoryOf(appWindow.packageName) == AppNetworkUsageCategory.CONTENT_HEAVY &&
                 uploadRatio < CONTENT_HEAVY_UPLOAD_RATIO_GATE
@@ -293,8 +280,7 @@ class TotalTrafficSpikeDetector : AnomalyDetector {
             return emptyList()
         }
         var severity = ((z - zThreshold) / 6.0).coerceIn(0.0, 1.0)
-        // Attribute the spike: when a content-heavy app dominates a download-shaped window, the
-        // volume is an expected binge (video/audio/game download), not a device-wide anomaly.
+
         val dominant = dominantContentHeavyApp(context)
         if (dominant != null) {
             severity *= CONTENT_HEAVY_DAMPEN_FACTOR
@@ -464,12 +450,6 @@ class LatencyShiftDetector : AnomalyDetector {
     }
 }
 
-/**
- * An app that has been silent for a long stretch suddenly producing traffic is the classic
- * "quiet implant wakes up" shape. Presence comes from the long-horizon store, so dormancy is
- * measured across retention cleanups; apps never seen before are the quarantine feature's job,
- * not this detector's.
- */
 class DormantAppNetworkActivityDetector : AnomalyDetector {
     override fun detect(context: AnomalyDetectionContext): List<AnomalySignal> =
         context.appWindows.mapNotNull { appWindow -> detectForApp(context, appWindow) }
@@ -492,14 +472,14 @@ class DormantAppNetworkActivityDetector : AnomalyDetector {
         if (appWindow.totalBytes >= DormantLargeBytes) {
             severity += 0.15
         }
-        // A dormant app that wakes up to UPLOAD is the exfiltration shape — escalate.
+
         if (uploadRatio >= 0.45) {
             severity += 0.20
         }
         if (idleDays >= LongDormancyDays) {
             severity += 0.10
         }
-        // Returning to a media/game app after a break is common; soften download-shaped wake-ups.
+
         if (context.categoryOf(appWindow.packageName) == AppNetworkUsageCategory.CONTENT_HEAVY &&
             uploadRatio < CONTENT_HEAVY_UPLOAD_RATIO_GATE
         ) {
@@ -531,11 +511,6 @@ class DormantAppNetworkActivityDetector : AnomalyDetector {
     }
 }
 
-/**
- * Robust z from raw history when it has enough samples, else from the persisted baseline's
- * median/MAD when that baseline has learned enough. The persisted stats survive statistics
- * retention and keep detection armed right after cleanup or an hour-bucket switch.
- */
 internal fun robustZWithBaselineFallback(
     value: Double,
     history: List<Double>,

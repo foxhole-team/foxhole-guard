@@ -1,7 +1,6 @@
 package com.foxhole.guard.ui.cli.settings
 
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -16,8 +15,8 @@ import com.foxhole.core.model.tunnelSelectedPackages
 import com.foxhole.guard.R
 import com.foxhole.guard.ui.HomeViewModel
 import com.foxhole.guard.ui.VpnRoutingScenario
-import com.foxhole.guard.ui.cli.CliSpacing
 import com.foxhole.guard.ui.cli.LocalCliColors
+import com.foxhole.guard.ui.cli.components.CLI_MENU_ROW_MIN_HEIGHT
 import com.foxhole.guard.ui.cli.components.CliDropdownOption
 import com.foxhole.guard.ui.cli.components.CliDropdownRow
 import com.foxhole.guard.ui.cli.components.CliInputRow
@@ -34,7 +33,7 @@ import com.foxhole.guard.ui.onProxySurfaceModeSelected
 import com.foxhole.guard.ui.onSocksSurfaceChanged
 import com.foxhole.guard.ui.onVpnRoutingScenarioSelected
 
-private enum class CliVpnConn { WHOLE_DEVICE, SELECTED_APPS, PROXY_SERVER }
+internal enum class CliVpnConn { WHOLE_DEVICE, SELECTED_APPS, PROXY_SERVER }
 
 internal enum class CliMissingAppsTarget { VPN, TOR }
 
@@ -57,14 +56,14 @@ internal fun CliVpnModeSection(
         settings.expert.packages(AppTunnelLane.TOR).none(String::isNotBlank)
     }
     CliPanel(
-        icon = R.drawable.pix_globe,
+        icon = R.drawable.lin_globe,
         title = stringResource(R.string.cli_route_apps_traffic_title),
         modifier = Modifier.fillMaxWidth(),
         infoText = stringResource(R.string.cli_help_routing_body),
     ) {
         CliDropdownRow(
             label = stringResource(R.string.cli_route_vpn_conn),
-            icon = R.drawable.pix_shield,
+            icon = R.drawable.lin_shield,
             value = stringResource(vpnConnLabel(conn)),
             options = CliVpnConn.entries.map { candidate ->
                 CliDropdownOption(
@@ -86,26 +85,26 @@ internal fun CliVpnModeSection(
             showSelectedOptionIcon = true,
             infoText = stringResource(vpnConnNote(conn, settings)),
         )
-        if (conn == CliVpnConn.SELECTED_APPS) {
+        CliSettingsAnimatedRows(visible = conn == CliVpnConn.SELECTED_APPS) {
             CliSplitControls(viewModel, settings)
         }
-        if (conn == CliVpnConn.PROXY_SERVER) {
+        CliSettingsAnimatedRows(visible = conn == CliVpnConn.PROXY_SERVER) {
             CliLocalProxyControls(viewModel, settings)
         }
 
-        CliRowDivider(modifier = Modifier.padding(vertical = CliSpacing.xs))
+        CliRowDivider()
         CliDropdownRow(
             label = stringResource(R.string.cli_route_tor_conn),
-            icon = R.drawable.pix_tor,
+            icon = R.drawable.lin_tor,
             value = stringResource(torScopeLabel(settings.privacyRoute.scope)),
             options = PrivacyRouteScope.entries.map { candidate ->
                 CliDropdownOption(
                     id = candidate.name,
                     label = stringResource(torScopeLabel(candidate)),
                     icon = if (candidate == PrivacyRouteScope.ALL_APPS) {
-                        R.drawable.pix_device
+                        R.drawable.lin_device
                     } else {
-                        R.drawable.pix_apps
+                        R.drawable.lin_apps
                     },
                     iconTint = colors.tor,
                 )
@@ -121,10 +120,10 @@ internal fun CliVpnModeSection(
             },
             showSelectedOptionIcon = true,
         )
-        CliRowDivider(modifier = Modifier.padding(vertical = CliSpacing.xs))
+        CliRowDivider()
         CliToggleRow(
             label = stringResource(R.string.cli_route_tor_block_without),
-            icon = R.drawable.pix_forbidden,
+            icon = R.drawable.lin_forbidden,
             checked = settings.privacyRoute.blockAppsWhenTorUnavailable,
             onToggle = { value -> viewModel.onPrivacyRouteBlockAppsWhenTorUnavailableChanged(value) },
             infoText = stringResource(R.string.cli_route_tor_block_without_note),
@@ -132,7 +131,7 @@ internal fun CliVpnModeSection(
     }
 }
 
-private fun vpnConnNeedsApps(conn: CliVpnConn): Boolean = conn != CliVpnConn.WHOLE_DEVICE
+internal fun vpnConnNeedsApps(conn: CliVpnConn): Boolean = conn == CliVpnConn.SELECTED_APPS
 
 private fun vpnConnLabel(conn: CliVpnConn): Int = when (conn) {
     CliVpnConn.WHOLE_DEVICE -> R.string.cli_route_vpn_whole_device
@@ -141,9 +140,9 @@ private fun vpnConnLabel(conn: CliVpnConn): Int = when (conn) {
 }
 
 private fun vpnConnIcon(conn: CliVpnConn): Int = when (conn) {
-    CliVpnConn.WHOLE_DEVICE -> R.drawable.pix_shield
-    CliVpnConn.SELECTED_APPS -> R.drawable.pix_apps
-    CliVpnConn.PROXY_SERVER -> R.drawable.pix_device
+    CliVpnConn.WHOLE_DEVICE -> R.drawable.lin_shield
+    CliVpnConn.SELECTED_APPS -> R.drawable.lin_apps
+    CliVpnConn.PROXY_SERVER -> R.drawable.lin_device
 }
 
 private fun vpnConnNote(
@@ -192,7 +191,7 @@ private fun CliLocalProxyControls(
     val surfaces = settings.expert.localSurfaces
     CliDropdownRow(
         label = stringResource(R.string.cli_route_proxy_mode),
-        icon = R.drawable.pix_link,
+        icon = R.drawable.lin_link,
         value = surfaces.proxyMode.name.lowercase(),
         options = ProxySurfaceMode.entries.map { surface ->
             CliDropdownOption(id = surface.name, label = surface.name.lowercase())
@@ -200,7 +199,7 @@ private fun CliLocalProxyControls(
         selectedId = surfaces.proxyMode.name,
         onSelect = { id -> viewModel.onProxySurfaceModeSelected(ProxySurfaceMode.valueOf(id)) },
     )
-    if (surfaces.proxyMode != ProxySurfaceMode.HTTP) {
+    CliSettingsAnimatedRows(visible = surfaces.proxyMode != ProxySurfaceMode.HTTP) {
         CliProxyPortRow(
             key = "local-socks",
             label = stringResource(R.string.cli_lan_proxy_socks_address),
@@ -208,7 +207,7 @@ private fun CliLocalProxyControls(
             onPort = { port -> viewModel.onSocksSurfaceChanged(surfaces.socks.copy(port = port)) },
         )
     }
-    if (surfaces.proxyMode != ProxySurfaceMode.SOCKS5) {
+    CliSettingsAnimatedRows(visible = surfaces.proxyMode != ProxySurfaceMode.SOCKS5) {
         CliProxyPortRow(
             key = "local-http",
             label = stringResource(R.string.cli_lan_proxy_http_address),
@@ -218,18 +217,19 @@ private fun CliLocalProxyControls(
     }
     CliToggleRow(
         label = stringResource(R.string.cli_route_proxy_auth),
-        icon = R.drawable.pix_lock,
+        icon = R.drawable.lin_lock,
         checked = surfaces.auth.enabled,
         onToggle = viewModel::onLocalProxyAuthEnabledChanged,
         infoText = stringResource(R.string.cli_route_proxy_auth_note),
     )
-    if (surfaces.auth.enabled) {
+    CliSettingsAnimatedRows(visible = surfaces.auth.enabled) {
         CliInputRow(
             prompt = "user",
             value = surfaces.auth.username,
             onValueChange = { value ->
                 viewModel.onLocalProxyAuthChanged(surfaces.auth.copy(username = value.take(64)))
             },
+            rowMinHeight = CLI_MENU_ROW_MIN_HEIGHT,
         )
         CliSecretRow(
             prompt = "pass",
@@ -238,6 +238,7 @@ private fun CliLocalProxyControls(
             onValueChange = { value ->
                 viewModel.onLocalProxyAuthChanged(surfaces.auth.copy(password = value.take(128)))
             },
+            rowMinHeight = CLI_MENU_ROW_MIN_HEIGHT,
         )
     }
 }
@@ -251,7 +252,7 @@ private fun CliSplitControls(
     val exclude = settings.expert.perAppRoutingMode == PerAppRoutingMode.EXCLUDE_SELECTED_APPS
     CliDropdownRow(
         label = stringResource(R.string.cli_route_split_kind),
-        icon = R.drawable.pix_apps,
+        icon = R.drawable.lin_apps,
         value = stringResource(
             if (exclude) R.string.cli_route_split_exclude else R.string.cli_route_split_include,
         ),
@@ -259,13 +260,13 @@ private fun CliSplitControls(
             CliDropdownOption(
                 id = PerAppRoutingMode.INCLUDE_SELECTED_APPS.name,
                 label = stringResource(R.string.cli_route_split_include),
-                icon = R.drawable.pix_shield,
+                icon = R.drawable.lin_shield,
                 iconTint = colors.vpn,
             ),
             CliDropdownOption(
                 id = PerAppRoutingMode.EXCLUDE_SELECTED_APPS.name,
                 label = stringResource(R.string.cli_route_split_exclude),
-                icon = R.drawable.pix_globe,
+                icon = R.drawable.lin_globe,
                 iconTint = colors.dim,
             ),
         ),

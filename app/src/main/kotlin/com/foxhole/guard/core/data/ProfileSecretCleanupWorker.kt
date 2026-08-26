@@ -13,7 +13,6 @@ class ProfileSecretCleanupWorker(
     override suspend fun doWork(): Result {
         val appGraph = (applicationContext as FoxholeApplication).appGraph
         if (appGraph.securityComponents.isDatabaseLockedForBackground()) {
-            // Orphan lookup reads the DB; wait for the next unlock.
             return Result.success()
         }
         val dependencies: FoxholeProfileMaintenanceDependencies = appGraph

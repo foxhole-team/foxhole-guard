@@ -119,7 +119,6 @@ internal fun CliAppPickerScreen(
             } else {
                 stringResource(R.string.cli_route_pick_save_changes)
             },
-            filled = hasEdits,
             color = if (hasEdits) Color.Unspecified else colors.dim,
             enabled = hasEdits,
             onClick = {

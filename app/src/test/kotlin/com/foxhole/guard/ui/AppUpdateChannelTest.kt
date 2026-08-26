@@ -1,5 +1,6 @@
 package com.foxhole.guard.ui
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -41,15 +42,30 @@ class AppUpdateChannelTest {
     }
 
     @Test
-    fun `fdroid recipe forces the managed update channel`() {
+    fun `every Binaries recipe matches the GitHub release channel`() {
         val metadata =
             listOf(
                 File("metadata/com.foxhole.guard.yml"),
                 File("../metadata/com.foxhole.guard.yml"),
             ).first(File::isFile).readText()
-        val build = metadata.substringAfter("Builds:").substringBefore("AutoUpdateMode:")
-        assertTrue(build.contains("gradleprops:"))
-        assertTrue(build.contains("foxhole.updateChannel=fdroid"))
+        val builds = fdroidBuildBlocks(metadata)
+
+        assertTrue(metadata.contains("Binaries:"))
+        assertTrue(metadata.contains("AutoUpdateMode: None"))
+        assertEquals(listOf("0.0.2", "0.1.0"), builds.map(FdroidBuildBlock::versionName))
+        builds.forEach { build ->
+            val gradleProperties = build.body.substringAfter("    gradleprops:")
+            assertTrue("${build.versionName}: missing gradleprops", build.body.contains("    gradleprops:"))
+            assertTrue(
+                "${build.versionName}: Binaries build must use the GitHub channel",
+                gradleProperties.lineSequence().any { line -> line.trim() == "- foxhole.updateChannel=github" },
+            )
+            assertFalse(
+                "${build.versionName}: Binaries build must not use the F-Droid channel",
+                gradleProperties.lineSequence().any { line -> line.trim() == "- foxhole.updateChannel=fdroid" },
+            )
+        }
+        assertTrue(builds.single { it.versionName == "0.1.0" }.body.contains("versionCode: 117"))
     }
 
     @Test
@@ -86,4 +102,21 @@ class AppUpdateChannelTest {
             File(path),
             File("../$path"),
         ).first(File::isFile)
+}
+
+private data class FdroidBuildBlock(
+    val versionName: String,
+    val body: String,
+)
+
+private fun fdroidBuildBlocks(metadata: String): List<FdroidBuildBlock> {
+    val buildsSection = metadata.substringAfter("Builds:\n").substringBefore("\nAllowedAPKSigningKeys:")
+    val starts = Regex("""(?m)^  - versionName: ([^\n]+)$""").findAll(buildsSection).toList()
+    return starts.mapIndexed { index, match ->
+        val end = starts.getOrNull(index + 1)?.range?.first ?: buildsSection.length
+        FdroidBuildBlock(
+            versionName = match.groupValues[1].trim(),
+            body = buildsSection.substring(match.range.first, end),
+        )
+    }
 }

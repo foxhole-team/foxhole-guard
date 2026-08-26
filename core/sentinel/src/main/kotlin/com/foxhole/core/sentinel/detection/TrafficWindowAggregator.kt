@@ -55,9 +55,6 @@ class TrafficWindowAggregator(
 
         val previous = lastSnapshot
         if (previous == null || snapshot.rxTotalBytes < previous.rxTotalBytes || snapshot.txTotalBytes < previous.txTotalBytes) {
-            // Counter reset restarts the byte baseline but keeps reconnectsInWindow: a reconnect
-            // often causes the reset, and dropping it here would lose that very signal. The count
-            // lands in the next emitted window.
             storeBaseline(snapshot, context.destinationCountries)
             return null
         }

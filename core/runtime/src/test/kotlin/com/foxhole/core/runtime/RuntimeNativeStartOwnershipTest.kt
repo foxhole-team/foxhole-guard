@@ -131,6 +131,52 @@ class RuntimeNativeStartOwnershipTest {
         assertTrue(successorPublished)
     }
 
+    @Test
+    fun `late poisoned predecessor prevents successor publication and notifies once`() =
+        runBlocking {
+            val runtime = PoisonRaceFakeNativeRuntime()
+            val host = PoisonRecordingHost()
+            val predecessor =
+                async(Dispatchers.Default) {
+                    runtime.startFailClosed(
+                        session = TEST_SESSION,
+                        host = host,
+                        owner = "predecessor",
+                        diagnosticsLogger = NoOpOwnershipDiagnostics,
+                        timeoutMessage = "start timed out",
+                        timeoutMs = 5_000L,
+                    )
+                }
+
+            withTimeout(1_000L) { runtime.predecessorNativeStartEntered.await() }
+            predecessor.cancelAndJoin()
+            val successor =
+                async(Dispatchers.Default) {
+                    runtime.startFailClosed(
+                        session = TEST_SESSION.copy(correlationId = "poison-race-successor"),
+                        host = host,
+                        owner = "successor",
+                        diagnosticsLogger = NoOpOwnershipDiagnostics,
+                        timeoutMessage = "start timed out",
+                        timeoutMs = 5_000L,
+                    )
+                }
+            withTimeout(1_000L) { runtime.successorNativeStartEntered.await() }
+
+            runtime.releasePredecessorNativeStart.complete(Unit)
+            withTimeout(1_000L) { host.processPoisoned.await() }
+            runtime.releaseSuccessorCommit.complete(Unit)
+            val successorResult = withTimeout(1_000L) { successor.await() }
+
+            assertEquals(
+                NativeForceStopOutcome.QUARANTINED,
+                successorResult.nativeForceStopOutcomeOrNull(),
+            )
+            assertTrue(runtime.publishedHandles.isEmpty())
+            assertEquals(listOf(1L), runtime.forceKilledHandles.toList())
+            assertEquals(1, host.poisonNotifications.get())
+        }
+
     private companion object {
         val TEST_SESSION =
             VpnSession(
@@ -159,6 +205,103 @@ class RuntimeNativeStartOwnershipTest {
                     ),
                 ),
             )
+    }
+}
+
+private class PoisonRaceFakeNativeRuntime :
+    FoxholeRuntime,
+    RuntimeNativeStartFenceOwner {
+    private val guard = RuntimeGenerationGuard(NoOpOwnershipDiagnostics)
+    private val poisonLatch = NativeForceStopPoisonLatch()
+    private val starts = AtomicInteger(0)
+    private val handles = AtomicLong(0L)
+    private val transitionLock = Any()
+
+    val predecessorNativeStartEntered = CompletableDeferred<Unit>()
+    val releasePredecessorNativeStart = CompletableDeferred<Unit>()
+    val successorNativeStartEntered = CompletableDeferred<Unit>()
+    val releaseSuccessorCommit = CompletableDeferred<Unit>()
+    val publishedHandles = Collections.synchronizedList(mutableListOf<Long>())
+    val forceKilledHandles = Collections.synchronizedList(mutableListOf<Long>())
+
+    override fun openNativeStartPermit(reason: String): Long = guard.next(reason)
+
+    override fun invalidateNativeStartPermit(generation: Long, reason: String): Boolean =
+        guard.invalidateIfCurrent(generation, reason)
+
+    override suspend fun startWithNativePermit(
+        session: VpnSession,
+        host: RuntimeServiceHost,
+        generation: Long,
+    ): Result<Unit> {
+        val call = starts.incrementAndGet()
+        val handle = handles.incrementAndGet()
+        if (call == 1) {
+            predecessorNativeStartEntered.complete(Unit)
+            releasePredecessorNativeStart.await()
+        } else {
+            successorNativeStartEntered.complete(Unit)
+            releaseSuccessorCommit.await()
+        }
+        return synchronized(transitionLock) {
+            if (call == 1 && !guard.isCurrent(generation)) {
+                forceKilledHandles += handle
+                val outcome = NativeForceStopOutcome.QUARANTINED
+                poisonLatch.remember(outcome, host::onNativeProcessPoisoned)
+                nativeForceStopPoisonedFailure(outcome, "late_start_discard")
+            } else {
+                val poisoned = poisonLatch.current.takeIf(NativeForceStopOutcome::processPoisoned)
+                if (poisoned != null) {
+                    nativeForceStopPoisonedFailure(poisoned, "start_commit")
+                } else {
+                    val published = guard.commitIfCurrent(generation) { publishedHandles += handle }
+                    if (published) {
+                        Result.success(Unit)
+                    } else {
+                        Result.failure(IllegalStateException("native start superseded"))
+                    }
+                }
+            }
+        }
+    }
+
+    override suspend fun start(session: VpnSession, host: RuntimeServiceHost): Result<Unit> =
+        startWithNativePermit(session, host, openNativeStartPermit("direct"))
+
+    override suspend fun reload(session: VpnSession, host: RuntimeServiceHost): Result<Unit> =
+        Result.success(Unit)
+
+    override suspend fun reloadWithNativePermit(
+        session: VpnSession,
+        host: RuntimeServiceHost,
+        generation: Long,
+    ): Result<Unit> = reload(session, host)
+
+    override suspend fun abortNativeTransition(generation: Long, reason: String): RuntimeKillResult? {
+        if (!guard.invalidateIfCurrent(generation, reason)) return null
+        return RuntimeKillResult(reason = reason, tunClosed = true, serverDetached = true)
+    }
+
+    override suspend fun quiesceForInterfaceHandover(): Boolean = true
+
+    override suspend fun stop(policy: RuntimeStopPolicy): RuntimeStopResult =
+        RuntimeStopResult(true, true, true, false, 0L)
+}
+
+private class PoisonRecordingHost : RuntimeServiceHost {
+    val processPoisoned = CompletableDeferred<Unit>()
+    val poisonNotifications = AtomicInteger(0)
+
+    override val runtimeContext: Context
+        get() = throw UnsupportedOperationException("not used by the fake runtime")
+
+    override fun stopRuntimeService() = Unit
+
+    override fun protectSocket(socket: Int): Boolean = true
+
+    override fun onNativeProcessPoisoned(outcome: NativeForceStopOutcome) {
+        poisonNotifications.incrementAndGet()
+        processPoisoned.complete(Unit)
     }
 }
 
@@ -221,11 +364,6 @@ private class BlockingPreflightNativeApi : FoxCoreNativeApi {
     override fun networkChangedWithHandle(handle: Long, networkHandle: Long) = Unit
 }
 
-/**
- * Executable fake for the JNI ownership boundary: the first call returns a handle only after its
- * awaiting command has been cancelled; the same generation guard used by FoxCoreRuntime decides
- * whether that handle may become active or must be closed.
- */
 private class BlockingFakeNativeRuntime :
     FoxholeRuntime,
     RuntimeNativeStartFenceOwner {

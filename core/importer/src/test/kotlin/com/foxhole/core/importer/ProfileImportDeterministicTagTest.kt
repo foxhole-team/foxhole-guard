@@ -8,10 +8,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Test
 
-// Phase 4a: node tags are a pure function of node identity. A refresh of an unchanged
-// subscription must reproduce byte-identical configs (stable subscription fingerprint, zero
-// secret churn), and within-config tag collisions must resolve deterministically instead of
-// leaning on random suffixes.
 internal class ProfileImportDeterministicTagTest : ProfileImportParserTestSupport() {
     private val support = ProfileImportCoreSupport(json)
 
@@ -55,7 +51,7 @@ internal class ProfileImportDeterministicTagTest : ProfileImportParserTestSuppor
         val deduped = support.deduplicateNodeTags(listOf(node("dup-1234"), node("dup-1234"), node("dup-1234")))
 
         assertEquals(listOf("dup-1234", "dup-1234-2", "dup-1234-3"), deduped.map { it.tag })
-        // The rewrite must land inside the outbound JSON, not only in the derived accessor.
+
         assertEquals(
             listOf("dup-1234", "dup-1234-2", "dup-1234-3"),
             deduped.map { it.outbound?.get("tag")?.jsonPrimitive?.content },

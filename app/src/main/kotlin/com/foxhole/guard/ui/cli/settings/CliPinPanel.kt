@@ -75,7 +75,7 @@ internal fun CliPinPanel(
 
     CliPanel(
         title = stringResource(panelTitleRes(flow)),
-        icon = R.drawable.pix_lock,
+        icon = R.drawable.lin_lock,
         titleColor = colors.accent,
         modifier = Modifier.fillMaxWidth(),
     ) {
@@ -131,7 +131,7 @@ internal fun CliEncryptionConsentSheet(
     val enabling = flow == CliPinFlow.ENABLE
     CliConfirmSheet(
         title = stringResource(if (enabling) R.string.cli_lock_title_enable else R.string.cli_lock_title_disable),
-        icon = R.drawable.pix_lock,
+        icon = R.drawable.lin_lock,
         question = stringResource(
             if (enabling) R.string.cli_lock_consent_body else R.string.cli_lock_disable_warning,
         ),
@@ -144,13 +144,13 @@ internal fun CliEncryptionConsentSheet(
             {
                 CliToggleRow(
                     label = stringResource(R.string.cli_lock_companion_monitoring),
-                    icon = R.drawable.pix_status,
+                    icon = R.drawable.lin_status,
                     checked = eventMonitoring,
                     onToggle = onEventMonitoring,
                 )
                 CliToggleRow(
                     label = stringResource(R.string.cli_lock_companion_journal),
-                    icon = R.drawable.pix_journal,
+                    icon = R.drawable.lin_journal,
                     checked = appJournal,
                     onToggle = onAppJournal,
                 )

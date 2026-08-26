@@ -13,6 +13,7 @@ import com.foxhole.core.model.blockedLanePackages
 import com.foxhole.core.model.isUdpTransport
 import com.foxhole.core.model.torScopeRunnable
 import com.foxhole.core.model.tunnelSelectedPackages
+import com.foxhole.core.runtime.torAllAppsCollidesWithVpnIncludeSplit
 import com.foxhole.guard.R
 import com.foxhole.guard.core.sentinel.InstalledAppSecurityNotifier
 import com.foxhole.guard.core.settings.applyAppLaneEdits
@@ -33,9 +34,7 @@ import com.foxhole.guard.core.settings.updateTrafficMode
 import com.foxhole.guard.core.settings.updateVpnRoutingScenario
 import com.foxhole.guard.runtime.FoxholeVpnService
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeoutOrNull
 
 internal fun HomeViewModel.onPerAppRoutingModeSelected(value: PerAppRoutingMode) {
     onVpnRoutingScenarioSelected(
@@ -52,9 +51,8 @@ internal fun HomeViewModel.onVpnRoutingScenarioSelected(value: VpnRoutingScenari
     if (currentVpnRoutingScenario(settings) == value) {
         return
     }
-    val targetMode = value.perAppRoutingMode(settings.expert.perAppRoutingMode)
     if (
-        targetMode != PerAppRoutingMode.FULL_TUNNEL &&
+        value.requiresSelectedApps() &&
         settings.expert.tunnelSelectedPackages().none(String::isNotBlank)
     ) {
         snackbars.tryEmit(warningBanner(R.string.split_tunnel_requires_apps))
@@ -70,6 +68,9 @@ internal fun HomeViewModel.onVpnRoutingScenarioSelected(value: VpnRoutingScenari
     }
     applyRoutingScenarioChange(change)
 }
+
+internal fun VpnRoutingScenario.requiresSelectedApps(): Boolean =
+    this == VpnRoutingScenario.SELECTED_INCLUDE || this == VpnRoutingScenario.SELECTED_EXCLUDE
 
 internal fun HomeViewModel.confirmPendingRoutingScenario() {
     val change = pendingRoutingScenarioConfirmationMutable.value ?: return
@@ -174,17 +175,11 @@ internal fun HomeViewModel.onQuarantinedAppResolved(
 }
 
 internal fun HomeViewModel.onPrivacyRouteModeSelected(value: PrivacyRouteMode) {
-    val settings = container.settingsRepository.settings.value
-    val privacyRoute = settings.privacyRoute
-    if (value == PrivacyRouteMode.TOR_OVER_VPN && !settings.torScopeRunnable()) {
-        snackbars.tryEmit(errorBanner(R.string.privacy_route_select_apps_first))
-        return
+    if (value == PrivacyRouteMode.OFF) {
+        cancelPendingTorQuickStartPermissionRequest()
     }
-    if (value == PrivacyRouteMode.TOR_OVER_VPN && shouldBlockTorOverUdpVpnEnable()) {
-        torTransitionPromptMutable.value =
-            TorTransitionPrompt.UdpVpnProtocolNotSupported(
-                protocolName = controlUiState.value.activeProfile?.protocolOptionOrDefault(null)?.displayName,
-            )
+    val settings = container.settingsRepository.settings.value
+    if (rejectUnavailablePrivacyRouteMode(value, settings)) {
         return
     }
     val snapshot = container.connectionController.snapshot.value
@@ -194,27 +189,6 @@ internal fun HomeViewModel.onPrivacyRouteModeSelected(value: PrivacyRouteMode) {
     val torStartPendingWithoutPrimaryRuntime =
         controlUiState.value.torOperation.active && !snapshot.isPrimaryConnectionRuntime()
     val mustStopEngagedTorOnly = torOnlyEngaged || torStartPendingWithoutPrimaryRuntime
-    val routingChange =
-        resolveRoutingChangeAction(
-            old = RoutingChangeState(snapshot.trafficMode, torOnlyRuntime = mustStopEngagedTorOnly),
-            new = RoutingChangeState(
-                snapshot.trafficMode,
-                torOnlyRuntime = mustStopEngagedTorOnly && value != PrivacyRouteMode.OFF,
-            ),
-        )
-    if (routingChange == RoutingChangeAction.FULL_SWITCH) {
-        viewModelScope.launch {
-            clearTorOperation()
-            torIpInfoMutable.value = null
-            container.settingsRepository.updatePrivacyRouteMode(value)
-            container.connectionController.disconnect(suppressLocalGuard = false)
-            withTimeoutOrNull(HomeViewModel.STOP_VPN_KEEP_TOR_SETTLE_TIMEOUT_MS) {
-                container.connectionController.snapshot.first { it.state !in ACTIVE_CONNECTION_STATES }
-            }
-            refreshIpInfoSilently()
-        }
-        return
-    }
     val routeScopeReady = settings.torScopeRunnable()
     if (value == PrivacyRouteMode.TOR_OVER_VPN && routeScopeReady) {
         markTorOperation(HomeTorOperationKind.CONNECTING)
@@ -226,7 +200,10 @@ internal fun HomeViewModel.onPrivacyRouteModeSelected(value: PrivacyRouteMode) {
         "tor",
         "privacy route mode -> $value via hot-reload path (snapshot=${snapshot.state}/${snapshot.profileId})",
     )
-    updateRuntimeSettingAndMaybeReload {
+    updateRuntimeSettingAndMaybeReload(
+        forceRuntimeApply = true,
+        forceStopStandaloneTor = mustStopEngagedTorOnly && value == PrivacyRouteMode.OFF,
+    ) {
         container.settingsRepository.updatePrivacyRouteMode(value)
         val settings = container.settingsRepository.settings.value
         if (value == PrivacyRouteMode.TOR_OVER_VPN && settings.privacyRoute.scope == PrivacyRouteScope.ALL_APPS) {
@@ -235,18 +212,45 @@ internal fun HomeViewModel.onPrivacyRouteModeSelected(value: PrivacyRouteMode) {
     }
 }
 
-internal fun HomeViewModel.onPrivacyRouteModeConfigured(value: PrivacyRouteMode) {
-    viewModelScope.launch {
-        val settings = container.settingsRepository.settings.value
-        if (value == PrivacyRouteMode.TOR_OVER_VPN && !settings.torScopeRunnable()) {
-            snackbars.tryEmit(errorBanner(R.string.privacy_route_select_apps_first))
-            return@launch
-        }
-        container.settingsRepository.updatePrivacyRouteMode(value)
-        if (value == PrivacyRouteMode.TOR_OVER_VPN && settings.privacyRoute.scope == PrivacyRouteScope.ALL_APPS) {
-            snackbars.tryEmit(warningBanner(R.string.privacy_route_all_apps_start_warning))
-        }
+private fun HomeViewModel.rejectUnavailablePrivacyRouteMode(
+    value: PrivacyRouteMode,
+    settings: com.foxhole.core.model.Settings,
+): Boolean {
+    if (value != PrivacyRouteMode.TOR_OVER_VPN) {
+        return false
     }
+    when {
+        !settings.privacyRoute.permitted ->
+            snackbars.tryEmit(errorBanner(R.string.privacy_route_core_forbidden))
+        !settings.torScopeRunnable() ->
+            snackbars.tryEmit(errorBanner(R.string.privacy_route_select_apps_first))
+        torAllAppsBesideActiveVpnCollision(
+            settings = settings,
+            mode = value,
+            primaryVpnActive = container.connectionController.snapshot.value.isPrimaryConnectionRuntime(),
+        ) -> snackbars.tryEmit(errorBanner(R.string.privacy_route_all_apps_requires_no_vpn))
+        privacyRouteModeCollidesWithVpnIncludeSplit(settings, value) ->
+            snackbars.tryEmit(errorBanner(R.string.error_tor_all_apps_needs_full_tunnel))
+        shouldBlockTorOverUdpVpnEnable() ->
+            torTransitionPromptMutable.value =
+                TorTransitionPrompt.UdpVpnProtocolNotSupported(
+                    protocolName = controlUiState.value.activeProfile?.protocolOptionOrDefault(null)?.displayName,
+                )
+        else -> return false
+    }
+    return true
+}
+
+internal fun privacyRouteModeCollidesWithVpnIncludeSplit(
+    settings: com.foxhole.core.model.Settings,
+    mode: PrivacyRouteMode,
+): Boolean =
+    settings.copy(
+        privacyRoute = settings.privacyRoute.copy(mode = mode),
+    ).torAllAppsCollidesWithVpnIncludeSplit()
+
+internal fun HomeViewModel.onPrivacyRouteModeConfigured(value: PrivacyRouteMode) {
+    onPrivacyRouteModeSelected(value)
 }
 
 internal fun HomeViewModel.shouldBlockTorOverUdpVpnEnable(
@@ -271,6 +275,7 @@ internal fun HomeViewModel.onPrivacyRouteScopeSelected(value: PrivacyRouteScope)
     if (settings.privacyRoute.scope == value) {
         return true
     }
+    if (rejectUnavailablePrivacyRouteScope(settings, value)) return false
     val change = PendingRoutingScenarioChange.Tor(
         current = settings.privacyRoute.scope,
         scope = value,
@@ -284,11 +289,21 @@ internal fun HomeViewModel.onPrivacyRouteScopeSelected(value: PrivacyRouteScope)
 }
 
 private fun HomeViewModel.applyPrivacyRouteScopeSelection(value: PrivacyRouteScope) {
-    viewModelScope.launch {
+    val settings = container.settingsRepository.settings.value
+    if (rejectUnavailablePrivacyRouteScope(settings, value)) return
+    updateRuntimeSettingAndMaybeReload(forceRuntimeApply = true) {
         container.settingsRepository.updatePrivacyRouteScope(value)
         emitRoutingScenarioSelected(value.terminalLabelRes())
     }
 }
+
+internal fun privacyRouteScopeCollidesWithVpnIncludeSplit(
+    settings: com.foxhole.core.model.Settings,
+    scope: PrivacyRouteScope,
+): Boolean =
+    settings.copy(
+        privacyRoute = settings.privacyRoute.copy(scope = scope),
+    ).torAllAppsCollidesWithVpnIncludeSplit()
 
 private fun PrivacyRouteScope.terminalLabelRes(): Int =
     when (this) {
@@ -300,17 +315,15 @@ internal fun HomeViewModel.applyPrivacyRouteScopeChange(
     value: PrivacyRouteScope,
     restartNow: Boolean,
 ) {
-    if (!restartNow) {
-        viewModelScope.launch {
-            container.settingsRepository.updatePrivacyRouteScope(value)
-            snackbars.tryEmit(warningBanner(R.string.privacy_route_settings_saved_deferred))
-        }
-        return
-    }
-    updateRuntimeSettingAndMaybeReload {
+    val settings = container.settingsRepository.settings.value
+    if (rejectUnavailablePrivacyRouteScope(settings, value)) return
+    updateRuntimeSettingAndMaybeReload(forceRuntimeApply = true) {
         container.settingsRepository.updatePrivacyRouteScope(value)
         if (value == PrivacyRouteScope.ALL_APPS && container.settingsRepository.current().privacyRoute.enabled) {
             snackbars.tryEmit(warningBanner(R.string.privacy_route_all_apps_start_warning))
+        }
+        if (!restartNow) {
+            snackbars.tryEmit(warningBanner(R.string.privacy_route_settings_saved_deferred))
         }
     }
 }
@@ -320,23 +333,71 @@ internal fun HomeViewModel.onPrivacyRouteScopeConfigured(value: PrivacyRouteScop
 }
 
 internal fun HomeViewModel.onPrivacyRouteBypassVpnTunnelChanged(value: Boolean) {
-    updateRuntimeSettingAndMaybeReload {
+    val settings = container.settingsRepository.settings.value
+    if (
+        torAllAppsBesideActiveVpnCollision(
+            settings = settings,
+            bypassVpnTunnel = value,
+            primaryVpnActive = container.connectionController.snapshot.value.isPrimaryConnectionRuntime(),
+        )
+    ) {
+        snackbars.tryEmit(errorBanner(R.string.privacy_route_all_apps_requires_no_vpn))
+        return
+    }
+    if (settings.privacyRoute.enabled && !value && shouldBlockTorOverUdpVpnEnable(bypassVpnTunnel = false)) {
+        val protocolName = controlUiState.value.activeProfile?.protocolOptionOrDefault(null)?.displayName
+        torTransitionPromptMutable.value = TorTransitionPrompt.UdpVpnProtocolNotSupported(protocolName)
+        return
+    }
+    updateRuntimeSettingAndMaybeReload(forceRuntimeApply = true) {
         container.settingsRepository.updatePrivacyRouteBypassVpnTunnel(value)
     }
 }
+
+private fun HomeViewModel.rejectUnavailablePrivacyRouteScope(
+    settings: com.foxhole.core.model.Settings,
+    scope: PrivacyRouteScope,
+): Boolean {
+    val messageResource =
+        when {
+            torAllAppsBesideActiveVpnCollision(
+                settings = settings,
+                scope = scope,
+                primaryVpnActive = container.connectionController.snapshot.value.isPrimaryConnectionRuntime(),
+            ) -> R.string.privacy_route_all_apps_requires_no_vpn
+            privacyRouteScopeCollidesWithVpnIncludeSplit(settings, scope) ->
+                R.string.error_tor_all_apps_needs_full_tunnel
+            else -> return false
+        }
+    snackbars.tryEmit(errorBanner(messageResource))
+    return true
+}
+
+internal fun torAllAppsBesideActiveVpnCollision(
+    settings: com.foxhole.core.model.Settings,
+    mode: PrivacyRouteMode = settings.privacyRoute.mode,
+    scope: PrivacyRouteScope = settings.privacyRoute.scope,
+    bypassVpnTunnel: Boolean = settings.privacyRoute.bypassVpnTunnel,
+    primaryVpnActive: Boolean,
+): Boolean =
+    primaryVpnActive &&
+        settings.privacyRoute.permitted &&
+        mode == PrivacyRouteMode.TOR_OVER_VPN &&
+        scope == PrivacyRouteScope.ALL_APPS &&
+        bypassVpnTunnel
 
 internal fun HomeViewModel.onPrivacyRouteBypassVpnTunnelConfigured(value: Boolean) {
     onPrivacyRouteBypassVpnTunnelChanged(value)
 }
 
 internal fun HomeViewModel.onPrivacyRouteBlockAppsWhenTorUnavailableChanged(value: Boolean) {
-    updateRuntimeSettingAndMaybeReload {
+    updateRuntimeSettingAndMaybeReload(forceRuntimeApply = true) {
         container.settingsRepository.updatePrivacyRouteBlockAppsWhenTorUnavailable(value)
     }
 }
 
 internal fun HomeViewModel.onPrivacyRouteSelectedPackagesChanged(value: List<String>) {
-    updateRuntimeSettingAndMaybeReload {
+    updateRuntimeSettingAndMaybeReload(forceRuntimeApply = true) {
         container.settingsRepository.updatePrivacyRouteSelectedPackages(
             value.filterNot { it == getApplication<Application>().packageName },
         )

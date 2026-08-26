@@ -2,9 +2,6 @@ package com.foxhole.core.model
 
 import kotlinx.serialization.Serializable
 
-// The settings-facing enums and their token helpers.
-// Split from Models.kt.
-
 @Serializable
 enum class ProfileSourceType {
     SUBSCRIPTION_URL,
@@ -31,12 +28,6 @@ enum class ProtocolHint {
     UNKNOWN,
 }
 
-/**
- * Strict persistence compatibility for the single engine cutover.
- *
- * The retired enum tokens are assembled here so they cannot accidentally become part of a new
- * public/runtime contract. New writes always use the current enum names.
- */
 fun storedProfileSourceType(value: String): ProfileSourceType =
     when (value) {
         legacyRawConfigSourceToken() -> ProfileSourceType.RAW_CONFIG_JSON
@@ -75,22 +66,16 @@ private fun asciiStorageToken(vararg codePoints: Int): String =
 enum class ThemeMode {
     SYSTEM,
     DARK,
+    OLED,
     LIGHT,
 }
 
-// Panel rendering is independent of ThemeMode, which remains the system/dark/light source.
 @Serializable
 enum class PanelAppearance {
     AUTO,
     STANDARD,
     DARK,
     LIGHT,
-}
-
-@Serializable
-enum class VisualStyle {
-    PIXEL,
-    PLAIN,
 }
 
 @Serializable
@@ -125,8 +110,6 @@ enum class DashboardCard {
     TRAFFIC,
 }
 
-// Statistics dashboard widgets, in default display order. The stored order keeps every id (also
-// currently hidden ones) so re-enabling a widget restores its slot.
 @Serializable
 enum class StatisticsWidgetId {
     OVERVIEW,
@@ -145,7 +128,6 @@ enum class StatisticsWidgetId {
 fun normalizedStatisticsWidgetOrder(order: List<StatisticsWidgetId>): List<StatisticsWidgetId> =
     (order + StatisticsWidgetId.entries).distinct()
 
-// Connection-map screen sections, in default display order (map, route scheme, country table).
 @Serializable
 enum class TrafficMapSectionId {
     MAP,
@@ -155,6 +137,12 @@ enum class TrafficMapSectionId {
 
 fun normalizedTrafficMapSectionOrder(order: List<TrafficMapSectionId>): List<TrafficMapSectionId> =
     (order + TrafficMapSectionId.entries).distinct()
+
+@Serializable
+enum class HomeAdditionalInfoCategory {
+    MAP,
+    ROUTE,
+}
 
 @Serializable
 enum class ConnectionState {
@@ -254,9 +242,6 @@ enum class PrivacyRouteUdpPolicy {
     BLOCK,
 }
 
-// Tor bridge pluggable-transport selection. AUTO keeps the bundled recommendation order (the
-// recommended transport's bridges first, every other ready transport as fallback); a specific
-// value narrows the torrc Bridge lines to that transport only.
 @Serializable
 enum class TorBridgeTransport {
     AUTO,
@@ -308,7 +293,6 @@ enum class RoutingRuleAction(val outboundTag: String) {
     }
 }
 
-// The traffic widget's body: the classic text stat blocks or the live chart.
 @Serializable
 enum class TrafficCardView {
     TEXT,
@@ -322,9 +306,6 @@ enum class TrafficChartPage {
     I2P,
 }
 
-// The statistics screen's day/week/month dropdown. The choice is remembered forever, so it lives
-// in the settings store and must be @Serializable — the app-module StatisticsDisplayRange is not.
-// durationMs is the window the summary calculator cuts events/windows by.
 @Serializable
 enum class StatisticsWindow(val durationMs: Long) {
     DAY(24L * 60L * 60L * 1000L),
@@ -332,8 +313,6 @@ enum class StatisticsWindow(val durationMs: Long) {
     MONTH(30L * 24L * 60L * 60L * 1000L),
 }
 
-// The four modes of the MODE button, mapped by the settings facade
-// (applyRoutingPreset) onto the underlying axes TrafficMode x PrivacyRouteMode x PerAppRoutingMode.
 @Serializable
 enum class RoutingModePreset {
     VPN,

@@ -3,8 +3,10 @@ Categories:
   - VPN & Proxy
 License: GPL-3.0-or-later
 AuthorName: FoxHole Team
+AuthorEmail: adam@merovingian.io
 SourceCode: https://github.com/foxhole-team/foxhole-guard
 IssueTracker: https://github.com/foxhole-team/foxhole-guard/issues
+Changelog: https://github.com/foxhole-team/foxhole-guard/releases
 
 AutoName: FoxHole Guard
 Summary: 'Privacy toolkit: VPN, Tor, firewall, DNS filtering, Sentinel, no telemetry'
@@ -38,9 +40,9 @@ Description: |
 
   DNS filters are built from the open AdGuard DNS filter. Downloaded data sets contain filtering data rather than executable code. Before use, the application verifies the signature, size, compatibility, and SHA-256 digest.
 
-  FoxHole Sentinel is a local security-monitoring module, not an antivirus. The current version uses Echap and MVT indicators, a network IOC matcher, correlation of IOCs with the owning application, and integration with the firewall and quarantine.
+  FoxHole Sentinel is a local security-monitoring module, not an antivirus. The current version uses Echap indicators, a network IOC matcher, correlation of IOCs with the owning application, and integration with the firewall and quarantine.
 
-  The FoxHole DB repository is used for updatable application data. The application can download four signed data sets: DNS filters, Tor bridges, indicators for the IOC matcher, and a GeoIP database.
+  The FoxHole DB repository is used for updatable application data. The application can download five independently signed data sets: DNS filters, Tor bridges, indicators for the IOC matcher, a GeoIP database, and TLS fingerprint tables.
 
   Android permissions are used only for the stated features. QUERY_ALL_PACKAGES is required for routing, the firewall, quarantine, DNS exclusions, and local auditing. PACKAGE_USAGE_STATS is used only for local statistics and analysis features enabled by the user.
 
@@ -52,62 +54,113 @@ Description: |
 
 RepoType: git
 Repo: https://github.com/foxhole-team/foxhole-guard.git
+Binaries:
+  https://github.com/foxhole-team/foxhole-guard/releases/download/v%v/FoxHole-v%v-arm64-v8a-release.apk
 
 Builds:
-  - versionName: 0.0.1
-    versionCode: 89
-    commit: v0.0.1
-    submodules: true
-    sudo:
-      - apt-get update
-      - apt-get install -y --no-install-recommends build-essential ca-certificates
-        cmake curl git ninja-build perl pkg-config rustup
-    gradle:
-      - yes
-    output: app/build/outputs/apk/release/app-release-unsigned.apk
-    prebuild:
-      - git clone https://github.com/foxhole-team/foxhole-core.git ../foxhole-core
-      - git -C ../foxhole-core checkout "$(cat config/foxcore-revision.txt)"
-      - rustup set profile minimal
-      - rustup default 1.97.1
-      - rustup component add clippy rustfmt
-      - rustup target add aarch64-linux-android
-      - cargo install cargo-ndk --version 4.1.2 --locked
-      - (cd ../foxhole-core && cargo fetch --locked)
-      - scripts/fetch-native-deps.sh
-    ndk: 29.0.14206865
-    gradleprops:
-      - foxhole.updateChannel=fdroid
-      - foxhole.nativeOffline=true
-
   - versionName: 0.0.2
     versionCode: 90
-    commit: v0.0.2
+    commit: 96e963fc020ef9615c1301d7f252352c3ab84cdd
     submodules: true
     sudo:
       - apt-get update
       - apt-get install -y --no-install-recommends build-essential ca-certificates
         cmake curl git ninja-build perl pkg-config rustup
-    gradle:
-      - yes
+      - mkdir -p /home/runner/work/foxhole-guard
+      - chown -R vagrant /home/runner
     output: app/build/outputs/apk/release/app-release-unsigned.apk
+    srclibs:
+      - FoxHoleCore@83c9f4b95080c254a4f88d2f2cb7fd48ad849c05
     prebuild:
-      - git clone https://github.com/foxhole-team/foxhole-core.git ../foxhole-core
-      - git -C ../foxhole-core checkout "$(cat config/foxcore-revision.txt)"
+      - test "$(tr -d '[:space:]' < config/foxcore-revision.txt)" = "$(git -C $$FoxHoleCore$$
+        rev-parse HEAD)"
+      - export CARGO_HOME=/home/runner/.cargo
+      - export RUSTUP_HOME=/home/runner/.rustup
       - rustup set profile minimal
       - rustup default 1.97.1
       - rustup component add clippy rustfmt
       - rustup target add aarch64-linux-android
       - cargo install cargo-ndk --version 4.1.2 --locked
-      - (cd ../foxhole-core && cargo fetch --locked)
+      - cargo fetch --locked --manifest-path $$FoxHoleCore$$/Cargo.toml
+      - export FOXHOLE_NATIVE_DEPS_DIR=/home/runner/work/foxhole-guard/foxhole-native-deps
       - scripts/fetch-native-deps.sh
+    build:
+      - mkdir -p /home/runner/work/foxhole-guard
+      - cd ..
+      - mv com.foxhole.guard /home/runner/work/foxhole-guard/foxhole-guard
+      - pushd /home/runner/work/foxhole-guard/foxhole-guard
+      - export CARGO_HOME=/home/runner/.cargo
+      - export RUSTUP_HOME=/home/runner/.rustup
+      - export PATH="$CARGO_HOME/bin:$PATH"
+      - export ANDROID_NDK_HOME=$$NDK$$
+      - export FOXCORE_SOURCE_ROOT=$$FoxHoleCore$$
+      - export FOXHOLE_NATIVE_DEPS_DIR=/home/runner/work/foxhole-guard/foxhole-native-deps
+      - export FOXHOLE_NATIVE_OFFLINE=1
+      - export I2PD_ABIS=arm64-v8a
+      - SOURCE_DATE_EPOCH=1787044986 scripts/build-i2pd.sh
+      - perl -0777 -pi -e 'use bytes; my $prefix = pack("V3a4", 4, 20, 3, "GNU\0");
+        my $new = pack("H*", "1e327f87ac68eff0b0c549402952a1c230fe4b22"); my $count
+        = s/\Q$prefix\E.{20}/$prefix$new/s; die "unexpected-build-id-$count" unless
+        $count == 1;' app/src/main/jniLibs/arm64-v8a/libi2pd.so
+      - gradle --no-daemon --console=plain -Pfoxhole.updateChannel=github -Pfoxhole.nativeOffline=true
+        :app:assembleRelease
+      - popd
+      - mv /home/runner/work/foxhole-guard/foxhole-guard com.foxhole.guard
     ndk: 29.0.14206865
     gradleprops:
-      - foxhole.updateChannel=fdroid
+      - foxhole.updateChannel=github
       - foxhole.nativeOffline=true
 
+  - versionName: 0.1.0
+    versionCode: 117
+    commit: v0.1.0
+    submodules: true
+    sudo:
+      - apt-get update
+      - apt-get install -y --no-install-recommends build-essential ca-certificates
+        cmake ninja-build perl pkg-config rustup
+    output: app/build/outputs/apk/release/app-arm64-v8a-release-unsigned.apk
+    srclibs:
+      - FoxHoleCore@cd8bf71e950247d7bcebc8cd62142adef5c970fc
+    prebuild:
+      - test "$(tr -d '[:space:]' < config/foxcore-revision.txt)" = "$(git -C $$FoxHoleCore$$
+        rev-parse HEAD)"
+      - rustup set profile minimal
+      - rustup default 1.97.1
+      - export RUSTUP_TOOLCHAIN=1.97.1
+      - rustup target add --toolchain 1.97.1 aarch64-linux-android
+      - cargo install cargo-ndk --version 4.1.2 --locked
+      - cargo fetch --locked --manifest-path $$FoxHoleCore$$/Cargo.toml
+      - scripts/fetch-native-deps.sh
+    build:
+      - export RUSTUP_TOOLCHAIN=1.97.1
+      - export ANDROID_NDK_HOME=$$NDK$$
+      - export FOXCORE_SOURCE_ROOT=$$FoxHoleCore$$
+      - export FOXHOLE_NATIVE_OFFLINE=1
+      - export I2PD_ABIS=arm64-v8a
+      - export TOR_TRANSPORT_ABIS=arm64-v8a
+      - gradle --no-daemon --console=plain -Pfoxhole.splitApks=true -Pfoxhole.updateChannel=github
+        -Pfoxhole.nativeOffline=true :app:assembleRelease
+    ndk: 29.0.14206865
+    gradleprops:
+      - foxhole.splitApks=true
+      - foxhole.updateChannel=github
+      - foxhole.nativeOffline=true
+
+AllowedAPKSigningKeys: e59de2486084c38f3c77e9df0eb5eff9a4559f3c68024f1208e0e9c04b0df665
+
 MaintainerNotes: |-
-  Every network fetch happens in sudo:/prebuild:; the Gradle phase runs with
+  Build 90 mirrors the reviewer-owned reproducibility recipe. The signed 0.0.2
+  APK was promoted unchanged from dev candidate 96e963f; release commit 798e58b
+  has the identical Git tree d8461ad. Building the candidate commit preserves
+  AGP's embedded VCS revision for verification. Rust and i2pd embed absolute
+  paths, so the recipe reproduces the upstream runner's /home/runner layout and
+  uses the pinned NDK 29. OpenSSL embeds its configure time, so
+  SOURCE_DATE_EPOCH is pinned to the signed candidate's exact UTC build instant.
+  The linker-generated i2pd build ID is normalized to the verified candidate's
+  value; every other byte still has to match for F-Droid verification to pass.
+  Build 117 needs no fixed runner path. Every network fetch happens in
+  sudo:/prebuild:; the Gradle phase runs with
   foxhole.nativeOffline=true, which makes scripts/build-i2pd.sh and
   scripts/build-tor-transports.sh abort instead of downloading. prebuild: seeds
   three caches: Rust (cargo fetch --locked against FoxCore's Cargo.lock) and, via
@@ -115,13 +168,14 @@ MaintainerNotes: |-
   toolchain and the lyrebird/conjure sources plus their Go module cache. Pins and
   sha256 digests live in scripts/native-deps.sh; the Go modules are verified by
   each upstream's go.sum, the transport sources by commit id.
-  cargo fetch runs from inside ../foxhole-core on purpose: rustup resolves that
-  workspace's rust-toolchain.toml there, so the toolchain and its components are
-  materialised in prebuild rather than downloaded mid-Gradle.
-  FoxHole Core is a separate pinned source workspace; the recipe checks out the
-  revision named by config/foxcore-revision.txt in the tagged tree, so a release
-  bump needs no recipe edit. ndk: matches the ndkVersion pinned in
-  app/build.gradle.kts and required by FoxCore's scripts/android-build.sh.
+  Build 117 uses the FoxHoleCore srclib and fails unless its HEAD exactly
+  matches config/foxcore-revision.txt. It pins RUSTUP_TOOLCHAIN to the minimal
+  Rust 1.97.1 toolchain and Android target; clippy and rustfmt are not needed by
+  the APK build. FoxCore 0.0.4 remaps checkout, Cargo-home, and Rustup-home paths
+  and rejects host paths in the built ELF. Current native scripts also remap i2pd
+  paths and normalize native build IDs, so build 117 needs no fixed runner path.
+  ndk: matches the ndkVersion pinned in app/build.gradle.kts and required by
+  FoxCore's scripts/android-build.sh.
   foxhole.updateFloorVersionCode is deliberately unset. It means "the versionCode
   that supersedes this build", and F-Droid builds an entry once, while nothing
   supersedes it yet, and never rebuilds a published versionCode - so for the
@@ -131,8 +185,12 @@ MaintainerNotes: |-
   used, note that AutoUpdateMode copies gradleprops verbatim, so a new entry must
   get a fresh horizon rather than inherit the previous one.
   The build is arm64-v8a only, matching the public upstream release.
+  Build 117 uses the same ABI split and GitHub update channel as Binaries; changing
+  either would prevent verification against the published upstream APK.
+  AutoUpdateMode stays None because each app release needs a manually reviewed
+  FoxHoleCore srclib revision and matching source-build inputs.
 
-AutoUpdateMode: Version v%v
+AutoUpdateMode: None
 UpdateCheckMode: Tags ^v[0-9].*$
-CurrentVersion: 0.0.2
-CurrentVersionCode: 90
+CurrentVersion: 0.1.0
+CurrentVersionCode: 117

@@ -18,11 +18,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.util.Collections
 
-/**
- * The mailbox command-queue contract through the public RuntimeSupervisor facade: sequential
- * execution, snapshot depth accounting, DROP_OLDEST bounds, preemption with inline emergency
- * kill, per-class coalescing matrices, the preempted-cleanup barrier and close semantics.
- */
 @Suppress("LargeClass")
 class RuntimeSupervisorCommandQueueTest {
     @Test
@@ -655,8 +650,6 @@ class RuntimeSupervisorCommandQueueTest {
             }
             withTimeout(1_000L) { currentStarted.await() }
 
-            // The running pass may have read settings older than these requests — dropping them
-            // would latch stale config. A burst collapses into ONE trailing latest-wins pass.
             repeat(3) { index ->
                 supervisor.launch(RuntimeCommandPriority.NORMAL, reason = "reload:settings") {
                     events += "trailing-$index"

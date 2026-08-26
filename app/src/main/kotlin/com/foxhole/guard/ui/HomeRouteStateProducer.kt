@@ -55,6 +55,7 @@ internal data class HomeRouteStateSources(
     val profileOptionLatencyUnavailable: StateFlow<Set<ProfileOptionLatencyKey>>,
     val dnsFilterRefreshInProgress: StateFlow<Boolean>,
     val appTrafficUsageAccessGranted: StateFlow<Boolean>,
+    val publicDnsIdentity: StateFlow<PublicDnsIdentity>,
     val statisticsVisible: StateFlow<Boolean>,
     val appPickerQuery: StateFlow<String>,
 )
@@ -139,6 +140,9 @@ internal class HomeRouteStateProducer(
             }
             .combine(container.settingsRepository.hydrated) { state, hydrated ->
                 state.copy(settingsHydrated = hydrated)
+            }
+            .combine(routeSources.publicDnsIdentity) { state, publicDnsIdentity ->
+                state.copy(publicDnsIdentity = publicDnsIdentity)
             }
             .distinctUntilChanged()
             .flowOn(Dispatchers.Default)

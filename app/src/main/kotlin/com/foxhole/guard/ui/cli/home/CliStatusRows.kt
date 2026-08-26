@@ -44,6 +44,7 @@ internal data class CliActiveRuntimes(
     val tor: Boolean,
     val torBesideVpn: Boolean,
     val i2p: Boolean,
+    val torScope: PrivacyRouteScope? = null,
 ) {
     val any: Boolean
         get() = vpn || tor || i2p
@@ -68,8 +69,12 @@ internal fun activeRuntimes(
         vpn = profileLive,
         proxy = profileLive && connection.trafficMode == TrafficMode.PROXY,
         tor = tor,
-        torBesideVpn = tor && profileLive && settings.privacyRoute.bypassVpnTunnel,
+        torBesideVpn =
+        tor &&
+            profileLive &&
+            connection.appliedTorRoute?.bypassVpnTunnel == true,
         i2p = settings.i2p.enabled && settings.i2p.engaged,
+        torScope = connection.appliedTorRoute?.scope,
     )
 }
 
@@ -91,7 +96,11 @@ internal fun cliStatusModeRows(
         lanProxyServing = home.lanProxy.phase.serving,
         localSurfaceServing = cliLocalProxySurfaceServing(home.connection),
     )
-    val torScenario = cliTorScenario(settings = settings, torLive = runtimes.tor)
+    val torScenario =
+        cliTorScenario(
+            torLive = runtimes.tor,
+            appliedScope = runtimes.torScope,
+        )
     val bothLegs = vpnScenario != null && torScenario != null
     val scenarioKey = stringResource(R.string.cli_home_status_scenario)
     val vpnRow = vpnScenario?.let { scenario ->
@@ -140,10 +149,6 @@ private fun cliScenarioLabel(scenario: CliStatusScenario): String =
         CliStatusScenario.PROXY_SERVER_LAN -> stringResource(R.string.cli_home_status_scenario_proxy_server_lan)
     }
 
-/**
- * Reads the traffic mode only: assembleProxy is the sole path emitting the user's local inbound and runs only for TrafficMode.PROXY, which Settings.normalized() migrates to TUNNEL, so nothing is listening.
- * Stored preferences must never light this label; publish a real loopback status when the core gains one.
- */
 internal fun cliLocalProxySurfaceServing(connection: ConnectionSnapshot): Boolean =
     connection.state == ConnectionState.CONNECTED &&
         connection.trafficMode == TrafficMode.PROXY &&
@@ -173,7 +178,7 @@ internal fun statusRouteRows(
     val settings = home.settings
     val assignments = settings.expert.appAssignments
     val torModule = cliTorLaneVisible(settings)
-    val wholeDeviceTor = runtimes.tor && settings.privacyRoute.scope == PrivacyRouteScope.ALL_APPS
+    val wholeDeviceTor = runtimes.tor && runtimes.torScope == PrivacyRouteScope.ALL_APPS
     val torRow = when {
         !torModule -> null
         wholeDeviceTor -> CliTerminalRow(
@@ -323,7 +328,7 @@ private fun statusI2pRow(home: HomeRouteUiState): CliTerminalRow? {
         },
         tone = when {
             ready -> CliLineTone.I2P
-            engaged -> CliLineTone.WARN
+            engaged -> CliLineTone.PENDING
             else -> CliLineTone.DIM
         },
     )

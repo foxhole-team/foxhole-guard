@@ -16,12 +16,6 @@ import androidx.core.content.getSystemService
 import com.foxhole.guard.R
 import com.foxhole.guard.withStoredAppLocale
 
-/**
- * Posts the "network detected — recommended profile, switch now?" system notification for the
- * network-rules feature. Used only when the app UI is not in front (an open app shows the same
- * recommendation as an in-app banner instead). Tapping the action (or the notification) opens the
- * app with an intent that applies the switch after the user's implicit confirmation-by-tap.
- */
 internal class NetworkRuleRecommendationNotifier(
     context: Context,
 ) {
@@ -76,7 +70,7 @@ internal class NetworkRuleRecommendationNotifier(
         PendingIntent.getActivity(
             appContext,
             REQUEST_CODE_SWITCH,
-            // exp CLI copy: the launcher is the CLI activity - notifications open it.
+
             Intent(appContext, com.foxhole.guard.ui.cli.CliMainActivity::class.java)
                 .setAction(ACTION_APPLY_NETWORK_RULE)
                 .putExtra(EXTRA_PROFILE_ID, profileId)

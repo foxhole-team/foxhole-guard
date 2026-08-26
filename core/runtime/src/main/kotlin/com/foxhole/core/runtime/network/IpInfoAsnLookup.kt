@@ -1,7 +1,5 @@
 package com.foxhole.core.runtime.network
 
-// Team Cymru ASN fallback: resolves an origin-AS provider name over DoH TXT records when the
-// IP-info payload carried no ISP. Pure helpers — split from IpInfoRepository.kt.
 internal fun lookupAsnProvider(ip: String): String? {
     val asn = lookupOriginAsn(ip) ?: return null
     val asName =

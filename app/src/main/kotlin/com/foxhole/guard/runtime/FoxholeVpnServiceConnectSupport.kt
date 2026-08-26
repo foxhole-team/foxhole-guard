@@ -17,6 +17,7 @@ import com.foxhole.core.runtime.RuntimeIpRefreshReason
 import com.foxhole.core.runtime.VpnHealthProbeTarget
 import com.foxhole.core.runtime.i2pRuntimeActive
 import com.foxhole.core.runtime.isSupportedForTunnelMode
+import com.foxhole.core.runtime.nativeForceStopOutcomeOrNull
 import com.foxhole.core.runtime.runtimeStartTimeoutMsForSession
 import com.foxhole.core.runtime.startFailClosed
 import com.foxhole.guard.R
@@ -28,16 +29,14 @@ import com.foxhole.guard.diagnosticFailureLabel
 import com.foxhole.guard.userFacingErrorMessage
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-
-/**
- * Session connect orchestration for [FoxholeVpnService]: starting the runtime with health metrics,
- * private-DNS validation, foreground-service handoff, and the main connect() entry point. Extracted
- * from the service body in the Phase B split by responsibility.
- */
 
 internal suspend fun FoxholeVpnService.startRuntimeWithHealthMetrics(
     session: VpnSession,
@@ -54,6 +53,12 @@ internal suspend fun FoxholeVpnService.startRuntimeWithHealthMetrics(
             timeoutMessage = RUNTIME_START_TIMEOUT_MARKER,
             timeoutMs = runtimeStartTimeoutMs,
         )
+    handleNativeForceStopPoison(result) { outcome ->
+        terminateProcessIfNativeForceStopPoisoned(
+            forceStopOutcome = outcome,
+            reason = "${owner}_start",
+        )
+    }
     RuntimeHealthMetrics.recordStart(
         owner = owner,
         success = result.isSuccess,
@@ -219,10 +224,6 @@ private fun FoxholeVpnService.scheduleTunnelValidationAfterHandoff(
     )
 }
 
-/**
- * Confirms the two independent halves of an I2P connection: an authenticated i2pd endpoint and
- * the exact service-owned, applied Android VPN network carrying the session that embeds it.
- */
 internal fun FoxholeVpnService.startI2pdReadinessProbe(
     settings: Settings,
     session: VpnSession,
@@ -233,34 +234,104 @@ internal fun FoxholeVpnService.startI2pdReadinessProbe(
         return
     }
     val expectedVpnNetworkHandle = vpnNetwork.networkHandle
+    val expectedRuntimeGeneration = runtimeSupervisor.currentGeneration()
     scope.launch(Dispatchers.IO) {
-        if (!container.i2pdManager.awaitReady(I2PD_READY_TIMEOUT_MS)) {
-            return@launch
-        }
-        val currentI2pdGeneration = container.i2pdManager.snapshot().endpoints?.generation
-        val currentVpnNetworkHandle = currentVpnNetworkOrNull()?.networkHandle
-        val sessionOwned = ownsI2pCarrierSession(session)
-        val carrierCurrent =
-            isI2pCarrierConfirmationCurrent(
+        fun probeOwned(): Boolean =
+            isI2pReadinessProbeOwned(
+                expectedRuntimeGeneration = expectedRuntimeGeneration,
+                currentRuntimeGeneration = runtimeSupervisor.currentGeneration(),
                 expectedEndpointGeneration = expectedEndpointGeneration,
-                currentEndpointGeneration = currentI2pdGeneration,
+                currentEndpointGeneration = container.i2pdManager.snapshot().endpoints?.generation,
                 expectedVpnNetworkHandle = expectedVpnNetworkHandle,
                 activeVpnNetworkHandle = activeVpnNetworkHandle,
-                currentVpnNetworkHandle = currentVpnNetworkHandle,
                 expectedRuntimeFingerprint = session.runtimeConfigFingerprint,
                 appliedRuntimeFingerprint = container.connectionController.appliedRuntimeSignature.value,
-                sessionOwned = sessionOwned,
+                sessionOwned = ownsI2pCarrierSession(session),
             )
-        if (!carrierCurrent || !container.i2pdManager.confirmCarrierReady(expectedEndpointGeneration)) {
-            container.diagnosticsLogger.recordStructured(
-                "i2pd",
-                "i2pd connected publication refused: carrier is not current",
-                "sessionId=${session.correlationId}",
-                "vpn_handle=$expectedVpnNetworkHandle",
-            )
+
+        val deadline = SystemClock.elapsedRealtime() + I2PD_COLD_READY_TOTAL_BUDGET_MS
+        var outcome = I2pdReadinessOutcome.RETRY
+        while (SystemClock.elapsedRealtime() < deadline && outcome == I2pdReadinessOutcome.RETRY) {
+            val remainingMs = deadline - SystemClock.elapsedRealtime()
+            outcome =
+                if (remainingMs <= 0L) {
+                    I2pdReadinessOutcome.EXHAUSTED
+                } else {
+                    val attemptBudgetMs = remainingMs.coerceAtMost(I2PD_READY_ATTEMPT_TIMEOUT_MS)
+                    awaitI2pdReadyWhileOwned(
+                        timeoutMs = attemptBudgetMs,
+                        probeOwned = ::probeOwned,
+                        awaitReady = container.i2pdManager::awaitReady,
+                    ).toI2pdReadinessOutcome()
+                }
+        }
+        when (outcome) {
+            I2pdReadinessOutcome.READY -> {
+                val carrierCurrent =
+                    isI2pCarrierConfirmationCurrent(
+                        expectedEndpointGeneration = expectedEndpointGeneration,
+                        currentEndpointGeneration = container.i2pdManager.snapshot().endpoints?.generation,
+                        expectedVpnNetworkHandle = expectedVpnNetworkHandle,
+                        activeVpnNetworkHandle = activeVpnNetworkHandle,
+                        currentVpnNetworkHandle = currentVpnNetworkOrNull()?.networkHandle,
+                        expectedRuntimeFingerprint = session.runtimeConfigFingerprint,
+                        appliedRuntimeFingerprint = container.connectionController.appliedRuntimeSignature.value,
+                        sessionOwned = ownsI2pCarrierSession(session),
+                    )
+                if (!carrierCurrent || !container.i2pdManager.confirmCarrierReady(expectedEndpointGeneration)) {
+                    container.diagnosticsLogger.recordStructured(
+                        "i2pd",
+                        "i2pd connected publication refused: carrier is not current",
+                        "sessionId=${session.correlationId}",
+                        "vpn_handle=$expectedVpnNetworkHandle",
+                    )
+                }
+            }
+            I2pdReadinessOutcome.RETRY,
+            I2pdReadinessOutcome.EXHAUSTED,
+            -> if (probeOwned()) {
+                container.diagnosticsLogger.recordStructured(
+                    "i2pd",
+                    "i2pd readiness budget exhausted",
+                    "sessionId=${session.correlationId}",
+                    "budget_ms=$I2PD_COLD_READY_TOTAL_BUDGET_MS",
+                )
+            }
+            I2pdReadinessOutcome.STALE -> Unit
         }
     }
 }
+
+private enum class I2pdReadinessOutcome {
+    RETRY,
+    READY,
+    STALE,
+    EXHAUSTED,
+}
+
+private fun Boolean?.toI2pdReadinessOutcome(): I2pdReadinessOutcome =
+    when (this) {
+        true -> I2pdReadinessOutcome.READY
+        false -> I2pdReadinessOutcome.RETRY
+        null -> I2pdReadinessOutcome.STALE
+    }
+
+private suspend fun awaitI2pdReadyWhileOwned(
+    timeoutMs: Long,
+    probeOwned: () -> Boolean,
+    awaitReady: suspend (Long) -> Boolean,
+): Boolean? =
+    coroutineScope {
+        val readiness = async { awaitReady(timeoutMs) }
+        while (readiness.isActive) {
+            if (!probeOwned()) {
+                readiness.cancelAndJoin()
+                return@coroutineScope null
+            }
+            delay(I2PD_READY_OWNERSHIP_POLL_MS)
+        }
+        readiness.await()
+    }
 
 private fun FoxholeVpnService.ownsI2pCarrierSession(session: VpnSession): Boolean {
     if (activeSession.matchesRuntimeValidationSession(session)) {
@@ -293,10 +364,29 @@ internal fun isI2pCarrierConfirmationCurrent(
         expectedRuntimeFingerprint != null &&
         expectedRuntimeFingerprint == appliedRuntimeFingerprint
 
-internal const val I2PD_READY_TIMEOUT_MS = 60_000L
+@Suppress("LongParameterList")
+internal fun isI2pReadinessProbeOwned(
+    expectedRuntimeGeneration: Long,
+    currentRuntimeGeneration: Long,
+    expectedEndpointGeneration: Long,
+    currentEndpointGeneration: Long?,
+    expectedVpnNetworkHandle: Long,
+    activeVpnNetworkHandle: Long?,
+    expectedRuntimeFingerprint: Int?,
+    appliedRuntimeFingerprint: Int?,
+    sessionOwned: Boolean,
+): Boolean =
+    sessionOwned &&
+        expectedRuntimeGeneration == currentRuntimeGeneration &&
+        expectedEndpointGeneration == currentEndpointGeneration &&
+        expectedVpnNetworkHandle == activeVpnNetworkHandle &&
+        expectedRuntimeFingerprint != null &&
+        expectedRuntimeFingerprint == appliedRuntimeFingerprint
 
-// Builds the session for connect(); null means the failure was already published via fail().
-// Cancellation is rethrown so a user stop never reads as an error.
+internal const val I2PD_READY_ATTEMPT_TIMEOUT_MS = 60_000L
+internal const val I2PD_COLD_READY_TOTAL_BUDGET_MS = 420_000L
+private const val I2PD_READY_OWNERSHIP_POLL_MS = 250L
+
 private suspend fun FoxholeVpnService.buildConnectSession(
     torOnlyConnect: Boolean,
     resolvedProfileId: Long,
@@ -319,17 +409,10 @@ private suspend fun FoxholeVpnService.buildConnectSession(
             )
         }
     }.getOrElse {
-        // A user stop/kill preempting this connect cancels the command mid-session-build; that is
-        // not a profile failure. Rethrow so the actor records a plain cancellation instead of
-        // fail() publishing a red "StandaloneCoroutine was cancelled" error state right after the
-        // user pressed Stop.
         if (it is CancellationException) {
             throw it
         }
-        // The localized message is written for the person holding the phone and says the same
-        // thing for every cause. Without this line the journal recorded that sentence and nothing
-        // else, so a profile rejected over one unsupported field looked identical to a corrupt
-        // one — and neither could be told apart from a decryption failure.
+
         container.diagnosticsLogger.recordFailure(
             "connection",
             "session build failed: ${diagnosticFailureLabel(it)}",
@@ -372,16 +455,7 @@ internal suspend fun FoxholeVpnService.connect(
         )
         return
     }
-    // NOT a gate. `strictRoute` means "route everything into the tunnel", which this app does on
-    // its own — it is passed to the TUN as `strict_route`. Android's lockdown ("block connections
-    // without VPN") is a SYSTEM setting the app cannot switch on, and it only adds what happens
-    // while no tunnel exists at all.
-    //
-    // Refusing to connect because the user has not visited system settings blocked the primary
-    // flow on every fresh install — the switch defaults to on — and reported it by printing the
-    // kill-switch HELP ARTICLE as the connection error, which is where "errors everywhere" came
-    // from. The honest behaviour is to connect and not claim a guarantee we do not have; the
-    // status surface already withholds the "strict protection" label unless lockdown is really on.
+
     if (settings.expert.strictRoute && !isSystemVpnLockdownActive()) {
         container.diagnosticsLogger.record(
             "connection",
@@ -393,8 +467,7 @@ internal suspend fun FoxholeVpnService.connect(
         return
     }
     val transitionGeneration = beginRuntimeTransition("connect")
-    // BUG 1 (startup ordering): an in-tunnel Tor route is deferred out of the FIRST config so the
-    // VPN comes up and validates alone; scheduleDeferredTorRouteUpgrade() engages Tor afterwards.
+
     val deferTorRoute =
         shouldDeferTorRouteForVpnFirstStartup(
             settings = settings,
@@ -402,8 +475,7 @@ internal suspend fun FoxholeVpnService.connect(
             trafficMode = trafficMode,
         )
     applyI2pCarrierPlan(I2pTunnelTransition.TUNNEL_STARTING, settings)
-    // The old worker must release FoxCore's process lease before the new start. Its master TUN
-    // stays open until Android installs the replacement, so traffic is blocked during the handoff.
+
     val handover =
         if (replaceActiveTunnel && activeSession != null) {
             retireActiveTunnelForTunnelHandover()
@@ -453,11 +525,6 @@ internal suspend fun FoxholeVpnService.connect(
     }
 }
 
-/**
- * Everything from building the session to the native start, run while the retired local guard still
- * owns the live interface. Split out of [connect] so the whole span — including its failure exits —
- * sits inside the make-before-break window: the old TUN outlives every one of these returns.
- */
 @Suppress("ReturnCount", "LongParameterList")
 private suspend fun FoxholeVpnService.establishTunnelSession(
     torOnlyConnect: Boolean,
@@ -487,16 +554,9 @@ private suspend fun FoxholeVpnService.establishTunnelSession(
         return null
     }
     rememberI2pRelayNetworkClass()
-    // Arm the deferred Tor upgrade AFTER the local-guard handoff, never before: the handoff runs
-    // closeRuntimeSession(), which clears pendingTorRouteUpgradeSessionId as a session-scoped
-    // leftover. Setting it first meant any live local guard (I2P's transparent tun, the firewall,
-    // any guard session) silently disarmed the upgrade — VPN+TOR then came up as VPN-ONLY while the
-    // UI and notification still claimed Tor was engaged.
+
     pendingTorRouteUpgradeSessionId = if (deferTorRoute) session.correlationId else null
-    // A new session needs a new bridge ownership claim: any IDLE/ERROR published on the way here
-    // (the stop half of a profile switch or reconnect) fenced the previous writer for good, and this
-    // service reuses one instance across sessions — without renewing, every publish below is
-    // rejected as stale and the UI freezes on "connecting" while the tunnel is actually up.
+
     renewBridgeWriter(trafficMode)
     activeSession = session
     activeLocalGuardMode = null
@@ -527,6 +587,7 @@ private suspend fun FoxholeVpnService.establishTunnelSession(
             protocolHint = session.protocolHint,
             protocolOptionId = session.protocolOptionId,
             torActive = session.torActive,
+            appliedTorRoute = session.appliedTorRoute,
             message = FoxholeVpnRuntimeBridge.snapshot.value.message,
             isSmartStartConnection = FoxholeVpnRuntimeBridge.snapshot.value.isSmartStartConnection,
         ),
@@ -550,6 +611,9 @@ private suspend fun FoxholeVpnService.establishTunnelSession(
         return null
     }
     val result = startRuntimeWithHealthMetrics(session = session, owner = "vpn")
+    if (result.nativeForceStopOutcomeOrNull() != null) {
+        return null
+    }
     if (!currentCoroutineContext().isActive) {
         container.diagnosticsLogger.record("connection", "runtime start cancelled after native return")
         return null

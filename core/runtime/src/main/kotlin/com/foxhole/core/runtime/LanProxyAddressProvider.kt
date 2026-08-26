@@ -10,11 +10,6 @@ import java.net.Inet4Address
 interface LanProxyAddressProvider {
     fun currentWifiIpv4Address(): String?
 
-    /**
-     * The full binding the core needs before it will publish a listener: handle, address, interface
-     * name and transport. Null means there is no network the LAN proxy may be published on — the
-     * beta is deliberately Wi-Fi/Ethernet IPv4 only, so cellular and VPN transports never qualify.
-     */
     fun currentLanBinding(): LanNetworkBinding? = null
 }
 
@@ -54,11 +49,6 @@ class AndroidLanProxyAddressProvider(
         )
     }
 
-    /**
-     * Wi-Fi and Ethernet only. A VPN transport is refused first and deliberately: publishing the
-     * listener on the tunnel itself puts it where no LAN client can reach it and where the relay
-     * would loop back into its own upstream.
-     */
     private fun NetworkCapabilities.lanTransportOrNull(): String? =
         when {
             hasTransport(NetworkCapabilities.TRANSPORT_VPN) -> null

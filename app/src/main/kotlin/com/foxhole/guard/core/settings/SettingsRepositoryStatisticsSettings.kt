@@ -5,8 +5,6 @@ import com.foxhole.core.model.StatisticsMetric
 import com.foxhole.core.model.StatisticsRefreshInterval
 import com.foxhole.core.model.StatisticsWindow
 
-// Statistics collection toggles. Extracted from SettingsRepository (class split by domain).
-
 suspend fun SettingsRepository.updateStatisticsEnabled(value: Boolean) =
     update { current ->
         current.copy(
@@ -18,14 +16,16 @@ suspend fun SettingsRepository.updateStatisticsEnabled(value: Boolean) =
         )
     }
 
-/** Show/hide the statistics feature (its screen + menu entry). Visibility only — never touches
- * collection, which is opted into inside the statistics screen. */
+suspend fun SettingsRepository.updateStatisticsDockIconEnabled(value: Boolean) =
+    update { current ->
+        current.copy(ui = current.ui.copy(statisticsDockIconEnabled = value))
+    }
+
 suspend fun SettingsRepository.updateStatisticsComponentVisible(value: Boolean) =
     update { current ->
         current.copy(statistics = current.statistics.copy(componentVisible = value))
     }
 
-// Session-only statistics: stores are wiped on session end and cold start.
 suspend fun SettingsRepository.updateStatisticsSessionOnly(value: Boolean) =
     update { current ->
         current.copy(
@@ -47,15 +47,6 @@ suspend fun SettingsRepository.updateStatisticsRefreshInterval(value: Statistics
         )
     }
 
-/**
- * The statistics screen's day/week dropdown, remembered forever.
- *
- * No safe-mode clause is needed here: Settings.normalized() rebuilds `ui` with a named copy() that
- * only overrides themeMode/onboardingCompleted/showExpertSettings/supportBotHandleOverride/
- * trafficMapEnabled, and updateSafeModeEnabled never rewrites UiSettings — unlike traffic/
- * privacyRoute/expert, which safe mode replaces wholesale. The fast UI store mirrors a whitelist of
- * dashboard flags only, so this value always comes back from the encrypted payload.
- */
 suspend fun SettingsRepository.updateStatisticsWindow(value: StatisticsWindow) =
     update { it.copy(ui = it.ui.copy(statisticsWindow = value)) }
 

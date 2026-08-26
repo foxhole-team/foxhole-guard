@@ -10,12 +10,6 @@ data class TorTrafficSnapshot(
     val txBytesPerSec: Long = 0L,
 )
 
-/**
- * Session byte accounting for the TOR lane: flows FoxCore routed into the Tor outbound,
- * accumulated from runtime connection snapshots by the same tracker that feeds the per-app stats.
- * This is what the dashboard traffic widget shows on its TOR page while a VPN and Tor run side by
- * side — the tunnel counters alone cannot split the two lanes.
- */
 object TorTrafficStats {
     private val state = MutableStateFlow(TorTrafficSnapshot())
     private val lock = Any()

@@ -138,8 +138,6 @@ class RuntimeSupervisorTest {
             }
             withTimeout(1_000L) { startRunning.await() }
 
-            // A config reapply for the same profile must queue behind the running start, never
-            // preempt it into an emergencyKill (the firewall/split "traffic stops" + refresh kill).
             supervisor.dispatch(
                 RuntimeCommand.Reload(reason = "1", source = RuntimeCommandSource.USER),
             ) {

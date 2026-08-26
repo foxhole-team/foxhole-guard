@@ -17,22 +17,6 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
-/**
- * Persisted I2P byte accounting: the store behind the statistics screen's I2P section.
- *
- * Both counters are read as CUMULATIVE totals and stored as deltas, which is what makes the writes
- * cheap. The recorder does not have to see every byte as it moves — it samples two running totals on
- * a slow ticker, so a sample costs two `+=` statements no matter how much traffic happened in
- * between, and nothing is lost when the sampler is late.
- *
- * Both values come from one i2pd webconsole snapshot. The network total is the router's cumulative
- * received + sent count, so bootstrap and tunnel maintenance move the statistic even before an
- * eepsite flow crosses FoxCore's optional I2P application lane. Transit is kept as a separate subset
- * for the relay readout; callers must not add it to the network total.
- *
- * Both restart from zero with their producer, so [i2pCumulativeDelta] treats a counter that went
- * backwards as a fresh start instead of a negative delta.
- */
 class I2pTrafficRepository(
     daoProvider: () -> I2pTrafficDao,
     private val routerStatusProvider: suspend () -> I2pRouterStatus? = { readI2pdRouterStatus() },
@@ -42,8 +26,6 @@ class I2pTrafficRepository(
 ) {
     private val dao by lazy(LazyThreadSafetyMode.SYNCHRONIZED, daoProvider)
 
-    // Serializes the sample pipeline: a sample is read-cursor -> write -> advance-cursor, and two
-    // interleaved samples would double-count the overlap.
     private val sampleMutex = Mutex()
     private var cursorsPrimed = false
     private var lastNetworkTotalBytes = 0L
@@ -67,13 +49,6 @@ class I2pTrafficRepository(
             )
         }.flowOn(Dispatchers.IO)
 
-    /**
-     * Drops the cursors without recording anything, so the next sample only re-primes them.
-     *
-     * Called whenever the counters and this recorder can have drifted apart — a new session, or
-     * statistics collection being off for a while. Without it, the first sample after the gap would
-     * charge the whole gap to the hour it happened to land in.
-     */
     suspend fun resetSampleCursors() {
         sampleMutex.withLock {
             cursorsPrimed = false
@@ -82,15 +57,7 @@ class I2pTrafficRepository(
         }
     }
 
-    /**
-     * Records everything the two counters moved since the previous sample.
-     *
-     * One webconsole read supplies both cumulative counters atomically enough for this hourly store.
-     * A missing snapshot is skipped without disturbing either cursor: i2pd may still be running.
-     */
     suspend fun sample() {
-        // Outside the lock: this is a loopback HTTP read, and holding the lock across it would let
-        // a slow console stall the teardown sample.
         val routerTraffic = routerStatusProvider()?.toTrafficTotals() ?: return
         sampleMutex.withLock {
             val nowMs = nowProvider()
@@ -101,8 +68,7 @@ class I2pTrafficRepository(
             val transitDelta =
                 if (primed && transit != null) i2pCumulativeDelta(transit, lastTransitTotalBytes) else 0L
             lastNetworkTotalBytes = network
-            // A console read that failed leaves the cursor alone: the router may still be running,
-            // and zeroing it would replay its whole lifetime total on the next successful read.
+
             transit?.let { lastTransitTotalBytes = it }
             cursorsPrimed = true
             if (ownDelta <= 0L && transitDelta <= 0L) {
@@ -113,14 +79,12 @@ class I2pTrafficRepository(
         }
     }
 
-    /** Wipes every persisted I2P counter — buckets and the lifetime aggregate alike. */
     suspend fun clear() {
         sampleMutex.withLock {
             awaitDatabaseReady()
             dao.deleteAllBuckets()
             dao.deleteAllTotals()
-            // A live session's counters keep climbing; re-priming stops the next sample from
-            // pouring the traffic that was just erased straight back in.
+
             cursorsPrimed = false
             lastNetworkTotalBytes = 0L
             lastTransitTotalBytes = 0L
@@ -140,11 +104,6 @@ class I2pTrafficRepository(
         pruneIfDue(nowMs)
     }
 
-    /**
-     * Bounds the store. Buckets older than the longest period on screen can never be shown again, so
-     * they go; the row cap behind the age cutoff covers a clock that jumped forward and left buckets
-     * no cutoff can reach. The lifetime row has no time dimension and is never pruned.
-     */
     private suspend fun pruneIfDue(nowMs: Long) {
         if (nowMs - lastPruneAtMs < PRUNE_INTERVAL_MS) {
             return
@@ -155,12 +114,10 @@ class I2pTrafficRepository(
     }
 
     private companion object {
-        // One pass an hour: the cutoff moves by whole buckets, so anything more often is wasted IO.
         const val PRUNE_INTERVAL_MS = 60L * 60L * 1000L
     }
 }
 
-/** One first-party i2pd snapshot used by the persisted network and relay counters. */
 internal data class I2pRouterTrafficTotals(
     val networkTotalBytes: Long,
     val transitTotalBytes: Long?,

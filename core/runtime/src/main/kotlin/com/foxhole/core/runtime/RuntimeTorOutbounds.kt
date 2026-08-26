@@ -12,9 +12,6 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 
-// Tor / TCP-reliability outbound builders for RuntimeConfigAssembler. Extracted from the
-// assembler (behaviour-preserving Phase B split by responsibility); pure JSON transforms.
-
 internal fun JsonObject.withTcpReliabilityOutbounds(): JsonObject {
     val patchedOutbounds = patchTcpReliabilityOutbounds(this["outbounds"]?.jsonArray) ?: return this
     return buildJsonObject {
@@ -28,9 +25,6 @@ internal fun JsonObject.withTcpReliabilityOutbounds(): JsonObject {
     }
 }
 
-// Split rules route to the "direct" outbound; a profile config is not obliged to declare
-// one, so an active split guarantees it here (mirrors the bypass-LAN assumption instead of
-// letting check_config fail on a dangling tag).
 internal fun JsonObject.withDirectOutboundIfNeeded(splitPlan: RuntimeSplitPlan): JsonObject {
     if (splitPlan.vpnMode == VpnAppSelectionMode.FULL_DEVICE) {
         return this

@@ -7,12 +7,6 @@ import kotlinx.serialization.json.Json
 import java.io.File
 import java.io.InputStream
 
-/**
- * On-disk home of the updatable IP→country database. The bundled application database is the
- * fallback; a successfully installed download (override files + metadata) takes precedence in
- * [TorGeoIpCountryResolver]. Installation is atomic (temp files + rename) and always ends by
- * invalidating the shared range cache so every live resolver re-reads the new data.
- */
 @Serializable
 data class GeoIpDatabaseMetadata(
     val version: String,
@@ -24,14 +18,11 @@ data class GeoIpDatabaseMetadata(
 )
 
 data class GeoIpDatabaseInfo(
-    // Null when no database is installed. The geo database is not bundled with the app:
-    // installed == null && bundledLabel == null means the device has no country data at all.
+
     val installed: GeoIpDatabaseMetadata?,
-    // Label of a bundled fallback if the build carries one; null otherwise (the normal case —
-    // the FoxHole DB geo group is downloaded on demand instead of shipped in the APK).
+
     val bundledLabel: String?,
-    // When the update source was last successfully probed (manual or scheduled), regardless of
-    // whether a download followed. Null when the source has never been reached.
+
     val lastCheckedAtMs: Long? = null,
 )
 
@@ -49,8 +40,6 @@ class GeoIpDatabaseStore(
             lastCheckedAtMs = readLastCheckedAtMs(),
         )
 
-    // The check timestamp lives outside the override directory so clearing a downloaded database
-    // does not erase the "last checked" history shown in settings.
     fun markChecked(timestampMs: Long = nowProvider()) {
         runCatching {
             checkStateFile().writeText(timestampMs.toString())
@@ -81,12 +70,6 @@ class GeoIpDatabaseStore(
                     TorGeoIpCountryResolver.overrideIpv6File(appContext).isFile
             }
 
-    /**
-     * Validates and installs downloaded range files. Each stream must be the raw range CSV
-     * ("start,end,CC" per line; IPv4 as integers or dotted quads, IPv6 as literals). Throws when
-     * either file parses to fewer than [MIN_RANGES_PER_FAMILY] usable ranges — a truncated or
-     * bogus download must never replace a working database.
-     */
     fun install(
         version: String,
         sourceRepo: String,
@@ -167,8 +150,6 @@ class GeoIpDatabaseStore(
     }
 }
 
-// The bundled geoip asset starts with comment lines including
-// "# Generated: Mon, 23 Mar 2026 04:33:02 GMT" and "# Vendor:    IPFire Project".
 @Suppress("LoopWithTooManyJumpStatements")
 private fun InputStream.readHeaderLabel(): String? {
     var generated: String? = null

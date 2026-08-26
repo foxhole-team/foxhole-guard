@@ -20,11 +20,6 @@ import com.foxhole.guard.ui.cli.CliMainActivity
 import com.foxhole.guard.withStoredAppLocale
 import kotlin.math.roundToInt
 
-/**
- * The system notifications of [WatchdogNames.WEB]: one stable id per app, so they overwrite rather
- * than spam, and a tap opens that app's frame through an intent extra. Modelled on AnomalyNotifier,
- * plus the contentIntent anomalies do not have.
- */
 class WebAppsNotifier(
     context: Context,
 ) {
@@ -83,7 +78,6 @@ class WebAppsNotifier(
         }
     }
 
-    /** True when the system will drop our notifications: master toggle off or the channel muted. */
     fun deliveryBlocked(): Boolean {
         if (!NotificationManagerCompat.from(appContext).areNotificationsEnabled()) {
             return true
@@ -102,11 +96,6 @@ class WebAppsNotifier(
     private fun notificationIdFor(appId: Long): Int =
         (NOTIFICATION_ID_BASE + (appId % NOTIFICATION_ID_RANGE)).toInt()
 
-    /**
-     * The channel carries the watchdog's name, not a description: this list is where the user has
-     * to recognize which service is talking. What the channel is for stays in the description, and
-     * that one is localized — the name is not.
-     */
     internal fun ensureChannel() {
         notificationManager?.createNotificationChannel(
             NotificationChannel(

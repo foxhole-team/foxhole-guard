@@ -155,7 +155,6 @@ private fun realityHelloProfile(
 
 private const val RANDOM_HELLO_PROFILE = "random"
 
-// Bare aliases track the current shipped table; unknown names fail instead of becoming Chrome.
 private val REALITY_HELLO_PROFILES =
     mapOf(
         "chrome" to "chrome_151",
@@ -176,7 +175,6 @@ private val REALITY_HELLO_PROFILES =
         "randomized" to "randomized",
     )
 
-// Choose once per process so one client does not change browser identity between requests.
 private val randomModernHelloProfile: String by lazy {
     RANDOM_MODERN_HELLO_PROFILES[SecureRandom().nextInt(RANDOM_MODERN_HELLO_PROFILES.size)]
 }

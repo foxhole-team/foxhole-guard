@@ -82,6 +82,58 @@ class CliSmartProfileTestActionTest {
         assertTrue(source.contains("viewModel.refreshSmartProfileMetricsInVpnMode(profileId)"))
     }
 
+    @Test
+    fun `smart profile sheet shares framed modal chrome and pins the profile table header`() {
+        val sheet = findFile(
+            "src/main/kotlin/com/foxhole/guard/ui/cli/profiles/CliSmartProfileSheet.kt",
+        ).readText()
+        val protocolTable = findFile(
+            "src/main/kotlin/com/foxhole/guard/ui/cli/profiles/CliProtocolDropdown.kt",
+        ).readText()
+        val dropdown = protocolTable
+            .substringAfter("internal fun CliProtocolDropdown(")
+            .substringBefore("@Composable\ninternal fun CliProtocolTableHeader(")
+        val sharedSheet = findFile(
+            "src/main/kotlin/com/foxhole/guard/ui/cli/components/CliBottomSheet.kt",
+        ).readText()
+        val english = findFile("src/main/res/values/strings.xml").readText()
+        val russian = findFile("src/main/res/values-ru/strings.xml").readText()
+
+        assertTrue(sheet.contains("CliBottomSheet("))
+        assertTrue(sheet.contains("sheetGesturesEnabled = false"))
+        assertTrue(sheet.contains("contentScrollEnabled = false"))
+        assertTrue(sheet.contains("CliIconTextItems("))
+        assertTrue(sheet.contains("framed = true"))
+        assertTrue(sheet.contains("iconColor = colors.info"))
+        assertTrue(sheet.contains("CliPanel("))
+        assertTrue(sheet.contains("contentPadding = CliPanelEdgeToEdgeContentPadding"))
+        assertTrue(sheet.contains("Spacer(modifier = Modifier.height(CliSpacing.sm))"))
+        assertTrue(sheet.contains("marquee = true"))
+        assertTrue(protocolTable.contains("basicMarquee"))
+        assertFalse(protocolTable.contains("CLI_PROTOCOL_MARQUEE"))
+        assertFalse(dropdown.contains("animateItem"))
+        assertTrue(dropdown.contains("LazyColumn("))
+        assertTrue(dropdown.contains("itemsIndexed("))
+        assertTrue(
+            dropdown.contains(
+                "nameLabel = stringResource(R.string.cli_prof_table_profile_name)",
+            ),
+        )
+        assertTrue(
+            dropdown.indexOf("CliProtocolTableHeader(") < dropdown.indexOf("LazyColumn("),
+        )
+        assertTrue(protocolTable.contains("CLI_PROTO_HEADER_CONNECT = \"T\""))
+        assertTrue(protocolTable.contains("CLI_PROTO_HEADER_PING = \"P\""))
+        assertTrue(protocolTable.contains("CLI_PROTO_HEADER_LATENCY = \"L\""))
+        assertTrue(english.contains("name=\"cli_prof_table_profile_name\">Profile name</string>"))
+        assertTrue(russian.contains("name=\"cli_prof_table_profile_name\">Имя профиля</string>"))
+        assertTrue(sheet.contains("onOptionSelected = requestSheetDismiss"))
+        assertTrue(sheet.contains("viewModel.setSmartProfileProtocolEnabled"))
+        assertTrue(sharedSheet.contains("contentScrollEnabled: Boolean = true"))
+        assertFalse(sharedSheet.contains(".cliModalContentEnter()"))
+        assertTrue(sharedSheet.contains("sheetState.hide()"))
+    }
+
     private fun findFile(relative: String): File =
         listOf(File(relative), File("app/$relative"), File("../app/$relative"))
             .first(File::isFile)

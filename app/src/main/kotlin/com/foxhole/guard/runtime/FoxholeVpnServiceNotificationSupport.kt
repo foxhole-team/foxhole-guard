@@ -18,16 +18,6 @@ import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
-/**
- * Foreground-service notification + runtime-command dispatch for [FoxholeVpnService], extracted from
- * the service body in the Phase B split by responsibility.
- */
-
-/**
- * Keeps the pull-built Android notification in step with the same confirmed I2P phase StateFlow
- * consumed by the app UI. The initial value is deliberately ignored: [FoxholeVpnService.onCreate]
- * must retain its graph-free fast foreground claim; onStartCommand builds the first full snapshot.
- */
 internal fun FoxholeVpnService.startI2pNotificationPhaseMonitoring() {
     scope.launch {
         collectI2pNotificationPhaseChanges(container.connectionController.i2pPhase) {
@@ -36,7 +26,6 @@ internal fun FoxholeVpnService.startI2pNotificationPhaseMonitoring() {
     }
 }
 
-/** Rebuilds the standard notification from the same confirmed Tor phase consumed by the UI. */
 internal fun FoxholeVpnService.startTorNotificationPhaseMonitoring() {
     scope.launch {
         collectTorNotificationPhaseChanges(container.connectionController.torPhase) {
@@ -45,11 +34,6 @@ internal fun FoxholeVpnService.startTorNotificationPhaseMonitoring() {
     }
 }
 
-/**
- * The LAN-proxy add-on is toggled without restarting the Android foreground service. Rebuild the
- * pull-based notification when the core confirms that its listener appeared or disappeared, so
- * disabling the add-on cannot leave a stale "proxy server available" line behind.
- */
 internal fun FoxholeVpnService.startLanProxyNotificationPhaseMonitoring() {
     scope.launch {
         collectLanProxyNotificationPhaseChanges(container.connectionController.lanProxyStatus) {
@@ -128,9 +112,6 @@ internal fun FoxholeVpnService.dispatchRuntimeCommand(
 }
 
 internal fun FoxholeVpnService.stopService(commandStartId: Int?) {
-    // Without a startId (an error teardown from validation or health) the stop uses the freshest
-    // known one: an unconditional stopSelf() ignored a newer CONNECT intent and killed the service
-    // together with a user command already queued.
     val effectiveStartId = commandStartId ?: latestServiceStartId
     if (effectiveStartId > 0) {
         stopSelfResult(effectiveStartId)

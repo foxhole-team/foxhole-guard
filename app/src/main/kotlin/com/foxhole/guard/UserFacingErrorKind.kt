@@ -10,13 +10,7 @@ import com.foxhole.core.runtime.FoxCoreRuntimeFailure
 import com.foxhole.core.runtime.TOR_ALL_APPS_NEEDS_FULL_TUNNEL_MARKER
 import java.util.Locale
 
-/**
- * Stable error categories allowed to cross into UI state, banners, and notifications.
- *
- * Exception messages stay in diagnostics. They may contain Java implementation details, remote
- * hosts, certificate paths or fragments of a provider configuration, so unknown failures always
- * collapse to the caller's localized fallback.
- */
+// Stable categories only: exception text stays out of UI because it may contain endpoints or credentials.
 internal enum class UserFacingErrorKind {
     PROFILE_CONFIG_INVALID,
     REALITY_VERIFICATION,
@@ -26,69 +20,21 @@ internal enum class UserFacingErrorKind {
     DNS_VALIDATION,
     TOR_VALIDATION,
 
-    /**
-     * The native core loaded, but it is not the one this app was built against.
-     * Distinct from "no library" because the fix is different and because the
-     * app and the core are two repositories that can drift apart.
-     */
     RUNTIME_ABI_MISMATCH,
 
-    /**
-     * The native core is genuinely absent or could not be linked.
-     *
-     * The only question `error_runtime_missing` answers. It used to be the catch-all FALLBACK of
-     * every connect, guard-start and reload sink, so any failure this file could not name — a
-     * tunnel a Tor stop had not released yet, a wedged native start — told the user their build
-     * has no core. A build either links the core or it does not, and only a link failure knows.
-     */
     RUNTIME_LIBRARY_MISSING,
 
-    /**
-     * The bounded native start gave up and fenced the runtime.
-     *
-     * Classified before [SERVER_UNREACHABLE]: the marker is a timeout, but "the server did not
-     * answer" is the wrong advice for a start that never reached the network.
-     */
     RUNTIME_START_TIMEOUT,
 
-    /** FoxHole Core loaded, but could not establish or replace the protected runtime route. */
     FOXCORE_RUNTIME_FAILURE,
 
-    /**
-     * A WireGuard/AmneziaWG profile that carries no resolver of its own.
-     *
-     * An L3 tunnel moves IP packets and offers no stream outbound to resolve through, so the
-     * runtime advertises the resolver the profile names and lets lookups ride inside the tunnel.
-     * With no resolver named there is nothing honest left to do: resolving beside the tunnel would
-     * put the user's lookups on the open network while the screen says they are tunnelled.
-     *
-     * Classified before [DNS_VALIDATION] because that one means "the tunnel came up and then DNS
-     * did not work", and the message says so. This refusal happens BEFORE the tunnel starts, and
-     * the path it names ($.dns.servers) contains "dns", so the generic rule used to catch it and
-     * tell the user about a validation step that never ran.
-     */
     PACKET_TUNNEL_DNS_MISSING,
 
-    /**
-     * «Whole device through TOR» over a VPN that only carries the selected apps.
-     *
-     * Refused before anything is built, so the sentence has to name the two settings that
-     * disagree — the generic profile-invalid fallback sent the owner looking at a profile that was
-     * never the problem.
-     */
     TOR_ALL_APPS_NEEDS_FULL_TUNNEL,
 
     UNKNOWN,
 }
 
-/**
- * The failures that carry a locale-independent tag this repository writes itself.
- *
- * Kept ahead of — and out of — the fingerprint heuristics below: a marker is an exact answer, while
- * the heuristics are guesses over words that happen to appear in a message. `packet_tunnel_dns_missing`
- * had to be listed before the generic "dns" rule for exactly that reason, and every marker added
- * after it would have needed the same care.
- */
 private fun markerUserFacingErrorKind(fingerprint: String): UserFacingErrorKind? =
     when {
         fingerprint.contains(TOR_ALL_APPS_NEEDS_FULL_TUNNEL_MARKER) ->
@@ -231,29 +177,8 @@ internal fun userFacingErrorMessageRes(
         UserFacingErrorKind.UNKNOWN -> fallbackRes
     }
 
-/**
- * Locale-independent tag a fenced native start puts on its failure, so the classification above can
- * recognise it. The user-facing sentence is picked here, not carried in an exception message: a
- * localized string travelling as a `message` is invisible to every classifier and used to reach the
- * screen only through a caller's fallback — which is exactly how a start timeout became "this build
- * has no native core".
- */
 internal const val RUNTIME_START_TIMEOUT_MARKER = "foxcore_runtime_start_timeout"
 
-/**
- * The technical cause of a failure, for the diagnostics journal only.
- *
- * This file already says exception messages stay in diagnostics. They did not: the connect and
- * reload paths published the localized fallback and dropped the throwable, so a profile the
- * translator rejected reached the journal as the same sentence the user had just read on screen,
- * naming neither the field nor the reason. On a live VLESS profile that failure took 1.2 seconds
- * and the journal could not say what was wrong with it.
- *
- * Messages travel only for failures whose text this repository writes and knows to be value-free:
- * a translation rejection is a rejection name and a JSON path. Everything else contributes its
- * class name alone, because a remote host, a certificate subject or a fragment of a provider's
- * configuration must not reach a journal the user can export.
- */
 internal fun diagnosticFailureLabel(error: Throwable?): String =
     generateSequence(error) { cause -> cause.cause }
         .take(MAX_ERROR_CAUSE_DEPTH)
@@ -270,11 +195,6 @@ internal fun diagnosticFailureLabel(error: Throwable?): String =
             }
         }.ifEmpty { "unknown" }
 
-/**
- * JSON paths are fixed schema labels, not remote values. Dots nevertheless look like a hostname to
- * the persistence sanitizer (`$.route.final` became `$.[host]`), erasing the field that explains a
- * config refusal. Slash notation keeps the same structural path without resembling a hostname.
- */
 private fun String.asDiagnosticJsonPath(): String = replace('.', '/')
 
 private fun String.containsAny(vararg needles: String): Boolean =

@@ -22,7 +22,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
-import com.foxhole.core.model.PanelAppearance
+import com.foxhole.core.model.ThemeMode
 import com.foxhole.guard.FoxholeApplication
 import com.foxhole.guard.core.data.profileDatabaseDowngradeDetected
 import com.foxhole.guard.ui.HomeViewModel
@@ -77,17 +77,15 @@ class CliMainActivity : AppCompatActivity() {
         }
 
         setContent {
-            val panelAppearance by homeViewModel.panelAppearance.collectAsStateWithLifecycle()
-            val visualStyle by homeViewModel.visualStyle.collectAsStateWithLifecycle()
-            val accentColor by homeViewModel.accentColor.collectAsStateWithLifecycle()
-            val resolvedAppearance = cliResolvedPanelAppearance(panelAppearance)
-            LaunchedEffect(resolvedAppearance) {
-                applyEdgeToEdge(light = resolvedAppearance == PanelAppearance.LIGHT)
+            val appearance by homeViewModel.appearanceUiState.collectAsStateWithLifecycle()
+            val resolvedThemeMode = cliResolvedThemeMode(appearance.themeMode)
+            LaunchedEffect(resolvedThemeMode) {
+                applyEdgeToEdge(light = resolvedThemeMode == ThemeMode.LIGHT)
             }
             CliTheme(
-                panelAppearance = panelAppearance,
-                visualStyle = visualStyle,
-                accentColor = accentColor,
+                themeMode = appearance.themeMode,
+                accentColor = appearance.accentColor,
+                pixelArtEnabled = appearance.pixelArtEnabled,
             ) {
                 LaunchedEffect(Unit) {
                     homeViewModel.requestVpnPermission.collect {

@@ -113,8 +113,6 @@ internal class RuntimeConfigAssemblerWireguardMtuTest : RuntimeConfigAssemblerTe
                 .first { server -> server.jsonObject["tag"]!!.jsonPrimitive.content == "dns-wireguard" }
                 .jsonObject
 
-        // Provider DNS is the default: the WireGuard-advertised resolver is the final resolver and
-        // rides the tunnel (detour=proxy) — queries never fall back to the local system resolver.
         assertEquals("dns-wireguard", dns["final"]!!.jsonPrimitive.content)
         assertEquals("udp", wireGuardDns["type"]!!.jsonPrimitive.content)
         assertEquals("1.1.1.1", wireGuardDns["server"]!!.jsonPrimitive.content)
@@ -157,8 +155,6 @@ internal class RuntimeConfigAssemblerWireguardMtuTest : RuntimeConfigAssemblerTe
         val dns = config["dns"]!!.jsonObject
         val servers = dns["servers"]!!.jsonArray.map { it.jsonObject["tag"]!!.jsonPrimitive.content }
 
-        // A non-WireGuard endpoint advertises no provider resolver, so provider mode falls through
-        // to the managed remote resolver — still inside the tunnel, never the local resolver.
         assertEquals("dns-remote", dns["final"]!!.jsonPrimitive.content)
         assertTrue(servers.contains("dns-wireguard"))
     }
@@ -305,7 +301,7 @@ internal class RuntimeConfigAssemblerWireguardMtuTest : RuntimeConfigAssemblerTe
                         allowLanAccess = true,
                         lanProxyMode = ProxySurfaceMode.HTTP,
                         http = ProxyInboundSettings(enabled = true, host = "127.0.0.1", port = 10809),
-                        // LAN auth is mandatory, so the LAN inbound is only published with a password.
+
                         lanAuth = LocalAuthSettings(username = "lan-user", password = "lan-pass"),
                     ),
                 ),
@@ -361,10 +357,6 @@ internal class RuntimeConfigAssemblerWireguardMtuTest : RuntimeConfigAssemblerTe
 
     @Test
     fun `lan proxy forces auth even when the stored lan auth flag is off`() {
-        // LAN auth is mandatory (stage2 §8): the LAN leg binds the phone's Wi-Fi address, so an
-        // anonymous inbound would relay the owner's VPN/Tor to the whole network. A stale
-        // enabled = false payload is ignored — the surface is still raised WITH users. The loopback
-        // (http-in) leg keeps honouring its own flag; only the LAN leg is forced.
         val lanAddressProvider = FakeLanProxyAddressProvider(address = "192.168.1.23")
         val lanAwareAssembler = RuntimeConfigAssembler(json, lanAddressProvider)
         val settings =
@@ -647,12 +639,11 @@ internal class RuntimeConfigAssemblerWireguardMtuTest : RuntimeConfigAssemblerTe
             )
         val persistentOn = base.copy(expert = base.expert.copy(blockAppsAlways = true))
 
-        // The general fingerprint (used by the profile tunnel) deliberately ignores blockAppsAlways…
         assertEquals(
             assembler.runtimeFingerprint(base, null),
             assembler.runtimeFingerprint(persistentOn, null),
         )
-        // …but the guard fingerprint must react, or the toggle no-ops on a live firewall.
+
         assertNotEquals(
             assembler.localGuardRuntimeFingerprint(base, LocalGuardMode.FIREWALL),
             assembler.localGuardRuntimeFingerprint(persistentOn, LocalGuardMode.FIREWALL),

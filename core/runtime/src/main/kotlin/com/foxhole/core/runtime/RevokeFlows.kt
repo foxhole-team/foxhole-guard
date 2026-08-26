@@ -3,24 +3,9 @@ package com.foxhole.core.runtime
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
-/**
- * Which live flows to cut.
- *
- * A policy reload preserves flows that are already open — a routing change must not kill a
- * download. Blocking is the opposite promise: "block this app" has to mean the app is off the
- * network now, not when its sockets happen to close. The two are separate calls so the caller
- * says which one it means, and the core never has to guess from the shape of a policy diff.
- *
- * Typed rather than a JSON string at the call site: the core refuses unknown kinds, missing
- * fields *and* extra fields, so a hand-written `{"kind":"all","package":"..."}` — the shape a
- * mistyped kind produces — is a refusal, not a device-wide cut. Building it here means no call
- * site can write that.
- */
 sealed interface RevokeTarget {
-    /** Everything. The kill switch. */
     data object All : RevokeTarget
 
-    /** One lane's worth of flows: `vpn`, `tor`, `i2p` or `direct`. */
     data class Lane(
         val lane: FlowLaneName,
     ) : RevokeTarget
@@ -30,17 +15,14 @@ sealed interface RevokeTarget {
         val uid: Int,
     ) : RevokeTarget
 
-    /** Every flow attributed to one package. */
     data class Package(
         val packageName: String,
     ) : RevokeTarget
 
-    /** Every flow leaving through one named outbound. */
     data class Outbound(
         val outboundId: String,
     ) : RevokeTarget
 
-    /** A single flow, by the `id` of a traffic-map row. */
     data class Flow(
         val flowId: Long,
     ) : RevokeTarget
@@ -83,23 +65,13 @@ internal fun RevokeTarget.toTargetJson(): String =
         }
     }.toString()
 
-/**
- * What the core made of a revocation request.
- *
- * [Revoked] with a count of zero is a success and the common case: the app was not talking, so the
- * state the caller asked for already holds. Only the negative codes are refusals, and they are
- * distinguished because "the core is not running" is a caller mistake worth a diagnostic, while
- * "the target did not parse" is a bug in this layer.
- */
 sealed interface RevokeOutcome {
     data class Revoked(
         val flows: Int,
     ) : RevokeOutcome
 
-    /** No engine to ask. Nothing is flowing through the core, so nothing needed cutting. */
     data object NotRunning : RevokeOutcome
 
-    /** The core refused the target document, or the native library predates this call. */
     data class Refused(
         val code: Int,
     ) : RevokeOutcome

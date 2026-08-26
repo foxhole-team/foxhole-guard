@@ -1,0 +1,4 @@
+0.1.0 public beta
+
+- Unifies the interface redesign and optimization
+- General runtime optimization

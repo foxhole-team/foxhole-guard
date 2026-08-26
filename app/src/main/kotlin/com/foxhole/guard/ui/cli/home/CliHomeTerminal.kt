@@ -1,5 +1,6 @@
 package com.foxhole.guard.ui.cli.home
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
@@ -59,32 +60,39 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import com.foxhole.core.model.ConnectionState
-import com.foxhole.core.model.VisualStyle
 import com.foxhole.core.model.networkUp
 import com.foxhole.guard.R
 import com.foxhole.guard.ui.cli.CliMotion
 import com.foxhole.guard.ui.cli.CliSpacing
 import com.foxhole.guard.ui.cli.CliType
 import com.foxhole.guard.ui.cli.LocalCliColors
-import com.foxhole.guard.ui.cli.LocalCliVisualStyle
+import com.foxhole.guard.ui.cli.cliBootstrapFade
+import com.foxhole.guard.ui.cli.cliDisplayStyle
 import com.foxhole.guard.ui.cli.cliScaledSp
+import com.foxhole.guard.ui.cli.cliTypography
 import com.foxhole.guard.ui.cli.components.CliBadge
 import com.foxhole.guard.ui.cli.components.CliFlagIcon
 import com.foxhole.guard.ui.cli.components.CliHeaderHelpButton
 import com.foxhole.guard.ui.cli.components.CliHomeSectionGap
+import com.foxhole.guard.ui.cli.components.CliIcon
+import com.foxhole.guard.ui.cli.components.CliLatencyKind
+import com.foxhole.guard.ui.cli.components.CliLatencyTone
 import com.foxhole.guard.ui.cli.components.CliPanel
-import com.foxhole.guard.ui.cli.components.CliPixIcon
+import com.foxhole.guard.ui.cli.components.CliSemanticGlyph
 import com.foxhole.guard.ui.cli.components.CliShimmerText
-import com.foxhole.guard.ui.cli.components.CliStatusDot
 import com.foxhole.guard.ui.cli.components.CliTypewriterText
-import com.foxhole.guard.ui.cli.components.PIXEL_CAP_HEIGHT_RATIO
 import com.foxhole.guard.ui.cli.components.cliFlagCode
 import com.foxhole.guard.ui.cli.components.cliFlagIconSize
+import com.foxhole.guard.ui.cli.components.cliLatencyTone
+import com.foxhole.guard.ui.cli.components.cliSemanticIcon
+import com.foxhole.guard.ui.cli.components.cliSystemMotionEnabled
 import com.foxhole.guard.ui.cli.fox.CliFoxHero
 import com.foxhole.guard.ui.cli.settings.rememberCliAppIcon
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 
 @Composable
+@Suppress("LongParameterList")
 internal fun CliTerminalPanel(
     terminal: CliTerminalState,
     home: com.foxhole.guard.ui.HomeRouteUiState,
@@ -94,6 +102,7 @@ internal fun CliTerminalPanel(
     onInteraction: () -> Unit,
     onClearRequested: () -> Unit,
     onHelpRequested: () -> Unit,
+    contentAfterHeader: @Composable () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val colors = LocalCliColors.current
@@ -103,59 +112,94 @@ internal fun CliTerminalPanel(
     Column(modifier = modifier) {
         CliTerminalHeader(home = home, onHelpRequested = onHelpRequested)
         CliHomeSectionGap()
-        CliPanel(
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f)
-                .testTag(CLI_HOME_TERMINAL_TAG),
-            background = colors.bg,
-            onClick = onInteraction,
-            onLongClick = {
-                onInteraction()
-                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                onClearRequested()
-            },
-        ) {
-            var outputLayoutRevision by remember { mutableIntStateOf(0) }
-            val visibleProgress =
-                terminalProgressForDisplay(terminal.bootProgress ?: terminal.progress, terminal.promptText)
-            CliTerminalScrollEffects(
-                terminal = terminal,
-                listState = listState,
-                visibleProgress = visibleProgress,
-                followsOutput = followsOutput,
-                onFollowsOutputChanged = onFollowsOutputChanged,
-                outputLayoutRevision = outputLayoutRevision,
-            )
-            LazyColumn(
-                state = listState,
+        contentAfterHeader()
+        CliHomeSectionTypography {
+            CliPanel(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .weight(1f),
+                    .weight(1f)
+                    .testTag(CLI_HOME_TERMINAL_TAG),
+                title = stringResource(R.string.cli_home_section_console),
+                titleModifier = Modifier.cliHomeSectionHeaderPlacement(),
+                titleColor = colors.accent,
+                icon = R.drawable.lin_terminal,
+                onClick = onInteraction,
+                onLongClick = {
+                    onInteraction()
+                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onClearRequested()
+                },
             ) {
-                val lastIndex = terminal.lines.lastIndex
-                itemsIndexed(terminal.lines, key = { _, line -> line.id }) { index, line ->
-                    CliTerminalLineRow(
-                        line = line,
-                        isLast = index == lastIndex && visibleProgress == null,
-                        timestampMetrics = timestampMetrics,
-                        terminal = terminal,
-                        onOutputHeightChanged = { outputLayoutRevision += 1 },
-                    )
-                }
-                visibleProgress?.let { live ->
-                    item(key = "terminal-progress-${live.id}") {
-                        CliTerminalProgressRow(progress = live, timestampMetrics = timestampMetrics)
+                var outputLayoutRevision by remember { mutableIntStateOf(0) }
+                val viewportHeight = remember(listState) { intArrayOf(-1) }
+                val visibleProgress =
+                    terminalProgressForDisplay(terminal.bootProgress ?: terminal.progress, terminal.promptText)
+                CliTerminalScrollEffects(
+                    terminal = terminal,
+                    listState = listState,
+                    visibleProgress = visibleProgress,
+                    followsOutput = followsOutput,
+                    onFollowsOutputChanged = onFollowsOutputChanged,
+                    outputLayoutRevision = outputLayoutRevision,
+                )
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                        .onSizeChanged { size ->
+                            val viewportChanged =
+                                size.height > 0 && size.height != viewportHeight[0]
+                            if (
+                                viewportChanged &&
+                                followsOutput &&
+                                !listState.isScrollInProgress
+                            ) {
+                                viewportHeight[0] = size.height
+                                val bottomIndex = terminalOutputBottomIndex(
+                                    lineCount = terminal.lines.size,
+                                    hasVisibleProgress = visibleProgress != null,
+                                )
+                                val anchorHeightPx = with(density) {
+                                    TERMINAL_OUTPUT_BOTTOM_GAP.roundToPx()
+                                }
+                                listState.requestScrollToItem(
+                                    index = bottomIndex,
+                                    scrollOffset = terminalBottomScrollOffset(
+                                        viewportStartOffset = 0,
+                                        viewportEndOffset = size.height,
+                                        anchorHeightPx = anchorHeightPx,
+                                    ),
+                                )
+                            } else {
+                                viewportHeight[0] = size.height
+                            }
+                        },
+                ) {
+                    val lastIndex = terminal.lines.lastIndex
+                    itemsIndexed(terminal.lines, key = { _, line -> line.id }) { index, line ->
+                        CliTerminalLineRow(
+                            line = line,
+                            isLast = index == lastIndex && visibleProgress == null,
+                            timestampMetrics = timestampMetrics,
+                            terminal = terminal,
+                            onOutputHeightChanged = { outputLayoutRevision += 1 },
+                        )
+                    }
+                    visibleProgress?.let { live ->
+                        item(key = "terminal-progress-${live.id}") {
+                            CliTerminalProgressRow(progress = live, timestampMetrics = timestampMetrics)
+                        }
+                    }
+                    item(key = "terminal-bottom-anchor") {
+                        Spacer(modifier = Modifier.height(TERMINAL_OUTPUT_BOTTOM_GAP))
                     }
                 }
-                item(key = "terminal-bottom-anchor") {
-                    Spacer(modifier = Modifier.height(TERMINAL_OUTPUT_BOTTOM_GAP))
-                }
+                CliPromptRow(
+                    terminal = terminal,
+                    modifier = Modifier.offset(y = cliTerminalPromptOffset()),
+                )
             }
-            CliPromptRow(
-                terminal = terminal,
-                modifier = Modifier.offset(y = cliTerminalPromptOffset()),
-            )
         }
     }
 }
@@ -163,11 +207,7 @@ internal fun CliTerminalPanel(
 @Composable
 @ReadOnlyComposable
 private fun cliTerminalPromptOffset(): Dp =
-    if (LocalCliVisualStyle.current == VisualStyle.PLAIN) {
-        TERMINAL_PROMPT_VISUAL_OFFSET_MODERN
-    } else {
-        TERMINAL_PROMPT_VISUAL_OFFSET
-    }
+    TERMINAL_PROMPT_VISUAL_OFFSET
 
 internal fun terminalProgressForDisplay(
     progress: CliTerminalProgress?,
@@ -222,7 +262,7 @@ private fun CliTerminalProgressRow(
                 tint = cliLineToneColor(progress.titleTone)
             )
             Text(
-                text = title,
+                text = cliTerminalLineText(title),
                 style = CliType.small,
                 color = cliLineToneColor(progress.titleTone),
                 maxLines = BODY_MAX_LINES,
@@ -235,7 +275,7 @@ private fun CliTerminalProgressRow(
                     modifier = Modifier.width(timestampMetrics.totalWidth + TERMINAL_LEAD_SLOT_WIDTH + CliSpacing.xs)
                 )
             },
-            style = cliTerminalFootnoteStyle(),
+            style = CliType.small,
         )
     }
 }
@@ -246,40 +286,24 @@ private fun CliTerminalProgressStepRow(
     leading: @Composable () -> Unit,
     style: androidx.compose.ui.text.TextStyle,
 ) {
-    val lifecycle = LocalLifecycleOwner.current.lifecycle
-    var frame by remember(progress.id) { mutableIntStateOf(0) }
-    LaunchedEffect(progress.id, lifecycle) {
-        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
-            while (true) {
-                delay(PROGRESS_SPINNER_STEP_MS)
-                frame = (frame + 1) % PROGRESS_SPINNER_FRAMES.size
-            }
-        }
-    }
     Row(
         modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
+        verticalAlignment = Alignment.Top,
     ) {
         leading()
-        if (LocalCliVisualStyle.current == VisualStyle.PLAIN) {
+        val color = cliLineToneColor(progress.tone)
+        if (progress.animated) {
             CliShimmerText(
-                text = progress.text,
+                text = cliTerminalLineText(progress.text),
                 style = style,
-                baseColor = cliLineToneColor(progress.tone),
+                baseColor = color,
                 maxLines = BODY_MAX_LINES,
             )
         } else {
             Text(
-                text = PROGRESS_SPINNER_FRAMES[frame],
+                text = cliTerminalLineText(progress.text),
                 style = style,
-                color = cliLineToneColor(progress.tone),
-                maxLines = 1,
-                modifier = Modifier.width(PROGRESS_SPINNER_WIDTH),
-            )
-            Text(
-                text = progress.text,
-                style = style,
-                color = cliLineToneColor(progress.tone),
+                color = color,
                 maxLines = BODY_MAX_LINES,
             )
         }
@@ -296,18 +320,24 @@ private fun CliTerminalScrollEffects(
     outputLayoutRevision: Int,
 ) {
     val density = LocalDensity.current
+    var programmaticScrollInProgress by remember(listState) { mutableStateOf(false) }
+    LaunchedEffect(terminal.promptText) {
+        if (terminal.promptText != null) {
+            onFollowsOutputChanged(true)
+        }
+    }
     LaunchedEffect(listState, terminal, visibleProgress?.id) {
         snapshotFlow {
             Triple(
-                listState.isScrollInProgress,
+                listState.isScrollInProgress && !programmaticScrollInProgress,
                 listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index,
                 terminalOutputBottomIndex(
                     lineCount = terminal.lines.size,
                     hasVisibleProgress = visibleProgress != null,
                 ),
             )
-        }.collect { (scrolling, lastVisibleIndex, lastIndex) ->
-            if (scrolling) {
+        }.collect { (userScrolling, lastVisibleIndex, lastIndex) ->
+            if (userScrolling) {
                 onFollowsOutputChanged(
                     shouldAutoScrollTerminal(
                         lastIndex = lastIndex,
@@ -326,23 +356,30 @@ private fun CliTerminalScrollEffects(
         outputLayoutRevision,
         followsOutput,
     ) {
-        if (!followsOutput || listState.isScrollInProgress) return@LaunchedEffect
+        if (!followsOutput) return@LaunchedEffect
+        snapshotFlow { listState.isScrollInProgress }
+            .first { scrolling -> !scrolling }
+        withFrameNanos { }
         val lastIndex = terminalOutputBottomIndex(
             lineCount = terminal.lines.size,
             hasVisibleProgress = visibleProgress != null,
         )
         if (lastIndex >= 0) {
-            withFrameNanos { }
             val layout = listState.layoutInfo
             val anchorHeightPx = with(density) { TERMINAL_OUTPUT_BOTTOM_GAP.roundToPx() }
-            listState.scrollToItem(
-                index = lastIndex,
-                scrollOffset = terminalBottomScrollOffset(
-                    viewportStartOffset = layout.viewportStartOffset,
-                    viewportEndOffset = layout.viewportEndOffset,
-                    anchorHeightPx = anchorHeightPx,
-                ),
-            )
+            programmaticScrollInProgress = true
+            try {
+                listState.scrollToItem(
+                    index = lastIndex,
+                    scrollOffset = terminalBottomScrollOffset(
+                        viewportStartOffset = layout.viewportStartOffset,
+                        viewportEndOffset = layout.viewportEndOffset,
+                        anchorHeightPx = anchorHeightPx,
+                    ),
+                )
+            } finally {
+                programmaticScrollInProgress = false
+            }
         }
     }
     LaunchedEffect(terminal.blockPending, terminal.promptText) {
@@ -434,26 +471,18 @@ private fun CliTerminalTimestamp(
 }
 
 private const val BLOCK_ROW_STEP_MS = 45L
-private const val PROGRESS_SPINNER_STEP_MS = 120L
 private const val CONNECTION_PROGRESS_WATCHDOG_MS = 45_000L
-private val PROGRESS_SPINNER_WIDTH = 12.dp
 private val TIMESTAMP_INNER_GAP = 2.dp
 private const val TIMESTAMP_BRACKET_LIGHTEN = 0.35f
-private val TERMINAL_OUTPUT_BOTTOM_GAP = 4.dp
-private val TERMINAL_PROMPT_VISUAL_OFFSET = 3.dp
-private val TERMINAL_PROMPT_VISUAL_OFFSET_MODERN = 7.dp
-private val TERMINAL_PROMPT_MARKER_OFFSET_MODERN = 1.dp
-private val TERMINAL_PROMPT_CURSOR_OFFSET_MODERN = 1.dp
-private val PROGRESS_SPINNER_FRAMES = arrayOf("|", "/", "—", "\\")
+private val TERMINAL_OUTPUT_BOTTOM_GAP = 24.dp
+private val TERMINAL_PROMPT_VISUAL_OFFSET = 7.dp
 private val TERMINAL_LEAD_SLOT_WIDTH = 12.dp
-private const val TERMINAL_FOOTNOTE_FONT_SP = 11f
-private const val TERMINAL_FOOTNOTE_LINE_SP = 14f
 private const val FRESH_PLACED_ROW_MS = 2_000L
 
 private const val KEY_COLUMN_WEIGHT = 1f
 private const val VALUE_COLUMN_WEIGHT = 1.4f
-private const val FLAGGED_KEY_COLUMN_WEIGHT = 0.65f
-private const val FLAGGED_VALUE_COLUMN_WEIGHT = 1.75f
+private const val FLAGGED_KEY_COLUMN_WEIGHT = 0.5f
+private const val FLAGGED_VALUE_COLUMN_WEIGHT = 1.9f
 
 @Composable
 private fun CliPromptRow(
@@ -463,54 +492,46 @@ private fun CliPromptRow(
     val colors = LocalCliColors.current
     val prompt = terminal.promptText
     val typedCount = terminal.promptTypedCount
-    val plainStyle = LocalCliVisualStyle.current == VisualStyle.PLAIN
-    LaunchedEffect(prompt, plainStyle) {
+    LaunchedEffect(prompt) {
         if (prompt != null) {
-            if (plainStyle) {
-                val startChars = terminal.promptTypedCount
-                val startNanos = withFrameNanos { it }
-                while (terminal.promptTypedCount < prompt.length) {
-                    withFrameNanos { now ->
-                        val elapsedMs = (now - startNanos) / 1_000_000L
-                        terminal.promptTypedCount =
-                            (startChars + (elapsedMs / PROMPT_TYPE_STEP_PLAIN_MS).toInt())
-                                .coerceAtMost(prompt.length)
-                    }
-                }
-                kotlinx.coroutines.delay(PROMPT_COMMIT_HOLD_PLAIN_MS)
-            } else {
-                while (terminal.promptTypedCount < prompt.length) {
-                    kotlinx.coroutines.delay(40L)
-                    terminal.promptTypedCount++
-                }
-                kotlinx.coroutines.delay(260L)
+            if (!cliSystemMotionEnabled()) {
+                terminal.promptTypedCount = prompt.length
+                terminal.commitPrompt()
+                return@LaunchedEffect
             }
+            val startChars = terminal.promptTypedCount
+            val startNanos = withFrameNanos { it }
+            while (terminal.promptTypedCount < prompt.length) {
+                withFrameNanos { now ->
+                    val elapsedMs = (now - startNanos) / 1_000_000L
+                    terminal.promptTypedCount =
+                        (startChars + (elapsedMs / PROMPT_TYPE_STEP_MS).toInt())
+                            .coerceAtMost(prompt.length)
+                }
+            }
+            kotlinx.coroutines.delay(PROMPT_COMMIT_HOLD_MS)
             terminal.commitPrompt()
         }
     }
     Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
-        Text(text = "fhg ", style = CliType.body, color = colors.accent)
         Text(
-            text = ">",
+            text = cliTerminalCommandText(stringResource(R.string.cli_home_terminal_prompt)) + " ",
             style = CliType.body,
             color = colors.accent,
-            modifier = Modifier.offset(
-                y = if (plainStyle) TERMINAL_PROMPT_MARKER_OFFSET_MODERN else 0.dp,
-            ),
+            modifier = Modifier.alignByBaseline(),
         )
-        Text(text = " ", style = CliType.body, color = colors.accent)
         if (prompt != null) {
             Text(
-                text = prompt.take(typedCount),
+                text = cliTerminalCommandText(prompt.take(typedCount)),
                 style = CliType.body,
                 color = colors.fg,
                 maxLines = 1,
+                modifier = Modifier.alignByBaseline(),
             )
         }
         CliBlinkingCursor(
-            modifier = Modifier.offset(
-                y = if (plainStyle) TERMINAL_PROMPT_CURSOR_OFFSET_MODERN else 0.dp,
-            ),
+            modifier = Modifier.alignBy { measured -> measured.measuredHeight }
+                .offset(y = CLI_TERMINAL_CURSOR_VERTICAL_OFFSET),
         )
     }
 }
@@ -529,11 +550,16 @@ private fun CliTerminalHeader(
         Spacer(modifier = Modifier.width(CliSpacing.xs))
         BoxWithConstraints(modifier = Modifier.weight(1f)) {
             val availableHeaderWidth = maxWidth
-            val brand = CliType.display.copy(fontSize = cliScaledSp(20f), lineHeight = cliScaledSp(22f))
             val brandFitsOneLine = maxWidth >= 224.dp
             Column {
-                CliBrandTitle(oneLine = brandFitsOneLine, style = brand)
-                Spacer(modifier = Modifier.height(CliSpacing.xs))
+                CliBrandTitle(
+                    oneLine = brandFitsOneLine,
+                    style = cliDisplayStyle("FOXHOLE GUARD").copy(
+                        fontSize = cliScaledSp(20f),
+                        lineHeight = cliScaledSp(22f),
+                    ),
+                )
+                Spacer(modifier = Modifier.height(HOME_HEADER_STATUS_GAP))
                 val torOnlyLive = isTorOnlyLive(home)
                 val runtimes = activeRuntimes(home = home, torOnlyLive = torOnlyLive)
                 val firewallLive =
@@ -548,10 +574,7 @@ private fun CliTerminalHeader(
                 val colors = LocalCliColors.current
                 val connected = word in CONNECTED_STATUS_WORDS
                 val statusColor = if (connected) colors.ok else cliStatusWordColor(word)
-                val dotColor = if (connected) colors.info else statusColor
-                val baseStatusStyle = CliType.body.copy(
-                    fontSize = STATUS_FONT_SIZE,
-                    lineHeight = STATUS_LINE_HEIGHT,
+                val baseStatusStyle = cliTypography(pixelArtEnabled = false).button.copy(
                     platformStyle = PlatformTextStyle(includeFontPadding = false),
                     lineHeightStyle = LineHeightStyle(
                         alignment = LineHeightStyle.Alignment.Center,
@@ -561,11 +584,11 @@ private fun CliTerminalHeader(
                 val line = buildAnnotatedString {
                     if (!connected) {
                         withStyle(SpanStyle(color = statusColor)) {
-                            append(cliStatusWordText(word).uppercase())
+                            append(cliStatusWordText(word))
                         }
                     } else {
                         withStyle(SpanStyle(color = colors.info)) {
-                            append(stringResource(R.string.cli_home_status_connected_prefix).uppercase())
+                            append(stringResource(R.string.cli_home_status_connected_prefix))
                         }
                         val tokens = buildList {
                             if (runtimes.vpn) {
@@ -588,7 +611,7 @@ private fun CliTerminalHeader(
                                     },
                                 )
                             }
-                            withStyle(SpanStyle(color = color)) { append(label.uppercase()) }
+                            withStyle(SpanStyle(color = color)) { append(label) }
                         }
                     }
                 }
@@ -603,57 +626,55 @@ private fun CliTerminalHeader(
                     ).size.width.toFloat()
                 }
                 val statusScale = with(density) {
-                    val preferredDotAndGapWidth =
-                        baseStatusStyle.fontSize.toPx() * PIXEL_CAP_HEIGHT_RATIO + STATUS_DOT_GAP.toPx()
                     cliStatusScale(
                         availableWidthPx = availableHeaderWidth.toPx(),
-                        textWidthPx = preferredTextWidth + preferredDotAndGapWidth,
+                        textWidthPx = preferredTextWidth,
                     )
                 }
                 val statusStyle = baseStatusStyle.copy(
-                    fontSize = STATUS_FONT_SIZE * statusScale,
-                    lineHeight = STATUS_LINE_HEIGHT * statusScale,
+                    fontSize = baseStatusStyle.fontSize * statusScale,
+                    lineHeight = baseStatusStyle.lineHeight * statusScale,
                 )
-                if (LocalCliVisualStyle.current == VisualStyle.PLAIN) {
-                    if (word in TRANSITION_STATUS_WORDS) {
+                val statusReady = home.profilesLoaded && home.settingsHydrated
+                AnimatedContent(
+                    targetState = statusReady,
+                    transitionSpec = { cliBootstrapFade() },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = "homeHeaderStatusReady",
+                ) { ready ->
+                    if (!ready) {
                         CliShimmerText(
-                            text = line.text,
+                            text = cliTerminalLineText(stringResource(R.string.cli_common_loading_data)),
                             style = statusStyle,
-                            baseColor = statusColor,
+                            baseColor = colors.dim,
                             maxLines = STATUS_WORD_MAX_LINES,
                         )
                     } else {
-                        Text(
-                            text = line,
-                            style = statusStyle,
-                            maxLines = STATUS_WORD_MAX_LINES,
-                            softWrap = false,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                } else {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        CliStatusDot(
-                            color = dotColor,
-                            fontSize = statusStyle.fontSize,
-                            pulsing = false,
-                            modifier = Modifier.offset(y = STATUS_DOT_VERTICAL_OFFSET * statusScale),
-                        )
-                        Spacer(modifier = Modifier.width(STATUS_DOT_GAP * statusScale))
-                        Text(
-                            text = line,
-                            style = statusStyle,
-                            maxLines = STATUS_WORD_MAX_LINES,
-                            softWrap = false,
-                            overflow = TextOverflow.Ellipsis,
-                        )
+                        if (word in TRANSITION_STATUS_WORDS) {
+                            CliShimmerText(
+                                text = line.text,
+                                style = statusStyle,
+                                baseColor = statusColor,
+                                maxLines = STATUS_WORD_MAX_LINES,
+                            )
+                        } else {
+                            Text(
+                                text = line,
+                                style = statusStyle,
+                                maxLines = STATUS_WORD_MAX_LINES,
+                                softWrap = false,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
                     }
                 }
             }
         }
         CliHeaderHelpButton(
-            contentDescription = stringResource(R.string.cli_help_start_title),
+            contentDescription = stringResource(R.string.cli_quick_start_title),
             topBar = true,
+            alignIconToFirstLine = true,
+            firstLineText = "FOXHOLE GUARD",
             onClick = onHelpRequested,
         )
     }
@@ -670,9 +691,10 @@ private fun CliBrandTitle(
     val instant = brandHeaderTypedOnce
     if (oneLine) {
         Row(verticalAlignment = Alignment.Top) {
-            CliTypewriterText(text = "FoxHole ", style = style, color = colors.accent, instant = instant)
+            CliTypewriterText(text = "FOXHOLE", style = style, color = colors.accent, instant = instant)
+            Spacer(modifier = Modifier.width(HOME_BRAND_WORD_GAP))
             CliTypewriterText(
-                text = "Guard",
+                text = "GUARD",
                 style = style,
                 color = colors.info,
                 instant = instant,
@@ -682,10 +704,10 @@ private fun CliBrandTitle(
         }
     } else {
         Column {
-            CliTypewriterText(text = "FoxHole", style = style, color = colors.accent, instant = instant)
+            CliTypewriterText(text = "FOXHOLE", style = style, color = colors.accent, instant = instant)
             Row(verticalAlignment = Alignment.Top) {
                 CliTypewriterText(
-                    text = "Guard",
+                    text = "GUARD",
                     style = style,
                     color = colors.info,
                     instant = instant,
@@ -715,7 +737,7 @@ internal fun cliStatusWordText(word: CliStatusWord): String = when (word) {
 private fun cliStatusWordColor(word: CliStatusWord): Color {
     val colors = LocalCliColors.current
     return when (word) {
-        CliStatusWord.CONNECTING, CliStatusWord.RECONNECTING, CliStatusWord.DISCONNECTING -> colors.warn
+        CliStatusWord.CONNECTING, CliStatusWord.RECONNECTING, CliStatusWord.DISCONNECTING -> colors.alert
         CliStatusWord.ERROR -> colors.err
         CliStatusWord.TOR, CliStatusWord.VPN_TOR -> colors.tor
         CliStatusWord.VPN -> colors.vpn
@@ -732,17 +754,15 @@ private val CONNECTED_STATUS_WORDS = setOf(
     CliStatusWord.I2P,
 )
 
-private const val LATENCY_OK_MAX_MS = 150L
-private const val LATENCY_WARN_MAX_MS = 400L
-
 @Composable
 internal fun latencyColor(ms: Long?): Color {
     val colors = LocalCliColors.current
-    return when {
-        ms == null -> Color.Unspecified
-        ms <= LATENCY_OK_MAX_MS -> colors.ok
-        ms <= LATENCY_WARN_MAX_MS -> colors.warn
-        else -> colors.err
+    return when (cliLatencyTone(ms, CliLatencyKind.HOME)) {
+        CliLatencyTone.UNAVAILABLE -> Color.Unspecified
+        CliLatencyTone.NORMAL -> colors.ok
+        CliLatencyTone.DEGRADED -> colors.warn
+        CliLatencyTone.ELEVATED -> colors.warn
+        CliLatencyTone.POOR -> colors.err
     }
 }
 
@@ -754,6 +774,7 @@ private fun cliLineToneColor(tone: CliLineTone): Color {
         CliLineTone.DIM -> colors.dim
         CliLineTone.ACCENT -> colors.accent
         CliLineTone.OK -> colors.ok
+        CliLineTone.PENDING -> colors.alert
         CliLineTone.WARN -> colors.warn
         CliLineTone.ERR -> colors.err
         CliLineTone.INFO -> colors.info
@@ -765,26 +786,40 @@ private fun cliLineToneColor(tone: CliLineTone): Color {
     }
 }
 
-/** Prompt and accent lines stay bare; narration and state events get class-specific glyphs. */
 internal fun cliLineToneIcon(tone: CliLineTone, prompt: Boolean): Int? {
     if (prompt) return null
     return when (tone) {
-        CliLineTone.PLAIN, CliLineTone.DIM -> R.drawable.pix_arrow_right
+        CliLineTone.PLAIN, CliLineTone.DIM -> R.drawable.lin_arrow_right
         CliLineTone.ACCENT -> null
-        CliLineTone.OK -> R.drawable.pix_check
-        CliLineTone.WARN -> R.drawable.pix_clock
-        CliLineTone.ERR -> R.drawable.pix_cross
-        CliLineTone.INFO -> R.drawable.pix_info
-        CliLineTone.VPN -> R.drawable.pix_shield
-        CliLineTone.TOR -> R.drawable.pix_tor
-        CliLineTone.I2P -> R.drawable.pix_incognito
-        CliLineTone.FIREWALL -> R.drawable.pix_fire
-        CliLineTone.DNS_FILTER -> R.drawable.pix_dns
+        CliLineTone.OK -> cliSemanticIcon(CliSemanticGlyph.SUCCESS)
+        CliLineTone.PENDING -> cliSemanticIcon(CliSemanticGlyph.PENDING)
+        CliLineTone.WARN -> cliSemanticIcon(CliSemanticGlyph.WARNING)
+        CliLineTone.ERR -> cliSemanticIcon(CliSemanticGlyph.ERROR)
+        CliLineTone.INFO -> cliSemanticIcon(CliSemanticGlyph.INFORMATION)
+        CliLineTone.VPN -> R.drawable.lin_shield
+        CliLineTone.TOR -> R.drawable.lin_tor
+        CliLineTone.I2P -> R.drawable.lin_incognito
+        CliLineTone.FIREWALL -> R.drawable.lin_fire
+        CliLineTone.DNS_FILTER -> R.drawable.lin_dns
     }
 }
 
+private fun cliTerminalExplicitIcon(icon: CliLineIcon?): Int? =
+    when (icon) {
+        CliLineIcon.IP -> R.drawable.lin_globe
+        CliLineIcon.LOCATION -> R.drawable.lin_map
+        null -> null
+    }
+
 internal fun cliTerminalLineIcon(line: CliTerminalLine): Int? =
-    if (isCliWelcomeLine(line.text)) R.drawable.ic_qs_tile else cliLineToneIcon(line.tone, line.prompt)
+    cliTerminalExplicitIcon(line.icon) ?: if (isCliWelcomeLine(line.text)) {
+        R.drawable.ic_qs_tile
+    } else {
+        cliLineToneIcon(line.tone, line.prompt)
+    }
+
+internal fun cliTerminalFootnoteIcon(line: CliTerminalLine): Int? =
+    cliTerminalExplicitIcon(line.icon)
 
 @Composable
 private fun rememberTypedCharCount(
@@ -795,6 +830,10 @@ private fun rememberTypedCharCount(
     var visibleChars by remember(lineId, length) { mutableIntStateOf(if (typing) 0 else length) }
     LaunchedEffect(lineId, length) {
         if (!typing || visibleChars >= length) return@LaunchedEffect
+        if (!cliSystemMotionEnabled()) {
+            visibleChars = length
+            return@LaunchedEffect
+        }
         val startChars = visibleChars
         val startNanos = withFrameNanos { it }
         while (visibleChars < length) {
@@ -816,7 +855,8 @@ private fun CliTerminalLineRow(
     onOutputHeightChanged: () -> Unit,
 ) {
     val toneColor = cliLineToneColor(line.tone)
-    val body = if (line.prompt) line.text.removePrefix("> ") else line.text
+    val rawBody = if (line.prompt) line.text.removePrefix("> ") else line.text
+    val body = if (line.prompt) cliTerminalCommandText(rawBody) else cliTerminalLineText(rawBody)
     val typing = remember(line.id) { isLast && line.typed && terminal.claimTyping(line.id) }
     val visibleChars = rememberTypedCharCount(line.id, body.length, typing)
     var measuredHeightPx by remember(line.id) { mutableIntStateOf(0) }
@@ -842,6 +882,7 @@ private fun CliTerminalLineRow(
             icon = cliTerminalLineIcon(line),
             tint = toneColor,
             promptMarker = line.prompt,
+            iconSize = cliTerminalLeadIconSize(line),
         )
         if (line.inlineValue && line.hasTerminalValueContent) {
             CliTerminalInlineValueRow(
@@ -955,15 +996,15 @@ private fun CliTerminalLeadSlot(
     icon: Int?,
     tint: Color,
     promptMarker: Boolean = false,
+    iconSize: Dp = CLI_HOME_TERMINAL_LEAD_ICON_SIZE,
 ) {
     val colors = LocalCliColors.current
-    val modernStyle = LocalCliVisualStyle.current == VisualStyle.PLAIN
-    val firstLineOffset = if (modernStyle && !promptMarker) 2.dp else 0.dp
+    val firstLineHeight = with(LocalDensity.current) { CliType.small.lineHeight.toDp() }
     Box(
         modifier = Modifier
             .width(TERMINAL_LEAD_SLOT_WIDTH)
-            .padding(top = firstLineOffset),
-        contentAlignment = Alignment.TopStart,
+            .height(firstLineHeight),
+        contentAlignment = Alignment.Center,
     ) {
         when {
             promptMarker -> Text(
@@ -972,10 +1013,10 @@ private fun CliTerminalLeadSlot(
                 color = colors.accent,
                 maxLines = 1,
             )
-            icon != null -> CliPixIcon(
+            icon != null -> CliIcon(
                 id = icon,
                 contentDescription = null,
-                size = 12.dp,
+                size = iconSize,
                 tint = tint,
             )
         }
@@ -989,15 +1030,19 @@ private fun RowScope.CliTerminalFootnoteBody(
     timestampMetrics: CliTerminalTimestampMetrics,
 ) {
     val colors = LocalCliColors.current
-    val style = cliTerminalFootnoteStyle()
+    val style = CliType.small
     val hasValue = line.value != null || line.flagCountry != null
-    Spacer(modifier = Modifier.width(timestampMetrics.totalWidth + TERMINAL_LEAD_SLOT_WIDTH + CliSpacing.xs))
+    Spacer(modifier = Modifier.width(timestampMetrics.totalWidth))
+    CliTerminalLeadSlot(
+        icon = cliTerminalFootnoteIcon(line),
+        tint = cliLineToneColor(line.valueTone),
+    )
     Row(
         modifier = Modifier.weight(1f),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            text = if (hasValue) cliTerminalKeyLabel(line.text) else line.text,
+            text = if (hasValue) cliTerminalKeyLabel(line.text) else cliTerminalLineText(line.text),
             style = style,
             color = if (line.tone == CliLineTone.DIM) colors.faint else cliLineToneColor(line.tone),
             maxLines = BODY_MAX_LINES,
@@ -1030,17 +1075,9 @@ private fun RowScope.CliTerminalFootnoteBody(
 }
 
 @Composable
-@ReadOnlyComposable
-private fun cliTerminalFootnoteStyle() = CliType.small.copy(
-    fontSize = cliScaledSp(TERMINAL_FOOTNOTE_FONT_SP),
-    lineHeight = cliScaledSp(TERMINAL_FOOTNOTE_LINE_SP),
-)
-
-@Composable
 private fun Modifier.cliPlacedRowEntrance(line: CliTerminalLine): Modifier {
-    val plainStyle = LocalCliVisualStyle.current == VisualStyle.PLAIN
     val animate = remember(line.id) {
-        plainStyle && !line.typed && !line.prompt &&
+        !line.typed && !line.prompt &&
             System.currentTimeMillis() - line.timestampMs < FRESH_PLACED_ROW_MS
     }
     if (!animate) return this
@@ -1099,11 +1136,14 @@ private fun RowScope.CliTerminalKeyValueColumns(
 private fun RowScope.CliTerminalValueText(line: CliTerminalLine, value: String) {
     val country = line.flagCountry?.takeIf { cliFlagCode(it) != null }
     if (country == null) {
+        val keepOnOneLine = cliTerminalValueStaysOnOneLine(line.icon, value)
         Text(
             text = value,
             style = CliType.small,
             color = cliLineToneColor(line.valueTone),
-            maxLines = BODY_MAX_LINES,
+            maxLines = if (keepOnOneLine) 1 else BODY_MAX_LINES,
+            softWrap = !keepOnOneLine,
+            overflow = if (keepOnOneLine) TextOverflow.Ellipsis else TextOverflow.Clip,
             textAlign = TextAlign.End,
             modifier = Modifier.weight(1f, fill = false),
         )
@@ -1129,10 +1169,48 @@ private fun RowScope.CliTerminalValueText(line: CliTerminalLine, value: String) 
     }
 }
 
+internal fun cliTerminalValueStaysOnOneLine(icon: CliLineIcon?, value: String): Boolean {
+    if (icon == CliLineIcon.IP) return true
+    val firstSegment = value.substringBefore('·').trim()
+    val ipv4 = firstSegment.count { it == '.' } == 3 &&
+        firstSegment.all { character -> character.isDigit() || character == '.' }
+    val ipv6 = ':' in firstSegment && firstSegment.all { character ->
+        character.isDigit() || character.lowercaseChar() in 'a'..'f' || character == ':' || character == '.'
+    }
+    return ipv4 || ipv6
+}
+
 internal fun cliTerminalKeyLabel(key: String): String {
-    val trimmed = key.trimEnd()
+    val trimmed = cliTerminalLineText(key.trimEnd())
     return if (trimmed.endsWith(':')) trimmed else "$trimmed:"
 }
+
+internal fun cliTerminalLineText(text: String): String {
+    if (isCliWelcomeLine(text)) return text
+    val tokenStart = text.indexOfFirst(Char::isLetter)
+    if (tokenStart < 0) return text
+    val tokenEnd = text.indexOfFirstFrom(tokenStart) { character -> !character.isLetterOrDigit() }
+        .takeIf { it >= 0 }
+        ?: text.length
+    val lead = text.substring(tokenStart, tokenEnd)
+    if (lead in CLI_TERMINAL_UPPERCASE_TOKENS) return text
+    val loweredLead = lead.lowercase()
+    if (lead == loweredLead) return text
+    return buildString(text.length) {
+        append(text, 0, tokenStart)
+        append(loweredLead)
+        append(text, tokenEnd, text.length)
+    }
+}
+
+private inline fun String.indexOfFirstFrom(startIndex: Int, predicate: (Char) -> Boolean): Int {
+    for (index in startIndex until length) {
+        if (predicate(this[index])) return index
+    }
+    return -1
+}
+
+private val CLI_TERMINAL_UPPERCASE_TOKENS = setOf("VPN", "TOR", "I2P", "DNS", "IP")
 
 private const val INLINE_PACKAGE_SLOT_PREFIX = "cli_terminal_status_package_"
 private const val INLINE_FLAG_SLOT = "cli_terminal_status_flag"
@@ -1161,6 +1239,17 @@ private fun CliTerminalAppIcon(packageName: String) {
 private const val BODY_MAX_LINES = 4
 private const val TERMINAL_BOTTOM_PROXIMITY_ROWS = 1
 
+internal val CLI_HOME_TERMINAL_LEAD_ICON_SIZE = 12.dp
+
+internal val CLI_HOME_TERMINAL_WELCOME_ICON_SIZE = 14.dp
+
+internal fun cliTerminalLeadIconSize(line: CliTerminalLine): Dp =
+    if (isCliWelcomeLine(line.text)) {
+        CLI_HOME_TERMINAL_WELCOME_ICON_SIZE
+    } else {
+        CLI_HOME_TERMINAL_LEAD_ICON_SIZE
+    }
+
 private const val STATUS_WORD_MAX_LINES = 1
 
 private val TRANSITION_STATUS_WORDS = setOf(
@@ -1169,14 +1258,11 @@ private val TRANSITION_STATUS_WORDS = setOf(
     CliStatusWord.DISCONNECTING,
 )
 
-private val STATUS_FONT_SIZE = cliScaledSp(13f)
+private const val PROMPT_TYPE_STEP_MS = 24L
+private const val PROMPT_COMMIT_HOLD_MS = 160L
 
-private const val PROMPT_TYPE_STEP_PLAIN_MS = 16L
-private const val PROMPT_COMMIT_HOLD_PLAIN_MS = 140L
-
-private val STATUS_LINE_HEIGHT = cliScaledSp(16f)
-private val STATUS_DOT_GAP = 6.dp
-private val STATUS_DOT_VERTICAL_OFFSET = (-2).dp
+private val HOME_BRAND_WORD_GAP = 2.dp
+private val HOME_HEADER_STATUS_GAP = 2.dp
 private const val MIN_STATUS_SCALE = 0.55f
 private val HOME_HEADER_FOX_SIZE = 58.dp
 
@@ -1193,6 +1279,9 @@ internal fun cliStatusScale(
 @Composable
 private fun CliBlinkingCursor(modifier: Modifier = Modifier) {
     val colors = LocalCliColors.current
+    val cursorHeight = with(LocalDensity.current) {
+        (CliType.body.fontSize * CLI_TERMINAL_CURSOR_CAP_HEIGHT_RATIO).toDp()
+    }
     var on by remember { mutableStateOf(true) }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     LaunchedEffect(lifecycle) {
@@ -1203,10 +1292,19 @@ private fun CliBlinkingCursor(modifier: Modifier = Modifier) {
             }
         }
     }
-    Canvas(modifier = modifier.size(width = 7.dp, height = 13.dp)) {
+    Canvas(
+        modifier = modifier.size(
+            width = cursorHeight * CLI_TERMINAL_CURSOR_WIDTH_RATIO,
+            height = cursorHeight,
+        ),
+    ) {
         drawRect(color = if (on) colors.fg else Color.Transparent)
     }
 }
+
+internal const val CLI_TERMINAL_CURSOR_CAP_HEIGHT_RATIO = 0.72f
+internal const val CLI_TERMINAL_CURSOR_WIDTH_RATIO = 0.5f
+internal val CLI_TERMINAL_CURSOR_VERTICAL_OFFSET = 1.dp
 
 @Composable
 internal fun stateLabel(state: ConnectionState): String = when (state) {

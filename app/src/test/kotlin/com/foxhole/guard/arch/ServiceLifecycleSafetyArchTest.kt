@@ -5,10 +5,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/**
- * onRevoke must invalidate the in-flight runtime transition synchronously before scheduling the KILL teardown, so permission loss cannot lose the race against queued START/SWITCH work.
- * Runtime wake locks belong to the owning service instance; the historic global registry leaked the service and held the lock forever.
- */
 class ServiceLifecycleSafetyArchTest {
     @Test
     fun `permission revoke invalidates the runtime transition before preempting at kill priority`() {

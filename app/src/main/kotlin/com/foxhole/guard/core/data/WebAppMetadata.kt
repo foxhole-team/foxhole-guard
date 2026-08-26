@@ -5,12 +5,9 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
-// Pure web-app parsers: regexes over <link>/<meta>/<title> rather than a DOM library. No new parse
-// dependency, and on real sites the attributes we need sit in a single tag.
-
 internal data class WebAppHtmlMetadata(
     val manifestUrl: String?,
-    // By descending priority: apple-touch-icon, rel=icon (largest sizes first), favicon.ico.
+
     val iconCandidates: List<String>,
     val siteName: String?,
     val title: String?,
@@ -18,7 +15,7 @@ internal data class WebAppHtmlMetadata(
 
 internal data class WebAppManifestMetadata(
     val name: String?,
-    // Largest icons first.
+
     val iconUrls: List<String>,
 )
 
@@ -82,10 +79,6 @@ internal fun resolveWebAppUrl(baseUrl: String, href: String): String? {
     return base.resolve(trimmed)?.toString()
 }
 
-/**
- * User-entered web-app address: a missing scheme becomes https and http is rejected — the frame
- * and watchdog speak https only, and the fetch SSRF guard would refuse plain http anyway.
- */
 internal fun normalizeWebAppInputUrl(raw: String): String? {
     val trimmed = raw.trim()
     if (trimmed.isEmpty() || trimmed.any(Char::isWhitespace)) {
@@ -94,7 +87,7 @@ internal fun normalizeWebAppInputUrl(raw: String): String? {
     val candidate =
         when {
             trimmed.startsWith("https://", ignoreCase = true) -> trimmed
-            // http, and any other explicit scheme, is rejected outright.
+
             trimmed.startsWith("http://", ignoreCase = true) || "://" in trimmed -> null
             else -> "https://$trimmed"
         } ?: return null
@@ -103,10 +96,6 @@ internal fun normalizeWebAppInputUrl(raw: String): String? {
         ?.toString()
 }
 
-/**
- * The `(N)` title heuristic: a leading counter is almost always an unread badge, while a trailing
- * one is accepted only when modest (<=999) — a trailing "(2026)" is a year, not a badge.
- */
 internal fun parseTitleBadge(title: String?): Int? {
     if (title.isNullOrBlank()) {
         return null
@@ -141,7 +130,6 @@ private fun tagAttribute(tag: String, name: String): String? {
     return match?.let { it.groupValues[2].ifEmpty { it.groupValues[3] } }?.takeIf(String::isNotBlank)
 }
 
-// Icon size rank from sizes="WxH [WxH...]": the maximum width; absent or "any" ranks 0.
 private fun iconSizeRank(sizes: String?): Int =
     sizes.orEmpty()
         .split(' ')

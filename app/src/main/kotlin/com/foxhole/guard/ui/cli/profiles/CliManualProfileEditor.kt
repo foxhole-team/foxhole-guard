@@ -24,6 +24,7 @@ import com.foxhole.guard.ui.cli.CliType
 import com.foxhole.guard.ui.cli.LocalCliColors
 import com.foxhole.guard.ui.cli.LocalCliPanelAppearance
 import com.foxhole.guard.ui.cli.components.CliButton
+import com.foxhole.guard.ui.cli.components.CliModalCloseButton
 import com.foxhole.guard.ui.cli.components.CliScreenHeader
 import com.foxhole.guard.ui.cli.components.CliTopBarHelpButton
 import com.foxhole.guard.ui.cli.components.cliModalSurfaceColor
@@ -45,7 +46,8 @@ internal fun CliManualProfileEditor(
     ) {
         CliScreenHeader(
             label = stringResource(R.string.cli_prof_edit_manual_title),
-            icon = R.drawable.pix_edit,
+            icon = R.drawable.lin_edit,
+            titleColor = colors.fg,
             trailing = { CliTopBarHelpButton(bodyRes = R.string.cli_prof_edit_manual_hint) },
         )
         BasicTextField(
@@ -65,10 +67,7 @@ internal fun CliManualProfileEditor(
                 modifier = Modifier.fillMaxWidth().padding(top = CliSpacing.sm),
                 horizontalArrangement = Arrangement.spacedBy(CliSpacing.sm),
             ) {
-                CliButton(
-                    label = stringResource(R.string.cli_common_no_cancel),
-                    color = colors.err,
-                    dashed = true,
+                CliModalCloseButton(
                     enabled = !busy,
                     dimWhenDisabled = false,
                     onClick = onCancel,

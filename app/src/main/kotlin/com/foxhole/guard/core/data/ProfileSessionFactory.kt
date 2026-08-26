@@ -19,6 +19,7 @@ import com.foxhole.core.runtime.PrivateDnsMode
 import com.foxhole.core.runtime.PrivateDnsState
 import com.foxhole.core.runtime.RuntimeConfigAssembler
 import com.foxhole.core.runtime.TorRuntimeInstaller
+import com.foxhole.core.runtime.appliedTorRouteOrNull
 import com.foxhole.core.runtime.i2pRuntimeActive
 import com.foxhole.core.runtime.isTorPrivacyRouteActive
 import com.foxhole.core.runtime.requireI2pPrivateDnsCompatibility
@@ -67,9 +68,7 @@ internal class ProfileSessionFactory(
             settings
                 .disableUnverifiedDnsRuleSetFiltering(dnsFilterRuntimePaths)
                 .forProtocolTestTrafficFreeze(protocolTestTrafficFreeze)
-        // VPN-first startup ordering: the first config of a Tor-in-VPN session is assembled with
-        // the Tor route switched off; the service hot-reloads the full config once the tunnel
-        // validates. The persisted settings are untouched - only this session build is stripped.
+
         val requestedRuntimeSettings =
             if (deferTorRoute && baseRuntimeSettings.privacyRoute.enabled) {
                 diagnosticsLogger.record(
@@ -113,8 +112,7 @@ internal class ProfileSessionFactory(
                     protocolTestTrafficFreeze = protocolTestTrafficFreeze,
                 )
             }.onFailure { error ->
-                // A cancelled build (mode switch, user stop mid-start) is not a failure; an
-                // E-level "build failed" here sends debugging down the wrong trail.
+
                 if (error is CancellationException) {
                     diagnosticsLogger.record("profile", "session build cancelled sessionId=$correlationId")
                     throw error
@@ -139,6 +137,7 @@ internal class ProfileSessionFactory(
             configJson = assembled,
             correlationId = correlationId,
             torActive = runtimeSettings.isTorPrivacyRouteActive(selectedProtocolHint),
+            appliedTorRoute = runtimeSettings.appliedTorRouteOrNull(selectedProtocolHint),
             quarantineNewApps = runtimeSettings.expert.newAppQuarantineEnabled,
             knownApplications = knownApplications,
             runtimeConfigFingerprint =
@@ -166,7 +165,7 @@ internal class ProfileSessionFactory(
         privateDnsState: PrivateDnsState? = null,
     ): VpnSession {
         val settings = settingsRepository.ensureNewAppQuarantineBaseline()
-        require(settings.privacyRoute.enabled) { "TOR route is disabled" }
+        require(settings.privacyRoute.permitted && settings.privacyRoute.enabled) { "TOR route is disabled" }
         val correlationId = newRuntimeCorrelationId()
         val dnsFilterRuntimePaths = settings.prepareVerifiedDnsFilterRuntimePaths()
         val runtimeSettings = settings.disableUnverifiedDnsRuleSetFiltering(dnsFilterRuntimePaths)
@@ -193,8 +192,7 @@ internal class ProfileSessionFactory(
                     i2pSocksPort = i2pEndpoint?.socksPort,
                 )
             }.onFailure { error ->
-                // Same cancellation transparency as getSession: a JobCancellationException here
-                // is a torn-down start, not a broken Tor runtime.
+
                 if (error is CancellationException) {
                     diagnosticsLogger.record("profile", "tor-only session build cancelled sessionId=$correlationId")
                     throw error
@@ -218,6 +216,7 @@ internal class ProfileSessionFactory(
             configJson = assembled,
             correlationId = correlationId,
             torActive = true,
+            appliedTorRoute = runtimeSettings.appliedTorRouteOrNull(ProtocolHint.TOR),
             quarantineNewApps = runtimeSettings.expert.newAppQuarantineEnabled,
             knownApplications = knownApplications,
             runtimeConfigFingerprint =
@@ -239,15 +238,8 @@ internal class ProfileSessionFactory(
         )
     }
 
-    // Starts i2pd when the independent I2P toggle is on and returns the exact endpoint lease used
-    // by the assembled config. Its generation is checked immediately before native start.
     private suspend fun startI2pEndpointOrNull(settings: Settings): I2pdEndpoints? {
         if (!settings.i2pRuntimeActive()) {
-            // Turning I2P off (or moving to a mode that does not need it) rebuilds the config
-            // WITHOUT the I2P leg, but nothing used to tear the already-running child down — so
-            // libi2pd.so kept running long after the switch, visible only as a stray process. The
-            // full teardown reaps it, but a settings toggle under a live tunnel never gets there.
-            // stop() is a safe no-op when nothing is running.
             i2pdManager.stop()
             return null
         }
@@ -262,9 +254,7 @@ internal class ProfileSessionFactory(
         if (!i2pRuntimeActive() || protocolHint != ProtocolHint.WIREGUARD) {
             return this
         }
-        // WireGuard/AWG is an L3 primary while the current I2P adapter is a stream outbound.
-        // Preserve the working VPN, close only the unsupported lane, and never let `.i2p` fall
-        // through to ordinary DNS/direct routing.
+
         i2pdManager.stop()
         diagnosticsLogger.record(
             "i2pd",
@@ -274,7 +264,8 @@ internal class ProfileSessionFactory(
     }
 
     private fun Settings.shouldPrepareTorRuntime(selectedProtocolHint: ProtocolHint): Boolean =
-        privacyRoute.enabled &&
+        privacyRoute.permitted &&
+            privacyRoute.enabled &&
             traffic.mode == TrafficMode.TUNNEL &&
             (privacyRoute.bypassVpnTunnel || !selectedProtocolHint.isUdpTransport())
 
@@ -309,7 +300,6 @@ internal class ProfileSessionFactory(
     }
 }
 
-/** Keeps debug call stacks useful without writing exception-borne URLs, hosts or profile keys. */
 internal fun sanitizedDiagnosticStackTrace(error: Throwable): String =
     buildString {
         append(error.javaClass.name)

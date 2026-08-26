@@ -19,22 +19,6 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/**
- * Whole-device TOR asked for while the VPN carries only the selected apps — reported from the
- * owner's Pixel on 2026-08-10 at 21:59.
- *
- * A live VLESS tunnel in «proxy · selected apps» took the MODE button to VPN+TOR. The assembler
- * built the config happily: `route.final` became the Tor outbound (the default for everything the
- * rules do not name) while the include split still emitted its inverted «everything else goes
- * direct» rule. Those are two different defaults for the same traffic, so the core refused the
- * document — journal: `runtime reload session failed: …(policy_unrepresentable at $.[host][3])`,
- * which is `$.route.rules[3]` after the journal sanitizer redacts `route.rules` as a hostname.
- *
- * The pair cannot be made true by any arrangement of rules: in an include split the tun captures
- * the selection alone, so the apps outside it are not in the tunnel the Tor route lives in. It is
- * refused, not reinterpreted — narrowing «whole device» to «the three selected apps» would tell a
- * person their phone rides Tor while most of it goes out clearnet.
- */
 internal class RuntimeTorScopeSplitCollisionTest : RuntimeConfigAssemblerTestSupport() {
     private val translator = FoxCoreConfigTranslator()
 
@@ -63,6 +47,7 @@ internal class RuntimeTorScopeSplitCollisionTest : RuntimeConfigAssemblerTestSup
                 .withLane(AppTunnelLane.VPN, listOf("com.example.v1", "com.example.v2", "com.example.v3")),
             privacyRoute =
             PrivacyRouteSettings(
+                permitted = true,
                 mode = PrivacyRouteMode.TOR_OVER_VPN,
                 scope = scope,
             ),
@@ -112,12 +97,16 @@ internal class RuntimeTorScopeSplitCollisionTest : RuntimeConfigAssemblerTestSup
             settings(PerAppRoutingMode.INCLUDE_SELECTED_APPS, PrivacyRouteScope.ALL_APPS)
                 .torAllAppsCollidesWithVpnIncludeSplit(),
         )
-        // An include split with nothing selected is a full tunnel, so there is no collision.
+
         assertFalse(
             Settings(
                 expert = ExpertSettings(perAppRoutingMode = PerAppRoutingMode.INCLUDE_SELECTED_APPS),
                 privacyRoute =
-                PrivacyRouteSettings(mode = PrivacyRouteMode.TOR_OVER_VPN, scope = PrivacyRouteScope.ALL_APPS),
+                PrivacyRouteSettings(
+                    permitted = true,
+                    mode = PrivacyRouteMode.TOR_OVER_VPN,
+                    scope = PrivacyRouteScope.ALL_APPS,
+                ),
             ).torAllAppsCollidesWithVpnIncludeSplit(),
         )
         assertFalse(
@@ -130,10 +119,6 @@ internal class RuntimeTorScopeSplitCollisionTest : RuntimeConfigAssemblerTestSup
         )
     }
 
-    /**
-     * The neighbours of the refused pair still assemble AND translate. Assembling alone proves
-     * nothing here: the owner's config assembled too, and died one call later in the translator.
-     */
     @Test
     fun `every other tor scope and split pairing still reaches the core`() {
         listOf(

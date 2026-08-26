@@ -1,11 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Ресурсное зеркало CliColors.accent для drawable-слоя виджетов (shape-строук не умеет
-         читать Compose-палитру). Меняется только вместе с CliColors. -->
-    <color name="cli_accent">#F07A14</color>
-    <color name="cli_fg">#E8E4DC</color>
-    <color name="cli_dim">#9CA3B0</color>
-    <color name="cli_ok">#6FE0B8</color>
-    <color name="cli_err">#FF6161</color>
-    <color name="cli_info">#4D9DE8</color>
+    <!-- Widget drawables cannot read the Compose palette; keep this semantic mirror in sync. -->
+    <color name="cli_accent">#7FB34A</color>
+    <color name="cli_fg">#F0E6D6</color>
+    <color name="cli_dim">#B49A76</color>
+    <color name="cli_ok">#7FB34A</color>
+    <color name="cli_err">#E0562A</color>
+    <color name="cli_info">#2FD9F2</color>
 </resources>

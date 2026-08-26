@@ -24,11 +24,17 @@ import com.foxhole.guard.ui.cli.CliFormat
 import com.foxhole.guard.ui.confirmedTorIdentityOrNull
 import java.util.Locale
 
+internal fun cliTerminalCommandText(text: String): String =
+    buildString(text.length) {
+        text.forEach { character -> append(character.lowercaseChar()) }
+    }
+
 internal enum class CliLineTone {
     PLAIN,
     DIM,
     ACCENT,
     OK,
+    PENDING,
     WARN,
     ERR,
     INFO,
@@ -37,6 +43,11 @@ internal enum class CliLineTone {
     I2P,
     FIREWALL,
     DNS_FILTER,
+}
+
+internal enum class CliLineIcon {
+    IP,
+    LOCATION,
 }
 
 @Immutable
@@ -53,6 +64,7 @@ internal data class CliTerminalLine(
     val inlineValue: Boolean = false,
     val typed: Boolean = true,
     val footnote: Boolean = false,
+    val icon: CliLineIcon? = null,
     val id: Long = 0L,
 )
 
@@ -64,13 +76,9 @@ internal data class CliTerminalProgress(
     val tone: CliLineTone,
     val title: String? = null,
     val titleTone: CliLineTone = tone,
+    val animated: Boolean = true,
 )
 
-/**
- * One row of a printed block. Blocks are tables, so a row is placed rather than typed: a block
- * drains a row every [CliTerminalState.drainBlockRow] tick, and typing them on top of that had every
- * visible row re-wrapping at once. Only a row that opts into [typed] takes the typewriter.
- */
 @Immutable
 internal data class CliTerminalRow(
     val key: String,
@@ -147,7 +155,7 @@ internal data class CliTerminalStrings(
     val reasonLabels: Map<AutoConnectReasonCode, String> = emptyMap(),
 )
 
-private enum class CliProgressLeg { VPN, TOR, I2P, DISCONNECT }
+private enum class CliProgressLeg { VPN, TOR, I2P, DISCONNECT, GEO }
 
 private const val TERMINAL_MAX_LINES = 120
 private const val WELCOME_LINE_PREFIX = "FoxHole Guard \u00b7 "
@@ -181,7 +189,6 @@ internal class CliTerminalState(
     private val onCleared: () -> Unit = {},
     startsHeld: Boolean = true,
 ) {
-
     val lines = mutableStateListOf<CliTerminalLine>()
 
     var progress: CliTerminalProgress? by mutableStateOf(null)
@@ -252,8 +259,8 @@ internal class CliTerminalState(
         append(welcomeLine(versionName), CliLineTone.ACCENT)
     }
 
-    fun onBootStage(profilesLoaded: Boolean) {
-        if (profilesLoaded) {
+    fun onBootStage(ready: Boolean) {
+        if (ready) {
             if (bootStage == CliBootStage.READY) return
             bootStage = CliBootStage.READY
             bootProgress = null
@@ -437,7 +444,7 @@ internal class CliTerminalState(
                 updateProgress(
                     CliProgressLeg.DISCONNECT,
                     disconnectingText(strings, snapshot.teardownPhase),
-                    CliLineTone.WARN,
+                    CliLineTone.PENDING,
                 )
             }
             ConnectionState.ERROR -> {
@@ -600,9 +607,9 @@ internal class CliTerminalState(
         if (higherLegPending || i2pResultCommitted) return
         when (current.phase) {
             I2pNetworkPhase.STARTING ->
-                updateProgress(CliProgressLeg.I2P, strings.i2pStarting, CliLineTone.WARN)
+                updateProgress(CliProgressLeg.I2P, strings.i2pStarting, CliLineTone.PENDING)
             I2pNetworkPhase.DISCOVERING_PEERS ->
-                updateProgress(CliProgressLeg.I2P, strings.i2pDiscovering, CliLineTone.WARN)
+                updateProgress(CliProgressLeg.I2P, strings.i2pDiscovering, CliLineTone.PENDING)
             I2pNetworkPhase.BUILDING_TUNNELS ->
                 updateProgress(
                     CliProgressLeg.I2P,
@@ -611,7 +618,8 @@ internal class CliTerminalState(
                     } else {
                         strings.i2pTunnels
                     },
-                    CliLineTone.WARN,
+                    CliLineTone.PENDING,
+                    animated = false,
                 )
             I2pNetworkPhase.CONNECTED -> {
                 updateProgress(CliProgressLeg.I2P, strings.i2pConnected, CliLineTone.OK)
@@ -749,6 +757,7 @@ internal class CliTerminalState(
             }
             CliProgressLeg.I2P,
             CliProgressLeg.DISCONNECT,
+            CliProgressLeg.GEO,
             null,
             -> Unit
         }
@@ -806,6 +815,7 @@ internal class CliTerminalState(
             append(
                 text = strings.exitKeyIp,
                 tone = CliLineTone.DIM,
+                icon = CliLineIcon.IP,
                 value = ip,
                 valueTone = tone,
                 valueLeading = true,
@@ -820,6 +830,7 @@ internal class CliTerminalState(
             append(
                 text = strings.exitKeyGeo,
                 tone = CliLineTone.DIM,
+                icon = CliLineIcon.LOCATION,
                 flagCountry = info.countryCode,
                 value = geo,
                 valueTone = tone,
@@ -904,6 +915,19 @@ internal class CliTerminalState(
         }
     }
 
+    fun beginGeoRefresh(text: String) {
+        if (progress != null) return
+        updateProgress(
+            leg = CliProgressLeg.GEO,
+            text = text,
+            tone = CliLineTone.PENDING,
+        )
+    }
+
+    fun finishGeoRefresh() {
+        clearProgress(CliProgressLeg.GEO)
+    }
+
     private var pendingOutput: CliTerminalLine? = null
     private val held = mutableListOf<CliTerminalLine>()
     private var nextLineId = 0L
@@ -919,13 +943,13 @@ internal class CliTerminalState(
 
     private fun updateVpnConnectProgress(
         step: String,
-        tone: CliLineTone = CliLineTone.WARN,
+        tone: CliLineTone = CliLineTone.PENDING,
     ) = updateProgress(
         leg = CliProgressLeg.VPN,
         text = step,
         tone = tone,
         title = strings.connecting,
-        titleTone = CliLineTone.WARN,
+        titleTone = CliLineTone.PENDING,
     )
 
     private fun updateProgress(
@@ -934,13 +958,20 @@ internal class CliTerminalState(
         tone: CliLineTone,
         title: String? = null,
         titleTone: CliLineTone = tone,
+        animated: Boolean = true,
     ) {
         val current = progress
         val reusesCurrentConnection =
             current != null &&
                 (progressLeg == leg || progressLeg == CliProgressLeg.VPN && leg == CliProgressLeg.TOR)
         progress = if (reusesCurrentConnection) {
-            current.copy(text = text, tone = tone, title = title, titleTone = titleTone)
+            current.copy(
+                text = text,
+                tone = tone,
+                title = title,
+                titleTone = titleTone,
+                animated = animated,
+            )
         } else {
             CliTerminalProgress(
                 id = nextProgressId++,
@@ -949,6 +980,7 @@ internal class CliTerminalState(
                 tone = tone,
                 title = title,
                 titleTone = titleTone,
+                animated = animated,
             )
         }
         progressLeg = leg
@@ -1013,12 +1045,14 @@ internal class CliTerminalState(
         inlineValue: Boolean = false,
         typed: Boolean = true,
         footnote: Boolean = false,
+        icon: CliLineIcon? = null,
     ) {
         lines.pruneBefore(System.currentTimeMillis() - retentionHours() * MS_PER_HOUR)
         val line = CliTerminalLine(
             timestampMs = System.currentTimeMillis(),
             text = text,
             tone = tone,
+            icon = icon,
             prompt = prompt,
             flagCountry = flagCountry,
             value = value,

@@ -119,10 +119,9 @@ internal suspend fun handleBootReceiverAction(
     }
 
     val security = (context.applicationContext as FoxholeApplication).appGraph.securityComponents
-    // Journal the boot first: this works while locked (only the plaintext guard public key
-    // is needed) and anchors the post-reboot timeline for the tamper verifier.
+
     runCatching { security.journalEvent(GuardEvent(type = GuardEventType.BOOT_COMPLETED)) }
-    // REINFORCED guard runs even before the VPN comes up (or when it is deferred while locked).
+
     if (security.isEventMonitoringActive() && security.guardHostingMode() == GuardHostingMode.REINFORCED) {
         runCatching { FoxholeGuardService.start(context) }
     }
@@ -133,13 +132,9 @@ internal suspend fun handleBootReceiverAction(
     when (plan.action) {
         BootRestoreAction.RESTORE_PROFILE ->
             if (security.isDatabaseLockedForBackground()) {
-                // The active profile lives in the encrypted DB; restoring it needs the password.
-                // Defer until the user unlocks (documented compromise) and record it.
                 runCatching { security.journalEvent(GuardEvent(type = GuardEventType.VPN_RESTORE_DEFERRED)) }
                 dependencies.diagnosticsLogger.record("connection", "boot restore deferred: password-locked")
-                // What does not need the password still runs. The firewall guard is built from
-                // the settings, which are readable here — the plan above was built from them —
-                // so a locked device comes up guarded and the profile joins it at the unlock.
+
                 plan.localGuardMode?.let { guardMode ->
                     startLocalGuardAtBoot(context, guardMode)
                     dependencies.diagnosticsLogger.record(
@@ -162,12 +157,6 @@ internal suspend fun handleBootReceiverAction(
     }
 }
 
-/**
- * Raise the local guard from the boot receiver.
- *
- * Boot starts the guard without going through `syncLocalGuard`, so the out-of-process reconciler
- * is armed here too — it is what survives a later process kill.
- */
 private fun startLocalGuardAtBoot(context: Context, mode: LocalGuardMode) {
     context.applyGuardReconcileSchedule(enabled = true)
     FoxholeConnectionServiceContract.startForegroundService(
@@ -216,11 +205,6 @@ internal fun bootRestorePlan(
     localGuardMode: LocalGuardMode?,
 ): BootRestorePlan =
     when {
-        // The guard mode travels with the profile restore even though the profile is what is
-        // being restored: the restore needs the encrypted database and the guard does not, so
-        // when a custom password holds the database shut this is the half that can still run.
-        // Without it, "password + autostart + firewall" started nothing at all after a reboot —
-        // the profile waited for the unlock, and the firewall waited with it for no reason.
         autoStartOnBoot ->
             BootRestorePlan(
                 action = BootRestoreAction.RESTORE_PROFILE,
@@ -256,7 +240,6 @@ internal suspend fun recoverAfterPackageReplace(
     val security = (context.applicationContext as FoxholeApplication).appGraph.securityComponents
     runCatching { security.journalEvent(GuardEvent(type = GuardEventType.MY_PACKAGE_REPLACED)) }
     if (security.isDatabaseLockedForBackground()) {
-        // Recovery reads the active profile from the encrypted DB; wait for unlock.
         runCatching { security.journalEvent(GuardEvent(type = GuardEventType.VPN_RESTORE_DEFERRED)) }
         dependencies.diagnosticsLogger.record("connection", "package replace recovery deferred: password-locked")
         return
@@ -272,6 +255,7 @@ internal suspend fun recoverAfterPackageReplace(
             activeProfileId = activeProfile?.id,
             settingsTrafficMode = settings.traffic.mode,
             localGuardMode = settings.localGuardModeOrNull(),
+            torOnlyRestoreAllowed = settings.privacyRoute.permitted && settings.privacyRoute.enabled,
         )
     if (plan.killStaleRuntime) {
         dependencies.diagnosticsLogger.record(
@@ -407,18 +391,34 @@ internal data class PackageReplaceRecoveryPlan(
     val reconnectRequired: Boolean = false,
 )
 
+private data class PackageReplaceResumeProfile(
+    val profileId: Long? = null,
+    val rejectedTorOnly: Boolean = false,
+)
+
+private fun RuntimeResumeState?.resolvePackageReplaceResumeProfile(
+    torOnlyRestoreAllowed: Boolean,
+): PackageReplaceResumeProfile {
+    val storedProfileId = this?.profileId ?: return PackageReplaceResumeProfile()
+    if (storedProfileId == FoxholeVpnService.TOR_ONLY_PROFILE_ID) {
+        return PackageReplaceResumeProfile(
+            profileId = storedProfileId.takeIf { torOnlyRestoreAllowed },
+            rejectedTorOnly = !torOnlyRestoreAllowed,
+        )
+    }
+    return PackageReplaceResumeProfile(profileId = storedProfileId.takeIf { it > 0L })
+}
+
 internal fun packageReplaceRecoveryPlan(
     resumeState: RuntimeResumeState?,
     hasActiveVpnNetwork: Boolean,
     activeProfileId: Long?,
     settingsTrafficMode: TrafficMode,
     localGuardMode: LocalGuardMode?,
+    torOnlyRestoreAllowed: Boolean = true,
 ): PackageReplaceRecoveryPlan {
     val resumeLocalGuardMode = resumeState?.localGuardMode
-    val resumeProfileId =
-        resumeState
-            ?.profileId
-            ?.takeIf { profileId -> profileId > 0L || profileId == FoxholeVpnService.TOR_ONLY_PROFILE_ID }
+    val resumeProfile = resumeState.resolvePackageReplaceResumeProfile(torOnlyRestoreAllowed)
     val resumeTrafficMode = resumeState?.trafficMode
     val killTrafficMode = resumeTrafficMode ?: settingsTrafficMode
     return when {
@@ -429,11 +429,18 @@ internal fun packageReplaceRecoveryPlan(
                 localGuardMode = resumeLocalGuardMode,
             )
 
-        resumeProfileId != null && resumeTrafficMode != null ->
+        resumeProfile.rejectedTorOnly ->
+            PackageReplaceRecoveryPlan(
+                killStaleRuntime = true,
+                killTrafficMode = TrafficMode.TUNNEL,
+                localGuardMode = localGuardMode,
+            )
+
+        resumeProfile.profileId != null && resumeTrafficMode != null ->
             PackageReplaceRecoveryPlan(
                 killStaleRuntime = true,
                 killTrafficMode = resumeTrafficMode,
-                profileId = resumeProfileId,
+                profileId = resumeProfile.profileId,
                 protocolOptionId = resumeState.protocolOptionId,
                 profileTrafficMode = resumeTrafficMode,
             )

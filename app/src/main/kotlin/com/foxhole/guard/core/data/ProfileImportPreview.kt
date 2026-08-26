@@ -15,12 +15,6 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import java.net.URI
 
-/**
- * Lightweight parse of a raw import for the add-profile confirmation sheet: the display name,
- * the protocols the payload carries, and the server/subscription domain — WITHOUT touching the
- * database or the network. Null when the payload does not parse (the ordinary import path then
- * surfaces its own human error).
- */
 data class ProfileImportPreview(
     val displayName: String,
     val subscription: Boolean,
@@ -39,15 +33,6 @@ data class ProfileImportProtocolRow(
     val reason: String? = null,
 )
 
-/**
- * The protocols a SUBSCRIPTION carries — which cannot be known without fetching its body, so the
- * preview above honestly reports none and this fills them in afterwards. The confirmation sheet
- * used to sit on a permanent "—" for every subscription: the one question it exists to answer
- * ("what am I about to add?") was the one it could not answer.
- *
- * Fetches and parses only; nothing is stored. A failure returns null and the sheet keeps its dash —
- * the ordinary import path will surface the real error if the user goes ahead.
- */
 suspend fun ProfileRepository.subscriptionProtocolsPreview(rawInput: String): ProfileImportPreview? {
     val settings = settingsRepository.current()
     return withContext(Dispatchers.IO) {
@@ -179,12 +164,6 @@ suspend fun ProfileRepository.rawInputImportPreview(rawInput: String): ProfileIm
     }
 }
 
-/**
- * Duplicate detection for the add-profile flow: the SAME source already stored earlier —
- * subscription imports match on the stored subscription URL, config imports on the exact trimmed
- * raw payload. Secrets are read per profile (profile counts are small); any read failure simply
- * reports "no duplicate" and the ordinary import proceeds.
- */
 suspend fun ProfileRepository.findProfileMatchingRawImport(rawInput: String): Profile? {
     val trimmed = rawInput.trim()
     if (trimmed.isEmpty()) {
@@ -248,7 +227,6 @@ internal fun normalizedSubscriptionSourceIdentity(rawInput: String): String? =
         ).toASCIIString()
     }.getOrNull()
 
-/** First outbound/endpoint `server` host in FoxHole's normalized import document. */
 private fun ProfileRepository.firstOutboundServer(configJson: String): String? =
     runCatching {
         val root = json.parseToJsonElement(configJson).jsonObject

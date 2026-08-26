@@ -4,10 +4,6 @@ import java.io.InterruptedIOException
 import java.net.SocketException
 import java.net.UnknownHostException
 
-// App-owned (device identity) requests deliberately run UNBOUND: explicit Network.bindSocket from
-// the VPN-owner process throws EPERM on several vendors (see the denial detectors below), so those
-// fetches ride the process-default routing. Tunnel-validation probes are the opposite — they must
-// observe the tunnel, so they bind to the VPN network.
 fun <T> tunnelValidationRequestNetwork(candidate: T?): T? =
     candidate
 

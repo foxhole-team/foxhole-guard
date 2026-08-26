@@ -88,8 +88,7 @@ internal fun decryptBackupDocument(
         runCatching {
             backupJson.parseToJsonElement(payload).jsonObject["format"]?.jsonPrimitive?.contentOrNull
         }.getOrNull() ?: return BackupParseResult.Failure.MALFORMED
-    // Read-only compatibility for files made by developer previews. New exports are always
-    // encrypted, but refusing an existing local backup would strand the user's profiles.
+
     if (format == BACKUP_DOCUMENT_FORMAT) return decodeBackupDocument(payload)
     if (format != ENCRYPTED_BACKUP_FORMAT) return BackupParseResult.Failure.NOT_A_BACKUP
 

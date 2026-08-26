@@ -1,6 +1,7 @@
 package com.foxhole.guard.ui.cli.map
 
 import android.graphics.Bitmap
+import android.os.Trace
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
@@ -10,6 +11,7 @@ import androidx.compose.ui.unit.IntSize
 import androidx.core.graphics.createBitmap
 import com.foxhole.guard.traffic.TrafficMapCountryShape
 import com.foxhole.guard.traffic.TrafficMapGeoPoint
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlin.math.abs
@@ -18,9 +20,12 @@ import android.graphics.Paint as AndroidPaint
 import android.graphics.Path as AndroidPath
 
 internal object CliMapLandCache {
-    private const val MAX_ENTRIES = 3
     private val lock = Any()
-    private val bitmaps = LinkedHashMap<CliMapLandKey, ImageBitmap>(MAX_ENTRIES, 0.75f, true)
+    private val bitmaps =
+        CliMapByteLru<CliMapLandKey, ImageBitmap>(MAX_CACHE_BYTES) { bitmap ->
+            cliMapBitmapByteCount(bitmap.width, bitmap.height)
+        }
+    private val inFlight = mutableMapOf<CliMapLandKey, CompletableDeferred<ImageBitmap>>()
 
     suspend fun bitmap(
         shapes: List<TrafficMapCountryShape>,
@@ -35,20 +40,74 @@ internal object CliMapLandCache {
             height = canvasSize.height.coerceAtLeast(1),
             fillColor = fillColor?.toArgb(),
             boundaryColor = boundaryColor.toArgb(),
-            shapesIdentity = System.identityHashCode(shapes),
-            shapeCount = shapes.size,
+            shapesIdentity = CliMapShapesIdentity(shapes),
             pointStride = pointStride.coerceAtLeast(1),
             antiAlias = antiAlias,
         )
-        synchronized(lock) { bitmaps[key] } ?: renderLand(shapes, key).also { rendered ->
+        var renderOwner = false
+        val pending =
+            synchronized(lock) {
+                bitmaps[key]?.let { cached -> return@withContext cached }
+                inFlight[key]
+                    ?: CompletableDeferred<ImageBitmap>().also { deferred ->
+                        inFlight[key] = deferred
+                        renderOwner = true
+                    }
+            }
+
+        if (!renderOwner) return@withContext pending.await()
+
+        try {
+            val rendered = traceMapLandSection { renderLand(shapes, key) }
             synchronized(lock) {
                 bitmaps[key] = rendered
-                while (bitmaps.size > MAX_ENTRIES) {
-                    bitmaps.remove(bitmaps.entries.first().key)
-                }
+                inFlight.remove(key)
             }
+            pending.complete(rendered)
+            rendered
+        } catch (error: Throwable) {
+            synchronized(lock) { inFlight.remove(key) }
+            pending.completeExceptionally(error)
+            throw error
         }
     }
+
+    private const val MAX_CACHE_BYTES = 12L * 1024L * 1024L
+}
+
+internal class CliMapByteLru<K, V>(
+    private val maxBytes: Long,
+    private val sizeOf: (V) -> Long,
+) {
+    private val entries = LinkedHashMap<K, V>(4, 0.75f, true)
+
+    var byteCount: Long = 0L
+        private set
+
+    val size: Int
+        get() = entries.size
+
+    operator fun get(key: K): V? = entries[key]
+
+    operator fun set(key: K, value: V) {
+        val valueBytes = sizeOf(value).coerceAtLeast(0L)
+        if (valueBytes > maxBytes) return
+        entries.put(key, value)?.let { previous -> byteCount -= sizeOf(previous).coerceAtLeast(0L) }
+        byteCount += valueBytes
+        while (byteCount > maxBytes && entries.size > 1) {
+            val eldest = entries.entries.first()
+            entries.remove(eldest.key)
+            byteCount -= sizeOf(eldest.value).coerceAtLeast(0L)
+        }
+    }
+
+    internal fun contains(key: K): Boolean = entries.containsKey(key)
+}
+
+internal fun cliMapBitmapByteCount(width: Int, height: Int): Long {
+    val rowBytes = width.coerceAtLeast(1).toLong() * ARGB_8888_BYTES_PER_PIXEL
+    val safeHeight = height.coerceAtLeast(1).toLong()
+    return if (safeHeight > Long.MAX_VALUE / rowBytes) Long.MAX_VALUE else rowBytes * safeHeight
 }
 
 internal fun cliProjectMap(lat: Double, lon: Double, size: androidx.compose.ui.geometry.Size): Offset {
@@ -115,12 +174,31 @@ private data class CliMapLandKey(
     val height: Int,
     val fillColor: Int?,
     val boundaryColor: Int,
-    val shapesIdentity: Int,
-    val shapeCount: Int,
+    val shapesIdentity: CliMapShapesIdentity,
     val pointStride: Int,
     val antiAlias: Boolean = false,
 )
 
+private class CliMapShapesIdentity(
+    private val shapes: List<TrafficMapCountryShape>,
+) {
+    override fun equals(other: Any?): Boolean =
+        other is CliMapShapesIdentity && shapes === other.shapes
+
+    override fun hashCode(): Int = System.identityHashCode(shapes)
+}
+
+private inline fun <T> traceMapLandSection(block: () -> T): T {
+    Trace.beginSection(TRAFFIC_MAP_RENDER_LAND_BITMAP_TRACE)
+    return try {
+        block()
+    } finally {
+        Trace.endSection()
+    }
+}
+
 private const val MIN_LAT = -55.0
 private const val MAX_LAT = 85.0
 private const val LAT_RANGE = MAX_LAT - MIN_LAT
+private const val ARGB_8888_BYTES_PER_PIXEL = 4L
+internal const val TRAFFIC_MAP_RENDER_LAND_BITMAP_TRACE = "TrafficMap/renderLandBitmap"

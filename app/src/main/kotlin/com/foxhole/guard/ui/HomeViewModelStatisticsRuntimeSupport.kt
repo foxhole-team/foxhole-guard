@@ -11,6 +11,7 @@ import com.foxhole.guard.R
 import com.foxhole.guard.core.settings.recordInstalledAppInventory
 import com.foxhole.guard.core.settings.updateAppTrafficStatsEnabled
 import com.foxhole.guard.core.settings.updateStatisticsComponentVisible
+import com.foxhole.guard.core.settings.updateStatisticsDockIconEnabled
 import com.foxhole.guard.core.settings.updateStatisticsEnabled
 import com.foxhole.guard.core.settings.updateStatisticsMetricEnabled
 import com.foxhole.guard.core.settings.updateStatisticsRefreshInterval
@@ -99,6 +100,12 @@ internal fun HomeViewModel.onStatisticsEnabledChanged(value: Boolean) {
             loadInstalledApps()
         }
         syncLocalGuardWithPermissionRequest()
+    }
+}
+
+internal fun HomeViewModel.onStatisticsDockIconEnabledChanged(value: Boolean) {
+    viewModelScope.launch {
+        container.settingsRepository.updateStatisticsDockIconEnabled(value)
     }
 }
 

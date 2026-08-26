@@ -14,11 +14,6 @@ import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
 import java.util.UUID
 
-// Local surface inbounds for RuntimeConfigAssembler: local/LAN proxy inbounds, runtime
-// loopback proxy inbound, experimental (clash/v2ray) api, proxy-surface resolution.
-// Behaviour-preserving Phase B extraction; json-free (the LAN listen address is resolved
-// by the assembler and passed in, keeping lanProxyAddressProvider out of this file).
-
 internal fun buildLocalSurfaceInbounds(
     localSurfaces: LocalSurfaceSettings,
     includeLocalProxy: Boolean,
@@ -37,10 +32,7 @@ internal fun buildLocalSurfaceInbounds(
                 ),
             )
         }
-        // The LAN leg is published on the phone's Wi-Fi address, so it is only ever raised WITH
-        // credentials (stage2 §8). Without a usable password the surface stays down: an unreachable
-        // LAN proxy is a nuisance, an unauthenticated one is an open relay into the owner's VPN/Tor
-        // for every device on that network. The loopback leg above is untouched by this rule.
+
         val lanAuth = localSurfaces.lanAuth.mandatoryLanProxyAuthOrNull()
         if (lanListenAddress != null && lanAuth != null) {
             val lanSurface = localSurfaces.lanProxySurface()
@@ -56,15 +48,6 @@ internal fun buildLocalSurfaceInbounds(
         }
     }
 
-/**
- * Credentials for the LAN inbound, or `null` when the surface must not be published at all.
- *
- * Auth is mandatory for the LAN leg, so the stored `enabled` flag is ignored (forced on) instead of
- * being honoured — settings normalization pins it on as well, this is the second, runtime-side half
- * of the same invariant. A blank password fails closed (no inbound); a blank username falls back to
- * the same default login the settings layer uses, so a half-filled form cannot silently turn the
- * surface into an anonymous one.
- */
 internal fun LocalAuthSettings.mandatoryLanProxyAuthOrNull(): LocalAuthSettings? =
     takeIf { password.isNotBlank() }
         ?.copy(
@@ -183,6 +166,4 @@ private object RuntimeLoopbackProxySecret {
 
 private const val RUNTIME_LOOPBACK_PROXY_USERNAME = "foxhole-runtime"
 
-// Mirrors SettingsRepository.DEFAULT_PROXY_LOGIN: the login the settings layer writes when the user
-// leaves the field empty, repeated here so the runtime never has to invent a different one.
 private const val LAN_PROXY_FALLBACK_USERNAME = "foxhole"

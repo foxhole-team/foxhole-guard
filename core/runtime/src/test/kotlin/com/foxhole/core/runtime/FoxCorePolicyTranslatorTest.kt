@@ -190,15 +190,6 @@ internal class FoxCorePolicyTranslatorTest : FoxCoreConfigTranslatorTestSupport(
         )
     }
 
-    /**
-     * The include split and the firewall are one config, and the firewall wins where they overlap.
-     *
-     * The assembler puts blocked packages inside the include set on purpose — the tun is
-     * full-device, so their reject rule is what stops them, and it is emitted first. The inverted
-     * rule used to demand that no application had been classified yet, which made exactly this
-     * pair — a split with any blocked app — unrepresentable: refused before the tun existed, so the
-     * profile did not connect at all.
-     */
     @Test
     fun `an include split keeps blocked apps blocked instead of refusing the config`() {
         val block =

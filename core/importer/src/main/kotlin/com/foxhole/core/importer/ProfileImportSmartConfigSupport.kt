@@ -9,9 +9,6 @@ import com.foxhole.core.model.SubscriptionEntryStatus
 import com.foxhole.core.network.RemoteHostResolver
 import kotlinx.serialization.json.Json
 
-// The smart-config leg of the import hierarchy: FoxHole smart-config documents are parsed,
-// grouped by profile and labeled here. Split from ProfileImportEngine.kt (same pattern as the
-// Node/Xray/Core supports below it).
 internal open class ProfileImportSmartConfigSupport(
     json: Json,
     remoteHostResolver: RemoteHostResolver? = null,
@@ -122,8 +119,6 @@ internal open class ProfileImportSmartConfigSupport(
         )
     }
 
-    // Within one route group, the same server offered as both plain ss:// and Outline ss://...?outline=1
-    // is one protocol option, not two. Keyed on the tag-stripped outbound; the plain representation wins.
     internal fun deduplicateSmartConfigEntries(entries: List<SmartConfigEntry>): List<SmartConfigEntry> {
         val chosen = LinkedHashMap<kotlinx.serialization.json.JsonObject, SmartConfigEntry>()
         entries.forEach { entry ->

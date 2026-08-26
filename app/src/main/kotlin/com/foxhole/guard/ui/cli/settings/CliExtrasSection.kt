@@ -23,7 +23,7 @@ internal fun CliExtrasSection(
     val colors = LocalCliColors.current
     CliPanel(
         title = stringResource(R.string.cli_cfg_group_extras),
-        icon = R.drawable.pix_link,
+        icon = R.drawable.lin_link,
         iconColor = colors.accent,
         modifier = Modifier.fillMaxWidth(),
         collapsible = true,
@@ -32,7 +32,8 @@ internal fun CliExtrasSection(
     ) {
         CliModuleBlock(
             label = stringResource(R.string.cli_extras_webapps),
-            icon = R.drawable.pix_webapps,
+            icon = R.drawable.lin_webapps,
+            infoText = stringResource(R.string.cli_help_webapps_body),
             checked = settings.webApps.enabled,
             onToggle = onWebAppsEnabledChanged,
             onOpenSettings = onOpenWebApps,
@@ -41,7 +42,8 @@ internal fun CliExtrasSection(
         CliDivider(color = colors.borderBright)
         CliModuleBlock(
             label = stringResource(R.string.cli_extras_proxy_server),
-            icon = R.drawable.pix_device,
+            icon = R.drawable.lin_device,
+            infoText = stringResource(R.string.cli_help_lan_proxy_body),
             checked = settings.expert.localSurfaces.allowLanAccess,
             onToggle = onProxyServerEnabledChanged,
             onOpenSettings = onOpenProxyServer,

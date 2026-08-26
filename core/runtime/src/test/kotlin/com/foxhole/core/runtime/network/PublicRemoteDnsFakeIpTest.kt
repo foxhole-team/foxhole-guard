@@ -6,17 +6,6 @@ import org.junit.Test
 import java.net.InetAddress
 import java.net.UnknownHostException
 
-/**
- * Regression guard for the device failure of 2026-08-09.
- *
- * The profile TUN captures the whole device by design, so this app's own control plane resolves
- * through its own DNS interceptor. With an overlay armed the interceptor answers out of the
- * fake-IP pool, and `PublicRemoteDns` used to read that as "private, reserved, or loopback",
- * fall through to a 750 ms DoH fallback and throw [UnknownHostException] when it did not land.
- * The connect path turns that into a failed session build, and the reload path answers a failed
- * session build by tearing the live tunnel down — which is what the owner saw as "falls over about
- * a minute later" and "per-app assignment does nothing".
- */
 class PublicRemoteDnsFakeIpTest {
     private val neverCalledFallback =
         PublicDnsFallback { hostname ->
@@ -48,7 +37,6 @@ class PublicRemoteDnsFakeIpTest {
         assertEquals(listOf(real), dns.lookup("proxy.example.com"))
     }
 
-    /** A genuinely private answer keeps its refusal: the exemption is for the pool alone. */
     @Test
     fun `a private answer still falls back and then fails`() {
         val dns =

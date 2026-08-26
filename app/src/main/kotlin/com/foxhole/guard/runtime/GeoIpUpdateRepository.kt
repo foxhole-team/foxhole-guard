@@ -12,24 +12,13 @@ class GeoIpUpdateRepository(
 ) {
     fun currentInfo(): GeoIpDatabaseInfo = store.currentInfo()
 
-    /**
-     * Whether the user has downloaded the geo database. The traffic map is gated on this —
-     * enabling the map with no downloaded DB is what triggers the download prompt.
-     */
     fun hasDownloadedDatabase(): Boolean = store.currentInfo().installed != null
 
-    /**
-     * Whether the periodic freshness probe is due (>= [GEOIP_CHECK_INTERVAL_MS] since the
-     * last successful check, or never checked). The new UI's map worker calls this instead of
-     * probing GitHub on every open; a `true` from [checkForUpdate] surfaces the "update database"
-     * button at the bottom of the map.
-     */
     fun isUpdateCheckDue(nowMs: Long = nowProvider()): Boolean {
         val lastChecked = store.readLastCheckedAtMs() ?: return true
         return nowMs - lastChecked >= GEOIP_CHECK_INTERVAL_MS
     }
 
-    /** Check-only probe for the "updates available" indicator; null when the source is unreachable. */
     suspend fun checkForUpdate(): Boolean? {
         val available = client.checkForUpdate(store)
         if (available != null) {
@@ -38,7 +27,6 @@ class GeoIpUpdateRepository(
         return available
     }
 
-    /** Deletes the downloaded database override; country data stays unavailable until re-download. */
     fun clearDownloaded(): Boolean {
         val cleared = store.clearOverride()
         diagnosticsLogger.record("ip", "geoip downloaded database cleared=$cleared")
@@ -70,8 +58,6 @@ class GeoIpUpdateRepository(
     }
 
     companion object {
-        // Minimum spacing between automatic freshness probes. 72h — the geo dataset moves
-        // slowly, so a rarer cadence is fine; the manual "check now" path ignores this gate.
         const val GEOIP_CHECK_INTERVAL_MS = 72L * 60L * 60L * 1000L
     }
 }

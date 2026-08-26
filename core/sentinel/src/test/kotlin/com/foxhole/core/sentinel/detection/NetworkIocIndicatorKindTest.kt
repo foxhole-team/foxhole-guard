@@ -8,13 +8,7 @@ import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/**
- * One severity for every indicator was the bug: a threat's shared CDN address and its
- * command-and-control endpoint are both "on the list", but thousands of ordinary apps reach the
- * first and nothing benign reaches the second.
- */
 class NetworkIocIndicatorKindTest {
-
     private val matcher =
         NetworkIocMatcher(
             ThreatIntelDocument(
@@ -152,13 +146,7 @@ class NetworkIocIndicatorKindTest {
     }
 }
 
-/**
- * A feed written before indicators had kinds still parses and still matches; it simply claims less.
- * The failure mode this guards is the loud one — reading "the feed did not say" as
- * "command-and-control" would turn every legacy CDN entry into a confident HIGH.
- */
 class LegacyThreatIntelFeedTest {
-
     private val legacy =
         ThreatIntelDocument(
             schema = 3,

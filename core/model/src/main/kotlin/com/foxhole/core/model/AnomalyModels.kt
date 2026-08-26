@@ -28,31 +28,18 @@ enum class AnomalyType {
     RECONNECT_STORM,
     LATENCY_SHIFT,
 
-    // Retired detector (destination-country heuristic); the value stays so persisted events decode.
     TOR_OR_I2P_ROUTE_MISMATCH,
     DORMANT_APP_NETWORK_ACTIVITY,
 
-    // A flow destination matched the threat-intel bundle's published indicator list (the Sentinel
-    // network IOC matcher); evidence carries the destination and the listed indicator.
     KNOWN_THREAT_DESTINATION,
 }
 
-/**
- * Coarse expectation of how an app uses the network, resolved from the platform app category.
- * CONTENT_HEAVY apps (video/audio/games) legitimately move large download volumes, so
- * download-shaped volume spikes from them are dampened; upload-shaped traffic never is.
- */
 @Serializable
 enum class AppNetworkUsageCategory {
     CONTENT_HEAVY,
     STANDARD,
 }
 
-/**
- * Long-horizon record that a package has been seen on the network. Unlike traffic windows this is
- * a tiny aggregate that survives statistics retention, so a package silent for weeks can be
- * recognized as dormant when it suddenly produces traffic again.
- */
 @Immutable
 data class AppNetworkPresence(
     val packageName: String,
@@ -91,7 +78,7 @@ data class AnomalySettings(
     val analyzeBackgroundTraffic: Boolean = false,
     val analyzeDestinationCountries: Boolean = false,
     val historyRetention: AnomalyHistoryRetention = AnomalyHistoryRetention.DAYS_7,
-    // Packages fully excluded from per-app anomaly analysis; device-wide detectors still see totals.
+
     val excludedPackages: List<String> = emptyList(),
 )
 
@@ -113,14 +100,12 @@ data class TrafficWindow(
     val blockedDnsDomains: Map<String, Long> = emptyMap(),
     // Real per-category block counts (per-category rule-set tags); empty on the legacy merged list.
     val blockedDnsByCategory: Map<DnsFilterCategory, Long> = emptyMap(),
-    // Real per-app block counts (blocked domains joined against observed DNS queries).
+
     val blockedDnsApps: Map<String, Long> = emptyMap(),
 ) {
     val totalBytes: Long get() = rxBytes + txBytes
 }
 
-// One measured protocol outcome (smart-start probe, reconnect probe or server ping); persisted so
-// profile details can chart real latency distributions instead of a single last-value snapshot.
 @Immutable
 data class ProtocolMetricEvent(
     val timestampMs: Long,

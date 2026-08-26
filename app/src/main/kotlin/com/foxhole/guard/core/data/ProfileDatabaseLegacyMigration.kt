@@ -43,8 +43,6 @@ internal fun migrateLegacyPlaintextDatabase(
         legacyRows
             .filterNot { row -> targetDatabase.legacyProfileRow(row.id) == row }
     if (unverifiedLegacyRows.isNotEmpty()) {
-        // Keep the legacy source for the next attempt, but never turn create() into a startup
-        // crash-loop: the copy above is idempotent (insert-or-ignore inside a transaction).
         Log.w(
             TAG,
             "legacy plaintext migration left unverified rows " +
@@ -141,9 +139,6 @@ private fun deleteLegacyPlaintextDatabase(legacy: File) {
         )
     val failedDeletes = files.filter { file -> file.exists() && !file.delete() }
     if (failedDeletes.isNotEmpty()) {
-        // Best effort: the rows are already migrated and verified, and re-running the copy is
-        // idempotent, so an undeletable file must not crash-loop every subsequent open. The
-        // deletion retries on the next create().
         Log.w(
             TAG,
             "legacy plaintext database migrated but not yet removed: " +

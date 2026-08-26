@@ -8,8 +8,6 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
-// WireGuard tunnel-validation helpers, kept engine-side (out of the host validation coordinator)
-// so the engine TunnelValidationGateway does not depend on it. Uses its own small Json parser.
 fun shouldPreferIpv4TunnelValidation(
     protocolHint: ProtocolHint?,
     configJson: String?,

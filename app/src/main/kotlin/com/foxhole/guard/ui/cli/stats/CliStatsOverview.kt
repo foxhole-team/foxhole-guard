@@ -65,10 +65,6 @@ internal data class CliStatsOverview(
         get() = if (vpnAttempts <= 0) 0f else vpnFailures.toFloat() / vpnAttempts.toFloat()
 }
 
-/**
- * Events with a blank protocol (smart-profile probes) count toward mean latency and total errors but cannot win best/worst; SERVER_PING latency is a real measurement and counts.
- * Lifetime values are only a fallback for an empty window and are tagged LIFETIME.
- */
 internal fun cliStatsOverview(
     window: StatisticsWindow,
     appTrafficWindows: List<AppTrafficWindow>,

@@ -3,6 +3,7 @@ package com.foxhole.guard.ui
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.listSaver
 import com.foxhole.core.model.Profile
+import com.foxhole.core.model.ProfileSourceType
 import com.foxhole.core.profile.ProfileExportChoice
 import com.foxhole.core.profile.exportableProfileChoices
 
@@ -14,6 +15,7 @@ data class ProfileExportSelectionRequest(
 internal data class ProfilesExportSelectionState(
     val selectedKeysByProfileId: Map<Long, Set<String>> = emptyMap(),
     val expandedSmartProfileIds: Set<Long> = emptySet(),
+    val subscriptionQrProfileId: Long? = null,
 )
 
 internal val ProfilesExportSelectionStateSaver: Saver<ProfilesExportSelectionState, Any> =
@@ -26,6 +28,7 @@ internal val ProfilesExportSelectionStateSaver: Saver<ProfilesExportSelectionSta
                         "$profileId:${selectionKeys.sorted().joinToString(separator = ",")}"
                     },
                 state.expandedSmartProfileIds.sorted(),
+                state.subscriptionQrProfileId?.toString().orEmpty(),
             )
         },
         restore = { restored ->
@@ -59,9 +62,11 @@ internal val ProfilesExportSelectionStateSaver: Saver<ProfilesExportSelectionSta
                             else -> null
                         }
                     }.toSet()
+            val subscriptionQrProfileId = restored.getOrNull(2)?.toString()?.toLongOrNull()
             ProfilesExportSelectionState(
                 selectedKeysByProfileId = selectedEntries,
                 expandedSmartProfileIds = expandedProfileIds,
+                subscriptionQrProfileId = subscriptionQrProfileId,
             )
         },
     )
@@ -71,6 +76,11 @@ internal fun ProfilesExportSelectionState.selectedKeys(profileId: Long): Set<Str
 
 internal fun ProfilesExportSelectionState.isReady(): Boolean =
     selectedKeysByProfileId.values.any { selectionKeys -> selectionKeys.isNotEmpty() }
+
+internal fun ProfilesExportSelectionState.subscriptionQrProfileIdOrNull(): Long? =
+    subscriptionQrProfileId?.takeIf { profileId ->
+        requests().singleOrNull()?.profileId == profileId
+    }
 
 internal fun ProfilesExportSelectionState.requests(): List<ProfileExportSelectionRequest> =
     selectedKeysByProfileId
@@ -95,6 +105,7 @@ internal fun ProfilesExportSelectionState.toggleSingleProfile(profile: Profile):
             setOf(selectionKey)
         }
     return withSelection(profile.id, nextSelection)
+        .withProfileLevelSubscriptionQrMode(profile, nextSelection)
 }
 
 internal fun ProfilesExportSelectionState.toggleSmartProfileAll(profile: Profile): ProfilesExportSelectionState {
@@ -108,6 +119,7 @@ internal fun ProfilesExportSelectionState.toggleSmartProfileAll(profile: Profile
             allKeys
         }
     return withSelection(profile.id, nextSelection)
+        .withProfileLevelSubscriptionQrMode(profile, nextSelection)
 }
 
 internal fun ProfilesExportSelectionState.toggleSmartProfileChoice(
@@ -123,7 +135,7 @@ internal fun ProfilesExportSelectionState.toggleSmartProfileChoice(
         } else {
             currentSelection + selectionKey
         }
-    return withSelection(profile.id, nextSelection)
+    return withSelection(profile.id, nextSelection).copy(subscriptionQrProfileId = null)
 }
 
 internal fun ProfilesExportSelectionState.toggleSmartProfileExpanded(profileId: Long): ProfilesExportSelectionState =
@@ -165,8 +177,27 @@ internal fun ProfilesExportSelectionState.pruneTo(profiles: List<Profile>): Prof
     return copy(
         selectedKeysByProfileId = normalizedSelections,
         expandedSmartProfileIds = expandedSmartProfileIds.intersect(validProfileIds),
+        subscriptionQrProfileId = subscriptionQrProfileId?.takeIf { profileId ->
+            val profile = profiles.firstOrNull { candidate -> candidate.id == profileId }
+            profile?.sourceType == ProfileSourceType.SUBSCRIPTION_URL &&
+                normalizedSelections.keys.singleOrNull() == profileId &&
+                normalizedSelections[profileId] == validSelectionKeysByProfileId[profileId]
+        },
     )
 }
+
+private fun ProfilesExportSelectionState.withProfileLevelSubscriptionQrMode(
+    profile: Profile,
+    selectionKeys: Set<String>,
+): ProfilesExportSelectionState =
+    if (profile.sourceType == ProfileSourceType.SUBSCRIPTION_URL && selectionKeys.isNotEmpty()) {
+        copy(
+            selectedKeysByProfileId = mapOf(profile.id to selectionKeys.toSortedSet()),
+            subscriptionQrProfileId = profile.id,
+        )
+    } else {
+        copy(subscriptionQrProfileId = null)
+    }
 
 private fun ProfilesExportSelectionState.withSelection(
     profileId: Long,

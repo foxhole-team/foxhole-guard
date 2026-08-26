@@ -1,7 +1,6 @@
 package com.foxhole.guard.core.diagnostics
 
 import com.foxhole.core.model.DiagnosticEntry
-import com.foxhole.core.model.DiagnosticSanitizer
 import com.foxhole.core.model.DiagnosticSeverity
 import com.foxhole.core.model.RetentionPolicy
 import com.foxhole.guard.core.sentinel.AndroidKeystoreFileCipher
@@ -69,7 +68,6 @@ internal class DiagnosticsSessionStore(
                     val replacement = writableSessionFile(now)
                     val replacementEntries =
                         (listOf(journalReadFailureEntry(now, target, error)) + entries)
-                            .sanitizePersistedEntries()
                             .takeLast(retention.maxEntries)
                             .toMutableList()
                     currentSessionEntries = replacementEntries
@@ -77,14 +75,13 @@ internal class DiagnosticsSessionStore(
                     maybeCleanup(now, retention)
                     return
                 }
-        sessionEntries += entries.sanitizePersistedEntries()
+        sessionEntries += entries
         val retained = sessionEntries.takeLast(retention.maxEntries).toMutableList()
         currentSessionEntries = retained
         writeEntriesSync(target, retained)
         maybeCleanup(now, retention)
     }
 
-    /** Drops every persisted entry with [tag] (the per-journal manual clear). */
     @Synchronized
     fun removeTag(tag: String) {
         sessionFiles().forEach { file ->
@@ -247,19 +244,16 @@ internal class DiagnosticsSessionStore(
         DiagnosticEntry(
             timestamp = timestamp,
             tag = tag,
-            message = DiagnosticSanitizer.sanitizeForPersistence(message),
+            message = message,
             severity = severity,
         )
-
-    private fun List<DiagnosticEntry>.sanitizePersistedEntries(): List<DiagnosticEntry> =
-        map { entry -> entry.copy(message = DiagnosticSanitizer.sanitizeForPersistence(entry.message)) }
 
     @Serializable
     private data class PersistedDiagnosticEntry(
         val timestamp: Long,
         val tag: String,
         val message: String,
-        // Defaulted so journals written before the level existed still read as ordinary entries.
+
         val severity: DiagnosticSeverity = DiagnosticSeverity.INFO,
     )
 

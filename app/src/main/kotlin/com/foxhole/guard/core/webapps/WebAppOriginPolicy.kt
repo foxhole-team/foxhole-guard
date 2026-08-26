@@ -10,10 +10,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 internal fun isWebAppTunTransportReady(snapshot: ConnectionSnapshot): Boolean =
     snapshot.state == ConnectionState.CONNECTED && snapshot.trafficMode == TrafficMode.TUNNEL
 
-/**
- * The route gate of the web apps module. With isolation on, adding, opening and polling demand a
- * ready tunnel; with it off (the default) web apps ride the current network like any browser.
- */
 internal fun webAppRouteSatisfied(isolationEnabled: Boolean, tunnelReady: Boolean): Boolean =
     !isolationEnabled || tunnelReady
 
@@ -34,21 +30,13 @@ internal fun webAppRouteSatisfied(
         WebAppRoute.VPN ->
             snapshot.state == ConnectionState.CONNECTED &&
                 snapshot.profileId?.let { profileId -> profileId > 0L } == true &&
-                // The current local HTTP bridge is stream-based. A WG/AWG primary is L3 and must
-                // be reported unavailable rather than silently falling back to direct.
+
                 snapshot.protocolHint != ProtocolHint.WIREGUARD
         WebAppRoute.TOR -> snapshot.state == ConnectionState.CONNECTED && snapshot.torActive
         WebAppRoute.I2P -> snapshot.state == ConnectionState.CONNECTED && i2pReady
         WebAppRoute.BLOCK -> false
     }
 
-/**
- * Allows the configured HTTPS host and its descendants, never its parent or a sibling.
- *
- * This deliberately does not guess an eTLD+1. Treating the last two labels as a site would make
- * unrelated tenants on `github.io` or `co.uk` peers. Keeping the configured host as the trust root
- * is the fail-closed rule and still permits sites that move a session to their own subdomain.
- */
 internal fun sameWebAppSite(
     appHost: String,
     candidateHost: String,
@@ -60,7 +48,6 @@ internal fun sameWebAppSite(
         (candidate == root || candidate.endsWith(".$root"))
 }
 
-/** HTTPS, host ancestry and effective port must all stay inside one configured web app. */
 internal fun isAllowedWebAppUrl(
     appUrl: String,
     candidateUrl: String?,

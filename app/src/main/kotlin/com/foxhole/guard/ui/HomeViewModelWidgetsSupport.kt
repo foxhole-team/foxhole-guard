@@ -4,8 +4,10 @@ import android.app.Application
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName
 import androidx.lifecycle.viewModelScope
+import com.foxhole.core.model.StatusWidgetLayoutMode
 import com.foxhole.guard.core.settings.updateFoxWidgetAnimationEnabled
 import com.foxhole.guard.core.settings.updateStatusWidgetAppearance
+import com.foxhole.guard.core.settings.updateStatusWidgetLayoutMode
 import com.foxhole.guard.core.settings.updateWebAppsWidgetAppearance
 import com.foxhole.guard.widget.FoxStatusWidgetReceiver
 import com.foxhole.guard.widget.StatusWidgetReceiver
@@ -32,6 +34,12 @@ internal fun HomeViewModel.onFoxWidgetAnimationChanged(value: Boolean) {
     }
 }
 
+internal fun HomeViewModel.onStatusWidgetLayoutModeChanged(value: StatusWidgetLayoutMode) {
+    viewModelScope.launch {
+        container.settingsRepository.updateStatusWidgetLayoutMode(value)
+    }
+}
+
 private fun HomeViewModel.updateWidgetAppearance(
     kind: HomeWidgetKind,
     transform: (com.foxhole.core.model.WidgetKindAppearance) -> com.foxhole.core.model.WidgetKindAppearance,
@@ -41,9 +49,9 @@ private fun HomeViewModel.updateWidgetAppearance(
     val baseAppearance =
         when (kind) {
             HomeWidgetKind.CONNECTION ->
-                settings.widgets.statusAppearanceForWidget(context, settings.ui.panelAppearance)
+                settings.widgets.statusAppearanceForWidget(context, settings.ui.themeMode)
             HomeWidgetKind.WEB_APPS ->
-                settings.widgets.webAppsAppearanceForWidget(context, settings.ui.panelAppearance)
+                settings.widgets.webAppsAppearanceForWidget(context, settings.ui.themeMode)
             HomeWidgetKind.STATUS -> null
         }
     viewModelScope.launch {
@@ -63,7 +71,6 @@ internal enum class HomeWidgetKind {
     STATUS,
 }
 
-/** Opens the launcher's native add/configure flow for exactly the selected widget provider. */
 internal fun HomeViewModel.onAddHomeWidget(kind: HomeWidgetKind) {
     val app = getApplication<Application>()
     val provider =
@@ -84,8 +91,7 @@ internal fun HomeViewModel.onAddHomeWidget(kind: HomeWidgetKind) {
         manager.requestPinAppWidget(ComponentName(app, provider), null, null)
     }
     val requestAccepted = pinRequest.getOrElse { failure ->
-        // Launcher implementations are outside our process boundary. A rejected or broken pin
-        // flow must leave this settings screen usable instead of taking the whole app down.
+
         container.diagnosticsLogger.record(
             "widget",
             "launcher widget request failed kind=$kind type=${failure::class.java.simpleName}",

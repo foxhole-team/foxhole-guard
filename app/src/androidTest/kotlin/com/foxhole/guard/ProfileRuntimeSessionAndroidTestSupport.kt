@@ -692,10 +692,7 @@ internal open class ProfileRuntimeSessionAndroidTestSupport {
         internal const val LIVE_DIRECT_LINK_TERMINAL_TIMEOUT_MS = 150_000L
         internal const val BYTES_PER_KB = 1024L
         internal const val RUNTIME_STRESS_RSS_DELTA_LIMIT_KB = 250L * 1024L
-        /**
-         * Must be a Freedom outbound: the raw-JSON strategy keys off Xray's `protocol` field, and
-         * the direct leg has to stay direct for the split assertion to mean anything.
-         */
+
         internal val LIVE_SPLIT_DIRECT_PROFILE =
             """
             {

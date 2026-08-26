@@ -5,11 +5,6 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/**
- * The exported log has two jobs, and they pull against each other: it must carry NOTHING that
- * identifies the user or their servers, and it must still carry enough to debug the crash it was
- * attached to. These pin both halves.
- */
 class DiagnosticSanitizerTest {
     @Test
     fun `secrets never survive an export`() {
@@ -29,8 +24,6 @@ class DiagnosticSanitizerTest {
 
     @Test
     fun `the debugging context survives an export`() {
-        // Everything here is a real runtime log line. If the sanitizer eats these, the log it
-        // produces is worthless for fixing the bug it was attached to.
         val sanitized =
             DiagnosticSanitizer.sanitizeForExport(
                 "session ended mode=tunnel result=error reason=handshake_timeout " +
@@ -48,9 +41,6 @@ class DiagnosticSanitizerTest {
 
     @Test
     fun `bundled file names are not mistaken for hostnames`() {
-        // geoip.db and friends look exactly like a hostname to a naive regex, and redacting them
-        // turned "geoip.db download failed" into "[host] download failed" — the one word that said
-        // WHAT failed was the word removed.
         val sanitized =
             DiagnosticSanitizer.sanitizeForExport(
                 "geoip.db download failed; libbox.so loaded; config.json parse error; tor.log rotated",

@@ -12,7 +12,6 @@ class TorBridgeUpdateRepository(
     private val store: TorBridgeStore,
     private val diagnosticsLogger: RuntimeDiagnosticsSink,
 ) {
-    /** Deletes the downloaded bridge list; the bundled list takes over on the next Tor start. */
     fun clearDownloaded(): Boolean {
         val cleared = store.clearOverride()
         diagnosticsLogger.record("tor", "downloaded bridge list cleared=$cleared")

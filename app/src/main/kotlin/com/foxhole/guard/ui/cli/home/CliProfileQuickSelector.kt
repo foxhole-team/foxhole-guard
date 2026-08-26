@@ -1,6 +1,5 @@
 package com.foxhole.guard.ui.cli.home
 
-import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
@@ -12,6 +11,7 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -36,13 +36,13 @@ import com.foxhole.core.model.ProfileProtocolOption
 import com.foxhole.guard.R
 import com.foxhole.guard.ui.HomeViewModel
 import com.foxhole.guard.ui.ProfilesRouteUiState
-import com.foxhole.guard.ui.cli.CliMotion
 import com.foxhole.guard.ui.cli.CliSpacing
 import com.foxhole.guard.ui.cli.CliType
 import com.foxhole.guard.ui.cli.LocalCliColors
 import com.foxhole.guard.ui.cli.LocalCliPanelAppearance
 import com.foxhole.guard.ui.cli.cliLabelText
 import com.foxhole.guard.ui.cli.components.CLI_ACTIVE_DOT_SLOT_WIDTH
+import com.foxhole.guard.ui.cli.components.CLI_MENU_ROW_MIN_HEIGHT
 import com.foxhole.guard.ui.cli.components.CLI_PROFILE_TABLE_RIM
 import com.foxhole.guard.ui.cli.components.CliActiveDot
 import com.foxhole.guard.ui.cli.components.CliColumnRule
@@ -59,7 +59,6 @@ import com.foxhole.guard.ui.cli.profiles.formatExpiryDate
 import com.foxhole.guard.ui.cli.profiles.profileCountryCode
 import com.foxhole.guard.ui.cli.profiles.protocolRowPresentation
 import com.foxhole.guard.ui.cli.profiles.rememberCliProtocolColumnWidths
-import com.foxhole.guard.ui.onQuickSelectorSingleProfileSelected
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -67,35 +66,37 @@ internal fun CliProfileQuickSelector(
     viewModel: HomeViewModel,
     expandedSmartId: Long?,
     onExpandedSmartChange: (Long?) -> Unit,
+    onProfileSelected: (Long) -> Unit,
+    onProtocolSelected: (Long, String) -> Unit,
     onDone: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val colors = LocalCliColors.current
     val profiles by viewModel.profilesRouteState.collectAsStateWithLifecycle()
     CliPanel(
-        icon = R.drawable.pix_profiles,
+        icon = R.drawable.lin_profiles,
         modifier = modifier.fillMaxWidth(),
         title = stringResource(R.string.cli_prof_title),
         accentBorderColor = colors.accent,
         onClick = onDone,
     ) {
         CliProfileSelectorContent(
-            viewModel = viewModel,
             profiles = profiles,
             expandedSmartId = expandedSmartId,
             onExpandedSmartChange = onExpandedSmartChange,
-            onDone = onDone,
+            onProfileSelected = onProfileSelected,
+            onProtocolSelected = onProtocolSelected,
         )
     }
 }
 
 @Composable
 private fun CliProfileSelectorContent(
-    viewModel: HomeViewModel,
     profiles: ProfilesRouteUiState,
     expandedSmartId: Long?,
     onExpandedSmartChange: (Long?) -> Unit,
-    onDone: () -> Unit,
+    onProfileSelected: (Long) -> Unit,
+    onProtocolSelected: (Long, String) -> Unit,
 ) {
     if (!profiles.profilesLoaded) {
         CliProfileSelectorLoadingState()
@@ -113,22 +114,23 @@ private fun CliProfileSelectorContent(
     CliProfileSelectorTableHeader()
     CliRowDivider()
     CliProfileSelectorTable(
-        viewModel = viewModel,
         profiles = profiles,
         expandedSmartId = expandedSmartId,
         onExpandedSmartChange = onExpandedSmartChange,
-        onDone = onDone,
+        onProfileSelected = onProfileSelected,
+        onProtocolSelected = onProtocolSelected,
     )
 }
 
 @Composable
 private fun CliProfileSelectorTable(
-    viewModel: HomeViewModel,
     profiles: ProfilesRouteUiState,
     expandedSmartId: Long?,
     onExpandedSmartChange: (Long?) -> Unit,
-    onDone: () -> Unit,
+    onProfileSelected: (Long) -> Unit,
+    onProtocolSelected: (Long, String) -> Unit,
 ) {
+    val colors = LocalCliColors.current
     BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
         val cellSpacing = if (maxWidth < CliProtocolCompactHostWidth) 2.dp else CliSpacing.xs
         val expandedProfile = profiles.profiles.firstOrNull { profile ->
@@ -142,15 +144,13 @@ private fun CliProfileSelectorTable(
                 cellSpacing = cellSpacing,
             )
         }
-        val stickyFill = cliPanelBackground(
+        val expandedSurface = cliPanelBackground(
             candidate = Color.Unspecified,
-            fallback = LocalCliColors.current.panel,
+            fallback = colors.panelAlt,
             appearance = LocalCliPanelAppearance.current,
         )
         LazyColumn(
-            modifier = Modifier
-                .animateContentSize(animationSpec = CliMotion.standard(SELECTOR_COLLAPSE_MS))
-                .heightIn(max = 300.dp),
+            modifier = Modifier.heightIn(max = 300.dp),
         ) {
             profiles.profiles.forEachIndexed { index, profile ->
                 val isSmart = profile.protocolOptions.size > 1
@@ -167,8 +167,7 @@ private fun CliProfileSelectorTable(
                                         profile.id.takeUnless { expandedSmartId == profile.id },
                                     )
                                 } else {
-                                    viewModel.onQuickSelectorSingleProfileSelected(profile.id)
-                                    onDone()
+                                    onProfileSelected(profile.id)
                                 }
                             },
                         )
@@ -176,11 +175,12 @@ private fun CliProfileSelectorTable(
                 }
                 if (profile.id == expandedProfile?.id && expandedWidths != null) {
                     stickyHeader(key = "proto-header-${profile.id}") {
-                        Column(modifier = Modifier.fillMaxWidth().background(stickyFill)) {
+                        Column(modifier = Modifier.fillMaxWidth().background(expandedSurface)) {
                             CliProtocolTableHeader(
                                 widths = expandedWidths,
                                 cellSpacing = cellSpacing,
                                 showStatus = false,
+                                nameLabel = "v2raytun",
                             )
                             CliRowDivider()
                         }
@@ -190,7 +190,7 @@ private fun CliProfileSelectorTable(
                         options,
                         key = { _, option -> "proto-${profile.id}-${option.id}" },
                     ) { optionIndex, option ->
-                        Column(modifier = Modifier.fillMaxWidth()) {
+                        Column(modifier = Modifier.fillMaxWidth().background(expandedSurface)) {
                             if (optionIndex > 0) CliRowDivider()
                             CliProtocolOptionRow(
                                 presentation = protocolRowPresentation(profiles, profile, option),
@@ -199,19 +199,23 @@ private fun CliProfileSelectorTable(
                                 showStatus = false,
                                 onClick = {
                                     if (option.enabled) {
-                                        viewModel.onSelectProfileProtocolOption(profile.id, option.id)
-                                        onDone()
+                                        onProtocolSelected(profile.id, option.id)
                                     }
                                 },
                                 onToggleEnabled = null,
                             )
                         }
                     }
+                    stickyHeader(key = "proto-boundary-${profile.id}") {
+                        Spacer(modifier = Modifier.fillMaxWidth().height(PROTOCOL_STICKY_BOUNDARY_HEIGHT))
+                    }
                 }
             }
         }
     }
 }
+
+private val PROTOCOL_STICKY_BOUNDARY_HEIGHT = 1.dp
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -226,7 +230,7 @@ private fun CliProfileSelectorRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .defaultMinSize(minHeight = 48.dp)
+            .defaultMinSize(minHeight = CLI_MENU_ROW_MIN_HEIGHT)
             .cliPressable(onClick = onClick),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -273,6 +277,7 @@ private fun ProfileSelectorLeadingSlot(profile: Profile, active: Boolean) {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun RowScope.ProfileSelectorProtocol(
     profile: Profile,
@@ -285,9 +290,15 @@ private fun RowScope.ProfileSelectorProtocol(
         style = CliType.small,
         color = colors.faint,
         maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
+        overflow = TextOverflow.Clip,
         textAlign = TextAlign.End,
-        modifier = Modifier.weight(PROFILE_SELECTOR_PROTOCOL_WEIGHT),
+        modifier = Modifier
+            .weight(PROFILE_SELECTOR_PROTOCOL_WEIGHT)
+            .basicMarquee(
+                iterations = Int.MAX_VALUE,
+                initialDelayMillis = PROFILE_SELECTOR_MARQUEE_DELAY_MS,
+                repeatDelayMillis = PROFILE_SELECTOR_MARQUEE_REPEAT_MS,
+            ),
     )
     Box(
         modifier = Modifier.width(CLI_PROFILE_TABLE_RIM),
@@ -347,8 +358,6 @@ private const val PROFILE_SELECTOR_PROTOCOL_WEIGHT = 0.25f
 private const val PROFILE_SELECTOR_EXPIRY_WEIGHT = 0.32f
 private const val PROFILE_SELECTOR_MARQUEE_DELAY_MS = 1_200
 private const val PROFILE_SELECTOR_MARQUEE_REPEAT_MS = 1_000
-
-internal const val SELECTOR_COLLAPSE_MS = CliMotion.DurationQuick
 
 private val PROFILE_SELECTOR_LEADING_SLOT = CLI_PROFILE_TABLE_RIM + CLI_ACTIVE_DOT_SLOT_WIDTH
 

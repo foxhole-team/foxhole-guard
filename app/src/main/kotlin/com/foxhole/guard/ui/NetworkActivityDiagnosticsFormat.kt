@@ -5,7 +5,6 @@ import com.foxhole.core.model.DiagnosticEntry
 import com.foxhole.core.model.IpInfo
 import com.foxhole.core.model.NetworkActivityEvent
 import com.foxhole.core.runtime.TorGeoIpCountryResolver
-import com.foxhole.guard.R
 import com.foxhole.guard.statistics.countryDisplayName
 import com.foxhole.guard.statistics.normalizedCountryCode
 
@@ -16,28 +15,24 @@ internal fun networkActivityDiagnosticEntries(
     context: Context,
     countryResolver: TorGeoIpCountryResolver,
     ipInfo: IpInfo?,
-): List<DiagnosticEntry> {
-    val unknownLabel = context.getString(R.string.cli_common_unknown)
-    return events.map { event ->
+): List<DiagnosticEntry> =
+    events.map { event ->
         DiagnosticEntry(
             timestamp = event.timestampMs,
             tag = NETWORK_ACTIVITY_TAG,
             message = event.toNetworkActivityDiagnosticMessage(
                 formatBytes = { bytes -> formatBytes(context, bytes) },
-                unknownLabel = unknownLabel,
                 countryCodeForDestination = countryResolver::countryCodeForDestination,
                 ipInfo = ipInfo,
             ),
         )
     }
-}
 
 internal fun fallbackNetworkDiagnosticEntries(entries: List<DiagnosticEntry>): List<DiagnosticEntry> =
     entries.filter { it.tag == NETWORK_ACTIVITY_TAG }
 
 internal fun NetworkActivityEvent.toNetworkActivityDiagnosticMessage(
     formatBytes: (Long) -> String,
-    unknownLabel: String,
     countryCodeForDestination: (String) -> String? = { null },
     ipInfo: IpInfo? = null,
 ): String =
@@ -56,7 +51,6 @@ internal fun NetworkActivityEvent.toNetworkActivityDiagnosticMessage(
                         networkActivityCountryLabel(
                             countryCodeForDestination = countryCodeForDestination,
                             ipInfo = ipInfo,
-                            unknownLabel = unknownLabel,
                         )
                     }",
                 )
@@ -72,7 +66,6 @@ internal fun NetworkActivityEvent.toNetworkActivityDiagnosticMessage(
 private fun NetworkActivityEvent.networkActivityCountryLabel(
     countryCodeForDestination: (String) -> String?,
     ipInfo: IpInfo?,
-    unknownLabel: String,
 ): String {
     val remote = remoteHost.connectionHost()
     val matchingIpInfo =
@@ -82,8 +75,7 @@ private fun NetworkActivityEvent.networkActivityCountryLabel(
         normalizedCountryCode(countryCode)
             ?: normalizedCountryCode(countryCodeForDestination(remoteHost))
             ?: normalizedCountryCode(matchingIpInfo?.countryCode)
-    val city = matchingIpInfo?.city?.takeIf(String::isNotBlank) ?: unknownLabel
-    return resolvedCode
-        ?.let { code -> "${countryDisplayName(code)} ($code) • $city" }
-        ?: "$unknownLabel • $city"
+    val country = resolvedCode?.let { code -> "${countryDisplayName(code)} ($code)" } ?: "?"
+    val city = matchingIpInfo?.city?.takeIf(String::isNotBlank)
+    return listOfNotNull(country, city).joinToString(separator = " • ")
 }

@@ -23,9 +23,11 @@ import com.foxhole.core.runtime.AndroidApplicationIdentityResolver
 import com.foxhole.core.runtime.FoxholeRuntime
 import com.foxhole.core.runtime.FoxholeVpnRuntimeBridge
 import com.foxhole.core.runtime.LocalGuardMode
+import com.foxhole.core.runtime.NativeForceStopOutcome
 import com.foxhole.core.runtime.RuntimeCommandPriority
 import com.foxhole.core.runtime.RuntimeNetworkCallbackKind
 import com.foxhole.core.runtime.RuntimeServiceHost
+import com.foxhole.core.runtime.RuntimeServiceOwnerLease
 import com.foxhole.core.runtime.RuntimeWakeLock
 import com.foxhole.core.runtime.TorGeoIpCountryResolver
 import com.foxhole.core.runtime.TorProbeProxyFailure
@@ -33,7 +35,6 @@ import com.foxhole.core.runtime.TorProbeProxyOwner
 import com.foxhole.core.runtime.TrafficStatsSampler
 import com.foxhole.core.runtime.isActiveRuntimeFor
 import com.foxhole.core.runtime.isActiveRuntimeForAnotherMode
-import com.foxhole.core.runtime.isIdleWithoutAttachedRuntimeResources
 import com.foxhole.core.runtime.localGuardModeAfterCleanProfileDisconnect
 import com.foxhole.core.runtime.requireSystemServiceSafe
 import com.foxhole.core.runtime.resolveSmartStartAnalysisPreservation
@@ -61,9 +62,12 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.launch
 import java.util.concurrent.ConcurrentHashMap
 
-// The service body is the shared-state surface for the FoxholeVpnService*Support extension
-// files (split by responsibility): framework callbacks plus thin cross-file entry points.
-// Splitting further would only scatter the Android Service contract.
+private data class ServiceDestroyOwnership(
+    val ownerCurrent: Boolean,
+    val detachedRuntime: FoxholeRuntime?,
+    val hadActiveRuntime: Boolean,
+)
+
 class FoxholeVpnService : VpnService(), RuntimeServiceHost {
     override fun attachBaseContext(newBase: Context) {
         super.attachBaseContext(newBase.withStoredAppLocale())
@@ -71,15 +75,15 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
 
     internal val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
-    /**
-     * Renewed per session, NOT once per service. The bridge gate fences by epoch on every terminal
-     * publish (IDLE/ERROR) and permanently rejects tokens minted at or before that fence — that is
-     * deliberate, so a superseded writer can never resurrect a dead runtime. But this service lives
-     * across many sessions: an in-service teardown (the stop half of a profile switch or reconnect)
-     * fenced its own long-lived writer, and every later write was rejected as stale — the runtime
-     * connected for real while the UI sat on "connecting" until the process was force-stopped.
-     * [renewBridgeWriter] mints a fresh claim as each new session begins.
-     */
+    override fun onNativeProcessPoisoned(outcome: NativeForceStopOutcome) {
+        processLifetimeScope.launch(Dispatchers.IO) {
+            terminateProcessIfNativeForceStopPoisoned(
+                forceStopOutcome = outcome,
+                reason = "native_force_stop_poisoned",
+            )
+        }
+    }
+
     @Volatile
     internal var bridgeWriter = FoxholeVpnRuntimeBridge.writer(TrafficMode.TUNNEL)
         private set
@@ -124,6 +128,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
 
     internal val runtimeInstanceStore
         get() = container.runtimeInstanceStore
+    private lateinit var runtimeServiceOwner: RuntimeServiceOwnerLease
     internal val runtime: FoxholeRuntime
         get() = runtimeInstanceStore.get()
     internal val runtimeSupervisor
@@ -194,9 +199,6 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
     internal var runtimeConnectionSnapshotFlow: SharedFlow<RuntimeConnectionSnapshot>? = null
     internal var immediateTrafficSampleJob: Job? = null
 
-    // One timer coroutine for every periodic session task (traffic samplers, health probe, child
-    // watchdog fallback), replacing their separate delay-loops (Ф3e). Tasks register/unregister on
-    // the same lifecycle points the old jobs were launched/cancelled.
     internal val sessionTicker: RuntimeSessionTicker =
         RuntimeSessionTicker(
             scope = scope,
@@ -212,8 +214,6 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
     internal var geoRefreshJob: Job? = null
     internal var ipv4EnrichmentJob: Job? = null
 
-    // @Volatile: the epoch is invalidated by main callbacks, command coroutines on Default and the
-    // health tick on IO; without the barrier a stale validation could miss it in the post-check.
     @Volatile
     private var validationJobBacking: Job? = null
     internal var validationJob: Job?
@@ -226,9 +226,6 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
     @Volatile
     internal var validationEpoch: Long = 0L
 
-    // The freshest startId: stopService(null) must yield to a newer intent — a CONNECT arriving
-    // alongside an error teardown, say — or stopSelf() kills the service together with a user
-    // command already queued.
     @Volatile
     internal var latestServiceStartId: Int = -1
     private var networkCallbackRegisteredBacking = false
@@ -253,7 +250,6 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
             runtimeSupervisor.setNetworkCallbackRegistered(RuntimeNetworkCallbackKind.DEFAULT, value)
         }
 
-    // Mutated by the IO health tick, read/reset by Default-dispatcher teardown commands.
     @Volatile
     internal var notificationConnectivityHealthState = ConnectivityHealthState.CHECKING
 
@@ -269,9 +265,6 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
     @Volatile
     internal var lastI2pRelayMeteredClass: Boolean? = null
 
-    // Thread-safe: structurally mutated from the main-thread network callbacks (add/remove/clear)
-    // but also iterated from the command/validation coroutines on Dispatchers.Default/IO
-    // (currentUpstreamNetworkOrNull -> mapNotNull), which raced a plain LinkedHashSet.
     internal val upstreamNetworkHandles: MutableSet<Long> = ConcurrentHashMap.newKeySet()
     internal var activeVpnNetworkHandle: Long?
         get() = runtimeSupervisor.ownership.value.activeVpnNetworkHandle
@@ -279,8 +272,6 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
             runtimeSupervisor.setActiveVpnNetworkHandle(value)
         }
 
-    // Thread-safe for the same reason as upstreamNetworkHandles: touched from both the network
-    // callbacks and the teardown/loss coroutines.
     internal val ignoredVpnNetworkLossHandles: MutableSet<Long> = ConcurrentHashMap.newKeySet()
     internal var runtimeNetworkActivityLoggingSuspended: Boolean
         get() = runtimeSupervisor.ownership.value.networkActivityLoggingSuspended
@@ -288,9 +279,6 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
             runtimeSupervisor.setNetworkActivityLoggingSuspended(value)
         }
 
-    // VPN-first Tor ordering: correlationId of the session whose in-tunnel Tor route was deferred
-    // at connect time and is still waiting for the post-validation upgrade reload.
-    // Written by the connect command (Default), consumed by the validation hook (Main).
     @Volatile
     internal var pendingTorRouteUpgradeSessionId: String? = null
 
@@ -301,6 +289,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
 
     override fun onCreate() {
         super.onCreate()
+        runtimeServiceOwner = runtimeInstanceStore.claimServiceOwner()
         FoxholeConnectionServiceContract.markServiceCreated()
         installTlsFingerprintTables()
         claimForegroundSlotEarly(notificationManager)
@@ -323,7 +312,11 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
             container = container,
             handlers =
             RuntimeServiceCommandHandlers(
-                dispatch = ::dispatchRuntimeCommand,
+                dispatch = { command, execute ->
+                    dispatchRuntimeCommand(command) { accepted ->
+                        if (prepareRuntimeOwnerForCommand()) execute(accepted)
+                    }
+                },
                 connect = ::connect,
                 disconnect = { commandStartId, suppressLocalGuard, preserveSmartStartAnalysis ->
                     disconnect(
@@ -346,20 +339,30 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         super.onTaskRemoved(rootIntent)
     }
 
-    override fun onDestroy() {
-        FoxholeConnectionServiceContract.markServiceDestroyed()
-        detachGuardDaemon("vpn-service")
-        FoxholeVpnRuntimeBridge.updateSocketProtector(null)
+    private fun claimServiceDestroyOwnership(): ServiceDestroyOwnership {
         val snapshot = FoxholeVpnRuntimeBridge.snapshot.value
         val activeMode = runtimeSupervisor.ownership.value.activeMode
         val runtimeOwnedByAnotherMode =
             activeMode?.let { mode -> mode != TrafficMode.TUNNEL } == true ||
                 snapshot.isActiveRuntimeForAnotherMode(TrafficMode.TUNNEL)
-        val ownsNativeRuntime = !runtimeOwnedByAnotherMode
         val hadActiveRuntime =
             activeMode == TrafficMode.TUNNEL ||
                 activeMode == null && snapshot.isActiveRuntimeFor(TrafficMode.TUNNEL)
-        super.onDestroy()
+        val ownerCurrent =
+            !runtimeOwnedByAnotherMode && runtimeInstanceStore.beginServiceDestroy(runtimeServiceOwner)
+        val detachedRuntime =
+            if (ownerCurrent) {
+                runtimeInstanceStore.detachCurrentForServiceDestroy(runtimeServiceOwner)
+            } else {
+                null
+            }
+        return ServiceDestroyOwnership(ownerCurrent, detachedRuntime, hadActiveRuntime)
+    }
+
+    override fun onDestroy() {
+        FoxholeConnectionServiceContract.markServiceDestroyed()
+        detachGuardDaemon("vpn-service")
+        FoxholeVpnRuntimeBridge.updateSocketProtector(null)
         stopTrafficUpdates()
         anomalyTrafficAggregator.reset()
         stopAppTrafficStatsUpdates()
@@ -367,33 +370,42 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         stopNotificationHealthMonitoring()
         stopChildProcessWatchdog()
         cancelScheduledAutoReconnect(resetAttempts = true)
-        // Leave the safety net alone: an error teardown always ends here, and the one-shot worker
-        // is the only thing that carries the heal past the service's death.
+
         cancelLocalGuardHeal(resetAttempts = true, cancelSafetyNet = false)
         invalidateValidationEpoch("service_destroy")
         runtimeSupervisor.closeCommandOwner(runtimeCommandOwner)
-        if (ownsNativeRuntime) {
-            runtimeInstanceStore.current()?.let { runtime ->
-                if (!runtime.nativeSnapshot().isIdleWithoutAttachedRuntimeResources()) {
-                    stopRuntimeAfterServiceDestroy(
-                        // Not this service's scope: it is cancelled at the end of onDestroy().
-                        scope = processLifetimeScope,
-                        runtime = runtime,
-                        diagnosticsLogger = DiagnosticsLoggerRuntimeDiagnosticsSink(container.diagnosticsLogger),
-                        owner = "vpn",
-                    )
-                }
+        val destroyOwnership = claimServiceDestroyOwnership()
+        super.onDestroy()
+        if (destroyOwnership.ownerCurrent) {
+            destroyOwnership.detachedRuntime?.let { runtime ->
+                stopRuntimeAfterServiceDestroy(
+                    // Not this service's scope: it is cancelled at the end of onDestroy().
+                    scope = processLifetimeScope,
+                    runtime = runtime,
+                    diagnosticsLogger = DiagnosticsLoggerRuntimeDiagnosticsSink(container.diagnosticsLogger),
+                    owner = "vpn",
+                    onStopped = { result ->
+                        if (!result.processPoisoned) {
+                            runtimeInstanceStore.completeServiceDestroyRuntime(runtimeServiceOwner)
+                        }
+                    },
+                    onProcessPoisoned = { result ->
+                        terminateProcessIfNativeForceStopPoisoned(
+                            forceStopOutcome = result.forceStopOutcome,
+                            reason = "service_destroy",
+                        )
+                        runtimeInstanceStore.completeServiceDestroyRuntime(runtimeServiceOwner)
+                    },
+                )
             }
-            stopRetiredRuntimesAfterServiceDestroy()
-            // Fail-closed: i2pd is the only app-managed child process. Arti and its managed
-            // transports are owned by the native runtime and are torn down with that handle.
+            stopRetiredRuntimesAfterServiceDestroy(runtimeServiceOwner)
+            runtimeInstanceStore.sealServiceDestroy(runtimeServiceOwner) {
+                reapTorTransportOrphansAfterServiceDestroy("vpn")
+            }
             container.i2pdManager.kill("service_destroy")
         }
         releaseRuntimeWakeLock()
-        if (hadActiveRuntime) {
-            // Cross-mode handoff safety now lives in the bridge writer: a stale mode's ERROR
-            // publication is rejected centrally, so this call is safe to make unconditionally —
-            // the return value only picks the right diagnostics line.
+        if (destroyOwnership.hadActiveRuntime) {
             if (publishUnexpectedRuntimeStopSnapshot()) {
                 container.diagnosticsLogger.record(
                     "connection",
@@ -406,8 +418,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
                 )
             }
         }
-        // Belt-and-braces: the stop*Updates/stop*Monitoring calls above already unregistered every
-        // task; this guarantees an emptied ticker even if a future task forgets its stop hook.
+
         sessionTicker.stop()
         scope.cancel()
         if (networkCallbackRegistered) {
@@ -430,27 +441,55 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         runtimeSupervisor.clearRuntimeOwnership(TrafficMode.TUNNEL)
     }
 
-    /**
-     * A make-before-break switch destroyed halfway parked a runtime that still owns an established
-     * TUN. Nothing can reach it once the service is gone, so it is closed here on the same
-     * process-lifetime scope as the live one.
-     */
-    private fun stopRetiredRuntimesAfterServiceDestroy() {
+    private fun stopRetiredRuntimesAfterServiceDestroy(ownerLease: RuntimeServiceOwnerLease) {
         while (true) {
-            val retired = runtimeInstanceStore.takeRetired() ?: return
+            val retired = runtimeInstanceStore.takeRetiredForServiceDestroy(ownerLease) ?: return
             stopRuntimeAfterServiceDestroy(
                 scope = processLifetimeScope,
                 runtime = retired,
                 diagnosticsLogger = DiagnosticsLoggerRuntimeDiagnosticsSink(container.diagnosticsLogger),
                 owner = "vpn_retired",
+                onStopped = { result ->
+                    if (!result.processPoisoned) {
+                        runtimeInstanceStore.completeServiceDestroyRuntime(ownerLease)
+                    }
+                },
+                onProcessPoisoned = { result ->
+                    terminateProcessIfNativeForceStopPoisoned(
+                        forceStopOutcome = result.forceStopOutcome,
+                        reason = "retired_service_destroy",
+                    )
+                    runtimeInstanceStore.completeServiceDestroyRuntime(ownerLease)
+                },
             )
         }
     }
 
+    private suspend fun prepareRuntimeOwnerForCommand(): Boolean {
+        var reaped: Int? = null
+        val ready =
+            runtimeInstanceStore.prepareServiceOwnerForRuntime(
+                owner = runtimeServiceOwner,
+                timeoutMs = SERVICE_DESTROY_DRAIN_TIMEOUT_MS,
+                cleanup = { reaped = reapTorTransportOrphans() },
+            )
+        reaped?.let { count ->
+            container.diagnosticsLogger.recordStructured(
+                "runtime",
+                "previous service destroy cleanup completed",
+                "transport_orphans_reaped=$count",
+            )
+        }
+        if (!ready) {
+            container.diagnosticsLogger.recordFailure(
+                "runtime",
+                "runtime command refused while previous service destroy is still draining",
+            )
+        }
+        return ready
+    }
+
     override fun onRevoke() {
-        // Permission loss must invalidate the in-flight transition synchronously, then jump ahead
-        // of START/SWITCH work. KILL preemption also invokes the supervisor's emergency native
-        // teardown before this orderly disconnect publishes the final revoked state.
         beginRuntimeTransition("permission_revoked")
         launchPriorityCommand(RuntimeCommandPriority.KILL, "permission_revoked") {
             disconnect(message = getString(R.string.vpn_permission_revoked))
@@ -491,9 +530,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
             }
         torProbeOwnerEnabled = false
         val generation = runtimeSupervisor.beginTransition(reason)
-        // Invalidate first (generation above), close off Main immediately afterwards. A fetch that
-        // races this point fails its owner fence even before the native stop call completes. The
-        // compare-and-close keeps a delayed teardown from closing the successor generation.
+
         outgoingProbeOwner?.let { owner ->
             scope.launch(Dispatchers.IO) { runtime.releaseTorProbeProxy(owner) }
         }
@@ -603,19 +640,12 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
             )
         }
         if (nextGuardMode != null) {
-            // Clean profile STOP with a firewall/DNS/I2P guard is a real interface handover, not
-            // two independent stop/start operations. Retire the profile worker while retaining
-            // its master TUN, establish and validate the replacement guard interface, and only
-            // then close the retired TUN. Closing here first left Android with no carrier and made
-            // the UI claim that the firewall was active while the device had no Internet.
             startLocalGuardAfterProfileDisconnect(nextGuardMode, commandStartId ?: 0)
             return
         }
         closeRuntimeSession(
             reason = "disconnect",
-            // Only a clean stop cancels the guard heal. An error teardown (message != null) — e.g.
-            // a guard start that failed because the device booted with no network — must leave a
-            // scheduled heal intact so it can retry once connectivity returns.
+
             cancelHeal = message == null,
             onTeardownPhase = publishTeardownPhase,
         )
@@ -664,10 +694,8 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         internal const val VPN_DNS_VALIDATION_TIMEOUT_MS = 8_000L
         internal const val VPN_DNS_VALIDATION_RETRY_DELAY_MS = 250L
         internal const val CONNECTIVITY_PROBE_NETWORK_WAIT_TIMEOUT_MS = 3_000L
+        internal const val SERVICE_DESTROY_DRAIN_TIMEOUT_MS = 10_000L
 
-        // Tor is at 100% by validation time (startup already awaited it), so this control-port ready
-        // check normally returns on the first poll; the budget only covers a rare still-bootstrapping
-        // edge before falling through to the ordinary exit-IP probe.
         internal const val TOR_VALIDATION_READY_TIMEOUT_MS = 8_000L
         internal const val VPN_NETWORK_WAIT_POLL_DELAY_MS = 100L
         internal const val IPV4_ENRICHMENT_CALL_TIMEOUT_MS = 4_000L
@@ -684,8 +712,6 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
             )
         internal const val NOTIFICATION_HEALTH_PROBE_TIMEOUT_MS = 1_000L
 
-        // Aligned with PROXY_NOTIFICATION_HEALTH_FAILURE_THRESHOLD: with the 15s->120s probe
-        // backoff, 5 consecutive failures meant minutes before the tunnel reacted to dead egress.
         internal const val NOTIFICATION_HEALTH_FAILURE_THRESHOLD = 3
         internal val UDP_HEALTH_PROBE_PAYLOAD = byteArrayOf(0x66)
         internal const val CONNECTIVITY_PROBE_ATTEMPTS = 4
@@ -702,9 +728,6 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         internal const val APP_TRAFFIC_SAMPLE_INTERVAL_MS = 60_000L
         internal const val APP_TRAFFIC_SAMPLE_CACHE_MAX_AGE_MS = APP_TRAFFIC_SAMPLE_INTERVAL_MS + 15_000L
 
-        // Session-ticker task ids (Ф3e). Shared constants: the registration sites and the
-        // isRegistered gates live in different files, and a drifted literal would silently
-        // disable a gate instead of failing to compile.
         internal const val TICKER_TASK_TRAFFIC = "traffic"
         internal const val TICKER_TASK_APP_TRAFFIC = "app_traffic"
         internal const val TICKER_TASK_DNS_GUARD_WINDOW = "dns_guard_window"
@@ -713,23 +736,14 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         internal const val TICKER_TASK_LAN_PROXY = "lan_proxy"
         internal const val TICKER_TASK_I2P_TRAFFIC = "i2p_traffic"
 
-        // Both I2P counters are cumulative, so the sampling rate decides write frequency, never
-        // accuracy: a slow pass records exactly the same bytes as a fast one, at two statements
-        // per pass plus one loopback console read.
         internal const val I2P_TRAFFIC_SAMPLE_INTERVAL_MS = 5_000L
         internal const val I2P_TRAFFIC_SAMPLE_WARMUP_MS = 60_000L
         internal const val I2P_TRAFFIC_SAMPLE_STEADY_INTERVAL_MS = 60_000L
 
-        // Slow on purpose: the pass exists to re-arm after a Wi-Fi change and to keep the screen
-        // honest, not to poll a listener that either bound or did not. Everything faster would put
-        // a native call on the wire for every second of an idle session.
         internal const val LAN_PROXY_SYNC_INTERVAL_MS = 5_000L
         internal const val MAX_TRAFFIC_MAP_RUNTIME_CONNECTIONS = 512
         internal const val RUNTIME_CONNECTION_OBSERVER_STOP_MS = 1_000L
 
-        // ConnectivityManager routinely lags several seconds behind the real tun close on a busy
-        // system; too-tight windows here made the fail-closed escalation kill the process on a
-        // healthy stop (seen by the user as a crash at Stop).
         internal const val VPN_NETWORK_TEARDOWN_SETTLE_TIMEOUT_MS = 4_000L
         internal const val VPN_NETWORK_TEARDOWN_SETTLE_POLL_MS = 100L
         internal const val VPN_NETWORK_TEARDOWN_ESCALATION_TIMEOUT_MS = 4_000L

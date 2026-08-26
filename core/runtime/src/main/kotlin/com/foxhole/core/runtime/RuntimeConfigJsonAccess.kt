@@ -6,9 +6,6 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
 
-// Pure JsonObject field-access helpers shared across RuntimeConfigAssembler and its
-// extracted collaborators. Behaviour-preserving extraction; no assembler state used.
-
 internal fun JsonObject.stringField(key: String): String? =
     this[key]?.jsonPrimitive?.contentOrNull?.trim()?.takeIf(String::isNotBlank)
 

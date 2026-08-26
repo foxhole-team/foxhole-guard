@@ -15,6 +15,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -44,15 +45,35 @@ internal fun CliStatsAppPanel(state: StatisticsRouteUiState) {
     }
     Spacer(modifier = Modifier.height(CliSpacing.sm))
     CliPanel(
-        icon = R.drawable.pix_apps,
+        icon = R.drawable.lin_apps,
         title = stringResource(R.string.cli_stats_apps_title),
         modifier = Modifier.fillMaxWidth(),
     ) {
         Row(modifier = Modifier.fillMaxWidth().padding(vertical = APP_TABLE_ROW_PADDING)) {
-            CliAppTrafficCell(stringResource(R.string.cli_sentinel_column_app), APP_NAME_WEIGHT, TextAlign.Start)
-            CliAppTrafficCell(stringResource(R.string.cli_stats_table_received), APP_VALUE_WEIGHT, TextAlign.End)
-            CliAppTrafficCell(stringResource(R.string.cli_stats_table_sent), APP_VALUE_WEIGHT, TextAlign.End)
-            CliAppTrafficCell(stringResource(R.string.cli_stats_table_total), APP_VALUE_WEIGHT, TextAlign.End)
+            CliAppTrafficCell(
+                stringResource(R.string.cli_sentinel_column_app),
+                APP_NAME_WEIGHT,
+                TextAlign.Start,
+                colors.dim,
+            )
+            CliAppTrafficCell(
+                stringResource(R.string.cli_stats_table_received),
+                APP_VALUE_WEIGHT,
+                TextAlign.End,
+                colors.dim,
+            )
+            CliAppTrafficCell(
+                stringResource(R.string.cli_stats_table_sent),
+                APP_VALUE_WEIGHT,
+                TextAlign.End,
+                colors.dim,
+            )
+            CliAppTrafficCell(
+                stringResource(R.string.cli_stats_table_total),
+                APP_VALUE_WEIGHT,
+                TextAlign.End,
+                colors.dim,
+            )
         }
         rows.forEach { row ->
             CliRowDivider()
@@ -99,11 +120,12 @@ private fun RowScope.CliAppTrafficCell(
     value: String,
     weight: Float,
     alignment: TextAlign,
+    color: Color = LocalCliColors.current.fg,
 ) {
     Text(
         text = value,
         style = CliType.small,
-        color = LocalCliColors.current.dim,
+        color = color,
         textAlign = alignment,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,

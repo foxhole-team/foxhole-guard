@@ -3,7 +3,6 @@ package com.foxhole.guard.ui.cli.profiles
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -11,7 +10,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.Text
@@ -42,16 +40,18 @@ import com.foxhole.guard.ui.cli.CliType
 import com.foxhole.guard.ui.cli.LocalCliColors
 import com.foxhole.guard.ui.cli.components.CliChromeTailSpacer
 import com.foxhole.guard.ui.cli.components.CliFlagIcon
+import com.foxhole.guard.ui.cli.components.CliGlassHeaderScreen
 import com.foxhole.guard.ui.cli.components.CliKeyValue
 import com.foxhole.guard.ui.cli.components.CliPanel
-import com.foxhole.guard.ui.cli.components.CliPixIcon
 import com.foxhole.guard.ui.cli.components.CliRowDivider
 import com.foxhole.guard.ui.cli.components.CliScreenHeader
 import com.foxhole.guard.ui.cli.components.CliTopBarHelpButton
-import com.foxhole.guard.ui.cli.components.cliPressable
+import com.foxhole.guard.ui.cli.components.CliTopBarHelpPresentation
+import com.foxhole.guard.ui.cli.components.CliTopBarIconButton
 import com.foxhole.guard.ui.cli.home.CliTerminalState
 import com.foxhole.guard.ui.cli.home.CliTorPromptPanel
 import com.foxhole.guard.ui.cli.home.modeCommandFor
+import com.foxhole.guard.ui.cli.settings.CliSmartHelpBody
 import com.foxhole.guard.ui.createProfileFromTemplate
 import com.foxhole.guard.ui.isReady
 import com.foxhole.guard.ui.protocolOptionOrDefault
@@ -129,109 +129,138 @@ private fun CliProfilesBody(
     var templateBusy by remember { mutableStateOf(false) }
     var templateEditorProfile by remember { mutableStateOf<com.foxhole.core.model.Profile?>(null) }
     val scope = rememberCoroutineScope()
-    Column(
+    CliGlassHeaderScreen(
         modifier = modifier
-            .fillMaxSize()
             .pointerInput(pendingDeleteId) {
                 if (pendingDeleteId != null) {
                     detectTapGestures { actions.changePendingDelete(null) }
                 }
-            }
-            .padding(horizontal = CliSpacing.md),
-    ) {
-        CliScreenHeader(
-            label = stringResource(R.string.cli_prof_title),
-            icon = R.drawable.pix_profiles,
-            suffix = selectedCount.takeIf { it > 0 }?.let { stringResource(R.string.cli_prof_sel_count, it) },
-            trailing = {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy((-12).dp),
-                ) {
-                    CliProfileAddButton(
-                        onClick = {
-                            actions.changePendingDelete(null)
-                            templateAddOpen = true
-                        },
-                    )
-                    CliTopBarHelpButton(
-                        bodyRes = R.string.cli_help_editor_body,
-                        onOpen = { actions.changePendingDelete(null) },
-                    )
-                }
             },
-        )
-        if (templateAddOpen) {
-            CliProfileTemplateSheet(
-                title = stringResource(R.string.cli_prof_create_title),
-                busy = templateBusy,
-                onDismiss = { templateAddOpen = false },
-                onContinue = { type ->
-                    if (!templateBusy) {
-                        templateBusy = true
-                        scope.launch {
-                            val created = viewModel.createProfileFromTemplate(type)
-                            templateBusy = false
-                            templateAddOpen = false
-                            if (created != null) {
-                                templateEditorProfile = created
-                            }
-                        }
+        header = {
+            CliScreenHeader(
+                label = stringResource(R.string.cli_prof_title),
+                icon = R.drawable.lin_profiles,
+                suffix = selectedCount.takeIf { it > 0 }?.let {
+                    stringResource(R.string.cli_prof_sel_count, it)
+                },
+                trailing = {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(0.dp),
+                    ) {
+                        CliProfileAddButton(
+                            onClick = {
+                                actions.changePendingDelete(null)
+                                templateAddOpen = true
+                            },
+                        )
+                        CliTopBarHelpButton(
+                            bodyRes = R.string.cli_help_editor_body,
+                            presentation = CliTopBarHelpPresentation(
+                                titleRes = R.string.cli_help_editor_title,
+                                icon = R.drawable.lin_profiles,
+                                itemIcons = PROFILES_HELP_ICONS,
+                            ),
+                            onOpen = { actions.changePendingDelete(null) },
+                            additionalContent = { CliProfilesSmartHelp() },
+                        )
                     }
                 },
             )
-        }
-        templateEditorProfile?.let { created ->
-            CliProfileEditorScreen(
+        },
+    ) { topInset ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = CliSpacing.md),
+        ) {
+            Spacer(modifier = Modifier.height(topInset))
+            if (templateAddOpen) {
+                CliProfileTemplateSheet(
+                    title = stringResource(R.string.cli_prof_create_title),
+                    busy = templateBusy,
+                    onDismiss = { templateAddOpen = false },
+                    onContinue = { type ->
+                        if (!templateBusy) {
+                            templateBusy = true
+                            scope.launch {
+                                val created = viewModel.createProfileFromTemplate(type)
+                                templateBusy = false
+                                templateAddOpen = false
+                                if (created != null) {
+                                    templateEditorProfile = created
+                                }
+                            }
+                        }
+                    },
+                )
+            }
+            templateEditorProfile?.let { created ->
+                CliProfileEditorScreen(
+                    viewModel = viewModel,
+                    profile = created,
+                    onDismiss = { templateEditorProfile = null },
+                    allowAddProtocol = false,
+                )
+            }
+            if (home.activeProfile != null) {
+                CliActiveProfileFactsPanel(home = home)
+                Spacer(modifier = Modifier.height(CliSpacing.sm))
+            }
+            importConfirmation?.let { confirmation ->
+                CliImportConfirmPanel(viewModel = viewModel, confirmation = confirmation)
+            }
+            CliProfilesPanel(
                 viewModel = viewModel,
-                profile = created,
-                onDismiss = { templateEditorProfile = null },
-                allowAddProtocol = false,
+                state = state,
+                selection = selection,
+                pendingDeleteId = pendingDeleteId,
+                expandedSmartId = expandedSmartId,
+                actions = actions,
+                modifier = Modifier.fillMaxWidth().weight(1f),
             )
-        }
-        if (home.activeProfile != null) {
-            CliActiveProfileFactsPanel(home = home)
             Spacer(modifier = Modifier.height(CliSpacing.sm))
-        }
-        importConfirmation?.let { confirmation ->
-            CliImportConfirmPanel(viewModel = viewModel, confirmation = confirmation)
-        }
-        CliProfilesPanel(
-            viewModel = viewModel,
-            state = state,
-            selection = selection,
-            pendingDeleteId = pendingDeleteId,
-            expandedSmartId = expandedSmartId,
-            actions = actions,
-            modifier = Modifier.fillMaxWidth().weight(1f),
-        )
-        Spacer(modifier = Modifier.height(CliSpacing.sm))
-        home.torTransitionPrompt?.let { prompt ->
-            CliTorPromptPanel(
+            home.torTransitionPrompt?.let { prompt ->
+                CliTorPromptPanel(
+                    viewModel = viewModel,
+                    prompt = prompt,
+                    onLiveModeSwitchConfirmed = { target ->
+                        terminal.command(modeCommandFor(target))
+                    },
+                )
+            }
+            CliProfileTransferRow(
                 viewModel = viewModel,
-                prompt = prompt,
-                onLiveModeSwitchConfirmed = { target ->
-                    terminal.command(modeCommandFor(target))
-                },
+                selection = selection,
+                onSelectionCleared = { actions.changeSelection(ProfilesExportSelectionState()) },
+                onInteraction = { actions.changePendingDelete(null) },
             )
+            CliChromeTailSpacer()
         }
-        CliProfileTransferRow(
-            viewModel = viewModel,
-            selection = selection,
-            onSelectionCleared = { actions.changeSelection(ProfilesExportSelectionState()) },
-            onInteraction = { actions.changePendingDelete(null) },
-        )
-        CliChromeTailSpacer()
     }
 }
+
+@Composable
+private fun CliProfilesSmartHelp() {
+    CliSmartHelpBody(
+        body = stringResource(R.string.cli_help_smart_body),
+        icon = R.drawable.lin_star,
+        framed = true,
+    )
+}
+
+private val PROFILES_HELP_ICONS = listOf(
+    R.drawable.lin_edit,
+    R.drawable.lin_star,
+    R.drawable.lin_lock,
+)
 
 @Composable
 private fun CliActiveProfileFactsPanel(home: HomeRouteUiState) {
     val colors = LocalCliColors.current
     val profile = home.activeProfile ?: return
-    val activeProtocol =
-        profile.protocolOptionOrDefault(home.connection.protocolOptionId)?.displayName
-            ?: profile.protocolHint.name.lowercase()
+    val activeOption = profile.protocolOptionOrDefault(home.connection.protocolOptionId)
+    val activeProtocol = (activeOption?.protocolHint ?: profile.protocolHint).name
     val isSubscription =
         profile.sourceType == ProfileSourceType.SUBSCRIPTION_URL || profile.protocolOptions.size > 1
     CliPanel(modifier = Modifier.fillMaxWidth()) {
@@ -239,20 +268,20 @@ private fun CliActiveProfileFactsPanel(home: HomeRouteUiState) {
             key = stringResource(R.string.cli_prof_facts_profile),
             value = profile.name,
             valueColor = colors.fg,
-            icon = R.drawable.pix_profiles,
+            icon = R.drawable.lin_profiles,
         )
         CliKeyValue(
             key = stringResource(R.string.cli_prof_facts_protocol),
             value = activeProtocol,
-            valueColor = colors.info,
-            icon = R.drawable.pix_shield,
+            valueColor = colors.fg,
+            icon = R.drawable.lin_shield,
         )
-        profileCountryCode(activeProtocol, profile.name)?.let { country ->
+        profileCountryCode(activeOption?.displayName, profile.name)?.let { country ->
             CliKeyValue(
                 key = stringResource(R.string.cli_prof_facts_geo),
                 value = country.uppercase(),
                 valueColor = colors.fg,
-                icon = R.drawable.pix_map,
+                icon = R.drawable.lin_map,
                 valueLeading = { CliFlagIcon(countryCode = country) },
             )
         }
@@ -262,14 +291,14 @@ private fun CliActiveProfileFactsPanel(home: HomeRouteUiState) {
                 if (isSubscription) R.string.cli_prof_facts_type_sub else R.string.cli_prof_facts_type_config,
             ),
             valueColor = colors.fg,
-            icon = if (isSubscription) R.drawable.pix_import else R.drawable.pix_edit,
+            icon = if (isSubscription) R.drawable.lin_import else R.drawable.lin_edit,
         )
         profile.subscriptionExpiresAt?.let { expiresAt ->
             CliKeyValue(
                 key = stringResource(R.string.cli_prof_facts_expiry),
                 value = formatExpiryDate(expiresAt),
                 valueColor = colors.warn,
-                icon = R.drawable.pix_clock,
+                icon = R.drawable.lin_clock,
             )
         }
     }
@@ -286,8 +315,8 @@ private fun CliProfilesPanel(
     modifier: Modifier,
 ) {
     CliPanel(
-        icon = R.drawable.pix_profiles,
-        title = stringResource(R.string.cli_prof_title),
+        icon = R.drawable.lin_profiles,
+        title = stringResource(R.string.cli_prof_available_title),
         modifier = modifier,
     ) {
         CliProfilesEmptyState(state)
@@ -322,18 +351,12 @@ private fun CliProfilesEmptyState(state: ProfilesRouteUiState) {
 @Composable
 private fun CliProfileAddButton(onClick: () -> Unit) {
     val colors = LocalCliColors.current
-    Box(
-        modifier = Modifier
-            .requiredSize(48.dp)
-            .cliPressable(onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        CliPixIcon(
-            id = R.drawable.pix_add,
-            contentDescription = stringResource(R.string.cli_prof_edit_add),
-            tint = colors.info,
-        )
-    }
+    CliTopBarIconButton(
+        icon = R.drawable.lin_add,
+        contentDescription = stringResource(R.string.cli_prof_edit_add),
+        onClick = onClick,
+        tint = colors.accent,
+    )
 }
 
 internal data class CliProfilesActions(
