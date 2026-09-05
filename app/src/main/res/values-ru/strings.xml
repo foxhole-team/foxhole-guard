@@ -795,6 +795,7 @@
     <string name="cli_cfg_locale_system">Автоматически</string>
     <string name="cli_cfg_locale_ru">русский</string>
     <string name="cli_cfg_locale_en">english</string>
+    <string name="cli_cfg_locale_ja">日本語</string>
     <string name="cli_cfg_nr_wifi">правило VPN в сети Wi-Fi</string>
     <string name="cli_cfg_nr_cellular">правило VPN в мобильной сети</string>
     <string name="cli_cfg_nr_auto_connect">автоподключение</string>

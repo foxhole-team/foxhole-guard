@@ -439,11 +439,13 @@ private fun WizardAppearancePanel(viewModel: HomeViewModel) {
         val systemLocaleLabel = stringResource(R.string.cli_cfg_locale_system)
         val russianLocaleLabel = stringResource(R.string.cli_cfg_locale_ru)
         val englishLocaleLabel = stringResource(R.string.cli_cfg_locale_en)
+        val japaneseLocaleLabel = stringResource(R.string.cli_cfg_locale_ja)
         val localeLabel = { locale: AppLocale ->
             when (locale) {
                 AppLocale.SYSTEM -> systemLocaleLabel
                 AppLocale.RU -> russianLocaleLabel
                 AppLocale.EN -> englishLocaleLabel
+                AppLocale.JA -> japaneseLocaleLabel
             }
         }
         val selectedLocale = settingsState.settings.ui.locale
@@ -500,6 +502,7 @@ private fun wizardLocaleFlagCountry(locale: AppLocale): String? = when (locale) 
     AppLocale.SYSTEM -> null
     AppLocale.RU -> "ru"
     AppLocale.EN -> "gb"
+    AppLocale.JA -> "jp"
 }
 
 @Composable
@@ -924,3 +927,4 @@ private const val DOWNLOAD_STEP = 3
 private const val WIZARD_SOURCE_TOR_PROJECT = "tor-project"
 private const val WIZARD_SOURCE_FOXHOLE_DB = "foxhole-db"
 private val WIZARD_SECOND_ACTION_HEIGHT = 48.dp
+

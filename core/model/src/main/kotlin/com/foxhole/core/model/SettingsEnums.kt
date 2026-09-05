@@ -94,6 +94,7 @@ enum class AppLocale(val tag: String) {
     SYSTEM(""),
     RU("ru"),
     EN("en"),
+    JA("ja"),
 
     ;
 
@@ -321,3 +322,4 @@ enum class RoutingModePreset {
     TOR,
     VPN_TOR,
 }
+

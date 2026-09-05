@@ -570,14 +570,27 @@ private fun CliLanguageRow(
     val systemLocaleLabel = stringResource(R.string.cli_cfg_locale_system)
     val russianLocaleLabel = stringResource(R.string.cli_cfg_locale_ru)
     val englishLocaleLabel = stringResource(R.string.cli_cfg_locale_en)
+    val japaneseLocaleLabel = stringResource(R.string.cli_cfg_locale_ja)
     CliDropdownRow(
         label = stringResource(R.string.cli_cfg_language),
         icon = R.drawable.lin_globe,
-        value = localeLabel(settings.ui.locale, systemLocaleLabel, russianLocaleLabel, englishLocaleLabel),
+        value = localeLabel(
+            settings.ui.locale,
+            systemLocaleLabel,
+            russianLocaleLabel,
+            englishLocaleLabel,
+            japaneseLocaleLabel,
+        ),
         options = AppLocale.entries.map { locale ->
             CliDropdownOption(
                 id = locale.name,
-                label = localeLabel(locale, systemLocaleLabel, russianLocaleLabel, englishLocaleLabel),
+                label = localeLabel(
+                    locale,
+                    systemLocaleLabel,
+                    russianLocaleLabel,
+                    englishLocaleLabel,
+                    japaneseLocaleLabel,
+                ),
                 flagCountry = localeFlagCountry(locale),
             )
         },
@@ -765,10 +778,12 @@ private fun localeLabel(
     systemLabel: String,
     russianLabel: String,
     englishLabel: String,
+    japaneseLabel: String,
 ): String = when (locale) {
     AppLocale.SYSTEM -> systemLabel
     AppLocale.RU -> russianLabel
     AppLocale.EN -> englishLabel
+    AppLocale.JA -> japaneseLabel
 }
 
 private fun themeModeLabel(
@@ -839,4 +854,6 @@ private fun localeFlagCountry(locale: AppLocale): String? = when (locale) {
     AppLocale.SYSTEM -> null
     AppLocale.RU -> "ru"
     AppLocale.EN -> "gb"
+    AppLocale.JA -> "jp"
 }
+
