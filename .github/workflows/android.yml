@@ -12,6 +12,7 @@ on:
       - "core/**"
       - "gradle/**"
       - "scripts/**"
+      - "metadata/**"
       - "third_party/**"
       - "build.gradle.kts"
       - "settings.gradle.kts"
@@ -57,6 +58,9 @@ jobs:
       - name: pinned FoxCore native smoke
         if: github.event_name == 'workflow_dispatch' && inputs.foxcore_smoke_only
         run: ./gradlew --no-daemon --console=plain --stacktrace :app:prepareFoxCoreNative
+
+      - name: release provenance regression tests
+        run: python3 -m unittest discover -s scripts/tests -p "test_*.py"
 
       # Run the cheap security gates before the cold native build so a policy failure is fast.
       - name: secret scan
@@ -146,7 +150,7 @@ jobs:
           version_code="$(scripts/package-release-candidate.sh published-code "$GITHUB_REPOSITORY")"
           echo "version_code=$version_code" >> "$GITHUB_OUTPUT"
 
-      # The only APK assembly; main republishes these exact bytes.
+      # This signed candidate approves the source tree before main builds the tagged release.
       # AGP cannot build ABI-split APKs and an AAB in one invocation, so the bundle is verified in a second, non-split configuration.
       - name: build and verify signed candidate
         run: |

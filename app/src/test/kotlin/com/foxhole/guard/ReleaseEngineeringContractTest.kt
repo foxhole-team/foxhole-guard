@@ -93,28 +93,26 @@ class ReleaseEngineeringContractTest {
     }
 
     @Test
-    fun `fdroid history preserves the reviewed build and hardens only the current entry`() {
+    fun `fdroid metadata delegates store copy and keeps only the current build`() {
         val metadata = projectFile("../metadata/com.foxhole.guard.yml").readText()
         val builds = fdroidBuildBlocks(metadata)
 
-        assertEquals(listOf("0.0.2", "0.1.0"), builds.map(FdroidBuildBlock::versionName))
-
-        val reviewed = builds.single { it.versionName == "0.0.2" }.body
-        assertTrue(reviewed.contains("versionCode: 90"))
-        assertTrue(reviewed.contains("commit: 96e963fc020ef9615c1301d7f252352c3ab84cdd"))
-        assertTrue(reviewed.contains("FoxHoleCore@83c9f4b95080c254a4f88d2f2cb7fd48ad849c05"))
-        assertTrue(reviewed.contains("/home/runner/work/foxhole-guard"))
-        assertTrue(reviewed.contains("SOURCE_DATE_EPOCH=1787044986"))
-        assertTrue(reviewed.contains("1e327f87ac68eff0b0c549402952a1c230fe4b22"))
+        assertEquals(listOf("0.1.0"), builds.map(FdroidBuildBlock::versionName))
+        assertFalse(metadata.contains("\nSummary:"))
+        assertFalse(metadata.contains("\nDescription:"))
+        assertFalse(metadata.contains("\nMaintainerNotes:"))
 
         val current = builds.single { it.versionName == "0.1.0" }.body
         val sudo = current.substringAfter("    sudo:").substringBefore("    output:")
         val prebuild = current.substringAfter("    prebuild:").substringBefore("    build:")
 
         assertTrue(current.contains("versionCode: 117"))
-        assertTrue(current.contains("FoxHoleCore@cd8bf71e950247d7bcebc8cd62142adef5c970fc"))
+        assertTrue(current.contains("config/foxcore-revision.txt"))
+        assertTrue(metadata.contains("AutoUpdateMode: Version"))
+        assertFalse(current.contains("srclibs:"))
+        assertFalse(current.contains("gradleprops:"))
         assertTrue(current.contains("foxhole.splitApks=true"))
-        assertTrue("missing base tools", sudo.contains("build-essential ca-certificates"))
+        assertTrue("missing base tools", sudo.contains("make g++ libc-dev"))
         assertTrue("missing native toolchain", sudo.contains("cmake ninja-build perl pkg-config rustup"))
         assertFalse("unused curl", Regex("""\bcurl\b""").containsMatchIn(sudo))
         assertFalse("unused git", Regex("""\bgit\b""").containsMatchIn(sudo))
@@ -132,7 +130,10 @@ class ReleaseEngineeringContractTest {
         val english = projectFile("../fastlane/metadata/android/en-US/full_description.txt").readText()
         val russian = projectFile("../fastlane/metadata/android/ru-RU/full_description.txt").readText()
 
-        listOf(fdroid, english).forEach { description ->
+        assertFalse(fdroid.contains("\nSummary:"))
+        assertFalse(fdroid.contains("\nDescription:"))
+        assertFalse(fdroid.contains("\nMaintainerNotes:"))
+        listOf(english).forEach { description ->
             assertTrue(description.contains("five independently signed data sets"))
             assertTrue(description.contains("TLS fingerprint tables"))
             assertFalse(description.contains("four signed data sets"))
@@ -489,7 +490,7 @@ class ReleaseEngineeringContractTest {
     }
 
     @Test
-    fun `signed candidate is built only on trusted dev push and main publishes those exact bytes`() {
+    fun `signed dev candidate approves source before main rebuilds the release`() {
         val androidWorkflow = projectFile("../.github/workflows/android.yml").readText()
         val releaseWorkflow = projectFile("../.github/workflows/release.yml").readText()
         val untrustedVerifyJob = androidWorkflow.substringBefore("  release-candidate:")
@@ -504,9 +505,8 @@ class ReleaseEngineeringContractTest {
         assertTrue(candidateJob.contains("package-release-candidate.sh"))
         assertTrue(candidateJob.contains("foxhole-app-${'$'}{{ github.sha }}"))
 
-        // main is a publish-only trust boundary: no Gradle, keystore, or rebuild. It finds a
-        assertFalse(releaseWorkflow.contains("./gradlew"))
-        assertFalse(releaseWorkflow.contains("FOXHOLE_RELEASE_STORE_FILE_B64"))
+        assertTrue(releaseWorkflow.contains("./gradlew"))
+        assertTrue(releaseWorkflow.contains("FOXHOLE_RELEASE_STORE_FILE_B64"))
         assertTrue(releaseWorkflow.contains(".commit.verification.verified"))
         assertTrue(releaseWorkflow.contains("dev_tree"))
         assertTrue(releaseWorkflow.contains("dev_tree\" == \"${'$'}MAIN_TREE"))
@@ -603,7 +603,7 @@ class ReleaseEngineeringContractTest {
     }
 
     @Test
-    fun `dev candidate runs public preflight and main release never rebuilds`() {
+    fun `dev candidate and main release both run public preflight`() {
         val androidWorkflow = projectFile("../.github/workflows/android.yml").readText()
         val releaseWorkflow = projectFile("../.github/workflows/release.yml").readText()
         val candidateJob = androidWorkflow.substringAfter("  release-candidate:")
@@ -626,8 +626,8 @@ class ReleaseEngineeringContractTest {
         assertTrue(releaseWorkflow.contains("actions/attest-build-provenance@"))
         assertTrue(releaseWorkflow.contains("published-code"))
         assertTrue(releaseWorkflow.contains("version_code > published_code"))
-        assertFalse(releaseWorkflow.contains("assembleRelease"))
-        assertFalse(releaseWorkflow.contains("publicReleasePreflight"))
+        assertTrue(releaseWorkflow.contains("assembleRelease"))
+        assertTrue(releaseWorkflow.contains("publicReleasePreflight"))
     }
 
     private fun projectFile(path: String): File =
@@ -662,7 +662,7 @@ private data class FdroidBuildBlock(
 )
 
 private fun fdroidBuildBlocks(metadata: String): List<FdroidBuildBlock> {
-    val buildsSection = metadata.substringAfter("Builds:\n").substringBefore("\nMaintainerNotes:")
+    val buildsSection = metadata.substringAfter("Builds:\n").substringBefore("\nAutoUpdateMode:")
     val starts = Regex("""(?m)^  - versionName: ([^\n]+)$""").findAll(buildsSection).toList()
     return starts.mapIndexed { index, match ->
         val end = starts.getOrNull(index + 1)?.range?.first ?: buildsSection.length

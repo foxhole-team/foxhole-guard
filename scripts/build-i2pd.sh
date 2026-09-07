@@ -46,7 +46,8 @@ sysroot="$toolbin/../sysroot"
 jobs="$( (command -v nproc >/dev/null 2>&1 && nproc) || sysctl -n hw.ncpu )"
 mkdir -p "$work"
 
-source_date_epoch="${SOURCE_DATE_EPOCH:-$(git -C "$i2pd_dir" show -s --format=%ct HEAD)}"
+# F-Droid exports the app commit epoch; OpenSSL must use the pinned i2pd source epoch.
+source_date_epoch="$(git -C "$i2pd_dir" show -s --format=%ct HEAD)"
 export SOURCE_DATE_EPOCH="$source_date_epoch"
 export ZERO_AR_DATE=1
 
@@ -124,7 +125,7 @@ normalize_i2pd_build_id() {
 log "building i2pd $(awk -F= '$1=="ref"{print $2}' "$version_file") for: ${abis[*]}"
 for abi in "${abis[@]}"; do
   ssl_target="$(ssl_target_for "$abi")"; clang="$(clang_for "$abi")"; triple="$(triple_for "$abi")"
-  openssl_stage="$work/openssl-$openssl_recipe-$abi"
+  openssl_stage="$work/openssl-$openssl_recipe-$source_date_epoch-$abi"
   openssl_out="$openssl_stage$openssl_prefix"
   boost_out="$work/boost-$boost_recipe-$abi"
 

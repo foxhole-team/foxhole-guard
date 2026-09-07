@@ -342,6 +342,10 @@ prepare_candidate() {
   local source_tree=$3
   [[ "$source_commit" =~ ^[0-9a-f]{40}$ ]] || die "invalid source commit"
   [[ "$source_tree" =~ ^[0-9a-f]{40}$ ]] || die "invalid source tree"
+  [[ "$(git rev-parse HEAD)" == "$source_commit" ]] || die "source commit does not match checkout"
+  [[ "$(git rev-parse 'HEAD^{tree}')" == "$source_tree" ]] || die "source tree does not match checkout"
+  # Native preparation applies the tracked i2pd patch inside the pinned submodule.
+  git diff --quiet --ignore-submodules=dirty HEAD -- || die "release source contains tracked changes"
   mkdir -p "$output_dir"
   [[ -z "$(find "$output_dir" -mindepth 1 -maxdepth 1 -print -quit)" ]] ||
     die "candidate output directory is not empty: $output_dir"
@@ -491,9 +495,9 @@ verify_candidate() {
   [[ "$license_name" == "$canonical_license_name" ]] ||
     die "candidate license-notices name is not canonical"
   [[ -z "$expected_source_commit" || "$source_commit" == "$expected_source_commit" ]] ||
-    die "candidate source commit does not match the selected dev run"
+    die "candidate source commit does not match the expected source commit"
   [[ -z "$expected_source_tree" || "$source_tree" == "$expected_source_tree" ]] ||
-    die "candidate source tree does not match main"
+    die "candidate source tree does not match the expected source tree"
 
   jq -e \
     --arg versionName "$VERSION_NAME" \
@@ -511,6 +515,7 @@ verify_candidate() {
   for file in "$arm64_name" "$sbom_name" "$license_name" release-certs.txt update-manifest.json; do
     [[ -f "$candidate_dir/$file" ]] || die "candidate file is missing: $file"
   done
+  python3 scripts/verify-apk-source.py "$candidate_dir/$arm64_name" "$source_commit"
   verify_license_notices_archive "$candidate_dir/$license_name"
 
   verify_android_sbom_inventory "$candidate_dir/$sbom_name" "$VERSION_NAME"

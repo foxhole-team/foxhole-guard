@@ -9,48 +9,6 @@ IssueTracker: https://github.com/foxhole-team/foxhole-guard/issues
 Changelog: https://github.com/foxhole-team/foxhole-guard/releases
 
 AutoName: FoxHole Guard
-Summary: 'Privacy toolkit: VPN, Tor, firewall, DNS filtering, Sentinel, no telemetry'
-Description: |
-  FoxHole Guard is a privacy-focused app for VPN, Tor and I2P networking, with firewall, DNS filtering, and FoxHole Sentinel network anomaly monitoring.
-
-  The application combines its own FoxHole Core networking engine, VPN, access to the Tor and I2P networks, a local firewall, DNS filtering, a traffic map, FoxHole Sentinel, isolated web applications, and a proxy server on the local network.
-
-  FoxHole Guard contains no advertising, usage analytics, or telemetry. Application lists, statistics, logs, routing rules, and local analysis results remain on the device unless the user explicitly exports them.
-
-  The project is currently in an early beta stage. Some features are still under development.
-
-  Main features:
-
-  • FoxHole Core - a custom networking engine written in Rust;
-  • operating modes: VPN, Tor, and VPN + Tor with independent routing scenarios;
-  • traffic routing rules for applications, domains, and CIDR ranges;
-  • smart profiles with multiple VPN protocols in a single profile;
-  • access to the Tor network through Arti: routing and scheduled exit-node rotation;
-  • access to the I2P network through a separate local i2pd process;
-  • firewall: application blocking and quarantine;
-  • DNS management: UDP/TCP, DoT, and DoH;
-  • DNS filtering for ads, trackers, telemetry, and potentially malicious domains;
-  • traffic map and local connection statistics;
-  • FoxHole Sentinel: local application auditing, IOC matching, and network-event correlation;
-  • extensions: web applications and a proxy server on the local network;
-  • background services for web-application notifications and security-event monitoring;
-  • backup of profiles and settings.
-
-  Supported protocols: VLESS, VMess, Hysteria2, WireGuard, AmneziaWG, Trojan, Shadowsocks, Outline, Naive, TUIC, AnyTLS, ShadowTLS v3, SOCKS5, and HTTP CONNECT. Reality and Vision are supported.
-
-  DNS filters are built from the open AdGuard DNS filter. Downloaded data sets contain filtering data rather than executable code. Before use, the application verifies the signature, size, compatibility, and SHA-256 digest.
-
-  FoxHole Sentinel is a local security-monitoring module, not an antivirus. The current version uses Echap indicators, a network IOC matcher, correlation of IOCs with the owning application, and integration with the firewall and quarantine.
-
-  The FoxHole DB repository is used for updatable application data. The application can download five independently signed data sets: DNS filters, Tor bridges, indicators for the IOC matcher, a GeoIP database, and TLS fingerprint tables.
-
-  Android permissions are used only for the stated features. QUERY_ALL_PACKAGES is required for routing, the firewall, quarantine, DNS exclusions, and local auditing. PACKAGE_USAGE_STATS is used only for local statistics and analysis features enabled by the user.
-
-  Network requests are made only for features enabled or initiated by the user: VPN, access to the Tor and I2P networks, updating v2raytun-type subscriptions, updating data sets, and web-application data.
-
-  License: GNU General Public License v3.0 or later (GPL-3.0-or-later).
-
-  Tor is a trademark of The Tor Project. FoxHole Guard is not a product of The Tor Project, AdGuard, I2P, or PurpleI2P and is not affiliated with them.
 
 RepoType: git
 Repo: https://github.com/foxhole-team/foxhole-guard.git
@@ -58,139 +16,48 @@ Binaries:
   https://github.com/foxhole-team/foxhole-guard/releases/download/v%v/FoxHole-v%v-arm64-v8a-release.apk
 
 Builds:
-  - versionName: 0.0.2
-    versionCode: 90
-    commit: 96e963fc020ef9615c1301d7f252352c3ab84cdd
-    submodules: true
-    sudo:
-      - apt-get update
-      - apt-get install -y --no-install-recommends build-essential ca-certificates
-        cmake curl git ninja-build perl pkg-config rustup
-      - mkdir -p /home/runner/work/foxhole-guard
-      - chown -R vagrant /home/runner
-    output: app/build/outputs/apk/release/app-release-unsigned.apk
-    srclibs:
-      - FoxHoleCore@83c9f4b95080c254a4f88d2f2cb7fd48ad849c05
-    prebuild:
-      - test "$(tr -d '[:space:]' < config/foxcore-revision.txt)" = "$(git -C $$FoxHoleCore$$
-        rev-parse HEAD)"
-      - export CARGO_HOME=/home/runner/.cargo
-      - export RUSTUP_HOME=/home/runner/.rustup
-      - rustup set profile minimal
-      - rustup default 1.97.1
-      - rustup component add clippy rustfmt
-      - rustup target add aarch64-linux-android
-      - cargo install cargo-ndk --version 4.1.2 --locked
-      - cargo fetch --locked --manifest-path $$FoxHoleCore$$/Cargo.toml
-      - export FOXHOLE_NATIVE_DEPS_DIR=/home/runner/work/foxhole-guard/foxhole-native-deps
-      - scripts/fetch-native-deps.sh
-    build:
-      - mkdir -p /home/runner/work/foxhole-guard
-      - cd ..
-      - mv com.foxhole.guard /home/runner/work/foxhole-guard/foxhole-guard
-      - pushd /home/runner/work/foxhole-guard/foxhole-guard
-      - export CARGO_HOME=/home/runner/.cargo
-      - export RUSTUP_HOME=/home/runner/.rustup
-      - export PATH="$CARGO_HOME/bin:$PATH"
-      - export ANDROID_NDK_HOME=$$NDK$$
-      - export FOXCORE_SOURCE_ROOT=$$FoxHoleCore$$
-      - export FOXHOLE_NATIVE_DEPS_DIR=/home/runner/work/foxhole-guard/foxhole-native-deps
-      - export FOXHOLE_NATIVE_OFFLINE=1
-      - export I2PD_ABIS=arm64-v8a
-      - SOURCE_DATE_EPOCH=1787044986 scripts/build-i2pd.sh
-      - perl -0777 -pi -e 'use bytes; my $prefix = pack("V3a4", 4, 20, 3, "GNU\0");
-        my $new = pack("H*", "1e327f87ac68eff0b0c549402952a1c230fe4b22"); my $count
-        = s/\Q$prefix\E.{20}/$prefix$new/s; die "unexpected-build-id-$count" unless
-        $count == 1;' app/src/main/jniLibs/arm64-v8a/libi2pd.so
-      - gradle --no-daemon --console=plain -Pfoxhole.updateChannel=github -Pfoxhole.nativeOffline=true
-        :app:assembleRelease
-      - popd
-      - mv /home/runner/work/foxhole-guard/foxhole-guard com.foxhole.guard
-    ndk: 29.0.14206865
-    gradleprops:
-      - foxhole.updateChannel=github
-      - foxhole.nativeOffline=true
-
   - versionName: 0.1.0
     versionCode: 117
-    commit: v0.1.0
+    commit: 597a3603afa9be92cf2d1bede2882ba27a4f08cd
     submodules: true
     sudo:
       - apt-get update
-      - apt-get install -y --no-install-recommends build-essential ca-certificates
-        cmake ninja-build perl pkg-config rustup
+      - apt-get install -y make g++ libc-dev cmake ninja-build perl pkg-config rustup
     output: app/build/outputs/apk/release/app-arm64-v8a-release-unsigned.apk
-    srclibs:
-      - FoxHoleCore@cd8bf71e950247d7bcebc8cd62142adef5c970fc
     prebuild:
-      - test "$(tr -d '[:space:]' < config/foxcore-revision.txt)" = "$(git -C $$FoxHoleCore$$
-        rev-parse HEAD)"
+      - core_revision="$(cat config/foxcore-revision.txt)"
+      - '[[ "$core_revision" =~ ^[0-9a-f]{40}$ ]]'
+      - test ! -e .foxcore-src
+      - git init .foxcore-src
+      - git -C .foxcore-src fetch --depth 1 https://github.com/foxhole-team/foxhole-core.git
+        "$core_revision"
+      - git -C .foxcore-src checkout --detach FETCH_HEAD
+      - test "$(git -C .foxcore-src rev-parse HEAD)" = "$core_revision"
+      - sed -i 's/^source_date_epoch=.*/source_date_epoch="$(git -C "$i2pd_dir" show
+        -s --format=%ct HEAD)"/' scripts/build-i2pd.sh
       - rustup set profile minimal
       - rustup default 1.97.1
       - export RUSTUP_TOOLCHAIN=1.97.1
       - rustup target add --toolchain 1.97.1 aarch64-linux-android
       - cargo install cargo-ndk --version 4.1.2 --locked
-      - cargo fetch --locked --manifest-path $$FoxHoleCore$$/Cargo.toml
+      - cargo fetch --locked --manifest-path .foxcore-src/Cargo.toml
       - scripts/fetch-native-deps.sh
+    scandelete:
+      - .foxcore-src/fuzz/corpus
     build:
       - export RUSTUP_TOOLCHAIN=1.97.1
       - export ANDROID_NDK_HOME=$$NDK$$
-      - export FOXCORE_SOURCE_ROOT=$$FoxHoleCore$$
+      - export FOXCORE_SOURCE_ROOT=$(pwd)/.foxcore-src
       - export FOXHOLE_NATIVE_OFFLINE=1
       - export I2PD_ABIS=arm64-v8a
       - export TOR_TRANSPORT_ABIS=arm64-v8a
       - gradle --no-daemon --console=plain -Pfoxhole.splitApks=true -Pfoxhole.updateChannel=github
         -Pfoxhole.nativeOffline=true :app:assembleRelease
     ndk: 29.0.14206865
-    gradleprops:
-      - foxhole.splitApks=true
-      - foxhole.updateChannel=github
-      - foxhole.nativeOffline=true
 
 AllowedAPKSigningKeys: e59de2486084c38f3c77e9df0eb5eff9a4559f3c68024f1208e0e9c04b0df665
 
-MaintainerNotes: |-
-  Build 90 mirrors the reviewer-owned reproducibility recipe. The signed 0.0.2
-  APK was promoted unchanged from dev candidate 96e963f; release commit 798e58b
-  has the identical Git tree d8461ad. Building the candidate commit preserves
-  AGP's embedded VCS revision for verification. Rust and i2pd embed absolute
-  paths, so the recipe reproduces the upstream runner's /home/runner layout and
-  uses the pinned NDK 29. OpenSSL embeds its configure time, so
-  SOURCE_DATE_EPOCH is pinned to the signed candidate's exact UTC build instant.
-  The linker-generated i2pd build ID is normalized to the verified candidate's
-  value; every other byte still has to match for F-Droid verification to pass.
-  Build 117 needs no fixed runner path. Every network fetch happens in
-  sudo:/prebuild:; the Gradle phase runs with
-  foxhole.nativeOffline=true, which makes scripts/build-i2pd.sh and
-  scripts/build-tor-transports.sh abort instead of downloading. prebuild: seeds
-  three caches: Rust (cargo fetch --locked against FoxCore's Cargo.lock) and, via
-  scripts/fetch-native-deps.sh, the OpenSSL/Boost source tarballs, the pinned Go
-  toolchain and the lyrebird/conjure sources plus their Go module cache. Pins and
-  sha256 digests live in scripts/native-deps.sh; the Go modules are verified by
-  each upstream's go.sum, the transport sources by commit id.
-  Build 117 uses the FoxHoleCore srclib and fails unless its HEAD exactly
-  matches config/foxcore-revision.txt. It pins RUSTUP_TOOLCHAIN to the minimal
-  Rust 1.97.1 toolchain and Android target; clippy and rustfmt are not needed by
-  the APK build. FoxCore 0.0.4 remaps checkout, Cargo-home, and Rustup-home paths
-  and rejects host paths in the built ELF. Current native scripts also remap i2pd
-  paths and normalize native build IDs, so build 117 needs no fixed runner path.
-  ndk: matches the ndkVersion pinned in app/build.gradle.kts and required by
-  FoxCore's scripts/android-build.sh.
-  foxhole.updateFloorVersionCode is deliberately unset. It means "the versionCode
-  that supersedes this build", and F-Droid builds an entry once, while nothing
-  supersedes it yet, and never rebuilds a published versionCode - so for the
-  newest entry there is no correct value, and for an older one it can no longer
-  be stamped. foxhole.updateSupportedUntilEpochDay is stampable here, but its
-  value is a per-release support decision nothing in the tree carries; when it is
-  used, note that AutoUpdateMode copies gradleprops verbatim, so a new entry must
-  get a fresh horizon rather than inherit the previous one.
-  The build is arm64-v8a only, matching the public upstream release.
-  Build 117 uses the same ABI split and GitHub update channel as Binaries; changing
-  either would prevent verification against the published upstream APK.
-  AutoUpdateMode stays None because each app release needs a manually reviewed
-  FoxHoleCore srclib revision and matching source-build inputs.
-
-AutoUpdateMode: None
+AutoUpdateMode: Version
 UpdateCheckMode: Tags ^v[0-9].*$
 CurrentVersion: 0.1.0
 CurrentVersionCode: 117
