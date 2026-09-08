@@ -4,6 +4,16 @@ set -euo pipefail
 root="${1:?device APK artifact directory is required}"
 serial="${ANDROID_SERIAL:-emulator-5554}"
 mkdir -p build/reports/device
+trap 'adb -s "$serial" logcat -d -b crash -b system > build/reports/device/emulator-logcat.txt 2>&1 || true' EXIT
+package_ready=false
+for ((attempt = 0; attempt < 30; attempt++)); do
+    if adb -s "$serial" shell pm path android 2>/dev/null | grep -q '^package:'; then
+        package_ready=true
+        break
+    fi
+    sleep 2
+done
+[[ "$package_ready" == true ]] || { echo "Emulator Package Manager did not become ready" >&2; exit 1; }
 adb -s "$serial" shell df -k /data > build/reports/device/storage.txt
 available_kb="$(awk 'END {print $4}' build/reports/device/storage.txt | tr -d '\r')"
 if [[ ! "$available_kb" =~ ^[0-9]+$ ]] || (( available_kb < 1048576 )); then
@@ -14,7 +24,8 @@ fi
 apks=()
 while IFS= read -r apk; do apks+=("$apk"); done < <(find "$root" -type f -name '*.apk' | sort)
 [[ ${#apks[@]} == 3 ]] || { echo "Expected app and two instrumentation APKs" >&2; exit 1; }
-for apk in "${apks[@]}"; do adb -s "$serial" install -r -t "$apk"; done
+# Avoid the streaming PackageInstaller pipe that closes during API 37 installs.
+for apk in "${apks[@]}"; do adb -s "$serial" install --no-streaming -r -t "$apk"; done
 
 run_tests() {
     local package="$1" classes="$2" report="$3"

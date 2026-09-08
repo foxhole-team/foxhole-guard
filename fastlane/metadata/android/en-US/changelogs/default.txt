@@ -10,3 +10,4 @@
 - Expands delivery inventory, vulnerability checks, release-signature verification, and Android regression coverage.
 - Corrects directory syncing, WebApp route availability, and the F-Droid source-build recipe.
 Build: fix license packaging for emulator ABIs.
+CI: wait for Package Manager and stage device APKs before installation on API 37.
