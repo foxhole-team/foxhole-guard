@@ -161,6 +161,7 @@ jobs:
           arch: x86_64
           cores: 2
           ram-size: 2048M
+          disk-size: 6G
           disable-animations: true
           emulator-options: -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect
           script: bash scripts/run-packaged-device-tests.sh device-apks

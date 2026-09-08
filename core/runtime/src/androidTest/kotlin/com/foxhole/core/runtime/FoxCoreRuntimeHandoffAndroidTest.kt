@@ -1,6 +1,7 @@
 package com.foxhole.core.runtime
 
 import android.net.Network
+import android.os.Parcel
 import android.os.ParcelFileDescriptor
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -266,9 +267,21 @@ private object HandoffDiagnostics : RuntimeDiagnosticsSink {
 
 private const val INITIAL_HANDLE = 71L
 private const val REPLACEMENT_HANDLE = 72L
-private val TEST_NETWORK_A = Network.fromNetworkHandle((101L shl 32) or 0xcafed00dL)
-private val TEST_NETWORK_B = Network.fromNetworkHandle((102L shl 32) or 0xcafed00dL)
-private val TEST_NETWORK_C = Network.fromNetworkHandle((103L shl 32) or 0xcafed00dL)
+private val TEST_NETWORK_A = testNetwork(101)
+private val TEST_NETWORK_B = testNetwork(102)
+private val TEST_NETWORK_C = testNetwork(103)
+
+private fun testNetwork(netId: Int): Network {
+    // The public Parcelable boundary is available on API 26; fromNetworkHandle requires API 28.
+    val parcel = Parcel.obtain()
+    return try {
+        parcel.writeInt(netId)
+        parcel.setDataPosition(0)
+        Network.CREATOR.createFromParcel(parcel)
+    } finally {
+        parcel.recycle()
+    }
+}
 private val TEST_CONFIG = FoxCoreSessionConfig(
     engineConfigJson = """{"schema_version":1}""",
     policyConfigJson = "{}",

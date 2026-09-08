@@ -1,2 +1,2 @@
 Security fixes with FoxCore 0.0.5. White accent and optional monochrome light/dark themes with a matching launcher icon. Safer profile updates and isolated WebApps. Updated I2P/Tor dependencies and private update downloads.
-Build: fix license packaging for emulator ABIs.
+Build: fix emulator license packaging, API 26 test compatibility, repeatable WebView checks and emulator storage.

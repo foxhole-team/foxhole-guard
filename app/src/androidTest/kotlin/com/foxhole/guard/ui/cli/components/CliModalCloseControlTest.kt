@@ -5,8 +5,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.toPixelMap
-import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.Modifier
@@ -23,6 +21,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
+import kotlin.math.roundToInt
 
 class CliModalCloseControlTest {
     @get:Rule
@@ -137,9 +136,17 @@ class CliModalCloseControlTest {
         composeRule.mainClock.advanceTimeBy(SHEET_SETTLE_MS)
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("mono_close").assertIsDisplayed()
-        val pixels = composeRule.onNodeWithTag("mono_body").assertIsDisplayed().captureToImage().toPixelMap()
-        val center = pixels[pixels.width / 2, pixels.height / 2]
-        assertTrue("Monochrome mode must preserve independently colored sheet content", center.red > 0.9f && center.green < 0.1f && center.blue < 0.1f && center.alpha > 0.9f)
+        val body = composeRule.onNodeWithTag("mono_body").assertIsDisplayed().fetchSemanticsNode()
+        // UiAutomation includes dialog windows on API 26; Compose captureToImage requires API 28 for them.
+        val screenshot = requireNotNull(InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot())
+        try {
+            val x = (body.positionOnScreen.x + body.boundsInRoot.width / 2).roundToInt()
+            val y = (body.positionOnScreen.y + body.boundsInRoot.height / 2).roundToInt()
+            val center = Color(screenshot.getPixel(x, y))
+            assertTrue("Monochrome mode must preserve independently colored sheet content", center.red > 0.9f && center.green < 0.1f && center.blue < 0.1f && center.alpha > 0.9f)
+        } finally {
+            screenshot.recycle()
+        }
     }
 
     private companion object {

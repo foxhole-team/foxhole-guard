@@ -68,6 +68,12 @@ class GuardBoundaryAndroidTest {
         withContext(Dispatchers.Main) {
             assumeTrue(WebAppProfiles.supported)
             val context = ApplicationProvider.getApplicationContext<FoxholeApplication>()
+            val pending = WebAppPendingDeletions(context)
+            // These isolated test profiles never use the default store; clear a previous run before loading them.
+            for (id in listOf(TEST_APP_A, TEST_APP_B)) {
+                assertTrue(WebAppProfiles.delete(id))
+                assertTrue(pending.completed(id))
+            }
             val first = WebView(context)
             val second = WebView(context)
             try {
@@ -84,7 +90,7 @@ class GuardBoundaryAndroidTest {
             } finally {
                 first.destroy()
                 second.destroy()
-                com.foxhole.guard.core.webapps.WebAppPendingDeletions(context).apply {
+                pending.apply {
                     record(TEST_APP_A, "https://guard-boundary.invalid")
                     record(TEST_APP_B, "https://guard-boundary.invalid")
                 }
