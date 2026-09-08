@@ -11,4 +11,4 @@
 - Mirrors the final Russian copy in English for beta information, update notes, web apps, routing, Quick start, Smart profiles, DNS, widgets, and map help.
 - Pins and verifies the public FoxCore 0.0.4 release.
 - Fixes the F-Droid I2P/OpenSSL build timestamp and keeps cached OpenSSL builds tied to their source epoch.
-- Prepares automatic F-Droid updates with pinned Core sources and release APKs built from the tagged commit.
+- Prepares automatic F-Droid updates with Core selected inside its srclib from the app revision pin and release APKs built from the tagged commit.

@@ -24,15 +24,14 @@ Builds:
       - apt-get update
       - apt-get install -y make g++ libc-dev cmake ninja-build perl pkg-config rustup
     output: app/build/outputs/apk/release/app-arm64-v8a-release-unsigned.apk
+    srclibs:
+      - FoxHoleCore@cd8bf71e950247d7bcebc8cd62142adef5c970fc
     prebuild:
       - core_revision="$(cat config/foxcore-revision.txt)"
       - '[[ "$core_revision" =~ ^[0-9a-f]{40}$ ]]'
-      - test ! -e .foxcore-src
-      - git init .foxcore-src
-      - git -C .foxcore-src fetch --depth 1 https://github.com/foxhole-team/foxhole-core.git
-        "$core_revision"
-      - git -C .foxcore-src checkout --detach FETCH_HEAD
-      - test "$(git -C .foxcore-src rev-parse HEAD)" = "$core_revision"
+      - git -C $$FoxHoleCore$$ fetch --depth 1 origin "$core_revision"
+      - git -C $$FoxHoleCore$$ checkout --detach "$core_revision"
+      - test "$(git -C $$FoxHoleCore$$ rev-parse HEAD)" = "$core_revision"
       - sed -i 's/^source_date_epoch=.*/source_date_epoch="$(git -C "$i2pd_dir" show
         -s --format=%ct HEAD)"/' scripts/build-i2pd.sh
       - rustup set profile minimal
@@ -40,14 +39,12 @@ Builds:
       - export RUSTUP_TOOLCHAIN=1.97.1
       - rustup target add --toolchain 1.97.1 aarch64-linux-android
       - cargo install cargo-ndk --version 4.1.2 --locked
-      - cargo fetch --locked --manifest-path .foxcore-src/Cargo.toml
+      - cargo fetch --locked --manifest-path $$FoxHoleCore$$/Cargo.toml
       - scripts/fetch-native-deps.sh
-    scandelete:
-      - .foxcore-src/fuzz/corpus
     build:
       - export RUSTUP_TOOLCHAIN=1.97.1
       - export ANDROID_NDK_HOME=$$NDK$$
-      - export FOXCORE_SOURCE_ROOT=$(pwd)/.foxcore-src
+      - export FOXCORE_SOURCE_ROOT=$$FoxHoleCore$$
       - export FOXHOLE_NATIVE_OFFLINE=1
       - export I2PD_ABIS=arm64-v8a
       - export TOR_TRANSPORT_ABIS=arm64-v8a

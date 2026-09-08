@@ -109,7 +109,7 @@ class ReleaseEngineeringContractTest {
         assertTrue(current.contains("versionCode: 117"))
         assertTrue(current.contains("config/foxcore-revision.txt"))
         assertTrue(metadata.contains("AutoUpdateMode: Version"))
-        assertFalse(current.contains("srclibs:"))
+        assertTrue(current.contains("srclibs:"))
         assertFalse(current.contains("gradleprops:"))
         assertTrue(current.contains("foxhole.splitApks=true"))
         assertTrue("missing base tools", sudo.contains("make g++ libc-dev"))
