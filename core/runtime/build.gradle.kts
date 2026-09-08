@@ -1,6 +1,6 @@
 plugins {
     id("com.android.library")
-    id("org.jetbrains.kotlin.plugin.serialization") version "2.4.10"
+    id("org.jetbrains.kotlin.plugin.serialization") version "2.4.20"
 }
 
 android {
@@ -9,6 +9,7 @@ android {
 
     defaultConfig {
         minSdk = 26
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         buildConfigField("boolean", "ENABLE_DIAGNOSTIC_LOGCAT", "false")
         buildConfigField("String", "VERSION_NAME", "\"${project.version}\"")
@@ -46,4 +47,7 @@ dependencies {
     implementation(libs.okhttp)
 
     testImplementation(libs.junit4)
+    androidTestImplementation(libs.androidx.junit)
+    androidTestImplementation(libs.androidx.test.core)
+    androidTestImplementation("androidx.test:runner:1.7.0")
 }

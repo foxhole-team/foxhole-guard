@@ -1,12 +1,11 @@
-0.1.0 public beta — consolidated changes since 0.0.2
+0.1.1 public beta — security and reliability fixes
 
-- Delivers the unified Home redesign and performance pass: compact cards, aligned headers, stable widget heights, smoother settings expansion, and calmer native Material navigation and modal motion.
-- Resolves the public DNS resolver as IPv4 with country code and flag, keeps the current resolver visible across connection transitions, and prevents duplicate FoxHole DB manifest paths and 404 refreshes.
-- Keeps the simplified widget’s country identity visible while stably disconnected, shows status updates only for transitions and refreshes, and keeps Glance provider classes distinct from Web Apps after R8 shrinking.
-- Reworks Quick start and Help into aligned action and Smart-profile tables with Home-console icons, equal metric/color row heights, right-aligned values, readable scrolling content, and restored detailed guidance.
-- Preserves explicit theme and accent choices across upgrades while keeping dark/orange defaults for new installs; separates the warning yellow from orange.
-- Keeps DNS filtering and Sentinel implementations and data downloads intact while first-run setup exposes only Tor and I2P enable switches.
-- Adds progress feedback for DNS, Tor, and Sentinel data operations, resilient simplified-widget refreshes across VPN, Tor, and I2P, and faster Smart-profile selector return.
-- Clarifies map country tables and journal guidance, including the full “connections” label in both locales.
-- Mirrors the final Russian copy in English for beta information, update notes, web apps, routing, Quick start, Smart profiles, DNS, widgets, and map help.
-- Pins and verifies the public FoxCore 0.0.4 release.
+- Adds a white accent, optional monochrome themes and launcher icon, and a shorter update notice.
+- Updates FoxCore to 0.0.5 with fixes for live-connection revocation, concurrent policy updates, private DNS validation, and domain routing.
+- Requires explicit consent for anonymous local proxies and authenticates notification commands before switching profiles.
+- Keeps runtime state consistent during network handoffs and policy reloads.
+- Isolates WebApp views, proxy sessions, and pending browsing-data deletion; refuses page loads when storage isolation fails.
+- Rejects stale profile-editor updates and preserves concurrent protocol changes.
+- Rebuilds I2P and Tor transports with updated OpenSSL, Go, and transport dependencies.
+- Expands delivery inventory, vulnerability checks, release-signature verification, and Android regression coverage.
+- Corrects directory syncing, WebApp route availability, and the F-Droid source-build recipe.

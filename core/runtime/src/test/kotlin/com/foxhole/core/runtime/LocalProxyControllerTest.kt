@@ -108,6 +108,7 @@ class LocalProxyControllerTest {
             username = "user".takeIf { auth },
             password = "secret".takeIf { auth },
             upstream = LocalProxyUpstream.PROFILE,
+            allowAnonymous = !auth,
         )
 
     @Test
@@ -133,6 +134,17 @@ class LocalProxyControllerTest {
         assertFalse("логин не должен появиться из ниоткуда", document.contains("username"))
         assertFalse("пароль не должен появиться из ниоткуда", document.contains("password"))
         assertTrue(document.contains("\"upstream\":\"profile\""))
+        assertTrue(document.contains("\"allow_anonymous\":true"))
+    }
+
+    @Test
+    fun `missing or partial credentials never opt into anonymous access`() {
+        for ((user, password) in listOf(null to null, "user" to null, "user" to "")) {
+            val document = LocalProxyRequest(0, user, password, LocalProxyUpstream.PROFILE).toConfigJson()
+            assertTrue(document.contains("\"allow_anonymous\":false"))
+            if (user != null) assertTrue(document.contains("\"username\":\"user\""))
+            if (password != null) assertTrue(document.contains("\"password\":\"\""))
+        }
     }
 
     @Test

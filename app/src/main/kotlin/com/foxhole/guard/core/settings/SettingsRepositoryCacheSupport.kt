@@ -8,6 +8,7 @@ import com.foxhole.core.model.HomeAdditionalInfoCategory
 
 internal const val FAST_UI_PREFERENCES_NAME = "foxhole_fast_ui"
 internal const val FAST_THEME_MODE_KEY = "theme_mode"
+internal const val FAST_MONOCHROME_KEY = "monochrome_enabled"
 internal const val FAST_ACCENT_COLOR_KEY = "accent_color"
 internal const val FAST_PIXEL_ART_ENABLED_KEY = "pixel_art_enabled"
 internal const val FAST_LOCALE_KEY = "locale"

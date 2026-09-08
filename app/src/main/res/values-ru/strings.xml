@@ -875,8 +875,7 @@
     <string name="cli_beta_notice_dns_protocols">DNS-фильтрация не применяется к протоколам WireGuard и AmneziaWG. </string>
     <string name="cli_beta_notice_ack">закрыть</string>
     <string name="cli_update_notice_title">Что нового</string>
-    <string name="cli_update_notice_body">Редизайн приложения\nОтображение трафика на главной странице\nУлучшена стабильность сетевого ядра FoxHole Core</string>
-    <string name="cli_update_notice_home_map">Виджет трафика</string>
+    <string name="cli_update_notice_body">Надёжнее VPN, DNS и защита соединений\nИсправлены профили и веб-приложения\nНовый белый акцент и монохромный режим</string>
     <string name="cli_extras_open_settings">настройки дополнения</string>
     <string name="cli_module_settings">настройки модуля</string>
     <string name="cli_extras_webapps">web-приложения</string>
@@ -1015,7 +1014,6 @@
     <string name="cli_updates_sources_change">изменить</string>
     <string name="cli_updates_sources_reset">сбросить</string>
     <string name="cli_updates_sources_note">манифесты FoxHole DB принимаются только с подписью FoxHole DB; APK обновления должен быть подписан тем же сертификатом FoxHole Guard, что и установленное приложение</string>
-    <string name="cli_updates_sources_token_note">только для приватного репозитория: без токена GitHub отвечает «не найдено»; токен отправляется только настроенному хосту</string>
     <string name="cli_updates_app_available">доступна %1$s</string>
     <string name="cli_updates_app_install">установить</string>
     <string name="cli_updates_app_failed">не удалось проверить обновление</string>
@@ -1135,7 +1133,7 @@
     <string name="cli_route_pick_show_system">системные</string>
     <string name="cli_route_pick_hide_system">только польз.</string>
     <string name="cli_route_sites_title">правила для web-адресов</string>
-    <string name="cli_route_sites_note">правила применяются атомарно</string>
+    <string name="cli_route_sites_note">Правила применяются атомарно. Сначала точный домен, затем суффикс и IP; при равенстве действует порядок списка. Более точное правило может перекрыть блокировку. DNS-подсказки не ослабляют защищённый маршрут; при доменных правилах IP без надёжной привязки к имени отклоняется.</string>
     <string name="cli_route_sites_formats">форматы: example.com · *.example.com · cidr: · kw: · re:</string>
     <string name="cli_route_sites_empty">для переключения сценариев сначала создайте правила маршрутизации сайтов</string>
     <string name="cli_route_sites_lane">маршрут</string>
@@ -1424,4 +1422,10 @@
         <item quantity="many">%1$d приложений</item>
         <item quantity="other">%1$d приложения</item>
     </plurals>
+    <string name="cli_webapps_storage_failed">Не удалось изолировать хранилище. Страница не загружена.</string>
+    <string name="cli_webapps_clear_pending">Очистка данных браузера ожидает завершения. Перезапустите FoxHole Guard для завершения удаления.</string>
+    <string name="cli_webapps_tor_unavailable">Маршрут TOR для веб-приложений недоступен: браузерный прокси Tor с аутентификацией ещё не реализован.</string>
+    <string name="cli_prof_edit_immediate_changes">Добавление или удаление протокола сразу сохраняет текущие правки протоколов. Отмена удаляет только изменения после последнего сохранения.</string>
+    <string name="cli_cfg_monochrome">Монохромный режим</string>
+    <string name="cli_cfg_accent_white">Белый</string>
 </resources>

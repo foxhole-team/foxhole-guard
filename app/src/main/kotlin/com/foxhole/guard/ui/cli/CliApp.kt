@@ -52,6 +52,7 @@ import com.foxhole.guard.ui.FoxholeBannerAction
 import com.foxhole.guard.ui.FoxholeBannerEvent
 import com.foxhole.guard.ui.FoxholeBannerTone
 import com.foxhole.guard.ui.HomeViewModel
+import com.foxhole.guard.ui.attachWebAppFrame
 import com.foxhole.guard.ui.biometricDecryptCipher
 import com.foxhole.guard.ui.biometricUnlockAvailable
 import com.foxhole.guard.ui.builtInPinPadEnabled
@@ -246,16 +247,21 @@ internal fun cliDockScreens(
 @Composable
 private fun CliWebAppOverlay(viewModel: HomeViewModel) {
     val openWebApp by viewModel.openWebAppState.collectAsStateWithLifecycle()
-    val webAppProxyCredentials by viewModel.webAppProxyCredentials.collectAsStateWithLifecycle()
-    openWebApp?.let { app ->
-        CliWebAppFrame(
-            app = app,
-            proxyCredentials = webAppProxyCredentials,
-            onClose = viewModel::closeWebApp,
-            onReleased = viewModel::onWebAppFrameReleased,
-            onExternalBlocked = viewModel::notifyWebAppExternalBlocked,
-            modifier = Modifier.fillMaxSize(),
-        )
+    openWebApp?.let { session ->
+        val lease = session.activation.lease?.takeIf { it.active } ?: return@let
+        val app = session.app
+        androidx.compose.runtime.key(app.id, lease.generation) {
+            CliWebAppFrame(
+                app = app,
+                proxyCredentials = session.activation.credentials,
+                lease = lease,
+                onAttached = { view -> viewModel.attachWebAppFrame(lease, view) },
+                onClose = viewModel::closeWebApp,
+                onReleased = { viewModel.onWebAppFrameReleased(lease) },
+                onExternalBlocked = viewModel::notifyWebAppExternalBlocked,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
     }
 }
 

@@ -1,5 +1,7 @@
 package com.foxhole.guard.core.security
 
+import android.system.Os
+import android.system.OsConstants
 import java.io.File
 import java.io.FileOutputStream
 import java.nio.file.AtomicMoveNotSupportedException
@@ -49,7 +51,13 @@ internal object AtomicFileWrites {
 
     private fun syncDirectoryBestEffort(directory: File) {
         runCatching {
-            FileOutputStream(directory, true).use { stream -> stream.fd.sync() }
+            val descriptor = Os.open(directory.absolutePath, OsConstants.O_RDONLY, 0)
+            try {
+                check(OsConstants.S_ISDIR(Os.fstat(descriptor).st_mode)) { "sync target is not a directory" }
+                Os.fsync(descriptor)
+            } finally {
+                Os.close(descriptor)
+            }
         }
     }
 }

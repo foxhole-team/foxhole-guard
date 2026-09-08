@@ -18,14 +18,16 @@ concurrency:
 
 jobs:
   release:
-    name: publish verified dev bytes
+    name: build and publish verified main commit
     if: github.repository == 'foxhole-team/foxhole-guard'
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 90
     steps:
-      - name: checkout main
+      - name: checkout release source
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
+          ref: ${{ github.sha }}
+          submodules: recursive
           persist-credentials: false
 
       - name: verify public signed main authority
@@ -44,12 +46,7 @@ jobs:
             echo "Refusing to publish while $GITHUB_REPOSITORY is not public." >&2
             exit 1
           }
-          verified="$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA" --jq '.commit.verification.verified')"
-          reason="$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA" --jq '.commit.verification.reason')"
-          [[ "$verified" == "true" ]] || {
-            echo "main commit is not GitHub-verified (reason: $reason). Sign it with the registered release key." >&2
-            exit 1
-          }
+          python3 scripts/verify-release-signature.py "$GITHUB_SHA"
           main_tree="$(git rev-parse 'HEAD^{tree}')"
           [[ "$main_tree" =~ ^[0-9a-f]{40}$ ]] || {
             echo "Could not resolve the main Git tree." >&2
@@ -57,7 +54,7 @@ jobs:
           }
           echo "main_tree=$main_tree" >> "$GITHUB_OUTPUT"
 
-      # Publishable only when an already-successful dev push had byte-for-byte identical source and kept its immutable signed candidate.
+      # A successful signed dev candidate approves the source tree; release APKs must embed the main commit that will be tagged.
       - name: find matching successful dev candidate
         id: candidate
         shell: bash
@@ -100,10 +97,10 @@ jobs:
             selected_sha="$dev_sha"
             selected_artifact="$artifact_name"
             break
-          done < <(jq -r '.workflow_runs[] | [.id, .head_sha] | @tsv' "$runs_json")
+          done < <(jq -r '.workflow_runs[] | select((.updated_at | fromdateiso8601) > now - 86400) | [.id, .head_sha] | @tsv' "$runs_json")
 
           [[ -n "$selected_run" ]] || {
-            echo "No successful, unexpired dev candidate has the same Git tree as main." >&2
+            echo "No successful dev candidate from the last 24 hours has the same Git tree as main." >&2
             exit 1
           }
           {
@@ -123,7 +120,7 @@ jobs:
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
           name: ${{ steps.candidate.outputs.artifact_name }}
-          path: ${{ runner.temp }}/foxhole-release-candidate
+          path: ${{ runner.temp }}/foxhole-dev-candidate
           github-token: ${{ github.token }}
           repository: ${{ github.repository }}
           run-id: ${{ steps.candidate.outputs.run_id }}
@@ -137,7 +134,7 @@ jobs:
           MAIN_TREE: ${{ steps.authority.outputs.main_tree }}
         run: |
           set -euo pipefail
-          candidate_dir="$RUNNER_TEMP/foxhole-release-candidate"
+          candidate_dir="$RUNNER_TEMP/foxhole-dev-candidate"
           scripts/package-release-candidate.sh verify "$candidate_dir" "$DEV_SHA" "$MAIN_TREE"
 
           metadata="$candidate_dir/CANDIDATE.json"
@@ -164,7 +161,115 @@ jobs:
           {
             echo "tag=$tag"
             echo "version_name=$version_name"
+            echo "published_code=$published_code"
           } >> "$GITHUB_OUTPUT"
+
+      - name: setup Android and FoxHole Core build
+        if: steps.candidate.outputs.dev_sha != github.sha
+        uses: ./.github/actions/setup-foxcore
+        with:
+          core-repository: ${{ vars.FOXCORE_REPO || 'foxhole-team/foxhole-core' }}
+
+      - name: prepare release signing inputs
+        if: steps.candidate.outputs.dev_sha != github.sha
+        shell: bash
+        env:
+          FOXHOLE_RELEASE_STORE_FILE_B64: ${{ secrets.FOXHOLE_RELEASE_STORE_FILE_B64 }}
+          FOXHOLE_RELEASE_STORE_PASSWORD: ${{ secrets.FOXHOLE_RELEASE_STORE_PASSWORD }}
+          FOXHOLE_RELEASE_KEY_ALIAS: ${{ secrets.FOXHOLE_RELEASE_KEY_ALIAS }}
+          FOXHOLE_RELEASE_KEY_PASSWORD: ${{ secrets.FOXHOLE_RELEASE_KEY_PASSWORD }}
+          FOXHOLE_RELEASE_STORE_TYPE: ${{ secrets.FOXHOLE_RELEASE_STORE_TYPE }}
+        run: |
+          set -euo pipefail
+          missing=()
+          for secret_name in \
+            FOXHOLE_RELEASE_STORE_FILE_B64 \
+            FOXHOLE_RELEASE_STORE_PASSWORD \
+            FOXHOLE_RELEASE_KEY_ALIAS \
+            FOXHOLE_RELEASE_KEY_PASSWORD
+          do
+            if [[ -z "${!secret_name:-}" ]]; then
+              missing+=("$secret_name")
+            fi
+          done
+          if (( ${#missing[@]} > 0 )); then
+            printf 'Release signing secrets are required. Missing: %s\n' "${missing[*]}" >&2
+            exit 1
+          fi
+          keystore_path="$RUNNER_TEMP/foxhole-release.p12"
+          if ! printf '%s' "$FOXHOLE_RELEASE_STORE_FILE_B64" | base64 --decode > "$keystore_path"; then
+            echo "FOXHOLE_RELEASE_STORE_FILE_B64 is not valid base64" >&2
+            exit 1
+          fi
+          chmod 600 "$keystore_path"
+          {
+            echo "FOXHOLE_RELEASE_STORE_FILE=$keystore_path"
+            echo "FOXHOLE_RELEASE_STORE_PASSWORD=$FOXHOLE_RELEASE_STORE_PASSWORD"
+            echo "FOXHOLE_RELEASE_KEY_ALIAS=$FOXHOLE_RELEASE_KEY_ALIAS"
+            echo "FOXHOLE_RELEASE_KEY_PASSWORD=$FOXHOLE_RELEASE_KEY_PASSWORD"
+            echo "FOXHOLE_RELEASE_STORE_TYPE=${FOXHOLE_RELEASE_STORE_TYPE:-PKCS12}"
+          } >> "$GITHUB_ENV"
+
+      # AGP cannot build ABI-split APKs and an AAB in one invocation, so the bundle is verified in a second, non-split configuration.
+      - name: build and verify signed release from main
+        if: steps.candidate.outputs.dev_sha != github.sha
+        run: |
+          ./gradlew \
+            --no-daemon \
+            --console=plain \
+            --stacktrace \
+            -Pfoxhole.splitApks=true \
+            -Pfoxhole.sbom=true \
+            "-Pfoxhole.lastUploadedVersionCode=${{ steps.policy.outputs.published_code }}" \
+            :app:validateReleaseSigningInputs \
+            :app:assembleRelease \
+            :app:verifyReleaseContainsNativeRuntime \
+            :app:verifyReleaseContainsBaselineProfile \
+            :app:verifyReleaseBuildConfigDefaults \
+            :app:verifyReleaseJniSurface
+          ./gradlew \
+            --no-daemon \
+            --console=plain \
+            --stacktrace \
+            -Pfoxhole.sbom=true \
+            "-Pfoxhole.lastUploadedVersionCode=${{ steps.policy.outputs.published_code }}" \
+            :app:validateReleaseSigningInputs \
+            :app:publicReleasePreflight
+
+      - name: package release with exact source provenance
+        if: steps.candidate.outputs.dev_sha != github.sha
+        shell: bash
+        run: |
+          set -euo pipefail
+          candidate_dir="$RUNNER_TEMP/foxhole-release-candidate"
+          source_tree="$(git rev-parse 'HEAD^{tree}')"
+          FOXHOLE_SBOM_PATH=build/reports/cyclonedx/bom.json \
+            scripts/package-release-candidate.sh \
+              prepare \
+              "$candidate_dir" \
+              "$GITHUB_SHA" \
+              "$source_tree"
+
+      - name: promote the exact already verified dev commit
+        if: steps.candidate.outputs.dev_sha == github.sha
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp -a "$RUNNER_TEMP/foxhole-dev-candidate" "$RUNNER_TEMP/foxhole-release-candidate"
+          scripts/package-release-candidate.sh verify "$RUNNER_TEMP/foxhole-release-candidate" "$GITHUB_SHA" "$(git rev-parse 'HEAD^{tree}')"
+
+      # Mapping and native symbols stay authenticated Actions artifacts, never attached to the public release.
+      - name: retain private diagnostics
+        if: steps.candidate.outputs.dev_sha != github.sha
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: foxhole-release-private-diagnostics-${{ github.sha }}
+          path: |
+            app/build/outputs/mapping/release/mapping.txt
+            app/build/outputs/mapping/publicRelease/mapping.txt
+            app/build/outputs/native-debug-symbols/publicRelease/publicRelease-native-symbols.zip
+          if-no-files-found: error
+          retention-days: 3
 
       - name: attest exact release files
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4
@@ -190,17 +295,19 @@ jobs:
             exit 1
           }
 
-          cleanup_enabled=true
-          cleanup_draft() {
-            if [[ "$cleanup_enabled" == true ]]; then
-              gh release delete "$RELEASE_TAG" --cleanup-tag --yes >/dev/null 2>&1 || true
-            fi
+          gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" \
+            -f "ref=refs/tags/$RELEASE_TAG" -f "sha=$GITHUB_SHA" >/dev/null
+          tag_type="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$RELEASE_TAG" --jq '.object.type')"
+          tag_sha="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$RELEASE_TAG" --jq '.object.sha')"
+          [[ "$tag_type" == "commit" && "$tag_sha" == "$GITHUB_SHA" ]] || {
+            echo "Release tag does not point directly at the verified main commit." >&2
+            exit 1
           }
-          trap cleanup_draft EXIT
 
           gh release create "$RELEASE_TAG" \
             "${assets[@]}" \
             --draft \
+            --verify-tag \
             --generate-notes \
             --target "$GITHUB_SHA" \
             --title "FoxHole Guard $VERSION_NAME"
@@ -242,9 +349,6 @@ jobs:
             }
           done
 
-          gh api --method PATCH \
-            "repos/$GITHUB_REPOSITORY/releases/$release_id" \
-            -F draft=false >/dev/null
           tag_type="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$RELEASE_TAG" --jq '.object.type')"
           tag_sha="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$RELEASE_TAG" --jq '.object.sha')"
           [[ "$tag_type" == "commit" && "$tag_sha" == "$GITHUB_SHA" ]] || {
@@ -252,10 +356,13 @@ jobs:
             exit 1
           }
 
+          gh api --method PATCH \
+            "repos/$GITHUB_REPOSITORY/releases/$release_id" \
+            -F draft=false >/dev/null
+
           gh release edit "$RELEASE_TAG" --draft=false --latest
           is_draft="$(gh release view "$RELEASE_TAG" --json isDraft --jq '.isDraft')"
           [[ "$is_draft" == "false" ]] || {
             echo "Release was not published after byte verification." >&2
             exit 1
           }
-          cleanup_enabled=false

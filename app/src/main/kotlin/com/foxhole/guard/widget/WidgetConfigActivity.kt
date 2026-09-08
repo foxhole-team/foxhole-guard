@@ -102,6 +102,7 @@ class WidgetConfigActivity : ComponentActivity() {
             CliTheme(
                 themeMode = settings.ui.themeMode,
                 accentColor = settings.ui.accentColor,
+                monochromeEnabled = settings.ui.monochromeEnabled,
                 pixelArtEnabled = settings.ui.pixelArtEnabled,
             ) {
                 WidgetConfigScreen(

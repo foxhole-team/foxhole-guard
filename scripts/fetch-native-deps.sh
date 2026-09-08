@@ -28,7 +28,7 @@ log() { printf '[fetch-native-deps] %s\n' "$*"; }
 
 seed_i2pd() {
   log "seeding i2pd sources into $i2pd_work_dir"
-  fetch_verified "$openssl_url" "$i2pd_work_dir/openssl.tgz" "$openssl_sha256" "OpenSSL $openssl_ver"
+  fetch_verified "$openssl_url" "$i2pd_work_dir/openssl-$openssl_ver.tgz" "$openssl_sha256" "OpenSSL $openssl_ver"
   fetch_verified "$boost_url" "$i2pd_work_dir/$boost_us.tar.bz2" "$boost_sha256" "Boost $boost_ver"
 }
 
@@ -75,6 +75,10 @@ seed_tor() {
   seed_git_source lyrebird "$lyrebird_repo" "$lyrebird_ref" "$lyrebird_commit"
   seed_git_source conjure "$conjure_repo" "$conjure_ref" "$conjure_commit"
   mkdir -p "$go_mod_cache"
+  ( cd "$tor_work_dir/conjure" && env GOTOOLCHAIN=local GOMODCACHE="$go_mod_cache" \
+      "$go_root_dir/bin/go" mod download -modfile="$native_deps_repo_root/config/native/conjure/go.mod" \
+      github.com/refraction-networking/conjure@v0.9.1 )
+  python3 "$native_deps_repo_root/scripts/prepare-tor-dependency.py" "$go_mod_cache" "$tor_work_dir/conjure-patched"
   local src
   for src in lyrebird conjure; do
     log "downloading $src Go modules into $go_mod_cache"
@@ -82,7 +86,7 @@ seed_tor() {
         GOTOOLCHAIN=local \
         GOMODCACHE="$go_mod_cache" \
         GOFLAGS=-mod=mod \
-        "$go_root_dir/bin/go" mod download all )
+        "$go_root_dir/bin/go" mod download -modfile="$native_deps_repo_root/config/native/$src/go.mod" all )
   done
 }
 

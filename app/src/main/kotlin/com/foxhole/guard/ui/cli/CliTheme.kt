@@ -491,6 +491,7 @@ private val DarkAccentHues = mapOf(
     AccentColor.BLUE to CliDataBlue,
     AccentColor.PINK to Color(0xFFFF5FCF),
     AccentColor.CYAN to CliNeonBlue,
+    AccentColor.WHITE to Color.White,
 )
 
 private val LightAccentHues = mapOf(
@@ -500,6 +501,7 @@ private val LightAccentHues = mapOf(
     AccentColor.BLUE to Color(0xFF175CA8),
     AccentColor.PINK to Color(0xFF9D286F),
     AccentColor.CYAN to Color(0xFF0C708C),
+    AccentColor.WHITE to Color(0xFF303842),
 )
 
 private fun CliColors.withAccentHue(hue: Color, light: Boolean): CliColors =
@@ -520,9 +522,11 @@ private fun CliColors.withAccentHue(hue: Color, light: Boolean): CliColors =
 internal fun cliColorsFor(
     resolvedThemeMode: ThemeMode,
     accent: AccentColor = AccentColor.AUTO,
+    monochromeEnabled: Boolean = false,
 ): CliColors {
     require(resolvedThemeMode != ThemeMode.SYSTEM) { "theme mode must be resolved before selecting fixed colors" }
     val light = resolvedThemeMode == ThemeMode.LIGHT
+    if (monochromeEnabled) return cliMonochromeColors(light)
     val base = when (resolvedThemeMode) {
         ThemeMode.SYSTEM -> error("theme mode must be resolved before selecting fixed colors")
         ThemeMode.DARK -> CliWarmDarkColors
@@ -614,13 +618,14 @@ fun CliTheme(
     themeMode: ThemeMode = ThemeMode.DARK,
     accentColor: AccentColor = AccentColor.AUTO,
     pixelArtEnabled: Boolean = true,
+    monochromeEnabled: Boolean = false,
     content: @Composable () -> Unit,
 ) {
     val resolvedThemeMode = cliResolvedThemeMode(themeMode)
     val resolvedAppearance = cliPanelAppearanceFor(themeMode)
     val context = LocalContext.current
     val systemDark = isSystemInDarkTheme()
-    val dynamicPalette = themeMode == ThemeMode.SYSTEM &&
+    val dynamicPalette = !monochromeEnabled && themeMode == ThemeMode.SYSTEM &&
         Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
     val dynamicScheme = remember(dynamicPalette, systemDark, context) {
         if (dynamicPalette) {
@@ -630,15 +635,16 @@ fun CliTheme(
         }
     }
     val light = resolvedThemeMode == ThemeMode.LIGHT
-    val colors = remember(resolvedThemeMode, accentColor, dynamicScheme) {
+    val colors = remember(resolvedThemeMode, accentColor, dynamicScheme, monochromeEnabled) {
         dynamicScheme?.let { scheme ->
             cliColorsFromDynamicScheme(scheme, light)
-        } ?: cliColorsFor(resolvedThemeMode, accentColor)
+        } ?: cliColorsFor(resolvedThemeMode, accentColor, monochromeEnabled)
     }
     val scheme = dynamicScheme ?: remember(resolvedThemeMode, accentColor, colors) {
         cliSchemeFor(colors, light)
     }
     CompositionLocalProvider(
+        LocalCliMonochrome provides monochromeEnabled,
         LocalCliColors provides colors,
         LocalCliPanelAppearance provides resolvedAppearance,
         LocalCliDynamicColors provides (dynamicScheme != null),

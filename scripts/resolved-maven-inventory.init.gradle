@@ -1,0 +1,105 @@
+import groovy.json.JsonOutput
+import groovy.json.JsonSlurper
+import org.gradle.api.artifacts.component.ModuleComponentIdentifier
+import org.gradle.api.artifacts.result.ResolvedDependencyResult
+import org.gradle.api.artifacts.result.UnresolvedDependencyResult
+
+// Each project resolves its own configurations under Gradle's project-state lock.
+gradle.projectsEvaluated {
+    def root = gradle.rootProject
+    def destination = root.file(root.findProperty('foxhole.mavenInventoryDir') ?: 'build/reports/security')
+    def projectTasks = []
+    def projectFiles = []
+    root.allprojects.toList().sort { it.path }.each { ownerProject ->
+        def exportFile = new File(destination, "maven-project-${ownerProject.path.replace(':', '_')}.json")
+        projectFiles.add(exportFile)
+        projectTasks.add(ownerProject.tasks.register('foxholeResolvedMavenProjectInventory') {
+            group = 'verification'
+            description = 'Export this project’s resolved Maven configurations for OSV.'
+            notCompatibleWithConfigurationCache('Inspects project dependency resolution results.')
+            outputs.file(exportFile)
+            outputs.upToDateWhen { false }
+            doLast {
+                def purl = { id -> "pkg:maven/${id.group}/${id.module}@${id.version}".toString() }
+                def configurations = []
+                def inspect = { configuration, owner ->
+                    if (!configuration.canBeResolved) return
+                    def runtime = owner.empty && configuration.name == 'releaseRuntimeClasspath' && ownerProject.name != 'macrobenchmark'
+                    def source = "${ownerProject.path}:${owner}${configuration.name}".toString()
+                    def resolution = configuration.incoming.resolutionResult
+                    def failures = resolution.allDependencies.findAll { it instanceof UnresolvedDependencyResult }
+                    if (!failures.empty) {
+                        throw new GradleException("Incomplete Maven inventory for ${source}: " +
+                            failures.collect { it.attempted.displayName }.join(', '), failures.first().failure)
+                    }
+                    def components = []
+                    def dependencies = []
+                    resolution.allComponents.each { resolved ->
+                        if (resolved.id instanceof ModuleComponentIdentifier) {
+                            def id = resolved.id
+                            def ref = purl(id)
+                            components.add(['type': 'library', group: id.group, name: id.module, version: id.version,
+                                'bom-ref': ref, purl: ref, properties: [[name: 'foxhole:resolvedConfiguration', value: source]]])
+                            def edges = resolved.dependencies.findAll {
+                                it instanceof ResolvedDependencyResult && it.selected.id instanceof ModuleComponentIdentifier
+                            }.collect { purl(it.selected.id) }.unique().sort()
+                            dependencies.add([ref: ref, dependsOn: edges])
+                        }
+                    }
+                    configurations.add([project: ownerProject.path, owner: owner, name: configuration.name,
+                        scope: runtime ? 'runtime' : 'build', components: components, dependencies: dependencies])
+                }
+                ownerProject.buildscript.configurations.toList().sort { it.name }.each { inspect(it, 'buildscript:') }
+                ownerProject.configurations.toList().sort { it.name }.each { inspect(it, '') }
+                exportFile.parentFile.mkdirs()
+                exportFile.text = JsonOutput.prettyPrint(JsonOutput.toJson(configurations)) + '\n'
+            }
+        })
+    }
+    root.tasks.register('foxholeResolvedMavenInventory') {
+        group = 'verification'
+        description = 'Merge resolved release-runtime and build/test Maven dependency graphs for OSV.'
+        dependsOn(projectTasks)
+        notCompatibleWithConfigurationCache('Reads project inventory exports.')
+        outputs.upToDateWhen { false }
+        doLast {
+            def inventories = ['runtime', 'build'].collectEntries { scope ->
+                [(scope): [components: new TreeMap(), dependencies: new TreeMap(), configurations: []]]
+            }
+            projectFiles.each { file ->
+                new JsonSlurper().parse(file).each { configuration ->
+                    def inventory = inventories[configuration.scope]
+                    configuration.components.each { item ->
+                        def previous = inventory.components[item['bom-ref']]
+                        if (previous == null) inventory.components[item['bom-ref']] = item
+                        else previous.properties = (previous.properties + item.properties).unique()
+                    }
+                    configuration.dependencies.each { item ->
+                        def edges = inventory.dependencies.computeIfAbsent(item.ref) { ignored -> new TreeSet() }
+                        edges.addAll(item.dependsOn)
+                    }
+                    inventory.configurations.add([project: configuration.project, owner: configuration.owner,
+                        name: configuration.name, components: configuration.components.collect { it['bom-ref'] }.sort()])
+                }
+            }
+            if (inventories.runtime.components.empty || inventories.build.components.empty) {
+                throw new GradleException('Both runtime and build Maven inventories must contain resolved modules.')
+            }
+            inventories.each { scope, inventory ->
+                def rootRef = "foxhole:maven:${scope}".toString()
+                def dependencyRows = inventory.dependencies.collect { ref, children -> [ref: ref, dependsOn: children.toList()] }
+                dependencyRows.add([ref: rootRef, dependsOn: inventory.components.keySet().toList()])
+                def document = [bomFormat: 'CycloneDX', specVersion: '1.6', version: 1,
+                    metadata: [component: ['type': 'application', name: "foxhole-maven-${scope}".toString(),
+                        version: root.version.toString(), 'bom-ref': rootRef], properties: [
+                        [name: 'foxhole:scope', value: scope], [name: 'foxhole:gradleVersion', value: gradle.gradleVersion]]],
+                    components: inventory.components.values().toList(), dependencies: dependencyRows]
+                def file = new File(destination, "maven-${scope}.cdx.json")
+                file.text = JsonOutput.prettyPrint(JsonOutput.toJson(document)) + '\n'
+                new File(destination, "maven-${scope}-configurations.json").text =
+                    JsonOutput.prettyPrint(JsonOutput.toJson(inventory.configurations)) + '\n'
+                logger.lifecycle("Resolved Maven ${scope}: ${inventory.components.size()} components in ${inventory.configurations.size()} configurations -> ${file}")
+            }
+        }
+    }
+}

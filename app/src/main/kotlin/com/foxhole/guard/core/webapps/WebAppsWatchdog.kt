@@ -26,7 +26,10 @@ import com.foxhole.guard.runtime.RuntimeSessionTicker
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
@@ -50,9 +53,13 @@ internal class WebAppsWatchdog(
 ) {
     private val ticker = RuntimeSessionTicker(scope = scope)
     private val pollMutex = Mutex()
+    private val dataCleaner = WebAppsDataCleaner(context)
 
     @Volatile
     var foregroundWebAppId: Long? = null
+        private set
+    private var foregroundActivation: WebAppProxyActivation? = null
+    private var foregroundView: WebView? = null
     private var webView: WebView? = null
 
     @Volatile
@@ -85,7 +92,7 @@ internal class WebAppsWatchdog(
                         ) { pollOnce() }
                     } else {
                         ticker.unregister(TICKER_TASK_ID)
-                        withContext(Dispatchers.Main) { releaseWebView() }
+                        pollMutex.withLock { withContext(Dispatchers.Main) { releaseWebView() } }
                     }
                 }
         }
@@ -135,6 +142,7 @@ internal class WebAppsWatchdog(
         snapshot: ConnectionSnapshot,
         i2pReady: Boolean,
     ) {
+        if (!dataCleaner.prepareForLoad(app.id)) return
         val route = app.webAppRoute()
         if (
             !webAppRouteSatisfied(
@@ -154,19 +162,21 @@ internal class WebAppsWatchdog(
         if (needsRuntimeRoute && !runCatching { routeReady(route) }.getOrDefault(false)) {
             return
         }
-        val activation = proxyController.activate(route = route, blockWithoutTunnel = isolationEnabled)
-        if (!activation.applied) {
-            return
-        }
+        var acquired: WebAppProxyActivation? = null
         val result =
             try {
-                withContext(Dispatchers.Main) {
-                    pollApp(app, activation.credentials)
+                withContext(NonCancellable) {
+                    acquired = proxyController.activate(route = route, blockWithoutTunnel = isolationEnabled)
                 }
+                currentCoroutineContext().ensureActive()
+                val activation = acquired?.takeIf { it.applied } ?: return
+                withContext(Dispatchers.Main) { pollApp(app, activation.credentials) }
             } finally {
-                withContext(Dispatchers.Main) { releaseWebView() }
-                check(proxyController.clear()) {
-                    "WebView proxy override could not be cleared"
+                withContext(NonCancellable + Dispatchers.Main) { releaseWebView() }
+                acquired?.lease?.let { lease ->
+                    check(withContext(NonCancellable) { proxyController.clear(lease) }) {
+                        "WebView proxy override could not be cleared"
+                    }
                 }
             }
         val newCount = computeBadge(
@@ -191,27 +201,85 @@ internal class WebAppsWatchdog(
         appId: Long,
         route: WebAppRoute,
         blockWithoutTunnel: Boolean,
-    ): WebAppProxyActivation {
-        foregroundWebAppId = appId
-        var activation = WebAppProxyActivation(applied = false)
-        withPollingPaused {
-            activation = proxyController.activate(route = route, blockWithoutTunnel = blockWithoutTunnel)
-        }
-        if (!activation.applied) {
+        requestCurrent: () -> Boolean = { true },
+    ): WebAppProxyActivation = pollMutex.withLock {
+        withContext(NonCancellable) {
+            if (!requestCurrent() || webAppsRepository.webApp(appId)?.webAppRoute() != route) {
+                return@withContext WebAppProxyActivation(applied = false)
+            }
+            withContext(Dispatchers.Main) {
+                releaseWebView()
+                destroyForegroundView()
+            }
+            val previous = foregroundActivation?.lease
+            if (previous != null && !proxyController.clear(previous)) {
+                return@withContext WebAppProxyActivation(applied = false)
+            }
+            foregroundActivation = null
             foregroundWebAppId = null
+            if (!dataCleaner.prepareForLoad(appId) || !requestCurrent()) {
+                return@withContext WebAppProxyActivation(applied = false)
+            }
+            foregroundWebAppId = appId
+            proxyController.activate(route, blockWithoutTunnel).also { activation ->
+                foregroundActivation = activation.takeIf { it.applied }
+                if (!activation.applied) foregroundWebAppId = null
+            }
         }
-        return activation
     }
 
-    suspend fun releaseForegroundProxy() {
-        proxyController.clear()
-        foregroundWebAppId = null
+    fun attachForegroundView(lease: WebAppProxyLease, view: WebView): Boolean {
+        if (foregroundActivation?.lease !== lease || !lease.active) {
+            view.settings.blockNetworkLoads = true
+            view.destroy()
+            return false
+        }
+        foregroundView = view
+        return true
+    }
+
+    fun releaseForegroundProxyAsync(lease: WebAppProxyLease) {
+        scope.launch { releaseForegroundProxy(lease) }
+    }
+
+    suspend fun releaseForegroundProxy(lease: WebAppProxyLease) = pollMutex.withLock {
+        withContext(NonCancellable) {
+            if (foregroundActivation?.lease !== lease) return@withContext
+            withContext(Dispatchers.Main) { destroyForegroundView() }
+            if (proxyController.clear(lease)) {
+                foregroundActivation = null
+                foregroundWebAppId = null
+            } else {
+                recordDiagnostic("WebView proxy release failed; polling remains suspended")
+            }
+        }
+    }
+
+    private fun destroyForegroundView() {
+        foregroundActivation?.lease?.revoke()
+        foregroundView?.let { view ->
+            view.settings.blockNetworkLoads = true
+            view.stopLoading()
+            runCatching { WebAppProfiles.cookieManager(view).flush() }
+            view.destroy()
+        }
+        foregroundView = null
     }
 
     suspend fun withPollingPaused(block: suspend () -> Unit) {
         pollMutex.withLock {
-            withContext(Dispatchers.Main) { releaseWebView() }
-            block()
+            withContext(NonCancellable) {
+                withContext(Dispatchers.Main) {
+                    releaseWebView()
+                    destroyForegroundView()
+                }
+                foregroundActivation?.lease?.let { lease ->
+                    check(proxyController.clear(lease)) { "WebView proxy release failed; mutation refused" }
+                }
+                foregroundActivation = null
+                foregroundWebAppId = null
+                block()
+            }
         }
     }
 
@@ -244,7 +312,15 @@ internal class WebAppsWatchdog(
         var documentStartScriptInstalled = false
         val shimScript = webAppShimJs(app.badgeCount)
         val view = WebView(context).apply {
-            WebAppProfiles.install(this, app.id)
+            val isolated = runCatching {
+                if (WebAppProfiles.supported) check(WebAppProfiles.install(this, app.id))
+                WebAppProfiles.cookieManager(this)
+            }.isSuccess
+            if (!isolated) {
+                settings.blockNetworkLoads = true
+                destroy()
+                error("WebApp storage isolation failed")
+            }
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
             settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW

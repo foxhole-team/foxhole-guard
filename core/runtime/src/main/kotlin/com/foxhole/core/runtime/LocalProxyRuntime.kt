@@ -14,12 +14,12 @@ import kotlinx.serialization.json.put
 
 const val LOCAL_PROXY_INBOUND_NAME = "device-local"
 
-/** What the app asks for. Absent credentials mean an anonymous listener — allowed on loopback. */
 data class LocalProxyRequest(
     val port: Int,
     val username: String?,
     val password: String?,
     val upstream: LocalProxyUpstream,
+    val allowAnonymous: Boolean = false,
 ) {
     fun toConfigJson(): String = toConfigJson(LOCAL_PROXY_INBOUND_NAME)
 
@@ -27,10 +27,13 @@ data class LocalProxyRequest(
         val document = buildJsonObject {
             put("name", inboundName)
             put("http_port", port.coerceIn(0, MAX_PORT))
+            put("allow_anonymous", allowAnonymous)
             val user = username?.trim().orEmpty()
             val secret = password.orEmpty()
-            if (user.isNotEmpty() && secret.isNotEmpty()) {
+            if (username != null) {
                 put("username", user)
+            }
+            if (password != null) {
                 put("password", secret)
             }
             put("upstream", upstream.wireName)

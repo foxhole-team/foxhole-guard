@@ -3,9 +3,9 @@
 # shellcheck disable=SC2034  # every pin below is consumed by the scripts that source this file
 
 
-openssl_ver="${I2PD_OPENSSL_VERSION:-3.5.4}"
+openssl_ver="${I2PD_OPENSSL_VERSION:-3.5.8}"
 case "$openssl_ver" in
-  3.5.4) openssl_sha256="${I2PD_OPENSSL_SHA256:-967311f84955316969bdb1d8d4b983718ef42338639c621ec4c34fddef355e99}" ;;
+  3.5.8) openssl_sha256="${I2PD_OPENSSL_SHA256:-a8f84a39918ec6415ce765d9b429d313ba97b8143169c172e734b9514464f5b2}" ;;
   *) openssl_sha256="${I2PD_OPENSSL_SHA256:?set I2PD_OPENSSL_SHA256 when overriding I2PD_OPENSSL_VERSION}" ;;
 esac
 openssl_url="https://github.com/openssl/openssl/releases/download/openssl-$openssl_ver/openssl-$openssl_ver.tar.gz"
@@ -18,13 +18,13 @@ esac
 boost_us="boost_${boost_ver//./_}"
 boost_url="https://archives.boost.io/release/$boost_ver/source/$boost_us.tar.bz2"
 
-go_version="${TOR_TRANSPORT_GO:-go1.25.8}"
+go_version="${TOR_TRANSPORT_GO:-go1.26.8}"
 go_tarball_sha256_for() {
   case "$1" in
-    go1.25.8-linux-amd64)   echo ceb5e041bbc3893846bd1614d76cb4681c91dadee579426cf21a63f2d7e03be6 ;;
-    go1.25.8-linux-arm64)   echo 7d137f59f66bb93f40a6b2b11e713adc2a9d0c8d9ae581718e3fad19e5295dc7 ;;
-    go1.25.8-darwin-amd64)  echo a0b8136598baf192af400051cee2481ffb407f4c113a81ff400896e26cbce9e4 ;;
-    go1.25.8-darwin-arm64)  echo c6547959f5dbe8440bf3da972bd65ba900168de5e7ab01464fbdc7ac8375c21c ;;
+    go1.26.8-linux-amd64)   echo d0f743b33e8d8945e6b1f432edd15785c70507121d6e2a723b21285eddf8b57b ;;
+    go1.26.8-linux-arm64)   echo 211ffced9dcb9633a55eac6364816ec0ddd951389a740e88fa8b3337971bdda0 ;;
+    go1.26.8-darwin-amd64)  echo 186be014105aa6542b767d2c6ed5cca10a0214bdff809ef1724022a8c7894150 ;;
+    go1.26.8-darwin-arm64)  echo a012b25b571bd0138a03dcd25375ceba866fe5ca822f426d2c66a4de56fd3f4b ;;
     *) return 1 ;;
   esac
 }

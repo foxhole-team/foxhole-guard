@@ -134,11 +134,11 @@ abstract class VerifyBundledLicenseAssetsInReleaseApkTask : DefaultTask() {
                 "assets/licenses/i2pd/Android-NDK-29-NOTICE.txt",
                 "assets/licenses/i2pd/Android-NDK-29-NOTICE.toolchain.txt",
                 "assets/licenses/i2pd/Boost-1.84.0-BSL-1.0.txt",
-                "assets/licenses/i2pd/OpenSSL-3.5.4-Apache-2.0.txt",
+                "assets/licenses/i2pd/OpenSSL-3.5.8-Apache-2.0.txt",
                 "assets/licenses/i2pd/i2pd-BSD-3-Clause.txt",
                 "assets/licenses/icons/Tabler-MIT.txt",
                 "assets/licenses/tor/GO-MODULES.json",
-                "assets/licenses/tor/Go-1.25.8-BSD-3-Clause.txt",
+                "assets/licenses/tor/Go-1.26.8-BSD-3-Clause.txt",
                 "assets/licenses/tor/conjure-client-BSD-3-Clause.txt",
                 "assets/licenses/tor/lyrebird-BSD-3-Clause.txt",
                 "assets/licenses/tor/lyrebird-GPL-3.0-or-later.txt",
@@ -197,8 +197,8 @@ abstract class VerifyBundledLicenseAssetsInReleaseApkTask : DefaultTask() {
 plugins {
     id("com.android.application")
     id("com.google.devtools.ksp") version "2.3.10"
-    id("org.jetbrains.kotlin.plugin.compose") version "2.4.10"
-    id("org.jetbrains.kotlin.plugin.serialization") version "2.4.10"
+    id("org.jetbrains.kotlin.plugin.compose") version "2.4.20"
+    id("org.jetbrains.kotlin.plugin.serialization") version "2.4.20"
     jacoco
 }
 
@@ -461,13 +461,12 @@ val prepareBundledTorTransports = tasks.register("prepareBundledTorTransports") 
             }
         }
 
-    inputs.file(buildTransportsScript)
+    inputs.files(buildTransportsScript, rootProject.file("scripts/native-deps.sh"), rootProject.file("scripts/prepare-tor-dependency.py"))
+    inputs.files(rootProject.fileTree("config/native"))
+    inputs.property("abis", shippedAndroidAbis)
     outputs.files(transports)
 
     doLast {
-        if (transports.all(File::isFile)) {
-            return@doLast
-        }
         require(buildTransportsScript.isFile) {
             "missing Tor transport build script: ${buildTransportsScript.absolutePath}"
         }
@@ -488,6 +487,8 @@ val prepareBundledTorTransports = tasks.register("prepareBundledTorTransports") 
         }
     }
 }
+
+val prebuiltFoxCoreDirectory = providers.environmentVariable("FOXCORE_PREBUILT_DIR").orNull?.let(::File)
 
 val prepareFoxCoreNative = tasks.register("prepareFoxCoreNative") {
     group = "build"
@@ -514,8 +515,25 @@ val prepareFoxCoreNative = tasks.register("prepareFoxCoreNative") {
             }
         }
     outputs.files(expectedLibraries)
+    inputs.property("prebuiltCore", prebuiltFoxCoreDirectory?.absolutePath.orEmpty())
+    prebuiltFoxCoreDirectory?.let { inputs.dir(it) }
 
     doLast {
+        if (prebuiltFoxCoreDirectory != null) {
+            val command = listOf(
+                "python3", rootProject.file("scripts/verify-core-release.py").absolutePath,
+                foxCoreSourceRoot.absolutePath, prebuiltFoxCoreDirectory.absolutePath, pinnedFoxCoreRevision,
+                shippedAndroidAbis.joinToString(" "), generatedFoxCoreNativeLibs.get().asFile.absolutePath,
+            )
+            check(ProcessBuilder(command).directory(rootProject.projectDir).inheritIO().start().waitFor() == 0) {
+                "Prebuilt Core did not match the pinned release manifest"
+            }
+            check(ProcessBuilder(foxCoreSourceRoot.resolve("scripts/android-elf-gate.sh").absolutePath,
+                generatedFoxCoreNativeLibs.get().asFile.absolutePath).inheritIO().start().waitFor() == 0) {
+                "Prebuilt Core ELF verification failed"
+            }
+            return@doLast
+        }
         require(foxCoreAndroidBuildScript.isFile) {
             "missing FoxCore Android build script: ${foxCoreAndroidBuildScript.absolutePath}"
         }
@@ -608,6 +626,8 @@ val prepareBundledLicenseAssets = tasks.register("prepareBundledLicenseAssets") 
         rootProject.file("LICENSE"),
         rootProject.file("THIRD_PARTY_NOTICES.md"),
         rootProject.file("scripts/native-deps.sh"),
+        rootProject.file("scripts/prepare-tor-dependency.py"),
+        fileTree(rootProject.file("config/native")),
         rootProject.file("config/foxcore-revision.txt"),
         rootProject.file("gradle/libs.versions.toml"),
         fileTree(rootProject.file("third_party/fonts")),
@@ -1032,7 +1052,7 @@ android {
         applicationId = publicApplicationId
         minSdk = 26
         targetSdk = 37
-        versionCode = 117
+        versionCode = 122
         versionName = project.version.toString()
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true

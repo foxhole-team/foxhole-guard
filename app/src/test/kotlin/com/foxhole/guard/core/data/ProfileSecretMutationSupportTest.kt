@@ -3,6 +3,9 @@ package com.foxhole.guard.core.data
 import com.foxhole.core.model.ProtocolHint
 import com.foxhole.core.model.StoredProfileProtocolOption
 import com.foxhole.core.model.StoredProfileSecret
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
@@ -221,6 +224,100 @@ class ProfileSecretMutationSupportTest {
         assertEquals("edited-vless-config", updated.resolvedConfigJson)
         assertEquals("edited-vless-config", updated.protocolOptions.first { it.id == "vless" }.normalizedConfigJson)
         assertEquals("trojan-config", updated.protocolOptions.first { it.id == "trojan" }.normalizedConfigJson)
+    }
+
+    @Test
+    fun `missing explicit target rejects all edits before either store changes`() = runBlocking {
+        val original = StoredProfileSecret(
+            resolvedConfigJson = validConfig("original"),
+            selectedProtocolOptionId = "a",
+            protocolOptions = listOf(storedOption("a", ProtocolHint.VLESS, validConfig("original"))),
+        )
+        val writes = mutableListOf<StoredProfileSecret>()
+        var metadata = false
+        val result = runCatching {
+            persistValidatedProfileEditorChanges(
+                original,
+                listOf(
+                    ProfileEditorConfigUpdate("a", validConfig("first")),
+                    ProfileEditorConfigUpdate("deleted", validConfig("second")),
+                ),
+                Json,
+                sanitizer = { it },
+                writeSecret = writes::add,
+                updateMetadata = { metadata = true },
+                onRollbackFailure = {},
+            )
+        }
+        assertTrue(result.isFailure)
+        assertTrue(writes.isEmpty())
+        assertFalse(metadata)
+    }
+
+    @Test
+    fun `revision detects subscription changes and profile rename`() {
+        val original = sampleSecret("original")
+        val revision = profileEditorRevision(original, "name")
+        requireProfileEditorRevision(original, "name", revision)
+        assertTrue(
+            runCatching {
+                requireProfileEditorRevision(original.copy(rawInput = "refreshed"), "name", revision)
+            }.isFailure,
+        )
+        assertTrue(runCatching { requireProfileEditorRevision(original, "renamed", revision) }.isFailure)
+    }
+
+    @Test
+    fun `cancellation after the secret write cannot skip its metadata commit`() = runBlocking {
+        val written = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        var metadata = false
+        val pending = async(Dispatchers.Default) {
+            persistValidatedProfileEditorChanges(
+                sampleSecret("original"),
+                listOf(ProfileEditorConfigUpdate(null, validConfig("updated"))),
+                Json,
+                sanitizer = { it },
+                writeSecret = {
+                    written.complete(Unit)
+                    release.await()
+                },
+                updateMetadata = { metadata = true },
+                onRollbackFailure = {},
+            )
+        }
+        written.await()
+        pending.cancel()
+        release.complete(Unit)
+        pending.join()
+        assertTrue(metadata)
+    }
+
+    @Test
+    fun `a write which changes storage then fails restores the original secret`() = runBlocking {
+        val original = sampleSecret("original")
+        var stored = original
+        var writes = 0
+        var metadata = false
+        val result = runCatching {
+            persistValidatedProfileEditorChanges(
+                original,
+                listOf(ProfileEditorConfigUpdate(null, validConfig("updated"))),
+                Json,
+                sanitizer = { it },
+                writeSecret = { value ->
+                    stored = value
+                    writes++
+                    if (writes == 1) error("write completion failed")
+                },
+                updateMetadata = { metadata = true },
+                onRollbackFailure = {},
+            )
+        }
+        assertTrue(result.isFailure)
+        assertEquals(original, stored)
+        assertEquals(2, writes)
+        assertFalse(metadata)
     }
 
     private fun sampleSecret(rawInput: String): StoredProfileSecret =

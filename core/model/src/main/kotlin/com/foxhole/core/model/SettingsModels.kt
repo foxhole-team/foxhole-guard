@@ -11,6 +11,7 @@ data class UiSettings(
     // Legacy storage only. ThemeMode is the single system/dark/OLED/light source.
     val panelAppearance: PanelAppearance = PanelAppearance.AUTO,
     val accentColor: AccentColor = AccentColor.ORANGE,
+    val monochromeEnabled: Boolean = false,
     val locale: AppLocale = AppLocale.SYSTEM,
 
     val pixelArtEnabled: Boolean = true,
@@ -90,6 +91,7 @@ data class UiSettings(
 data class AppearanceUiState(
     val themeMode: ThemeMode = ThemeMode.DARK,
     val accentColor: AccentColor = AccentColor.ORANGE,
+    val monochromeEnabled: Boolean = false,
     val pixelArtEnabled: Boolean = true,
 )
 
@@ -97,6 +99,7 @@ fun UiSettings.appearanceUiState(): AppearanceUiState =
     AppearanceUiState(
         themeMode = themeMode,
         accentColor = accentColor,
+        monochromeEnabled = monochromeEnabled,
         pixelArtEnabled = pixelArtEnabled,
     )
 
@@ -105,6 +108,7 @@ fun UiSettings.withAppearanceUiState(value: AppearanceUiState): UiSettings =
         themeMode = value.themeMode,
         panelAppearance = PanelAppearance.AUTO,
         accentColor = value.accentColor,
+        monochromeEnabled = value.monochromeEnabled,
         pixelArtEnabled = value.pixelArtEnabled,
     )
 

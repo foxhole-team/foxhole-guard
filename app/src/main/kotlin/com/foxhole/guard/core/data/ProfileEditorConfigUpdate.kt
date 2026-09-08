@@ -3,9 +3,11 @@ package com.foxhole.guard.core.data
 import com.foxhole.core.model.Profile
 import com.foxhole.core.model.StoredProfileSecret
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
+import java.security.MessageDigest
 
 internal data class ProfileEditorConfigUpdate(
     val protocolOptionId: String?,
@@ -16,6 +18,8 @@ internal suspend fun ProfileRepository.updateProfileEditor(
     profileId: Long,
     profileName: String?,
     edits: List<ProfileEditorConfigUpdate>,
+    expectedRevision: String? = null,
+    onSavedRevision: (String) -> Unit = {},
 ): Profile {
     val trimmedName = profileName?.trim()
     require(trimmedName == null || trimmedName.isNotBlank()) { "profile name is blank" }
@@ -23,13 +27,14 @@ internal suspend fun ProfileRepository.updateProfileEditor(
         val entity = dao.getById(profileId) ?: error("profile not found")
         val targetName = trimmedName ?: entity.name
         val originalSecret = secretStore.read(entity.secretRef) ?: error("profile secret is missing")
+        requireProfileEditorRevision(originalSecret, entity.name, expectedRevision)
         val settings = settingsRepository.current()
         val effectiveAllowInsecureTls =
             allowsInsecureTlsForStoredProfileRuntime(
                 allowInsecureTlsGlobally = settings.expert.allowInsecureTls,
                 secret = originalSecret,
             )
-        persistValidatedProfileEditorChanges(
+        val savedSecret = persistValidatedProfileEditorChanges(
             originalSecret = originalSecret,
             edits = edits,
             json = json,
@@ -54,6 +59,7 @@ internal suspend fun ProfileRepository.updateProfileEditor(
                 )
             },
         )
+        onSavedRevision(profileEditorRevision(savedSecret, targetName))
         requireProfile(profileId)
     }
     if (updated.isActive) persistCachedActiveProfile(updated)
@@ -82,14 +88,37 @@ internal suspend fun persistValidatedProfileEditorChanges(
                 )
             }.withInsecureTlsMarkers(json)
     val secretChanged = nextSecret != originalSecret
-    if (secretChanged) writeSecret(nextSecret)
-    try {
-        updateMetadata()
-    } catch (error: Throwable) {
-        if (secretChanged) {
-            runCatching { writeSecret(originalSecret) }.onFailure(onRollbackFailure)
+    withContext(NonCancellable) {
+        try {
+            if (secretChanged) writeSecret(nextSecret)
+            updateMetadata()
+        } catch (error: Throwable) {
+            if (secretChanged) {
+                runCatching { writeSecret(originalSecret) }.onFailure(onRollbackFailure)
+            }
+            throw error
         }
-        throw error
     }
     return nextSecret
+}
+
+internal fun profileEditorRevision(secret: StoredProfileSecret, name: String): String {
+    val bytes = (name + "\u0000" + Json.encodeToString(StoredProfileSecret.serializer(), secret)).encodeToByteArray()
+    return try {
+        MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
+    } finally {
+        bytes.fill(0)
+    }
+}
+
+internal fun requireProfileEditorRevision(secret: StoredProfileSecret, name: String, expected: String?) {
+    require(expected == null || expected == profileEditorRevision(secret, name)) {
+        "profile changed; reload the editor before saving"
+    }
+}
+
+internal suspend fun ProfileRepository.editorRevision(profileId: Long): String = secretMutationMutex.withLock {
+    val entity = dao.getById(profileId) ?: error("profile not found")
+    val secret = secretStore.read(entity.secretRef) ?: error("profile secret is missing")
+    profileEditorRevision(secret, entity.name)
 }

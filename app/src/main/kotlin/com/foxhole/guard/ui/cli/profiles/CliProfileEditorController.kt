@@ -8,6 +8,7 @@ import androidx.compose.runtime.setValue
 import com.foxhole.core.model.Profile
 import com.foxhole.guard.ui.HomeViewModel
 import com.foxhole.guard.ui.emitError
+import com.foxhole.guard.ui.profileEditorRevision
 import com.foxhole.guard.ui.removeProfileProtocolOption
 import com.foxhole.guard.ui.saveManualProfileConfig
 import com.foxhole.guard.ui.saveProfileEditorChanges
@@ -34,6 +35,8 @@ internal class CliProfileEditorController(
     var reloadKey by mutableIntStateOf(0)
         private set
 
+    private var revision: String? = null
+
     val dirty: Boolean
         get() = slots.orEmpty().any(CliEditorSlot::dirty)
 
@@ -41,12 +44,15 @@ internal class CliProfileEditorController(
         profile: Profile,
         onUnreadable: () -> Unit,
     ) {
+        val before = viewModel.profileEditorRevision(profileId)
         val loaded = loadCliEditorSlots(viewModel, profile)
-        if (loaded.isEmpty()) {
+        val after = viewModel.profileEditorRevision(profileId)
+        if (loaded.isEmpty() || before != after) {
             viewModel.emitError(messages.loadFailed)
             onUnreadable()
         } else {
             slots = loaded
+            revision = after
         }
     }
 
@@ -92,6 +98,7 @@ internal class CliProfileEditorController(
                     profileName = profileName,
                     protocolOptionId = slot.optionId,
                     rawText = text,
+                    expectedRevision = revision,
                 )
             ) {
                 onSaved()
@@ -113,9 +120,9 @@ internal class CliProfileEditorController(
             }
         }
 
-    fun addProtocol(add: suspend (List<CliEditorSlot>) -> Boolean) =
+    fun addProtocol(add: suspend (List<CliEditorSlot>, String?) -> Boolean) =
         runExclusive {
-            if (flush() && add(slots.orEmpty())) {
+            if (flush() && add(slots.orEmpty(), revision)) {
                 expanded = null
                 rawEditor = null
                 reloadKey++
@@ -127,7 +134,7 @@ internal class CliProfileEditorController(
         onSaved: () -> Unit,
     ) =
         runExclusive {
-            if (viewModel.saveProfileEditorChanges(profileId, profileName, slots?.pendingEdits().orEmpty())) {
+            if (viewModel.saveProfileEditorChanges(profileId, profileName, slots?.pendingEdits().orEmpty(), revision)) {
                 onSaved()
             }
         }
@@ -138,13 +145,17 @@ internal class CliProfileEditorController(
         }
         expanded = null
         rawEditor = null
-        viewModel.removeProfileProtocolOption(profileId, optionId)
-        reloadKey++
+        if (viewModel.removeProfileProtocolOption(profileId, optionId, revision)) reloadKey++
     }
 
     private suspend fun flush(): Boolean {
         val edits = slots?.pendingEdits().orEmpty()
-        return edits.isEmpty() || viewModel.saveProfileProtocolConfigs(profileId, edits)
+        if (edits.isEmpty()) return true
+        var savedRevision: String? = null
+        if (!viewModel.saveProfileProtocolConfigs(profileId, edits, revision) { savedRevision = it }) return false
+        revision = checkNotNull(savedRevision)
+        slots = slots?.map { it.copy(dirty = false) }
+        return true
     }
 
     private fun runExclusive(block: suspend () -> Unit) {

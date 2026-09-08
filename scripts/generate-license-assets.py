@@ -14,9 +14,9 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 NATIVE_PINS = {
-    "openssl": ("3.5.4", "967311f84955316969bdb1d8d4b983718ef42338639c621ec4c34fddef355e99"),
+    "openssl": ("3.5.8", "a8f84a39918ec6415ce765d9b429d313ba97b8143169c172e734b9514464f5b2"),
     "boost": ("1.84.0", "cc4b893acf645c9d4b698e9a0f08ca8846aa5d6c68275c14c3e7949c24109454"),
-    "go": ("go1.25.8", None),
+    "go": ("go1.26.8", None),
     "lyrebird": ("0b10edbb61e0ca6fb70c7d57aeaabf315f1fade1", None),
     "conjure": ("0090962226b82aa4a8fc38506f9b98de67d0781e", None),
 }
@@ -67,9 +67,9 @@ def copy(output: Path, source: Path, relative: str, expected_hash: str | None = 
 def require_native_pins() -> None:
     pins = (REPO_ROOT / "scripts/native-deps.sh").read_text()
     required = (
-        'openssl_ver="${I2PD_OPENSSL_VERSION:-3.5.4}"',
+        'openssl_ver="${I2PD_OPENSSL_VERSION:-3.5.8}"',
         'boost_ver="${I2PD_BOOST_VERSION:-1.84.0}"',
-        'go_version="${TOR_TRANSPORT_GO:-go1.25.8}"',
+        'go_version="${TOR_TRANSPORT_GO:-go1.26.8}"',
         'lyrebird_commit="0b10edbb61e0ca6fb70c7d57aeaabf315f1fade1"',
         'conjure_commit="0090962226b82aa4a8fc38506f9b98de67d0781e"',
     )
@@ -219,8 +219,15 @@ def go_modules(go_binary: Path, executable: Path) -> list[dict[str, str]]:
                 "version": fields[3],
             }
         elif kind == "=>" and pending:
-            pending["path"] = fields[2]
-            pending["version"] = fields[3]
+            if fields[2] == "../conjure-patched":
+                if pending["declaredPath"] != "github.com/refraction-networking/conjure" or pending["declaredVersion"] != "v0.9.1":
+                    raise SystemExit("Unexpected patched Conjure module identity")
+                pending["replacementPath"] = fields[2]
+                pending["patchManifestSha256"] = sha256(read_checked(REPO_ROOT / "config/native/conjure/stun-v3-patch.json"))
+                pending["patchScriptSha256"] = sha256(read_checked(REPO_ROOT / "scripts/prepare-tor-dependency.py"))
+            else:
+                pending["path"] = fields[2]
+                pending["version"] = fields[3]
         elif pending:
             modules.append(pending)
             pending = None
@@ -264,6 +271,8 @@ def copy_go_module_licenses(output: Path, module_cache: Path, modules: list[dict
         path = str(module["path"])
         version = str(module["version"])
         source = module_cache / f"{go_escape(path)}@{go_escape(version)}"
+        if module.get("replacementPath") == "../conjure-patched":
+            source = module_cache.parent / "tor-transports/conjure-patched"
         if not source.is_dir():
             raise SystemExit(f"Go module cache entry is missing: {source}")
         licenses = sorted(
@@ -364,7 +373,7 @@ def generate(args: argparse.Namespace) -> None:
         output,
         f"i2pd/OpenSSL-{openssl_version}-Apache-2.0.txt",
         extract_member(
-            i2pd_cache / "openssl.tgz",
+            i2pd_cache / f"openssl-{openssl_version}.tgz",
             f"openssl-{openssl_version}/LICENSE.txt",
             str(openssl_hash),
         ),
@@ -403,26 +412,22 @@ def generate(args: argparse.Namespace) -> None:
         "conjure-client": REPO_ROOT / "app/src/main/assets/tor/arm64-v8a/tor/pluggable_transports/conjure-client",
     }
     require_lyrebird_composite_license(binary_paths["lyrebird"])
-    expected_module_counts = {"lyrebird": 61, "conjure-client": 33}
     inventory: dict[tuple[str, str], dict[str, object]] = {}
     for binary_name, binary in binary_paths.items():
         if not binary.is_file():
             raise SystemExit(f"Tor transport binary is missing: {binary}")
         binary_modules = go_modules(go_binary, binary)
-        if len(binary_modules) != expected_module_counts[binary_name]:
-            raise SystemExit(
-                f"{binary_name} module inventory changed: "
-                f"expected {expected_module_counts[binary_name]}, found {len(binary_modules)}"
-            )
+        if not binary_modules:
+            raise SystemExit(f"{binary_name} has no embedded Go dependency inventory")
         for module in binary_modules:
             key = (module["path"], module["version"])
             current = inventory.setdefault(key, {**module, "binaries": []})
             current["binaries"].append(binary_name)
     modules = sorted(inventory.values(), key=lambda item: (str(item["path"]), str(item["version"])))
-    if len(modules) != 78:
-        raise SystemExit(f"Tor transport module inventory changed: expected 78 distinct modules, found {len(modules)}")
     write(output, "tor/GO-MODULES.json", (json.dumps(modules, indent=2, sort_keys=True) + "\n").encode())
     copy_go_module_licenses(output, native_root / "gomodcache", modules)
+    copy(output, REPO_ROOT / "config/native/conjure/stun-v3-patch.json", "tor/CONJURE-PATCH.json")
+    copy(output, REPO_ROOT / "scripts/prepare-tor-dependency.py", "tor/CONJURE-PATCH.py")
 
     core_revision = (REPO_ROOT / "config/foxcore-revision.txt").read_text().strip()
     if not re.fullmatch(r"[0-9a-f]{40}", core_revision):

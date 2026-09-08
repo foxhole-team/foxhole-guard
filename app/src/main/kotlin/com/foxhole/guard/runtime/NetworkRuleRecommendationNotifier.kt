@@ -74,6 +74,10 @@ internal class NetworkRuleRecommendationNotifier(
             Intent(appContext, com.foxhole.guard.ui.cli.CliMainActivity::class.java)
                 .setAction(ACTION_APPLY_NETWORK_RULE)
                 .putExtra(EXTRA_PROFILE_ID, profileId)
+                .putExtra(
+                    EXTRA_REQUEST_TOKEN,
+                    NetworkRuleCommandRequests.issue(appContext, profileId, protocolOptionId)
+                )
                 .putExtra(EXTRA_PROTOCOL_OPTION_ID, protocolOptionId)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
@@ -94,6 +98,7 @@ internal class NetworkRuleRecommendationNotifier(
 
     companion object {
         const val ACTION_APPLY_NETWORK_RULE = "com.foxhole.guard.action.APPLY_NETWORK_RULE"
+        const val EXTRA_REQUEST_TOKEN = "network_rule_request_token"
         const val EXTRA_PROFILE_ID = "network_rule_profile_id"
         const val EXTRA_PROTOCOL_OPTION_ID = "network_rule_protocol_option_id"
         const val CHANNEL_ID = "foxhole_network_rules"

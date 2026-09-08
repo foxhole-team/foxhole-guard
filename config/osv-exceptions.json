@@ -1,0 +1,41 @@
+{
+  "schema": 1,
+  "exceptions": [
+    {
+      "ecosystem": "Go",
+      "package": "golang.org/x/crypto",
+      "version": "v0.56.0",
+      "advisory": "GO-2026-5932",
+      "reason": "The advisory affects only the unmaintained OpenPGP packages. Neither Android transport imports those packages; the native package gate refuses any new reachability before allowing the scan.",
+      "evidence": "scripts/verify-tor-package-boundary.py; build/reports/security/tor-package-evidence.json; https://pkg.go.dev/vuln/GO-2026-5932",
+      "expires": "2026-12-07"
+    },
+    {
+      "ecosystem": "crates.io",
+      "package": "bincode",
+      "version": "2.0.1",
+      "advisory": "RUSTSEC-2025-0141",
+      "reason": "Transitive unmaintained dependency inventory, not a disclosed exploitable runtime vulnerability. Shipped Android feature reachability is reviewed by the pinned Core release maintenance policy.",
+      "evidence": "foxhole-core/deny.toml; foxhole-core/docs/architecture/02-cryptography.md",
+      "expires": "2026-12-07"
+    },
+    {
+      "ecosystem": "crates.io",
+      "package": "paste",
+      "version": "1.0.15",
+      "advisory": "RUSTSEC-2024-0436",
+      "reason": "Unmaintained transitive procedural macro used at compile time; tracked for replacement by the pinned Core maintenance policy.",
+      "evidence": "foxhole-core/deny.toml",
+      "expires": "2026-12-07"
+    },
+    {
+      "ecosystem": "crates.io",
+      "package": "rsa",
+      "version": "0.9.10",
+      "advisory": "RUSTSEC-2023-0071",
+      "reason": "The Marvin advisory affects private-key RSA operations. The shipped Arti client uses public verification; the pinned-source RSA gate rejects any newly reachable private operation.",
+      "evidence": "foxhole-core/scripts/tor-rsa-gate.sh; foxhole-core/deny.toml",
+      "expires": "2026-12-07"
+    }
+  ]
+}

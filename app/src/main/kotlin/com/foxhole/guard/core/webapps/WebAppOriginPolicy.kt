@@ -13,6 +13,15 @@ internal fun isWebAppTunTransportReady(snapshot: ConnectionSnapshot): Boolean =
 internal fun webAppRouteSatisfied(isolationEnabled: Boolean, tunnelReady: Boolean): Boolean =
     !isolationEnabled || tunnelReady
 
+internal val WEB_APP_ROUTE_OPTIONS = listOf(
+    WebAppRoute.DEFAULT,
+    WebAppRoute.DIRECT,
+    WebAppRoute.VPN,
+    WebAppRoute.BLOCK,
+)
+
+internal fun webAppRouteAvailable(route: WebAppRoute): Boolean = route in WEB_APP_ROUTE_OPTIONS
+
 /** Per-app route readiness. Strict routes never degrade to the current/default network. */
 internal fun webAppRouteSatisfied(
     route: WebAppRoute,
@@ -20,7 +29,7 @@ internal fun webAppRouteSatisfied(
     snapshot: ConnectionSnapshot,
     i2pReady: Boolean,
 ): Boolean =
-    when (route) {
+    webAppRouteAvailable(route) && when (route) {
         WebAppRoute.DEFAULT ->
             webAppRouteSatisfied(
                 isolationEnabled = blockWithoutTunnel,

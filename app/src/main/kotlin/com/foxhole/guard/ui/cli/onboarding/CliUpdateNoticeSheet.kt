@@ -17,7 +17,6 @@ import com.foxhole.guard.ui.HomeViewModel
 import com.foxhole.guard.ui.cli.CliSpacing
 import com.foxhole.guard.ui.cli.components.CliBottomSheet
 import com.foxhole.guard.ui.cli.components.CliPanel
-import com.foxhole.guard.ui.cli.components.CliRowDivider
 import com.foxhole.guard.ui.cli.components.CliToggleRow
 
 @Composable
@@ -26,24 +25,21 @@ internal fun CliUpdateNoticeSheet(viewModel: HomeViewModel) {
     val visible by viewModel.alphaNoticeVisible.collectAsStateWithLifecycle()
     if (!visible || !settings.ui.onboardingCompleted) return
     CliUpdateNoticeSheetContent(
+        monochromeEnabled = settings.ui.monochromeEnabled,
         onDismiss = viewModel::dismissAlphaNotice,
     )
 }
 
 @Composable
 internal fun CliUpdateNoticeSheetContent(
-    onDismiss: (Boolean, Boolean) -> Unit,
+    monochromeEnabled: Boolean = false,
+    onDismiss: (Boolean) -> Unit,
 ) {
-    var showTrafficMap by rememberSaveable {
-        mutableStateOf(UPDATE_NOTICE_TRAFFIC_MAP_DEFAULT_ENABLED)
-    }
-    var useFoxholeStyle by rememberSaveable {
-        mutableStateOf(UPDATE_NOTICE_FOXHOLE_STYLE_DEFAULT_ENABLED)
-    }
+    var monochrome by rememberSaveable { mutableStateOf(monochromeEnabled) }
     val body = stringResource(R.string.cli_update_notice_body)
     val items = remember(body) { updateNoticeItems(body) }
     CliBottomSheet(
-        onDismiss = { onDismiss(showTrafficMap, useFoxholeStyle) },
+        onDismiss = { onDismiss(monochrome) },
         title = stringResource(R.string.cli_update_notice_title),
         icon = R.drawable.lin_update,
     ) {
@@ -51,17 +47,10 @@ internal fun CliUpdateNoticeSheetContent(
         Spacer(modifier = Modifier.height(CliSpacing.md))
         CliPanel(modifier = Modifier.fillMaxWidth()) {
             CliToggleRow(
-                label = stringResource(R.string.cli_update_notice_home_map),
-                checked = showTrafficMap,
-                onToggle = { showTrafficMap = it },
-                icon = R.drawable.lin_map,
-            )
-            CliRowDivider()
-            CliToggleRow(
-                label = stringResource(R.string.cli_cfg_pixel_art),
-                checked = useFoxholeStyle,
-                onToggle = { useFoxholeStyle = it },
-                icon = R.drawable.lin_terminal,
+                label = stringResource(R.string.cli_cfg_monochrome),
+                checked = monochrome,
+                onToggle = { monochrome = it },
+                icon = R.drawable.lin_star,
             )
         }
         Spacer(modifier = Modifier.height(CliSpacing.sm))
@@ -85,6 +74,3 @@ private val UPDATE_NOTICE_ICONS = listOf(
     R.drawable.lin_map,
     R.drawable.lin_shield,
 )
-
-internal const val UPDATE_NOTICE_TRAFFIC_MAP_DEFAULT_ENABLED = true
-internal const val UPDATE_NOTICE_FOXHOLE_STYLE_DEFAULT_ENABLED = true

@@ -60,12 +60,36 @@
             android:launchMode="singleTask"
             android:screenOrientation="userPortrait"
             android:theme="@style/Theme.Foxhole.Splash">
+
+        </activity>
+
+        <activity-alias
+            android:name=".ui.cli.ColorLauncher"
+            android:targetActivity=".ui.cli.CliMainActivity"
+            android:enabled="true"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:roundIcon="@mipmap/ic_launcher"
+            android:label="${appLabel}">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
-
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-        </activity>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".ui.cli.MonochromeLauncher"
+            android:targetActivity=".ui.cli.CliMainActivity"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_bw"
+            android:roundIcon="@mipmap/ic_launcher_bw"
+            android:label="${appLabel}">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
 
         <service
             android:name=".runtime.FoxholeVpnService"

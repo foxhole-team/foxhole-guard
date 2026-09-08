@@ -93,6 +93,7 @@ internal fun FoxholeVpnService.syncLocalProxy() {
             username = surfaces.auth.username.takeIf { surfaces.auth.enabled },
             password = surfaces.auth.password.takeIf { surfaces.auth.enabled },
             upstream = LocalProxyUpstream.PROFILE,
+            allowAnonymous = !surfaces.auth.enabled,
         )
     }
     val latch = proxySurfaceSyncState().local

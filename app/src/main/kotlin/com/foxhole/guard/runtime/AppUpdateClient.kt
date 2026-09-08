@@ -211,6 +211,7 @@ class AppUpdateClient(
                 asset.readableUrl().asPublicHttpsUrl(),
                 MAX_METADATA_BYTES,
                 "update manifest",
+                accept = ASSET_ACCEPT,
             )
         return json.decodeFromString<AppUpdateManifest>(manifestJson)
     }
@@ -288,10 +289,13 @@ class AppUpdateClient(
         url: HttpUrl,
         maxBytes: Long,
         label: String,
+        accept: String = "application/vnd.github+json",
     ): String {
         runCatching { url.requirePublicHttpsUrl(resolveHost = true, resolver = resolver) }
             .getOrElse { error -> throw AppUpdateBlockedUrlException(error.appUpdateReason()) }
-        newCall(Request.Builder().url(url).get().authorized(url).build()).execute().use { response ->
+        newCall(
+            Request.Builder().url(url).get().header("Accept", accept).authorized(url).build()
+        ).execute().use { response ->
             if (!response.isSuccessful) {
                 throw AppUpdateHttpException(
                     code = response.code,

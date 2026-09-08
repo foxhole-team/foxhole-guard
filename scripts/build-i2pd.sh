@@ -43,10 +43,11 @@ esac
 toolbin="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/$host_tag/bin"
 [[ -d "$toolbin" ]] || { echo "NDK host toolchain not found: $toolbin" >&2; exit 1; }
 sysroot="$toolbin/../sysroot"
-jobs="$( (command -v nproc >/dev/null 2>&1 && nproc) || sysctl -n hw.ncpu )"
+jobs="${I2PD_BUILD_JOBS:-$( (command -v nproc >/dev/null 2>&1 && nproc) || sysctl -n hw.ncpu )}"
 mkdir -p "$work"
 
-source_date_epoch="${SOURCE_DATE_EPOCH:-$(git -C "$i2pd_dir" show -s --format=%ct HEAD)}"
+# F-Droid exports the app commit epoch; OpenSSL must use the pinned i2pd source epoch.
+source_date_epoch="$(git -C "$i2pd_dir" show -s --format=%ct HEAD)"
 export SOURCE_DATE_EPOCH="$source_date_epoch"
 export ZERO_AR_DATE=1
 
@@ -70,7 +71,7 @@ for remap_flag in "${remap_flags[@]}"; do
   boost_remap_flags+=" <compileflags>$remap_flag"
 done
 
-fetch_verified "$openssl_url" "$work/openssl.tgz" "$openssl_sha256" "OpenSSL $openssl_ver"
+fetch_verified "$openssl_url" "$work/openssl-$openssl_ver.tgz" "$openssl_sha256" "OpenSSL $openssl_ver"
 fetch_verified "$boost_url" "$work/$boost_us.tar.bz2" "$boost_sha256" "Boost $boost_ver"
 
 shopt -s nullglob
@@ -124,15 +125,15 @@ normalize_i2pd_build_id() {
 log "building i2pd $(awk -F= '$1=="ref"{print $2}' "$version_file") for: ${abis[*]}"
 for abi in "${abis[@]}"; do
   ssl_target="$(ssl_target_for "$abi")"; clang="$(clang_for "$abi")"; triple="$(triple_for "$abi")"
-  openssl_stage="$work/openssl-$openssl_recipe-$abi"
+  openssl_stage="$work/openssl-$openssl_ver-$openssl_recipe-$source_date_epoch-$abi"
   openssl_out="$openssl_stage$openssl_prefix"
   boost_out="$work/boost-$boost_recipe-$abi"
 
   if [[ ! -f "$openssl_out/lib/libcrypto.a" && ! -f "$openssl_out/lib64/libcrypto.a" ]]; then
     log "[$abi] OpenSSL"
-    openssl_source="$work/openssl-src-$openssl_recipe-$abi"
+    openssl_source="$work/openssl-src-$openssl_ver-$openssl_recipe-$abi"
     rm -rf "$openssl_source" "$openssl_stage"; mkdir -p "$openssl_source"
-    tar xf "$work/openssl.tgz" -C "$openssl_source" --strip-components=1
+    tar xf "$work/openssl-$openssl_ver.tgz" -C "$openssl_source" --strip-components=1
     ( cd "$openssl_source"
       ANDROID_NDK_ROOT="$ANDROID_NDK_HOME" PATH="$toolbin:$PATH" \
         ./Configure "$ssl_target" -D__ANDROID_API__="$api" no-shared no-tests no-apps \

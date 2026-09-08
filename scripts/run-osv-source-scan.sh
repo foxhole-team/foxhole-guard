@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-mkdir -p build/reports/security
+REPORT_DIR="${FOXHOLE_SECURITY_REPORT_DIR:-build/reports/security}"
+mkdir -p "$REPORT_DIR"
 
 OSV_VERSION="${OSV_VERSION:-v2.3.5}"
 OSV_ASSET="${OSV_ASSET:-}"
 SCAN_TMP="${RUNNER_TEMP:-${TMPDIR:-/tmp}}"
-REPORT_PATH="build/reports/security/osv-source.json"
+REPORT_PATH="${OSV_REPORT_PATH:-$REPORT_DIR/osv-source.json}"
+mkdir -p "$(dirname "$REPORT_PATH")"
 
 if [[ -z "$OSV_ASSET" ]]; then
   case "$(uname -s):$(uname -m)" in
@@ -60,15 +62,33 @@ if ! verify_scanner_checksum; then
 fi
 chmod +x "$OSV_SCANNER_PATH"
 
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/native-deps.sh"
+ndk_root="${ANDROID_NDK_HOME:-${ANDROID_HOME:?Android SDK is required}/ndk/29.0.14206865}"
+python3 scripts/verify-tor-package-boundary.py "$native_deps_dir" "$ndk_root" "$REPORT_DIR"
+
+core_root="${FOXCORE_SOURCE_ROOT:-$(dirname "$native_deps_repo_root")/foxhole-core}"
+(cd "$core_root" && scripts/tor-rsa-gate.sh)
+scan_inputs=()
+if [[ $# -gt 0 ]]; then
+  for sbom in "$@"; do
+    [[ -s "$sbom" ]] || { echo "Missing dependency SBOM: $sbom" >&2; exit 1; }
+    scan_inputs+=(--sbom "$sbom")
+  done
+else
+  # Re-resolve under the same project lockfiles and verification policy on every gate run.
+  # The metadata checksum catalog may contain historical artifacts, so it is not a dependency graph.
+  ./gradlew --no-daemon --console=plain --max-workers=2 \
+    -I scripts/resolved-maven-inventory.init.gradle \
+    -Pfoxhole.mavenInventoryDir="$REPORT_DIR" foxholeResolvedMavenInventory
+  for scope in runtime build; do
+    scan_inputs+=(--sbom "$REPORT_DIR/maven-$scope.cdx.json")
+  done
+  scan_inputs+=(--sbom "$REPORT_DIR/tor-source.cdx.json")
+fi
 rm -f "$REPORT_PATH"
 set +e
-"$OSV_SCANNER_PATH" scan source -r . \
+"$OSV_SCANNER_PATH" scan source "${scan_inputs[@]}" \
   --verbosity error \
-  --experimental-exclude app/build \
-  --experimental-exclude build \
-  --experimental-exclude output \
-  --experimental-exclude artifacts \
-  --experimental-exclude .tmp \
   --format json \
   --output-file "$REPORT_PATH"
 scanner_status=$?
@@ -77,38 +97,5 @@ set -e
 if [[ "$scanner_status" -ne 0 && "$scanner_status" -ne 1 ]]; then
   exit "$scanner_status"
 fi
-
-python3 - <<'PY'
-import json
-import pathlib
-import sys
-
-report_path = pathlib.Path("build/reports/security/osv-source.json")
-if not report_path.exists():
-    sys.exit("OSV report was not generated")
-data = json.loads(report_path.read_text())
-runtime_findings = []
-build_metadata_findings = []
-for result in data.get("results", []):
-    source_path = result.get("source", {}).get("path", "")
-    for package in result.get("packages", []):
-        vulnerabilities = package.get("vulnerabilities", [])
-        if not vulnerabilities:
-            continue
-        package_name = package.get("package", {}).get("name", "unknown")
-        ids = ",".join(vulnerability.get("id", "unknown") for vulnerability in vulnerabilities)
-        finding = f"{source_path}: {package_name} [{ids}]"
-        if source_path.endswith("gradle/verification-metadata.xml"):
-            build_metadata_findings.append(finding)
-        else:
-            runtime_findings.append(finding)
-if build_metadata_findings:
-    print("Known build-tool metadata OSV findings:")
-    for finding in build_metadata_findings:
-        print(f"- {finding}")
-if runtime_findings:
-    print("Runtime/source dependency OSV findings:")
-    for finding in runtime_findings:
-        print(f"- {finding}")
-    sys.exit(1)
-PY
+python3 scripts/classify-osv-report.py "$REPORT_PATH" config/osv-exceptions.json \
+  --scanner-status "$scanner_status"

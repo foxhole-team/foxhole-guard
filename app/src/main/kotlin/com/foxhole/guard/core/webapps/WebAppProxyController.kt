@@ -9,9 +9,12 @@ import androidx.webkit.WebViewFeature
 import com.foxhole.core.model.WebAppRoute
 import com.foxhole.core.runtime.network.HttpProxyAccess
 import com.foxhole.core.runtime.network.ProxyAccessType
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.coroutines.resume
 
 internal sealed interface WebAppProxyPlan {
@@ -26,9 +29,21 @@ internal data class WebAppProxyCredentials(
     val password: String,
 )
 
+internal class WebAppProxyLease internal constructor(val generation: Long) {
+    private val valid = AtomicBoolean(true)
+    val active: Boolean get() = valid.get()
+    internal fun revoke() { valid.set(false) }
+}
+
 internal data class WebAppProxyActivation(
     val applied: Boolean,
     val credentials: WebAppProxyCredentials? = null,
+    val lease: WebAppProxyLease? = null,
+)
+
+internal data class WebAppForegroundSession(
+    val app: com.foxhole.guard.core.data.WebAppEntity,
+    val activation: WebAppProxyActivation,
 )
 
 internal fun WebAppProxyPlan.mustBlockServiceWorkerNetwork(): Boolean = this is WebAppProxyPlan.Http
@@ -40,6 +55,8 @@ internal class WebAppProxyController(
     private val appContext = context.applicationContext
     private val executor = ContextCompat.getMainExecutor(appContext)
     private val switchMutex = Mutex()
+    private var generation = 0L
+    private var lease: WebAppProxyLease? = null
 
     @Volatile
     var activeCredentials: WebAppProxyCredentials? = null
@@ -50,6 +67,7 @@ internal class WebAppProxyController(
         blockWithoutTunnel: Boolean,
     ): WebAppProxyActivation =
         switchMutex.withLock {
+            if (lease != null) return@withLock WebAppProxyActivation(applied = false)
             val plan = planProvider(route, blockWithoutTunnel)
                 ?: return@withLock WebAppProxyActivation(applied = false)
             when (plan) {
@@ -58,7 +76,7 @@ internal class WebAppProxyController(
                         return@withLock WebAppProxyActivation(applied = false)
                     }
                     activeCredentials = null
-                    WebAppProxyActivation(applied = true)
+                    activation(null)
                 }
                 is WebAppProxyPlan.Http -> {
                     val access = plan.access
@@ -79,18 +97,27 @@ internal class WebAppProxyController(
                             password = requireNotNull(access.password),
                         )
                     activeCredentials = credentials
-                    WebAppProxyActivation(applied = true, credentials = credentials)
+                    activation(credentials)
                 }
             }
         }
 
-    suspend fun clear(): Boolean =
+    private fun activation(credentials: WebAppProxyCredentials?): WebAppProxyActivation {
+        val acquired = WebAppProxyLease(++generation)
+        lease = acquired
+        return WebAppProxyActivation(applied = true, credentials = credentials, lease = acquired)
+    }
+
+    suspend fun clear(expected: WebAppProxyLease): Boolean =
         switchMutex.withLock {
+            if (lease !== expected) return@withLock true
+            expected.revoke()
             val overrideCleared = clearOverride()
             val workerNetworkRestored = overrideCleared && setServiceWorkerNetworkBlocked(false)
             (overrideCleared && workerNetworkRestored).also { cleared ->
                 if (cleared) {
                     activeCredentials = null
+                    lease = null
                 }
             }
         }
@@ -110,9 +137,11 @@ internal class WebAppProxyController(
                     .removeImplicitRules()
                     .addProxyRule("http://$host:$port")
                     .build()
-            suspendCancellableCoroutine { continuation ->
-                ProxyController.getInstance().setProxyOverride(config, executor) {
-                    if (continuation.isActive) continuation.resume(Unit)
+            withContext(NonCancellable) {
+                suspendCancellableCoroutine { continuation ->
+                    ProxyController.getInstance().setProxyOverride(config, executor) {
+                        if (continuation.isActive) continuation.resume(Unit)
+                    }
                 }
             }
         }.isSuccess
@@ -123,9 +152,11 @@ internal class WebAppProxyController(
             return activeCredentials == null
         }
         return runCatching {
-            suspendCancellableCoroutine { continuation ->
-                ProxyController.getInstance().clearProxyOverride(executor) {
-                    if (continuation.isActive) continuation.resume(Unit)
+            withContext(NonCancellable) {
+                suspendCancellableCoroutine { continuation ->
+                    ProxyController.getInstance().clearProxyOverride(executor) {
+                        if (continuation.isActive) continuation.resume(Unit)
+                    }
                 }
             }
         }.isSuccess

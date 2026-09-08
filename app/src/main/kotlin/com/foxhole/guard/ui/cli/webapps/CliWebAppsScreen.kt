@@ -41,6 +41,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.foxhole.core.model.WebAppRoute
 import com.foxhole.guard.R
 import com.foxhole.guard.core.data.WebAppEntity
+import com.foxhole.guard.core.webapps.WEB_APP_ROUTE_OPTIONS
 import com.foxhole.guard.ui.HomeViewModel
 import com.foxhole.guard.ui.WebAppAddUiState
 import com.foxhole.guard.ui.clearAllWebAppsData
@@ -280,6 +281,7 @@ private fun CliWebAppActionsSheet(
                 onDone()
             },
         )
+        CliElbowLine(text = stringResource(R.string.cli_webapps_tor_unavailable))
         if (clearAllConsentOpen) {
             CliElbowLine(
                 text = stringResource(R.string.cli_webapps_clear_all_consent),
@@ -346,15 +348,6 @@ private fun CliWebAppActionsSheet(
         }
     }
 }
-
-private val WEB_APP_ROUTE_OPTIONS =
-    listOf(
-        WebAppRoute.DEFAULT,
-        WebAppRoute.DIRECT,
-        WebAppRoute.VPN,
-        WebAppRoute.TOR,
-        WebAppRoute.BLOCK,
-    )
 
 @Composable
 private fun CliWebAppAddPanel(

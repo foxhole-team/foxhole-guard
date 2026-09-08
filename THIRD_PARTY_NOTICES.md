@@ -105,7 +105,7 @@ toolchain; no prebuilt transport executable is taken from a third-party bundle.
   in `third_party/i2pd.version`, and built by `scripts/build-i2pd.sh` into
   `libi2pd.so`. The upstream license text is provided by the submodule at
   `third_party/i2pd/LICENSE`.
-- The binary statically links pinned **OpenSSL 3.5.4** (Apache-2.0),
+- The binary statically links pinned **OpenSSL 3.5.8** (Apache-2.0),
   **Boost 1.84.0** (BSL-1.0) and Android NDK **libc++** (Apache-2.0 WITH
   LLVM-exception). Their exact archive licenses and the NDK 29 notices are in
   `assets/licenses/i2pd/`.
@@ -229,3 +229,11 @@ therefore copied independently to `assets/licenses/android/`:
 - AndroidX / Jetpack Compose / Kotlin / kotlinx — Apache-2.0 — © The Android Open
   Source Project, JetBrains s.r.o. and contributors
 - OkHttp, Okio — Apache-2.0 — © Square, Inc.
+
+## Reviewed Conjure STUN migration
+
+The pinned Conjure v0.9.1 dependency uses STUN v3.1.5 for both client import sites.
+`scripts/prepare-tor-dependency.py` copies verified module sources into a build
+folder and checks the original file hashes before applying this import migration.
+The original module identity and licenses remain in the delivery inventory;
+the patch script and input hashes are included in the bundled notices.

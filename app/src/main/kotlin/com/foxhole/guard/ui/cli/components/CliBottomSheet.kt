@@ -196,36 +196,47 @@ internal fun CliBottomSheet(
                     content = content,
                 )
                 Spacer(modifier = Modifier.height(CliSpacing.md))
-                if (footerLeading == null && footerTrailing == null) {
-                    CliModalCloseButton(
-                        onClick = requestDismiss,
-                        label = closeLabel,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .then(
-                                if (closeActionTag == null) Modifier else Modifier.testTag(closeActionTag),
-                            ),
-                    )
-                } else {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(CliSpacing.sm),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        footerLeading?.invoke(this)
-                        CliModalCloseButton(
-                            onClick = requestDismiss,
-                            label = closeLabel,
-                            modifier = Modifier
-                                .weight(1f)
-                                .then(
-                                    if (closeActionTag == null) Modifier else Modifier.testTag(closeActionTag),
-                                ),
-                        )
-                        footerTrailing?.invoke(this)
-                    }
-                }
+                CliSheetFooter(footerLeading, footerTrailing, requestDismiss, closeLabel, closeActionTag)
             }
+        }
+    }
+}
+
+@Composable
+private fun CliSheetFooter(
+    leading: (@Composable RowScope.() -> Unit)?,
+    trailing: (@Composable RowScope.() -> Unit)?,
+    onDismiss: () -> Unit,
+    closeLabel: String?,
+    closeActionTag: String?,
+) {
+    if (leading == null && trailing == null) {
+        CliModalCloseButton(
+            onClick = onDismiss,
+            label = closeLabel,
+            modifier = Modifier
+                .fillMaxWidth()
+                .then(
+                    if (closeActionTag == null) Modifier else Modifier.testTag(closeActionTag),
+                ),
+        )
+    } else {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(CliSpacing.sm),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            leading?.invoke(this)
+            CliModalCloseButton(
+                onClick = onDismiss,
+                label = closeLabel,
+                modifier = Modifier
+                    .weight(1f)
+                    .then(
+                        if (closeActionTag == null) Modifier else Modifier.testTag(closeActionTag),
+                    ),
+            )
+            trailing?.invoke(this)
         }
     }
 }

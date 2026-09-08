@@ -1,9 +1,11 @@
 package com.foxhole.guard.ui.cli.settings
 
+import androidx.annotation.DrawableRes
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -22,16 +24,15 @@ import com.foxhole.guard.ui.cli.CliType
 import com.foxhole.guard.ui.cli.LocalCliColors
 import com.foxhole.guard.ui.cli.components.CliBadge
 import com.foxhole.guard.ui.cli.components.CliBottomSheet
-import com.foxhole.guard.ui.cli.components.CliChip
-import com.foxhole.guard.ui.cli.components.CliElbowLine
+import com.foxhole.guard.ui.cli.components.CliButton
+import com.foxhole.guard.ui.cli.components.CliIcon
 import com.foxhole.guard.ui.cli.components.CliInfoSheet
 import com.foxhole.guard.ui.cli.components.CliInputRow
 import com.foxhole.guard.ui.cli.components.CliRowDivider
 import com.foxhole.guard.ui.cli.components.CliRowInfoGlyph
-import com.foxhole.guard.ui.cli.components.CliSheetAction
-import com.foxhole.guard.ui.cli.components.CliSheetActionsRow
 import com.foxhole.guard.ui.cli.components.CliSheetHeaderIconRole
 import com.foxhole.guard.ui.cli.components.CliTopBarSettingsButton
+import com.foxhole.guard.ui.cli.components.LocalCliBottomSheetDismissAfter
 import com.foxhole.guard.ui.cli.components.cliModalHeaderIconSizeFor
 
 @Composable
@@ -69,7 +70,6 @@ private fun CliUpdateSourcesSheet(
     onDismiss: () -> Unit,
     onApply: (UpdateSourceSettings) -> Unit,
 ) {
-    val colors = LocalCliColors.current
     var database by rememberSaveable { mutableStateOf(sources.databaseBaseUrl) }
     var releases by rememberSaveable { mutableStateOf(sources.appReleasesUrl) }
     var token by rememberSaveable { mutableStateOf(sources.appReleasesToken) }
@@ -89,6 +89,25 @@ private fun CliUpdateSourcesSheet(
         onDismiss = onDismiss,
         title = stringResource(R.string.cli_updates_sources_title),
         icon = R.drawable.lin_settings,
+        closeLabel = stringResource(R.string.cli_common_no_cancel),
+        footerTrailing = {
+            val dismissAfter = LocalCliBottomSheetDismissAfter.current
+            CliButton(
+                label = stringResource(R.string.cli_prof_config_save_action),
+                modifier = Modifier.weight(1f),
+                onClick = {
+                    dismissAfter {
+                        onApply(
+                            UpdateSourceSettings(
+                                databaseBaseUrl = database,
+                                appReleasesUrl = releases,
+                                appReleasesToken = token,
+                            )
+                        )
+                    }
+                },
+            )
+        },
         trailing = {
             CliRowInfoGlyph(
                 onTap = { noteOpen = true },
@@ -110,8 +129,12 @@ private fun CliUpdateSourcesSheet(
                 value = database,
                 onValueChange = { database = it },
                 autoFocus = true,
-                trailingChipLabel = stringResource(R.string.cli_updates_sources_reset),
-                onTrailingChip = { database = "" },
+                trailingContent = {
+                    UpdateSourceIconButton(
+                        R.drawable.lin_restart,
+                        stringResource(R.string.cli_updates_sources_reset)
+                    ) { database = "" }
+                },
             )
         }
         if (appChannelEditable) {
@@ -130,10 +153,14 @@ private fun CliUpdateSourcesSheet(
                     value = releases,
                     onValueChange = { releases = it },
                     autoFocus = true,
-                    trailingChipLabel = stringResource(R.string.cli_updates_sources_reset),
-                    onTrailingChip = {
-                        releases = ""
-                        token = ""
+                    trailingContent = {
+                        UpdateSourceIconButton(
+                            R.drawable.lin_restart,
+                            stringResource(R.string.cli_updates_sources_reset)
+                        ) {
+                            releases = ""
+                            token = ""
+                        }
                     },
                 )
                 CliInputRow(
@@ -142,30 +169,8 @@ private fun CliUpdateSourcesSheet(
                     onValueChange = { token = it },
                     password = true,
                 )
-                CliElbowLine(
-                    text = stringResource(R.string.cli_updates_sources_token_note),
-                    color = colors.dim,
-                )
             }
         }
-        Spacer(modifier = Modifier.height(CliSpacing.md))
-        CliSheetActionsRow(
-            actions = listOf(
-                CliSheetAction(
-                    label = stringResource(R.string.cli_common_yes_confirm),
-                    onClick = {
-                        onApply(
-                            UpdateSourceSettings(
-                                databaseBaseUrl = database,
-                                appReleasesUrl = releases,
-                                appReleasesToken = token,
-                            ),
-                        )
-                    },
-                    dismissAfterClick = true,
-                ),
-            ),
-        )
     }
 }
 
@@ -205,9 +210,9 @@ private fun CliUpdateChannelRow(
             }
         }
         Spacer(modifier = Modifier.width(CliSpacing.sm))
-        CliChip(
-            label = stringResource(R.string.cli_updates_sources_change),
-            selected = editing,
+        UpdateSourceIconButton(
+            icon = if (editing) R.drawable.lin_check else R.drawable.lin_edit,
+            description = stringResource(R.string.cli_updates_sources_change),
             onClick = onToggleEdit,
         )
     }
@@ -227,3 +232,10 @@ internal fun cliUpdateSourceRowPresentation(configuredValue: String): CliUpdateS
 private val BADGE_GAP = 3.dp
 
 private val CHANNEL_ROW_HEIGHT = 48.dp
+
+@Composable
+private fun UpdateSourceIconButton(@DrawableRes icon: Int, description: String, onClick: () -> Unit) {
+    IconButton(onClick = onClick) {
+        CliIcon(id = icon, contentDescription = description, tint = LocalCliColors.current.accent)
+    }
+}

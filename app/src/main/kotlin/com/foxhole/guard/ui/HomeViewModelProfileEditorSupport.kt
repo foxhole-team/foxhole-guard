@@ -13,11 +13,15 @@ import com.foxhole.guard.core.data.ProfileEditorConfigUpdate
 import com.foxhole.guard.core.data.ProfileRepository
 import com.foxhole.guard.core.data.allowsInsecureTlsForStoredProfileRuntime
 import com.foxhole.guard.core.data.createDraftProfile
+import com.foxhole.guard.core.data.editorRevision
 import com.foxhole.guard.core.data.requireLocalProfileImportWithinLimit
+import com.foxhole.guard.core.data.requireProfileEditorRevision
 import com.foxhole.guard.core.data.updateProfileEditor
 import com.foxhole.guard.core.data.withInsecureTlsMarkers
 import com.foxhole.guard.userFacingErrorMessage
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 
 internal data class ProfileProtocolConfigEdit(
     val protocolOptionId: String?,
@@ -27,6 +31,8 @@ internal data class ProfileProtocolConfigEdit(
 internal suspend fun HomeViewModel.saveProfileProtocolConfigs(
     profileId: Long,
     edits: List<ProfileProtocolConfigEdit>,
+    expectedRevision: String? = null,
+    onSavedRevision: (String) -> Unit = {},
 ): Boolean {
     if (edits.isEmpty()) {
         return true
@@ -34,6 +40,8 @@ internal suspend fun HomeViewModel.saveProfileProtocolConfigs(
     return runCatching {
         container.profileRepository.updateProfileEditor(
             profileId = profileId,
+            expectedRevision = expectedRevision,
+            onSavedRevision = onSavedRevision,
             profileName = null,
             edits = edits.map { edit ->
                 ProfileEditorConfigUpdate(
@@ -60,6 +68,7 @@ internal suspend fun HomeViewModel.saveProfileEditorChanges(
     profileId: Long,
     profileName: String,
     edits: List<ProfileProtocolConfigEdit>,
+    expectedRevision: String? = null,
 ): Boolean {
     if (profileName.isBlank()) {
         emitError(getApplication<Application>().getString(R.string.profile_rename_failed))
@@ -68,6 +77,7 @@ internal suspend fun HomeViewModel.saveProfileEditorChanges(
     return runCatching {
         container.profileRepository.updateProfileEditor(
             profileId = profileId,
+            expectedRevision = expectedRevision,
             profileName = profileName,
             edits = edits.map { edit ->
                 ProfileEditorConfigUpdate(
@@ -98,6 +108,7 @@ internal suspend fun HomeViewModel.saveManualProfileConfig(
     profileName: String,
     protocolOptionId: String?,
     rawText: String,
+    expectedRevision: String? = null,
 ): Boolean {
     val normalized =
         runCatching {
@@ -117,6 +128,7 @@ internal suspend fun HomeViewModel.saveManualProfileConfig(
         profileId = profileId,
         profileName = profileName,
         edits = listOf(ProfileProtocolConfigEdit(protocolOptionId, normalized)),
+        expectedRevision = expectedRevision,
     )
 }
 
@@ -125,27 +137,31 @@ internal suspend fun HomeViewModel.addProfileProtocolOption(
     displayName: String,
     protocolHint: ProtocolHint,
     configJson: String,
+    expectedRevision: String? = null,
 ): Boolean =
     runCatching {
         val repository = container.profileRepository
-        val entity = repository.dao.getById(profileId) ?: error("profile not found")
-        val secret = repository.secretStore.read(entity.secretRef) ?: error("profile secret is missing")
-        val sanitized = repository.sanitizeForProfile(secret, configJson)
-        val existing = secret.materializedProtocolOptions(entity.protocolHint)
-        val option =
-            StoredProfileProtocolOption(
-                id = existing.freeProtocolOptionId(protocolHint),
-                displayName = displayName.trim().ifBlank { protocolHint.name.lowercase() },
-                protocolHint = protocolHint,
-                normalizedConfigJson = sanitized,
-            )
-        val updated =
-            secret
-                .copy(
-                    protocolOptions = existing + option,
-                    selectedProtocolOptionId = secret.selectedProtocolOptionId ?: existing.first().id,
-                ).withInsecureTlsMarkers(repository.json)
-        repository.persistProtocolOptions(profileId, entity.secretRef, updated, entity.protocolHint)
+        repository.secretMutationMutex.withLock {
+            val entity = repository.dao.getById(profileId) ?: error("profile not found")
+            val secret = repository.secretStore.read(entity.secretRef) ?: error("profile secret is missing")
+            requireProfileEditorRevision(secret, entity.name, expectedRevision)
+            val sanitized = repository.sanitizeForProfile(secret, configJson)
+            val existing = secret.materializedProtocolOptions(entity.protocolHint)
+            val option =
+                StoredProfileProtocolOption(
+                    id = existing.freeProtocolOptionId(protocolHint),
+                    displayName = displayName.trim().ifBlank { protocolHint.name.lowercase() },
+                    protocolHint = protocolHint,
+                    normalizedConfigJson = sanitized,
+                )
+            val updated =
+                secret
+                    .copy(
+                        protocolOptions = existing + option,
+                        selectedProtocolOptionId = secret.selectedProtocolOptionId ?: existing.first().id,
+                    ).withInsecureTlsMarkers(repository.json)
+            repository.persistProtocolOptions(profileId, entity.secretRef, updated, secret, entity.protocolHint)
+        }
     }.onSuccess {
         emitSuccess(getApplication<Application>().getString(R.string.cli_prof_edit_added))
     }.onFailure { error ->
@@ -155,34 +171,39 @@ internal suspend fun HomeViewModel.addProfileProtocolOption(
 internal suspend fun HomeViewModel.removeProfileProtocolOption(
     profileId: Long,
     optionId: String,
+    expectedRevision: String? = null,
 ): Boolean =
     runCatching {
         val repository = container.profileRepository
-        val entity = repository.dao.getById(profileId) ?: error("profile not found")
-        val secret = repository.secretStore.read(entity.secretRef) ?: error("profile secret is missing")
-        val remaining = secret.protocolOptions.filterNot { option -> option.id == optionId }
-        require(remaining.isNotEmpty() && remaining.size < secret.protocolOptions.size) {
-            getApplication<Application>().getString(R.string.cli_prof_edit_last_protocol)
-        }
-        val reselected =
-            if (secret.selectedProtocolOptionId == optionId) {
-                remaining.firstOrNull(StoredProfileProtocolOption::enabled) ?: remaining.first()
-            } else {
-                null
+        repository.secretMutationMutex.withLock {
+            val entity = repository.dao.getById(profileId) ?: error("profile not found")
+            val secret = repository.secretStore.read(entity.secretRef) ?: error("profile secret is missing")
+            requireProfileEditorRevision(secret, entity.name, expectedRevision)
+            val remaining = secret.protocolOptions.filterNot { option -> option.id == optionId }
+            require(remaining.isNotEmpty() && remaining.size < secret.protocolOptions.size) {
+                getApplication<Application>().getString(R.string.cli_prof_edit_last_protocol)
             }
-        val updated =
-            secret
-                .copy(
-                    protocolOptions = remaining,
-                    selectedProtocolOptionId = reselected?.id ?: secret.selectedProtocolOptionId,
-                    resolvedConfigJson = reselected?.normalizedConfigJson ?: secret.resolvedConfigJson,
-                ).withInsecureTlsMarkers(repository.json)
-        repository.persistProtocolOptions(
-            profileId = profileId,
-            secretRef = entity.secretRef,
-            secret = updated,
-            fallbackProtocolHint = reselected?.protocolHint?.name ?: entity.protocolHint,
-        )
+            val reselected =
+                if (secret.selectedProtocolOptionId == optionId) {
+                    remaining.firstOrNull(StoredProfileProtocolOption::enabled) ?: remaining.first()
+                } else {
+                    null
+                }
+            val updated =
+                secret
+                    .copy(
+                        protocolOptions = remaining,
+                        selectedProtocolOptionId = reselected?.id ?: secret.selectedProtocolOptionId,
+                        resolvedConfigJson = reselected?.normalizedConfigJson ?: secret.resolvedConfigJson,
+                    ).withInsecureTlsMarkers(repository.json)
+            repository.persistProtocolOptions(
+                profileId = profileId,
+                secretRef = entity.secretRef,
+                secret = updated,
+                originalSecret = secret,
+                fallbackProtocolHint = reselected?.protocolHint?.name ?: entity.protocolHint,
+            )
+        }
     }.onSuccess {
         emitSuccess(getApplication<Application>().getString(R.string.cli_prof_edit_removed))
     }.onFailure { error ->
@@ -324,9 +345,20 @@ private suspend fun ProfileRepository.persistProtocolOptions(
     profileId: Long,
     secretRef: String,
     secret: StoredProfileSecret,
+    originalSecret: StoredProfileSecret,
     fallbackProtocolHint: String,
-) {
-    secretMutationMutex.withLock { secretStore.write(secretRef, secret) }
-    dao.updateProtocolHint(profileId, fallbackProtocolHint)
+) = withContext(NonCancellable) {
+    try {
+        secretStore.write(secretRef, secret)
+        dao.updateProtocolHint(profileId, fallbackProtocolHint)
+    } catch (error: Throwable) {
+        runCatching { secretStore.write(secretRef, originalSecret) }.onFailure {
+            diagnosticsLogger.recordFailure("profile", "protocol metadata rollback failed")
+        }
+        throw error
+    }
     diagnosticsLogger.record("profile", "profile protocol options changed")
 }
+
+internal suspend fun HomeViewModel.profileEditorRevision(profileId: Long): String =
+    container.profileRepository.editorRevision(profileId)

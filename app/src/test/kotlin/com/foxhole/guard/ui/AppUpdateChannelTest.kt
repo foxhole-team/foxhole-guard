@@ -1,5 +1,6 @@
 package com.foxhole.guard.ui
 
+import com.foxhole.guard.BuildConfig
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -51,21 +52,24 @@ class AppUpdateChannelTest {
         val builds = fdroidBuildBlocks(metadata)
 
         assertTrue(metadata.contains("Binaries:"))
-        assertTrue(metadata.contains("AutoUpdateMode: None"))
-        assertEquals(listOf("0.0.2", "0.1.0"), builds.map(FdroidBuildBlock::versionName))
+        assertTrue(metadata.contains("AutoUpdateMode: Version"))
+        assertEquals(listOf(BuildConfig.VERSION_NAME.removeSuffix("-Debug")), builds.map(FdroidBuildBlock::versionName))
+        assertFalse(metadata.contains("\nSummary:"))
+        assertFalse(metadata.contains("\nDescription:"))
+        assertFalse(metadata.contains("\nMaintainerNotes:"))
         builds.forEach { build ->
-            val gradleProperties = build.body.substringAfter("    gradleprops:")
-            assertTrue("${build.versionName}: missing gradleprops", build.body.contains("    gradleprops:"))
+            val commands = build.body.substringAfter("    build:").substringBefore("    ndk:")
+            assertFalse(build.body.contains("    gradleprops:"))
             assertTrue(
                 "${build.versionName}: Binaries build must use the GitHub channel",
-                gradleProperties.lineSequence().any { line -> line.trim() == "- foxhole.updateChannel=github" },
+                commands.contains("-Pfoxhole.updateChannel=github"),
             )
             assertFalse(
                 "${build.versionName}: Binaries build must not use the F-Droid channel",
-                gradleProperties.lineSequence().any { line -> line.trim() == "- foxhole.updateChannel=fdroid" },
+                commands.contains("-Pfoxhole.updateChannel=fdroid"),
             )
         }
-        assertTrue(builds.single { it.versionName == "0.1.0" }.body.contains("versionCode: 117"))
+        assertTrue(builds.single().body.contains("versionCode: ${BuildConfig.VERSION_CODE}"))
     }
 
     @Test

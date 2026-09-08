@@ -26,6 +26,7 @@ import com.foxhole.guard.R
 import com.foxhole.guard.core.data.WebAppEntity
 import com.foxhole.guard.core.webapps.WebAppProfiles
 import com.foxhole.guard.core.webapps.WebAppProxyCredentials
+import com.foxhole.guard.core.webapps.WebAppProxyLease
 import com.foxhole.guard.core.webapps.isAllowedWebAppUrl
 import com.foxhole.guard.core.webapps.webAppShimJs
 import com.foxhole.guard.ui.cli.CliSpacing
@@ -38,6 +39,8 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 internal fun CliWebAppFrame(
     app: WebAppEntity,
     proxyCredentials: WebAppProxyCredentials?,
+    lease: WebAppProxyLease,
+    onAttached: (WebView) -> Boolean,
     onClose: () -> Unit,
     onReleased: () -> Unit,
     onExternalBlocked: (String) -> Unit,
@@ -68,14 +71,12 @@ internal fun CliWebAppFrame(
                     proxyCredentials = proxyCredentials,
                     onExternalBlocked = onExternalBlocked,
                 )
-                    .apply { loadUrl(app.url) }
+                    .apply { if (onAttached(this) && lease.active && !settings.blockNetworkLoads) loadUrl(app.url) }
             },
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f),
-            onRelease = { webView ->
-                WebAppProfiles.cookieManager(webView).flush()
-                webView.destroy()
+            onRelease = { _ ->
                 onReleased()
             },
         )
@@ -93,7 +94,18 @@ internal fun buildWebAppWebView(
     var documentStartScriptInstalled = false
     val shimScript = webAppShimJs(initialBadge = 0, bridged = false)
     return WebView(context).apply {
-        WebAppProfiles.install(this, appId)
+        val isolated = runCatching {
+            if (WebAppProfiles.supported) check(WebAppProfiles.install(this, appId))
+            WebAppProfiles.cookieManager(this).also { cookies ->
+                cookies.setAcceptCookie(true)
+                cookies.setAcceptThirdPartyCookies(this, false)
+            }
+        }.isSuccess
+        if (!isolated) {
+            settings.blockNetworkLoads = true
+            loadData(context.getString(R.string.cli_webapps_storage_failed), "text/plain", "UTF-8")
+            return@apply
+        }
         settings.javaScriptEnabled = true
         settings.domStorageEnabled = true
         settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
@@ -103,10 +115,6 @@ internal fun buildWebAppWebView(
         settings.javaScriptCanOpenWindowsAutomatically = false
         settings.setSupportMultipleWindows(false)
         settings.setGeolocationEnabled(false)
-        WebAppProfiles.cookieManager(this).also { cookies ->
-            cookies.setAcceptCookie(true)
-            cookies.setAcceptThirdPartyCookies(this, false)
-        }
         webViewClient = object : WebViewClient() {
             override fun onReceivedHttpAuthRequest(
                 view: WebView,

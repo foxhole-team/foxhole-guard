@@ -87,6 +87,7 @@ enum class AccentColor {
     BLUE,
     PINK,
     CYAN,
+    WHITE,
 }
 
 @Serializable

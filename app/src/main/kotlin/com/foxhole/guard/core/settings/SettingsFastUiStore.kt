@@ -65,6 +65,7 @@ internal class SettingsFastUiStore(
             putString(FAST_THEME_MODE_KEY, value.themeMode.name)
             remove(RETIRED_VISUAL_STYLE_KEY)
             putString(FAST_ACCENT_COLOR_KEY, value.accentColor.name)
+            putBoolean(FAST_MONOCHROME_KEY, value.monochromeEnabled)
             putBoolean(FAST_PIXEL_ART_ENABLED_KEY, value.pixelArtEnabled)
             putString(FAST_LOCALE_KEY, value.locale.name)
             putBoolean(FAST_NETWORK_CARD_ENABLED_KEY, value.networkCardEnabled)
@@ -110,6 +111,7 @@ internal class SettingsFastUiStore(
         return AppearanceUiState(
             themeMode = themeMode,
             accentColor = accentColor,
+            monochromeEnabled = fastUiPreferences.getBoolean(FAST_MONOCHROME_KEY, false),
             pixelArtEnabled = fastUiPreferences.getBoolean(
                 FAST_PIXEL_ART_ENABLED_KEY,
                 true,

@@ -6,6 +6,11 @@ internal fun StoredProfileSecret.withUpdatedResolvedConfigJson(
     sanitized: String,
     protocolOptionIdOverride: String? = null,
 ): StoredProfileSecret {
+    if (protocolOptionIdOverride != null) {
+        require(protocolOptionIdOverride.isNotBlank() && protocolOptions.any { it.id == protocolOptionIdOverride }) {
+            "profile changed; reload the editor before saving"
+        }
+    }
     val targetOption =
         if (protocolOptions.isEmpty()) {
             null

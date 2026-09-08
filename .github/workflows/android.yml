@@ -10,8 +10,12 @@ on:
       - "app/**"
       - "config/**"
       - "core/**"
+      - "macrobenchmark/**"
+      - "gradlew"
+      - "gradlew.bat"
       - "gradle/**"
       - "scripts/**"
+      - "metadata/**"
       - "third_party/**"
       - "build.gradle.kts"
       - "settings.gradle.kts"
@@ -58,6 +62,9 @@ jobs:
         if: github.event_name == 'workflow_dispatch' && inputs.foxcore_smoke_only
         run: ./gradlew --no-daemon --console=plain --stacktrace :app:prepareFoxCoreNative
 
+      - name: release provenance regression tests
+        run: python3 -m unittest discover -s scripts/tests -p "test_*.py"
+
       # Run the cheap security gates before the cold native build so a policy failure is fast.
       - name: secret scan
         if: github.event_name != 'workflow_dispatch' || inputs.security_scan_only || !inputs.foxcore_smoke_only
@@ -79,10 +86,89 @@ jobs:
         if: github.event_name != 'workflow_dispatch' || (!inputs.foxcore_smoke_only && !inputs.security_scan_only)
         run: ./gradlew --no-daemon --console=plain --stacktrace :app:assembleDebug
 
+  device-build:
+    name: build Android device test APKs once
+    needs: verify
+    if: github.event_name != 'workflow_dispatch' || (!inputs.foxcore_smoke_only && !inputs.security_scan_only)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      CARGO_BUILD_JOBS: "2"
+      I2PD_BUILD_JOBS: "2"
+    steps:
+      - name: checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          submodules: recursive
+          persist-credentials: false
+      - name: setup Android and FoxHole Core build
+        uses: ./.github/actions/setup-foxcore
+        with:
+          core-repository: ${{ vars.FOXCORE_REPO || 'foxhole-team/foxhole-core' }}
+          android-abis: x86_64
+      - name: build the emulator APK from source
+        run: |
+          ./gradlew --no-daemon --max-workers=2 --console=plain -Pfoxhole.abis=x86_64 \
+            :app:assembleDebug :app:assembleDebugAndroidTest :core:runtime:assembleDebugAndroidTest
+      - name: store exact device test APKs
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: device-test-apks-${{ github.sha }}
+          path: |
+            app/build/outputs/apk/debug/*.apk
+            app/build/outputs/apk/androidTest/debug/*.apk
+            core/runtime/build/outputs/apk/androidTest/debug/*.apk
+          retention-days: 3
+          if-no-files-found: error
+
+  device:
+    name: Android device boundaries (API ${{ matrix.api }})
+    needs: device-build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        api: ["26", "34", "37.0"]
+    steps:
+      - name: checkout device runner
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - name: download the single verified device build
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: device-test-apks-${{ github.sha }}
+          path: device-apks
+      - name: enable emulator acceleration
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: execute device regression tests
+        uses: reactivecircus/android-emulator-runner@5d6e86df22ab11632167a1a6b0c9ab0dc3469586 # v2.36.0
+        with:
+          api-level: ${{ matrix.api }}
+          target: google_apis
+          arch: x86_64
+          cores: 2
+          ram-size: 2048M
+          disable-animations: true
+          emulator-options: -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect
+          script: bash scripts/run-packaged-device-tests.sh device-apks
+      - name: retain device test reports
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: android-device-api-${{ matrix.api }}-${{ github.sha }}
+          path: build/reports/device/
+          if-no-files-found: warn
+          retention-days: 7
+
   release-candidate:
     name: signed release candidate
     if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
-    needs: verify
+    needs: [verify, device]
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:
@@ -146,7 +232,7 @@ jobs:
           version_code="$(scripts/package-release-candidate.sh published-code "$GITHUB_REPOSITORY")"
           echo "version_code=$version_code" >> "$GITHUB_OUTPUT"
 
-      # The only APK assembly; main republishes these exact bytes.
+      # This signed candidate approves the source tree before main builds the tagged release.
       # AGP cannot build ABI-split APKs and an AAB in one invocation, so the bundle is verified in a second, non-split configuration.
       - name: build and verify signed candidate
         run: |

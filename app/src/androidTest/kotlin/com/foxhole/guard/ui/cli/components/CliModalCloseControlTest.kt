@@ -1,6 +1,14 @@
 package com.foxhole.guard.ui.cli.components
 
 import androidx.compose.material3.Text
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toPixelMap
+import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.SemanticsActions
@@ -10,6 +18,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.test.platform.app.InstrumentationRegistry
 import com.foxhole.guard.ui.cli.CliTheme
+import com.foxhole.core.model.ThemeMode
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -113,6 +122,23 @@ class CliModalCloseControlTest {
         assertEquals(close.top, action.top, FOOTER_ALIGNMENT_TOLERANCE_PX)
         assertEquals(close.bottom, action.bottom, FOOTER_ALIGNMENT_TOLERANCE_PX)
         assertTrue(close.right < action.left)
+    }
+
+    @Test
+    fun monochromeSheetDrawsItsBodyAfterAnimatedEntry() {
+        composeRule.setContent {
+            CliTheme(themeMode = ThemeMode.DARK, monochromeEnabled = true) {
+                CliBottomSheet(onDismiss = {}, title = "Monochrome", closeActionTag = "mono_close") {
+                    Box(Modifier.size(40.dp).background(Color.Red).testTag("mono_body"))
+                }
+            }
+        }
+        composeRule.mainClock.advanceTimeBy(SHEET_SETTLE_MS)
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("mono_close").assertIsDisplayed()
+        val pixels = composeRule.onNodeWithTag("mono_body").assertIsDisplayed().captureToImage().toPixelMap()
+        val center = pixels[pixels.width / 2, pixels.height / 2]
+        assertTrue("Monochrome mode must preserve independently colored sheet content", center.red > 0.9f && center.green < 0.1f && center.blue < 0.1f && center.alpha > 0.9f)
     }
 
     private companion object {

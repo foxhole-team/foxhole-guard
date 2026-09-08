@@ -101,8 +101,8 @@ internal class WebAppOriginPolicyTest {
         assertFalse(webAppRouteSatisfied(WebAppRoute.I2P, true, vpn, i2pReady = false))
 
         val tor = vpn.copy(torActive = true)
-        assertTrue(webAppRouteSatisfied(WebAppRoute.TOR, true, tor, i2pReady = false))
-        assertTrue(webAppRouteSatisfied(WebAppRoute.I2P, true, tor, i2pReady = true))
+        assertFalse(webAppRouteSatisfied(WebAppRoute.TOR, true, tor, i2pReady = false))
+        assertFalse(webAppRouteSatisfied(WebAppRoute.I2P, true, tor, i2pReady = true))
     }
 
     @Test

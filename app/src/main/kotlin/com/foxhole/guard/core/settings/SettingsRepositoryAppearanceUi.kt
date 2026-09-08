@@ -16,32 +16,14 @@ suspend fun SettingsRepository.updateShowHomeAdditionalInfo(value: Boolean) =
 suspend fun SettingsRepository.updateHomeAdditionalInfoCategory(value: HomeAdditionalInfoCategory) =
     update { it.copy(ui = it.ui.copy(homeAdditionalInfoCategory = value)) }
 
-internal fun UiSettings.withUpdateNoticeTrafficMap(enabled: Boolean): UiSettings =
-    if (enabled) {
-        copy(
-            showHomeAdditionalInfo = true,
-            homeAdditionalInfoCategory = HomeAdditionalInfoCategory.MAP,
-        )
-    } else {
-        copy(showHomeAdditionalInfo = false)
-    }
+suspend fun SettingsRepository.updateMonochromeEnabled(value: Boolean) =
+    update { it.copy(ui = it.ui.copy(monochromeEnabled = value)) }
 
-internal fun UiSettings.withUpdateNoticeChoices(
-    showTrafficMap: Boolean,
-    useFoxholeStyle: Boolean,
-    shownVersionCode: Int,
-): UiSettings =
-    withUpdateNoticeTrafficMap(showTrafficMap).copy(
-        pixelArtEnabled = useFoxholeStyle,
-        alphaNoticeShownVersionCode = shownVersionCode,
-    )
+internal fun UiSettings.withUpdateNoticeChoices(monochromeEnabled: Boolean, shownVersionCode: Int): UiSettings =
+    copy(monochromeEnabled = monochromeEnabled, alphaNoticeShownVersionCode = shownVersionCode)
 
-suspend fun SettingsRepository.applyUpdateNoticeChoice(
-    showTrafficMap: Boolean,
-    useFoxholeStyle: Boolean,
-    shownVersionCode: Int,
-) = update {
-    it.copy(ui = it.ui.withUpdateNoticeChoices(showTrafficMap, useFoxholeStyle, shownVersionCode))
+suspend fun SettingsRepository.applyUpdateNoticeChoice(monochromeEnabled: Boolean, shownVersionCode: Int) = update {
+    it.copy(ui = it.ui.withUpdateNoticeChoices(monochromeEnabled, shownVersionCode))
 }
 
 suspend fun SettingsRepository.updateSuppressProfileSwipeReconnectConfirm(value: Boolean) =

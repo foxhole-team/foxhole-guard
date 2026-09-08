@@ -13,7 +13,10 @@ import com.foxhole.core.network.NetworkFingerprint
 import com.foxhole.core.network.isCellularOrMetered
 import com.foxhole.core.network.scopedByNetworkRules
 import com.foxhole.guard.R
+import com.foxhole.guard.core.security.LockState
 import com.foxhole.guard.runtime.FoxholeVpnService
+import com.foxhole.guard.runtime.NetworkRuleCommandRequest
+import com.foxhole.guard.runtime.NetworkRuleCommandRequests
 import com.foxhole.guard.runtime.NetworkRuleRecommendationNotifier
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.channels.awaitClose
@@ -21,8 +24,10 @@ import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 internal fun HomeViewModel.currentNetworkFingerprintForSmartRules(): NetworkFingerprint? {
     val fingerprint = container.networkFingerprintProvider.currentFingerprint() ?: return null
@@ -210,8 +215,21 @@ internal fun HomeViewModel.applyNetworkRuleSwitchIntent(intent: Intent?) {
         return
     }
     val protocolOptionId = intent.getStringExtra(NetworkRuleRecommendationNotifier.EXTRA_PROTOCOL_OPTION_ID)
-    NetworkRuleRecommendationNotifier(getApplication()).cancel()
-    requestManualConnectPermissionOrConnect(profileId, protocolOptionId)
+    val token = intent.getStringExtra(NetworkRuleRecommendationNotifier.EXTRA_REQUEST_TOKEN) ?: return
+    intent.removeExtra(NetworkRuleRecommendationNotifier.EXTRA_REQUEST_TOKEN)
+    viewModelScope.launch {
+        val admitted = withTimeoutOrNull(NetworkRuleCommandRequest.EXPIRY_MS) {
+            appLockManager.lockState.first { it == LockState.UNLOCKED }
+        } ?: return@launch
+        if (admitted != LockState.UNLOCKED || !NetworkRuleCommandRequests.consume(
+                getApplication(), token, profileId, protocolOptionId,
+            )
+        ) {
+            return@launch
+        }
+        NetworkRuleRecommendationNotifier(getApplication()).cancel()
+        requestManualConnectPermissionOrConnect(profileId, protocolOptionId)
+    }
 }
 
 private const val NETWORK_RULES_CHANGE_DEBOUNCE_MS = 2_500L

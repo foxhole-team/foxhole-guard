@@ -34,7 +34,7 @@ import com.foxhole.guard.core.settings.applyUpdateNoticeChoice
 import com.foxhole.guard.core.settings.rotatePrivacyRouteIdentity
 import com.foxhole.guard.core.settings.updatePrivacyRouteAutoRotateExit
 import com.foxhole.guard.core.settings.updatePrivacyRouteAutoRotateInterval
-import com.foxhole.guard.core.webapps.WebAppProxyCredentials
+import com.foxhole.guard.core.webapps.WebAppForegroundSession
 import com.foxhole.guard.runtime.FoxholeVpnService
 import com.foxhole.guard.runtime.PublicDnsIdentityResolver
 import com.foxhole.guard.runtime.RemoteDownloadProgress
@@ -402,12 +402,9 @@ class HomeViewModel(
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
     internal val webAppAddStateMutable = MutableStateFlow<WebAppAddUiState>(WebAppAddUiState.Idle)
     internal val webAppAddState: StateFlow<WebAppAddUiState> = webAppAddStateMutable.asStateFlow()
-    internal val openWebAppMutable = MutableStateFlow<WebAppEntity?>(null)
-    val openWebAppState: StateFlow<WebAppEntity?> = openWebAppMutable.asStateFlow()
-
-    internal val webAppProxyCredentialsMutable = MutableStateFlow<WebAppProxyCredentials?>(null)
-    internal val webAppProxyCredentials: StateFlow<WebAppProxyCredentials?> =
-        webAppProxyCredentialsMutable.asStateFlow()
+    internal val webAppOpenRequests = com.foxhole.guard.core.webapps.WebAppOpenRequests()
+    internal val openWebAppMutable = MutableStateFlow<WebAppForegroundSession?>(null)
+    internal val openWebAppState: StateFlow<WebAppForegroundSession?> = openWebAppMutable.asStateFlow()
 
     internal var pendingSensitiveAction: (() -> Unit)? = null
     internal val actionAuthVisibleMutable = MutableStateFlow(false)
@@ -597,11 +594,10 @@ class HomeViewModel(
             .distinctUntilChanged()
             .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
-    fun dismissAlphaNotice(showTrafficMap: Boolean, useFoxholeStyle: Boolean) {
+    fun dismissAlphaNotice(monochromeEnabled: Boolean) {
         viewModelScope.launch {
             container.settingsRepository.applyUpdateNoticeChoice(
-                showTrafficMap = showTrafficMap,
-                useFoxholeStyle = useFoxholeStyle,
+                monochromeEnabled = monochromeEnabled,
                 shownVersionCode = BuildConfig.VERSION_CODE,
             )
         }

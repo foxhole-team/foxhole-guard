@@ -21,6 +21,7 @@ import com.foxhole.guard.core.settings.SettingsRepository
 import com.foxhole.guard.core.settings.removeSmartProfilePreference
 import com.foxhole.guard.runtime.DnsFilterAssetInstaller
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.emitAll
@@ -461,56 +462,78 @@ class ProfileRepository(
     suspend fun renameProfile(
         profileId: Long,
         name: String,
-    ): Profile {
-        val trimmed = name.trim()
-        require(trimmed.isNotBlank()) { "profile name is blank" }
-        dao.updateName(profileId, trimmed)
-        val updated = requireProfile(profileId)
-        if (updated.isActive) {
-            persistCachedActiveProfile(updated)
+    ): Profile = secretMutationMutex.withLock {
+        withContext(NonCancellable) {
+            val trimmed = name.trim()
+            require(trimmed.isNotBlank()) { "profile name is blank" }
+            dao.updateName(profileId, trimmed)
+            val updated = requireProfile(profileId)
+            if (updated.isActive) {
+                persistCachedActiveProfile(updated)
+            }
+            diagnosticsLogger.record("profile", "profile renamed")
+            updated
         }
-        diagnosticsLogger.record("profile", "profile renamed")
-        return updated
     }
 
     suspend fun selectProfileProtocolOption(
         profileId: Long,
         optionId: String,
-    ): Profile {
-        val entity = dao.getById(profileId) ?: error("profile not found")
-        val secret = secretStore.read(entity.secretRef) ?: error("profile secret is missing")
-        val selected = secret.selectableProtocolOptionOrNull(optionId) ?: error("protocol option not found")
-        requireSelectableInsecureTls(secret = secret, option = selected)
-        secretStore.write(
-            secretRef = entity.secretRef,
-            value = secret.copy(selectedProtocolOptionId = selected.id),
-        )
-        dao.updateProtocolHint(profileId, selected.protocolHint.name)
-        val updated = requireProfile(profileId)
-        if (updated.isActive) {
-            persistCachedActiveProfile(updated)
+    ): Profile = secretMutationMutex.withLock {
+        withContext(NonCancellable) {
+            val entity = dao.getById(profileId) ?: error("profile not found")
+            val secret = secretStore.read(entity.secretRef) ?: error("profile secret is missing")
+            val selected = secret.selectableProtocolOptionOrNull(optionId) ?: error("protocol option not found")
+            requireSelectableInsecureTls(secret = secret, option = selected)
+            persistProtocolSelection(entity.secretRef, secret, secret.copy(selectedProtocolOptionId = selected.id)) {
+                dao.updateProtocolHint(profileId, selected.protocolHint.name)
+            }
+            val updated = requireProfile(profileId)
+            if (updated.isActive) {
+                persistCachedActiveProfile(updated)
+            }
+            diagnosticsLogger.record("profile", "profile protocol option changed")
+            updated
         }
-        diagnosticsLogger.record("profile", "profile protocol option changed")
-        return updated
     }
 
     suspend fun setProfileProtocolOptionEnabled(
         profileId: Long,
         optionId: String,
         enabled: Boolean,
-    ): Profile {
-        val entity = dao.getById(profileId) ?: error("profile not found")
-        val secret = secretStore.read(entity.secretRef) ?: error("profile secret is missing")
-        val allowInsecureTls = allowsInsecureTlsForProfileRuntime(secret)
-        val update = secret.protocolOptionEnabledUpdate(optionId, enabled, json, allowInsecureTls)
-        secretStore.write(secretRef = entity.secretRef, value = update.secret)
-        dao.updateProtocolHint(profileId, update.reselectedOption?.protocolHint?.name ?: entity.protocolHint)
-        val updated = requireProfile(profileId)
-        if (updated.isActive) {
-            persistCachedActiveProfile(updated)
+    ): Profile = secretMutationMutex.withLock {
+        withContext(NonCancellable) {
+            val entity = dao.getById(profileId) ?: error("profile not found")
+            val secret = secretStore.read(entity.secretRef) ?: error("profile secret is missing")
+            val allowInsecureTls = allowsInsecureTlsForProfileRuntime(secret)
+            val update = secret.protocolOptionEnabledUpdate(optionId, enabled, json, allowInsecureTls)
+            persistProtocolSelection(entity.secretRef, secret, update.secret) {
+                dao.updateProtocolHint(profileId, update.reselectedOption?.protocolHint?.name ?: entity.protocolHint)
+            }
+            val updated = requireProfile(profileId)
+            if (updated.isActive) {
+                persistCachedActiveProfile(updated)
+            }
+            diagnosticsLogger.record("profile", "profile protocol option enabled toggled")
+            updated
         }
-        diagnosticsLogger.record("profile", "profile protocol option enabled toggled")
-        return updated
+    }
+
+    private suspend fun persistProtocolSelection(
+        secretRef: String,
+        original: StoredProfileSecret,
+        updated: StoredProfileSecret,
+        metadata: suspend () -> Unit,
+    ) {
+        try {
+            secretStore.write(secretRef, updated)
+            metadata()
+        } catch (error: Throwable) {
+            runCatching { secretStore.write(secretRef, original) }.onFailure {
+                diagnosticsLogger.recordFailure("profile", "protocol selection rollback failed")
+            }
+            throw error
+        }
     }
 
     suspend fun getActiveProfile(): Profile? {
@@ -604,33 +627,7 @@ class ProfileRepository(
         editedJson: String,
         protocolOptionIdOverride: String? = null,
     ) {
-        val entity = dao.getById(profileId) ?: error("profile not found")
-        val secret = secretStore.read(entity.secretRef) ?: error("profile secret is missing")
-        val settings = settingsRepository.current()
-        val effectiveAllowInsecureTls =
-            allowsInsecureTlsForStoredProfileRuntime(
-                allowInsecureTlsGlobally = settings.expert.allowInsecureTls,
-                secret = secret,
-            )
-        val sanitized =
-            withContext(Dispatchers.IO) {
-                parser.sanitizeResolvedConfig(
-                    raw = editedJson,
-                    allowPrivateOutboundHosts = settings.expert.allowPrivateOutboundHosts,
-                    allowInsecureTls = effectiveAllowInsecureTls,
-                )
-            }
-        secretStore.write(
-            secretRef = entity.secretRef,
-            value =
-            secret
-                .withUpdatedResolvedConfigJson(
-                    sanitized = sanitized,
-                    protocolOptionIdOverride = protocolOptionIdOverride,
-                )
-                .withInsecureTlsMarkers(json),
-        )
-        diagnosticsLogger.record("profile", "resolved config updated")
+        updateProfileEditor(profileId, null, listOf(ProfileEditorConfigUpdate(protocolOptionIdOverride, editedJson)))
     }
 
     @Suppress("CyclomaticComplexMethod")

@@ -123,6 +123,9 @@ internal fun CliProfileEditorScreen(
                         },
                         modifier = Modifier.fillMaxWidth().weight(1f),
                     )
+                    com.foxhole.guard.ui.cli.components.CliElbowLine(
+                        text = stringResource(R.string.cli_prof_edit_immediate_changes),
+                    )
                     Spacer(modifier = Modifier.height(CliSpacing.sm))
                     CliProfileEditorFooter(
                         dirty = cliProfileEditorHasChanges(profile.name, name, controller.slots),
@@ -141,8 +144,8 @@ internal fun CliProfileEditorScreen(
                 onDismiss = { templateSheetOpen = false },
                 onContinue = { type ->
                     templateSheetOpen = false
-                    controller.addProtocol { current ->
-                        viewModel.addBlankProtocolOption(profile.id, type, current)
+                    controller.addProtocol { current, revision ->
+                        viewModel.addBlankProtocolOption(profile.id, type, current, revision)
                     }
                 },
             )
@@ -175,6 +178,7 @@ private suspend fun HomeViewModel.addBlankProtocolOption(
     profileId: Long,
     type: String,
     slots: List<CliEditorSlot>,
+    revision: String?,
 ): Boolean {
     val template = slots.firstOrNull()?.root ?: return false
     val config = cliNewProtocolConfig(template, cliBlankOutbound(type))
@@ -183,6 +187,7 @@ private suspend fun HomeViewModel.addBlankProtocolOption(
         displayName = type,
         protocolHint = cliProtocolHintForType(type),
         configJson = cliEditorJson.encodeToString(JsonObject.serializer(), config),
+        expectedRevision = revision,
     )
 }
 

@@ -10,6 +10,10 @@ inputs:
       `vars.FOXCORE_REPO` here with this default as the fallback placeholder.
     required: false
     default: foxhole-team/foxhole-core
+  android-abis:
+    description: Space-separated Android ABIs to compile from the pinned native sources.
+    required: false
+    default: arm64-v8a
 
 runs:
   using: composite
@@ -39,13 +43,14 @@ runs:
       with:
         distribution: temurin
         java-version: "17"
-        cache: gradle
 
     - name: setup Gradle
       uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5
 
     - name: install the Rust toolchain pinned by the FoxHole Core workspace
       shell: bash
+      env:
+        FOXHOLE_ANDROID_ABIS: ${{ inputs.android-abis }}
       run: |
         set -euo pipefail
         # rustup honours the core's rust-toolchain.toml inside .foxcore-src; FOXCORE_RUST_TOOLCHAIN
@@ -61,10 +66,26 @@ runs:
           exit 1
         fi
         rustup toolchain install "$toolchain" --profile minimal --component clippy --component rustfmt
-        # Widening -Pfoxhole.abis needs the matching targets added here too.
-        rustup target add --toolchain "$toolchain" aarch64-linux-android
+        targets=()
+        for abi in $FOXHOLE_ANDROID_ABIS; do
+          case "$abi" in
+            arm64-v8a) targets+=(aarch64-linux-android) ;;
+            armeabi-v7a) targets+=(armv7-linux-androideabi) ;;
+            x86_64) targets+=(x86_64-linux-android) ;;
+            *) echo "Unsupported Android ABI: $abi" >&2; exit 1 ;;
+          esac
+        done
+        (( ${#targets[@]} > 0 )) || { echo "At least one Android ABI is required" >&2; exit 1; }
+        rustup target add --toolchain "$toolchain" "${targets[@]}"
         echo "FOXCORE_RUST_TOOLCHAIN=$toolchain" >> "$GITHUB_ENV"
         echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+
+    - name: cache pinned Rust build intermediates
+      uses: Swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c # v2
+      with:
+        workspaces: .foxcore-src -> target
+        shared-key: guard-${{ inputs.android-abis }}
+        cache-on-failure: false
 
     - name: install pinned Android SDK and NDK
       shell: bash
@@ -101,6 +122,13 @@ runs:
           "platforms;android-37.0" \
           "build-tools;37.0.0" \
           "ndk;29.0.14206865"
+
+    - name: reuse the authenticated public Core ARM release
+      if: inputs.android-abis == 'arm64-v8a'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: scripts/fetch-core-release.sh "$GITHUB_WORKSPACE/.foxcore-src" "$RUNNER_TEMP/foxcore-public-release" "${{ inputs.core-repository }}"
 
     - name: fetch pinned native dependencies
       shell: bash

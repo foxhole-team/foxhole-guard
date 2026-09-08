@@ -128,10 +128,10 @@ class CliConfirmationModalContractTest {
         assertTrue(bottomSheet.contains("Modifier.verticalScroll(bodyScrollState)"))
         assertTrue(
             bottomSheet.indexOf("Modifier.verticalScroll(bodyScrollState)") <
-                bottomSheet.indexOf("footerTrailing?.invoke(this)"),
+                bottomSheet.indexOf("trailing?.invoke(this)"),
         )
-        val footer = bottomSheet.substringAfter("footerLeading?.invoke(this)")
-        assertTrue(footer.indexOf("CliModalCloseButton(") < footer.indexOf("footerTrailing?.invoke(this)"))
+        val footer = bottomSheet.substringAfter("leading?.invoke(this)")
+        assertTrue(footer.indexOf("CliModalCloseButton(") < footer.indexOf("trailing?.invoke(this)"))
     }
 
     @Test
@@ -153,7 +153,7 @@ class CliConfirmationModalContractTest {
         assertFalse(request.contains("catch ("))
         assertFalse(request.contains("delay("))
         assertTrue(bottomSheet.contains("onDismissRequest = requestDismiss"))
-        assertEquals(2, Regex("onClick = requestDismiss").findAll(bottomSheet).count())
+        assertEquals(2, Regex("onClick = onDismiss").findAll(bottomSheet).count())
         assertTrue(bottomSheet.contains("LocalCliBottomSheetDismissRequest provides requestDismiss"))
         assertTrue(bottomSheet.contains("LocalCliBottomSheetDismissAfter provides requestDismissAfter"))
         assertTrue(bottomSheet.contains("autoDismissAfterMillis?.let"))

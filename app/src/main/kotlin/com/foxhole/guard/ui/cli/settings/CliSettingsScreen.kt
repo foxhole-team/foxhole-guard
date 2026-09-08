@@ -83,6 +83,7 @@ import com.foxhole.guard.ui.onHomeAdditionalInfoCategorySelected
 import com.foxhole.guard.ui.onLatencyProbeMethodSelected
 import com.foxhole.guard.ui.onLocalProxyLanAccessChanged
 import com.foxhole.guard.ui.onLocaleSelected
+import com.foxhole.guard.ui.onMonochromeEnabledChanged
 import com.foxhole.guard.ui.onMtuChanged
 import com.foxhole.guard.ui.onPixelArtEnabledChanged
 import com.foxhole.guard.ui.onPreferIpv6Changed
@@ -544,6 +545,13 @@ private fun CliApplicationSection(
         CliRowDivider()
         CliAccentColorRow(viewModel = viewModel, settings = settings)
         CliRowDivider()
+        CliToggleRow(
+            label = stringResource(R.string.cli_cfg_monochrome),
+            checked = settings.ui.monochromeEnabled,
+            onToggle = viewModel::onMonochromeEnabledChanged,
+            icon = R.drawable.lin_star,
+        )
+        CliRowDivider()
         CliHomeAdditionalInfoRows(viewModel = viewModel, settings = settings)
         CliRowDivider()
         CliTerminalClearRows()
@@ -802,6 +810,7 @@ private fun CliAccentColorRow(viewModel: HomeViewModel, settings: Settings) {
     val blueLabel = stringResource(R.string.cli_cfg_accent_blue)
     val pinkLabel = stringResource(R.string.cli_cfg_accent_pink)
     val cyanLabel = stringResource(R.string.cli_cfg_accent_cyan)
+    val whiteLabel = stringResource(R.string.cli_cfg_accent_white)
     val accentLabel = { accent: AccentColor ->
         when (accent) {
             AccentColor.AUTO -> autoLabel
@@ -811,6 +820,7 @@ private fun CliAccentColorRow(viewModel: HomeViewModel, settings: Settings) {
             AccentColor.BLUE -> blueLabel
             AccentColor.PINK -> pinkLabel
             AccentColor.CYAN -> cyanLabel
+            AccentColor.WHITE -> whiteLabel
         }
     }
     CliDropdownRow(

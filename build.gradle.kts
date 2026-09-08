@@ -8,8 +8,10 @@ buildscript {
         resolutionStrategy.eachDependency {
             val coordinate = "${requested.group}:${requested.name}"
             when {
+                requested.group == "com.squareup.wire" && requested.name.startsWith("wire-runtime") ->
+                    useVersion("6.3.0")
                 requested.group == "io.netty" && requested.name.startsWith("netty-") ->
-                    useVersion("4.1.136.Final")
+                    useVersion("4.1.137.Final")
                 coordinate == "org.apache.commons:commons-lang3" ->
                     useVersion("3.20.0")
                 coordinate == "org.apache.httpcomponents:httpclient" ->
@@ -26,7 +28,7 @@ buildscript {
     }
     dependencies {
         classpath("com.android.tools.build:gradle:9.3.0")
-        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:2.4.10")
+        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:2.4.20")
     }
 }
 
@@ -38,7 +40,7 @@ if (enableSbom.get()) {
 
 allprojects {
     group = "com.foxhole"
-    version = "0.1.0"
+    version = "0.1.1"
 }
 
 val hardenedToolDependencyVersions =
@@ -54,8 +56,10 @@ allprojects {
         resolutionStrategy.eachDependency {
             val coordinate = "${requested.group}:${requested.name}"
             when {
+                requested.group == "com.squareup.wire" && requested.name.startsWith("wire-runtime") ->
+                    useVersion("6.3.0")
                 requested.group == "io.netty" && requested.name.startsWith("netty-") ->
-                    useVersion("4.1.136.Final")
+                    useVersion("4.1.137.Final")
                 requested.group == "org.bouncycastle" && requested.name in
                     setOf("bcpkix-jdk18on", "bcprov-jdk18on", "bcutil-jdk18on") ->
                     useVersion("1.85")

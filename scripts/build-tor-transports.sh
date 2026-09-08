@@ -102,6 +102,8 @@ build_one() {
       CC="$toolchain_bin/$cc" \
       ${proxy_env[@]+"${proxy_env[@]}"} \
       "$go_bin" build \
+        -mod=readonly \
+        -modfile="$repo_root/config/native/${name/conjure-client/conjure}/go.mod" \
         -trimpath \
         -buildvcs=false \
         -ldflags "-s -w -buildid= -checklinkname=0" \
@@ -113,6 +115,8 @@ build_one() {
 echo "go: $("$go_bin" env GOVERSION) ($go_bin), GOTOOLCHAIN=$go_toolchain, GOMODCACHE=$go_mod_cache"
 lyrebird_src="$(fetch_source lyrebird "$lyrebird_repo" "$lyrebird_ref" "$lyrebird_commit")"
 conjure_src="$(fetch_source conjure "$conjure_repo" "$conjure_ref" "$conjure_commit")"
+
+python3 "$repo_root/scripts/prepare-tor-dependency.py" "$go_mod_cache" "$work_root/conjure-patched"
 
 for abi in "${abis[@]}"; do
   echo "== $abi"

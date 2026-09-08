@@ -335,6 +335,7 @@ internal object JniFoxCoreNativeApi : FoxCoreNativeApi {
 }
 
 internal data class ActiveFoxCoreSession(
+    val sessionIdentity: Any = Any(),
     val handle: Long,
     val tun: ParcelFileDescriptor,
     val masterTunFd: Int,

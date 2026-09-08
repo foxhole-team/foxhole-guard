@@ -865,8 +865,7 @@
     <string name="cli_beta_notice_dns_protocols">DNS filtering does not apply to WireGuard or AmneziaWG.</string>
     <string name="cli_beta_notice_ack">i understand</string>
     <string name="cli_update_notice_title">What’s new</string>
-    <string name="cli_update_notice_body">App redesign\nTraffic display on the Home screen\nImproved FoxHole Core network-engine stability</string>
-    <string name="cli_update_notice_home_map">Traffic widget</string>
+    <string name="cli_update_notice_body">More reliable VPN, DNS and connection protection\nProfile and WebApp fixes\nNew white accent and monochrome mode</string>
     <string name="cli_extras_open_settings">open settings</string>
     <string name="cli_module_settings">module settings</string>
     <string name="cli_extras_webapps">web apps</string>
@@ -1005,7 +1004,6 @@
     <string name="cli_updates_sources_change">change</string>
     <string name="cli_updates_sources_reset">reset</string>
     <string name="cli_updates_sources_note">FoxHole DB manifests are accepted only with the FoxHole DB signature; an update APK must use the same FoxHole Guard signing certificate as the installed app</string>
-    <string name="cli_updates_sources_token_note">only for a private repository: without a token its releases answer “not found”. sent to the configured host only</string>
     <string name="cli_updates_app_available">%1$s available</string>
     <string name="cli_updates_app_install">install</string>
     <string name="cli_updates_app_failed">update check failed</string>
@@ -1122,7 +1120,7 @@
     <string name="cli_route_pick_show_system">system</string>
     <string name="cli_route_pick_hide_system">user apps only</string>
     <string name="cli_route_sites_title">rules for web addresses</string>
-    <string name="cli_route_sites_note">rules are applied atomically</string>
+    <string name="cli_route_sites_note">Rules apply atomically. Exact domains take priority over suffixes, then IP rules; list order breaks ties. A more specific rule can override a Block rule. DNS hints cannot weaken a protected route; an IP without a reliable name binding is refused when domain rules apply.</string>
     <string name="cli_route_sites_formats">formats: example.com · *.example.com · cidr: · kw: · re:</string>
     <string name="cli_route_sites_empty">create site routing rules before switching scenarios</string>
     <string name="cli_route_sites_lane">route</string>
@@ -1408,4 +1406,10 @@
         <item quantity="one">%1$d app</item>
         <item quantity="other">%1$d apps</item>
     </plurals>
+    <string name="cli_webapps_storage_failed">Storage isolation failed. This page was not loaded.</string>
+    <string name="cli_webapps_clear_pending">Browser data cleanup is pending. Restart FoxHole Guard to finish removal.</string>
+    <string name="cli_webapps_tor_unavailable">TOR WebApp routing is unavailable: an authenticated Tor browser proxy is not implemented.</string>
+    <string name="cli_prof_edit_immediate_changes">Adding or removing a protocol saves pending protocol edits immediately. Cancel only discards changes made since the last save.</string>
+    <string name="cli_cfg_monochrome">Monochrome mode</string>
+    <string name="cli_cfg_accent_white">White</string>
 </resources>

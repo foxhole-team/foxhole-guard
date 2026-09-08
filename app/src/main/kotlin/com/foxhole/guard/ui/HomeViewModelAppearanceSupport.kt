@@ -5,6 +5,7 @@ import com.foxhole.core.model.AccentColor
 import com.foxhole.core.model.HomeAdditionalInfoCategory
 import com.foxhole.guard.core.settings.updateAccentColor
 import com.foxhole.guard.core.settings.updateHomeAdditionalInfoCategory
+import com.foxhole.guard.core.settings.updateMonochromeEnabled
 import com.foxhole.guard.core.settings.updatePixelArtEnabled
 import com.foxhole.guard.core.settings.updateShowHomeAdditionalInfo
 import kotlinx.coroutines.launch
@@ -31,4 +32,8 @@ internal fun HomeViewModel.onHomeAdditionalInfoCategorySelected(value: HomeAddit
     viewModelScope.launch {
         container.settingsRepository.updateHomeAdditionalInfoCategory(value)
     }
+}
+
+internal fun HomeViewModel.onMonochromeEnabledChanged(value: Boolean) {
+    viewModelScope.launch { container.settingsRepository.updateMonochromeEnabled(value) }
 }

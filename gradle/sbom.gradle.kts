@@ -13,8 +13,10 @@ buildscript {
         resolutionStrategy.eachDependency {
             val coordinate = "${requested.group}:${requested.name}"
             when {
+                requested.group == "com.squareup.wire" && requested.name.startsWith("wire-runtime") ->
+                    useVersion("6.3.0")
                 requested.group == "io.netty" && requested.name.startsWith("netty-") ->
-                    useVersion("4.1.136.Final")
+                    useVersion("4.1.137.Final")
                 coordinate == "org.apache.commons:commons-lang3" ->
                     useVersion("3.20.0")
                 coordinate == "org.apache.httpcomponents:httpclient" ->

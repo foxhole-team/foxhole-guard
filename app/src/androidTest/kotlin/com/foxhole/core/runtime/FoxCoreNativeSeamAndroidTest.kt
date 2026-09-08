@@ -1,5 +1,6 @@
 package com.foxhole.core.runtime
 
+import com.foxhole.guard.BuildConfig
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -14,6 +15,7 @@ class FoxCoreNativeSeamAndroidTest {
         val json = Json { ignoreUnknownKeys = false }
 
         assertFalse(FoxholeNativeEngine.nativeVersion().isBlank())
+        assertEquals(BuildConfig.FOXCORE_SOURCE_VERSION, FoxholeNativeEngine.nativeVersion())
         assertEquals(FoxholeNativeEngine.ABI_VERSION, FoxholeNativeEngine.nativeAbiVersion())
         val capabilities = json.parseToJsonElement(FoxholeNativeEngine.nativeCapabilities()).jsonObject
         assertEquals(

@@ -41,6 +41,7 @@ internal fun CliInputRow(
     numeric: Boolean = false,
     password: Boolean = false,
     rowMinHeight: Dp = 48.dp,
+    trailingContent: (@Composable () -> Unit)? = null,
 ) {
     val colors = LocalCliColors.current
     val focusRequester = remember { FocusRequester() }
@@ -81,7 +82,10 @@ internal fun CliInputRow(
                 Text(text = "_", style = CliType.body, color = colors.faint)
             }
         }
-        if (trailingChipLabel != null && onTrailingChip != null) {
+        if (trailingContent != null) {
+            Spacer(modifier = Modifier.width(CliSpacing.sm))
+            trailingContent()
+        } else if (trailingChipLabel != null && onTrailingChip != null) {
             Spacer(modifier = Modifier.width(CliSpacing.sm))
             CliChip(label = trailingChipLabel, onClick = onTrailingChip)
         }

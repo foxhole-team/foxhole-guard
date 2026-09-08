@@ -16,6 +16,9 @@ import com.foxhole.guard.core.settings.updateWebAppsEnabled
 import com.foxhole.guard.core.settings.updateWebAppsIsolation
 import com.foxhole.guard.core.settings.updateWebAppsPollIntervalMinutes
 import com.foxhole.guard.core.settings.updateWebAppsPushService
+import com.foxhole.guard.core.webapps.WebAppForegroundSession
+import com.foxhole.guard.core.webapps.WebAppProxyLease
+import com.foxhole.guard.core.webapps.publishWebAppAcquisition
 import com.foxhole.guard.core.webapps.webAppRouteSatisfied
 import com.foxhole.guard.runtime.FoxholeVpnService
 import com.foxhole.guard.ui.cli.CliMainActivity
@@ -24,9 +27,15 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
-private fun HomeViewModel.setOpenWebApp(app: WebAppEntity?) {
+private fun HomeViewModel.setOpenWebApp(app: WebAppForegroundSession?) {
+    val previous = openWebAppMutable.value
+    if (app == null) webAppOpenRequests.next()
     openWebAppMutable.value = app
-    getApplication<FoxholeApplication>().appGraph.webAppsWatchdog.foregroundWebAppId = app?.id
+    if (app == null) {
+        previous?.activation?.lease?.let { lease ->
+            getApplication<FoxholeApplication>().appGraph.webAppsWatchdog.releaseForegroundProxyAsync(lease)
+        }
+    }
 }
 
 internal fun HomeViewModel.onWebAppsEnabledChanged(value: Boolean) {
@@ -150,10 +159,9 @@ internal fun HomeViewModel.renameWebApp(id: Long, name: String) {
 }
 
 internal fun HomeViewModel.setWebAppRoute(id: Long, route: WebAppRoute) {
+    if (!com.foxhole.guard.core.webapps.webAppRouteAvailable(route)) return
+    closeWebApp()
     viewModelScope.launch {
-        if (openWebAppMutable.value?.id == id) {
-            setOpenWebApp(null)
-        }
         val graph = getApplication<FoxholeApplication>().appGraph
         graph.webAppsWatchdog.withPollingPaused {
             container.webAppsRepository.setRoute(id, route)
@@ -162,25 +170,26 @@ internal fun HomeViewModel.setWebAppRoute(id: Long, route: WebAppRoute) {
 }
 
 internal fun HomeViewModel.removeWebApp(id: Long) {
+    closeWebApp()
     viewModelScope.launch {
-        if (openWebAppMutable.value?.id == id) {
-            setOpenWebApp(null)
-        }
-        val removed = container.webAppsRepository.webApp(id)
-        container.webAppsRepository.remove(id)
         val graph = getApplication<FoxholeApplication>().appGraph
-        graph.webAppsNotifier.cancel(id)
-        removed?.let { entity ->
-            graph.webAppsWatchdog.withPollingPaused {
-                graph.webAppsDataCleaner.clearApp(entity.id, entity.url)
+        graph.webAppsWatchdog.withPollingPaused {
+            val removed = container.webAppsRepository.webApp(id) ?: return@withPollingPaused
+            graph.webAppsDataCleaner.recordDeletion(removed.id, removed.url)
+            container.webAppsRepository.remove(id)
+            graph.webAppsNotifier.cancel(id)
+            if (graph.webAppsDataCleaner.clearApp(removed.id, removed.url) == null) {
+                emitError(getApplication<Application>().getString(R.string.cli_webapps_clear_pending))
             }
         }
     }
 }
 
 internal fun HomeViewModel.openWebApp(id: Long) {
+    val request = webAppOpenRequests.next()
     viewModelScope.launch {
         val app = container.webAppsRepository.webApp(id) ?: return@launch
+        if (!webAppOpenRequests.owns(request)) return@launch
         val webApps = container.settingsRepository.current().webApps
         val route = app.webAppRoute()
         if (
@@ -192,26 +201,28 @@ internal fun HomeViewModel.openWebApp(id: Long) {
                 i2pReady = container.connectionController.i2pPhase.value.phase.networkUp,
             )
         ) {
-            emitError(
-                getApplication<Application>().getString(R.string.cli_webapps_route_required),
-            )
+            emitError(getApplication<Application>().getString(R.string.cli_webapps_route_required))
             return@launch
         }
-        val activation =
-            getApplication<FoxholeApplication>().appGraph.webAppsWatchdog.acquireForegroundProxy(
-                appId = app.id,
-                route = route,
-                blockWithoutTunnel = webApps.isolationEnabled,
-            )
-        if (!activation.applied) {
-            emitError(
-                getApplication<Application>().getString(R.string.cli_webapps_route_unavailable),
-            )
-            return@launch
-        }
-        webAppProxyCredentialsMutable.value = activation.credentials
         container.webAppsRepository.resetBadge(app.id)
-        setOpenWebApp(app)
+        if (!webAppOpenRequests.owns(request)) return@launch
+        val watchdog = getApplication<FoxholeApplication>().appGraph.webAppsWatchdog
+        val published = publishWebAppAcquisition(
+            isCurrent = { webAppOpenRequests.owns(request) },
+            acquire = {
+                watchdog.acquireForegroundProxy(
+                    appId = app.id,
+                    route = route,
+                    blockWithoutTunnel = webApps.isolationEnabled,
+                    requestCurrent = { webAppOpenRequests.owns(request) },
+                )
+            },
+            release = watchdog::releaseForegroundProxy,
+            publish = { activation -> setOpenWebApp(WebAppForegroundSession(app, activation)) },
+        )
+        if (!published && webAppOpenRequests.owns(request)) {
+            emitError(getApplication<Application>().getString(R.string.cli_webapps_route_unavailable))
+        }
     }
 }
 
@@ -219,12 +230,13 @@ internal fun HomeViewModel.closeWebApp() {
     setOpenWebApp(null)
 }
 
-internal fun HomeViewModel.onWebAppFrameReleased() {
-    viewModelScope.launch {
-        webAppProxyCredentialsMutable.value = null
-        getApplication<FoxholeApplication>().appGraph.webAppsWatchdog.releaseForegroundProxy()
-    }
+internal fun HomeViewModel.onWebAppFrameReleased(lease: WebAppProxyLease) {
+    if (openWebAppMutable.value?.activation?.lease === lease) setOpenWebApp(null)
+    getApplication<FoxholeApplication>().appGraph.webAppsWatchdog.releaseForegroundProxyAsync(lease)
 }
+
+internal fun HomeViewModel.attachWebAppFrame(lease: WebAppProxyLease, view: android.webkit.WebView): Boolean =
+    getApplication<FoxholeApplication>().appGraph.webAppsWatchdog.attachForegroundView(lease, view)
 
 internal fun HomeViewModel.startWebAppRouteSupervision() {
     viewModelScope.launch {
@@ -236,7 +248,7 @@ internal fun HomeViewModel.startWebAppRouteSupervision() {
         ) { app, snapshot, webApps, i2p ->
             app == null ||
                 webAppRouteSatisfied(
-                    route = app.webAppRoute(),
+                    route = app.app.webAppRoute(),
                     blockWithoutTunnel = webApps.isolationEnabled,
                     snapshot = snapshot,
                     i2pReady = i2p.phase.networkUp,
@@ -265,6 +277,7 @@ internal fun HomeViewModel.webAppPerAppClearSupported(): Boolean =
     getApplication<FoxholeApplication>().appGraph.webAppsDataCleaner.perAppClearSupported
 
 internal fun HomeViewModel.clearWebAppData(id: Long) {
+    closeWebApp()
     viewModelScope.launch {
         val graph = getApplication<FoxholeApplication>().appGraph
         val app = container.webAppsRepository.webApp(id) ?: return@launch
@@ -284,6 +297,7 @@ internal fun HomeViewModel.clearWebAppData(id: Long) {
 }
 
 internal fun HomeViewModel.clearAllWebAppsData() {
+    closeWebApp()
     viewModelScope.launch {
         val graph = getApplication<FoxholeApplication>().appGraph
         val apps = container.webAppsRepository.listWebApps()

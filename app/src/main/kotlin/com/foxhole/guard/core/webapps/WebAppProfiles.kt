@@ -26,16 +26,18 @@ internal object WebAppProfiles {
             return false
         }
         return runCatching {
+            val pending = WebAppPendingDeletions(view.context)
+            check(!pending.fullWipePending() && appId !in pending.entries()) { "WebApp data cleanup is pending" }
             val name = webAppProfileName(appId)
             ProfileStore.getInstance().getOrCreateProfile(name)
             WebViewCompat.setProfile(view, name)
+            check(WebViewCompat.getProfile(view).name == name) { "WebApp storage profile mismatch" }
         }.isSuccess
     }
 
     fun cookieManager(view: WebView): CookieManager =
         if (WebViewFeature.isFeatureSupported(WebViewFeature.MULTI_PROFILE)) {
-            runCatching { WebViewCompat.getProfile(view).cookieManager }
-                .getOrDefault(CookieManager.getInstance())
+            WebViewCompat.getProfile(view).cookieManager
         } else {
             CookieManager.getInstance()
         }

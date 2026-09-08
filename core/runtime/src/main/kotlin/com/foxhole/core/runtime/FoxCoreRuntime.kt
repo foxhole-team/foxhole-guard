@@ -395,7 +395,7 @@ internal class FoxCoreRuntime internal constructor(
     ): Boolean {
         val pending = pendingTransition as? PendingNativeTransition.Reload
         return pending?.generation == generation && pending.session === current &&
-            active === current && nativeStartOwnership.isCurrent(generation)
+            active?.sessionIdentity === current.sessionIdentity && nativeStartOwnership.isCurrent(generation)
     }
 
     private fun executePolicyReload(
@@ -683,8 +683,8 @@ internal class FoxCoreRuntime internal constructor(
         runCatching {
             native.networkChangedWithHandle(current.handle, network.networkHandle)
             synchronized(stateLock) {
-                if (active === current) {
-                    active = current.copy(networkHandle = network.networkHandle)
+                active?.takeIf { it.sessionIdentity === current.sessionIdentity }?.let { latest ->
+                    active = latest.copy(networkHandle = network.networkHandle)
                 }
             }
         }.onFailure {
@@ -777,7 +777,9 @@ internal class FoxCoreRuntime internal constructor(
     ) {
         synchronized(stateLock) {
             generation += 1L
-            active = next
+            // A policy completion must retain handoff metadata published after preparation.
+            active = active?.takeIf { it.sessionIdentity === next.sessionIdentity }
+                ?.let { next.copy(networkHandle = it.networkHandle) } ?: next
             activeTransitionGeneration = ownerGeneration
             shareRuntime.attach(next.handle)
             state = RuntimeState.RUNNING

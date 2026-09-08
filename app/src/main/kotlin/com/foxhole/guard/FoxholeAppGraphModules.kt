@@ -447,14 +447,18 @@ internal class FoxholeRuntimeGraphModule(
         route: WebAppRoute,
         blockWithoutTunnel: Boolean,
     ): WebAppProxyPlan? =
-        when (route) {
-            WebAppRoute.BLOCK -> null
-            WebAppRoute.DIRECT -> WebAppProxyPlan.Direct
-            WebAppRoute.DEFAULT ->
-                if (blockWithoutTunnel) tunnelWebAppProxyPlan() else WebAppProxyPlan.Direct
-            WebAppRoute.VPN -> tunnelWebAppProxyPlan()
+        if (!com.foxhole.guard.core.webapps.webAppRouteAvailable(route)) {
+            null
+        } else {
+            when (route) {
+                WebAppRoute.BLOCK -> null
+                WebAppRoute.DIRECT -> WebAppProxyPlan.Direct
+                WebAppRoute.DEFAULT ->
+                    if (blockWithoutTunnel) tunnelWebAppProxyPlan() else WebAppProxyPlan.Direct
+                WebAppRoute.VPN -> tunnelWebAppProxyPlan()
 
-            WebAppRoute.TOR, WebAppRoute.I2P -> null
+                WebAppRoute.TOR, WebAppRoute.I2P -> null
+            }
         }
 
     private suspend fun tunnelWebAppProxyPlan(): WebAppProxyPlan? {
