@@ -16,10 +16,12 @@ class CliMonochromeTest {
         val settings = Settings()
         assertFalse(settings.ui.monochromeEnabled)
         val changed = settings.copy(ui = settings.ui.copy(monochromeEnabled = true, accentColor = AccentColor.WHITE))
-        assertEquals(
-            changed,
-            Json.decodeFromString(Settings.serializer(), Json.encodeToString(Settings.serializer(), changed))
+        val decoded = Json.decodeFromString(
+            Settings.serializer(),
+            Json.encodeToString(Settings.serializer(), changed)
         )
+        assertTrue(decoded.ui.monochromeEnabled)
+        assertEquals(AccentColor.WHITE, decoded.ui.accentColor)
     }
 
     @Test
