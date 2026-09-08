@@ -55,6 +55,7 @@ class CliModalCloseControlTest {
         closeNode
             .assertHasClickAction()
             .performSemanticsAction(SemanticsActions.OnClick)
+        composeRule.waitUntil(timeoutMillis = 5_000) { dismissed }
         composeRule.runOnIdle { assertTrue(dismissed) }
     }
 

@@ -640,14 +640,21 @@ val prepareBundledLicenseAssets = tasks.register("prepareBundledLicenseAssets") 
         foxCoreSourceRoot.resolve("LICENSE"),
         foxCoreSourceRoot.resolve("THIRD_PARTY_NOTICES.md"),
         foxCoreSourceRoot.resolve("sbom/foxcore-aarch64-linux-android.cdx.json"),
-        rootProject.file("app/src/main/assets/tor/arm64-v8a/tor/pluggable_transports/lyrebird"),
-        rootProject.file("app/src/main/assets/tor/arm64-v8a/tor/pluggable_transports/conjure-client"),
     )
+    inputs.property("androidAbis", shippedAndroidAbis.joinToString(" "))
+    shippedAndroidAbis.forEach { abi ->
+        inputs.files(
+            rootProject.file("app/src/main/assets/tor/$abi/tor/pluggable_transports/lyrebird"),
+            rootProject.file("app/src/main/assets/tor/$abi/tor/pluggable_transports/conjure-client"),
+        )
+    }
     outputs.dir(generatedLicenseAssetsDir)
 
     doLast {
         val output = generatedLicenseAssetsDir.get().asFile
         delete(output)
+        val buildLog = layout.buildDirectory.file("reports/native/license-assets.log").get().asFile
+        buildLog.parentFile.mkdirs()
         val process =
             ProcessBuilder(
                 "python3",
@@ -656,11 +663,16 @@ val prepareBundledLicenseAssets = tasks.register("prepareBundledLicenseAssets") 
                 output.absolutePath,
                 "--foxcore-root",
                 foxCoreSourceRoot.absolutePath,
+                "--android-abis",
+                shippedAndroidAbis.joinToString(" "),
             ).directory(rootProject.projectDir)
-                .inheritIO()
+                .redirectErrorStream(true)
+                .redirectOutput(buildLog)
                 .start()
         val exitCode = process.waitFor()
-        check(exitCode == 0) { "license asset generator failed with exit code $exitCode" }
+        check(exitCode == 0) {
+            "license asset generator failed with exit code $exitCode:\n${buildLog.readText().takeLast(8_000)}"
+        }
     }
 }
 

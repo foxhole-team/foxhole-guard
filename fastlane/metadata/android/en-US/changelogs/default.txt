@@ -9,3 +9,4 @@
 - Rebuilds I2P and Tor transports with updated OpenSSL, Go, and transport dependencies.
 - Expands delivery inventory, vulnerability checks, release-signature verification, and Android regression coverage.
 - Corrects directory syncing, WebApp route availability, and the F-Droid source-build recipe.
+Build: fix license packaging for emulator ABIs.

@@ -41,6 +41,13 @@ STATIC_HASHES = {
 LICENSE_FILE = re.compile(r"^(license|copying|notice)(?:[._-].*)?$", re.IGNORECASE)
 
 
+def transport_binary_paths(abis):
+    if not abis or len(set(abis)) != len(abis) or any(abi not in {"arm64-v8a", "armeabi-v7a", "x86_64"} for abi in abis):
+        raise ValueError("Expected unique supported Android ABIs")
+    return [(name, REPO_ROOT / "app/src/main/assets/tor" / abi / "tor/pluggable_transports" / name)
+            for abi in abis for name in ("lyrebird", "conjure-client")]
+
+
 def sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
@@ -407,22 +414,21 @@ def generate(args: argparse.Namespace) -> None:
     go_root = native_root / go_version
     go_binary = go_root / "bin/go"
     copy(output, go_root / "LICENSE", f"tor/Go-{go_version.removeprefix('go')}-BSD-3-Clause.txt")
-    binary_paths = {
-        "lyrebird": REPO_ROOT / "app/src/main/assets/tor/arm64-v8a/tor/pluggable_transports/lyrebird",
-        "conjure-client": REPO_ROOT / "app/src/main/assets/tor/arm64-v8a/tor/pluggable_transports/conjure-client",
-    }
-    require_lyrebird_composite_license(binary_paths["lyrebird"])
+    binary_paths = transport_binary_paths(args.android_abis.split())
     inventory: dict[tuple[str, str], dict[str, object]] = {}
-    for binary_name, binary in binary_paths.items():
+    for binary_name, binary in binary_paths:
         if not binary.is_file():
             raise SystemExit(f"Tor transport binary is missing: {binary}")
+        if binary_name == "lyrebird":
+            require_lyrebird_composite_license(binary)
         binary_modules = go_modules(go_binary, binary)
         if not binary_modules:
             raise SystemExit(f"{binary_name} has no embedded Go dependency inventory")
         for module in binary_modules:
             key = (module["path"], module["version"])
             current = inventory.setdefault(key, {**module, "binaries": []})
-            current["binaries"].append(binary_name)
+            if binary_name not in current["binaries"]:
+                current["binaries"].append(binary_name)
     modules = sorted(inventory.values(), key=lambda item: (str(item["path"]), str(item["version"])))
     write(output, "tor/GO-MODULES.json", (json.dumps(modules, indent=2, sort_keys=True) + "\n").encode())
     copy_go_module_licenses(output, native_root / "gomodcache", modules)
@@ -485,6 +491,7 @@ def main() -> None:
     parser.add_argument("--foxcore-root")
     parser.add_argument("--native-deps-root")
     parser.add_argument("--ndk-root")
+    parser.add_argument("--android-abis", default="arm64-v8a")
     generate(parser.parse_args())
 
 
