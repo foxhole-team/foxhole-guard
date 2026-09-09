@@ -19,6 +19,13 @@ display role.
 The full upstream TTF is used without subsetting so English and Russian headings
 always render through one font rather than a script-specific fallback.
 
+Tiny5 has no Japanese (CJK) glyphs. Pixel-style Japanese fonts exist, but on phone
+screens their strokes are usually too thin or dense to stay readable. For Japanese
+UI, missing glyphs therefore fall back to the system font: mixed Latin/CJK
+appearance is an accepted trade-off rather than bundling a hard-to-read CJK
+pixel face. JetBrains Mono likewise covers Latin/Cyrillic body text and relies on
+the same system fallback for Japanese.
+
 ## JetBrains Mono
 
 - Upstream: https://github.com/JetBrains/JetBrainsMono
@@ -32,3 +39,4 @@ always render through one font rather than a script-specific fallback.
 - License: SIL Open Font License 1.1; upstream `OFL.txt` is stored as
   `JetBrainsMono-OFL.txt` (SHA-256
   `30f0c136e3c88e422d0791acd97238870f9054a9729bc34cf2ff0d4ed8cac4ad`).
+
