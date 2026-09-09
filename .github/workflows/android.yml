@@ -137,9 +137,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # API 37's current emulator image crashes PackageManager while installing
-        # instrumentation APKs (Broken pipe) before any app test can run.
-        # Keep the supported min SDK and current stable API as the required gate.
+        # The API 37 image fails APK installation before instrumentation starts.
+        # API 26 and 34 retain device coverage until that image can run the suites.
         api: ["26", "34"]
     steps:
       - name: checkout device runner
