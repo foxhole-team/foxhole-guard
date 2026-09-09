@@ -16,6 +16,8 @@ with Path("calls").open("a") as calls:
 if "df" in args:
     print("Filesystem 1K-blocks Used Available Use% Mounted on")
     print("/dev/block/data 6291456 1000 " + os.environ.get("FREE_KB", "4000000") + " 1% /data")
+elif "pm" in args:
+    print("package:/system/framework/framework-res.apk")
 elif "instrument" in args:
     runtime = any(a.startswith("com.foxhole.core.runtime.test/") for a in args)
     fail = runtime and os.environ.get("FAIL_RUNTIME") == "1"
