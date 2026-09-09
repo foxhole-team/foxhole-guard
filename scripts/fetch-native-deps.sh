@@ -75,18 +75,24 @@ seed_tor() {
   seed_git_source lyrebird "$lyrebird_repo" "$lyrebird_ref" "$lyrebird_commit"
   seed_git_source conjure "$conjure_repo" "$conjure_ref" "$conjure_commit"
   mkdir -p "$go_mod_cache"
+  local conjure_modfile="$tor_work_dir/conjure-seed.mod"
+  cp "$native_deps_repo_root/config/native/conjure/go.mod" "$conjure_modfile"
+  cp "$native_deps_repo_root/config/native/conjure/go.sum" "${conjure_modfile%.mod}.sum"
   ( cd "$tor_work_dir/conjure" && env GOTOOLCHAIN=local GOMODCACHE="$go_mod_cache" \
-      "$go_root_dir/bin/go" mod download -modfile="$native_deps_repo_root/config/native/conjure/go.mod" \
+      "$go_root_dir/bin/go" mod download -modfile="$conjure_modfile" \
       github.com/refraction-networking/conjure@v0.9.1 )
   python3 "$native_deps_repo_root/scripts/prepare-tor-dependency.py" "$go_mod_cache" "$tor_work_dir/conjure-patched"
   local src
   for src in lyrebird conjure; do
     log "downloading $src Go modules into $go_mod_cache"
+    local modfile="$tor_work_dir/$src-seed.mod"
+    cp "$native_deps_repo_root/config/native/$src/go.mod" "$modfile"
+    cp "$native_deps_repo_root/config/native/$src/go.sum" "${modfile%.mod}.sum"
     ( cd "$tor_work_dir/$src" && env \
         GOTOOLCHAIN=local \
         GOMODCACHE="$go_mod_cache" \
         GOFLAGS=-mod=mod \
-        "$go_root_dir/bin/go" mod download -modfile="$native_deps_repo_root/config/native/$src/go.mod" all )
+        "$go_root_dir/bin/go" mod download -modfile="$modfile" all )
   done
 }
 
