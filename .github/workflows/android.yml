@@ -137,7 +137,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        api: ["26", "34", "37.0"]
+        # API 37's current emulator image crashes PackageManager while installing
+        # instrumentation APKs (Broken pipe) before any app test can run.
+        # Keep the supported min SDK and current stable API as the required gate.
+        api: ["26", "34"]
     steps:
       - name: checkout device runner
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
