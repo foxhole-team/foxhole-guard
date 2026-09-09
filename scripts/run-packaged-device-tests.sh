@@ -24,8 +24,14 @@ done
 apks=()
 while IFS= read -r apk; do apks+=("$apk"); done < <(find "$root" -type f -name '*.apk' | sort)
 [[ ${#apks[@]} == 3 ]] || { echo "Expected app and two instrumentation APKs" >&2; exit 1; }
-# Avoid the streaming PackageInstaller pipe that closes during API 37 installs.
-for apk in "${apks[@]}"; do adb -s "$serial" install --no-streaming -r -t "$apk"; done
+# Avoid the PackageInstaller transport pipe that closes during API 37 installs.
+# Push first, then ask the already-ready package manager to install the local file.
+for apk in "${apks[@]}"; do
+    remote="/data/local/tmp/foxhole-$(basename "$apk")"
+    adb -s "$serial" push "$apk" "$remote"
+    adb -s "$serial" shell pm install -r -t "$remote"
+    adb -s "$serial" shell rm -f "$remote"
+done
 
 run_tests() {
     local package="$1" classes="$2" report="$3"
