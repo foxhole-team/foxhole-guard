@@ -62,7 +62,7 @@ jobs:
             -Pfoxhole.splitApks=true -Pfoxhole.sbom=true -Pfoxhole.updateChannel=fdroid \
             :app:validateReleaseSigningInputs :app:assembleRelease \
             :app:verifyReleaseContainsNativeRuntime :app:verifyReleaseContainsBaselineProfile \
-            :app:verifyReleaseBuildConfigDefaults :app:verifyReleaseJniSurface
+            :app:verifyReleaseBuildConfigDefaults :app:verifyReleaseJniSurface :app:verifyReleaseSbom
 
       - name: verify channel, certificate and exact source
         run: |
