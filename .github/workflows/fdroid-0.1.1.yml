@@ -1,0 +1,108 @@
+name: F-Droid APK for published 0.1.1
+
+on:
+  push:
+    branches: [release/fdroid-0.1.1]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fdroid-apk-0.1.1
+  cancel-in-progress: false
+
+jobs:
+  apk:
+    name: build the existing release with its F-Droid channel
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      RELEASE_SOURCE: cbc770278f6162793d06a2c1c88515a67119d55f
+    steps:
+      - name: checkout unchanged published app source
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: cbc770278f6162793d06a2c1c88515a67119d55f
+          submodules: recursive
+          persist-credentials: false
+
+      - name: verify published release authority
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          [[ "$(git rev-parse HEAD)" == "$RELEASE_SOURCE" ]]
+          [[ -z "$(git status --porcelain)" ]]
+          [[ "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/v0.1.1" --jq '.object.sha')" == "$RELEASE_SOURCE" ]]
+          python3 scripts/verify-release-signature.py "$RELEASE_SOURCE"
+
+      - name: setup pinned release build tools and native sources
+        uses: ./.github/actions/setup-foxcore
+        with:
+          core-repository: foxhole-team/foxhole-core
+
+      - name: build the signed F-Droid APK
+        env:
+          FOXHOLE_RELEASE_STORE_FILE_B64: ${{ secrets.FOXHOLE_RELEASE_STORE_FILE_B64 }}
+          FOXHOLE_RELEASE_STORE_PASSWORD: ${{ secrets.FOXHOLE_RELEASE_STORE_PASSWORD }}
+          FOXHOLE_RELEASE_KEY_ALIAS: ${{ secrets.FOXHOLE_RELEASE_KEY_ALIAS }}
+          FOXHOLE_RELEASE_KEY_PASSWORD: ${{ secrets.FOXHOLE_RELEASE_KEY_PASSWORD }}
+          FOXHOLE_RELEASE_STORE_TYPE: ${{ secrets.FOXHOLE_RELEASE_STORE_TYPE }}
+        run: |
+          set -euo pipefail
+          for name in FOXHOLE_RELEASE_STORE_FILE_B64 FOXHOLE_RELEASE_STORE_PASSWORD FOXHOLE_RELEASE_KEY_ALIAS FOXHOLE_RELEASE_KEY_PASSWORD; do
+            [[ -n "${!name:-}" ]] || { echo "Missing signing input: $name" >&2; exit 1; }
+          done
+          umask 077
+          export FOXHOLE_RELEASE_STORE_FILE="$RUNNER_TEMP/foxhole-fdroid-release.p12"
+          trap 'rm -f "$FOXHOLE_RELEASE_STORE_FILE"' EXIT
+          printf '%s' "$FOXHOLE_RELEASE_STORE_FILE_B64" | base64 --decode > "$FOXHOLE_RELEASE_STORE_FILE"
+          export FOXHOLE_RELEASE_STORE_TYPE="${FOXHOLE_RELEASE_STORE_TYPE:-PKCS12}"
+          ./gradlew --no-daemon --console=plain --stacktrace \
+            -Pfoxhole.splitApks=true -Pfoxhole.sbom=true -Pfoxhole.updateChannel=fdroid \
+            :app:validateReleaseSigningInputs :app:assembleRelease \
+            :app:verifyReleaseContainsNativeRuntime :app:verifyReleaseContainsBaselineProfile \
+            :app:verifyReleaseBuildConfigDefaults :app:verifyReleaseJniSurface
+
+      - name: verify channel, certificate and exact source
+        run: |
+          set -euo pipefail
+          apk=app/build/outputs/apk/release/app-arm64-v8a-release.apk
+          out="$RUNNER_TEMP/fdroid-0.1.1"
+          mkdir -p "$out"
+          name=FoxHole-v0.1.1-arm64-v8a-fdroid.apk
+          sdk="$ANDROID_HOME/build-tools/37.0.0"
+          "$sdk/apksigner" verify --verbose --print-certs "$apk" > "$out/fdroid-release-certs.txt"
+          expected="$(tr -d '[:space:]' < config/release-cert-sha256.txt)"
+          actual="$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' "$out/fdroid-release-certs.txt")"
+          [[ "$actual" == "$expected" ]]
+          grep -Fx 'Number of signers: 1' "$out/fdroid-release-certs.txt"
+          grep -Fx 'Verified using v2 scheme (APK Signature Scheme v2): true' "$out/fdroid-release-certs.txt"
+          python3 scripts/verify-apk-source.py "$apk" "$RELEASE_SOURCE"
+          grep -F 'UPDATE_CHANNEL = "fdroid"' app/build/generated/source/buildConfig/release/com/foxhole/guard/BuildConfig.java
+          "$sdk/aapt" dump permissions "$apk" > "$RUNNER_TEMP/fdroid-permissions.txt"
+          if grep -Fq 'android.permission.REQUEST_INSTALL_PACKAGES' "$RUNNER_TEMP/fdroid-permissions.txt"; then
+            echo 'F-Droid APK must not request permission to install packages.' >&2
+            exit 1
+          fi
+          "$sdk/aapt" dump badging "$apk" > "$RUNNER_TEMP/fdroid-badging.txt"
+          grep -E "^package: name='com.foxhole.guard' versionCode='122' versionName='0.1.1'" "$RUNNER_TEMP/fdroid-badging.txt"
+          grep -Fx "native-code: 'arm64-v8a'" "$RUNNER_TEMP/fdroid-badging.txt"
+          cp "$apk" "$out/$name"
+          python3 scripts/aggregate-delivery-sbom.py build/reports/cyclonedx/bom.json \
+            app/build/generated/licenseAssets "$out/$name" "$out/FoxHole-v0.1.1-fdroid-sbom.cdx.json"
+          jq -n --arg source "$RELEASE_SOURCE" --arg tree "$(git rev-parse 'HEAD^{tree}')" \
+            --arg core "$(tr -d '[:space:]' < config/foxcore-revision.txt)" \
+            --arg run "https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            '{versionName:"0.1.1",versionCode:122,updateChannel:"fdroid",sourceCommit:$source,sourceTree:$tree,foxcoreRevision:$core,buildRun:$run}' \
+            > "$out/fdroid-source.json"
+          (cd "$out" && sha256sum "$name" FoxHole-v0.1.1-fdroid-sbom.cdx.json fdroid-release-certs.txt fdroid-source.json > fdroid-SHA256SUMS)
+
+      - name: retain verified F-Droid delivery files
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: foxhole-fdroid-0.1.1
+          path: ${{ runner.temp }}/fdroid-0.1.1/*
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
