@@ -43,7 +43,7 @@ class AppUpdateChannelTest {
     }
 
     @Test
-    fun `every Binaries recipe matches the GitHub release channel`() {
+    fun `every Binaries recipe matches the dedicated F-Droid release channel`() {
         val metadata =
             listOf(
                 File("metadata/com.foxhole.guard.yml"),
@@ -52,6 +52,7 @@ class AppUpdateChannelTest {
         val builds = fdroidBuildBlocks(metadata)
 
         assertTrue(metadata.contains("Binaries:"))
+        assertTrue(metadata.contains("FoxHole-v%v-arm64-v8a-fdroid.apk"))
         assertTrue(metadata.contains("AutoUpdateMode: Version"))
         assertEquals(listOf(BuildConfig.VERSION_NAME.removeSuffix("-Debug")), builds.map(FdroidBuildBlock::versionName))
         assertFalse(metadata.contains("\nSummary:"))
@@ -61,12 +62,12 @@ class AppUpdateChannelTest {
             val commands = build.body.substringAfter("    build:").substringBefore("    ndk:")
             assertFalse(build.body.contains("    gradleprops:"))
             assertTrue(
-                "${build.versionName}: Binaries build must use the GitHub channel",
-                commands.contains("-Pfoxhole.updateChannel=github"),
+                "${build.versionName}: Binaries build must use the F-Droid channel",
+                commands.contains("-Pfoxhole.updateChannel=fdroid"),
             )
             assertFalse(
-                "${build.versionName}: Binaries build must not use the F-Droid channel",
-                commands.contains("-Pfoxhole.updateChannel=fdroid"),
+                "${build.versionName}: Binaries build must not use the GitHub channel",
+                commands.contains("-Pfoxhole.updateChannel=github"),
             )
         }
         assertTrue(builds.single().body.contains("versionCode: ${BuildConfig.VERSION_CODE}"))

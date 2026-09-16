@@ -1,2 +1,4 @@
+FoxHole 0.1.2
+
 Update FoxCore to 0.0.6 with the rustls TLS 1.3 security fix (RUSTSEC-2026-0285).
 Provide a separate F-Droid APK with in-app updates disabled.
