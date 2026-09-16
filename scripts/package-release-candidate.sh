@@ -14,7 +14,7 @@ Certificate source:
   supplied by a caller, but it must match that file and the fingerprints documented in
   README.md and docs/README.ru.md.
 
-prepare also reads the split release APKs from app/build/outputs/apk/release and the
+prepare reads both signed APKs from build/release-variants/{github,fdroid}/app.apk and the
 CycloneDX JSON from FOXHOLE_SBOM_PATH (default: build/reports/cyclonedx/bom.json).
 The generated license assets come from FOXHOLE_LICENSE_ASSETS_PATH
 (default: app/build/generated/licenseAssets).
@@ -142,6 +142,7 @@ verify_apk() {
   local expected_cert=$3
   local apksigner=$4
   local aapt2=$5
+  local channel=$6
 
   local report actual package_line native_line
   report="$($apksigner verify --verbose --print-certs "$apk")"
@@ -164,9 +165,24 @@ verify_apk() {
   native_line="$($aapt2 dump badging "$apk" | sed -n '/^native-code:/p' | sed -n '1p')"
   [[ "$native_line" == "native-code: 'arm64-v8a'" ]] ||
     die "release APK has an unexpected native ABI inventory: $(basename "$apk")"
-  "$aapt2" dump permissions "$apk" |
-    grep -F "uses-permission: name='android.permission.REQUEST_INSTALL_PACKAGES'" >/dev/null ||
-    die "GitHub release APK is missing REQUEST_INSTALL_PACKAGES: $(basename "$apk")"
+  verify_apk_update_channel "$apk" "$aapt2" "$channel"
+}
+
+verify_apk_update_channel() {
+  local apk=$1 aapt2=$2 channel=$3 permissions
+  permissions="$("$aapt2" dump permissions "$apk")"
+  case "$channel" in
+    github)
+      grep -Fq "uses-permission: name='android.permission.REQUEST_INSTALL_PACKAGES'" <<<"$permissions" ||
+        die "GitHub APK is missing REQUEST_INSTALL_PACKAGES: $(basename "$apk")"
+      ;;
+    fdroid)
+      if grep -Fq "android.permission.REQUEST_INSTALL_PACKAGES" <<<"$permissions"; then
+        die "F-Droid APK must not request REQUEST_INSTALL_PACKAGES: $(basename "$apk")"
+      fi
+      ;;
+    *) die "unsupported APK update channel: $channel" ;;
+  esac
 }
 
 package_license_notices() {
@@ -336,6 +352,13 @@ verify_android_sbom_inventory() {
     ' "$sbom" >/dev/null || die "Android CycloneDX dependency inventory is incomplete or malformed"
 }
 
+verify_sbom_apk_digest() {
+  local sbom=$1 apk=$2
+  jq -e --arg digest "$(sha256_file "$apk")" '
+    [.metadata.properties[] | select(.name == "foxhole:apkSha256") | .value] == [$digest]
+  ' "$sbom" >/dev/null || die "SBOM does not describe the expected APK: $(basename "$sbom")"
+}
+
 prepare_candidate() {
   local output_dir=$1
   local source_commit=$2
@@ -356,26 +379,28 @@ prepare_candidate() {
   apksigner=$(find_build_tool apksigner)
   aapt2=$(find_build_tool aapt2)
 
-  local -a apks=()
-  while IFS= read -r apk; do
-    apks+=("$apk")
-  done < <(find app/build/outputs/apk/release -maxdepth 1 -type f -name '*.apk' | LC_ALL=C sort)
-  [[ ${#apks[@]} -eq 1 ]] || die "expected exactly one arm64-v8a release APK, found ${#apks[@]}"
-  local arm64_source
-  arm64_source=$(printf '%s\n' "${apks[@]}" | grep 'arm64-v8a' || true)
-  [[ -f "$arm64_source" ]] || die "arm64-v8a release APK was not produced"
+  local arm64_source=build/release-variants/github/app.apk
+  local fdroid_source=build/release-variants/fdroid/app.apk
+  [[ -f "$arm64_source" ]] || die "GitHub arm64-v8a release APK was not produced"
+  [[ -f "$fdroid_source" ]] || die "F-Droid arm64-v8a release APK was not produced"
 
   local arm64_name="FoxHole-${RELEASE_TAG}-arm64-v8a-release.apk"
+  local fdroid_name="FoxHole-${RELEASE_TAG}-arm64-v8a-fdroid.apk"
   cp "$arm64_source" "$output_dir/$arm64_name"
+  cp "$fdroid_source" "$output_dir/$fdroid_name"
 
   local sbom_source=${FOXHOLE_SBOM_PATH:-build/reports/cyclonedx/bom.json}
   [[ -f "$sbom_source" ]] || die "CycloneDX SBOM was not generated: $sbom_source"
   local sbom_name="FoxHole-${RELEASE_TAG}-sbom.cdx.json"
+  local fdroid_sbom_name="FoxHole-${RELEASE_TAG}-fdroid-sbom.cdx.json"
   local license_source=${FOXHOLE_LICENSE_ASSETS_PATH:-app/build/generated/licenseAssets}
   python3 scripts/aggregate-delivery-sbom.py "$sbom_source" "$license_source" \
     "$output_dir/$arm64_name" "$output_dir/$sbom_name"
   verify_android_sbom_inventory "$output_dir/$sbom_name" "$VERSION_NAME"
-  scripts/run-osv-source-scan.sh "$output_dir/$sbom_name"
+  python3 scripts/aggregate-delivery-sbom.py "$sbom_source" "$license_source" \
+    "$output_dir/$fdroid_name" "$output_dir/$fdroid_sbom_name"
+  verify_android_sbom_inventory "$output_dir/$fdroid_sbom_name" "$VERSION_NAME"
+  scripts/run-osv-source-scan.sh "$output_dir/$sbom_name" "$output_dir/$fdroid_sbom_name"
 
   local license_name="FoxHole-${RELEASE_TAG}-license-notices.zip"
   package_license_notices "$license_source" "$output_dir/$license_name"
@@ -384,7 +409,9 @@ prepare_candidate() {
   local cert_report="$output_dir/release-certs.txt"
   : > "$cert_report"
   printf '== %s ==\n' "$arm64_name" >> "$cert_report"
-  verify_apk "$output_dir/$arm64_name" "$cert_report" "$expected_cert" "$apksigner" "$aapt2"
+  verify_apk "$output_dir/$arm64_name" "$cert_report" "$expected_cert" "$apksigner" "$aapt2" github
+  printf '== %s ==\n' "$fdroid_name" >> "$cert_report"
+  verify_apk "$output_dir/$fdroid_name" "$cert_report" "$expected_cert" "$apksigner" "$aapt2" fdroid
 
   local arm64_sha
   arm64_sha=$(sha256_file "$output_dir/$arm64_name")
@@ -409,10 +436,12 @@ prepare_candidate() {
     --arg tag "$RELEASE_TAG" \
     --arg coreRevision "$CORE_REVISION" \
     --arg arm64Apk "$arm64_name" \
+    --arg fdroidArm64Apk "$fdroid_name" \
     --arg sbom "$sbom_name" \
+    --arg fdroidSbom "$fdroid_sbom_name" \
     --arg licenseNotices "$license_name" \
     '{
-      schema: 1,
+      schema: 2,
       sourceCommit: $sourceCommit,
       sourceTree: $sourceTree,
       versionName: $versionName,
@@ -420,7 +449,9 @@ prepare_candidate() {
       tag: $tag,
       coreRevision: $coreRevision,
       arm64Apk: $arm64Apk,
+      fdroidArm64Apk: $fdroidArm64Apk,
       sbom: $sbom,
+      fdroidSbom: $fdroidSbom,
       licenseNotices: $licenseNotices,
       updateChannel: "github"
     }' > "$output_dir/CANDIDATE.json"
@@ -429,7 +460,9 @@ prepare_candidate() {
   local file
   for file in \
     "$arm64_name" \
+    "$fdroid_name" \
     "$sbom_name" \
+    "$fdroid_sbom_name" \
     "$license_name" \
     release-certs.txt \
     update-manifest.json \
@@ -449,7 +482,9 @@ verify_candidate() {
   [[ -f "$candidate_dir/SHA256SUMS" ]] || die "candidate checksums are missing"
 
   local canonical_arm64_name="FoxHole-${RELEASE_TAG}-arm64-v8a-release.apk"
+  local canonical_fdroid_name="FoxHole-${RELEASE_TAG}-arm64-v8a-fdroid.apk"
   local canonical_sbom_name="FoxHole-${RELEASE_TAG}-sbom.cdx.json"
+  local canonical_fdroid_sbom_name="FoxHole-${RELEASE_TAG}-fdroid-sbom.cdx.json"
   local canonical_license_name="FoxHole-${RELEASE_TAG}-license-notices.zip"
   local expected_files actual_files
   expected_files="$(
@@ -457,8 +492,10 @@ verify_candidate() {
       CANDIDATE.json \
       SHA256SUMS \
       "$canonical_arm64_name" \
+      "$canonical_fdroid_name" \
       "$canonical_license_name" \
       "$canonical_sbom_name" \
+      "$canonical_fdroid_sbom_name" \
       release-certs.txt \
       update-manifest.json |
       LC_ALL=C sort
@@ -482,18 +519,24 @@ verify_candidate() {
   )
 
   local metadata="$candidate_dir/CANDIDATE.json"
-  local source_commit source_tree arm64_name sbom_name license_name
+  local source_commit source_tree arm64_name fdroid_name sbom_name fdroid_sbom_name license_name
   source_commit=$(jq -er '.sourceCommit' "$metadata")
   source_tree=$(jq -er '.sourceTree' "$metadata")
   arm64_name=$(jq -er '.arm64Apk' "$metadata")
+  fdroid_name=$(jq -er '.fdroidArm64Apk' "$metadata")
   sbom_name=$(jq -er '.sbom' "$metadata")
+  fdroid_sbom_name=$(jq -er '.fdroidSbom' "$metadata")
   license_name=$(jq -er '.licenseNotices' "$metadata")
   [[ "$source_commit" =~ ^[0-9a-f]{40}$ ]] || die "candidate source commit is invalid"
   [[ "$source_tree" =~ ^[0-9a-f]{40}$ ]] || die "candidate source tree is invalid"
   [[ "$arm64_name" == "$canonical_arm64_name" ]] ||
     die "candidate arm64 APK name is not canonical"
+  [[ "$fdroid_name" == "$canonical_fdroid_name" ]] ||
+    die "candidate F-Droid APK name is not canonical"
   [[ "$sbom_name" == "$canonical_sbom_name" ]] ||
     die "candidate SBOM name is not canonical"
+  [[ "$fdroid_sbom_name" == "$canonical_fdroid_sbom_name" ]] ||
+    die "candidate F-Droid SBOM name is not canonical"
   [[ "$license_name" == "$canonical_license_name" ]] ||
     die "candidate license-notices name is not canonical"
   [[ -z "$expected_source_commit" || "$source_commit" == "$expected_source_commit" ]] ||
@@ -506,7 +549,7 @@ verify_candidate() {
     --argjson versionCode "$VERSION_CODE" \
     --arg tag "$RELEASE_TAG" \
     --arg coreRevision "$CORE_REVISION" '
-      .schema == 1 and
+      .schema == 2 and
       .versionName == $versionName and
       .versionCode == $versionCode and
       .tag == $tag and
@@ -514,13 +557,17 @@ verify_candidate() {
       .updateChannel == "github"
     ' "$metadata" >/dev/null
 
-  for file in "$arm64_name" "$sbom_name" "$license_name" release-certs.txt update-manifest.json; do
+  for file in "$arm64_name" "$fdroid_name" "$sbom_name" "$fdroid_sbom_name" "$license_name" release-certs.txt update-manifest.json; do
     [[ -f "$candidate_dir/$file" ]] || die "candidate file is missing: $file"
   done
   python3 scripts/verify-apk-source.py "$candidate_dir/$arm64_name" "$source_commit"
+  python3 scripts/verify-apk-source.py "$candidate_dir/$fdroid_name" "$source_commit"
   verify_license_notices_archive "$candidate_dir/$license_name"
 
   verify_android_sbom_inventory "$candidate_dir/$sbom_name" "$VERSION_NAME"
+  verify_android_sbom_inventory "$candidate_dir/$fdroid_sbom_name" "$VERSION_NAME"
+  verify_sbom_apk_digest "$candidate_dir/$sbom_name" "$candidate_dir/$arm64_name"
+  verify_sbom_apk_digest "$candidate_dir/$fdroid_sbom_name" "$candidate_dir/$fdroid_name"
 
   local arm64_sha
   arm64_sha=$(sha256_file "$candidate_dir/$arm64_name")
@@ -540,7 +587,8 @@ verify_candidate() {
   apksigner=$(find_build_tool apksigner)
   aapt2=$(find_build_tool aapt2)
   verify_report=$(mktemp)
-  verify_apk "$candidate_dir/$arm64_name" "$verify_report" "$expected_cert" "$apksigner" "$aapt2"
+  verify_apk "$candidate_dir/$arm64_name" "$verify_report" "$expected_cert" "$apksigner" "$aapt2" github
+  verify_apk "$candidate_dir/$fdroid_name" "$verify_report" "$expected_cert" "$apksigner" "$aapt2" fdroid
   rm -f "$verify_report"
 }
 
@@ -588,21 +636,23 @@ published_version_code() {
   printf '%s\n' "$version_code"
 }
 
-[[ $# -ge 2 ]] || usage
-command=$1
-shift
-case "$command" in
-  prepare)
-    [[ $# -eq 3 ]] || usage
-    prepare_candidate "$@"
-    ;;
-  verify)
-    [[ $# -ge 1 && $# -le 3 ]] || usage
-    verify_candidate "$@"
-    ;;
-  published-code)
-    [[ $# -eq 1 ]] || usage
-    published_version_code "$@"
-    ;;
-  *) usage ;;
-esac
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  [[ $# -ge 2 ]] || usage
+  command=$1
+  shift
+  case "$command" in
+    prepare)
+      [[ $# -eq 3 ]] || usage
+      prepare_candidate "$@"
+      ;;
+    verify)
+      [[ $# -ge 1 && $# -le 3 ]] || usage
+      verify_candidate "$@"
+      ;;
+    published-code)
+      [[ $# -eq 1 ]] || usage
+      published_version_code "$@"
+      ;;
+    *) usage ;;
+  esac
+fi

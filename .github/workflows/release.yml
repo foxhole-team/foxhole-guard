@@ -210,31 +210,9 @@ jobs:
             echo "FOXHOLE_RELEASE_STORE_TYPE=${FOXHOLE_RELEASE_STORE_TYPE:-PKCS12}"
           } >> "$GITHUB_ENV"
 
-      # AGP cannot build ABI-split APKs and an AAB in one invocation, so the bundle is verified in a second, non-split configuration.
-      - name: build and verify signed release from main
+      - name: build and verify signed GitHub and F-Droid releases from main
         if: steps.candidate.outputs.dev_sha != github.sha
-        run: |
-          ./gradlew \
-            --no-daemon \
-            --console=plain \
-            --stacktrace \
-            -Pfoxhole.splitApks=true \
-            -Pfoxhole.sbom=true \
-            "-Pfoxhole.lastUploadedVersionCode=${{ steps.policy.outputs.published_code }}" \
-            :app:validateReleaseSigningInputs \
-            :app:assembleRelease \
-            :app:verifyReleaseContainsNativeRuntime \
-            :app:verifyReleaseContainsBaselineProfile \
-            :app:verifyReleaseBuildConfigDefaults \
-            :app:verifyReleaseJniSurface
-          ./gradlew \
-            --no-daemon \
-            --console=plain \
-            --stacktrace \
-            -Pfoxhole.sbom=true \
-            "-Pfoxhole.lastUploadedVersionCode=${{ steps.policy.outputs.published_code }}" \
-            :app:validateReleaseSigningInputs \
-            :app:publicReleasePreflight
+        run: scripts/build-release-variants.sh "${{ steps.policy.outputs.published_code }}"
 
       - name: package release with exact source provenance
         if: steps.candidate.outputs.dev_sha != github.sha
@@ -265,7 +243,7 @@ jobs:
         with:
           name: foxhole-release-private-diagnostics-${{ github.sha }}
           path: |
-            app/build/outputs/mapping/release/mapping.txt
+            build/release-variants/*/mapping.txt
             app/build/outputs/mapping/publicRelease/mapping.txt
             app/build/outputs/native-debug-symbols/publicRelease/publicRelease-native-symbols.zip
           if-no-files-found: error
@@ -290,8 +268,8 @@ jobs:
           while IFS= read -r asset; do
             assets+=("$asset")
           done < <(find "$candidate_dir" -mindepth 1 -maxdepth 1 -type f | LC_ALL=C sort)
-          [[ ${#assets[@]} -eq 7 ]] || {
-            echo "Expected exactly seven verified release files." >&2
+          [[ ${#assets[@]} -eq 9 ]] || {
+            echo "Expected exactly nine verified release files." >&2
             exit 1
           }
 

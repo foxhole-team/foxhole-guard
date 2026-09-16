@@ -22,7 +22,7 @@
   <a href="https://f-droid.org/packages/com.foxhole.guard/">
     <img src="https://img.shields.io/f-droid/v/com.foxhole.guard?label=F-Droid&logo=f-droid&style=flat-square" alt="F-Droid Version">
   </a>
-  <a href="https://apps.obtainium.imranr.dev/redirect?r=obtainium://app/%7B%22id%22%3A%22com.foxhole.guard%22%2C%22url%22%3A%22https%3A%2F%2Fgithub.com%2Ffoxhole-team%2Ffoxhole-guard%22%2C%22author%22%3A%22FoxHole%20Team%22%2C%22name%22%3A%22FoxHole%20Guard%22%2C%22preferredApkIndex%22%3A0%2C%22additionalSettings%22%3A%22%7B%5C%22apkFilterRegEx%5C%22%3A%5C%22arm64-v8a.%2A%5C%5C%5C%5C.apk%24%5C%22%2C%5C%22invertAPKFilter%5C%22%3Afalse%2C%5C%22verifyLatestTag%5C%22%3Atrue%7D%22%2C%22overrideSource%22%3A%22GitHub%22%7D">
+  <a href="https://apps.obtainium.imranr.dev/redirect?r=obtainium://app/%7B%22id%22%3A%22com.foxhole.guard%22%2C%22url%22%3A%22https%3A%2F%2Fgithub.com%2Ffoxhole-team%2Ffoxhole-guard%22%2C%22author%22%3A%22FoxHole%20Team%22%2C%22name%22%3A%22FoxHole%20Guard%22%2C%22preferredApkIndex%22%3A0%2C%22additionalSettings%22%3A%22%7B%5C%22apkFilterRegEx%5C%22%3A%5C%22arm64-v8a-release%5C%5C%5C%5C.apk%24%5C%22%2C%5C%22invertAPKFilter%5C%22%3Afalse%2C%5C%22verifyLatestTag%5C%22%3Atrue%7D%22%2C%22overrideSource%22%3A%22GitHub%22%7D">
     <img src="https://img.shields.io/badge/Obtainium-%D0%B4%D0%BE%D0%B1%D0%B0%D0%B2%D0%B8%D1%82%D1%8C-1A73E8?style=flat-square" alt="Установить через Obtainium">
   </a>
 
@@ -496,6 +496,12 @@ APK публичной беты содержит один проверенный
 ---
 
 ## 🔏 Проверка релиза
+
+Автосборка выпускает два ARM64 APK с одним сертификатом подписи:
+`FoxHole-<tag>-arm64-v8a-release.apk` поддерживает обновление приложения из GitHub;
+`FoxHole-<tag>-arm64-v8a-fdroid.apk` отключает обновление APK внутри приложения
+и не запрашивает разрешение на установку пакетов. Рецепт F-Droid воспроизводит
+второй вариант; обновлениями управляет клиент F-Droid. У каждого APK свой SBOM.
 
 Для APK из официального релиза рекомендуется проверять контрольную сумму и сертификат подписи.
 

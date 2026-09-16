@@ -13,16 +13,17 @@ AutoName: FoxHole Guard
 RepoType: git
 Repo: https://github.com/foxhole-team/foxhole-guard.git
 Binaries:
-  https://github.com/foxhole-team/foxhole-guard/releases/download/v%v/FoxHole-v%v-arm64-v8a-release.apk
+  https://github.com/foxhole-team/foxhole-guard/releases/download/v%v/FoxHole-v%v-arm64-v8a-fdroid.apk
 
 Builds:
-  - versionName: 0.1.1
-    versionCode: 122
-    commit: v0.1.1
+  - versionName: 0.1.2
+    versionCode: 129
+    commit: v0.1.2
     submodules: true
     sudo:
       - apt-get update
       - apt-get install -y make g++ libc-dev cmake ninja-build perl pkg-config rustup
+        bzip2
     output: app/build/outputs/apk/release/app-arm64-v8a-release-unsigned.apk
     srclibs:
       - FoxHoleCore@cd8bf71e950247d7bcebc8cd62142adef5c970fc
@@ -32,8 +33,6 @@ Builds:
       - git -C $$FoxHoleCore$$ fetch --depth 1 origin "$core_revision"
       - git -C $$FoxHoleCore$$ checkout --detach "$core_revision"
       - test "$(git -C $$FoxHoleCore$$ rev-parse HEAD)" = "$core_revision"
-      - sed -i 's/^source_date_epoch=.*/source_date_epoch="$(git -C "$i2pd_dir" show
-        -s --format=%ct HEAD)"/' scripts/build-i2pd.sh
       - rustup set profile minimal
       - rustup default 1.97.1
       - export RUSTUP_TOOLCHAIN=1.97.1
@@ -48,7 +47,7 @@ Builds:
       - export FOXHOLE_NATIVE_OFFLINE=1
       - export I2PD_ABIS=arm64-v8a
       - export TOR_TRANSPORT_ABIS=arm64-v8a
-      - gradle --no-daemon --console=plain -Pfoxhole.splitApks=true -Pfoxhole.updateChannel=github
+      - gradle --no-daemon --console=plain -Pfoxhole.splitApks=true -Pfoxhole.updateChannel=fdroid
         -Pfoxhole.nativeOffline=true :app:assembleRelease
     ndk: 29.0.14206865
 
@@ -56,5 +55,5 @@ AllowedAPKSigningKeys: e59de2486084c38f3c77e9df0eb5eff9a4559f3c68024f1208e0e9c04
 
 AutoUpdateMode: Version
 UpdateCheckMode: Tags ^v[0-9].*$
-CurrentVersion: 0.1.1
-CurrentVersionCode: 122
+CurrentVersion: 0.1.2
+CurrentVersionCode: 129

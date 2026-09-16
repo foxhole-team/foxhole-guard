@@ -244,30 +244,8 @@ jobs:
           echo "version_code=$version_code" >> "$GITHUB_OUTPUT"
 
       # This signed candidate approves the source tree before main builds the tagged release.
-      # AGP cannot build ABI-split APKs and an AAB in one invocation, so the bundle is verified in a second, non-split configuration.
-      - name: build and verify signed candidate
-        run: |
-          ./gradlew \
-            --no-daemon \
-            --console=plain \
-            --stacktrace \
-            -Pfoxhole.splitApks=true \
-            -Pfoxhole.sbom=true \
-            "-Pfoxhole.lastUploadedVersionCode=${{ steps.published.outputs.version_code }}" \
-            :app:validateReleaseSigningInputs \
-            :app:assembleRelease \
-            :app:verifyReleaseContainsNativeRuntime \
-            :app:verifyReleaseContainsBaselineProfile \
-            :app:verifyReleaseBuildConfigDefaults \
-            :app:verifyReleaseJniSurface
-          ./gradlew \
-            --no-daemon \
-            --console=plain \
-            --stacktrace \
-            -Pfoxhole.sbom=true \
-            "-Pfoxhole.lastUploadedVersionCode=${{ steps.published.outputs.version_code }}" \
-            :app:validateReleaseSigningInputs \
-            :app:publicReleasePreflight
+      - name: build and verify signed GitHub and F-Droid candidates
+        run: scripts/build-release-variants.sh "${{ steps.published.outputs.version_code }}"
 
       - name: package immutable candidate
         shell: bash
@@ -297,7 +275,7 @@ jobs:
         with:
           name: foxhole-private-diagnostics-${{ github.sha }}
           path: |
-            app/build/outputs/mapping/release/mapping.txt
+            build/release-variants/*/mapping.txt
             app/build/outputs/mapping/publicRelease/mapping.txt
             app/build/outputs/native-debug-symbols/publicRelease/publicRelease-native-symbols.zip
           if-no-files-found: error

@@ -259,6 +259,9 @@ val releaseSigningStoreFile =
         }
 val appUpdateChannel =
     providers.gradleProperty("foxhole.updateChannel").orNull?.trim()?.takeIf(String::isNotEmpty) ?: "github"
+require(appUpdateChannel in setOf("github", "fdroid")) {
+    "foxhole.updateChannel must be github or fdroid"
+}
 
 val appUpdateFloorVersionCode =
     providers.gradleProperty("foxhole.updateFloorVersionCode").orNull?.trim()?.toLongOrNull() ?: 0L
@@ -738,9 +741,13 @@ val verifyReleaseContainsLicenseAssets =
 val verifyReleaseBuildConfigDefaults = tasks.register("verifyReleaseBuildConfigDefaults") {
     dependsOn("generateReleaseBuildConfig")
     inputs.file(releaseBuildConfigFile)
+    inputs.property("updateChannel", appUpdateChannel)
 
     doLast {
         val content = releaseBuildConfigFile.get().asFile.readText()
+        require("public static final String UPDATE_CHANNEL = \"$appUpdateChannel\";" in content) {
+            "release BuildConfig must use the requested update channel: $appUpdateChannel"
+        }
         require(!enableReleaseProbe) {
             "foxhole.releaseProbe is only supported by internalRelease; public release builds must keep probes off."
         }
@@ -1064,7 +1071,7 @@ android {
         applicationId = publicApplicationId
         minSdk = 26
         targetSdk = 37
-        versionCode = 122
+        versionCode = 129
         versionName = project.version.toString()
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
