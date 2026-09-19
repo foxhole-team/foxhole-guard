@@ -1171,7 +1171,7 @@ android {
 
     androidResources {
         generateLocaleConfig = true
-        localeFilters += listOf("en", "ru")
+        localeFilters += listOf("en", "ru", "ja")
     }
 
     sourceSets {

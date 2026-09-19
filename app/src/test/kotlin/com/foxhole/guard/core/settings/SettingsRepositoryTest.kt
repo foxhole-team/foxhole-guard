@@ -100,6 +100,7 @@ internal class SettingsRepositoryTest : SettingsRepositoryTestSupport() {
         assertEquals("", AppLocale.SYSTEM.appLanguageTags())
         assertEquals("en", AppLocale.EN.appLanguageTags())
         assertEquals("ru", AppLocale.RU.appLanguageTags())
+        assertEquals("ja", AppLocale.JA.appLanguageTags())
     }
 
     @Test
@@ -653,3 +654,4 @@ internal class SettingsRepositoryTest : SettingsRepositoryTestSupport() {
         assertEquals(listOf(smartPreference), reset.smartProfilePreferences)
     }
 }
+

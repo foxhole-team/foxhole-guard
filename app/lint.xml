@@ -23,6 +23,7 @@
     <!-- The values are compact terminal copy, not grammatical quantity sentences. -->
     <issue id="PluralsCandidate">
         <ignore path="src/main/res/values/strings.xml" />
+        <ignore path="src/main/res/values-ja/strings.xml" />
     </issue>
 
     <!-- JavaScript is the explicit Web Apps feature boundary, not enabled for arbitrary app UI. -->
@@ -39,5 +40,7 @@
     <!-- Lowercase/caps are intentional parts of the terminal button grammar. -->
     <issue id="ButtonCase">
         <ignore path="src/main/res/values/strings.xml" />
+        <ignore path="src/main/res/values-ja/strings.xml" />
     </issue>
 </lint>
+

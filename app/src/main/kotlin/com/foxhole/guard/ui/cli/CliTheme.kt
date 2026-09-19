@@ -177,6 +177,10 @@ object CliRadius {
     val sheet = 24.dp
 }
 
+// Tiny5 has no Japanese (CJK) glyphs. Pixel-style Japanese fonts exist, but on phone
+// screens their strokes are usually too thin or dense to stay readable. Missing glyphs
+// therefore fall back to the system font: mixed Latin/CJK appearance is an accepted
+// trade-off for Japanese UI rather than bundling a hard-to-read CJK pixel face.
 private val Tiny5Family = FontFamily(Font(R.font.tiny5_regular))
 
 @Immutable
@@ -654,3 +658,4 @@ fun CliTheme(
         MaterialTheme(colorScheme = scheme, content = content)
     }
 }
+
