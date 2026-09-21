@@ -48,7 +48,7 @@ jobs:
     timeout-minutes: 90
     steps:
       - name: checkout
-        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: recursive
           persist-credentials: false
@@ -97,7 +97,7 @@ jobs:
       I2PD_BUILD_JOBS: "2"
     steps:
       - name: checkout
-        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: recursive
           persist-credentials: false
@@ -111,7 +111,7 @@ jobs:
           ./gradlew --no-daemon --max-workers=2 --console=plain -Pfoxhole.abis=x86_64 \
             :app:assembleDebug :app:assembleDebugAndroidTest :core:runtime:assembleDebugAndroidTest
       - name: store exact device test APKs
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: device-test-apks-${{ github.sha }}
           path: |
@@ -123,7 +123,7 @@ jobs:
 
       - name: retain native build diagnostics
         if: failure()
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: device-build-diagnostics-${{ github.sha }}
           path: app/build/reports/
@@ -142,11 +142,11 @@ jobs:
         api: ["26", "34"]
     steps:
       - name: checkout device runner
-        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: download the single verified device build
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: device-test-apks-${{ github.sha }}
           path: device-apks
@@ -156,7 +156,7 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
       - name: execute device regression tests
-        uses: reactivecircus/android-emulator-runner@5d6e86df22ab11632167a1a6b0c9ab0dc3469586 # v2.36.0
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
         with:
           api-level: ${{ matrix.api }}
           target: google_apis
@@ -169,7 +169,7 @@ jobs:
           script: bash scripts/run-packaged-device-tests.sh device-apks
       - name: retain device test reports
         if: always()
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: android-device-api-${{ matrix.api }}-${{ github.sha }}
           path: build/reports/device/
@@ -184,7 +184,7 @@ jobs:
     timeout-minutes: 90
     steps:
       - name: checkout verified dev commit
-        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: recursive
           persist-credentials: false
@@ -261,7 +261,7 @@ jobs:
               "$source_tree"
 
       - name: upload immutable candidate
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: foxhole-app-${{ github.sha }}
           path: ${{ runner.temp }}/foxhole-release-candidate/*
@@ -271,7 +271,7 @@ jobs:
 
       # Mapping and native symbols stay authenticated Actions artifacts, never attached to the public release.
       - name: retain private diagnostics
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: foxhole-private-diagnostics-${{ github.sha }}
           path: |
