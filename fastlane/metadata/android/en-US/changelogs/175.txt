@@ -1,0 +1,1 @@
+Restore left-aligned in-app notification text.

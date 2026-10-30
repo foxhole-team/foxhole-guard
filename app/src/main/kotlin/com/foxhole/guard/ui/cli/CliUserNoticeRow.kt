@@ -45,7 +45,7 @@ internal fun CliUserNoticeRow(notice: FoxholeBannerEvent, onDismiss: () -> Unit)
                 notice.message,
                 style = CliType.body,
                 color = color,
-                textAlign = TextAlign.End,
+                textAlign = TextAlign.Start,
                 modifier = Modifier.weight(1f)
             )
             CliNoticeCloseButton(color = color, onClose = onDismiss)

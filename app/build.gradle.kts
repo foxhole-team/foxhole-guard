@@ -276,7 +276,7 @@ val releaseSigningStoreFile =
                 }
             candidates.firstOrNull(File::isFile)
         }
-val baseAppVersionCode = 174
+val baseAppVersionCode = 175
 val localBuildNumber = providers.gradleProperty("foxhole.localBuildNumber").orNull?.let { raw ->
     requireNotNull(raw.toIntOrNull()?.takeIf { it in (baseAppVersionCode + 1)..2_100_000_000 }) {
         "foxhole.localBuildNumber must exceed $baseAppVersionCode and be at most 2100000000"

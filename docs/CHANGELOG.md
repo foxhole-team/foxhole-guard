@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.1 - 2026-10-30
+
+- Restore left-aligned in-app notification text within the space before the close button.
+
 ## 1.0.0 - 2026-10-30
 
 - Use Core 1.0.1 DNS/policy fixes and publish ARM64, ARMv7, x86, x86_64 and universal APKs.
