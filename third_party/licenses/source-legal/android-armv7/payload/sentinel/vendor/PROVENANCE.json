@@ -1,0 +1,38 @@
+{
+  "crate": "yara-x",
+  "version": "1.21.0",
+  "upstreamCrateSha256": "01380fac6a879db2b11b5a3586075ec220988805c98a21497f6895fb35c9d373",
+  "registryCacheModified": false,
+  "patches": [
+    {
+      "path": "patches/dex-without-crypto-feature.patch",
+      "sha256": "c78604030716ea7e1f626323914d82b4cb23b24bffb334bdc52c30d27470ae95"
+    },
+    {
+      "path": "patches/private-rule-iterator-lengths.patch",
+      "sha256": "6f0d0969a0c070496d3d942ad258d5b93de1444be3b2754876723d400e668bf0"
+    },
+    {
+      "path": "patches/wasmtime49-dependency.patch",
+      "sha256": "abc91b2e412128fab557ee8aebd5e982cc8b41aeb251e5dd70b823f9176557bd"
+    }
+  ],
+  "reasons": [
+    "Pin Wasmtime 49.0.4 security fixes without enabling component-model async features.",
+    "Expose ULEB128 for dex-module without the unused crypto feature and RSA dependency.",
+    "Derive private/global rule iterator lengths from the actual matching/nonmatching bitmaps."
+  ],
+  "parser": {
+    "crate": "yara-x-parser",
+    "version": "1.21.0",
+    "upstreamCrateSha256": "c22368f8704927061c57ab970df41972a38c8717da10b3973677457272ed7b7f",
+    "registryCacheModified": false,
+    "patches": [
+      {
+        "path": "patches/parser-debug-tree.patch",
+        "sha256": "6204df633793d8c6b14c84c5d1890e396fa6df278b1b3bd939120d9344fa8bb9"
+      }
+    ],
+    "reason": "Replace the debug-only ascii_tree dependency with an original BSD-3-Clause formatter; preserve published AST fixtures and upstream parser license."
+  }
+}

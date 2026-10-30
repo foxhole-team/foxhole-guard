@@ -33,12 +33,14 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.foxhole.core.model.AccentColor
 import com.foxhole.core.model.AppLocale
 import com.foxhole.core.model.HomeAdditionalInfoCategory
+import com.foxhole.core.model.InterfaceMode
 import com.foxhole.core.model.LatencyProbeMethod
 import com.foxhole.core.model.Settings
 import com.foxhole.core.model.ThemeMode
 import com.foxhole.core.model.TrafficMode
 import com.foxhole.core.model.TunStack
 import com.foxhole.guard.R
+import com.foxhole.guard.router.ui.GuardRouterManagementScreen
 import com.foxhole.guard.ui.HomeViewModel
 import com.foxhole.guard.ui.SettingsRouteUiState
 import com.foxhole.guard.ui.cli.CliRetentionUnit
@@ -79,7 +81,9 @@ import com.foxhole.guard.ui.onAccentColorSelected
 import com.foxhole.guard.ui.onAtomicConnectionChanged
 import com.foxhole.guard.ui.onAutoReconnectChanged
 import com.foxhole.guard.ui.onAutoStartChanged
+import com.foxhole.guard.ui.onCoreTuningChanged
 import com.foxhole.guard.ui.onHomeAdditionalInfoCategorySelected
+import com.foxhole.guard.ui.onInterfaceModeSelected
 import com.foxhole.guard.ui.onLatencyProbeMethodSelected
 import com.foxhole.guard.ui.onLocalProxyLanAccessChanged
 import com.foxhole.guard.ui.onLocaleSelected
@@ -87,6 +91,7 @@ import com.foxhole.guard.ui.onMonochromeEnabledChanged
 import com.foxhole.guard.ui.onMtuChanged
 import com.foxhole.guard.ui.onPixelArtEnabledChanged
 import com.foxhole.guard.ui.onPreferIpv6Changed
+import com.foxhole.guard.ui.onResetCoreTuning
 import com.foxhole.guard.ui.onShowHomeAdditionalInfoChanged
 import com.foxhole.guard.ui.onStatisticsUiVisibilityChanged
 import com.foxhole.guard.ui.onThemeSelected
@@ -97,12 +102,30 @@ import com.foxhole.guard.ui.onWebAppsEnabledChanged
 internal fun CliSettingsScreen(
     viewModel: HomeViewModel,
     modifier: Modifier = Modifier,
+    openRouterRequested: Boolean = false,
+    onRouterRequestConsumed: () -> Unit = {},
 ) {
     val state by viewModel.settingsRouteState.collectAsStateWithLifecycle()
     var subScreen by rememberSaveable { mutableStateOf<String?>(null) }
+    LaunchedEffect(openRouterRequested) {
+        if (openRouterRequested) {
+            subScreen = SUB_ROUTER
+            onRouterRequestConsumed()
+        }
+    }
     val pixelArtEnabled = LocalCliPixelArtEnabled.current
     val iconMetrics = cliSettingsIconMetrics(pixelArtEnabled)
-    val settingsTypography = cliSettingsTypographyFor(LocalCliType.current, pixelArtEnabled)
+    val baseTypography = cliSettingsTypographyFor(LocalCliType.current, pixelArtEnabled)
+    val settingsTypography = if (state.settings.ui.interfaceMode == InterfaceMode.USER) {
+        baseTypography.copy(body = baseTypography.body.copy(fontSize = 16.sp, lineHeight = 24.sp))
+    } else {
+        baseTypography
+    }
+    LaunchedEffect(state.settings.ui.interfaceMode, subScreen) {
+        if (state.settings.ui.interfaceMode == InterfaceMode.USER && subScreen in expertOnlySettingsScreens) {
+            subScreen = null
+        }
+    }
     var expandedSections by rememberSaveable(stateSaver = CliStringSetSaver) {
         mutableStateOf(emptySet())
     }
@@ -190,6 +213,7 @@ private fun CliSettingsRootColumn(
     onToggleSection: (String) -> Unit,
     onOpenSub: (String) -> Unit,
 ) {
+    val expert = state.settings.ui.interfaceMode == InterfaceMode.EXPERT
     val dnsUpdatePhase by viewModel.dnsFilterUpdatePhase.collectAsStateWithLifecycle()
     val dnsDownloadProgress by viewModel.dnsFilterDownloadProgress.collectAsStateWithLifecycle()
     CliGlassHeaderScreen(
@@ -204,19 +228,28 @@ private fun CliSettingsRootColumn(
                 .padding(horizontal = CliSpacing.md),
         ) {
             Spacer(modifier = Modifier.height(topInset))
-            CliNetworkSection(
-                viewModel = viewModel,
-                state = state,
-                expanded = SECTION_NETWORK in expandedSections,
-                onToggleExpanded = { onToggleSection(SECTION_NETWORK) },
-            )
-            Spacer(modifier = Modifier.height(CliSpacing.sm))
-            CliRulesSection(
-                viewModel = viewModel,
-                state = state,
-                expanded = SECTION_RULES in expandedSections,
-                onToggleExpanded = { onToggleSection(SECTION_RULES) },
-            )
+            if (expert) {
+                CliNetworkSection(
+                    viewModel = viewModel,
+                    state = state,
+                    expanded = SECTION_NETWORK in expandedSections,
+                    onToggleExpanded = { onToggleSection(SECTION_NETWORK) },
+                )
+                Spacer(modifier = Modifier.height(CliSpacing.sm))
+                CliRulesSection(
+                    viewModel = viewModel,
+                    state = state,
+                    expanded = SECTION_RULES in expandedSections,
+                    onToggleExpanded = { onToggleSection(SECTION_RULES) },
+                )
+            } else {
+                CliUserConnectionSection(
+                    viewModel = viewModel,
+                    settings = state.settings,
+                    expanded = SECTION_NETWORK in expandedSections,
+                    onToggleExpanded = { onToggleSection(SECTION_NETWORK) },
+                )
+            }
             Spacer(modifier = Modifier.height(CliSpacing.sm))
             CliDnsSection(
                 viewModel = viewModel,
@@ -229,6 +262,7 @@ private fun CliSettingsRootColumn(
                 expanded = SECTION_DNS in expandedSections,
                 onToggleExpanded = { onToggleSection(SECTION_DNS) },
                 onOpenAppBypass = { onOpenSub(SUB_DNS_BYPASS) },
+                showAdvanced = expert,
             )
             Spacer(modifier = Modifier.height(CliSpacing.sm))
             CliSecuritySection(
@@ -257,8 +291,19 @@ private fun CliSettingsRootColumn(
                 onProxyServerEnabledChanged = viewModel::onLocalProxyLanAccessChanged,
                 onOpenWebApps = { onOpenSub(SUB_WEBAPPS) },
                 onOpenProxyServer = { onOpenSub(SUB_LAN_PROXY) },
+                onOpenRouter = { onOpenSub(SUB_ROUTER) },
             )
             Spacer(modifier = Modifier.height(CliSpacing.sm))
+            if (expert) {
+                CliCoreExpertSection(
+                    tuning = state.settings.expert.core,
+                    expanded = SECTION_CORE_EXPERT in expandedSections,
+                    onToggleExpanded = { onToggleSection(SECTION_CORE_EXPERT) },
+                    onChanged = viewModel::onCoreTuningChanged,
+                    onReset = viewModel::onResetCoreTuning,
+                )
+                Spacer(modifier = Modifier.height(CliSpacing.sm))
+            }
             CliApplicationSection(
                 viewModel = viewModel,
                 settings = state.settings,
@@ -270,6 +315,7 @@ private fun CliSettingsRootColumn(
             CliMoreSection(
                 viewModel = viewModel,
                 statisticsDockIconEnabled = state.settings.ui.statisticsDockIconEnabled,
+                showDiagnostics = expert,
                 onOpenSub = onOpenSub,
             )
             CliChromeTailSpacer()
@@ -285,6 +331,7 @@ private fun CliCfgSubScreen(
     modifier: Modifier,
 ) {
     when (key) {
+        SUB_ROUTER -> GuardRouterManagementScreen(onBack = onBack, modifier = modifier)
         SUB_DNS_BYPASS -> CliDnsBypassAppsScreen(viewModel, modifier)
         SUB_TOR -> CliTorSubScreen(viewModel, modifier)
         SUB_I2P -> CliI2pSubScreen(viewModel, modifier)
@@ -311,6 +358,7 @@ private fun CliCfgSubScreen(
     }
 }
 
+private const val SUB_ROUTER = "openwrt_router"
 private const val SUB_DNS_BYPASS = "dns_bypass"
 private const val SUB_TOR = "tor"
 private const val SUB_I2P = "i2p"
@@ -334,6 +382,7 @@ private const val SECTION_SECURITY = "security"
 private const val SECTION_MODULES = "modules"
 private const val SECTION_APP = "application"
 private const val SECTION_EXTRAS = "extras"
+private const val SECTION_CORE_EXPERT = "core_expert"
 
 internal const val CLI_OPT_CUSTOM = "custom"
 
@@ -348,6 +397,7 @@ private fun CliNetworkSection(
     val colors = LocalCliColors.current
     CliPanel(
         title = stringResource(R.string.cli_cfg_group_network),
+        titleColor = colors.fg,
         icon = R.drawable.lin_globe,
         iconColor = colors.accent,
         modifier = Modifier.fillMaxWidth(),
@@ -425,6 +475,7 @@ private fun CliRulesSection(
     val colors = LocalCliColors.current
     CliPanel(
         title = stringResource(R.string.cli_cfg_group_rules),
+        titleColor = colors.fg,
         icon = R.drawable.lin_settings,
         iconColor = colors.accent,
         modifier = Modifier.fillMaxWidth(),
@@ -481,7 +532,7 @@ private fun CliMtuRows(
 }
 
 private val MTU_PRESETS = listOf(1280, 1400, 1500, 9000)
-private const val MIN_MTU = 576
+private const val MIN_MTU = 1280
 private const val MAX_MTU = 9000
 
 @Composable
@@ -495,6 +546,7 @@ private fun CliApplicationSection(
     val colors = LocalCliColors.current
     CliPanel(
         title = stringResource(R.string.cli_cfg_group_app),
+        titleColor = colors.fg,
         icon = R.drawable.lin_settings,
         iconColor = colors.accent,
         modifier = Modifier.fillMaxWidth(),
@@ -504,6 +556,8 @@ private fun CliApplicationSection(
         contentPadding = CliPanelEdgeToEdgeContentPadding,
     ) {
         CliLanguageRow(viewModel = viewModel, settings = settings)
+        CliRowDivider()
+        CliInterfaceModeRow(settings.ui.interfaceMode, viewModel::onInterfaceModeSelected)
         CliRowDivider()
         val systemAppearanceLabel = stringResource(R.string.cli_cfg_appearance_system)
         val darkAppearanceLabel = stringResource(R.string.cli_cfg_appearance_dark)
@@ -554,8 +608,10 @@ private fun CliApplicationSection(
         CliRowDivider()
         CliHomeAdditionalInfoRows(viewModel = viewModel, settings = settings)
         CliRowDivider()
-        CliTerminalClearRows()
-        CliRowDivider()
+        if (settings.ui.interfaceMode == InterfaceMode.EXPERT) {
+            CliTerminalClearRows()
+            CliRowDivider()
+        }
         CliActionRow(
             label = stringResource(R.string.cli_cfg_widgets),
             icon = R.drawable.lin_home,
@@ -578,14 +634,25 @@ private fun CliLanguageRow(
     val systemLocaleLabel = stringResource(R.string.cli_cfg_locale_system)
     val russianLocaleLabel = stringResource(R.string.cli_cfg_locale_ru)
     val englishLocaleLabel = stringResource(R.string.cli_cfg_locale_en)
+    val japaneseLocaleLabel = stringResource(R.string.cli_cfg_locale_ja)
+    val germanLocaleLabel = stringResource(R.string.cli_cfg_locale_de)
+    val frenchLocaleLabel = stringResource(R.string.cli_cfg_locale_fr)
+    val spanishLocaleLabel = stringResource(R.string.cli_cfg_locale_es)
+    val chineseLocaleLabel = stringResource(R.string.cli_cfg_locale_zh)
     CliDropdownRow(
         label = stringResource(R.string.cli_cfg_language),
         icon = R.drawable.lin_globe,
-        value = localeLabel(settings.ui.locale, systemLocaleLabel, russianLocaleLabel, englishLocaleLabel),
-        options = AppLocale.entries.map { locale ->
+        value = localeLabel(
+            settings.ui.locale, systemLocaleLabel, russianLocaleLabel, englishLocaleLabel,
+            japaneseLocaleLabel, germanLocaleLabel, frenchLocaleLabel, spanishLocaleLabel, chineseLocaleLabel,
+        ),
+        options = com.foxhole.guard.GUARD_APP_LANGUAGE_CHOICES.map { locale ->
             CliDropdownOption(
                 id = locale.name,
-                label = localeLabel(locale, systemLocaleLabel, russianLocaleLabel, englishLocaleLabel),
+                label = localeLabel(
+                    locale, systemLocaleLabel, russianLocaleLabel, englishLocaleLabel,
+                    japaneseLocaleLabel, germanLocaleLabel, frenchLocaleLabel, spanishLocaleLabel, chineseLocaleLabel,
+                ),
                 flagCountry = localeFlagCountry(locale),
             )
         },
@@ -600,13 +667,15 @@ private fun CliHomeAdditionalInfoRows(
     viewModel: HomeViewModel,
     settings: Settings,
 ) {
-    CliToggleRow(
-        label = stringResource(R.string.cli_cfg_home_additional_info),
-        checked = settings.ui.showHomeAdditionalInfo,
-        onToggle = viewModel::onShowHomeAdditionalInfoChanged,
-        icon = R.drawable.lin_home,
-    )
-    CliRowDivider()
+    if (settings.ui.interfaceMode == InterfaceMode.EXPERT) {
+        CliToggleRow(
+            label = stringResource(R.string.cli_cfg_home_additional_info),
+            checked = settings.ui.showHomeAdditionalInfo,
+            onToggle = viewModel::onShowHomeAdditionalInfoChanged,
+            icon = R.drawable.lin_home,
+        )
+        CliRowDivider()
+    }
     val mapLabel = stringResource(R.string.cli_cfg_home_additional_info_map)
     val routeLabel = stringResource(R.string.cli_cfg_home_additional_info_route)
     val categoryLabel = { category: HomeAdditionalInfoCategory ->
@@ -633,7 +702,7 @@ private fun CliHomeAdditionalInfoRows(
         onSelect = { id ->
             viewModel.onHomeAdditionalInfoCategorySelected(HomeAdditionalInfoCategory.valueOf(id))
         },
-        enabled = settings.ui.showHomeAdditionalInfo,
+        enabled = settings.ui.interfaceMode == InterfaceMode.USER || settings.ui.showHomeAdditionalInfo,
         showSelectedOptionIcon = true,
     )
 }
@@ -642,6 +711,7 @@ private fun CliHomeAdditionalInfoRows(
 private fun CliMoreSection(
     viewModel: HomeViewModel,
     statisticsDockIconEnabled: Boolean,
+    showDiagnostics: Boolean,
     onOpenSub: (String) -> Unit,
 ) {
     val iconLift = cliSettingsMoreIconLiftFor(LocalCliPixelArtEnabled.current)
@@ -667,7 +737,7 @@ private fun CliMoreSection(
             headingLabel = true,
             onTap = { onOpenSub(SUB_LOGS) },
         )
-        CliSettingsAnimatedRows(visible = !statisticsDockIconEnabled) {
+        CliSettingsAnimatedRows(visible = showDiagnostics && !statisticsDockIconEnabled) {
             CliDivider()
             CliActionRow(
                 label = stringResource(R.string.cli_dock_stats),
@@ -773,10 +843,20 @@ private fun localeLabel(
     systemLabel: String,
     russianLabel: String,
     englishLabel: String,
+    japaneseLabel: String,
+    germanLabel: String,
+    frenchLabel: String,
+    spanishLabel: String,
+    chineseLabel: String,
 ): String = when (locale) {
     AppLocale.SYSTEM -> systemLabel
     AppLocale.RU -> russianLabel
     AppLocale.EN -> englishLabel
+    AppLocale.JA -> japaneseLabel
+    AppLocale.DE -> germanLabel
+    AppLocale.FR -> frenchLabel
+    AppLocale.ES -> spanishLabel
+    AppLocale.ZH -> chineseLabel
 }
 
 private fun themeModeLabel(
@@ -849,4 +929,11 @@ private fun localeFlagCountry(locale: AppLocale): String? = when (locale) {
     AppLocale.SYSTEM -> null
     AppLocale.RU -> "ru"
     AppLocale.EN -> "gb"
+    AppLocale.JA -> "jp"
+    AppLocale.DE -> "de"
+    AppLocale.FR -> "fr"
+    AppLocale.ES -> "es"
+    AppLocale.ZH -> "cn"
 }
+
+private val expertOnlySettingsScreens = setOf(SUB_DNS_BYPASS)

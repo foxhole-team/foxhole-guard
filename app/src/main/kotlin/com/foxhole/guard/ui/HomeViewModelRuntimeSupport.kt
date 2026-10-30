@@ -422,7 +422,13 @@ internal suspend fun HomeViewModel.emitSuccess(message: String) {
 
 internal suspend fun HomeViewModel.emitRoutingScenarioSelected(labelRes: Int) {
     val app = getApplication<Application>()
-    emitSuccess(app.getString(R.string.routing_scenario_selected, app.getString(labelRes)))
+    snackbars.emit(
+        FoxholeBannerEvent(
+            message = app.getString(R.string.routing_scenario_selected, app.getString(labelRes)),
+            tone = FoxholeBannerTone.INFO,
+            showInTopNotice = false,
+        ),
+    )
 }
 
 private const val RUNTIME_RECONNECT_DISCONNECT_TIMEOUT_MS = 12_000L

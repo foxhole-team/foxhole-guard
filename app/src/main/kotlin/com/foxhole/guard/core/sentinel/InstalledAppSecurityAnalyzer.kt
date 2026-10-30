@@ -81,12 +81,13 @@ class InstalledAppSecurityAnalyzer(
         packageName: String,
         fallbackLabel: String = packageName,
     ): Result<InstalledAppSecuritySummary> =
-        runCatching {
+        sentinelAttempt {
             val appInfo = getApplicationInfo(packageName)
             val packageInfo = getPackageInfo(packageName)
             val label = appInfo.loadLabel(packageManager).toString().takeIf(String::isNotBlank) ?: fallbackLabel
             val isSystemApp = appInfo.isSystemApp()
             val installerPackageName = installerPackageName(packageName)
+            val signingCertificateBytes = signatures(packageName).map(Signature::toByteArray)
             val facts =
                 collectFacts(
                     packageName = packageName,
@@ -125,8 +126,8 @@ class InstalledAppSecurityAnalyzer(
                         Intent.ACTION_BOOT_COMPLETED,
                         null,
                     ),
-                    signingCertSha256 = signingCertDigests(packageName, "SHA-256"),
-                    signingCertSha1 = signingCertDigests(packageName, "SHA-1"),
+                    signingCertSha256 = signingCertDigests(signingCertificateBytes, "SHA-256"),
+                    signingCertSha1 = signingCertDigests(signingCertificateBytes, "SHA-1"),
                 )
             val assessment = scoreInstalledApp(facts, threatIntelProvider())
             InstalledAppSecuritySummary(
@@ -175,14 +176,10 @@ class InstalledAppSecurityAnalyzer(
     }
 
     private fun signingCertDigests(
-        packageName: String,
+        signingCertificateBytes: List<ByteArray>,
         algorithm: String,
     ): Set<String> =
-        runCatching {
-            signatures(packageName)
-                .map { signature -> signature.toByteArray().digestHex(algorithm) }
-                .toSet()
-        }.getOrElse { emptySet() }
+        signingCertificateBytes.map { bytes -> bytes.digestHex(algorithm) }.toSet()
 
     private fun signatures(packageName: String): List<Signature> =
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
@@ -225,7 +222,7 @@ class InstalledAppSecurityAnalyzer(
         }
 
     private fun installerPackageName(packageName: String): String? =
-        runCatching {
+        sentinelAttempt {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                 val sourceInfo = packageManager.getInstallSourceInfo(packageName)
                 sourceInfo.installingPackageName ?: sourceInfo.initiatingPackageName

@@ -1,47 +1,70 @@
 package com.foxhole.guard.guardian
 
+import android.Manifest
 import android.content.Context
-import android.content.pm.ApplicationInfo
 import android.content.pm.PackageInfo
 import android.content.pm.PackageManager
 import android.os.Build
+import com.foxhole.guard.core.sentinel.sentinelAttempt
 import java.security.MessageDigest
 
 internal class GuardPackageInspector(
     context: Context,
 ) {
-    private val packageManager = context.applicationContext.packageManager
+    private val appContext = context.applicationContext
+    private val packageManager = appContext.packageManager
 
-    fun snapshotInstalledApps(): Result<List<GuardInventoryApp>> =
-        runCatching {
-            val apps =
-                installedPackages().mapNotNull { info ->
-                    val packageName = info.packageName.takeIf(String::isNotBlank) ?: return@mapNotNull null
-                    GuardInventoryApp(
-                        packageName = packageName,
-                        versionCode = versionCodeOf(info),
-                        uid = info.applicationInfo?.uid,
-                        signerSha256 = signerSha256(info),
-                        firstInstallTime = info.firstInstallTime,
-                    )
-                }
-            check(apps.isNotEmpty()) { "package manager returned no packages" }
-            apps
+    private val metadataCache = GuardPackageMetadataCache()
+
+    fun invalidate(packageName: String) = metadataCache.invalidate(packageName)
+
+    fun invalidateEpoch() = metadataCache.invalidateEpoch()
+
+    fun snapshotInstalledApps(): Result<GuardPackageVisibleInventory> =
+        sentinelAttempt {
+            val installed = installedPackages()
+            check(installed.isNotEmpty()) { "package manager returned no packages" }
+            val facts = installed.associate { info -> info.packageName to sentinelAttempt { metadataOf(info) } }
+            val apps = facts.values.mapNotNull { it.getOrNull() }
+            val unresolved = facts.filterValues { it.isFailure }.keys
+            metadataCache.retainVisiblePackages(facts.keys)
+            GuardPackageVisibleInventory(apps, unresolved, hasFullInventoryVisibility() && unresolved.isEmpty())
         }
 
+    private fun hasFullInventoryVisibility(): Boolean =
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.R ||
+            appContext.checkSelfPermission(Manifest.permission.QUERY_ALL_PACKAGES) == PackageManager.PERMISSION_GRANTED
+
     fun describe(packageName: String): GuardInventoryApp =
-        GuardInventoryApp(
-            packageName = packageName,
-            versionCode = versionCodeOf(packageName),
-            uid = runCatching { applicationInfo(packageName)?.uid }.getOrNull(),
-            signerSha256 = signerSha256(packageName),
-            firstInstallTime = runCatching { packageInfo(packageName, signingFlags())?.firstInstallTime ?: 0L }.getOrDefault(
-                0L
-            ),
+        metadataOf(requireNotNull(packageInfo(packageName, 0)))
+
+    private fun installationOf(info: PackageInfo): GuardPackageInstallation = GuardPackageInstallation(
+        packageName = info.packageName,
+        uid = info.applicationInfo?.uid,
+        versionCode = versionCodeOf(info),
+        firstInstallTime = info.firstInstallTime,
+        lastUpdateTime = info.lastUpdateTime,
+    )
+
+    private fun metadataOf(info: PackageInfo): GuardInventoryApp {
+        val installation = installationOf(info)
+        val provenance = "schema1:api${Build.VERSION.SDK_INT}:current-signers"
+        val facts = metadataCache.resolve(installation, provenance) {
+            val signed = requireNotNull(packageInfo(installation.packageName, signingFlags()))
+            GuardPackageMetadata(installationOf(signed), requireNotNull(signerSha256(signed)), provenance)
+        }
+        return GuardInventoryApp(
+            packageName = installation.packageName,
+            versionCode = installation.versionCode,
+            uid = installation.uid,
+            signerSha256 = facts.signerSha256,
+            firstInstallTime = installation.firstInstallTime,
+            lastUpdateTime = installation.lastUpdateTime,
         )
+    }
 
     fun installerOf(packageName: String): String? =
-        runCatching {
+        sentinelAttempt {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                 packageManager.getInstallSourceInfo(packageName).installingPackageName
             } else {
@@ -52,37 +75,17 @@ internal class GuardPackageInspector(
 
     private fun installedPackages(): List<PackageInfo> =
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            packageManager.getInstalledPackages(PackageManager.PackageInfoFlags.of(signingFlags().toLong()))
+            packageManager.getInstalledPackages(PackageManager.PackageInfoFlags.of(0))
         } else {
             @Suppress("DEPRECATION")
-            packageManager.getInstalledPackages(signingFlags())
+            packageManager.getInstalledPackages(0)
         }
-
-    private fun applicationInfo(packageName: String): ApplicationInfo? =
-        runCatching {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                packageManager.getApplicationInfo(packageName, PackageManager.ApplicationInfoFlags.of(0))
-            } else {
-                @Suppress("DEPRECATION")
-                packageManager.getApplicationInfo(packageName, 0)
-            }
-        }.getOrNull()
-
-    private fun versionCodeOf(packageName: String): Long =
-        runCatching {
-            packageInfo(packageName, 0)?.let(::versionCodeOf) ?: 0L
-        }.getOrDefault(0L)
 
     private fun versionCodeOf(info: PackageInfo): Long =
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) info.longVersionCode else legacyVersionCode(info)
 
     @Suppress("DEPRECATION")
     private fun legacyVersionCode(info: PackageInfo): Long = info.versionCode.toLong()
-
-    fun signerSha256(packageName: String): String? =
-        runCatching {
-            packageInfo(packageName, signingFlags())?.let(::signerSha256)
-        }.getOrNull()
 
     private fun signingFlags(): Int =
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
@@ -102,6 +105,7 @@ internal class GuardPackageInspector(
             }
         return signatures
             ?.map { signature -> signature.toByteArray() }
+            ?.takeIf { it.isNotEmpty() && it.all(ByteArray::isNotEmpty) }
             ?.minWithOrNull { left, right -> compareByteArrays(left, right) }
             ?.let { bytes ->
                 MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
@@ -131,3 +135,9 @@ internal class GuardPackageInspector(
             packageManager.getPackageInfo(packageName, flags)
         }
 }
+
+internal data class GuardPackageVisibleInventory(
+    val apps: List<GuardInventoryApp>,
+    val unresolvedPackages: Set<String>,
+    val authoritative: Boolean,
+)

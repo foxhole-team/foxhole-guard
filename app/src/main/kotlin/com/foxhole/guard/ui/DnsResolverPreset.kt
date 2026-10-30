@@ -19,6 +19,7 @@ internal enum class DnsResolverPreset(
         SecureDnsMode.PLAIN -> plainHost
         SecureDnsMode.DOH -> dohHost
         SecureDnsMode.DOT -> dotHost
+        SecureDnsMode.DOQ, SecureDnsMode.DOH3 -> error("DoQ and DoH3 require a custom resolver")
     }
 
     fun matches(server: String): Boolean = this != CUSTOM && server in setOf(plainHost, dohHost, dotHost)
@@ -27,8 +28,11 @@ internal enum class DnsResolverPreset(
 internal fun dnsResolverPresetFor(server: String): DnsResolverPreset? =
     DnsResolverPreset.entries.firstOrNull { preset -> preset.matches(server.trim()) }
 
-internal fun defaultDnsServerFor(mode: SecureDnsMode): String =
-    DnsResolverPreset.CLOUDFLARE.hostFor(mode)
+internal fun defaultDnsServerFor(mode: SecureDnsMode): String? =
+    when (mode) {
+        SecureDnsMode.DOQ, SecureDnsMode.DOH3 -> null
+        else -> DnsResolverPreset.CLOUDFLARE.hostFor(mode)
+    }
 
 internal fun dnsServerHostForGeo(server: String): String? {
     val trimmed = server.trim()

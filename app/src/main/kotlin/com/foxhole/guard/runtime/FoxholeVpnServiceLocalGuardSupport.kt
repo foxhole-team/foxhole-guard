@@ -6,11 +6,12 @@ import android.os.SystemClock
 import com.foxhole.core.model.ConnectionSnapshot
 import com.foxhole.core.model.ConnectionState
 import com.foxhole.core.model.DnsRuntimeStats
+import com.foxhole.core.model.DnsSettings
 import com.foxhole.core.model.Settings
 import com.foxhole.core.model.TrafficMode
 import com.foxhole.core.model.TrafficSnapshot
 import com.foxhole.core.model.VpnSession
-import com.foxhole.core.model.disableUnverifiedRuleSetRuntimeDns
+import com.foxhole.core.model.dnsRuleSetFilteringEnabled
 import com.foxhole.core.runtime.DnsFilterRuntimePaths
 import com.foxhole.core.runtime.FoxCoreConfigTranslator
 import com.foxhole.core.runtime.FoxholeVpnRuntimeBridge
@@ -31,7 +32,9 @@ import com.foxhole.core.runtime.runtimeProfileName
 import com.foxhole.core.runtime.runtimeSettingsAfterCleanProfileDisconnect
 import com.foxhole.core.runtime.shouldDeferLocalGuardStartForActiveProfileRuntime
 import com.foxhole.guard.R
+import com.foxhole.guard.core.data.requireDnsFilterRuntimePolicy
 import com.foxhole.guard.core.settings.ensureNewAppQuarantineBaseline
+import com.foxhole.guard.core.settings.onboardingLicenseAccepted
 import com.foxhole.guard.core.settings.updateDnsReplaceSystemDns
 import com.foxhole.guard.diagnosticFailureLabel
 import com.foxhole.guard.userFacingErrorMessage
@@ -75,6 +78,14 @@ private suspend fun FoxholeVpnService.startLocalGuardInternal(
     preserveDisconnectingState: Boolean,
 ) {
     val persistedSettings = container.settingsRepository.current()
+    if (!onboardingLicenseAccepted(persistedSettings.ui.acceptedLicenseAgreementVersion)) {
+        disconnect(
+            message = getString(R.string.cli_wizard_license_required),
+            commandStartId = commandStartId,
+            suppressLocalGuard = true,
+        )
+        return
+    }
     val settings =
         if (preserveDisconnectingState) {
             persistedSettings.runtimeSettingsAfterCleanProfileDisconnect()
@@ -209,7 +220,7 @@ private suspend fun FoxholeVpnService.establishLocalGuardSession(
     preserveDisconnectingState: Boolean,
 ): PendingLocalGuardActivation? {
     val session =
-        runCatchingUnlessCancelled {
+        dnsCategoryAttempt {
             buildLocalGuardSession(mode = mode, settings = settings)
         }.getOrElse { error ->
             container.i2pdManager.markCarrierUnavailable()
@@ -294,7 +305,11 @@ private suspend fun FoxholeVpnService.establishLocalGuardSession(
             "local guard start failed: ${diagnosticFailureLabel(error)}",
         )
 
-        scheduleLocalGuardHeal(mode, "start_runtime_failed")
+        if (shouldRetryLocalGuardStart(error)) {
+            scheduleLocalGuardHeal(mode, "start_runtime_failed")
+        } else {
+            cancelLocalGuardHeal(resetAttempts = true)
+        }
         fail(
             userFacingErrorMessage(error, R.string.error_runtime_start_failed),
             commandStartId
@@ -440,7 +455,7 @@ private suspend fun FoxholeVpnService.probeLocalGuardFallbackReachability(
     network: Network,
 ): Boolean {
     val httpResult =
-        runCatchingUnlessCancelled {
+        dnsCategoryAttempt {
             container.ipInfoRepository.probe(
                 endpoint = DNS_INDEPENDENT_IP_INFO_ENDPOINT,
                 callTimeoutMs = FoxholeVpnService.LOCAL_GUARD_CONNECTIVITY_PROBE_TIMEOUT_MS,
@@ -449,7 +464,7 @@ private suspend fun FoxholeVpnService.probeLocalGuardFallbackReachability(
             )
         }
     val dnsResult =
-        runCatchingUnlessCancelled {
+        dnsCategoryAttempt {
             withContext(Dispatchers.IO) {
                 network.getAllByName(FoxholeVpnService.LOCAL_GUARD_CONNECTIVITY_DNS_PROBE_HOST).isNotEmpty()
             }
@@ -514,7 +529,7 @@ internal suspend fun FoxholeVpnService.buildLocalGuardSession(
     val activePreset = container.routingRepository.currentPresetForRuntime()
     val privateDnsState = PrivateDnsSettings.currentState(this)
     val dnsFilterRuntimePaths = prepareLocalGuardDnsFilterRuntimePaths(baselineSettings)
-    val runtimeSettings = baselineSettings.disableUnverifiedLocalGuardDnsFiltering(dnsFilterRuntimePaths)
+    val runtimeSettings = baselineSettings
 
     val dnsGuardFullCapture = mode == LocalGuardMode.DNS && isSystemVpnLockdownActive()
     if (dnsGuardFullCapture) {
@@ -562,13 +577,14 @@ internal suspend fun FoxholeVpnService.buildLocalGuardSession(
         ),
         quarantinePolicyRevision = runtimeSettings.expert.quarantinePolicyRevision,
         i2pEndpointGeneration = i2pEndpoint?.generation,
+        coreTuning = runtimeSettings.expert.core,
     )
     return session.copy(
         foxCoreConfig =
         FoxCoreConfigTranslator().translate(
             session = session,
             dnsRuleSetBootstrap = dnsFilterRuntimePaths?.foxCoreBootstrap,
-        ),
+        ).let { translated -> requireDnsFilterRuntimePolicy(runtimeSettings, session, translated) },
     )
 }
 
@@ -582,7 +598,7 @@ private suspend fun FoxholeVpnService.startLocalGuardI2pEndpointOrNull(
         container.i2pdManager.stop()
         return null
     }
-    return runCatching { container.i2pdManager.ensureStarted(settings.i2p) }
+    return dnsCategoryAttempt { container.i2pdManager.ensureStarted(settings.i2p) }
         .onFailure { error ->
             if (error is CancellationException) throw error
             container.diagnosticsLogger.recordFailure(
@@ -593,21 +609,41 @@ private suspend fun FoxholeVpnService.startLocalGuardI2pEndpointOrNull(
 }
 
 private suspend fun FoxholeVpnService.prepareLocalGuardDnsFilterRuntimePaths(settings: Settings): DnsFilterRuntimePaths? {
-    if (!settings.dns.filteringEnabled) {
-        return null
-    }
-    return container.dnsFilterAssetInstaller.prepareVerifiedOrNull()
-        ?: run {
-            container.diagnosticsLogger.record("dns", "dns rule-set runtime disabled: verified filter unavailable")
-            null
-        }
+    if (!settings.dns.dnsRuleSetFilteringEnabled()) return null
+    return requiredCategorizedDnsRuntimePaths(
+        settings.dns,
+        container.dnsFilterAssetInstaller.prepareCategorized(settings.dns)
+    )
 }
 
-private fun Settings.disableUnverifiedLocalGuardDnsFiltering(
-    dnsFilterRuntimePaths: DnsFilterRuntimePaths?,
-): Settings =
-    if (dns.filteringEnabled && dnsFilterRuntimePaths == null) {
-        copy(dns = dns.disableUnverifiedRuleSetRuntimeDns())
-    } else {
-        this
+internal class DnsFilterUnavailableException(val reason: CategorizedDnsUnavailable) :
+    IllegalStateException("dns_filter_categories_unavailable")
+
+internal fun categorizedDnsPreparationReady(settings: DnsSettings, preparation: CategorizedDnsPreparation): Boolean {
+    if (!settings.dnsRuleSetFilteringEnabled() || preparation !is CategorizedDnsPreparation.Ready) return false
+    val bootstrap = preparation.paths.foxCoreBootstrap ?: return false
+    val selected = settings.categorizedDnsSelection()
+    return bootstrap.categoryVariant == selected.variant && bootstrap.availableCategories?.containsAll(selected.categories) == true
+}
+
+internal fun requiredCategorizedDnsRuntimePaths(settings: DnsSettings, preparation: CategorizedDnsPreparation): DnsFilterRuntimePaths? {
+    if (!settings.dnsRuleSetFilteringEnabled()) return null
+    if (categorizedDnsPreparationReady(
+            settings,
+            preparation
+        )
+    ) {
+        return (preparation as CategorizedDnsPreparation.Ready).paths
+    }
+    val reason = (preparation as? CategorizedDnsPreparation.Unavailable)?.reason ?: CategorizedDnsUnavailable.REQUIRED_CATEGORY_MISSING
+    throw DnsFilterUnavailableException(reason)
+}
+
+internal inline fun <T> dnsCategoryAttempt(block: () -> T): Result<T> =
+    try {
+        Result.success(block())
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (error: Exception) {
+        Result.failure(error)
     }

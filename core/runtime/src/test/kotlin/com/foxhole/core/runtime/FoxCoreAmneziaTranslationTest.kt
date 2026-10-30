@@ -20,6 +20,96 @@ import org.junit.Test
 
 internal class FoxCoreAmneziaTranslationTest : FoxCoreConfigTranslatorTestSupport() {
     @Test
+    fun `content padding numeric singletons and range strings reach FoxCore without narrowing`() {
+        listOf(
+            JsonPrimitive(0L),
+            JsonPrimitive(65_536L),
+            JsonPrimitive(4_294_967_295L),
+            JsonPrimitive("0-4294967295"),
+        ).forEach { cpa ->
+            val outbound = translateAmnezia {
+                putAll(FULL_BLOCK)
+                put("content_padding_addition", cpa)
+            }
+            assertEquals(cpa, outbound.getValue("amnezia").jsonObject["content_padding_addition"])
+            assertEquals(ZERO_WIREGUARD_KEY, outbound.getValue("private_key").jsonPrimitive.content)
+            assertEquals(ONE_WIREGUARD_KEY, outbound.getValue("peer_public_key").jsonPrimitive.content)
+        }
+    }
+
+    @Test
+    fun `content padding absence and existing obfuscation fields retain their original translation`() {
+        val old = translateAmnezia {
+            putAll(FULL_BLOCK)
+            put("random_trailers", true)
+        }.getValue("amnezia").jsonObject
+        assertNull(old["content_padding_addition"])
+        val withCpa = translateAmnezia {
+            putAll(FULL_BLOCK)
+            put("random_trailers", true)
+            put("content_padding_addition", "32-64")
+        }.getValue("amnezia").jsonObject
+        assertEquals(old, JsonObject(withCpa.filterKeys { it != "content_padding_addition" }))
+        listOf("0-0" to 0L, "32-32" to 32L).forEach { (raw, expected) ->
+            assertEquals(
+                JsonPrimitive(expected),
+                translateAmnezia {
+                    put("content_padding_addition", raw)
+                }.getValue("amnezia").jsonObject["content_padding_addition"],
+            )
+        }
+    }
+
+    @Test
+    fun `content padding rejects noncanonical JSON and invalid uint32 ranges`() {
+        listOf(
+            "\"32\"", "true", "null", "32.0", "1e2", "-1", "4294967296", "[]", "{}",
+            "\"2-1\"", "\"0-4294967296\"", "\"1-2-3\"",
+        ).forEach { raw ->
+            val failure = assertThrows(raw, FoxCoreConfigTranslationException::class.java) {
+                translateAmnezia {
+                    put("content_padding_addition", kotlinx.serialization.json.Json.parseToJsonElement(raw))
+                }
+            }
+            assertEquals(raw, FoxCoreConfigRejection.INVALID_SHAPE, failure.rejection)
+        }
+    }
+
+    @Test
+    fun `CPA cannot make a malformed stored header protection key valid`() {
+        val failure = assertThrows(FoxCoreConfigTranslationException::class.java) {
+            translateAmnezia {
+                put("content_padding_addition", 32)
+                put("header_protection_key", "00")
+            }
+        }
+        assertEquals(FoxCoreConfigRejection.INVALID_SHAPE, failure.rejection)
+    }
+
+    @Test
+    fun `random trailers reach the native amnezia config as a boolean`() {
+        val amnezia = translateAmnezia {
+            putAll(
+                FULL_BLOCK
+            )
+            put("random_trailers", true)
+        }.getValue("amnezia").jsonObject
+        assertEquals("true", amnezia.getValue("random_trailers").jsonPrimitive.content)
+        assertFalse(amnezia.getValue("random_trailers").jsonPrimitive.isString)
+    }
+
+    @Test
+    fun `random trailers must be a boolean in stored normalized configs`() {
+        val failure = assertThrows(FoxCoreConfigTranslationException::class.java) {
+            translateAmnezia {
+                putAll(FULL_BLOCK)
+                put("random_trailers", "true")
+            }
+        }
+        assertEquals(FoxCoreConfigRejection.INVALID_SHAPE, failure.rejection)
+    }
+
+    @Test
     fun `every parameter family survives translation in the shape foxcore-api accepts`() {
         val outbound = translateAmnezia { putAll(FULL_BLOCK) }
 
@@ -197,6 +287,89 @@ internal class FoxCoreAmneziaTranslationTest : FoxCoreConfigTranslatorTestSuppor
         assertEquals("wireguard", outbound.getValue("type").jsonPrimitive.content)
         assertNull(outbound["listen_port"])
         assertEquals("70", outbound.getValue("amnezia").jsonObject.getValue("junk_max_size").jsonPrimitive.content)
+    }
+
+    @Test
+    fun `HPK and CPA reach native JSON without changing WireGuard keys`() {
+        val key = "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA="
+        val outbound = translateAmnezia {
+            put("header_protection_key", key)
+            put("init_junk_size", 12)
+            put("response_junk_size", 12)
+            put("cookie_junk_size", 12)
+            put("transport_junk_size", 12)
+            put("content_padding_addition", "7-13")
+            put("random_trailers", true)
+        }
+        val block = outbound.getValue("amnezia").jsonObject
+        assertEquals(JsonPrimitive(key), block["header_protection_key"])
+        assertEquals(JsonPrimitive("7-13"), block["content_padding_addition"])
+        assertEquals(JsonPrimitive(true), block["random_trailers"])
+        assertEquals(ZERO_WIREGUARD_KEY, outbound.getValue("private_key").jsonPrimitive.content)
+        listOf("init_junk_size", "response_junk_size", "cookie_junk_size", "transport_junk_size").forEach { field ->
+            val failure = assertThrows(FoxCoreConfigTranslationException::class.java) {
+                translateAmnezia {
+                    putAll(block)
+                    put(field, 11)
+                }
+            }
+            assertEquals(FoxCoreConfigRejection.INVALID_SHAPE, failure.rejection)
+            assertFalse(failure.message.orEmpty().contains(key))
+        }
+    }
+
+    @Test
+    fun `zero HPK stays declared while absent HPK stays absent`() {
+        assertNull(translateAmnezia { }.getValue("amnezia").jsonObject["header_protection_key"])
+        val block = translateAmnezia {
+            put("header_protection_key", ZERO_WIREGUARD_KEY)
+        }.getValue("amnezia").jsonObject
+        assertEquals(JsonPrimitive(ZERO_WIREGUARD_KEY), block["header_protection_key"])
+        assertEquals(JsonPrimitive(0), block["transport_junk_size"])
+    }
+
+    @Test
+    fun `malformed stored header keys are refused with redacted shape errors`() {
+        listOf("null", "42", "true", "[]", "{}", "\"bad-secret\"").forEach { raw ->
+            val failure = assertThrows(FoxCoreConfigTranslationException::class.java) {
+                translateAmnezia {
+                    put("header_protection_key", kotlinx.serialization.json.Json.parseToJsonElement(raw))
+                }
+            }
+            assertEquals(FoxCoreConfigRejection.INVALID_SHAPE, failure.rejection)
+            assertFalse(failure.message.orEmpty().contains("bad-secret"))
+        }
+    }
+
+    @Test
+    fun `typed translation helpers retain rejection order and paths`() {
+        val junk = assertThrows(FoxCoreConfigTranslationException::class.java) {
+            translateAmnezia {
+                put("junk_packet_count", 1)
+                put("junk_min_size", 80)
+                put("junk_max_size", 70)
+                put("header_protection_key", "bad-key")
+            }
+        }
+        assertTrue(junk.path.endsWith(".amnezia.junk_max_size"))
+        val contentPadding = assertThrows(FoxCoreConfigTranslationException::class.java) {
+            translateAmnezia {
+                put("content_padding_addition", "not-a-range")
+                put("header_protection_key", "bad-key")
+            }
+        }
+        assertTrue(contentPadding.path.endsWith(".amnezia.content_padding_addition"))
+        val headerProtection = assertThrows(FoxCoreConfigTranslationException::class.java) {
+            translateAmnezia {
+                put("header_protection_key", "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA=")
+                put("init_junk_size", 11)
+                put("response_junk_size", 12)
+                put("cookie_junk_size", 12)
+                put("transport_junk_size", 12)
+                put("init_packets", JsonPrimitive(42))
+            }
+        }
+        assertTrue(headerProtection.path.endsWith(".amnezia.header_protection_key"))
     }
 
     private fun translateAmnezia(

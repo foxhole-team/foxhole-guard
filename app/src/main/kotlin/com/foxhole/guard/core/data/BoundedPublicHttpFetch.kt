@@ -3,6 +3,8 @@ package com.foxhole.guard.core.data
 import com.foxhole.core.network.RemoteHostResolver
 import com.foxhole.core.network.requirePublicUrl
 import com.foxhole.core.runtime.network.PublicRemoteDns
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.suspendCancellableCoroutine
 import okhttp3.Call
 import okhttp3.Callback
@@ -101,12 +103,28 @@ internal suspend fun executeBoundedPublicGetCancellable(
     maxBytes: Long,
     maxRedirects: Int = REMOTE_FETCH_MAX_REDIRECTS,
     resolver: RemoteHostResolver? = null,
+    truncateOversizedBody: Boolean = false,
+    requestFactory: (HttpUrl) -> Request,
+): BoundedPublicHttpResponse = executeBoundedPublicGetCancellable(
+    client, initialUrl, allowHttp, maxBytes, maxRedirects, resolver, truncateOversizedBody, { it }, requestFactory,
+)
+
+internal suspend fun executeBoundedPublicGetCancellable(
+    client: OkHttpClient,
+    initialUrl: HttpUrl,
+    allowHttp: Boolean,
+    maxBytes: Long,
+    maxRedirects: Int = REMOTE_FETCH_MAX_REDIRECTS,
+    resolver: RemoteHostResolver? = null,
+    truncateOversizedBody: Boolean = false,
+    transportFailureMapper: (IOException) -> Throwable,
     requestFactory: (HttpUrl) -> Request,
 ): BoundedPublicHttpResponse {
     require(maxBytes > 0L) { "maxBytes must be positive" }
     require(maxRedirects >= 0) { "maxRedirects must not be negative" }
     var url = initialUrl
     repeat(maxRedirects + 1) {
+        currentCoroutineContext().ensureActive()
         url.requirePublicUrl(
             allowHttp = allowHttp,
             resolveHost = true,
@@ -115,7 +133,7 @@ internal suspend fun executeBoundedPublicGetCancellable(
         val response =
             client
                 .withPublicRemoteDns()
-                .executeCancellable(requestFactory(url), url, maxBytes)
+                .executeCancellable(requestFactory(url), url, maxBytes, truncateOversizedBody, transportFailureMapper)
         if (response.code in HTTP_REDIRECT_CODES) {
             val location = response.headers["Location"] ?: error("redirect without Location")
             val nextUrl = url.resolve(location) ?: error("invalid redirect Location")
@@ -136,7 +154,32 @@ private suspend fun OkHttpClient.executeCancellable(
     request: Request,
     finalUrl: HttpUrl,
     maxBytes: Long,
+    truncateOversizedBody: Boolean,
+    transportFailureMapper: (IOException) -> Throwable,
 ): BoundedPublicHttpResponse =
+    executeCancellableResponse(request, transportFailureMapper) { opened ->
+        BoundedPublicHttpResponse(
+            code = opened.code,
+            headers = opened.headers,
+            body = when {
+                opened.code == 304 || opened.code in HTTP_REDIRECT_CODES -> null
+                truncateOversizedBody -> opened.body.readUtf8Truncated(maxBytes)
+                else -> opened.body.readUtf8Capped(maxBytes)
+            },
+            finalUrl = finalUrl,
+        )
+    }
+
+internal suspend fun <T> OkHttpClient.executeCancellableResponse(
+    request: Request,
+    readResponse: (Response) -> T,
+): T = executeCancellableResponse(request, { it }, readResponse)
+
+internal suspend fun <T> OkHttpClient.executeCancellableResponse(
+    request: Request,
+    transportFailureMapper: (IOException) -> Throwable,
+    readResponse: (Response) -> T,
+): T =
     newCall(request).let { call ->
         awaitCancellableHttpCall(
             cancelCall = call::cancel,
@@ -147,7 +190,8 @@ private suspend fun OkHttpClient.executeCancellable(
                             call: Call,
                             e: IOException,
                         ) {
-                            complete(Result.failure(e))
+                            val failure = try { transportFailureMapper(e) } catch (error: Throwable) { error }
+                            complete(Result.failure(failure))
                         }
 
                         override fun onResponse(
@@ -156,19 +200,7 @@ private suspend fun OkHttpClient.executeCancellable(
                         ) {
                             val result =
                                 runCatching {
-                                    response.use { opened ->
-                                        BoundedPublicHttpResponse(
-                                            code = opened.code,
-                                            headers = opened.headers,
-                                            body =
-                                            when {
-                                                opened.code == 304 ||
-                                                    opened.code in HTTP_REDIRECT_CODES -> null
-                                                else -> opened.body.readUtf8Capped(maxBytes)
-                                            },
-                                            finalUrl = finalUrl,
-                                        )
-                                    }
+                                    response.use(readResponse)
                                 }
                             result.fold(
                                 onSuccess = { value ->
@@ -194,7 +226,7 @@ internal suspend fun <T> awaitCancellableHttpCall(
         startCall(continuation::resumeWith)
     }
 
-internal fun executeBoundedPublicGetBytes(
+internal suspend fun executeBoundedPublicGetBytesCancellable(
     client: OkHttpClient,
     initialUrl: HttpUrl,
     allowHttp: Boolean,
@@ -207,29 +239,25 @@ internal fun executeBoundedPublicGetBytes(
     require(maxRedirects >= 0) { "maxRedirects must not be negative" }
     var url = initialUrl
     repeat(maxRedirects + 1) {
-        url.requirePublicUrl(
-            allowHttp = allowHttp,
-            resolveHost = true,
-            resolver = resolver,
-        )
-        val guardedClient = client.withPublicRemoteDns()
-        guardedClient.newCall(requestFactory(url)).execute().use { response ->
-            if (response.isRedirect) {
-                val location = response.header("Location") ?: error("redirect without Location")
-                val nextUrl = url.resolve(location) ?: error("invalid redirect Location")
-                nextUrl.requirePublicUrl(
-                    allowHttp = allowHttp,
-                    resolveHost = true,
-                    resolver = resolver,
-                )
-                url = nextUrl
-                return@repeat
-            }
-            if (response.code !in 200..299) {
-                return null
-            }
-            return response.body.readBytesCapped(maxBytes)
+        currentCoroutineContext().ensureActive()
+        url.requirePublicUrl(allowHttp = allowHttp, resolveHost = true, resolver = resolver)
+        val (code, headers, body) = client.withPublicRemoteDns().executeCancellableResponse(
+            requestFactory(url)
+        ) { response ->
+            Triple(
+                response.code,
+                response.headers,
+                if (response.isSuccessful) response.body.readBytesCapped(maxBytes) else null
+            )
         }
+        if (code in HTTP_REDIRECT_CODES) {
+            val location = headers["Location"] ?: error("redirect without Location")
+            val nextUrl = url.resolve(location) ?: error("invalid redirect Location")
+            nextUrl.requirePublicUrl(allowHttp = allowHttp, resolveHost = true, resolver = resolver)
+            url = nextUrl
+            return@repeat
+        }
+        return body
     }
     error("too many redirects")
 }

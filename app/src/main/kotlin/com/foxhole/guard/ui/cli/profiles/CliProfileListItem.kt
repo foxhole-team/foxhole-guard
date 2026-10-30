@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -55,14 +56,15 @@ import com.foxhole.guard.ui.cli.components.CLI_MENU_ROW_MIN_HEIGHT
 import com.foxhole.guard.ui.cli.components.CLI_PROFILE_TABLE_RIM
 import com.foxhole.guard.ui.cli.components.CliActiveDot
 import com.foxhole.guard.ui.cli.components.CliColumnRule
-import com.foxhole.guard.ui.cli.components.CliConfirmSheet
 import com.foxhole.guard.ui.cli.components.CliDisclosureGlyph
 import com.foxhole.guard.ui.cli.components.CliFlagIcon
 import com.foxhole.guard.ui.cli.components.CliIcon
 import com.foxhole.guard.ui.cli.components.CliInputRow
+import com.foxhole.guard.ui.cli.components.CliProtocolBadge
 import com.foxhole.guard.ui.cli.components.cliAccentSweepBorder
 import com.foxhole.guard.ui.cli.components.cliCombinedPressable
 import com.foxhole.guard.ui.cli.components.cliPressable
+import com.foxhole.guard.ui.cli.components.cliProtocolBadgeLabel
 import com.foxhole.guard.ui.deleteProfile
 import com.foxhole.guard.ui.isReady
 import com.foxhole.guard.ui.isSmartProfileExpanded
@@ -142,6 +144,7 @@ internal fun CliProfileListItem(
         )
         if (exportExpanded && exportChoices.size > 1) {
             CliSmartExportChoiceRows(
+                profile = profile,
                 choices = exportChoices,
                 selectedKeys = selection.selectedKeys(profile.id),
                 onToggle = { selectionKey ->
@@ -240,6 +243,7 @@ private fun ProfilesExportSelectionState.selectedForExport(
 
 @Composable
 private fun CliSmartExportChoiceRows(
+    profile: Profile,
     choices: List<com.foxhole.core.profile.ProfileExportChoice>,
     selectedKeys: Set<String>,
     onToggle: (String) -> Unit,
@@ -265,13 +269,28 @@ private fun CliSmartExportChoiceRows(
                     color = if (selected) colors.ok else colors.dim,
                 )
                 Spacer(modifier = Modifier.width(CliSpacing.sm))
-                Text(
-                    text = choice.displayName,
-                    style = CliType.small,
-                    color = if (selected) colors.fg else colors.dim,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f),
+                val protocol = (
+                    profile.protocolOptions.firstOrNull { it.id == choice.protocolOptionId }?.protocolHint
+                        ?: profile.protocolHint
+                    ).name
+                if (
+                    !choice.displayName.equals(cliProtocolBadgeLabel(protocol), ignoreCase = true) &&
+                    !choice.displayName.equals(protocol, ignoreCase = true)
+                ) {
+                    Text(
+                        text = choice.displayName,
+                        style = CliType.small,
+                        color = if (selected) colors.fg else colors.dim,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                    Spacer(Modifier.width(6.dp))
+                }
+                CliProtocolBadge(
+                    protocol,
+                    Modifier.offset(y = (-5).dp),
+                    textColor = if (selected) colors.fg else colors.dim,
                 )
             }
         }
@@ -323,19 +342,17 @@ private fun CliProfileRow(
                 modifier = Modifier.weight(PROFILE_TABLE_EXPIRY_WEIGHT),
             )
             CliColumnRule()
-            Text(
-                text = profileTableProtocolLabel(profile),
-                style = if (active) CliType.body else CliType.small,
-                color = when {
-                    profile.requiresInsecureTls -> colors.warn
-                    active -> colors.fg
-                    else -> colors.faint
-                },
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                textAlign = TextAlign.End,
-                modifier = Modifier.weight(PROFILE_TABLE_PROTOCOL_WEIGHT),
-            )
+            Box(Modifier.weight(PROFILE_TABLE_PROTOCOL_WEIGHT), contentAlignment = Alignment.CenterEnd) {
+                CliProtocolBadge(
+                    profileTableProtocolLabel(profile),
+                    Modifier.offset(y = (-5).dp),
+                    textColor = when {
+                        profile.requiresInsecureTls -> colors.warn
+                        active -> colors.fg
+                        else -> colors.faint
+                    },
+                )
+            }
             Box(
                 modifier = Modifier.width(CLI_PROFILE_TABLE_RIM),
                 contentAlignment = Alignment.CenterEnd,
@@ -550,11 +567,9 @@ private fun CliProfileActionsRow(
         }
     }
     if (stage == CliProfileActionStage.DELETE) {
-        CliConfirmSheet(
-            title = stringResource(R.string.cli_prof_act_delete),
-            icon = R.drawable.lin_trash,
-            question = stringResource(R.string.cli_prof_delete_confirm, profileName),
-            onConfirm = onDeleteConfirm,
+        CliProfileDeleteConfirmation(
+            profileName = profileName,
+            onContinue = onDeleteConfirm,
             onDismiss = { stage = CliProfileActionStage.MENU },
         )
     }

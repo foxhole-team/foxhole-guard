@@ -14,6 +14,51 @@ class DiagnosticsExportFormatterTest {
             .withZone(ZoneOffset.UTC)
 
     @Test
+    fun `native missing data is unavailable rather than invented zeros`() {
+        val result = formatSanitizedAboutDiagnosticsExport(
+            metadata = testMetadata(),
+            entries = emptyList(),
+            formatter = formatter,
+            nativeCounters = parseNativeAggregateCounters("{}"),
+        )
+        assertTrue(result.contains("Native Aggregate Read: unavailable"))
+        assertFalse(result.contains("Native Aggregate dns_queries: 0"))
+    }
+
+    @Test
+    fun `partial native snapshot exports only closed keys and explicit missing values`() {
+        val result = formatSanitizedAboutDiagnosticsExport(
+            metadata = testMetadata(),
+            entries = emptyList(),
+            formatter = formatter,
+            nativeCounters = parseNativeAggregateCounters(
+                "{\"dns_queries\":0,\"dns_blocked\":\"SAFE_NATIVE_SECRET\",\"domain\":\"SAFE_DOMAIN_SECRET\"}",
+            ),
+        )
+        assertTrue(result.contains("Native Aggregate Read: partial"))
+        assertTrue(result.contains("Native Aggregate dns_queries: 0"))
+        assertTrue(result.contains("Native Aggregate dns_blocked: unavailable"))
+        assertFalse(result.contains("SAFE_NATIVE_SECRET"))
+        assertFalse(result.contains("SAFE_DOMAIN_SECRET"))
+    }
+
+    private fun testMetadata() = DiagnosticsExportMetadata(
+        generatedAt = 1_700_000_000_000L,
+        appVersion = "1.0.0-beta1",
+        versionCode = 1,
+        coreVersion = "1.13.6",
+        androidRelease = "16",
+        sdkInt = 36,
+        supportedAbis = listOf("arm64-v8a"),
+        themeMode = "system",
+        locale = "system",
+        trafficMode = "tunnel",
+        tunStack = "system",
+        diagnosticsRetention = RetentionPolicy(RetentionPreset.DAY),
+        networkActivityLoggingEnabled = false,
+    )
+
+    @Test
     fun `export includes metadata header and sanitizes retained entries`() {
         val payload =
             formatSanitizedAboutDiagnosticsExport(

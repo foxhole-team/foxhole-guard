@@ -1,0 +1,126 @@
+{
+  "schema": 1,
+  "graphics": {
+    "version": "1.0.1",
+    "commit": "8a05a22af450d589ef911d772a001a49dcb05b71",
+    "sourceArchive": {
+      "url": "https://android.googlesource.com/platform/frameworks/support/+archive/8a05a22af450d589ef911d772a001a49dcb05b71/graphics/graphics-path/src/main/cpp.tar.gz",
+      "sha256": "b2ceeaaeef63cdb323a601bfaa885ec7178849e4249c15ae60faba770fc19864",
+      "format": "canonical-ustar-v1",
+      "historicalPublisherArchiveSha256": "f1a313787fe81c4d7775436c9e4bc5548987a8f1304a0870a163ec72c2c1a6c7"
+    },
+    "originalAar": {
+      "url": "https://dl.google.com/dl/android/maven2/androidx/graphics/graphics-path/1.0.1/graphics-path-1.0.1.aar",
+      "sha256": "8ca4032b6d79b351f0b59ad4b580eddbb9423e1652f7c958830687f1eee2ec03"
+    },
+    "originalSourceJar": {
+      "url": "https://dl.google.com/dl/android/maven2/androidx/graphics/graphics-path/1.0.1/graphics-path-1.0.1-sources.jar",
+      "sha256": "9f1b5995b9577a8876525c3411ebb2a49f9ef0e875f6aec3059e807596dc6ca6"
+    },
+    "sourceFiles": {
+      "CMakeLists.txt": {
+        "sha256": "87a8967586e828d2b1cc6c5745d09f30466036bffbcd780b378c75239d90b173",
+        "gitBlobSha1": "722eb2d68bf63dffefa1eaf0fadae397c23fc6ba"
+      },
+      "Conic.cpp": {
+        "sha256": "49b3da93aa43480cf9cd481590be48705cb9340c52e5d09635efbd0ece07be83",
+        "gitBlobSha1": "e22e2b2c0643d377f21bc92a18458867618296a2"
+      },
+      "Conic.h": {
+        "sha256": "cd315ad7c8d030c72e96893e9a0feec463d72d2066209a203dedcf0925398a6f",
+        "gitBlobSha1": "2bd34419cd410e0c38391ecf580e068f0fc59191"
+      },
+      "Path.h": {
+        "sha256": "4ee841338063d8c6f71ff4c655ecf52559f6c6df9af79835388dae1ebcd8b982",
+        "gitBlobSha1": "f25d708782be3f13fb77fef6098fdd26e57b10b6"
+      },
+      "PathIterator.cpp": {
+        "sha256": "3705946b43bf894e013f46ccc940f9923f43285340f8fc2128f95c59238ec7f8",
+        "gitBlobSha1": "cab9c5d1eb14317ee973cf6198a452393fc94fca"
+      },
+      "PathIterator.h": {
+        "sha256": "a16e99b0273fb7205607eb0cf51fc7be518a55f3446a304f92ecab353e77be6f",
+        "gitBlobSha1": "414dbdd1d62f4a50fa30d49143edad60ea6d959e"
+      },
+      "libandroidx.graphics.path.map": {
+        "sha256": "bc338abd36eeb27059572903ad167cf4231a36ca92be4eae3574501aa83f0d8c",
+        "gitBlobSha1": "d1310e52849b7f49928acbd74384c3c7d507a602"
+      },
+      "pathway.cpp": {
+        "sha256": "4be68d6fdb6376e95560f7c49a79aa0cd97218d758cf11ea3230ac9124485800",
+        "gitBlobSha1": "d3a7d75a447274e8941f327a50593493f495115c"
+      },
+      "scalar.h": {
+        "sha256": "b1d2bba80a4c9272d84473b6f09f700972b016f7579842d3a87bdbbdb2af1edc",
+        "gitBlobSha1": "0342d138393b2bc579e5055fd3ee09e80a6f390d"
+      },
+      "math/TVecHelpers.h": {
+        "sha256": "1b0d6b06c5bbd6b438f9d8440ac78cf93fb8a713761badc59a4412b6457c1014",
+        "gitBlobSha1": "ef7e182d804f20d3ecb3b3f5c69409b335ee8d57"
+      },
+      "math/compiler.h": {
+        "sha256": "d53e85383580e5dbf81cbcb24426b0fe1bf419b4837540242dbdca3f1df4cf66",
+        "gitBlobSha1": "d6e18aaae05a3be3e4fe766b38bb1c3046240b40"
+      },
+      "math/vec2.h": {
+        "sha256": "09e1a8eb3f8fdf9c1071500f1a4933f67caeb6d0f765d5c44ba968370de9fcb1",
+        "gitBlobSha1": "ae67a2563332513d7b3fe071494d004dc39ae1af"
+      }
+    },
+    "javaSourceMatchedCommit": {
+      "ConicConverter.kt": true,
+      "PathIterator.kt": true,
+      "PathIteratorImpl.kt": true,
+      "PathSegment.kt": true
+    },
+    "api": 26,
+    "ndk": "29.0.14206865",
+    "linkerFlags": [
+      "-Wl,-z,max-page-size=16384,-z,common-page-size=16384"
+    ],
+    "derivedNative": true,
+    "originalJavaRemainsMaven": true,
+    "sourceLicense": {
+      "url": "https://android.googlesource.com/platform/frameworks/support/+/8a05a22af450d589ef911d772a001a49dcb05b71/LICENSE.txt?format=TEXT",
+      "sha256": "1236b05fc28c4ea06da4c5df5886c457d836443891f390c5108c1bda0b53c23d",
+      "encoding": "base64",
+      "origin": "Original exact release source licence, not embedded in Maven1.0.1AAR"
+    }
+  },
+  "sodium": {
+    "version": "1.0.20",
+    "modifiedSource": true,
+    "sourceArchive": {
+      "url": "https://download.libsodium.org/libsodium/releases/libsodium-1.0.20.tar.gz",
+      "sha256": "ebb65ef6ca439333c2bb41a0c1990587288da07f6c7fd07cb3a18cc18d30ce19"
+    },
+    "upstreamSecurityFixCommit": "ad3004ec8731730e93fcfbbc824e67eadc1c1bae",
+    "patch": {
+      "path": "config/native/libsodium/CVE-2025-69277.patch",
+      "sha256": "3134c046e09bddf5bbd25c04d9c17f1252b98a9ca59b36fe426fea155f59a35e"
+    },
+    "effectivePatchedFiles": {
+      "test/default/core_ed25519.c": "752e6cefe006964b1cf73b3d898b2bd98aeb1e39cf5352883800e04fd9a526dc",
+      "src/libsodium/crypto_core/ed25519/ref10/ed25519_ref10.c": "86c5a0dae9729e32e899bb5ca3601d232ce507447c22ea1f1f6c17f5e71eaf56"
+    },
+    "originalJavaMavenCoordinate": "com.goterl:lazysodium-android:5.2.0",
+    "originalAar": {
+      "url": "https://repo.maven.apache.org/maven2/com/goterl/lazysodium-android/5.2.0/lazysodium-android-5.2.0.aar",
+      "sha256": "b5378c1d9db2573d61b304e89cf83db187a05c3e4ff081d9b2ef3d0bb00ca314"
+    },
+    "api": 26,
+    "ndk": "29.0.14206865",
+    "linkerFlags": [
+      "-Wl,-z,max-page-size=16384,-z,common-page-size=16384"
+    ],
+    "derivedNative": true,
+    "originalJavaRemainsMaven": true,
+    "sourceInventory": {
+      "path": "config/native/libsodium/source-inventory.json",
+      "sha256": "8a9568e05223ad47d5c8cc46af347a2ff6dd93b8d2de9bf1472040125df7aa48",
+      "originalFileCount": 583,
+      "actualReferenceEffectiveFileCount": 585,
+      "publicNoBackupEffectiveFileCount": 583
+    }
+  }
+}

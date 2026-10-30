@@ -2,6 +2,7 @@ package com.foxhole.guard.ui.cli
 
 import android.content.res.Resources
 import android.os.SystemClock
+import android.view.HapticFeedbackConstants
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.ReportDrawn
 import androidx.activity.compose.ReportDrawnWhen
@@ -24,12 +25,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -41,11 +43,15 @@ import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.LifecycleStartEffect
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.foxhole.core.model.AutoConnectReasonCode
+import com.foxhole.core.model.InterfaceMode
 import com.foxhole.guard.R
 import com.foxhole.guard.core.security.LockState
 import com.foxhole.guard.ui.FoxholeBannerAction
@@ -57,7 +63,6 @@ import com.foxhole.guard.ui.biometricDecryptCipher
 import com.foxhole.guard.ui.biometricUnlockAvailable
 import com.foxhole.guard.ui.builtInPinPadEnabled
 import com.foxhole.guard.ui.cli.components.CliButton
-import com.foxhole.guard.ui.cli.components.CliChip
 import com.foxhole.guard.ui.cli.components.CliHintBar
 import com.foxhole.guard.ui.cli.components.LocalCliGlassBlurEnabled
 import com.foxhole.guard.ui.cli.home.CliHomeScreen
@@ -104,6 +109,7 @@ import kotlinx.coroutines.delay
 fun CliApp(viewModel: HomeViewModel) {
     val colors = LocalCliColors.current
     val lockState by viewModel.lockState.collectAsStateWithLifecycle()
+    val interfaceMode by viewModel.interfaceMode.collectAsStateWithLifecycle()
 
     var screen by rememberSaveable(
         stateSaver = Saver(
@@ -111,102 +117,213 @@ fun CliApp(viewModel: HomeViewModel) {
             restore = { name -> CliScreen.entries.firstOrNull { e -> e.name == name } ?: CliScreen.HOME },
         ),
     ) { mutableStateOf(CliScreen.HOME) }
+    var openRouterInSettings by rememberSaveable { mutableStateOf(false) }
     val appContext = LocalContext.current.applicationContext
     val terminalStrings = remember(appContext) { cliTerminalStrings(appContext.resources) }
     val terminal = rememberCliTerminalState(strings = terminalStrings)
     val terminalListState = rememberLazyListState()
     var terminalFollowsOutput by rememberSaveable { mutableStateOf(true) }
-    var pendingActionBanner by rememberSaveable(stateSaver = actionBannerSaver) {
+    val pending = rememberCliPendingBanners(viewModel, terminal)
+    CliNoticeHapticEffect(pending, CLI_EXPERIMENTAL_TOP_NOTICES_ENABLED && lockState == LockState.UNLOCKED)
+
+    CliTopNoticeProvider(
+        visible = CLI_EXPERIMENTAL_TOP_NOTICES_ENABLED && lockState == LockState.UNLOCKED &&
+            (pending.action != null || pending.notice != null),
+        noticeContent = {
+            pending.action?.let { banner ->
+                CliActionBannerRow(viewModel, banner, onClear = { pending.action = null })
+            }
+            pending.notice?.let { notice ->
+                CliUserNoticeRow(notice = notice, onDismiss = {
+                    if (pending.notice == notice) pending.notice = null
+                })
+            }
+        },
+    ) {
+        CliTopNoticeHost()
+        if (lockState != LockState.UNLOCKED) {
+            ReportDrawn()
+            CliUnlockGate(viewModel = viewModel, lockState = lockState)
+            return@CliTopNoticeProvider
+        }
+
+        val onboardingRequired by viewModel.onboardingRequired.collectAsStateWithLifecycle()
+        if (onboardingRequired) {
+            ReportDrawn()
+            CliOnboardingWizard(viewModel = viewModel)
+            return@CliTopNoticeProvider
+        }
+
+        val homeFrontendReady by viewModel.homeFrontendReady.collectAsStateWithLifecycle()
+        ReportDrawnWhen { homeFrontendReady }
+
+        CliQuickStartSheet(viewModel = viewModel)
+
+        val betaNoticeRequired by viewModel.betaNoticeRequired.collectAsStateWithLifecycle()
+        if (betaNoticeRequired) {
+            CliBetaNoticeSheet(onAcknowledge = viewModel::onBetaNoticeAcknowledged)
+        } else {
+            CliUpdateNoticeSheet(viewModel = viewModel)
+        }
+        CliConnectionHapticEffect(viewModel = viewModel)
+
+        CliRouteVisibilityEffect(viewModel = viewModel, screen = screen)
+
+        val dockScreens = rememberDockScreens(
+            viewModel = viewModel,
+            interfaceMode = interfaceMode,
+            screen = screen,
+            onScreenRemoved = { removed ->
+                screen = if (removed == CliScreen.STATS) CliScreen.SETTINGS else CliScreen.HOME
+            },
+        )
+        val routerDockVisible by viewModel.container.settingsRepository.routerDockShortcutVisible.collectAsStateWithLifecycle()
+        val dockOrder by viewModel.container.settingsRepository.dockOptionalOrder.collectAsStateWithLifecycle()
+        val settingsHydrated by viewModel.container.settingsRepository.hydrated.collectAsStateWithLifecycle()
+        val visibleOptional = buildList {
+            if (CliScreen.WEBAPPS in dockScreens) add("WEBAPPS")
+            if (CliScreen.STATS in dockScreens) add("STATS")
+            if (routerDockVisible) add("ROUTER")
+        }
+        var previousOptional by remember { mutableStateOf<Set<String>?>(null) }
+        LaunchedEffect(settingsHydrated, visibleOptional) {
+            if (!settingsHydrated) return@LaunchedEffect
+            val actualSettings = viewModel.container.settingsRepository.settings.value
+            val active = buildList {
+                if (actualSettings.webApps.enabled && actualSettings.webApps.dockScreenEnabled) add("WEBAPPS")
+                if (actualSettings.ui.statisticsDockIconEnabled) add("STATS")
+                if (viewModel.container.settingsRepository.routerDockShortcutVisible.value) add("ROUTER")
+            }
+            val previous = previousOptional
+            var order = viewModel.container.settingsRepository.dockOptionalOrder.value
+            if (previous == null) order = order + active.filterNot(order::contains)
+            else active.filterNot(previous::contains).forEach { key -> order = order.filterNot { it == key } + key }
+            viewModel.container.settingsRepository.updateDockOptionalOrder(order)
+            previousOptional = active.toSet()
+        }
+        val openRouter: () -> Unit = {
+            openRouterInSettings = true
+            screen = CliScreen.SETTINGS
+        }
+
+        BackHandler(enabled = screen != CliScreen.HOME) { screen = CliScreen.HOME }
+
+        var bottomChromeHeightPx by remember { mutableIntStateOf(0) }
+        val bottomChromeClearance = with(LocalDensity.current) { bottomChromeHeightPx.toDp() }
+        CompositionLocalProvider(
+
+            LocalCliGlassBlurEnabled provides false,
+            LocalCliBottomChromeClearance provides bottomChromeClearance,
+        ) {
+            Box(modifier = Modifier.fillMaxSize().testTag(CLI_APP_ROOT_TAG)) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(colors.bg)
+                        .clipToBounds(),
+                ) {
+                    CliTabPager(
+                        screen = screen,
+                        viewModel = viewModel,
+                        terminal = terminal,
+                        terminalListState = terminalListState,
+                        terminalFollowsOutput = terminalFollowsOutput,
+                        onTerminalFollowsOutputChanged = { terminalFollowsOutput = it },
+                        onOpenMap = { screen = CliScreen.MAP },
+                        onOpenProfiles = { screen = CliScreen.PROFILES },
+                        onOpenRouter = openRouter,
+                        openRouterRequested = openRouterInSettings,
+                        onRouterRequestConsumed = { openRouterInSettings = false },
+                    )
+                }
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .onSizeChanged { size -> bottomChromeHeightPx = size.height }
+                        .navigationBarsPadding(),
+                ) {
+                    if (!CLI_EXPERIMENTAL_TOP_NOTICES_ENABLED) {
+                        pending.action?.let { banner ->
+                            CliActionBannerRow(
+                                viewModel = viewModel,
+                                banner = banner,
+                                onClear = { pending.action = null },
+                            )
+                        }
+                    }
+                    CliHintBar(
+                        current = cliDockSelectedScreen(screen, interfaceMode),
+                        onSelect = { screen = it },
+                        screens = dockScreens,
+                        onRouterShortcut = openRouter.takeIf { routerDockVisible },
+                        optionalOrder = dockOrder,
+                    )
+                }
+                CliWebAppOverlay(viewModel = viewModel)
+            }
+        }
+    }
+}
+
+private class CliPendingBanners(
+    actionState: MutableState<FoxholeBannerEvent?>,
+    noticeState: MutableState<FoxholeBannerEvent?>,
+) {
+    var action by actionState
+    var notice by noticeState
+}
+
+@Composable
+private fun CliNoticeHapticEffect(pending: CliPendingBanners, visible: Boolean) {
+    val view = LocalView.current
+    var shownAction by rememberSaveable(stateSaver = actionBannerSaver) { mutableStateOf<FoxholeBannerEvent?>(null) }
+    var shownNotice by rememberSaveable(stateSaver = actionBannerSaver) { mutableStateOf<FoxholeBannerEvent?>(null) }
+    val action = pending.action
+    val notice = pending.notice
+    LifecycleResumeEffect(visible, action, notice) {
+        if (visible) {
+            if ((action != null && action != shownAction) || (notice != null && notice != shownNotice)) {
+                view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+            }
+            shownAction = action
+            shownNotice = notice
+        }
+        onPauseOrDispose { }
+    }
+}
+
+@Composable
+private fun rememberCliPendingBanners(viewModel: HomeViewModel, terminal: CliTerminalState): CliPendingBanners {
+    val actionState = rememberSaveable(stateSaver = actionBannerSaver) {
         mutableStateOf<FoxholeBannerEvent?>(null)
+    }
+    val noticeState = rememberSaveable(stateSaver = actionBannerSaver) {
+        mutableStateOf<FoxholeBannerEvent?>(null)
+    }
+    val pending = remember(actionState, noticeState) { CliPendingBanners(actionState, noticeState) }
+    LaunchedEffect(pending.notice) {
+        val notice = pending.notice ?: return@LaunchedEffect
+        val duration = userNoticeDurationMillis(notice) ?: return@LaunchedEffect
+        delay(duration)
+        if (pending.notice == notice) pending.notice = null
+    }
+    LaunchedEffect(pending.action) {
+        val banner = pending.action ?: return@LaunchedEffect
+        val expiresAt = banner.expiresAtElapsedMs ?: return@LaunchedEffect
+        delay(expiresAt - SystemClock.elapsedRealtime())
+        if (pending.action == banner) {
+            viewModel.dismissBannerAction(banner.action)
+            pending.action = null
+        }
     }
 
     CliBannerBridge(
         viewModel = viewModel,
         terminal = terminal,
-        pendingActionBanner = pendingActionBanner,
-        onPendingActionBannerChange = { pendingActionBanner = it },
+        onPendingActionBannerChange = { pending.action = it },
+        onUserNotice = { incoming -> pending.notice = retainUserNotice(pending.notice, incoming) },
     )
-
-    if (lockState != LockState.UNLOCKED) {
-        ReportDrawn()
-        CliUnlockGate(viewModel = viewModel, lockState = lockState)
-        return
-    }
-
-    val onboardingRequired by viewModel.onboardingRequired.collectAsStateWithLifecycle()
-    if (onboardingRequired) {
-        ReportDrawn()
-        CliOnboardingWizard(viewModel = viewModel)
-        return
-    }
-
-    val homeFrontendReady by viewModel.homeFrontendReady.collectAsStateWithLifecycle()
-    ReportDrawnWhen { homeFrontendReady }
-
-    CliQuickStartSheet(viewModel = viewModel)
-
-    val betaNoticeRequired by viewModel.betaNoticeRequired.collectAsStateWithLifecycle()
-    if (betaNoticeRequired) {
-        CliBetaNoticeSheet(onAcknowledge = viewModel::onBetaNoticeAcknowledged)
-    } else {
-        CliUpdateNoticeSheet(viewModel = viewModel)
-    }
-    CliConnectionHapticEffect(viewModel = viewModel)
-
-    CliRouteVisibilityEffect(viewModel = viewModel, screen = screen)
-
-    val dockScreens = rememberDockScreens(
-        viewModel = viewModel,
-        screen = screen,
-        onScreenRemoved = { removed ->
-            screen = if (removed == CliScreen.STATS) CliScreen.SETTINGS else CliScreen.HOME
-        },
-    )
-
-    BackHandler(enabled = screen != CliScreen.HOME) { screen = CliScreen.HOME }
-
-    var bottomChromeHeightPx by remember { mutableIntStateOf(0) }
-    val bottomChromeClearance = with(LocalDensity.current) { bottomChromeHeightPx.toDp() }
-    CompositionLocalProvider(
-
-        LocalCliGlassBlurEnabled provides false,
-        LocalCliBottomChromeClearance provides bottomChromeClearance,
-    ) {
-        Box(modifier = Modifier.fillMaxSize().testTag(CLI_APP_ROOT_TAG)) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(colors.bg)
-                    .clipToBounds(),
-            ) {
-                CliTabPager(
-                    screen = screen,
-                    viewModel = viewModel,
-                    terminal = terminal,
-                    terminalListState = terminalListState,
-                    terminalFollowsOutput = terminalFollowsOutput,
-                    onTerminalFollowsOutputChanged = { terminalFollowsOutput = it },
-                    onOpenMap = { screen = CliScreen.MAP },
-                )
-            }
-            Column(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .onSizeChanged { size -> bottomChromeHeightPx = size.height }
-                    .navigationBarsPadding(),
-            ) {
-                pendingActionBanner?.let { banner ->
-                    CliActionBannerRow(
-                        viewModel = viewModel,
-                        banner = banner,
-                        onClear = { pendingActionBanner = null },
-                    )
-                }
-                CliHintBar(current = screen, onSelect = { screen = it }, screens = dockScreens)
-            }
-            CliWebAppOverlay(viewModel = viewModel)
-        }
-    }
+    return pending
 }
 
 val LocalCliBottomChromeClearance = staticCompositionLocalOf { 0.dp }
@@ -214,6 +331,7 @@ val LocalCliBottomChromeClearance = staticCompositionLocalOf { 0.dp }
 @Composable
 private fun rememberDockScreens(
     viewModel: HomeViewModel,
+    interfaceMode: InterfaceMode,
     screen: CliScreen,
     onScreenRemoved: (CliScreen) -> Unit,
 ): List<CliScreen> {
@@ -221,10 +339,11 @@ private fun rememberDockScreens(
     val webAppsVisible = settingsRouteState.settings.webApps.enabled &&
         settingsRouteState.settings.webApps.dockScreenEnabled
     val statisticsDockIconEnabled = settingsRouteState.settings.ui.statisticsDockIconEnabled
-    val dockScreens = remember(webAppsVisible, statisticsDockIconEnabled) {
+    val dockScreens = remember(webAppsVisible, statisticsDockIconEnabled, interfaceMode) {
         cliDockScreens(
             webAppsVisible = webAppsVisible,
             statisticsDockIconEnabled = statisticsDockIconEnabled,
+            interfaceMode = interfaceMode,
         )
     }
     LaunchedEffect(webAppsVisible, statisticsDockIconEnabled, screen) {
@@ -239,10 +358,15 @@ private fun rememberDockScreens(
 internal fun cliDockScreens(
     webAppsVisible: Boolean,
     statisticsDockIconEnabled: Boolean,
+    interfaceMode: InterfaceMode,
 ): List<CliScreen> = CliScreen.entries.filter { screen ->
     (screen != CliScreen.WEBAPPS || webAppsVisible) &&
-        (screen != CliScreen.STATS || statisticsDockIconEnabled)
+        (screen != CliScreen.STATS || statisticsDockIconEnabled) &&
+        (screen != CliScreen.MAP || interfaceMode == InterfaceMode.EXPERT)
 }
+
+internal fun cliDockSelectedScreen(screen: CliScreen, interfaceMode: InterfaceMode): CliScreen =
+    if (screen == CliScreen.MAP && interfaceMode == InterfaceMode.USER) CliScreen.HOME else screen
 
 @Composable
 private fun CliWebAppOverlay(viewModel: HomeViewModel) {
@@ -270,12 +394,12 @@ private fun CliRouteVisibilityEffect(
     viewModel: HomeViewModel,
     screen: CliScreen,
 ) {
-    DisposableEffect(screen) {
+    LifecycleStartEffect(screen, viewModel) {
         viewModel.onDashboardUiVisibilityChanged(screen == CliScreen.HOME)
         viewModel.onProfilesUiVisibilityChanged(screen == CliScreen.PROFILES)
         viewModel.onTrafficUiVisibilityChanged(screen == CliScreen.HOME || screen == CliScreen.MAP)
         viewModel.onStatisticsUiVisibilityChanged(screen == CliScreen.STATS)
-        onDispose {
+        onStopOrDispose {
             viewModel.onDashboardUiVisibilityChanged(false)
             viewModel.onProfilesUiVisibilityChanged(false)
             viewModel.onTrafficUiVisibilityChanged(false)
@@ -288,22 +412,18 @@ private fun CliRouteVisibilityEffect(
 private fun CliBannerBridge(
     viewModel: HomeViewModel,
     terminal: CliTerminalState,
-    pendingActionBanner: FoxholeBannerEvent?,
     onPendingActionBannerChange: (FoxholeBannerEvent?) -> Unit,
+    onUserNotice: (FoxholeBannerEvent) -> Unit,
 ) {
-    LaunchedEffect(pendingActionBanner) {
-        val banner = pendingActionBanner ?: return@LaunchedEffect
-        val expiresAt = banner.expiresAtElapsedMs ?: return@LaunchedEffect
-        delay(expiresAt - SystemClock.elapsedRealtime())
-        viewModel.dismissBannerAction(banner.action)
-        onPendingActionBannerChange(null)
-    }
+    val updateNotice by rememberUpdatedState(onUserNotice)
 
     LaunchedEffect(Unit) {
         viewModel.snackbars.stream.collect { banner ->
             terminal.note(text = banner.message, tone = bannerTone(banner.tone))
             if (banner.action != null) {
                 onPendingActionBannerChange(banner)
+            } else {
+                updateNotice(banner)
             }
         }
     }
@@ -347,6 +467,10 @@ private fun CliTabPager(
     terminalFollowsOutput: Boolean,
     onTerminalFollowsOutputChanged: (Boolean) -> Unit,
     onOpenMap: () -> Unit,
+    onOpenProfiles: () -> Unit,
+    onOpenRouter: () -> Unit,
+    openRouterRequested: Boolean,
+    onRouterRequestConsumed: () -> Unit,
 ) {
     AnimatedContent(
         targetState = screen,
@@ -367,6 +491,10 @@ private fun CliTabPager(
             terminalFollowsOutput = terminalFollowsOutput,
             onTerminalFollowsOutputChanged = onTerminalFollowsOutputChanged,
             onOpenMap = onOpenMap,
+            onOpenProfiles = onOpenProfiles,
+            onOpenRouter = onOpenRouter,
+            openRouterRequested = openRouterRequested,
+            onRouterRequestConsumed = onRouterRequestConsumed,
         )
     }
 }
@@ -380,6 +508,10 @@ private fun CliTabContent(
     terminalFollowsOutput: Boolean,
     onTerminalFollowsOutputChanged: (Boolean) -> Unit,
     onOpenMap: () -> Unit,
+    onOpenProfiles: () -> Unit,
+    onOpenRouter: () -> Unit,
+    openRouterRequested: Boolean,
+    onRouterRequestConsumed: () -> Unit,
 ) {
     Box(modifier = Modifier.fillMaxSize().testTag(cliScreenTag(target))) {
         when (target) {
@@ -390,6 +522,8 @@ private fun CliTabContent(
                 terminalFollowsOutput = terminalFollowsOutput,
                 onTerminalFollowsOutputChanged = onTerminalFollowsOutputChanged,
                 onOpenMap = onOpenMap,
+                onOpenProfiles = onOpenProfiles,
+                onOpenRouter = onOpenRouter,
                 modifier = Modifier
                     .statusBarsPadding()
                     .offset(y = -CliTopBarLift)
@@ -403,7 +537,11 @@ private fun CliTabContent(
             CliScreen.MAP -> CliMapScreen(viewModel = viewModel)
             CliScreen.WEBAPPS -> CliWebAppsScreen(viewModel = viewModel)
             CliScreen.STATS -> CliStatsScreen(viewModel = viewModel)
-            CliScreen.SETTINGS -> CliSettingsScreen(viewModel = viewModel)
+            CliScreen.SETTINGS -> CliSettingsScreen(
+                viewModel = viewModel,
+                openRouterRequested = openRouterRequested,
+                onRouterRequestConsumed = onRouterRequestConsumed,
+            )
         }
     }
 }
@@ -430,25 +568,27 @@ private fun CliActionBannerRow(
     onClear: () -> Unit,
 ) {
     val colors = LocalCliColors.current
+    val noticeColor = if (CLI_EXPERIMENTAL_TOP_NOTICES_ENABLED) cliNoticeColor(banner.tone, colors) else colors.warn
+    val noticeBorder = if (CLI_EXPERIMENTAL_TOP_NOTICES_ENABLED) noticeColor.copy(alpha = 0.65f) else colors.border
     Row(
         modifier = Modifier
             .padding(horizontal = CliSpacing.sm, vertical = CliSpacing.xs)
             .background(colors.panel, RoundedCornerShape(CliRadius.modal))
-            .border(1.dp, colors.border, RoundedCornerShape(CliRadius.modal))
+            .border(1.dp, noticeBorder, RoundedCornerShape(CliRadius.modal))
             .padding(horizontal = CliSpacing.sm, vertical = CliSpacing.xs),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
             text = banner.message,
             style = CliType.small,
-            color = colors.warn,
+            color = noticeColor,
             maxLines = 2,
             modifier = Modifier.weight(1f),
         )
         Spacer(modifier = Modifier.width(CliSpacing.sm))
         CliButton(
             label = banner.actionLabel ?: stringResource(R.string.cli_common_btn_ok),
-            color = colors.warn,
+            color = noticeColor,
             onClick = {
                 when (banner.action) {
                     FoxholeBannerAction.ACCEPT_PROTOCOL_RECOMMENDATION ->
@@ -461,14 +601,10 @@ private fun CliActionBannerRow(
             },
         )
         Spacer(modifier = Modifier.width(CliSpacing.sm))
-        CliChip(
-            label = stringResource(R.string.cli_banner_dismiss),
-            contentDescription = stringResource(R.string.cli_banner_dismiss_action),
-            onClick = {
-                viewModel.dismissBannerAction(banner.action)
-                onClear()
-            },
-        )
+        CliNoticeCloseButton(color = noticeColor, onClose = {
+            viewModel.dismissBannerAction(banner.action)
+            onClear()
+        })
     }
 }
 
@@ -490,6 +626,7 @@ private val actionBannerSaver: Saver<FoxholeBannerEvent?, Any> = Saver(
                 it.action?.name,
                 it.durationMillis,
                 it.expiresAtElapsedMs,
+                it.showInTopNotice,
             )
         }
     },
@@ -504,6 +641,7 @@ private val actionBannerSaver: Saver<FoxholeBannerEvent?, Any> = Saver(
             action = FoxholeBannerAction.entries.firstOrNull { it.name == fields.getOrNull(3) },
             durationMillis = fields.getOrNull(4) as? Long,
             expiresAtElapsedMs = fields.getOrNull(5) as? Long,
+            showInTopNotice = fields.getOrNull(6) as? Boolean ?: true,
         )
     },
 )

@@ -12,6 +12,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
 import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 
 class CliTerminalJournalWiringTest {
 
@@ -156,7 +157,7 @@ class CliTerminalJournalWiringTest {
 
         assertTrue(
             "journal reset did not retain the canonical session facts",
-            awaitJournalText(file, listOf("FoxHole Guard · v1.2.3")),
+            awaitJournalText(store, file, listOf("FoxHole Guard · v1.2.3")),
         )
     }
 
@@ -193,7 +194,7 @@ class CliTerminalJournalWiringTest {
             writer.record(CliTerminalLine(timestampMs = NOW_MS, text = "line $index", tone = CliLineTone.INFO))
         }
         writer.shutdown()
-        assertTrue("journal writer did not finish", awaitJournal(file))
+        assertTrue("journal writer did not finish", awaitJournalText(store, file, (1..5).map { "line $it" }))
 
         val reread = CliTerminalStore(file = file, fileCipher = PlainTestFileCipher)
             .load(nowMs = NOW_MS, retentionHours = 24, limit = 120)
@@ -214,26 +215,18 @@ class CliTerminalJournalWiringTest {
         writer.record(CliTerminalLine(timestampMs = NOW_MS, text = "after clear"))
         writer.shutdown()
 
-        assertTrue("journal clear/write sequence did not finish", awaitJournalText(file, listOf("after clear")))
+        assertTrue("journal clear/write sequence did not finish", awaitJournalText(store, file, listOf("after clear")))
     }
 
-    private fun awaitJournal(file: File): Boolean {
+    private fun awaitJournalText(store: CliTerminalStore, file: File, expected: List<String>): Boolean {
         val deadline = System.currentTimeMillis() + AWAIT_TIMEOUT_MS
         while (System.currentTimeMillis() < deadline) {
-            if (file.isFile && file.length() > 0L) {
-                return true
+            // Production reads share the writer's store lock, including clear/write transitions.
+            val actual = synchronized(store) {
+                CliTerminalStore(file = file, fileCipher = PlainTestFileCipher)
+                    .load(nowMs = NOW_MS, retentionHours = 24, limit = 120)
+                    .map { it.text }
             }
-            Thread.sleep(AWAIT_POLL_MS)
-        }
-        return false
-    }
-
-    private fun awaitJournalText(file: File, expected: List<String>): Boolean {
-        val deadline = System.currentTimeMillis() + AWAIT_TIMEOUT_MS
-        while (System.currentTimeMillis() < deadline) {
-            val actual = CliTerminalStore(file = file, fileCipher = PlainTestFileCipher)
-                .load(nowMs = NOW_MS, retentionHours = 24, limit = 120)
-                .map { it.text }
             if (actual == expected) return true
             Thread.sleep(AWAIT_POLL_MS)
         }
@@ -281,8 +274,20 @@ class CliTerminalJournalWiringTest {
         override fun readBytes(file: File): ByteArray = file.readBytes()
 
         override fun writeBytesAtomic(file: File, plaintext: ByteArray) {
-            file.parentFile?.mkdirs()
-            file.writeBytes(plaintext)
+            val parent = requireNotNull(file.parentFile).apply { mkdirs() }
+            val temporary = Files.createTempFile(parent.toPath(), file.name, ".tmp")
+            try {
+                Files.write(temporary, plaintext)
+                // Readers must never observe a partial JSON line, as with the production cipher.
+                Files.move(
+                    temporary,
+                    file.toPath(),
+                    StandardCopyOption.ATOMIC_MOVE,
+                    StandardCopyOption.REPLACE_EXISTING,
+                )
+            } finally {
+                Files.deleteIfExists(temporary)
+            }
         }
     }
 

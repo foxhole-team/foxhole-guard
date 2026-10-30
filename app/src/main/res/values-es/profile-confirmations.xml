@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="cli_protocol_switch_confirmation_title">Se requiere confirmación</string>
+    <string name="cli_protocol_switch_confirmation_body">Esta acción sustituirá el protocolo VPN actual.\n¿Continuar?</string>
+    <string name="cli_profile_delete_confirmation_title">Confirmar eliminación del perfil</string>
+    <string name="cli_profile_confirmation_cancel">Cancelar</string>
+    <string name="cli_profile_confirmation_continue">Continuar</string>
+</resources>

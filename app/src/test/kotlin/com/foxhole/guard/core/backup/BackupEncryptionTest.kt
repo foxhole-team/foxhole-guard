@@ -4,8 +4,10 @@ import com.foxhole.core.model.ProfileSourceType
 import com.foxhole.guard.core.security.GuardCrypto
 import com.foxhole.guard.core.security.GuardKdfParams
 import com.foxhole.guard.core.security.GuardKeypair
+import kotlinx.coroutines.CancellationException
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -80,6 +82,84 @@ class BackupEncryptionTest {
         requirePortableBackupPlaintextSize(MAX_BACKUP_PLAINTEXT_BYTES)
         assertThrows(IllegalArgumentException::class.java) {
             requirePortableBackupPlaintextSize(MAX_BACKUP_PLAINTEXT_BYTES + 1)
+        }
+    }
+
+    @Test
+    fun `key derivation cancellation is preserved`() {
+        val cancellation = CancellationException("test cancellation")
+
+        assertSame(cancellation, decryptionFailure(cancellation))
+    }
+
+    @Test
+    fun `fatal key derivation errors are preserved`() {
+        val fatal = AssertionError("test fatal error")
+
+        assertSame(fatal, decryptionFailure(fatal))
+    }
+
+    @Test
+    fun `ordinary key derivation failures retain the existing failure result`() {
+        val envelope = encryptBackupDocument(document, testPassword(), crypto)
+        val unavailable = RecordingKdf(IllegalStateException("test unavailable"))
+
+        assertEquals(
+            BackupParseResult.Failure.WRONG_PASSWORD_OR_CORRUPT,
+            decryptBackupDocument(envelope, testPassword(), unavailable),
+        )
+        assertTrue(unavailable.passwordBytes!!.all { it == 0.toByte() })
+    }
+
+    @Test
+    fun `temporary password and derived key bytes are cleared after a successful round trip`() {
+        val recording = RecordingKdf()
+        val envelope = encryptBackupDocument(document, testPassword(), recording)
+
+        assertTrue(recording.passwordBytes!!.all { it == 0.toByte() })
+        assertTrue(recording.keyBytes!!.all { it == 0.toByte() })
+        assertTrue(decryptBackupDocument(envelope, testPassword(), recording) is BackupParseResult.Success)
+        assertTrue(recording.passwordBytes!!.all { it == 0.toByte() })
+        assertTrue(recording.keyBytes!!.all { it == 0.toByte() })
+    }
+
+    private fun testPassword(): CharArray = "correct horse battery staple".toCharArray()
+
+    @Test
+    fun `encryption preflight shares the exact supported key derivation policy`() {
+        val params = GuardKdfParams(memKib = 64 * 1024, ops = 3, parallelism = 1)
+
+        assertTrue(isSupportedBackupKdf("argon2id13", params))
+        assertFalse(isSupportedBackupKdf("other", params))
+        assertFalse(isSupportedBackupKdf("argon2id13", params.copy(memKib = 8 * 1024)))
+        assertFalse(isSupportedBackupKdf("argon2id13", params.copy(ops = 4)))
+        assertFalse(isSupportedBackupKdf("argon2id13", params.copy(parallelism = 2)))
+    }
+
+    private fun decryptionFailure(failure: Throwable): Throwable? {
+        val envelope = encryptBackupDocument(document, testPassword(), crypto)
+        val recording = RecordingKdf(failure)
+        val actual = runCatching { decryptBackupDocument(envelope, testPassword(), recording) }.exceptionOrNull()
+        assertTrue(recording.passwordBytes!!.all { it == 0.toByte() })
+        return actual
+    }
+
+    private class RecordingKdf(
+        private val failure: Throwable? = null,
+    ) : GuardCrypto by DeterministicTestKdf() {
+        var passwordBytes: ByteArray? = null
+        var keyBytes: ByteArray? = null
+
+        override fun argon2id(
+            password: ByteArray,
+            salt: ByteArray,
+            params: GuardKdfParams,
+            outputLength: Int,
+        ): ByteArray {
+            passwordBytes = password
+            failure?.let { throw it }
+            return DeterministicTestKdf().argon2id(password, salt, params, outputLength)
+                .also { keyBytes = it }
         }
     }
 

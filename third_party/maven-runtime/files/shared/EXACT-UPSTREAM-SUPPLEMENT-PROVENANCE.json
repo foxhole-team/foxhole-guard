@@ -1,0 +1,26 @@
+{
+  "originalCaptureResult": "sql419-guard-runtime-notices-second",
+  "onlyComponents": [
+    "androidx.glance:glance-appwidget-external-protobuf:1.1.1",
+    "com.google.crypto.tink:tink-android:1.8.0",
+    "com.google.errorprone:error_prone_annotations:2.50.0",
+    "com.goterl:lazysodium-android:5.2.0",
+    "net.zetetic:sqlcipher-android:4.19.1"
+  ],
+  "publisherFiles": {
+    "Protobuf4.28.2-LICENSE": "6e5e117324afd944dcf67f36cf329843bc1a92229a8cd9bb573d7a83130fea7d",
+    "Tink1.8.0-LICENSE": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+    "error-prone-2.50.0-COPYING": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+    "LazySodium5.2.0-LICENSE.txt": "1f256ecad192880510e84ad60474eab7589218784b9a50bc7ceee34c2b91f1d5",
+    "SQLCipher4.19.1-LICENSE.txt": "09e4af560ce2e3c9c2aa6b564e35947b03db7d1ae345f22a32793ed46542cc14"
+  },
+  "glanceReleaseCommit": "54a06695b700f449577a763921b8d75c1a59578a",
+  "protobufVersionFromActualReleaseSource": "4.28.2",
+  "tinkSourceZipSha256": "cff458ea60897f7a5edc91d1eb9c58c650c2fd3206d94672f29c950b94398a49",
+  "limits": "Source supplements, not original archive legalmembers; never infer noNOTICE from genericstandard text. Tink/error-prone exactrootCOPYING scanned; Glance empty officialsourcesjar retained.",
+  "lazySodiumLicenseNormalization": {
+    "upstreamSha256": "4b89d4518bd135ab4ee154a7bce722246b57a98c3d7efc1a09409898160c2bd1",
+    "vendoredTerminatingNewlineSha256": "1f256ecad192880510e84ad60474eab7589218784b9a50bc7ceee34c2b91f1d5",
+    "onlyChange": "One final newline as recorded originalvendorREADME"
+  }
+}

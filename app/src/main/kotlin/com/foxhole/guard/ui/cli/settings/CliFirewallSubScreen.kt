@@ -159,7 +159,7 @@ private fun CliKillSwitchPanel(
 }
 
 @Composable
-private fun CliQuarantineQueue(
+internal fun CliQuarantineQueue(
     pendingPackages: List<String>,
     pendingDetails: List<PendingQuarantineAppDetails>,
     installedApps: List<InstalledAppOption>,

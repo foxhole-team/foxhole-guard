@@ -14,10 +14,11 @@ Certificate source:
   supplied by a caller, but it must match that file and the fingerprints documented in
   README.md and docs/README.ru.md.
 
-prepare reads both signed APKs from build/release-variants/{github,fdroid}/app.apk and the
-CycloneDX JSON from FOXHOLE_SBOM_PATH (default: build/reports/cyclonedx/bom.json).
-The generated license assets come from FOXHOLE_LICENSE_ASSETS_PATH
-(default: app/build/generated/licenseAssets).
+prepare reads signed APKs and their generated licenseAssets from
+build/release-variants/{github,github-armv7,fdroid}/. Each directory contains app.apk.
+The CycloneDX JSON comes from FOXHOLE_SBOM_PATH (default: build/reports/cyclonedx/bom.json).
+The exact ABI profiles are android4, android-armv7 and android4 respectively.
+The primary GitHub asset keeps its established filename for update compatibility.
 USAGE
   exit 2
 }
@@ -51,10 +52,25 @@ find_build_tool() {
 }
 
 read_release_coordinates() {
-  VERSION_CODE="$(
-    sed -nE 's/^[[:space:]]*versionCode[[:space:]]*=[[:space:]]*([0-9]+).*$/\1/p' \
-      app/build.gradle.kts | head -n 1
-  )"
+  VERSION_CODE="$(python3 - app/build.gradle.kts <<'PY'
+from pathlib import Path
+import re
+import sys
+text = Path(sys.argv[1]).read_text()
+values = re.findall(r'^\s*versionCode\s*=\s*(.+?)\s*$', text, re.M)
+if len(values) != 1:
+    raise SystemExit('Expected one release versionCode declaration')
+value = values[0]
+if value == 'localBuildNumber ?: baseAppVersionCode':
+    bases = re.findall(r'^\s*val baseAppVersionCode\s*=\s*([1-9][0-9]*)\s*$', text, re.M)
+    if len(bases) != 1:
+        raise SystemExit('Expected one public baseAppVersionCode')
+    value = bases[0]
+if re.fullmatch(r'[1-9][0-9]*', value) is None:
+    raise SystemExit('Unsupported release versionCode expression')
+print(value)
+PY
+)"
   VERSION_NAME="$(
     sed -nE 's/^[[:space:]]*version[[:space:]]*=[[:space:]]*"([^"]+)".*$/\1/p' \
       build.gradle.kts | head -n 1
@@ -143,6 +159,7 @@ verify_apk() {
   local apksigner=$4
   local aapt2=$5
   local channel=$6
+  local profile=$7
 
   local report actual package_line native_line
   report="$($apksigner verify --verbose --print-certs "$apk")"
@@ -163,8 +180,19 @@ verify_apk() {
   [[ "$package_line" == *"versionCode='$VERSION_CODE'"* ]] || die "unexpected versionCode in $(basename "$apk")"
   [[ "$package_line" == *"versionName='$VERSION_NAME'"* ]] || die "unexpected versionName in $(basename "$apk")"
   native_line="$($aapt2 dump badging "$apk" | sed -n '/^native-code:/p' | sed -n '1p')"
-  [[ "$native_line" == "native-code: 'arm64-v8a'" ]] ||
-    die "release APK has an unexpected native ABI inventory: $(basename "$apk")"
+  python3 - "$native_line" "$profile" <<'PY' || die "release APK has an unexpected native ABI inventory: $(basename "$apk")"
+import re
+import sys
+profiles = {'android4': {'arm64-v8a', 'armeabi-v7a', 'x86', 'x86_64'},
+            'android64': {'arm64-v8a', 'x86_64'}, 'android-armv7': {'armeabi-v7a'},
+            'android3': {'arm64-v8a', 'armeabi-v7a', 'x86_64'}}
+line, profile = sys.argv[1:]
+if profile not in profiles or re.fullmatch(r"native-code: '[A-Za-z0-9_-]+'(?: '[A-Za-z0-9_-]+')*", line) is None:
+    raise SystemExit('Invalid native ABI declaration')
+abis = re.findall(r"'([^']+)'", line)
+if len(abis) != len(set(abis)) or set(abis) != profiles[profile]:
+    raise SystemExit('Native ABI set differs from the selected release profile')
+PY
   verify_apk_update_channel "$apk" "$aapt2" "$channel"
 }
 
@@ -217,8 +245,8 @@ PY
 }
 
 verify_license_notices_archive() {
-  local archive=$1
-  python3 - "$archive" <<'PY' || die "license-notices archive verification failed"
+  local archive=$1 profile=$2
+  python3 - "$archive" "$profile" "$CORE_REVISION" <<'PY' || die "license-notices archive verification failed"
 import hashlib
 import json
 import re
@@ -256,7 +284,6 @@ with zipfile.ZipFile(sys.argv[1]) as archive:
         "fonts/Tiny5-OFL.txt",
         "foxcore/FoxHole-Core-GPL-3.0-or-later.txt",
         "foxcore/THIRD_PARTY_NOTICES.md",
-        "foxcore/foxcore-aarch64-linux-android.cdx.json",
         "i2pd/Android-NDK-29-NOTICE.txt",
         "i2pd/Android-NDK-29-NOTICE.toolchain.txt",
         "i2pd/Boost-1.84.0-BSL-1.0.txt",
@@ -264,7 +291,7 @@ with zipfile.ZipFile(sys.argv[1]) as archive:
         "i2pd/i2pd-BSD-3-Clause.txt",
         "icons/Tabler-MIT.txt",
         "tor/GO-MODULES.json",
-        "tor/Go-1.26.8-BSD-3-Clause.txt",
+        "tor/Go-1.26.10-BSD-3-Clause.txt",
         "tor/conjure-client-BSD-3-Clause.txt",
         "tor/lyrebird-BSD-3-Clause.txt",
         "tor/lyrebird-GPL-3.0-or-later.txt",
@@ -274,6 +301,17 @@ with zipfile.ZipFile(sys.argv[1]) as archive:
         "tor-config/upstream-members/pt_config.json",
         "tor-config/upstream-members/torrc-defaults.txt",
     }
+    profiles = {'android4': (['arm64-v8a', 'armeabi-v7a', 'x86', 'x86_64'],
+                             ['aarch64-linux-android', 'armv7-linux-androideabi', 'i686-linux-android', 'x86_64-linux-android']),
+                'android64': (['arm64-v8a', 'x86_64'], ['aarch64-linux-android', 'x86_64-linux-android']),
+                'android-armv7': (['armeabi-v7a'], ['armv7-linux-androideabi']),
+                'android3': (['arm64-v8a', 'armeabi-v7a', 'x86_64'],
+                             ['aarch64-linux-android', 'armv7-linux-androideabi', 'x86_64-linux-android'])}
+    profile = sys.argv[2]
+    if profile not in profiles:
+        raise SystemExit('Unknown release license profile')
+    abis, targets = profiles[profile]
+    required.update('foxcore/foxcore-' + target + '.cdx.json' for target in targets)
     if not required.issubset(names):
         raise SystemExit(f"missing license entries: {sorted(required - set(names))}")
     checksums = {}
@@ -293,8 +331,11 @@ with zipfile.ZipFile(sys.argv[1]) as archive:
         if hashlib.sha256(archive.read(name)).hexdigest() != expected_digest:
             raise SystemExit(f"license checksum mismatch: {name}")
     manifest = json.loads(archive.read("MANIFEST.json"))
-    if manifest.get("schema") != 1 or not re.fullmatch(r"[0-9a-f]{40}", manifest.get("foxcoreRevision", "")):
+    if (manifest.get("schema") != 1 or not re.fullmatch(r"[0-9a-f]{40}", manifest.get("foxcoreRevision", "")) or
+            manifest.get("foxcoreRevision") != sys.argv[3]):
         raise SystemExit("invalid license manifest metadata")
+    if (manifest.get('androidDeliveryProfile'), manifest.get('abis'), manifest.get('targets')) != (profile, abis, targets):
+        raise SystemExit('License manifest differs from the selected release profile')
     manifest_entries = manifest.get("files")
     if not isinstance(manifest_entries, list):
         raise SystemExit("license manifest has no file inventory")
@@ -343,7 +384,7 @@ verify_android_sbom_inventory() {
       exact_component("jna"; "5.19.1"; "pkg:maven/net.java.dev.jna/jna@5.19.1") and
       exact_component("lazysodium-android"; "5.2.0"; "pkg:maven/com.goterl/lazysodium-android@5.2.0") and
       exact_component("okhttp"; "5.4.0"; "pkg:maven/com.squareup.okhttp3/okhttp@5.4.0") and
-      exact_component("sqlcipher-android"; "4.17.0"; "pkg:maven/net.zetetic/sqlcipher-android@4.17.0") and
+      exact_component("sqlcipher-android"; "4.19.1"; "pkg:maven/net.zetetic/sqlcipher-android@4.19.1") and
       exact_component(
         "zxing-android-embedded";
         "4.3.0";
@@ -359,236 +400,196 @@ verify_sbom_apk_digest() {
   ' "$sbom" >/dev/null || die "SBOM does not describe the expected APK: $(basename "$sbom")"
 }
 
+aggregate_profile_sbom() {
+  local maven=$1 licenses=$2 apk=$3 output=$4 profile=$5
+  python3 - "$maven" "$licenses" "$apk" "$output" "$profile" <<'PY'
+from pathlib import Path
+import importlib.util
+import json
+import subprocess
+import sys
+import tempfile
+
+maven, licenses, apk, output = map(Path, sys.argv[1:5])
+profile = sys.argv[5]
+root = Path.cwd()
+shapes = {'android4': (['arm64-v8a', 'armeabi-v7a', 'x86', 'x86_64'],
+                       ['aarch64-linux-android', 'armv7-linux-androideabi', 'i686-linux-android', 'x86_64-linux-android']),
+          'android64': (['arm64-v8a', 'x86_64'], ['aarch64-linux-android', 'x86_64-linux-android']),
+          'android-armv7': (['armeabi-v7a'], ['armv7-linux-androideabi']),
+          'android3': (['arm64-v8a', 'armeabi-v7a', 'x86_64'],
+                       ['aarch64-linux-android', 'armv7-linux-androideabi', 'x86_64-linux-android'])}
+if profile not in shapes:
+    raise SystemExit('Unknown aggregate release profile')
+spec = importlib.util.spec_from_file_location('release_delivery_inventory', root / 'scripts/aggregate-delivery-sbom.py')
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+# Each aggregate uses committed source with only its two declared profile headers projected.
+with tempfile.TemporaryDirectory(prefix='foxhole-release-profile-') as directory:
+    projected = Path(directory)
+    subprocess.run(['git', 'checkout-index', '--all', '--prefix=' + str(projected) + '/'], check=True)
+    pins_path = projected / 'config/foxcore-source-manifest.json'
+    config_path = projected / 'config/foxcore-android-delivery.json'
+    pins = json.loads(pins_path.read_text())
+    config = json.loads(config_path.read_text())
+    if (config != {'schema': 1, **{key: pins[key] for key in ('androidDeliveryProfile', 'abis', 'targets')}} or
+            pins['commit'] != (projected / 'config/foxcore-revision.txt').read_text().strip() or
+            len(pins['files']) != 522 or len({row['path'] for row in pins['files']}) != 522):
+        raise SystemExit('Committed delivery headers disagree')
+    snapshot = json.loads((projected / 'third_party/licenses/source-legal' / profile / 'snapshot.json').read_text())
+    abis, targets = shapes[profile]
+    shape = {'androidDeliveryProfile': profile, 'abis': abis, 'targets': targets}
+    if (snapshot.get('coreCommit') != pins['commit'] or snapshot.get('androidDeliveryProfile') != profile or
+            snapshot.get('abis') != abis or snapshot.get('targets') != targets or
+            snapshot.get('compiledInputs') != {row['path']: row['sha256'] for row in pins['files']}):
+        raise SystemExit('Canonical release profile source binding differs')
+    config_path.write_text(json.dumps({'schema': 1, **shape}, indent=2) + '\n')
+    pins_path.write_text(json.dumps({**pins, **shape}, indent=2) + '\n')
+    document = module.aggregate(json.loads(maven.read_text()), licenses, apk, projected)
+    output.write_text(json.dumps(document, indent=2) + '\n')
+PY
+}
+
+release_matrix_names() {
+  apk_names=("FoxHole-${RELEASE_TAG}-arm64-v8a-release.apk" "FoxHole-${RELEASE_TAG}-armeabi-v7a-release.apk" "FoxHole-${RELEASE_TAG}-universal-fdroid.apk")
+  sbom_names=("FoxHole-${RELEASE_TAG}-sbom.cdx.json" "FoxHole-${RELEASE_TAG}-armeabi-v7a-sbom.cdx.json" "FoxHole-${RELEASE_TAG}-fdroid-sbom.cdx.json")
+  license_names=("FoxHole-${RELEASE_TAG}-license-notices.zip" "FoxHole-${RELEASE_TAG}-armeabi-v7a-license-notices.zip" "FoxHole-${RELEASE_TAG}-fdroid-license-notices.zip")
+  profiles=(android4 android-armv7 android4)
+  channels=(github github fdroid)
+}
+
+write_update_manifest() {
+  local apk=$1 output=$2
+  jq -n --argjson versionCode "$VERSION_CODE" --arg versionName "$VERSION_NAME" \
+    --arg apkName "$(basename "$apk")" --arg apkSha256 "$(sha256_file "$apk")" \
+    '{versionCode: $versionCode, versionName: $versionName, apkName: $apkName,
+      apkSha256: $apkSha256, notes: "See the release notes on GitHub."}' > "$output"
+}
+
+verify_update_manifest() {
+  local manifest=$1 apk=$2
+  jq -e --argjson versionCode "$VERSION_CODE" --arg versionName "$VERSION_NAME" \
+    --arg apkName "$(basename "$apk")" --arg apkSha256 "$(sha256_file "$apk")" \
+    '.versionCode == $versionCode and .versionName == $versionName and
+     .apkName == $apkName and .apkSha256 == $apkSha256' "$manifest" >/dev/null
+}
+
+matrix_artifacts() {
+  jq -n --arg gh64 "${apk_names[0]}" --arg gh32 "${apk_names[1]}" --arg fd3 "${apk_names[2]}" \
+    --arg sb64 "${sbom_names[0]}" --arg sb32 "${sbom_names[1]}" --arg sb3 "${sbom_names[2]}" \
+    --arg li64 "${license_names[0]}" --arg li32 "${license_names[1]}" --arg li3 "${license_names[2]}" \
+    '[{profile:"android4",updateChannel:"github",apk:$gh64,sbom:$sb64,licenseNotices:$li64},
+      {profile:"android-armv7",updateChannel:"github",apk:$gh32,sbom:$sb32,licenseNotices:$li32},
+      {profile:"android4",updateChannel:"fdroid",apk:$fd3,sbom:$sb3,licenseNotices:$li3}]'
+}
+
 prepare_candidate() {
-  local output_dir=$1
-  local source_commit=$2
-  local source_tree=$3
+  local output_dir=$1 source_commit=$2 source_tree=$3
   [[ "$source_commit" =~ ^[0-9a-f]{40}$ ]] || die "invalid source commit"
   [[ "$source_tree" =~ ^[0-9a-f]{40}$ ]] || die "invalid source tree"
   [[ "$(git rev-parse HEAD)" == "$source_commit" ]] || die "source commit does not match checkout"
   [[ "$(git rev-parse 'HEAD^{tree}')" == "$source_tree" ]] || die "source tree does not match checkout"
-  # Native preparation applies the tracked i2pd patch inside the pinned submodule.
   git diff --quiet --ignore-submodules=dirty HEAD -- || die "release source contains tracked changes"
   mkdir -p "$output_dir"
-  [[ -z "$(find "$output_dir" -mindepth 1 -maxdepth 1 -print -quit)" ]] ||
-    die "candidate output directory is not empty: $output_dir"
-
+  [[ -z "$(find "$output_dir" -mindepth 1 -maxdepth 1 -print -quit)" ]] || die "candidate output directory is not empty: $output_dir"
   read_release_coordinates
-  local expected_cert apksigner aapt2
+  local expected_cert apksigner aapt2 i
   expected_cert=$(normalized_expected_cert)
   apksigner=$(find_build_tool apksigner)
   aapt2=$(find_build_tool aapt2)
-
-  local arm64_source=build/release-variants/github/app.apk
-  local fdroid_source=build/release-variants/fdroid/app.apk
-  [[ -f "$arm64_source" ]] || die "GitHub arm64-v8a release APK was not produced"
-  [[ -f "$fdroid_source" ]] || die "F-Droid arm64-v8a release APK was not produced"
-
-  local arm64_name="FoxHole-${RELEASE_TAG}-arm64-v8a-release.apk"
-  local fdroid_name="FoxHole-${RELEASE_TAG}-arm64-v8a-fdroid.apk"
-  cp "$arm64_source" "$output_dir/$arm64_name"
-  cp "$fdroid_source" "$output_dir/$fdroid_name"
-
+  release_matrix_names
+  local sources=(build/release-variants/github/app.apk build/release-variants/github-armv7/app.apk build/release-variants/fdroid/app.apk)
+  local license_sources=("${FOXHOLE_GITHUB_LICENSE_ASSETS_PATH:-build/release-variants/github/licenseAssets}" "${FOXHOLE_ARMV7_LICENSE_ASSETS_PATH:-build/release-variants/github-armv7/licenseAssets}" "${FOXHOLE_FDROID_LICENSE_ASSETS_PATH:-build/release-variants/fdroid/licenseAssets}")
   local sbom_source=${FOXHOLE_SBOM_PATH:-build/reports/cyclonedx/bom.json}
   [[ -f "$sbom_source" ]] || die "CycloneDX SBOM was not generated: $sbom_source"
-  local sbom_name="FoxHole-${RELEASE_TAG}-sbom.cdx.json"
-  local fdroid_sbom_name="FoxHole-${RELEASE_TAG}-fdroid-sbom.cdx.json"
-  local license_source=${FOXHOLE_LICENSE_ASSETS_PATH:-app/build/generated/licenseAssets}
-  python3 scripts/aggregate-delivery-sbom.py "$sbom_source" "$license_source" \
-    "$output_dir/$arm64_name" "$output_dir/$sbom_name"
-  verify_android_sbom_inventory "$output_dir/$sbom_name" "$VERSION_NAME"
-  python3 scripts/aggregate-delivery-sbom.py "$sbom_source" "$license_source" \
-    "$output_dir/$fdroid_name" "$output_dir/$fdroid_sbom_name"
-  verify_android_sbom_inventory "$output_dir/$fdroid_sbom_name" "$VERSION_NAME"
-  scripts/run-osv-source-scan.sh "$output_dir/$sbom_name" "$output_dir/$fdroid_sbom_name"
-
-  local license_name="FoxHole-${RELEASE_TAG}-license-notices.zip"
-  package_license_notices "$license_source" "$output_dir/$license_name"
-  verify_license_notices_archive "$output_dir/$license_name"
-
   local cert_report="$output_dir/release-certs.txt"
   : > "$cert_report"
-  printf '== %s ==\n' "$arm64_name" >> "$cert_report"
-  verify_apk "$output_dir/$arm64_name" "$cert_report" "$expected_cert" "$apksigner" "$aapt2" github
-  printf '== %s ==\n' "$fdroid_name" >> "$cert_report"
-  verify_apk "$output_dir/$fdroid_name" "$cert_report" "$expected_cert" "$apksigner" "$aapt2" fdroid
-
-  local arm64_sha
-  arm64_sha=$(sha256_file "$output_dir/$arm64_name")
-  jq -n \
-    --argjson versionCode "$VERSION_CODE" \
-    --arg versionName "$VERSION_NAME" \
-    --arg apkName "$arm64_name" \
-    --arg apkSha256 "$arm64_sha" \
-    '{
-      versionCode: $versionCode,
-      versionName: $versionName,
-      apkName: $apkName,
-      apkSha256: $apkSha256,
-      notes: "See the release notes on GitHub."
-    }' > "$output_dir/update-manifest.json"
-
-  jq -n \
-    --arg sourceCommit "$source_commit" \
-    --arg sourceTree "$source_tree" \
-    --arg versionName "$VERSION_NAME" \
-    --argjson versionCode "$VERSION_CODE" \
-    --arg tag "$RELEASE_TAG" \
-    --arg coreRevision "$CORE_REVISION" \
-    --arg arm64Apk "$arm64_name" \
-    --arg fdroidArm64Apk "$fdroid_name" \
-    --arg sbom "$sbom_name" \
-    --arg fdroidSbom "$fdroid_sbom_name" \
-    --arg licenseNotices "$license_name" \
-    '{
-      schema: 2,
-      sourceCommit: $sourceCommit,
-      sourceTree: $sourceTree,
-      versionName: $versionName,
-      versionCode: $versionCode,
-      tag: $tag,
-      coreRevision: $coreRevision,
-      arm64Apk: $arm64Apk,
-      fdroidArm64Apk: $fdroidArm64Apk,
-      sbom: $sbom,
-      fdroidSbom: $fdroidSbom,
-      licenseNotices: $licenseNotices,
-      updateChannel: "github"
-    }' > "$output_dir/CANDIDATE.json"
-
+  for i in 0 1 2; do
+    [[ -f "${sources[$i]}" ]] || die "release APK was not produced: ${profiles[$i]}"
+    cp "${sources[$i]}" "$output_dir/${apk_names[$i]}"
+    printf '== %s ==\n' "${apk_names[$i]}" >> "$cert_report"
+    verify_apk "$output_dir/${apk_names[$i]}" "$cert_report" "$expected_cert" "$apksigner" "$aapt2" "${channels[$i]}" "${profiles[$i]}"
+    python3 scripts/verify-apk-source.py "$output_dir/${apk_names[$i]}" "$source_commit"
+    aggregate_profile_sbom "$sbom_source" "${license_sources[$i]}" "$output_dir/${apk_names[$i]}" "$output_dir/${sbom_names[$i]}" "${profiles[$i]}"
+    verify_android_sbom_inventory "$output_dir/${sbom_names[$i]}" "$VERSION_NAME"
+    package_license_notices "${license_sources[$i]}" "$output_dir/${license_names[$i]}"
+    verify_license_notices_archive "$output_dir/${license_names[$i]}" "${profiles[$i]}"
+  done
+  scripts/run-osv-source-scan.sh "${sbom_names[@]/#/$output_dir/}"
+  write_update_manifest "$output_dir/${apk_names[0]}" "$output_dir/update-manifest.json"
+  write_update_manifest "$output_dir/${apk_names[1]}" "$output_dir/update-manifest-armeabi-v7a.json"
+  jq -n --arg sourceCommit "$source_commit" --arg sourceTree "$source_tree" \
+    --arg versionName "$VERSION_NAME" --argjson versionCode "$VERSION_CODE" --arg tag "$RELEASE_TAG" \
+    --arg coreRevision "$CORE_REVISION" --argjson artifacts "$(matrix_artifacts)" \
+    '{schema:2,artifactMatrixVersion:1,sourceCommit:$sourceCommit,sourceTree:$sourceTree,versionName:$versionName,
+      versionCode:$versionCode,tag:$tag,coreRevision:$coreRevision,artifacts:$artifacts,
+      arm64Apk:$artifacts[0].apk,fdroidArm64Apk:$artifacts[2].apk,fdroidUniversalApk:$artifacts[2].apk,
+      sbom:$artifacts[0].sbom,fdroidSbom:$artifacts[2].sbom,licenseNotices:$artifacts[0].licenseNotices,
+      armv7Apk:$artifacts[1].apk,armv7Sbom:$artifacts[1].sbom,
+      armv7LicenseNotices:$artifacts[1].licenseNotices,fdroidLicenseNotices:$artifacts[2].licenseNotices,
+      updateChannel:"github",
+      updaterManifests:{android4:"update-manifest.json","android-armv7":"update-manifest-armeabi-v7a.json"}}' > "$output_dir/CANDIDATE.json"
   : > "$output_dir/SHA256SUMS"
   local file
-  for file in \
-    "$arm64_name" \
-    "$fdroid_name" \
-    "$sbom_name" \
-    "$fdroid_sbom_name" \
-    "$license_name" \
-    release-certs.txt \
-    update-manifest.json \
-    CANDIDATE.json
-  do
+  for file in "${apk_names[@]}" "${sbom_names[@]}" "${license_names[@]}" release-certs.txt update-manifest.json update-manifest-armeabi-v7a.json CANDIDATE.json; do
     printf '%s  %s\n' "$(sha256_file "$output_dir/$file")" "$file" >> "$output_dir/SHA256SUMS"
   done
   verify_candidate "$output_dir" "$source_commit" "$source_tree"
 }
 
 verify_candidate() {
-  local candidate_dir=$1
-  local expected_source_commit=${2:-}
-  local expected_source_tree=${3:-}
+  local candidate_dir=$1 expected_source_commit=${2:-} expected_source_tree=${3:-}
   read_release_coordinates
+  release_matrix_names
   [[ -f "$candidate_dir/CANDIDATE.json" ]] || die "candidate metadata is missing"
   [[ -f "$candidate_dir/SHA256SUMS" ]] || die "candidate checksums are missing"
-
-  local canonical_arm64_name="FoxHole-${RELEASE_TAG}-arm64-v8a-release.apk"
-  local canonical_fdroid_name="FoxHole-${RELEASE_TAG}-arm64-v8a-fdroid.apk"
-  local canonical_sbom_name="FoxHole-${RELEASE_TAG}-sbom.cdx.json"
-  local canonical_fdroid_sbom_name="FoxHole-${RELEASE_TAG}-fdroid-sbom.cdx.json"
-  local canonical_license_name="FoxHole-${RELEASE_TAG}-license-notices.zip"
   local expected_files actual_files
-  expected_files="$(
-    printf '%s\n' \
-      CANDIDATE.json \
-      SHA256SUMS \
-      "$canonical_arm64_name" \
-      "$canonical_fdroid_name" \
-      "$canonical_license_name" \
-      "$canonical_sbom_name" \
-      "$canonical_fdroid_sbom_name" \
-      release-certs.txt \
-      update-manifest.json |
-      LC_ALL=C sort
-  )"
-  actual_files="$(
-    find "$candidate_dir" -mindepth 1 -maxdepth 1 -type f -exec basename {} \; |
-      LC_ALL=C sort
-  )"
+  expected_files="$(printf '%s\n' CANDIDATE.json SHA256SUMS "${apk_names[@]}" "${sbom_names[@]}" "${license_names[@]}" release-certs.txt update-manifest.json update-manifest-armeabi-v7a.json | LC_ALL=C sort)"
+  actual_files="$(find "$candidate_dir" -mindepth 1 -maxdepth 1 -type f -exec basename {} \; | LC_ALL=C sort)"
   [[ "$actual_files" == "$expected_files" ]] || die "candidate contains an unexpected file set"
   if find "$candidate_dir" -mindepth 1 -maxdepth 1 ! -type f -print -quit | grep -q .; then
     die "candidate contains a directory, symlink, or special file"
   fi
-
   (
     cd "$candidate_dir"
-    if command -v sha256sum >/dev/null 2>&1; then
-      sha256sum --check --strict SHA256SUMS
-    else
-      shasum -a 256 -c SHA256SUMS
-    fi
+    if command -v sha256sum >/dev/null 2>&1; then sha256sum --check --strict SHA256SUMS
+    else shasum -a 256 -c SHA256SUMS; fi
   )
-
-  local metadata="$candidate_dir/CANDIDATE.json"
-  local source_commit source_tree arm64_name fdroid_name sbom_name fdroid_sbom_name license_name
+  local metadata="$candidate_dir/CANDIDATE.json" source_commit source_tree i
   source_commit=$(jq -er '.sourceCommit' "$metadata")
   source_tree=$(jq -er '.sourceTree' "$metadata")
-  arm64_name=$(jq -er '.arm64Apk' "$metadata")
-  fdroid_name=$(jq -er '.fdroidArm64Apk' "$metadata")
-  sbom_name=$(jq -er '.sbom' "$metadata")
-  fdroid_sbom_name=$(jq -er '.fdroidSbom' "$metadata")
-  license_name=$(jq -er '.licenseNotices' "$metadata")
   [[ "$source_commit" =~ ^[0-9a-f]{40}$ ]] || die "candidate source commit is invalid"
   [[ "$source_tree" =~ ^[0-9a-f]{40}$ ]] || die "candidate source tree is invalid"
-  [[ "$arm64_name" == "$canonical_arm64_name" ]] ||
-    die "candidate arm64 APK name is not canonical"
-  [[ "$fdroid_name" == "$canonical_fdroid_name" ]] ||
-    die "candidate F-Droid APK name is not canonical"
-  [[ "$sbom_name" == "$canonical_sbom_name" ]] ||
-    die "candidate SBOM name is not canonical"
-  [[ "$fdroid_sbom_name" == "$canonical_fdroid_sbom_name" ]] ||
-    die "candidate F-Droid SBOM name is not canonical"
-  [[ "$license_name" == "$canonical_license_name" ]] ||
-    die "candidate license-notices name is not canonical"
-  [[ -z "$expected_source_commit" || "$source_commit" == "$expected_source_commit" ]] ||
-    die "candidate source commit does not match the expected source commit"
-  [[ -z "$expected_source_tree" || "$source_tree" == "$expected_source_tree" ]] ||
-    die "candidate source tree does not match the expected source tree"
-
-  jq -e \
-    --arg versionName "$VERSION_NAME" \
-    --argjson versionCode "$VERSION_CODE" \
-    --arg tag "$RELEASE_TAG" \
-    --arg coreRevision "$CORE_REVISION" '
-      .schema == 2 and
-      .versionName == $versionName and
-      .versionCode == $versionCode and
-      .tag == $tag and
-      .coreRevision == $coreRevision and
-      .updateChannel == "github"
+  [[ -z "$expected_source_commit" || "$source_commit" == "$expected_source_commit" ]] || die "candidate source commit does not match the expected source commit"
+  [[ -z "$expected_source_tree" || "$source_tree" == "$expected_source_tree" ]] || die "candidate source tree does not match the expected source tree"
+  jq -e --arg versionName "$VERSION_NAME" --argjson versionCode "$VERSION_CODE" --arg tag "$RELEASE_TAG" \
+    --arg coreRevision "$CORE_REVISION" --argjson artifacts "$(matrix_artifacts)" '
+      .schema == 2 and .artifactMatrixVersion == 1 and .versionName == $versionName and .versionCode == $versionCode and
+      .tag == $tag and .coreRevision == $coreRevision and .artifacts == $artifacts and
+      .arm64Apk == $artifacts[0].apk and .fdroidArm64Apk == $artifacts[2].apk and
+      .fdroidUniversalApk == $artifacts[2].apk and .sbom == $artifacts[0].sbom and
+      .fdroidSbom == $artifacts[2].sbom and .licenseNotices == $artifacts[0].licenseNotices and
+      .armv7Apk == $artifacts[1].apk and .armv7Sbom == $artifacts[1].sbom and
+      .armv7LicenseNotices == $artifacts[1].licenseNotices and
+      .fdroidLicenseNotices == $artifacts[2].licenseNotices and .updateChannel == "github" and
+      .updaterManifests == {android4:"update-manifest.json","android-armv7":"update-manifest-armeabi-v7a.json"}
     ' "$metadata" >/dev/null
-
-  for file in "$arm64_name" "$fdroid_name" "$sbom_name" "$fdroid_sbom_name" "$license_name" release-certs.txt update-manifest.json; do
-    [[ -f "$candidate_dir/$file" ]] || die "candidate file is missing: $file"
+  for i in 0 1 2; do
+    python3 scripts/verify-apk-source.py "$candidate_dir/${apk_names[$i]}" "$source_commit"
+    verify_license_notices_archive "$candidate_dir/${license_names[$i]}" "${profiles[$i]}"
+    verify_android_sbom_inventory "$candidate_dir/${sbom_names[$i]}" "$VERSION_NAME"
+    verify_sbom_apk_digest "$candidate_dir/${sbom_names[$i]}" "$candidate_dir/${apk_names[$i]}"
   done
-  python3 scripts/verify-apk-source.py "$candidate_dir/$arm64_name" "$source_commit"
-  python3 scripts/verify-apk-source.py "$candidate_dir/$fdroid_name" "$source_commit"
-  verify_license_notices_archive "$candidate_dir/$license_name"
-
-  verify_android_sbom_inventory "$candidate_dir/$sbom_name" "$VERSION_NAME"
-  verify_android_sbom_inventory "$candidate_dir/$fdroid_sbom_name" "$VERSION_NAME"
-  verify_sbom_apk_digest "$candidate_dir/$sbom_name" "$candidate_dir/$arm64_name"
-  verify_sbom_apk_digest "$candidate_dir/$fdroid_sbom_name" "$candidate_dir/$fdroid_name"
-
-  local arm64_sha
-  arm64_sha=$(sha256_file "$candidate_dir/$arm64_name")
-  jq -e \
-    --argjson versionCode "$VERSION_CODE" \
-    --arg versionName "$VERSION_NAME" \
-    --arg apkName "$arm64_name" \
-    --arg apkSha256 "$arm64_sha" '
-      .versionCode == $versionCode and
-      .versionName == $versionName and
-      .apkName == $apkName and
-      .apkSha256 == $apkSha256
-    ' "$candidate_dir/update-manifest.json" >/dev/null
-
+  verify_update_manifest "$candidate_dir/update-manifest.json" "$candidate_dir/${apk_names[0]}"
+  verify_update_manifest "$candidate_dir/update-manifest-armeabi-v7a.json" "$candidate_dir/${apk_names[1]}"
   local expected_cert apksigner aapt2 verify_report
   expected_cert=$(normalized_expected_cert)
   apksigner=$(find_build_tool apksigner)
   aapt2=$(find_build_tool aapt2)
   verify_report=$(mktemp)
-  verify_apk "$candidate_dir/$arm64_name" "$verify_report" "$expected_cert" "$apksigner" "$aapt2" github
-  verify_apk "$candidate_dir/$fdroid_name" "$verify_report" "$expected_cert" "$apksigner" "$aapt2" fdroid
+  for i in 0 1 2; do
+    verify_apk "$candidate_dir/${apk_names[$i]}" "$verify_report" "$expected_cert" "$apksigner" "$aapt2" "${channels[$i]}" "${profiles[$i]}"
+  done
   rm -f "$verify_report"
 }
 

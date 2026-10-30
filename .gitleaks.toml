@@ -33,6 +33,7 @@ regexes = [
 # The F-Droid recipe publishes the APK certificate pin so clients can verify upgrades.
 [[allowlists]]
 description = "public APK certificate pin in F-Droid metadata"
+targetRules = ["generic-api-key"]
 condition = "AND"
 paths = ['''^metadata/com\.foxhole\.guard\.yml$''']
 regexTarget = "line"
@@ -60,3 +61,16 @@ regex = '''\b(?:37\.139\.\d{1,3}\.\d{1,3}|83\.166\.245\.\d{1,3}|185\.62\.56\.\d{
 id = "foxhole-live-test-uuid"
 description = "UUID of a retired VLESS/VMess account"
 regex = '''(?i)\ba(?:86|43)ad(?:23[013]|466)\b'''
+
+# This published HPK test vector encodes bytes 1..32; other values and paths remain scanned.
+[[allowlists]]
+description = "deterministic Amnezia HPK byte-range test vector"
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "secret"
+paths = [
+  '''^core/model/src/test/kotlin/com/foxhole/core/model/AmneziaHeaderProtectionKeyTest\.kt$''',
+  '''^core/importer/src/test/kotlin/com/foxhole/core/importer/ProfileImportAmneziaTest\.kt$''',
+  '''^core/runtime/src/test/kotlin/com/foxhole/core/runtime/FoxCoreAmneziaTranslationTest\.kt$''',
+]
+regexes = ['''^AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA=$''']

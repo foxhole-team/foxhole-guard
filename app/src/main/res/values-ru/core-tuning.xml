@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="cli_core_expert_title">Экспертные настройки</string>
+    <string name="cli_core_expert_note">Изменения применяются к активному туннелю. Изменение ресурсов ядра перезапускает его. Большие буферы и лимиты соединений могут увеличить расход памяти.</string>
+    <string name="cli_core_workers">Потоки ядра</string>
+    <string name="cli_core_connect_timeout">Таймаут подключения</string>
+    <string name="cli_core_handshake_timeout">Таймаут рукопожатия</string>
+    <string name="cli_core_relay_buffer">Буфер I/O</string>
+    <string name="cli_core_tcp_flows">Лимит TCP-соединений</string>
+    <string name="cli_core_udp_flows">Лимит UDP-соединений</string>
+    <string name="cli_core_dns_timeout">Таймаут DNS</string>
+    <string name="cli_core_dns_cache">Записи в кэше DNS</string>
+    <string name="cli_core_reset">Стандартные настройки ядра</string>
+    <string name="cli_core_default">Стандарт</string>
+    <string name="cli_core_range">Допустимый диапазон: %1$d–%2$d</string>
+</resources>

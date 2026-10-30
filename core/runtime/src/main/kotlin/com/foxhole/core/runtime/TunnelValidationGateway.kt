@@ -91,7 +91,10 @@ class TunnelValidationGateway(
         val resolvedConfig =
             currentSnapshot.profileId
                 ?.let { profileId ->
-                    runCatching { profileRepository.getResolvedConfig(profileId) }.getOrNull()
+                    runCatching { profileRepository.getResolvedConfig(profileId) }
+                        .onFailure { error ->
+                            if (error is CancellationException) throw error
+                        }.getOrNull()
                 }
         val remoteDnsServers = resolvedConfig?.let(VpnDnsServerSelector::remoteDnsServerAddresses).orEmpty()
         if (activeTunnelConnected) {

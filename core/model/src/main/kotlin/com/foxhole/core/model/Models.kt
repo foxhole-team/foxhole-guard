@@ -321,6 +321,11 @@ data class FoxCoreDnsRuleSetBootstrap(
     val publicKeyBase64: String,
     val minimumSequence: Long = 0,
     val signedUpdate: FoxCoreSignedDnsRuleSetUpdate? = null,
+    val categoryMinimumSequence: ULong? = null,
+    val availableCategories: Set<DnsFilterCategory>? = null,
+    val categoryVariant: String? = null,
+    val stagedBundleToken: String? = null,
+    val manifestSha256: String? = null,
 ) {
     internal fun redactedDescription(): String =
         "FoxCoreDnsRuleSetBootstrap(name=$name, artifact=<redacted>, key=<redacted>)"
@@ -379,6 +384,7 @@ data class VpnSession(
     val quarantinePolicyRevision: Long = 0L,
 
     val i2pEndpointGeneration: Long? = null,
+    val coreTuning: CoreTuningSettings = CoreTuningSettings(),
 )
 
 @Serializable

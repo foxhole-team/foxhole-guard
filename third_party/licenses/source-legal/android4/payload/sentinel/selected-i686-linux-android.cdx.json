@@ -1,0 +1,5805 @@
+{
+  "bomFormat": "CycloneDX",
+  "components": [
+    {
+      "bom-ref": "urn:foxhole:cargo:16e49ee3a77903b0a1ce2402e211beab882d21705f8dcde1888388d762a5cf52",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/VirusTotal/yara-x"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "BSD-3-Clause"
+          }
+        }
+      ],
+      "name": "yara-x",
+      "properties": [
+        {
+          "name": "cargo:workspace-manifest",
+          "value": "vendor/yara-x/Cargo.toml"
+        },
+        {
+          "name": "cargo:source-revision",
+          "value": "7b15f5b614031181b5a2eab274acac6f15d961ff"
+        }
+      ],
+      "purl": "pkg:generic/foxhole/yara-x@1.21.0?core_commit=7b15f5b614031181b5a2eab274acac6f15d961ff",
+      "type": "library",
+      "version": "1.21.0"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:0614e1e14fc1156385efa0ec4701e0f9cc26e5a56d98feaaab2e9321f3b61df9",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/VirusTotal/yara-x"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "BSD-3-Clause"
+          }
+        }
+      ],
+      "name": "yara-x-parser",
+      "properties": [
+        {
+          "name": "cargo:workspace-manifest",
+          "value": "vendor/yara-x-parser/Cargo.toml"
+        },
+        {
+          "name": "cargo:source-revision",
+          "value": "7b15f5b614031181b5a2eab274acac6f15d961ff"
+        }
+      ],
+      "purl": "pkg:generic/foxhole/yara-x-parser@1.21.0?core_commit=7b15f5b614031181b5a2eab274acac6f15d961ff",
+      "type": "library",
+      "version": "1.21.0"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:90cd2b641d4a87240b7c25b484d080254e9904ad02b65fef0214ea1ff2eb3b34",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/BurntSushi/aho-corasick"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "Unlicense OR MIT"
+          }
+        }
+      ],
+      "name": "aho-corasick",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/aho-corasick@1.1.5",
+      "type": "library",
+      "version": "1.1.5"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:7fa97af46101d5450eac49be4546e81a17788d696821fa92eb2c4d8e81f8854c",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/zakarumych/allocator-api2"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT OR Apache-2.0"
+          }
+        }
+      ],
+      "name": "allocator-api2",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/allocator-api2@0.2.21",
+      "type": "library",
+      "version": "0.2.21"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:36bcbefd0a26c295b0312c6e2777a69020ab4b0838df6c714aabaead92d1fc57",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/rust-lang/annotate-snippets-rs"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT OR Apache-2.0"
+          }
+        }
+      ],
+      "name": "annotate-snippets",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/annotate-snippets@0.12.16",
+      "type": "library",
+      "version": "0.12.16"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:f65811ba5717f4d7bbc050f08daa1b199f745f1f10273982b78ec79fda15804d",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/rust-cli/anstyle.git"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT OR Apache-2.0"
+          }
+        }
+      ],
+      "name": "anstyle",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/anstyle@1.0.14",
+      "type": "library",
+      "version": "1.0.14"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:dc6381fb80453cb72e8cd8d57100cef2b28ddbc425b3fec7097e099f71670a7a",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/dtolnay/anyhow"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT OR Apache-2.0"
+          }
+        }
+      ],
+      "name": "anyhow",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/anyhow@1.0.104",
+      "type": "library",
+      "version": "1.0.104"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:0fc146108d9dc69c10c3d160e2a81133528b695410a2f6ec94f9fdd0f3f0dee6",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/rust-fuzz/arbitrary/"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT OR Apache-2.0"
+          }
+        }
+      ],
+      "name": "arbitrary",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/arbitrary@1.4.2",
+      "type": "library",
+      "version": "1.4.2"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:aac6a21f4ad3aae570205a5f49ec1f044843b6de7001d78761f6b5c1666e8334",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/dtolnay/async-trait"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT OR Apache-2.0"
+          }
+        }
+      ],
+      "name": "async-trait",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/async-trait@0.1.92",
+      "type": "library",
+      "version": "0.1.92"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:41f0cbe6f49388330f3cbe8bd41cf2425bcd7e355afd34d4d7e6504a9eb42044",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/cuviper/autocfg"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "Apache-2.0 OR MIT"
+          }
+        }
+      ],
+      "name": "autocfg",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/autocfg@1.5.1",
+      "type": "library",
+      "version": "1.5.1"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:9f42fcbf7f46c7761923e94fa712edeb5e9116b5af2dd604779e24d198f90209",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/marshallpierce/rust-base64"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT OR Apache-2.0"
+          }
+        }
+      ],
+      "name": "base64",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/base64@0.23.1",
+      "type": "library",
+      "version": "0.23.1"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:87b72b2dae39fbdc68be1cb8c12e3e9701e8b21a8748a009addcece2e9e9219b",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/bincode-org/bincode"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT"
+          }
+        }
+      ],
+      "name": "bincode",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/bincode@2.0.1",
+      "type": "library",
+      "version": "2.0.1"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:1d3d983f6fc282547f1a3689f3ab62b0421a4ba9aaa3153d56860169e6f90ee0",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/bincode-org/bincode"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT"
+          }
+        }
+      ],
+      "name": "bincode_derive",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/bincode_derive@2.0.1",
+      "type": "library",
+      "version": "2.0.1"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:a49cf0c5a775307b7368e406ac13821c5c7a61dcf56d81a66b0b89383dc856aa",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/bitflags/bitflags"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT OR Apache-2.0"
+          }
+        }
+      ],
+      "name": "bitflags",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/bitflags@2.13.2",
+      "type": "library",
+      "version": "2.13.2"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:28e51f0c6ff6604b8cd9e96d31920021bb1aa46872c7e488fc567bcffb18f03a",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/bitvecto-rs/bitvec"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT"
+          }
+        }
+      ],
+      "name": "bitvec",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/bitvec@1.1.1",
+      "type": "library",
+      "version": "1.1.1"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:0a748df31aea20d47263b095b5b850a9527f4078b9947b5601ec9d889560d9d2",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/RustCrypto/utils"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT OR Apache-2.0"
+          }
+        }
+      ],
+      "name": "block-buffer",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/block-buffer@0.10.4",
+      "type": "library",
+      "version": "0.10.4"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:1fe2d9cc7282e81dde32ee5c4097b785fd6247e922d9cbafcb2ce5661da54cdc",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/BurntSushi/bstr"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT OR Apache-2.0"
+          }
+        }
+      ],
+      "name": "bstr",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/bstr@1.13.1",
+      "type": "library",
+      "version": "1.13.1"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:a812c55fcf5184c58052de5b7d2d58d9faae7eb793f028f2ee6c83328b26e4c6",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/fitzgen/bumpalo"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT OR Apache-2.0"
+          }
+        }
+      ],
+      "name": "bumpalo",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/bumpalo@3.20.3",
+      "type": "library",
+      "version": "3.20.3"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:b46afb380e482614115ad2fd2334523fc08847cdb3664e0c3faf02e2d813afe5",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/rust-lang/cc-rs"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT OR Apache-2.0"
+          }
+        }
+      ],
+      "name": "cc",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/cc@1.6.0",
+      "type": "library",
+      "version": "1.6.0"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:cd0760faee680b12ef8b70309bfc17e074aca6c0a7c7fddf6da282bdcc959701",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/rust-lang/cfg-if"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT OR Apache-2.0"
+          }
+        }
+      ],
+      "name": "cfg-if",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/cfg-if@1.0.5",
+      "type": "library",
+      "version": "1.0.5"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:3519045bb4b8a24737bf48335d61905e02007e7a48cfa00c03aafb71935fb898",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/chronotope/chrono"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT OR Apache-2.0"
+          }
+        }
+      ],
+      "name": "chrono",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/chrono@0.4.45",
+      "type": "library",
+      "version": "0.4.45"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:20e80a5d26b86e1729b2342ac33f215b9c775aab6f356a87e168df25e123e630",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/jamesmunns/cobs.rs"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT OR Apache-2.0"
+          }
+        }
+      ],
+      "name": "cobs",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/cobs@0.3.0",
+      "type": "library",
+      "version": "0.3.0"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:ff5de8f1750579af31d3d657ab14833d2c7171d3242205e733f8ea4a15652c2c",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/RustCrypto/formats/tree/master/const-oid"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "Apache-2.0 OR MIT"
+          }
+        }
+      ],
+      "name": "const-oid",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/const-oid@0.9.6",
+      "type": "library",
+      "version": "0.9.6"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:783bc5a752764d2b266ad7f22bc10ec60b82286a9ae7745b9a9293169d1b7d97",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/matklad/countme"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT OR Apache-2.0"
+          }
+        }
+      ],
+      "name": "countme",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/countme@3.0.1",
+      "type": "library",
+      "version": "3.0.1"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:bcd8b7c7d2875f07216bf8b506825218c6c9c8eb6da8f2cd971cae3096303dba",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/RustCrypto/utils"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT OR Apache-2.0"
+          }
+        }
+      ],
+      "name": "cpufeatures",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/cpufeatures@0.2.17",
+      "type": "library",
+      "version": "0.2.17"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:b76a7bc90873b624283c028c956ad57c6719b53507103124c2645c852d8685b9",
+      "licenses": [
+        {
+          "license": {
+            "name": "Apache-2.0 WITH LLVM-exception"
+          }
+        }
+      ],
+      "name": "cranelift-assembler-x64-meta",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/cranelift-assembler-x64-meta@0.136.4",
+      "type": "library",
+      "version": "0.136.4"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:15626a4253537bac46a2e3295a74f3653a6929a5bf3cb339861ddca1301c0425",
+      "licenses": [
+        {
+          "license": {
+            "name": "Apache-2.0 WITH LLVM-exception"
+          }
+        }
+      ],
+      "name": "cranelift-assembler-x64",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/cranelift-assembler-x64@0.136.4",
+      "type": "library",
+      "version": "0.136.4"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:dc8bcc92ad1a76c40e444a092b0a7c8daa4210d689857e9c9d0ddfc682b89476",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/bytecodealliance/wasmtime"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "Apache-2.0 WITH LLVM-exception"
+          }
+        }
+      ],
+      "name": "cranelift-bforest",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/cranelift-bforest@0.136.4",
+      "type": "library",
+      "version": "0.136.4"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:efe2ef5c9c082140f3a6e8dfb85f9f042b66a55c4d4dd30acf651200b922e9bc",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/bytecodealliance/wasmtime"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "Apache-2.0 WITH LLVM-exception"
+          }
+        }
+      ],
+      "name": "cranelift-bitset",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/cranelift-bitset@0.136.4",
+      "type": "library",
+      "version": "0.136.4"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:5ac844bac82c2152c0f105676e0257a918e3f67a8db5c7cb1f1e37909c2927a8",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/bytecodealliance/wasmtime"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "Apache-2.0 WITH LLVM-exception"
+          }
+        }
+      ],
+      "name": "cranelift-codegen-meta",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/cranelift-codegen-meta@0.136.4",
+      "type": "library",
+      "version": "0.136.4"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:3d126e74f6d886bf7cb6c495e6f453ebdce252d593b8dc41d7922421b68ef044",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/bytecodealliance/wasmtime"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "Apache-2.0 WITH LLVM-exception"
+          }
+        }
+      ],
+      "name": "cranelift-codegen-shared",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/cranelift-codegen-shared@0.136.4",
+      "type": "library",
+      "version": "0.136.4"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:c64349906a2961b61c2a3e9ce488ddb747d8cffd21e5b070cd96a4a1d18acc68",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/bytecodealliance/wasmtime"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "Apache-2.0 WITH LLVM-exception"
+          }
+        }
+      ],
+      "name": "cranelift-codegen",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/cranelift-codegen@0.136.4",
+      "type": "library",
+      "version": "0.136.4"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:007968a4740291de0b49c80c5367d4431e4b6bd9989184974a37a2f59e5175c2",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/bytecodealliance/wasmtime"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "Apache-2.0 WITH LLVM-exception"
+          }
+        }
+      ],
+      "name": "cranelift-control",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/cranelift-control@0.136.4",
+      "type": "library",
+      "version": "0.136.4"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:dd9eac08406aaabe135426fc07c7e6fb5bf9ac7bb28f1a39d2dc6c4a8e9b1e19",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/bytecodealliance/wasmtime"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "Apache-2.0 WITH LLVM-exception"
+          }
+        }
+      ],
+      "name": "cranelift-entity",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/cranelift-entity@0.136.4",
+      "type": "library",
+      "version": "0.136.4"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:b554ee2f20195b9ef2571cacb56ee0de5b641728c89314150e88ff4c65fc06c7",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/bytecodealliance/wasmtime"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "Apache-2.0 WITH LLVM-exception"
+          }
+        }
+      ],
+      "name": "cranelift-frontend",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/cranelift-frontend@0.136.4",
+      "type": "library",
+      "version": "0.136.4"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:0f6a7a8e3e3052a4685e50d868d29ca297232bec63ed9e098d2d03db1fc346d6",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/bytecodealliance/wasmtime/tree/main/cranelift/isle"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "Apache-2.0 WITH LLVM-exception"
+          }
+        }
+      ],
+      "name": "cranelift-isle",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/cranelift-isle@0.136.4",
+      "type": "library",
+      "version": "0.136.4"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:888e153e67adeb25807dcd9d1370e77fe4e07e079cab06e279d73eff216213d3",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/bytecodealliance/wasmtime"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "Apache-2.0 WITH LLVM-exception"
+          }
+        }
+      ],
+      "name": "cranelift-native",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/cranelift-native@0.136.4",
+      "type": "library",
+      "version": "0.136.4"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:bed753c2ed9968a4e15ed7064bb4ba0d4c87818c525020641cdb20dd7cf22d12",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/bytecodealliance/wasmtime"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "Apache-2.0 WITH LLVM-exception"
+          }
+        }
+      ],
+      "name": "cranelift-srcgen",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/cranelift-srcgen@0.136.4",
+      "type": "library",
+      "version": "0.136.4"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:43f78745249e5acd66a957b8100202cff7c8bdf088b4cf0d0658e34f1e7f20f1",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/srijs/rust-crc32fast"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT OR Apache-2.0"
+          }
+        }
+      ],
+      "name": "crc32fast",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/crc32fast@1.5.2",
+      "type": "library",
+      "version": "1.5.2"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:f1d8bfc3e214efbd97cdba468465e5481edaf5d1b7389d2d0f1afa1c8527ce27",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/crossbeam-rs/crossbeam"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT OR Apache-2.0"
+          }
+        }
+      ],
+      "name": "crossbeam-deque",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/crossbeam-deque@0.8.8",
+      "type": "library",
+      "version": "0.8.8"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:db2de746cd7713d374794ca84d4d5c6d57a223dd6014576f3a69f35a641ef0c0",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/crossbeam-rs/crossbeam"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT OR Apache-2.0"
+          }
+        }
+      ],
+      "name": "crossbeam-epoch",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/crossbeam-epoch@0.9.21",
+      "type": "library",
+      "version": "0.9.21"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:0af40b6560042e5643b1433220530af9f1837fc8c6cb55e5267ab1c88a69cf30",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/crossbeam-rs/crossbeam"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT OR Apache-2.0"
+          }
+        }
+      ],
+      "name": "crossbeam-utils",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/crossbeam-utils@0.8.23",
+      "type": "library",
+      "version": "0.8.23"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:d182dd5c73aae8001cf15539ab11dace4a4143f4cfbda65d38a1c2e66c405cb8",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/RustCrypto/traits"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT OR Apache-2.0"
+          }
+        }
+      ],
+      "name": "crypto-common",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/crypto-common@0.1.7",
+      "type": "library",
+      "version": "0.1.7"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:9ff8c51d63d90c09b892cffcd3403a6e92965954c46518b3629e2c425fd1eb2a",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/daac-tools/daachorse"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT OR Apache-2.0"
+          }
+        }
+      ],
+      "name": "daachorse",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/daachorse@5.0.0",
+      "type": "library",
+      "version": "5.0.0"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:72f6bec47beeaeee90c38a21d4947285bf91d279c04e6019a83ba262d02418c3",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/TedDriggs/darling"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT"
+          }
+        }
+      ],
+      "name": "darling",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/darling@0.24.1",
+      "type": "library",
+      "version": "0.24.1"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:072241f391fbae1e25372a0b720fdc3c7a58aa4fa644347e91f23cb7fee06944",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/TedDriggs/darling"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT"
+          }
+        }
+      ],
+      "name": "darling_core",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/darling_core@0.24.1",
+      "type": "library",
+      "version": "0.24.1"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:faed4d33a5352d4474649f9750c0b38270411f6fdf54ee022e349dc831d9911a",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/TedDriggs/darling"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT"
+          }
+        }
+      ],
+      "name": "darling_macro",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/darling_macro@0.24.1",
+      "type": "library",
+      "version": "0.24.1"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:c92dfeadaf7c683da66c4e62cbc10d8e2026e6d36f4ac3f08e5685ea7e289d16",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/RustCrypto/traits"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT OR Apache-2.0"
+          }
+        }
+      ],
+      "name": "digest",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/digest@0.10.7",
+      "type": "library",
+      "version": "0.10.7"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:d29cbefce14cd31dc5912400c7fb96638e4781b0807be0ab0e8e3ea6095454a5",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/rayon-rs/either"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT OR Apache-2.0"
+          }
+        }
+      ],
+      "name": "either",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/either@1.18.0",
+      "type": "library",
+      "version": "1.18.0"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:32551cd25f1a7bfd7828c86ad03b46718c0fd3ad934d8620c00b1544f2223e4b",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/indexmap-rs/equivalent"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "Apache-2.0 OR MIT"
+          }
+        }
+      ],
+      "name": "equivalent",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/equivalent@1.0.2",
+      "type": "library",
+      "version": "1.0.2"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:3ca955306268a03ad6ff3bae75d0394865c43fbc1ca8dc2376af3ee92594f8c8",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/lambda-fairy/rust-errno"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT OR Apache-2.0"
+          }
+        }
+      ],
+      "name": "errno",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/errno@0.3.14",
+      "type": "library",
+      "version": "0.3.14"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:2d1706e57b063f1357ccbab8f8fcd661c808712c1b84722ce581fff5578b8a31",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/sfackler/rust-fallible-iterator"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT/Apache-2.0"
+          }
+        }
+      ],
+      "name": "fallible-iterator",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/fallible-iterator@0.3.0",
+      "type": "library",
+      "version": "0.3.0"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:f2fd8a521611640e746db14169b3a516a272e2852cc146bf0396a4f0533b0c17",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/smol-rs/fastrand"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "Apache-2.0 OR MIT"
+          }
+        }
+      ],
+      "name": "fastrand",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/fastrand@2.5.0",
+      "type": "library",
+      "version": "2.5.0"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:b7d72184f7829ff18c3caa191cb113bd39aeecb3f6cf91a016051a058bfbcdea",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/rust-lang/cc-rs"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT OR Apache-2.0"
+          }
+        }
+      ],
+      "name": "find-msvc-tools",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/find-msvc-tools@0.1.14",
+      "type": "library",
+      "version": "0.1.14"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:013fd1a40ea9e6a4df2785046f9797870e28184e3f7a7933b7749d4fee4b06c3",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/servo/rust-fnv"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "Apache-2.0 / MIT"
+          }
+        }
+      ],
+      "name": "fnv",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/fnv@1.0.7",
+      "type": "library",
+      "version": "1.0.7"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:3ee6d7fb02b926f657afdee39eac43e689ce63fb87a9b14fbbc68b356860a05b",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/orlp/foldhash"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "Zlib"
+          }
+        }
+      ],
+      "name": "foldhash",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/foldhash@0.2.0",
+      "type": "library",
+      "version": "0.2.0"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:d8fb4d9018b7a0649135b4a93461a2102677eb7c8ef37e11b7890cfd80c47078",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/myrrlyn/funty"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT"
+          }
+        }
+      ],
+      "name": "funty",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/funty@2.0.0",
+      "type": "library",
+      "version": "2.0.0"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:31bd8478daf21efc8c8211e67cf4f307492f42c6015677e5ec1ba8111fab0f66",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/fizyk20/generic-array.git"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT"
+          }
+        }
+      ],
+      "name": "generic-array",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/generic-array@0.14.7",
+      "type": "library",
+      "version": "0.14.7"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:4f1c9ebbb1def1e1f4a591776ee7c4fb3d77dd021faf187c9f103a1adcf5b5df",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/rust-random/getrandom"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT OR Apache-2.0"
+          }
+        }
+      ],
+      "name": "getrandom",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/getrandom@0.4.3",
+      "type": "library",
+      "version": "0.4.3"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:c730b6ea4d34e3a601c622f034ddc7b74082479b1565c03f0b2d9d81566809b3",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/gimli-rs/gimli"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT OR Apache-2.0"
+          }
+        }
+      ],
+      "name": "gimli",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/gimli@0.32.3",
+      "type": "library",
+      "version": "0.32.3"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:d6820bc6cfb9aa414adcc934ad29a442a3a57c32a1b88f7a8e43e0ca58ae6802",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/gimli-rs/gimli"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT OR Apache-2.0"
+          }
+        }
+      ],
+      "name": "gimli",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/gimli@0.33.0",
+      "type": "library",
+      "version": "0.33.0"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:456a593cb9d363e88907769d8b3f1ecfbac6b958da562ca58f57a573f53f4fad",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/BurntSushi/ripgrep/tree/master/crates/globset"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "Unlicense OR MIT"
+          }
+        }
+      ],
+      "name": "globset",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/globset@0.4.20",
+      "type": "library",
+      "version": "0.4.20"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:3d4d7d8e89237a2f454172781ca44ab4d5b1b7be607a7a83bb6440413a512603",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/gilnaa/globwalk"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT"
+          }
+        }
+      ],
+      "name": "globwalk",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/globwalk@0.9.1",
+      "type": "library",
+      "version": "0.9.1"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:e7eb9be3602750730974b6283453d552617bd38da5179c7b7669e8192bf498a5",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/rust-lang/hashbrown"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT OR Apache-2.0"
+          }
+        }
+      ],
+      "name": "hashbrown",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/hashbrown@0.14.5",
+      "type": "library",
+      "version": "0.14.5"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:5a074a4bb6610bcfeacc30a86d6315d0670fd78bf0fa8b92bff8ec46282ad873",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/rust-lang/hashbrown"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT OR Apache-2.0"
+          }
+        }
+      ],
+      "name": "hashbrown",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/hashbrown@0.16.1",
+      "type": "library",
+      "version": "0.16.1"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:97fc3cc13b5a2878587f7b9e4e8536b8e1783344ef598c825e8d059fbc3f16c0",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/rust-lang/hashbrown"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT OR Apache-2.0"
+          }
+        }
+      ],
+      "name": "hashbrown",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/hashbrown@0.17.1",
+      "type": "library",
+      "version": "0.17.1"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:f63e88c3dd883d30cb1e1daf49f5034fa612345896d10da3996e73c41a582531",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/withoutboats/heck"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT OR Apache-2.0"
+          }
+        }
+      ],
+      "name": "heck",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/heck@0.5.0",
+      "type": "library",
+      "version": "0.5.0"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:411d443ec84f5214c5378b486129d8aa95cc8d1e43803fc531cbb3116f094887",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/KokaKiwi/rust-hex"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT OR Apache-2.0"
+          }
+        }
+      ],
+      "name": "hex",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/hex@0.4.3",
+      "type": "library",
+      "version": "0.4.3"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:29f5faf5baaa7299dc71aaf227c3902e94d443ab156ed50678e232ab5877d3f6",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/rust-lang/cargo"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT OR Apache-2.0"
+          }
+        }
+      ],
+      "name": "home",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/home@0.5.12",
+      "type": "library",
+      "version": "0.5.12"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:136fa1b08ee959648add3f4b31447ec4cc199279cbed34afa350c4798ea13d78",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/strawlab/iana-time-zone"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT OR Apache-2.0"
+          }
+        }
+      ],
+      "name": "iana-time-zone",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/iana-time-zone@0.1.65",
+      "type": "library",
+      "version": "0.1.65"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:5c4104fba7e8e21a4c332a9e5dce58ddc5100f3a684aba23b358ab426f4dcf45",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/fitzgen/id-arena"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT/Apache-2.0"
+          }
+        }
+      ],
+      "name": "id-arena",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/id-arena@2.3.0",
+      "type": "library",
+      "version": "2.3.0"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:db7646cd67eae585cbc0f4842bd945818990f8860622b8f4b09c232386762552",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/TedDriggs/ident_case"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT/Apache-2.0"
+          }
+        }
+      ],
+      "name": "ident_case",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/ident_case@1.0.1",
+      "type": "library",
+      "version": "1.0.1"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:4c0c01eb7810dfb2f696084d11421512c78702610f6c6ae74b859982d8196316",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/BurntSushi/ripgrep/tree/master/crates/ignore"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "Unlicense OR MIT"
+          }
+        }
+      ],
+      "name": "ignore",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/ignore@0.4.33",
+      "type": "library",
+      "version": "0.4.33"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:a08229e1084ed6876d4431d1480d8f34a080f3ce933a9f531121b460197a5942",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/indexmap-rs/indexmap"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "Apache-2.0 OR MIT"
+          }
+        }
+      ],
+      "name": "indexmap",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/indexmap@2.14.2",
+      "type": "library",
+      "version": "2.14.2"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:f5d6ab8f192da44a31c06bf92ba41d3865bb7a24d9b9bef4fb347bfa4284affb",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/artichoke/intaglio"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "Apache-2.0 OR MIT"
+          }
+        }
+      ],
+      "name": "intaglio",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/intaglio@1.15.1",
+      "type": "library",
+      "version": "1.15.1"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:bf45d30982982006c612b65f0d8f818263477b1e83c5da54f001580ec7fd1ae7",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/dtolnay/inventory"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT OR Apache-2.0"
+          }
+        }
+      ],
+      "name": "inventory",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/inventory@0.3.24",
+      "type": "library",
+      "version": "0.3.24"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:c9b112c1c5015fe2a0124fc8fbe493f623a98ba6ae136a1f41ee6b2ea2bdf868",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/rust-itertools/itertools"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT OR Apache-2.0"
+          }
+        }
+      ],
+      "name": "itertools",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/itertools@0.14.0",
+      "type": "library",
+      "version": "0.14.0"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:02bfd5c5aaf966ecaaa44444263fbda70c090f18ef31b7bae91bb6d2c4dec188",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/rust-itertools/itertools"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT OR Apache-2.0"
+          }
+        }
+      ],
+      "name": "itertools",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/itertools@0.15.0",
+      "type": "library",
+      "version": "0.15.0"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:b22a1f7a12102d0d19e62c0a28f9e02cc1d5ea23ccf44b99be4891d29e5c545a",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/dtolnay/itoa"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT OR Apache-2.0"
+          }
+        }
+      ],
+      "name": "itoa",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/itoa@1.0.18",
+      "type": "library",
+      "version": "1.0.18"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:dff6c608daf8b094e8b6f1f26774512e3d37fac385787ebe6fa28d4a66bc014e",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/gimli-rs/leb128"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT OR Apache-2.0"
+          }
+        }
+      ],
+      "name": "leb128",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/leb128@0.2.7",
+      "type": "library",
+      "version": "0.2.7"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:00dfbb0d6aba32a3455870620fe01c64c1048519423f61c3e9e99f89f205e4f1",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/bluk/leb128fmt"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT OR Apache-2.0"
+          }
+        }
+      ],
+      "name": "leb128fmt",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/leb128fmt@0.1.0",
+      "type": "library",
+      "version": "0.1.0"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:49cdee5076e2c0c3825d3b7a74751cb0835271eb1e7bc863db8c9a21b7b22185",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/rust-lang/libc"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT OR Apache-2.0"
+          }
+        }
+      ],
+      "name": "libc",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/libc@0.2.190",
+      "type": "library",
+      "version": "0.2.190"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:8b46ea706c63b1d31df3d473126eb954e67284138a0105a082786c7d63ba792f",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/rust-lang/compiler-builtins"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT"
+          }
+        }
+      ],
+      "name": "libm",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/libm@0.2.16",
+      "type": "library",
+      "version": "0.2.16"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:270748a5256f7ae46ccd2bd347ad70445ecc0421cf4cc9fbc12eabd50f968f6d",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/sunfishcode/linux-raw-sys"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT"
+          }
+        }
+      ],
+      "name": "linux-raw-sys",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/linux-raw-sys@0.12.1",
+      "type": "library",
+      "version": "0.12.1"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:1ecc89e9a211612aa60f42945e0c8fe45d5a25c690c6a60bf03f84a34c6d60f3",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/sunfishcode/linux-raw-sys"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT"
+          }
+        }
+      ],
+      "name": "linux-raw-sys",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/linux-raw-sys@0.4.15",
+      "type": "library",
+      "version": "0.4.15"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:23464387d23b2fd3689ef355afa12123de5c97cce4ac625860d8ecaa93a619a8",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/rust-lang/log"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT OR Apache-2.0"
+          }
+        }
+      ],
+      "name": "log",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/log@0.4.34",
+      "type": "library",
+      "version": "0.4.34"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:aa3edb0ff284c81abada31e79d13828a21bd77d9655fc7898282e094d0ccec38",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/maciejhirsz/logos"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT OR Apache-2.0"
+          }
+        }
+      ],
+      "name": "logos-codegen",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/logos-codegen@0.16.1",
+      "type": "library",
+      "version": "0.16.1"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:3a21e7f2a8f46f7f69e02cdcf2e8bef6a31dc0619d9c2ee1d5b543dcc1360611",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/maciejhirsz/logos"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT OR Apache-2.0"
+          }
+        }
+      ],
+      "name": "logos-derive",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/logos-derive@0.16.1",
+      "type": "library",
+      "version": "0.16.1"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:b2ce977d26d03ac4bc7ff2d00af21a623f308c3538f54f4cdc35956f0cd9ac97",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/maciejhirsz/logos"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT OR Apache-2.0"
+          }
+        }
+      ],
+      "name": "logos",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/logos@0.16.1",
+      "type": "library",
+      "version": "0.16.1"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:b3df4bbadae26f8e36c9483f2542755659423a9ca1613059a67cc7321cc8ab4e",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/RustCrypto/hashes"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT OR Apache-2.0"
+          }
+        }
+      ],
+      "name": "md-5",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/md-5@0.10.6",
+      "type": "library",
+      "version": "0.10.6"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:9c6980a5a4f405fe906e31a855b0eca4b40826a35b9d05e1b34fd8e44854eda5",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/BurntSushi/memchr"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "Unlicense OR MIT"
+          }
+        }
+      ],
+      "name": "memchr",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/memchr@2.8.3",
+      "type": "library",
+      "version": "2.8.3"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:672116007534fa21e5c208afff463eb1d0123d51fe1cbdcad0c195b378002f2f",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/RazrFalcon/memmap2-rs"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT OR Apache-2.0"
+          }
+        }
+      ],
+      "name": "memmap2",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/memmap2@0.9.11",
+      "type": "library",
+      "version": "0.9.11"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:aa722ac5c71d378bb1ef8e1a7a836e9686dd85f4d770b882bbe72df9ed4a5ab8",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/Gilnaa/memoffset"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT"
+          }
+        }
+      ],
+      "name": "memoffset",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/memoffset@0.9.1",
+      "type": "library",
+      "version": "0.9.1"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:b469462e0cff0e79aef12988ab1329ec65faacb50b31ed31dd43acd719b9dd91",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/rust-bakery/nom"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT"
+          }
+        }
+      ],
+      "name": "nom",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/nom@8.0.0",
+      "type": "library",
+      "version": "8.0.0"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:d86a25d50eba7e9634150973ec4d66967f8dad61c513ce9a090dbadfae181371",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/rust-num/num-derive"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT OR Apache-2.0"
+          }
+        }
+      ],
+      "name": "num-derive",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/num-derive@0.4.2",
+      "type": "library",
+      "version": "0.4.2"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:d58f8d42fe005088a81cfcf98458196afd159d063843d262808a9769659018dd",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/rust-num/num-traits"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT OR Apache-2.0"
+          }
+        }
+      ],
+      "name": "num-traits",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/num-traits@0.2.19",
+      "type": "library",
+      "version": "0.2.19"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:82576b4221475543c55397dab08f57241fe59130393a806a876c99d7a8c42c3d",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/gimli-rs/object"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "Apache-2.0 OR MIT"
+          }
+        }
+      ],
+      "name": "object",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/object@0.40.0",
+      "type": "library",
+      "version": "0.40.0"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:4a678fe26ea416ea43c805a4e83015e3e5516d4f91b944519ed6f69e8a0a2057",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/matklad/once_cell"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT OR Apache-2.0"
+          }
+        }
+      ],
+      "name": "once_cell",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/once_cell@1.21.4",
+      "type": "library",
+      "version": "1.21.4"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:5d6767036113c81511ac020b998a067d53bb1b0c9109ee561dc27a1edde9c109",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/jamesmunns/postcard"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT OR Apache-2.0"
+          }
+        }
+      ],
+      "name": "postcard",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/postcard@1.1.3",
+      "type": "library",
+      "version": "1.1.3"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:ccabd92ae66666212be2e9dfca6b094db23401a9f854af5f1a9c8fcb8026794e",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/dtolnay/proc-macro2"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT OR Apache-2.0"
+          }
+        }
+      ],
+      "name": "proc-macro2",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/proc-macro2@1.0.107",
+      "type": "library",
+      "version": "1.0.107"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:c0ce4644965d263a6a8e3ed45b49b9db7ed3d4a8ecaabc32e7873a457507b663",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/stepancheg/rust-protobuf/"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT"
+          }
+        }
+      ],
+      "name": "protobuf-codegen",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/protobuf-codegen@3.7.2",
+      "type": "library",
+      "version": "3.7.2"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:b710f18e6de9a9c80e070c4b0dd2b5690a06a680724d51cff31eb100164ffae6",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/stepancheg/rust-protobuf/tree/master/protobuf-parse/"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT"
+          }
+        }
+      ],
+      "name": "protobuf-parse",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/protobuf-parse@3.7.2",
+      "type": "library",
+      "version": "3.7.2"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:579d172f0ac9f18c0c820af967d3e6a5b58ee938fcfdfc6703412f0cfff7297b",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/stepancheg/rust-protobuf/"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT"
+          }
+        }
+      ],
+      "name": "protobuf-support",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/protobuf-support@3.7.2",
+      "type": "library",
+      "version": "3.7.2"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:e4820a8493a6ab12b5bf3d2777c49b462b53b442467abf16df5913d467e1b54b",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/stepancheg/rust-protobuf/"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT"
+          }
+        }
+      ],
+      "name": "protobuf",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/protobuf@3.7.2",
+      "type": "library",
+      "version": "3.7.2"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:54f5a304b9f87b8b2b2588b15e164dc982065aa1cce016bf118138d729454ea1",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/bytecodealliance/wasmtime/tree/main/pulley"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "Apache-2.0 WITH LLVM-exception"
+          }
+        }
+      ],
+      "name": "pulley-interpreter",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/pulley-interpreter@49.0.4",
+      "type": "library",
+      "version": "49.0.4"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:4538bc8ae9288a10b27dbd649b57262375aaadcd0d664694a60810180cd67f02",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/bytecodealliance/wasmtime/tree/main/pulley/macros"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "Apache-2.0 WITH LLVM-exception"
+          }
+        }
+      ],
+      "name": "pulley-macros",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/pulley-macros@49.0.4",
+      "type": "library",
+      "version": "49.0.4"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:0f6442d57d05be225bb02deb09fba78d36da300d0dd328fa190d49fd772170b6",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/dtolnay/quote"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT OR Apache-2.0"
+          }
+        }
+      ],
+      "name": "quote",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/quote@1.0.47",
+      "type": "library",
+      "version": "1.0.47"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:bae8f41540222089b7ec4bd177c37b61422facae6cdc9fcd3fabf5015d130f59",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/bitvecto-rs/radium"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT"
+          }
+        }
+      ],
+      "name": "radium",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/radium@0.7.0",
+      "type": "library",
+      "version": "0.7.0"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:4cbeb30712bb5ed3cc098053903e6d8b10e1348905d837322138811fef4e3b06",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/bytecodealliance/regalloc2"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "Apache-2.0 WITH LLVM-exception"
+          }
+        }
+      ],
+      "name": "regalloc2",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/regalloc2@0.15.2",
+      "type": "library",
+      "version": "0.15.2"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:8f2fdfe1d2ac0163035dc7f1fb1c5e4aa5e988c60e999c3301d83253a407aee9",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/rust-lang/regex"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT OR Apache-2.0"
+          }
+        }
+      ],
+      "name": "regex-automata",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/regex-automata@0.4.18",
+      "type": "library",
+      "version": "0.4.18"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:22c585733f7202302084ac2cfaaf56723bee464ca4056bf81f2e4446c5ae6afc",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/rust-lang/regex"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT OR Apache-2.0"
+          }
+        }
+      ],
+      "name": "regex-syntax",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/regex-syntax@0.8.11",
+      "type": "library",
+      "version": "0.8.11"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:3a9e44532b5bfae7fe228e6210b8e8a8885e66e8d575cd958e53da254ad5aab3",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/rust-lang/regex"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT OR Apache-2.0"
+          }
+        }
+      ],
+      "name": "regex",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/regex@1.13.1",
+      "type": "library",
+      "version": "1.13.1"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:f876658278c229fd8466b4b0cf8b5e3f28834d28fe1826adff20baa2193c673f",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/rust-analyzer/rowan"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT OR Apache-2.0"
+          }
+        }
+      ],
+      "name": "rowan",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/rowan@0.17.0",
+      "type": "library",
+      "version": "0.17.0"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:cba5c33a0de8c2aaf1bc26c00ae28a809d67429db2f75c94c438309dbd7e412d",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/rust-lang-nursery/rustc-hash"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "Apache-2.0/MIT"
+          }
+        }
+      ],
+      "name": "rustc-hash",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/rustc-hash@1.1.0",
+      "type": "library",
+      "version": "1.1.0"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:190e0dd89b4cc3a25eab95abaf5f37cc698452d05924b02cd9dcfc48bd019176",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/rust-lang/rustc-hash"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "Apache-2.0 OR MIT"
+          }
+        }
+      ],
+      "name": "rustc-hash",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/rustc-hash@2.1.3",
+      "type": "library",
+      "version": "2.1.3"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:6667bb374f9d376eaadd4dd8bee722c75e2ad511d2d0de1772fd0c91d5eb4978",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/djc/rustc-version-rs"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT OR Apache-2.0"
+          }
+        }
+      ],
+      "name": "rustc_version",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/rustc_version@0.4.1",
+      "type": "library",
+      "version": "0.4.1"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:5cdac9cace61296572dd5288b379113faefe55b381911c1328fb0df16e402bfc",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/bytecodealliance/rustix"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT"
+          }
+        }
+      ],
+      "name": "rustix",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/rustix@0.38.44",
+      "type": "library",
+      "version": "0.38.44"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:750318918bc69024ff70568f9b53936f23c504a8f490e1a1459fba4f9f660a1a",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/bytecodealliance/rustix"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT"
+          }
+        }
+      ],
+      "name": "rustix",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/rustix@1.1.5",
+      "type": "library",
+      "version": "1.1.5"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:d9b700bc3c3890bc55a30ee6d54fce112437681d6cc13caff920dcacdf133606",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/BurntSushi/same-file"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "Unlicense/MIT"
+          }
+        }
+      ],
+      "name": "same-file",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/same-file@1.0.6",
+      "type": "library",
+      "version": "1.0.6"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:c561b155d15120c5fdfb8eaf76d2a9fe95f01ffc51cd2809fc4d2bdb886bdf22",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/dtolnay/semver"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT OR Apache-2.0"
+          }
+        }
+      ],
+      "name": "semver",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/semver@1.0.28",
+      "type": "library",
+      "version": "1.0.28"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:f2b8eb6ed8331bd9c40e76832ab66dc6826024991f83b8fb488c1c92fcc24dda",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/serde-rs/serde"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT OR Apache-2.0"
+          }
+        }
+      ],
+      "name": "serde",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/serde@1.0.229",
+      "type": "library",
+      "version": "1.0.229"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:08cccc74f6fecb9f85c90d567873f18851f4f6b15e53851ce78d972be591fb0e",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/serde-rs/serde"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT OR Apache-2.0"
+          }
+        }
+      ],
+      "name": "serde_core",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/serde_core@1.0.229",
+      "type": "library",
+      "version": "1.0.229"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:db09cb763d5d0002fb927800af552690ff0ba8ba86d4f8aa4ed170d74d262c65",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/serde-rs/serde"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT OR Apache-2.0"
+          }
+        }
+      ],
+      "name": "serde_derive",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/serde_derive@1.0.229",
+      "type": "library",
+      "version": "1.0.229"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:1923d23e1529cf831649de78a3bd69e552f14753c672c20ad24aca08033461fe",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/serde-rs/json"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT OR Apache-2.0"
+          }
+        }
+      ],
+      "name": "serde_json",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/serde_json@1.0.151",
+      "type": "library",
+      "version": "1.0.151"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:be2212b4b000fc4c866208af5da01b819468d399feb7b9b5af9e523ab1c83cd8",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/RustCrypto/hashes"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT OR Apache-2.0"
+          }
+        }
+      ],
+      "name": "sha1",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/sha1@0.10.7",
+      "type": "library",
+      "version": "0.10.7"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:be6ca6b456607db4db69e4042a70757a0bae090eaf7edc3bfa5e2b810988d452",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/RustCrypto/hashes"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT OR Apache-2.0"
+          }
+        }
+      ],
+      "name": "sha2",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/sha2@0.10.9",
+      "type": "library",
+      "version": "0.10.9"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:39c590964ea26fe4466f1ea3422273681770b2266779a6952fba6c2a6b6573f3",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/comex/rust-shlex"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT OR Apache-2.0"
+          }
+        }
+      ],
+      "name": "shlex",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/shlex@2.0.1",
+      "type": "library",
+      "version": "2.0.1"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:938489e47dfed8aad8ccfbe32716d976d4a90f082d0110ee7c02bf084cff95ad",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/mcountryman/simd-adler32"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT"
+          }
+        }
+      ],
+      "name": "simd-adler32",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/simd-adler32@0.3.10",
+      "type": "library",
+      "version": "0.3.10"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:d454c37b6dd44b63408826927eb35e2f409059d57a9996b2b20cd9694ad61c8a",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/seancroach/simd_cesu8"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "Apache-2.0 OR MIT"
+          }
+        }
+      ],
+      "name": "simd_cesu8",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/simd_cesu8@1.2.0",
+      "type": "library",
+      "version": "1.2.0"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:2b987c0c22676df79fcae27d938ce50bb20392d8a6f91cb080fee354d9b14ba0",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/rusticstuff/simdutf8"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT OR Apache-2.0"
+          }
+        }
+      ],
+      "name": "simdutf8",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/simdutf8@0.1.5",
+      "type": "library",
+      "version": "0.1.5"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:39b7d49d735198e2328c99c6b7831340530d41fedf9668f11b0c1d8991b2602e",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/servo/rust-smallvec"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT OR Apache-2.0"
+          }
+        }
+      ],
+      "name": "smallvec",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/smallvec@1.16.2",
+      "type": "library",
+      "version": "1.16.2"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:51a193006677fa2f6c4264ec34a5b5392a0bcbbb3de654b7d78579ce57a16c5b",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/storyyeller/stable_deref_trait"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT OR Apache-2.0"
+          }
+        }
+      ],
+      "name": "stable_deref_trait",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/stable_deref_trait@1.2.1",
+      "type": "library",
+      "version": "1.2.1"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:293d2faa1881de9e441996a02567d01829a82e2052dc968bbff7b5f5ce8b19cc",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/rapidfuzz/strsim-rs"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT"
+          }
+        }
+      ],
+      "name": "strsim",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/strsim@0.11.1",
+      "type": "library",
+      "version": "0.11.1"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:cac3d4b33ff30f156ab7b1e41df5f039bebee1fdbce2d70186b3127dced4cf9b",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/Peternator7/strum"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT"
+          }
+        }
+      ],
+      "name": "strum_macros",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/strum_macros@0.28.0",
+      "type": "library",
+      "version": "0.28.0"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:1615627a100e64b9cb561ec29f744c3d236affba2eb8f40062bb7f155540ccd3",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/dtolnay/syn"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT OR Apache-2.0"
+          }
+        }
+      ],
+      "name": "syn",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/syn@2.0.119",
+      "type": "library",
+      "version": "2.0.119"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:6b5d88f681b0a659ef671dbedb1c10c64910ea1e2b6634444fc073941a0d8491",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/dtolnay/syn"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT OR Apache-2.0"
+          }
+        }
+      ],
+      "name": "syn",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/syn@3.0.6",
+      "type": "library",
+      "version": "3.0.6"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:5ff916a1d981e10e920e10c24dee8d6909fa79c140c75131278f059c1dedf46a",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/myrrlyn/tap"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT"
+          }
+        }
+      ],
+      "name": "tap",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/tap@1.0.1",
+      "type": "library",
+      "version": "1.0.1"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:c261a98bf279059bbd5c73788a074071d13141dd455e8718e91cdfaec8384239",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/bytecodealliance/target-lexicon"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "Apache-2.0 WITH LLVM-exception"
+          }
+        }
+      ],
+      "name": "target-lexicon",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/target-lexicon@0.13.5",
+      "type": "library",
+      "version": "0.13.5"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:1f0bd31707aa8e1f62a7e59b687ec42fc16a01c9c69632f9b3962df8c9c70123",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/Stebalien/tempfile"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT OR Apache-2.0"
+          }
+        }
+      ],
+      "name": "tempfile",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/tempfile@3.27.0",
+      "type": "library",
+      "version": "3.27.0"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:ffe3373d6cf058342069949b00d29c13974af645f5e6836854933b44199e01e2",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/BurntSushi/termcolor"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "Unlicense OR MIT"
+          }
+        }
+      ],
+      "name": "termcolor",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/termcolor@1.4.1",
+      "type": "library",
+      "version": "1.4.1"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:374eef83681871ec555ebb018542743095499a3b3ba51a8cc7d9467b0425225e",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/rust-analyzer/text-size"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT OR Apache-2.0"
+          }
+        }
+      ],
+      "name": "text-size",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/text-size@1.1.1",
+      "type": "library",
+      "version": "1.1.1"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:6b2340c92849ba71b75e1dd30d6f52d2e196e732f689ff240258fbae5ca84507",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/dtolnay/thiserror"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT OR Apache-2.0"
+          }
+        }
+      ],
+      "name": "thiserror-impl",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/thiserror-impl@1.0.69",
+      "type": "library",
+      "version": "1.0.69"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:a180cbdc09de3f2e787f1f5190bb0a08ecf2146e78efd9816dcc0aea7cc6248e",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/dtolnay/thiserror"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT OR Apache-2.0"
+          }
+        }
+      ],
+      "name": "thiserror-impl",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/thiserror-impl@2.0.21",
+      "type": "library",
+      "version": "2.0.21"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:a126bd374c6b07040f8b6f297d1f62c2e4277215328af07df6910c1ca8a9c08c",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/dtolnay/thiserror"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT OR Apache-2.0"
+          }
+        }
+      ],
+      "name": "thiserror",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/thiserror@1.0.69",
+      "type": "library",
+      "version": "1.0.69"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:37cdeafdaa1508a731d6be8372bc8f402831598e7ecfa4b2572450b002c09d92",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/dtolnay/thiserror"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT OR Apache-2.0"
+          }
+        }
+      ],
+      "name": "thiserror",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/thiserror@2.0.21",
+      "type": "library",
+      "version": "2.0.21"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:6cdf3ca9cd53bf9de1e8db74e0fe59f4687aaef037075009231cdf4c3e38a74a",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/paholg/typenum"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT OR Apache-2.0"
+          }
+        }
+      ],
+      "name": "typenum",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/typenum@1.20.1",
+      "type": "library",
+      "version": "1.20.1"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:41ef6b9581495b2faf98d018efd3c4cd191393bdc3e41244a9c0d5fdfdd8f467",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/dtolnay/unicode-ident"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "(MIT OR Apache-2.0) AND Unicode-3.0"
+          }
+        }
+      ],
+      "name": "unicode-ident",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/unicode-ident@1.0.26",
+      "type": "library",
+      "version": "1.0.26"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:39fb389141f65e83828254293fe9c97904ece9b2a19f2f7cc64b8b89fa4f7f76",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/unicode-rs/unicode-width"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT OR Apache-2.0"
+          }
+        }
+      ],
+      "name": "unicode-width",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/unicode-width@0.2.2",
+      "type": "library",
+      "version": "0.2.2"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:8da36943056278adc52aa3aa2921a71c629f9775fd549a190c6e8ebd9bb16835",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/bincode-org/unty"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT OR Apache-2.0"
+          }
+        }
+      ],
+      "name": "unty",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/unty@0.0.4",
+      "type": "library",
+      "version": "0.0.4"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:13f5a7bf98cf131992b82b95f528bdb24815f9b0ec329115df1bf611afa784ae",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/SergioBenitez/version_check"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT/Apache-2.0"
+          }
+        }
+      ],
+      "name": "version_check",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/version_check@0.9.5",
+      "type": "library",
+      "version": "0.9.5"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:828671efa8941abf249115118c322c92c22dd0d13243ad26cf26db029cf65b12",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/bincode-org/virtue"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT"
+          }
+        }
+      ],
+      "name": "virtue",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/virtue@0.0.18",
+      "type": "library",
+      "version": "0.0.18"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:0da544e734434eee8e1505da2bdb883010c23dc61b1b032a575bc46a973f6f68",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/BurntSushi/walkdir"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "Unlicense/MIT"
+          }
+        }
+      ],
+      "name": "walkdir",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/walkdir@2.5.0",
+      "type": "library",
+      "version": "2.5.0"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:0e0afc29455d4bcbc82b8a54af80f63a112aaac36732414eae5f2df2862fb392",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/rustwasm/walrus/tree/crates/macro"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT/Apache-2.0"
+          }
+        }
+      ],
+      "name": "walrus-macro",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/walrus-macro@0.26.0",
+      "type": "library",
+      "version": "0.26.0"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:80b890603a2dba99b8bacd131d9728feb636d30c98800ec8a88853c61019930a",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/rustwasm/walrus"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT/Apache-2.0"
+          }
+        }
+      ],
+      "name": "walrus",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/walrus@0.27.2",
+      "type": "library",
+      "version": "0.27.2"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:f5201332c0cfc95bc1332d96516437a0883e9a73ef2ccd75b2362c52d9b09427",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/bytecodealliance/wasm-tools/tree/main/crates/wasm-encoder"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT"
+          }
+        }
+      ],
+      "name": "wasm-encoder",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/wasm-encoder@0.245.1",
+      "type": "library",
+      "version": "0.245.1"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:81d679f691e31aefdbb07d6bf9ef44f8ae918a74cd5883ef328feff1be4e69d8",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/bytecodealliance/wasm-tools/tree/main/crates/wasm-encoder"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT"
+          }
+        }
+      ],
+      "name": "wasm-encoder",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/wasm-encoder@0.258.3",
+      "type": "library",
+      "version": "0.258.3"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:659d380790daf7d237673c4ac13b6d65f8cf5293563cdf9a20e29f957dc1f974",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/bytecodealliance/wasm-tools/tree/main/crates/wasmparser"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT"
+          }
+        }
+      ],
+      "name": "wasmparser",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/wasmparser@0.245.1",
+      "type": "library",
+      "version": "0.245.1"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:3864b4fd6fa89f16a4e22aa2b212748922e8b79a2d34dd54abebd728d5b700c7",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/bytecodealliance/wasm-tools/tree/main/crates/wasmparser"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT"
+          }
+        }
+      ],
+      "name": "wasmparser",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/wasmparser@0.258.3",
+      "type": "library",
+      "version": "0.258.3"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:725f4ca09995500da4aa2c254de632ea9781a6d01e6b82d6ebc3e35240b1d045",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/bytecodealliance/wasm-tools/tree/main/crates/wasmprinter"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT"
+          }
+        }
+      ],
+      "name": "wasmprinter",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/wasmprinter@0.258.3",
+      "type": "library",
+      "version": "0.258.3"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:2d3ce7d4188d8ca758dbe098485333433abff6ec554c428b1524926c8f827216",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/bytecodealliance/wasmtime"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "Apache-2.0 WITH LLVM-exception"
+          }
+        }
+      ],
+      "name": "wasmtime-environ",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/wasmtime-environ@49.0.4",
+      "type": "library",
+      "version": "49.0.4"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:af314f15c5cdf6b5a2f0dca31eff402296939a8b04e9a887fa3cc0594bbebf56",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/bytecodealliance/wasmtime"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "Apache-2.0 WITH LLVM-exception"
+          }
+        }
+      ],
+      "name": "wasmtime-internal-component-util",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/wasmtime-internal-component-util@49.0.4",
+      "type": "library",
+      "version": "49.0.4"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:a81ecf5f8d06c64e8e5b7434f42496c2a8ed08c8f94d6db32048d3597408ba17",
+      "licenses": [
+        {
+          "license": {
+            "name": "Apache-2.0 WITH LLVM-exception"
+          }
+        }
+      ],
+      "name": "wasmtime-internal-core",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/wasmtime-internal-core@49.0.4",
+      "type": "library",
+      "version": "49.0.4"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:13cccb4a76e5882f4f2f019a05127e1c29ba728b5e56e4e1c812de9eafac7d89",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/bytecodealliance/wasmtime"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "Apache-2.0 WITH LLVM-exception"
+          }
+        }
+      ],
+      "name": "wasmtime-internal-cranelift",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/wasmtime-internal-cranelift@49.0.4",
+      "type": "library",
+      "version": "49.0.4"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:c4df2ee4c6747326940005b1f65db9574a6d4aa3f9bd4b8af983209d16379db1",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/bytecodealliance/wasmtime"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "Apache-2.0 WITH LLVM-exception"
+          }
+        }
+      ],
+      "name": "wasmtime-internal-jit-icache-coherence",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/wasmtime-internal-jit-icache-coherence@49.0.4",
+      "type": "library",
+      "version": "49.0.4"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:ba3434bc4dee9866ed4431218cbe63ed36996b89525f71c0da5d457a3b6004de",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/bytecodealliance/wasmtime"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "Apache-2.0 WITH LLVM-exception"
+          }
+        }
+      ],
+      "name": "wasmtime-internal-unwinder",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/wasmtime-internal-unwinder@49.0.4",
+      "type": "library",
+      "version": "49.0.4"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:6ef44bcfe7fdbe5e711c6c4077be1e8c1a7b229ba30ec9535791b299a9a054c9",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/bytecodealliance/wasmtime"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "Apache-2.0 WITH LLVM-exception"
+          }
+        }
+      ],
+      "name": "wasmtime-internal-versioned-export-macros",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/wasmtime-internal-versioned-export-macros@49.0.4",
+      "type": "library",
+      "version": "49.0.4"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:15b7b27e363aab3e739c64f357c36aaf7033cd50a0cd2ec2627ff97d43cddfb9",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/bytecodealliance/wasmtime"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "Apache-2.0 WITH LLVM-exception"
+          }
+        }
+      ],
+      "name": "wasmtime",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/wasmtime@49.0.4",
+      "type": "library",
+      "version": "49.0.4"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:90d15f2d3323b0441d69477592bcc6039600b91c6b86d7348ae5660be30ebd6d",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/harryfei/which-rs.git"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT"
+          }
+        }
+      ],
+      "name": "which",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/which@4.4.2",
+      "type": "library",
+      "version": "4.4.2"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:b7b88a286785013c1d5dbc319a71d43562152cba11093ddab57db1a142fd455d",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/myrrlyn/wyz"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT"
+          }
+        }
+      ],
+      "name": "wyz",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/wyz@0.5.1",
+      "type": "library",
+      "version": "0.5.1"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:afeec71311de3e792a1dd9b61ac680b84093f795a853a92eaf3c00a0eb177345",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/SergioBenitez/yansi"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT OR Apache-2.0"
+          }
+        }
+      ],
+      "name": "yansi",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/yansi@1.0.1",
+      "type": "library",
+      "version": "1.0.1"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:9469eca231d59eb8ee6903bbb00bbcf781c7da15aa96ae54c17927d0406b2605",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/VirusTotal/yara-x"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "BSD-3-Clause"
+          }
+        }
+      ],
+      "name": "yara-x-macros",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/yara-x-macros@1.21.0",
+      "type": "library",
+      "version": "1.21.0"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:7281bd9bc87197a21306d12157e75956f50f0c0fa3683cdba723cbdbef7e62a1",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/VirusTotal/yara-x"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "BSD-3-Clause"
+          }
+        }
+      ],
+      "name": "yara-x-proto",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/yara-x-proto@1.21.0",
+      "type": "library",
+      "version": "1.21.0"
+    },
+    {
+      "bom-ref": "urn:foxhole:cargo:bfa80998800166cc58abde8f47836bbceece99390092b6a7fd75f327b6687b6c",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/dtolnay/zmij"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT"
+          }
+        }
+      ],
+      "name": "zmij",
+      "properties": [
+        {
+          "name": "cargo:source",
+          "value": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ],
+      "purl": "pkg:cargo/zmij@1.0.23",
+      "type": "library",
+      "version": "1.0.23"
+    }
+  ],
+  "dependencies": [
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:0614e1e14fc1156385efa0ec4701e0f9cc26e5a56d98feaaab2e9321f3b61df9",
+        "urn:foxhole:cargo:16e49ee3a77903b0a1ce2402e211beab882d21705f8dcde1888388d762a5cf52",
+        "urn:foxhole:cargo:1923d23e1529cf831649de78a3bd69e552f14753c672c20ad24aca08033461fe",
+        "urn:foxhole:cargo:49cdee5076e2c0c3825d3b7a74751cb0835271eb1e7bc863db8c9a21b7b22185",
+        "urn:foxhole:cargo:b46afb380e482614115ad2fd2334523fc08847cdb3664e0c3faf02e2d813afe5",
+        "urn:foxhole:cargo:f2b8eb6ed8331bd9c40e76832ab66dc6826024991f83b8fb488c1c92fcc24dda"
+      ],
+      "ref": "urn:foxhole:cargo:75bdef7d0781af4942331c3f8ffa5fa9ebed5ce09a6e605e21078e16c111536b"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:02bfd5c5aaf966ecaaa44444263fbda70c090f18ef31b7bae91bb6d2c4dec188",
+        "urn:foxhole:cargo:0614e1e14fc1156385efa0ec4701e0f9cc26e5a56d98feaaab2e9321f3b61df9",
+        "urn:foxhole:cargo:15b7b27e363aab3e739c64f357c36aaf7033cd50a0cd2ec2627ff97d43cddfb9",
+        "urn:foxhole:cargo:190e0dd89b4cc3a25eab95abaf5f37cc698452d05924b02cd9dcfc48bd019176",
+        "urn:foxhole:cargo:1923d23e1529cf831649de78a3bd69e552f14753c672c20ad24aca08033461fe",
+        "urn:foxhole:cargo:1fe2d9cc7282e81dde32ee5c4097b785fd6247e922d9cbafcb2ce5661da54cdc",
+        "urn:foxhole:cargo:22c585733f7202302084ac2cfaaf56723bee464ca4056bf81f2e4446c5ae6afc",
+        "urn:foxhole:cargo:28e51f0c6ff6604b8cd9e96d31920021bb1aa46872c7e488fc567bcffb18f03a",
+        "urn:foxhole:cargo:36bcbefd0a26c295b0312c6e2777a69020ab4b0838df6c714aabaead92d1fc57",
+        "urn:foxhole:cargo:37cdeafdaa1508a731d6be8372bc8f402831598e7ecfa4b2572450b002c09d92",
+        "urn:foxhole:cargo:39b7d49d735198e2328c99c6b7831340530d41fedf9668f11b0c1d8991b2602e",
+        "urn:foxhole:cargo:3a9e44532b5bfae7fe228e6210b8e8a8885e66e8d575cd958e53da254ad5aab3",
+        "urn:foxhole:cargo:3d4d7d8e89237a2f454172781ca44ab4d5b1b7be607a7a83bb6440413a512603",
+        "urn:foxhole:cargo:411d443ec84f5214c5378b486129d8aa95cc8d1e43803fc531cbb3116f094887",
+        "urn:foxhole:cargo:43f78745249e5acd66a957b8100202cff7c8bdf088b4cf0d0658e34f1e7f20f1",
+        "urn:foxhole:cargo:672116007534fa21e5c208afff463eb1d0123d51fe1cbdcad0c195b378002f2f",
+        "urn:foxhole:cargo:7281bd9bc87197a21306d12157e75956f50f0c0fa3683cdba723cbdbef7e62a1",
+        "urn:foxhole:cargo:80b890603a2dba99b8bacd131d9728feb636d30c98800ec8a88853c61019930a",
+        "urn:foxhole:cargo:87b72b2dae39fbdc68be1cb8c12e3e9701e8b21a8748a009addcece2e9e9219b",
+        "urn:foxhole:cargo:8f2fdfe1d2ac0163035dc7f1fb1c5e4aa5e988c60e999c3301d83253a407aee9",
+        "urn:foxhole:cargo:938489e47dfed8aad8ccfbe32716d976d4a90f082d0110ee7c02bf084cff95ad",
+        "urn:foxhole:cargo:9469eca231d59eb8ee6903bbb00bbcf781c7da15aa96ae54c17927d0406b2605",
+        "urn:foxhole:cargo:9c6980a5a4f405fe906e31a855b0eca4b40826a35b9d05e1b34fd8e44854eda5",
+        "urn:foxhole:cargo:9f42fcbf7f46c7761923e94fa712edeb5e9116b5af2dd604779e24d198f90209",
+        "urn:foxhole:cargo:9ff8c51d63d90c09b892cffcd3403a6e92965954c46518b3629e2c425fd1eb2a",
+        "urn:foxhole:cargo:a08229e1084ed6876d4431d1480d8f34a080f3ce933a9f531121b460197a5942",
+        "urn:foxhole:cargo:a49cf0c5a775307b7368e406ac13821c5c7a61dcf56d81a66b0b89383dc856aa",
+        "urn:foxhole:cargo:b3df4bbadae26f8e36c9483f2542755659423a9ca1613059a67cc7321cc8ab4e",
+        "urn:foxhole:cargo:b469462e0cff0e79aef12988ab1329ec65faacb50b31ed31dd43acd719b9dd91",
+        "urn:foxhole:cargo:b710f18e6de9a9c80e070c4b0dd2b5690a06a680724d51cff31eb100164ffae6",
+        "urn:foxhole:cargo:be2212b4b000fc4c866208af5da01b819468d399feb7b9b5af9e523ab1c83cd8",
+        "urn:foxhole:cargo:be6ca6b456607db4db69e4042a70757a0bae090eaf7edc3bfa5e2b810988d452",
+        "urn:foxhole:cargo:bf45d30982982006c612b65f0d8f818263477b1e83c5da54f001580ec7fd1ae7",
+        "urn:foxhole:cargo:c0ce4644965d263a6a8e3ed45b49b9db7ed3d4a8ecaabc32e7873a457507b663",
+        "urn:foxhole:cargo:cac3d4b33ff30f156ab7b1e41df5f039bebee1fdbce2d70186b3127dced4cf9b",
+        "urn:foxhole:cargo:d454c37b6dd44b63408826927eb35e2f409059d57a9996b2b20cd9694ad61c8a",
+        "urn:foxhole:cargo:d58f8d42fe005088a81cfcf98458196afd159d063843d262808a9769659018dd",
+        "urn:foxhole:cargo:d86a25d50eba7e9634150973ec4d66967f8dad61c513ce9a090dbadfae181371",
+        "urn:foxhole:cargo:dc6381fb80453cb72e8cd8d57100cef2b28ddbc425b3fec7097e099f71670a7a",
+        "urn:foxhole:cargo:e4820a8493a6ab12b5bf3d2777c49b462b53b442467abf16df5913d467e1b54b",
+        "urn:foxhole:cargo:f2b8eb6ed8331bd9c40e76832ab66dc6826024991f83b8fb488c1c92fcc24dda",
+        "urn:foxhole:cargo:f5d6ab8f192da44a31c06bf92ba41d3865bb7a24d9b9bef4fb347bfa4284affb"
+      ],
+      "ref": "urn:foxhole:cargo:16e49ee3a77903b0a1ce2402e211beab882d21705f8dcde1888388d762a5cf52"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:02bfd5c5aaf966ecaaa44444263fbda70c090f18ef31b7bae91bb6d2c4dec188",
+        "urn:foxhole:cargo:190e0dd89b4cc3a25eab95abaf5f37cc698452d05924b02cd9dcfc48bd019176",
+        "urn:foxhole:cargo:1fe2d9cc7282e81dde32ee5c4097b785fd6247e922d9cbafcb2ce5661da54cdc",
+        "urn:foxhole:cargo:a08229e1084ed6876d4431d1480d8f34a080f3ce933a9f531121b460197a5942",
+        "urn:foxhole:cargo:a49cf0c5a775307b7368e406ac13821c5c7a61dcf56d81a66b0b89383dc856aa",
+        "urn:foxhole:cargo:b2ce977d26d03ac4bc7ff2d00af21a623f308c3538f54f4cdc35956f0cd9ac97",
+        "urn:foxhole:cargo:d58f8d42fe005088a81cfcf98458196afd159d063843d262808a9769659018dd",
+        "urn:foxhole:cargo:f2b8eb6ed8331bd9c40e76832ab66dc6826024991f83b8fb488c1c92fcc24dda",
+        "urn:foxhole:cargo:f876658278c229fd8466b4b0cf8b5e3f28834d28fe1826adff20baa2193c673f"
+      ],
+      "ref": "urn:foxhole:cargo:0614e1e14fc1156385efa0ec4701e0f9cc26e5a56d98feaaab2e9321f3b61df9"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:9c6980a5a4f405fe906e31a855b0eca4b40826a35b9d05e1b34fd8e44854eda5"
+      ],
+      "ref": "urn:foxhole:cargo:90cd2b641d4a87240b7c25b484d080254e9904ad02b65fef0214ea1ff2eb3b34"
+    },
+    {
+      "dependsOn": [],
+      "ref": "urn:foxhole:cargo:7fa97af46101d5450eac49be4546e81a17788d696821fa92eb2c4d8e81f8854c"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:39fb389141f65e83828254293fe9c97904ece9b2a19f2f7cc64b8b89fa4f7f76",
+        "urn:foxhole:cargo:f65811ba5717f4d7bbc050f08daa1b199f745f1f10273982b78ec79fda15804d"
+      ],
+      "ref": "urn:foxhole:cargo:36bcbefd0a26c295b0312c6e2777a69020ab4b0838df6c714aabaead92d1fc57"
+    },
+    {
+      "dependsOn": [],
+      "ref": "urn:foxhole:cargo:f65811ba5717f4d7bbc050f08daa1b199f745f1f10273982b78ec79fda15804d"
+    },
+    {
+      "dependsOn": [],
+      "ref": "urn:foxhole:cargo:dc6381fb80453cb72e8cd8d57100cef2b28ddbc425b3fec7097e099f71670a7a"
+    },
+    {
+      "dependsOn": [],
+      "ref": "urn:foxhole:cargo:0fc146108d9dc69c10c3d160e2a81133528b695410a2f6ec94f9fdd0f3f0dee6"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:0f6442d57d05be225bb02deb09fba78d36da300d0dd328fa190d49fd772170b6",
+        "urn:foxhole:cargo:6b5d88f681b0a659ef671dbedb1c10c64910ea1e2b6634444fc073941a0d8491",
+        "urn:foxhole:cargo:ccabd92ae66666212be2e9dfca6b094db23401a9f854af5f1a9c8fcb8026794e"
+      ],
+      "ref": "urn:foxhole:cargo:aac6a21f4ad3aae570205a5f49ec1f044843b6de7001d78761f6b5c1666e8334"
+    },
+    {
+      "dependsOn": [],
+      "ref": "urn:foxhole:cargo:41f0cbe6f49388330f3cbe8bd41cf2425bcd7e355afd34d4d7e6504a9eb42044"
+    },
+    {
+      "dependsOn": [],
+      "ref": "urn:foxhole:cargo:9f42fcbf7f46c7761923e94fa712edeb5e9116b5af2dd604779e24d198f90209"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:1d3d983f6fc282547f1a3689f3ab62b0421a4ba9aaa3153d56860169e6f90ee0",
+        "urn:foxhole:cargo:8da36943056278adc52aa3aa2921a71c629f9775fd549a190c6e8ebd9bb16835",
+        "urn:foxhole:cargo:f2b8eb6ed8331bd9c40e76832ab66dc6826024991f83b8fb488c1c92fcc24dda"
+      ],
+      "ref": "urn:foxhole:cargo:87b72b2dae39fbdc68be1cb8c12e3e9701e8b21a8748a009addcece2e9e9219b"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:828671efa8941abf249115118c322c92c22dd0d13243ad26cf26db029cf65b12"
+      ],
+      "ref": "urn:foxhole:cargo:1d3d983f6fc282547f1a3689f3ab62b0421a4ba9aaa3153d56860169e6f90ee0"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:08cccc74f6fecb9f85c90d567873f18851f4f6b15e53851ce78d972be591fb0e"
+      ],
+      "ref": "urn:foxhole:cargo:a49cf0c5a775307b7368e406ac13821c5c7a61dcf56d81a66b0b89383dc856aa"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:5ff916a1d981e10e920e10c24dee8d6909fa79c140c75131278f059c1dedf46a",
+        "urn:foxhole:cargo:b7b88a286785013c1d5dbc319a71d43562152cba11093ddab57db1a142fd455d",
+        "urn:foxhole:cargo:bae8f41540222089b7ec4bd177c37b61422facae6cdc9fcd3fabf5015d130f59",
+        "urn:foxhole:cargo:d8fb4d9018b7a0649135b4a93461a2102677eb7c8ef37e11b7890cfd80c47078",
+        "urn:foxhole:cargo:f2b8eb6ed8331bd9c40e76832ab66dc6826024991f83b8fb488c1c92fcc24dda"
+      ],
+      "ref": "urn:foxhole:cargo:28e51f0c6ff6604b8cd9e96d31920021bb1aa46872c7e488fc567bcffb18f03a"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:31bd8478daf21efc8c8211e67cf4f307492f42c6015677e5ec1ba8111fab0f66"
+      ],
+      "ref": "urn:foxhole:cargo:0a748df31aea20d47263b095b5b850a9527f4078b9947b5601ec9d889560d9d2"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:08cccc74f6fecb9f85c90d567873f18851f4f6b15e53851ce78d972be591fb0e",
+        "urn:foxhole:cargo:8f2fdfe1d2ac0163035dc7f1fb1c5e4aa5e988c60e999c3301d83253a407aee9",
+        "urn:foxhole:cargo:9c6980a5a4f405fe906e31a855b0eca4b40826a35b9d05e1b34fd8e44854eda5"
+      ],
+      "ref": "urn:foxhole:cargo:1fe2d9cc7282e81dde32ee5c4097b785fd6247e922d9cbafcb2ce5661da54cdc"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:7fa97af46101d5450eac49be4546e81a17788d696821fa92eb2c4d8e81f8854c"
+      ],
+      "ref": "urn:foxhole:cargo:a812c55fcf5184c58052de5b7d2d58d9faae7eb793f028f2ee6c83328b26e4c6"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:39c590964ea26fe4466f1ea3422273681770b2266779a6952fba6c2a6b6573f3",
+        "urn:foxhole:cargo:b7d72184f7829ff18c3caa191cb113bd39aeecb3f6cf91a016051a058bfbcdea"
+      ],
+      "ref": "urn:foxhole:cargo:b46afb380e482614115ad2fd2334523fc08847cdb3664e0c3faf02e2d813afe5"
+    },
+    {
+      "dependsOn": [],
+      "ref": "urn:foxhole:cargo:cd0760faee680b12ef8b70309bfc17e074aca6c0a7c7fddf6da282bdcc959701"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:136fa1b08ee959648add3f4b31447ec4cc199279cbed34afa350c4798ea13d78",
+        "urn:foxhole:cargo:d58f8d42fe005088a81cfcf98458196afd159d063843d262808a9769659018dd"
+      ],
+      "ref": "urn:foxhole:cargo:3519045bb4b8a24737bf48335d61905e02007e7a48cfa00c03aafb71935fb898"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:37cdeafdaa1508a731d6be8372bc8f402831598e7ecfa4b2572450b002c09d92"
+      ],
+      "ref": "urn:foxhole:cargo:20e80a5d26b86e1729b2342ac33f215b9c775aab6f356a87e168df25e123e630"
+    },
+    {
+      "dependsOn": [],
+      "ref": "urn:foxhole:cargo:ff5de8f1750579af31d3d657ab14833d2c7171d3242205e733f8ea4a15652c2c"
+    },
+    {
+      "dependsOn": [],
+      "ref": "urn:foxhole:cargo:783bc5a752764d2b266ad7f22bc10ec60b82286a9ae7745b9a9293169d1b7d97"
+    },
+    {
+      "dependsOn": [],
+      "ref": "urn:foxhole:cargo:bcd8b7c7d2875f07216bf8b506825218c6c9c8eb6da8f2cd971cae3096303dba"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:bed753c2ed9968a4e15ed7064bb4ba0d4c87818c525020641cdb20dd7cf22d12"
+      ],
+      "ref": "urn:foxhole:cargo:b76a7bc90873b624283c028c956ad57c6719b53507103124c2645c852d8685b9"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:b76a7bc90873b624283c028c956ad57c6719b53507103124c2645c852d8685b9"
+      ],
+      "ref": "urn:foxhole:cargo:15626a4253537bac46a2e3295a74f3653a6929a5bf3cb339861ddca1301c0425"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:a81ecf5f8d06c64e8e5b7434f42496c2a8ed08c8f94d6db32048d3597408ba17",
+        "urn:foxhole:cargo:dd9eac08406aaabe135426fc07c7e6fb5bf9ac7bb28f1a39d2dc6c4a8e9b1e19"
+      ],
+      "ref": "urn:foxhole:cargo:dc8bcc92ad1a76c40e444a092b0a7c8daa4210d689857e9c9d0ddfc682b89476"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:a81ecf5f8d06c64e8e5b7434f42496c2a8ed08c8f94d6db32048d3597408ba17",
+        "urn:foxhole:cargo:db09cb763d5d0002fb927800af552690ff0ba8ba86d4f8aa4ed170d74d262c65",
+        "urn:foxhole:cargo:f2b8eb6ed8331bd9c40e76832ab66dc6826024991f83b8fb488c1c92fcc24dda"
+      ],
+      "ref": "urn:foxhole:cargo:efe2ef5c9c082140f3a6e8dfb85f9f042b66a55c4d4dd30acf651200b922e9bc"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:3d126e74f6d886bf7cb6c495e6f453ebdce252d593b8dc41d7922421b68ef044",
+        "urn:foxhole:cargo:54f5a304b9f87b8b2b2588b15e164dc982065aa1cce016bf118138d729454ea1",
+        "urn:foxhole:cargo:b76a7bc90873b624283c028c956ad57c6719b53507103124c2645c852d8685b9",
+        "urn:foxhole:cargo:bed753c2ed9968a4e15ed7064bb4ba0d4c87818c525020641cdb20dd7cf22d12",
+        "urn:foxhole:cargo:f63e88c3dd883d30cb1e1daf49f5034fa612345896d10da3996e73c41a582531"
+      ],
+      "ref": "urn:foxhole:cargo:5ac844bac82c2152c0f105676e0257a918e3f67a8db5c7cb1f1e37909c2927a8"
+    },
+    {
+      "dependsOn": [],
+      "ref": "urn:foxhole:cargo:3d126e74f6d886bf7cb6c495e6f453ebdce252d593b8dc41d7922421b68ef044"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:007968a4740291de0b49c80c5367d4431e4b6bd9989184974a37a2f59e5175c2",
+        "urn:foxhole:cargo:0f6a7a8e3e3052a4685e50d868d29ca297232bec63ed9e098d2d03db1fc346d6",
+        "urn:foxhole:cargo:15626a4253537bac46a2e3295a74f3653a6929a5bf3cb339861ddca1301c0425",
+        "urn:foxhole:cargo:190e0dd89b4cc3a25eab95abaf5f37cc698452d05924b02cd9dcfc48bd019176",
+        "urn:foxhole:cargo:23464387d23b2fd3689ef355afa12123de5c97cce4ac625860d8ecaa93a619a8",
+        "urn:foxhole:cargo:39b7d49d735198e2328c99c6b7831340530d41fedf9668f11b0c1d8991b2602e",
+        "urn:foxhole:cargo:3d126e74f6d886bf7cb6c495e6f453ebdce252d593b8dc41d7922421b68ef044",
+        "urn:foxhole:cargo:4cbeb30712bb5ed3cc098053903e6d8b10e1348905d837322138811fef4e3b06",
+        "urn:foxhole:cargo:54f5a304b9f87b8b2b2588b15e164dc982065aa1cce016bf118138d729454ea1",
+        "urn:foxhole:cargo:5ac844bac82c2152c0f105676e0257a918e3f67a8db5c7cb1f1e37909c2927a8",
+        "urn:foxhole:cargo:5d6767036113c81511ac020b998a067d53bb1b0c9109ee561dc27a1edde9c109",
+        "urn:foxhole:cargo:8b46ea706c63b1d31df3d473126eb954e67284138a0105a082786c7d63ba792f",
+        "urn:foxhole:cargo:97fc3cc13b5a2878587f7b9e4e8536b8e1783344ef598c825e8d059fbc3f16c0",
+        "urn:foxhole:cargo:a812c55fcf5184c58052de5b7d2d58d9faae7eb793f028f2ee6c83328b26e4c6",
+        "urn:foxhole:cargo:a81ecf5f8d06c64e8e5b7434f42496c2a8ed08c8f94d6db32048d3597408ba17",
+        "urn:foxhole:cargo:be6ca6b456607db4db69e4042a70757a0bae090eaf7edc3bfa5e2b810988d452",
+        "urn:foxhole:cargo:c261a98bf279059bbd5c73788a074071d13141dd455e8718e91cdfaec8384239",
+        "urn:foxhole:cargo:d6820bc6cfb9aa414adcc934ad29a442a3a57c32a1b88f7a8e43e0ca58ae6802",
+        "urn:foxhole:cargo:db09cb763d5d0002fb927800af552690ff0ba8ba86d4f8aa4ed170d74d262c65",
+        "urn:foxhole:cargo:dc8bcc92ad1a76c40e444a092b0a7c8daa4210d689857e9c9d0ddfc682b89476",
+        "urn:foxhole:cargo:dd9eac08406aaabe135426fc07c7e6fb5bf9ac7bb28f1a39d2dc6c4a8e9b1e19",
+        "urn:foxhole:cargo:efe2ef5c9c082140f3a6e8dfb85f9f042b66a55c4d4dd30acf651200b922e9bc",
+        "urn:foxhole:cargo:f2b8eb6ed8331bd9c40e76832ab66dc6826024991f83b8fb488c1c92fcc24dda"
+      ],
+      "ref": "urn:foxhole:cargo:c64349906a2961b61c2a3e9ce488ddb747d8cffd21e5b070cd96a4a1d18acc68"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:0fc146108d9dc69c10c3d160e2a81133528b695410a2f6ec94f9fdd0f3f0dee6"
+      ],
+      "ref": "urn:foxhole:cargo:007968a4740291de0b49c80c5367d4431e4b6bd9989184974a37a2f59e5175c2"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:a81ecf5f8d06c64e8e5b7434f42496c2a8ed08c8f94d6db32048d3597408ba17",
+        "urn:foxhole:cargo:db09cb763d5d0002fb927800af552690ff0ba8ba86d4f8aa4ed170d74d262c65",
+        "urn:foxhole:cargo:efe2ef5c9c082140f3a6e8dfb85f9f042b66a55c4d4dd30acf651200b922e9bc",
+        "urn:foxhole:cargo:f2b8eb6ed8331bd9c40e76832ab66dc6826024991f83b8fb488c1c92fcc24dda"
+      ],
+      "ref": "urn:foxhole:cargo:dd9eac08406aaabe135426fc07c7e6fb5bf9ac7bb28f1a39d2dc6c4a8e9b1e19"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:23464387d23b2fd3689ef355afa12123de5c97cce4ac625860d8ecaa93a619a8",
+        "urn:foxhole:cargo:39b7d49d735198e2328c99c6b7831340530d41fedf9668f11b0c1d8991b2602e",
+        "urn:foxhole:cargo:97fc3cc13b5a2878587f7b9e4e8536b8e1783344ef598c825e8d059fbc3f16c0",
+        "urn:foxhole:cargo:c261a98bf279059bbd5c73788a074071d13141dd455e8718e91cdfaec8384239",
+        "urn:foxhole:cargo:c64349906a2961b61c2a3e9ce488ddb747d8cffd21e5b070cd96a4a1d18acc68"
+      ],
+      "ref": "urn:foxhole:cargo:b554ee2f20195b9ef2571cacb56ee0de5b641728c89314150e88ff4c65fc06c7"
+    },
+    {
+      "dependsOn": [],
+      "ref": "urn:foxhole:cargo:0f6a7a8e3e3052a4685e50d868d29ca297232bec63ed9e098d2d03db1fc346d6"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:c261a98bf279059bbd5c73788a074071d13141dd455e8718e91cdfaec8384239",
+        "urn:foxhole:cargo:c64349906a2961b61c2a3e9ce488ddb747d8cffd21e5b070cd96a4a1d18acc68"
+      ],
+      "ref": "urn:foxhole:cargo:888e153e67adeb25807dcd9d1370e77fe4e07e079cab06e279d73eff216213d3"
+    },
+    {
+      "dependsOn": [],
+      "ref": "urn:foxhole:cargo:bed753c2ed9968a4e15ed7064bb4ba0d4c87818c525020641cdb20dd7cf22d12"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:cd0760faee680b12ef8b70309bfc17e074aca6c0a7c7fddf6da282bdcc959701"
+      ],
+      "ref": "urn:foxhole:cargo:43f78745249e5acd66a957b8100202cff7c8bdf088b4cf0d0658e34f1e7f20f1"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:0af40b6560042e5643b1433220530af9f1837fc8c6cb55e5267ab1c88a69cf30",
+        "urn:foxhole:cargo:db2de746cd7713d374794ca84d4d5c6d57a223dd6014576f3a69f35a641ef0c0"
+      ],
+      "ref": "urn:foxhole:cargo:f1d8bfc3e214efbd97cdba468465e5481edaf5d1b7389d2d0f1afa1c8527ce27"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:0af40b6560042e5643b1433220530af9f1837fc8c6cb55e5267ab1c88a69cf30"
+      ],
+      "ref": "urn:foxhole:cargo:db2de746cd7713d374794ca84d4d5c6d57a223dd6014576f3a69f35a641ef0c0"
+    },
+    {
+      "dependsOn": [],
+      "ref": "urn:foxhole:cargo:0af40b6560042e5643b1433220530af9f1837fc8c6cb55e5267ab1c88a69cf30"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:31bd8478daf21efc8c8211e67cf4f307492f42c6015677e5ec1ba8111fab0f66",
+        "urn:foxhole:cargo:6cdf3ca9cd53bf9de1e8db74e0fe59f4687aaef037075009231cdf4c3e38a74a"
+      ],
+      "ref": "urn:foxhole:cargo:d182dd5c73aae8001cf15539ab11dace4a4143f4cfbda65d38a1c2e66c405cb8"
+    },
+    {
+      "dependsOn": [],
+      "ref": "urn:foxhole:cargo:9ff8c51d63d90c09b892cffcd3403a6e92965954c46518b3629e2c425fd1eb2a"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:072241f391fbae1e25372a0b720fdc3c7a58aa4fa644347e91f23cb7fee06944",
+        "urn:foxhole:cargo:faed4d33a5352d4474649f9750c0b38270411f6fdf54ee022e349dc831d9911a"
+      ],
+      "ref": "urn:foxhole:cargo:72f6bec47beeaeee90c38a21d4947285bf91d279c04e6019a83ba262d02418c3"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:0f6442d57d05be225bb02deb09fba78d36da300d0dd328fa190d49fd772170b6",
+        "urn:foxhole:cargo:293d2faa1881de9e441996a02567d01829a82e2052dc968bbff7b5f5ce8b19cc",
+        "urn:foxhole:cargo:6b5d88f681b0a659ef671dbedb1c10c64910ea1e2b6634444fc073941a0d8491",
+        "urn:foxhole:cargo:ccabd92ae66666212be2e9dfca6b094db23401a9f854af5f1a9c8fcb8026794e",
+        "urn:foxhole:cargo:db7646cd67eae585cbc0f4842bd945818990f8860622b8f4b09c232386762552"
+      ],
+      "ref": "urn:foxhole:cargo:072241f391fbae1e25372a0b720fdc3c7a58aa4fa644347e91f23cb7fee06944"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:072241f391fbae1e25372a0b720fdc3c7a58aa4fa644347e91f23cb7fee06944",
+        "urn:foxhole:cargo:0f6442d57d05be225bb02deb09fba78d36da300d0dd328fa190d49fd772170b6",
+        "urn:foxhole:cargo:6b5d88f681b0a659ef671dbedb1c10c64910ea1e2b6634444fc073941a0d8491"
+      ],
+      "ref": "urn:foxhole:cargo:faed4d33a5352d4474649f9750c0b38270411f6fdf54ee022e349dc831d9911a"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:0a748df31aea20d47263b095b5b850a9527f4078b9947b5601ec9d889560d9d2",
+        "urn:foxhole:cargo:d182dd5c73aae8001cf15539ab11dace4a4143f4cfbda65d38a1c2e66c405cb8",
+        "urn:foxhole:cargo:ff5de8f1750579af31d3d657ab14833d2c7171d3242205e733f8ea4a15652c2c"
+      ],
+      "ref": "urn:foxhole:cargo:c92dfeadaf7c683da66c4e62cbc10d8e2026e6d36f4ac3f08e5685ea7e289d16"
+    },
+    {
+      "dependsOn": [],
+      "ref": "urn:foxhole:cargo:d29cbefce14cd31dc5912400c7fb96638e4781b0807be0ab0e8e3ea6095454a5"
+    },
+    {
+      "dependsOn": [],
+      "ref": "urn:foxhole:cargo:32551cd25f1a7bfd7828c86ad03b46718c0fd3ad934d8620c00b1544f2223e4b"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:49cdee5076e2c0c3825d3b7a74751cb0835271eb1e7bc863db8c9a21b7b22185"
+      ],
+      "ref": "urn:foxhole:cargo:3ca955306268a03ad6ff3bae75d0394865c43fbc1ca8dc2376af3ee92594f8c8"
+    },
+    {
+      "dependsOn": [],
+      "ref": "urn:foxhole:cargo:2d1706e57b063f1357ccbab8f8fcd661c808712c1b84722ce581fff5578b8a31"
+    },
+    {
+      "dependsOn": [],
+      "ref": "urn:foxhole:cargo:f2fd8a521611640e746db14169b3a516a272e2852cc146bf0396a4f0533b0c17"
+    },
+    {
+      "dependsOn": [],
+      "ref": "urn:foxhole:cargo:b7d72184f7829ff18c3caa191cb113bd39aeecb3f6cf91a016051a058bfbcdea"
+    },
+    {
+      "dependsOn": [],
+      "ref": "urn:foxhole:cargo:013fd1a40ea9e6a4df2785046f9797870e28184e3f7a7933b7749d4fee4b06c3"
+    },
+    {
+      "dependsOn": [],
+      "ref": "urn:foxhole:cargo:3ee6d7fb02b926f657afdee39eac43e689ce63fb87a9b14fbbc68b356860a05b"
+    },
+    {
+      "dependsOn": [],
+      "ref": "urn:foxhole:cargo:d8fb4d9018b7a0649135b4a93461a2102677eb7c8ef37e11b7890cfd80c47078"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:13f5a7bf98cf131992b82b95f528bdb24815f9b0ec329115df1bf611afa784ae",
+        "urn:foxhole:cargo:6cdf3ca9cd53bf9de1e8db74e0fe59f4687aaef037075009231cdf4c3e38a74a"
+      ],
+      "ref": "urn:foxhole:cargo:31bd8478daf21efc8c8211e67cf4f307492f42c6015677e5ec1ba8111fab0f66"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:49cdee5076e2c0c3825d3b7a74751cb0835271eb1e7bc863db8c9a21b7b22185",
+        "urn:foxhole:cargo:cd0760faee680b12ef8b70309bfc17e074aca6c0a7c7fddf6da282bdcc959701"
+      ],
+      "ref": "urn:foxhole:cargo:4f1c9ebbb1def1e1f4a591776ee7c4fb3d77dd021faf187c9f103a1adcf5b5df"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:2d1706e57b063f1357ccbab8f8fcd661c808712c1b84722ce581fff5578b8a31",
+        "urn:foxhole:cargo:51a193006677fa2f6c4264ec34a5b5392a0bcbbb3de654b7d78579ce57a16c5b",
+        "urn:foxhole:cargo:a08229e1084ed6876d4431d1480d8f34a080f3ce933a9f531121b460197a5942"
+      ],
+      "ref": "urn:foxhole:cargo:c730b6ea4d34e3a601c622f034ddc7b74082479b1565c03f0b2d9d81566809b3"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:013fd1a40ea9e6a4df2785046f9797870e28184e3f7a7933b7749d4fee4b06c3",
+        "urn:foxhole:cargo:5a074a4bb6610bcfeacc30a86d6315d0670fd78bf0fa8b92bff8ec46282ad873",
+        "urn:foxhole:cargo:a08229e1084ed6876d4431d1480d8f34a080f3ce933a9f531121b460197a5942"
+      ],
+      "ref": "urn:foxhole:cargo:d6820bc6cfb9aa414adcc934ad29a442a3a57c32a1b88f7a8e43e0ca58ae6802"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:1fe2d9cc7282e81dde32ee5c4097b785fd6247e922d9cbafcb2ce5661da54cdc",
+        "urn:foxhole:cargo:22c585733f7202302084ac2cfaaf56723bee464ca4056bf81f2e4446c5ae6afc",
+        "urn:foxhole:cargo:23464387d23b2fd3689ef355afa12123de5c97cce4ac625860d8ecaa93a619a8",
+        "urn:foxhole:cargo:8f2fdfe1d2ac0163035dc7f1fb1c5e4aa5e988c60e999c3301d83253a407aee9",
+        "urn:foxhole:cargo:90cd2b641d4a87240b7c25b484d080254e9904ad02b65fef0214ea1ff2eb3b34"
+      ],
+      "ref": "urn:foxhole:cargo:456a593cb9d363e88907769d8b3f1ecfbac6b958da562ca58f57a573f53f4fad"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:0da544e734434eee8e1505da2bdb883010c23dc61b1b032a575bc46a973f6f68",
+        "urn:foxhole:cargo:4c0c01eb7810dfb2f696084d11421512c78702610f6c6ae74b859982d8196316",
+        "urn:foxhole:cargo:a49cf0c5a775307b7368e406ac13821c5c7a61dcf56d81a66b0b89383dc856aa"
+      ],
+      "ref": "urn:foxhole:cargo:3d4d7d8e89237a2f454172781ca44ab4d5b1b7be607a7a83bb6440413a512603"
+    },
+    {
+      "dependsOn": [],
+      "ref": "urn:foxhole:cargo:e7eb9be3602750730974b6283453d552617bd38da5179c7b7669e8192bf498a5"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:08cccc74f6fecb9f85c90d567873f18851f4f6b15e53851ce78d972be591fb0e",
+        "urn:foxhole:cargo:3ee6d7fb02b926f657afdee39eac43e689ce63fb87a9b14fbbc68b356860a05b"
+      ],
+      "ref": "urn:foxhole:cargo:5a074a4bb6610bcfeacc30a86d6315d0670fd78bf0fa8b92bff8ec46282ad873"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:08cccc74f6fecb9f85c90d567873f18851f4f6b15e53851ce78d972be591fb0e",
+        "urn:foxhole:cargo:3ee6d7fb02b926f657afdee39eac43e689ce63fb87a9b14fbbc68b356860a05b"
+      ],
+      "ref": "urn:foxhole:cargo:97fc3cc13b5a2878587f7b9e4e8536b8e1783344ef598c825e8d059fbc3f16c0"
+    },
+    {
+      "dependsOn": [],
+      "ref": "urn:foxhole:cargo:f63e88c3dd883d30cb1e1daf49f5034fa612345896d10da3996e73c41a582531"
+    },
+    {
+      "dependsOn": [],
+      "ref": "urn:foxhole:cargo:411d443ec84f5214c5378b486129d8aa95cc8d1e43803fc531cbb3116f094887"
+    },
+    {
+      "dependsOn": [],
+      "ref": "urn:foxhole:cargo:29f5faf5baaa7299dc71aaf227c3902e94d443ab156ed50678e232ab5877d3f6"
+    },
+    {
+      "dependsOn": [],
+      "ref": "urn:foxhole:cargo:136fa1b08ee959648add3f4b31447ec4cc199279cbed34afa350c4798ea13d78"
+    },
+    {
+      "dependsOn": [],
+      "ref": "urn:foxhole:cargo:5c4104fba7e8e21a4c332a9e5dce58ddc5100f3a684aba23b358ab426f4dcf45"
+    },
+    {
+      "dependsOn": [],
+      "ref": "urn:foxhole:cargo:db7646cd67eae585cbc0f4842bd945818990f8860622b8f4b09c232386762552"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:0da544e734434eee8e1505da2bdb883010c23dc61b1b032a575bc46a973f6f68",
+        "urn:foxhole:cargo:23464387d23b2fd3689ef355afa12123de5c97cce4ac625860d8ecaa93a619a8",
+        "urn:foxhole:cargo:456a593cb9d363e88907769d8b3f1ecfbac6b958da562ca58f57a573f53f4fad",
+        "urn:foxhole:cargo:8f2fdfe1d2ac0163035dc7f1fb1c5e4aa5e988c60e999c3301d83253a407aee9",
+        "urn:foxhole:cargo:9c6980a5a4f405fe906e31a855b0eca4b40826a35b9d05e1b34fd8e44854eda5",
+        "urn:foxhole:cargo:d9b700bc3c3890bc55a30ee6d54fce112437681d6cc13caff920dcacdf133606",
+        "urn:foxhole:cargo:f1d8bfc3e214efbd97cdba468465e5481edaf5d1b7389d2d0f1afa1c8527ce27"
+      ],
+      "ref": "urn:foxhole:cargo:4c0c01eb7810dfb2f696084d11421512c78702610f6c6ae74b859982d8196316"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:08cccc74f6fecb9f85c90d567873f18851f4f6b15e53851ce78d972be591fb0e",
+        "urn:foxhole:cargo:32551cd25f1a7bfd7828c86ad03b46718c0fd3ad934d8620c00b1544f2223e4b",
+        "urn:foxhole:cargo:97fc3cc13b5a2878587f7b9e4e8536b8e1783344ef598c825e8d059fbc3f16c0"
+      ],
+      "ref": "urn:foxhole:cargo:a08229e1084ed6876d4431d1480d8f34a080f3ce933a9f531121b460197a5942"
+    },
+    {
+      "dependsOn": [],
+      "ref": "urn:foxhole:cargo:f5d6ab8f192da44a31c06bf92ba41d3865bb7a24d9b9bef4fb347bfa4284affb"
+    },
+    {
+      "dependsOn": [],
+      "ref": "urn:foxhole:cargo:bf45d30982982006c612b65f0d8f818263477b1e83c5da54f001580ec7fd1ae7"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:d29cbefce14cd31dc5912400c7fb96638e4781b0807be0ab0e8e3ea6095454a5"
+      ],
+      "ref": "urn:foxhole:cargo:c9b112c1c5015fe2a0124fc8fbe493f623a98ba6ae136a1f41ee6b2ea2bdf868"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:d29cbefce14cd31dc5912400c7fb96638e4781b0807be0ab0e8e3ea6095454a5"
+      ],
+      "ref": "urn:foxhole:cargo:02bfd5c5aaf966ecaaa44444263fbda70c090f18ef31b7bae91bb6d2c4dec188"
+    },
+    {
+      "dependsOn": [],
+      "ref": "urn:foxhole:cargo:b22a1f7a12102d0d19e62c0a28f9e02cc1d5ea23ccf44b99be4891d29e5c545a"
+    },
+    {
+      "dependsOn": [],
+      "ref": "urn:foxhole:cargo:dff6c608daf8b094e8b6f1f26774512e3d37fac385787ebe6fa28d4a66bc014e"
+    },
+    {
+      "dependsOn": [],
+      "ref": "urn:foxhole:cargo:00dfbb0d6aba32a3455870620fe01c64c1048519423f61c3e9e99f89f205e4f1"
+    },
+    {
+      "dependsOn": [],
+      "ref": "urn:foxhole:cargo:49cdee5076e2c0c3825d3b7a74751cb0835271eb1e7bc863db8c9a21b7b22185"
+    },
+    {
+      "dependsOn": [],
+      "ref": "urn:foxhole:cargo:8b46ea706c63b1d31df3d473126eb954e67284138a0105a082786c7d63ba792f"
+    },
+    {
+      "dependsOn": [],
+      "ref": "urn:foxhole:cargo:270748a5256f7ae46ccd2bd347ad70445ecc0421cf4cc9fbc12eabd50f968f6d"
+    },
+    {
+      "dependsOn": [],
+      "ref": "urn:foxhole:cargo:1ecc89e9a211612aa60f42945e0c8fe45d5a25c690c6a60bf03f84a34c6d60f3"
+    },
+    {
+      "dependsOn": [],
+      "ref": "urn:foxhole:cargo:23464387d23b2fd3689ef355afa12123de5c97cce4ac625860d8ecaa93a619a8"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:013fd1a40ea9e6a4df2785046f9797870e28184e3f7a7933b7749d4fee4b06c3",
+        "urn:foxhole:cargo:0f6442d57d05be225bb02deb09fba78d36da300d0dd328fa190d49fd772170b6",
+        "urn:foxhole:cargo:1615627a100e64b9cb561ec29f744c3d236affba2eb8f40062bb7f155540ccd3",
+        "urn:foxhole:cargo:22c585733f7202302084ac2cfaaf56723bee464ca4056bf81f2e4446c5ae6afc",
+        "urn:foxhole:cargo:8f2fdfe1d2ac0163035dc7f1fb1c5e4aa5e988c60e999c3301d83253a407aee9",
+        "urn:foxhole:cargo:ccabd92ae66666212be2e9dfca6b094db23401a9f854af5f1a9c8fcb8026794e"
+      ],
+      "ref": "urn:foxhole:cargo:aa3edb0ff284c81abada31e79d13828a21bd77d9655fc7898282e094d0ccec38"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:aa3edb0ff284c81abada31e79d13828a21bd77d9655fc7898282e094d0ccec38"
+      ],
+      "ref": "urn:foxhole:cargo:3a21e7f2a8f46f7f69e02cdcf2e8bef6a31dc0619d9c2ee1d5b543dcc1360611"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:3a21e7f2a8f46f7f69e02cdcf2e8bef6a31dc0619d9c2ee1d5b543dcc1360611"
+      ],
+      "ref": "urn:foxhole:cargo:b2ce977d26d03ac4bc7ff2d00af21a623f308c3538f54f4cdc35956f0cd9ac97"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:c92dfeadaf7c683da66c4e62cbc10d8e2026e6d36f4ac3f08e5685ea7e289d16",
+        "urn:foxhole:cargo:cd0760faee680b12ef8b70309bfc17e074aca6c0a7c7fddf6da282bdcc959701"
+      ],
+      "ref": "urn:foxhole:cargo:b3df4bbadae26f8e36c9483f2542755659423a9ca1613059a67cc7321cc8ab4e"
+    },
+    {
+      "dependsOn": [],
+      "ref": "urn:foxhole:cargo:9c6980a5a4f405fe906e31a855b0eca4b40826a35b9d05e1b34fd8e44854eda5"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:49cdee5076e2c0c3825d3b7a74751cb0835271eb1e7bc863db8c9a21b7b22185"
+      ],
+      "ref": "urn:foxhole:cargo:672116007534fa21e5c208afff463eb1d0123d51fe1cbdcad0c195b378002f2f"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:41f0cbe6f49388330f3cbe8bd41cf2425bcd7e355afd34d4d7e6504a9eb42044"
+      ],
+      "ref": "urn:foxhole:cargo:aa722ac5c71d378bb1ef8e1a7a836e9686dd85f4d770b882bbe72df9ed4a5ab8"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:9c6980a5a4f405fe906e31a855b0eca4b40826a35b9d05e1b34fd8e44854eda5"
+      ],
+      "ref": "urn:foxhole:cargo:b469462e0cff0e79aef12988ab1329ec65faacb50b31ed31dd43acd719b9dd91"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:0f6442d57d05be225bb02deb09fba78d36da300d0dd328fa190d49fd772170b6",
+        "urn:foxhole:cargo:1615627a100e64b9cb561ec29f744c3d236affba2eb8f40062bb7f155540ccd3",
+        "urn:foxhole:cargo:ccabd92ae66666212be2e9dfca6b094db23401a9f854af5f1a9c8fcb8026794e"
+      ],
+      "ref": "urn:foxhole:cargo:d86a25d50eba7e9634150973ec4d66967f8dad61c513ce9a090dbadfae181371"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:41f0cbe6f49388330f3cbe8bd41cf2425bcd7e355afd34d4d7e6504a9eb42044"
+      ],
+      "ref": "urn:foxhole:cargo:d58f8d42fe005088a81cfcf98458196afd159d063843d262808a9769659018dd"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:43f78745249e5acd66a957b8100202cff7c8bdf088b4cf0d0658e34f1e7f20f1",
+        "urn:foxhole:cargo:97fc3cc13b5a2878587f7b9e4e8536b8e1783344ef598c825e8d059fbc3f16c0",
+        "urn:foxhole:cargo:9c6980a5a4f405fe906e31a855b0eca4b40826a35b9d05e1b34fd8e44854eda5",
+        "urn:foxhole:cargo:a08229e1084ed6876d4431d1480d8f34a080f3ce933a9f531121b460197a5942"
+      ],
+      "ref": "urn:foxhole:cargo:82576b4221475543c55397dab08f57241fe59130393a806a876c99d7a8c42c3d"
+    },
+    {
+      "dependsOn": [],
+      "ref": "urn:foxhole:cargo:4a678fe26ea416ea43c805a4e83015e3e5516d4f91b944519ed6f69e8a0a2057"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:20e80a5d26b86e1729b2342ac33f215b9c775aab6f356a87e168df25e123e630",
+        "urn:foxhole:cargo:f2b8eb6ed8331bd9c40e76832ab66dc6826024991f83b8fb488c1c92fcc24dda"
+      ],
+      "ref": "urn:foxhole:cargo:5d6767036113c81511ac020b998a067d53bb1b0c9109ee561dc27a1edde9c109"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:41ef6b9581495b2faf98d018efd3c4cd191393bdc3e41244a9c0d5fdfdd8f467"
+      ],
+      "ref": "urn:foxhole:cargo:ccabd92ae66666212be2e9dfca6b094db23401a9f854af5f1a9c8fcb8026794e"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:1f0bd31707aa8e1f62a7e59b687ec42fc16a01c9c69632f9b3962df8c9c70123",
+        "urn:foxhole:cargo:3a9e44532b5bfae7fe228e6210b8e8a8885e66e8d575cd958e53da254ad5aab3",
+        "urn:foxhole:cargo:4a678fe26ea416ea43c805a4e83015e3e5516d4f91b944519ed6f69e8a0a2057",
+        "urn:foxhole:cargo:a126bd374c6b07040f8b6f297d1f62c2e4277215328af07df6910c1ca8a9c08c",
+        "urn:foxhole:cargo:b710f18e6de9a9c80e070c4b0dd2b5690a06a680724d51cff31eb100164ffae6",
+        "urn:foxhole:cargo:dc6381fb80453cb72e8cd8d57100cef2b28ddbc425b3fec7097e099f71670a7a",
+        "urn:foxhole:cargo:e4820a8493a6ab12b5bf3d2777c49b462b53b442467abf16df5913d467e1b54b"
+      ],
+      "ref": "urn:foxhole:cargo:c0ce4644965d263a6a8e3ed45b49b9db7ed3d4a8ecaabc32e7873a457507b663"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:1f0bd31707aa8e1f62a7e59b687ec42fc16a01c9c69632f9b3962df8c9c70123",
+        "urn:foxhole:cargo:23464387d23b2fd3689ef355afa12123de5c97cce4ac625860d8ecaa93a619a8",
+        "urn:foxhole:cargo:579d172f0ac9f18c0c820af967d3e6a5b58ee938fcfdfc6703412f0cfff7297b",
+        "urn:foxhole:cargo:90d15f2d3323b0441d69477592bcc6039600b91c6b86d7348ae5660be30ebd6d",
+        "urn:foxhole:cargo:a08229e1084ed6876d4431d1480d8f34a080f3ce933a9f531121b460197a5942",
+        "urn:foxhole:cargo:a126bd374c6b07040f8b6f297d1f62c2e4277215328af07df6910c1ca8a9c08c",
+        "urn:foxhole:cargo:dc6381fb80453cb72e8cd8d57100cef2b28ddbc425b3fec7097e099f71670a7a",
+        "urn:foxhole:cargo:e4820a8493a6ab12b5bf3d2777c49b462b53b442467abf16df5913d467e1b54b"
+      ],
+      "ref": "urn:foxhole:cargo:b710f18e6de9a9c80e070c4b0dd2b5690a06a680724d51cff31eb100164ffae6"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:a126bd374c6b07040f8b6f297d1f62c2e4277215328af07df6910c1ca8a9c08c"
+      ],
+      "ref": "urn:foxhole:cargo:579d172f0ac9f18c0c820af967d3e6a5b58ee938fcfdfc6703412f0cfff7297b"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:4a678fe26ea416ea43c805a4e83015e3e5516d4f91b944519ed6f69e8a0a2057",
+        "urn:foxhole:cargo:579d172f0ac9f18c0c820af967d3e6a5b58ee938fcfdfc6703412f0cfff7297b",
+        "urn:foxhole:cargo:a126bd374c6b07040f8b6f297d1f62c2e4277215328af07df6910c1ca8a9c08c"
+      ],
+      "ref": "urn:foxhole:cargo:e4820a8493a6ab12b5bf3d2777c49b462b53b442467abf16df5913d467e1b54b"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:23464387d23b2fd3689ef355afa12123de5c97cce4ac625860d8ecaa93a619a8",
+        "urn:foxhole:cargo:4538bc8ae9288a10b27dbd649b57262375aaadcd0d664694a60810180cd67f02",
+        "urn:foxhole:cargo:a81ecf5f8d06c64e8e5b7434f42496c2a8ed08c8f94d6db32048d3597408ba17",
+        "urn:foxhole:cargo:efe2ef5c9c082140f3a6e8dfb85f9f042b66a55c4d4dd30acf651200b922e9bc"
+      ],
+      "ref": "urn:foxhole:cargo:54f5a304b9f87b8b2b2588b15e164dc982065aa1cce016bf118138d729454ea1"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:0f6442d57d05be225bb02deb09fba78d36da300d0dd328fa190d49fd772170b6",
+        "urn:foxhole:cargo:1615627a100e64b9cb561ec29f744c3d236affba2eb8f40062bb7f155540ccd3",
+        "urn:foxhole:cargo:ccabd92ae66666212be2e9dfca6b094db23401a9f854af5f1a9c8fcb8026794e"
+      ],
+      "ref": "urn:foxhole:cargo:4538bc8ae9288a10b27dbd649b57262375aaadcd0d664694a60810180cd67f02"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:ccabd92ae66666212be2e9dfca6b094db23401a9f854af5f1a9c8fcb8026794e"
+      ],
+      "ref": "urn:foxhole:cargo:0f6442d57d05be225bb02deb09fba78d36da300d0dd328fa190d49fd772170b6"
+    },
+    {
+      "dependsOn": [],
+      "ref": "urn:foxhole:cargo:bae8f41540222089b7ec4bd177c37b61422facae6cdc9fcd3fabf5015d130f59"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:190e0dd89b4cc3a25eab95abaf5f37cc698452d05924b02cd9dcfc48bd019176",
+        "urn:foxhole:cargo:23464387d23b2fd3689ef355afa12123de5c97cce4ac625860d8ecaa93a619a8",
+        "urn:foxhole:cargo:39b7d49d735198e2328c99c6b7831340530d41fedf9668f11b0c1d8991b2602e",
+        "urn:foxhole:cargo:7fa97af46101d5450eac49be4546e81a17788d696821fa92eb2c4d8e81f8854c",
+        "urn:foxhole:cargo:97fc3cc13b5a2878587f7b9e4e8536b8e1783344ef598c825e8d059fbc3f16c0",
+        "urn:foxhole:cargo:a812c55fcf5184c58052de5b7d2d58d9faae7eb793f028f2ee6c83328b26e4c6",
+        "urn:foxhole:cargo:f2b8eb6ed8331bd9c40e76832ab66dc6826024991f83b8fb488c1c92fcc24dda"
+      ],
+      "ref": "urn:foxhole:cargo:4cbeb30712bb5ed3cc098053903e6d8b10e1348905d837322138811fef4e3b06"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:22c585733f7202302084ac2cfaaf56723bee464ca4056bf81f2e4446c5ae6afc",
+        "urn:foxhole:cargo:90cd2b641d4a87240b7c25b484d080254e9904ad02b65fef0214ea1ff2eb3b34",
+        "urn:foxhole:cargo:9c6980a5a4f405fe906e31a855b0eca4b40826a35b9d05e1b34fd8e44854eda5"
+      ],
+      "ref": "urn:foxhole:cargo:8f2fdfe1d2ac0163035dc7f1fb1c5e4aa5e988c60e999c3301d83253a407aee9"
+    },
+    {
+      "dependsOn": [],
+      "ref": "urn:foxhole:cargo:22c585733f7202302084ac2cfaaf56723bee464ca4056bf81f2e4446c5ae6afc"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:22c585733f7202302084ac2cfaaf56723bee464ca4056bf81f2e4446c5ae6afc",
+        "urn:foxhole:cargo:8f2fdfe1d2ac0163035dc7f1fb1c5e4aa5e988c60e999c3301d83253a407aee9",
+        "urn:foxhole:cargo:90cd2b641d4a87240b7c25b484d080254e9904ad02b65fef0214ea1ff2eb3b34",
+        "urn:foxhole:cargo:9c6980a5a4f405fe906e31a855b0eca4b40826a35b9d05e1b34fd8e44854eda5"
+      ],
+      "ref": "urn:foxhole:cargo:3a9e44532b5bfae7fe228e6210b8e8a8885e66e8d575cd958e53da254ad5aab3"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:374eef83681871ec555ebb018542743095499a3b3ba51a8cc7d9467b0425225e",
+        "urn:foxhole:cargo:783bc5a752764d2b266ad7f22bc10ec60b82286a9ae7745b9a9293169d1b7d97",
+        "urn:foxhole:cargo:aa722ac5c71d378bb1ef8e1a7a836e9686dd85f4d770b882bbe72df9ed4a5ab8",
+        "urn:foxhole:cargo:cba5c33a0de8c2aaf1bc26c00ae28a809d67429db2f75c94c438309dbd7e412d",
+        "urn:foxhole:cargo:e7eb9be3602750730974b6283453d552617bd38da5179c7b7669e8192bf498a5"
+      ],
+      "ref": "urn:foxhole:cargo:f876658278c229fd8466b4b0cf8b5e3f28834d28fe1826adff20baa2193c673f"
+    },
+    {
+      "dependsOn": [],
+      "ref": "urn:foxhole:cargo:cba5c33a0de8c2aaf1bc26c00ae28a809d67429db2f75c94c438309dbd7e412d"
+    },
+    {
+      "dependsOn": [],
+      "ref": "urn:foxhole:cargo:190e0dd89b4cc3a25eab95abaf5f37cc698452d05924b02cd9dcfc48bd019176"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:c561b155d15120c5fdfb8eaf76d2a9fe95f01ffc51cd2809fc4d2bdb886bdf22"
+      ],
+      "ref": "urn:foxhole:cargo:6667bb374f9d376eaadd4dd8bee722c75e2ad511d2d0de1772fd0c91d5eb4978"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:1ecc89e9a211612aa60f42945e0c8fe45d5a25c690c6a60bf03f84a34c6d60f3",
+        "urn:foxhole:cargo:a49cf0c5a775307b7368e406ac13821c5c7a61dcf56d81a66b0b89383dc856aa"
+      ],
+      "ref": "urn:foxhole:cargo:5cdac9cace61296572dd5288b379113faefe55b381911c1328fb0df16e402bfc"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:270748a5256f7ae46ccd2bd347ad70445ecc0421cf4cc9fbc12eabd50f968f6d",
+        "urn:foxhole:cargo:3ca955306268a03ad6ff3bae75d0394865c43fbc1ca8dc2376af3ee92594f8c8",
+        "urn:foxhole:cargo:49cdee5076e2c0c3825d3b7a74751cb0835271eb1e7bc863db8c9a21b7b22185",
+        "urn:foxhole:cargo:a49cf0c5a775307b7368e406ac13821c5c7a61dcf56d81a66b0b89383dc856aa"
+      ],
+      "ref": "urn:foxhole:cargo:750318918bc69024ff70568f9b53936f23c504a8f490e1a1459fba4f9f660a1a"
+    },
+    {
+      "dependsOn": [],
+      "ref": "urn:foxhole:cargo:d9b700bc3c3890bc55a30ee6d54fce112437681d6cc13caff920dcacdf133606"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:08cccc74f6fecb9f85c90d567873f18851f4f6b15e53851ce78d972be591fb0e"
+      ],
+      "ref": "urn:foxhole:cargo:c561b155d15120c5fdfb8eaf76d2a9fe95f01ffc51cd2809fc4d2bdb886bdf22"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:08cccc74f6fecb9f85c90d567873f18851f4f6b15e53851ce78d972be591fb0e",
+        "urn:foxhole:cargo:db09cb763d5d0002fb927800af552690ff0ba8ba86d4f8aa4ed170d74d262c65"
+      ],
+      "ref": "urn:foxhole:cargo:f2b8eb6ed8331bd9c40e76832ab66dc6826024991f83b8fb488c1c92fcc24dda"
+    },
+    {
+      "dependsOn": [],
+      "ref": "urn:foxhole:cargo:08cccc74f6fecb9f85c90d567873f18851f4f6b15e53851ce78d972be591fb0e"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:0f6442d57d05be225bb02deb09fba78d36da300d0dd328fa190d49fd772170b6",
+        "urn:foxhole:cargo:6b5d88f681b0a659ef671dbedb1c10c64910ea1e2b6634444fc073941a0d8491",
+        "urn:foxhole:cargo:ccabd92ae66666212be2e9dfca6b094db23401a9f854af5f1a9c8fcb8026794e"
+      ],
+      "ref": "urn:foxhole:cargo:db09cb763d5d0002fb927800af552690ff0ba8ba86d4f8aa4ed170d74d262c65"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:08cccc74f6fecb9f85c90d567873f18851f4f6b15e53851ce78d972be591fb0e",
+        "urn:foxhole:cargo:9c6980a5a4f405fe906e31a855b0eca4b40826a35b9d05e1b34fd8e44854eda5",
+        "urn:foxhole:cargo:a08229e1084ed6876d4431d1480d8f34a080f3ce933a9f531121b460197a5942",
+        "urn:foxhole:cargo:b22a1f7a12102d0d19e62c0a28f9e02cc1d5ea23ccf44b99be4891d29e5c545a",
+        "urn:foxhole:cargo:bfa80998800166cc58abde8f47836bbceece99390092b6a7fd75f327b6687b6c"
+      ],
+      "ref": "urn:foxhole:cargo:1923d23e1529cf831649de78a3bd69e552f14753c672c20ad24aca08033461fe"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:bcd8b7c7d2875f07216bf8b506825218c6c9c8eb6da8f2cd971cae3096303dba",
+        "urn:foxhole:cargo:c92dfeadaf7c683da66c4e62cbc10d8e2026e6d36f4ac3f08e5685ea7e289d16",
+        "urn:foxhole:cargo:cd0760faee680b12ef8b70309bfc17e074aca6c0a7c7fddf6da282bdcc959701"
+      ],
+      "ref": "urn:foxhole:cargo:be2212b4b000fc4c866208af5da01b819468d399feb7b9b5af9e523ab1c83cd8"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:bcd8b7c7d2875f07216bf8b506825218c6c9c8eb6da8f2cd971cae3096303dba",
+        "urn:foxhole:cargo:c92dfeadaf7c683da66c4e62cbc10d8e2026e6d36f4ac3f08e5685ea7e289d16",
+        "urn:foxhole:cargo:cd0760faee680b12ef8b70309bfc17e074aca6c0a7c7fddf6da282bdcc959701"
+      ],
+      "ref": "urn:foxhole:cargo:be6ca6b456607db4db69e4042a70757a0bae090eaf7edc3bfa5e2b810988d452"
+    },
+    {
+      "dependsOn": [],
+      "ref": "urn:foxhole:cargo:39c590964ea26fe4466f1ea3422273681770b2266779a6952fba6c2a6b6573f3"
+    },
+    {
+      "dependsOn": [],
+      "ref": "urn:foxhole:cargo:938489e47dfed8aad8ccfbe32716d976d4a90f082d0110ee7c02bf084cff95ad"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:2b987c0c22676df79fcae27d938ce50bb20392d8a6f91cb080fee354d9b14ba0",
+        "urn:foxhole:cargo:6667bb374f9d376eaadd4dd8bee722c75e2ad511d2d0de1772fd0c91d5eb4978"
+      ],
+      "ref": "urn:foxhole:cargo:d454c37b6dd44b63408826927eb35e2f409059d57a9996b2b20cd9694ad61c8a"
+    },
+    {
+      "dependsOn": [],
+      "ref": "urn:foxhole:cargo:2b987c0c22676df79fcae27d938ce50bb20392d8a6f91cb080fee354d9b14ba0"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:f2b8eb6ed8331bd9c40e76832ab66dc6826024991f83b8fb488c1c92fcc24dda"
+      ],
+      "ref": "urn:foxhole:cargo:39b7d49d735198e2328c99c6b7831340530d41fedf9668f11b0c1d8991b2602e"
+    },
+    {
+      "dependsOn": [],
+      "ref": "urn:foxhole:cargo:51a193006677fa2f6c4264ec34a5b5392a0bcbbb3de654b7d78579ce57a16c5b"
+    },
+    {
+      "dependsOn": [],
+      "ref": "urn:foxhole:cargo:293d2faa1881de9e441996a02567d01829a82e2052dc968bbff7b5f5ce8b19cc"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:0f6442d57d05be225bb02deb09fba78d36da300d0dd328fa190d49fd772170b6",
+        "urn:foxhole:cargo:1615627a100e64b9cb561ec29f744c3d236affba2eb8f40062bb7f155540ccd3",
+        "urn:foxhole:cargo:ccabd92ae66666212be2e9dfca6b094db23401a9f854af5f1a9c8fcb8026794e",
+        "urn:foxhole:cargo:f63e88c3dd883d30cb1e1daf49f5034fa612345896d10da3996e73c41a582531"
+      ],
+      "ref": "urn:foxhole:cargo:cac3d4b33ff30f156ab7b1e41df5f039bebee1fdbce2d70186b3127dced4cf9b"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:0f6442d57d05be225bb02deb09fba78d36da300d0dd328fa190d49fd772170b6",
+        "urn:foxhole:cargo:41ef6b9581495b2faf98d018efd3c4cd191393bdc3e41244a9c0d5fdfdd8f467",
+        "urn:foxhole:cargo:ccabd92ae66666212be2e9dfca6b094db23401a9f854af5f1a9c8fcb8026794e"
+      ],
+      "ref": "urn:foxhole:cargo:1615627a100e64b9cb561ec29f744c3d236affba2eb8f40062bb7f155540ccd3"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:0f6442d57d05be225bb02deb09fba78d36da300d0dd328fa190d49fd772170b6",
+        "urn:foxhole:cargo:41ef6b9581495b2faf98d018efd3c4cd191393bdc3e41244a9c0d5fdfdd8f467",
+        "urn:foxhole:cargo:ccabd92ae66666212be2e9dfca6b094db23401a9f854af5f1a9c8fcb8026794e"
+      ],
+      "ref": "urn:foxhole:cargo:6b5d88f681b0a659ef671dbedb1c10c64910ea1e2b6634444fc073941a0d8491"
+    },
+    {
+      "dependsOn": [],
+      "ref": "urn:foxhole:cargo:5ff916a1d981e10e920e10c24dee8d6909fa79c140c75131278f059c1dedf46a"
+    },
+    {
+      "dependsOn": [],
+      "ref": "urn:foxhole:cargo:c261a98bf279059bbd5c73788a074071d13141dd455e8718e91cdfaec8384239"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:4a678fe26ea416ea43c805a4e83015e3e5516d4f91b944519ed6f69e8a0a2057",
+        "urn:foxhole:cargo:4f1c9ebbb1def1e1f4a591776ee7c4fb3d77dd021faf187c9f103a1adcf5b5df",
+        "urn:foxhole:cargo:750318918bc69024ff70568f9b53936f23c504a8f490e1a1459fba4f9f660a1a",
+        "urn:foxhole:cargo:f2fd8a521611640e746db14169b3a516a272e2852cc146bf0396a4f0533b0c17"
+      ],
+      "ref": "urn:foxhole:cargo:1f0bd31707aa8e1f62a7e59b687ec42fc16a01c9c69632f9b3962df8c9c70123"
+    },
+    {
+      "dependsOn": [],
+      "ref": "urn:foxhole:cargo:ffe3373d6cf058342069949b00d29c13974af645f5e6836854933b44199e01e2"
+    },
+    {
+      "dependsOn": [],
+      "ref": "urn:foxhole:cargo:374eef83681871ec555ebb018542743095499a3b3ba51a8cc7d9467b0425225e"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:0f6442d57d05be225bb02deb09fba78d36da300d0dd328fa190d49fd772170b6",
+        "urn:foxhole:cargo:1615627a100e64b9cb561ec29f744c3d236affba2eb8f40062bb7f155540ccd3",
+        "urn:foxhole:cargo:ccabd92ae66666212be2e9dfca6b094db23401a9f854af5f1a9c8fcb8026794e"
+      ],
+      "ref": "urn:foxhole:cargo:6b2340c92849ba71b75e1dd30d6f52d2e196e732f689ff240258fbae5ca84507"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:0f6442d57d05be225bb02deb09fba78d36da300d0dd328fa190d49fd772170b6",
+        "urn:foxhole:cargo:6b5d88f681b0a659ef671dbedb1c10c64910ea1e2b6634444fc073941a0d8491",
+        "urn:foxhole:cargo:ccabd92ae66666212be2e9dfca6b094db23401a9f854af5f1a9c8fcb8026794e"
+      ],
+      "ref": "urn:foxhole:cargo:a180cbdc09de3f2e787f1f5190bb0a08ecf2146e78efd9816dcc0aea7cc6248e"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:6b2340c92849ba71b75e1dd30d6f52d2e196e732f689ff240258fbae5ca84507"
+      ],
+      "ref": "urn:foxhole:cargo:a126bd374c6b07040f8b6f297d1f62c2e4277215328af07df6910c1ca8a9c08c"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:a180cbdc09de3f2e787f1f5190bb0a08ecf2146e78efd9816dcc0aea7cc6248e"
+      ],
+      "ref": "urn:foxhole:cargo:37cdeafdaa1508a731d6be8372bc8f402831598e7ecfa4b2572450b002c09d92"
+    },
+    {
+      "dependsOn": [],
+      "ref": "urn:foxhole:cargo:6cdf3ca9cd53bf9de1e8db74e0fe59f4687aaef037075009231cdf4c3e38a74a"
+    },
+    {
+      "dependsOn": [],
+      "ref": "urn:foxhole:cargo:41ef6b9581495b2faf98d018efd3c4cd191393bdc3e41244a9c0d5fdfdd8f467"
+    },
+    {
+      "dependsOn": [],
+      "ref": "urn:foxhole:cargo:39fb389141f65e83828254293fe9c97904ece9b2a19f2f7cc64b8b89fa4f7f76"
+    },
+    {
+      "dependsOn": [],
+      "ref": "urn:foxhole:cargo:8da36943056278adc52aa3aa2921a71c629f9775fd549a190c6e8ebd9bb16835"
+    },
+    {
+      "dependsOn": [],
+      "ref": "urn:foxhole:cargo:13f5a7bf98cf131992b82b95f528bdb24815f9b0ec329115df1bf611afa784ae"
+    },
+    {
+      "dependsOn": [],
+      "ref": "urn:foxhole:cargo:828671efa8941abf249115118c322c92c22dd0d13243ad26cf26db029cf65b12"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:d9b700bc3c3890bc55a30ee6d54fce112437681d6cc13caff920dcacdf133606"
+      ],
+      "ref": "urn:foxhole:cargo:0da544e734434eee8e1505da2bdb883010c23dc61b1b032a575bc46a973f6f68"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:0f6442d57d05be225bb02deb09fba78d36da300d0dd328fa190d49fd772170b6",
+        "urn:foxhole:cargo:1615627a100e64b9cb561ec29f744c3d236affba2eb8f40062bb7f155540ccd3",
+        "urn:foxhole:cargo:ccabd92ae66666212be2e9dfca6b094db23401a9f854af5f1a9c8fcb8026794e",
+        "urn:foxhole:cargo:f63e88c3dd883d30cb1e1daf49f5034fa612345896d10da3996e73c41a582531"
+      ],
+      "ref": "urn:foxhole:cargo:0e0afc29455d4bcbc82b8a54af80f63a112aaac36732414eae5f2df2862fb392"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:0e0afc29455d4bcbc82b8a54af80f63a112aaac36732414eae5f2df2862fb392",
+        "urn:foxhole:cargo:23464387d23b2fd3689ef355afa12123de5c97cce4ac625860d8ecaa93a619a8",
+        "urn:foxhole:cargo:5c4104fba7e8e21a4c332a9e5dce58ddc5100f3a684aba23b358ab426f4dcf45",
+        "urn:foxhole:cargo:659d380790daf7d237673c4ac13b6d65f8cf5293563cdf9a20e29f957dc1f974",
+        "urn:foxhole:cargo:c730b6ea4d34e3a601c622f034ddc7b74082479b1565c03f0b2d9d81566809b3",
+        "urn:foxhole:cargo:dc6381fb80453cb72e8cd8d57100cef2b28ddbc425b3fec7097e099f71670a7a",
+        "urn:foxhole:cargo:dff6c608daf8b094e8b6f1f26774512e3d37fac385787ebe6fa28d4a66bc014e",
+        "urn:foxhole:cargo:f5201332c0cfc95bc1332d96516437a0883e9a73ef2ccd75b2362c52d9b09427"
+      ],
+      "ref": "urn:foxhole:cargo:80b890603a2dba99b8bacd131d9728feb636d30c98800ec8a88853c61019930a"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:00dfbb0d6aba32a3455870620fe01c64c1048519423f61c3e9e99f89f205e4f1"
+      ],
+      "ref": "urn:foxhole:cargo:f5201332c0cfc95bc1332d96516437a0883e9a73ef2ccd75b2362c52d9b09427"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:00dfbb0d6aba32a3455870620fe01c64c1048519423f61c3e9e99f89f205e4f1"
+      ],
+      "ref": "urn:foxhole:cargo:81d679f691e31aefdbb07d6bf9ef44f8ae918a74cd5883ef328feff1be4e69d8"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:5a074a4bb6610bcfeacc30a86d6315d0670fd78bf0fa8b92bff8ec46282ad873",
+        "urn:foxhole:cargo:a08229e1084ed6876d4431d1480d8f34a080f3ce933a9f531121b460197a5942",
+        "urn:foxhole:cargo:a49cf0c5a775307b7368e406ac13821c5c7a61dcf56d81a66b0b89383dc856aa",
+        "urn:foxhole:cargo:c561b155d15120c5fdfb8eaf76d2a9fe95f01ffc51cd2809fc4d2bdb886bdf22",
+        "urn:foxhole:cargo:f2b8eb6ed8331bd9c40e76832ab66dc6826024991f83b8fb488c1c92fcc24dda"
+      ],
+      "ref": "urn:foxhole:cargo:659d380790daf7d237673c4ac13b6d65f8cf5293563cdf9a20e29f957dc1f974"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:a49cf0c5a775307b7368e406ac13821c5c7a61dcf56d81a66b0b89383dc856aa",
+        "urn:foxhole:cargo:c561b155d15120c5fdfb8eaf76d2a9fe95f01ffc51cd2809fc4d2bdb886bdf22",
+        "urn:foxhole:cargo:f2b8eb6ed8331bd9c40e76832ab66dc6826024991f83b8fb488c1c92fcc24dda"
+      ],
+      "ref": "urn:foxhole:cargo:3864b4fd6fa89f16a4e22aa2b212748922e8b79a2d34dd54abebd728d5b700c7"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:3864b4fd6fa89f16a4e22aa2b212748922e8b79a2d34dd54abebd728d5b700c7",
+        "urn:foxhole:cargo:dc6381fb80453cb72e8cd8d57100cef2b28ddbc425b3fec7097e099f71670a7a",
+        "urn:foxhole:cargo:ffe3373d6cf058342069949b00d29c13974af645f5e6836854933b44199e01e2"
+      ],
+      "ref": "urn:foxhole:cargo:725f4ca09995500da4aa2c254de632ea9781a6d01e6b82d6ebc3e35240b1d045"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:23464387d23b2fd3689ef355afa12123de5c97cce4ac625860d8ecaa93a619a8",
+        "urn:foxhole:cargo:3864b4fd6fa89f16a4e22aa2b212748922e8b79a2d34dd54abebd728d5b700c7",
+        "urn:foxhole:cargo:39b7d49d735198e2328c99c6b7831340530d41fedf9668f11b0c1d8991b2602e",
+        "urn:foxhole:cargo:5d6767036113c81511ac020b998a067d53bb1b0c9109ee561dc27a1edde9c109",
+        "urn:foxhole:cargo:725f4ca09995500da4aa2c254de632ea9781a6d01e6b82d6ebc3e35240b1d045",
+        "urn:foxhole:cargo:81d679f691e31aefdbb07d6bf9ef44f8ae918a74cd5883ef328feff1be4e69d8",
+        "urn:foxhole:cargo:82576b4221475543c55397dab08f57241fe59130393a806a876c99d7a8c42c3d",
+        "urn:foxhole:cargo:97fc3cc13b5a2878587f7b9e4e8536b8e1783344ef598c825e8d059fbc3f16c0",
+        "urn:foxhole:cargo:a08229e1084ed6876d4431d1480d8f34a080f3ce933a9f531121b460197a5942",
+        "urn:foxhole:cargo:a81ecf5f8d06c64e8e5b7434f42496c2a8ed08c8f94d6db32048d3597408ba17",
+        "urn:foxhole:cargo:af314f15c5cdf6b5a2f0dca31eff402296939a8b04e9a887fa3cc0594bbebf56",
+        "urn:foxhole:cargo:be6ca6b456607db4db69e4042a70757a0bae090eaf7edc3bfa5e2b810988d452",
+        "urn:foxhole:cargo:c261a98bf279059bbd5c73788a074071d13141dd455e8718e91cdfaec8384239",
+        "urn:foxhole:cargo:c561b155d15120c5fdfb8eaf76d2a9fe95f01ffc51cd2809fc4d2bdb886bdf22",
+        "urn:foxhole:cargo:d6820bc6cfb9aa414adcc934ad29a442a3a57c32a1b88f7a8e43e0ca58ae6802",
+        "urn:foxhole:cargo:db09cb763d5d0002fb927800af552690ff0ba8ba86d4f8aa4ed170d74d262c65",
+        "urn:foxhole:cargo:dc6381fb80453cb72e8cd8d57100cef2b28ddbc425b3fec7097e099f71670a7a",
+        "urn:foxhole:cargo:dc8bcc92ad1a76c40e444a092b0a7c8daa4210d689857e9c9d0ddfc682b89476",
+        "urn:foxhole:cargo:dd9eac08406aaabe135426fc07c7e6fb5bf9ac7bb28f1a39d2dc6c4a8e9b1e19",
+        "urn:foxhole:cargo:efe2ef5c9c082140f3a6e8dfb85f9f042b66a55c4d4dd30acf651200b922e9bc",
+        "urn:foxhole:cargo:f2b8eb6ed8331bd9c40e76832ab66dc6826024991f83b8fb488c1c92fcc24dda"
+      ],
+      "ref": "urn:foxhole:cargo:2d3ce7d4188d8ca758dbe098485333433abff6ec554c428b1524926c8f827216"
+    },
+    {
+      "dependsOn": [],
+      "ref": "urn:foxhole:cargo:af314f15c5cdf6b5a2f0dca31eff402296939a8b04e9a887fa3cc0594bbebf56"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:8b46ea706c63b1d31df3d473126eb954e67284138a0105a082786c7d63ba792f",
+        "urn:foxhole:cargo:97fc3cc13b5a2878587f7b9e4e8536b8e1783344ef598c825e8d059fbc3f16c0",
+        "urn:foxhole:cargo:f2b8eb6ed8331bd9c40e76832ab66dc6826024991f83b8fb488c1c92fcc24dda"
+      ],
+      "ref": "urn:foxhole:cargo:a81ecf5f8d06c64e8e5b7434f42496c2a8ed08c8f94d6db32048d3597408ba17"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:007968a4740291de0b49c80c5367d4431e4b6bd9989184974a37a2f59e5175c2",
+        "urn:foxhole:cargo:23464387d23b2fd3689ef355afa12123de5c97cce4ac625860d8ecaa93a619a8",
+        "urn:foxhole:cargo:2d3ce7d4188d8ca758dbe098485333433abff6ec554c428b1524926c8f827216",
+        "urn:foxhole:cargo:37cdeafdaa1508a731d6be8372bc8f402831598e7ecfa4b2572450b002c09d92",
+        "urn:foxhole:cargo:3864b4fd6fa89f16a4e22aa2b212748922e8b79a2d34dd54abebd728d5b700c7",
+        "urn:foxhole:cargo:39b7d49d735198e2328c99c6b7831340530d41fedf9668f11b0c1d8991b2602e",
+        "urn:foxhole:cargo:54f5a304b9f87b8b2b2588b15e164dc982065aa1cce016bf118138d729454ea1",
+        "urn:foxhole:cargo:6ef44bcfe7fdbe5e711c6c4077be1e8c1a7b229ba30ec9535791b299a9a054c9",
+        "urn:foxhole:cargo:82576b4221475543c55397dab08f57241fe59130393a806a876c99d7a8c42c3d",
+        "urn:foxhole:cargo:888e153e67adeb25807dcd9d1370e77fe4e07e079cab06e279d73eff216213d3",
+        "urn:foxhole:cargo:a81ecf5f8d06c64e8e5b7434f42496c2a8ed08c8f94d6db32048d3597408ba17",
+        "urn:foxhole:cargo:b554ee2f20195b9ef2571cacb56ee0de5b641728c89314150e88ff4c65fc06c7",
+        "urn:foxhole:cargo:ba3434bc4dee9866ed4431218cbe63ed36996b89525f71c0da5d457a3b6004de",
+        "urn:foxhole:cargo:c261a98bf279059bbd5c73788a074071d13141dd455e8718e91cdfaec8384239",
+        "urn:foxhole:cargo:c64349906a2961b61c2a3e9ce488ddb747d8cffd21e5b070cd96a4a1d18acc68",
+        "urn:foxhole:cargo:c9b112c1c5015fe2a0124fc8fbe493f623a98ba6ae136a1f41ee6b2ea2bdf868",
+        "urn:foxhole:cargo:d6820bc6cfb9aa414adcc934ad29a442a3a57c32a1b88f7a8e43e0ca58ae6802",
+        "urn:foxhole:cargo:dd9eac08406aaabe135426fc07c7e6fb5bf9ac7bb28f1a39d2dc6c4a8e9b1e19"
+      ],
+      "ref": "urn:foxhole:cargo:13cccb4a76e5882f4f2f019a05127e1c29ba728b5e56e4e1c812de9eafac7d89"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:49cdee5076e2c0c3825d3b7a74751cb0835271eb1e7bc863db8c9a21b7b22185",
+        "urn:foxhole:cargo:a81ecf5f8d06c64e8e5b7434f42496c2a8ed08c8f94d6db32048d3597408ba17"
+      ],
+      "ref": "urn:foxhole:cargo:c4df2ee4c6747326940005b1f65db9574a6d4aa3f9bd4b8af983209d16379db1"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:23464387d23b2fd3689ef355afa12123de5c97cce4ac625860d8ecaa93a619a8",
+        "urn:foxhole:cargo:2d3ce7d4188d8ca758dbe098485333433abff6ec554c428b1524926c8f827216",
+        "urn:foxhole:cargo:82576b4221475543c55397dab08f57241fe59130393a806a876c99d7a8c42c3d",
+        "urn:foxhole:cargo:c64349906a2961b61c2a3e9ce488ddb747d8cffd21e5b070cd96a4a1d18acc68"
+      ],
+      "ref": "urn:foxhole:cargo:ba3434bc4dee9866ed4431218cbe63ed36996b89525f71c0da5d457a3b6004de"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:0f6442d57d05be225bb02deb09fba78d36da300d0dd328fa190d49fd772170b6",
+        "urn:foxhole:cargo:1615627a100e64b9cb561ec29f744c3d236affba2eb8f40062bb7f155540ccd3",
+        "urn:foxhole:cargo:ccabd92ae66666212be2e9dfca6b094db23401a9f854af5f1a9c8fcb8026794e"
+      ],
+      "ref": "urn:foxhole:cargo:6ef44bcfe7fdbe5e711c6c4077be1e8c1a7b229ba30ec9535791b299a9a054c9"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:13cccb4a76e5882f4f2f019a05127e1c29ba728b5e56e4e1c812de9eafac7d89",
+        "urn:foxhole:cargo:23464387d23b2fd3689ef355afa12123de5c97cce4ac625860d8ecaa93a619a8",
+        "urn:foxhole:cargo:2d3ce7d4188d8ca758dbe098485333433abff6ec554c428b1524926c8f827216",
+        "urn:foxhole:cargo:3864b4fd6fa89f16a4e22aa2b212748922e8b79a2d34dd54abebd728d5b700c7",
+        "urn:foxhole:cargo:39b7d49d735198e2328c99c6b7831340530d41fedf9668f11b0c1d8991b2602e",
+        "urn:foxhole:cargo:49cdee5076e2c0c3825d3b7a74751cb0835271eb1e7bc863db8c9a21b7b22185",
+        "urn:foxhole:cargo:4a678fe26ea416ea43c805a4e83015e3e5516d4f91b944519ed6f69e8a0a2057",
+        "urn:foxhole:cargo:54f5a304b9f87b8b2b2588b15e164dc982065aa1cce016bf118138d729454ea1",
+        "urn:foxhole:cargo:5d6767036113c81511ac020b998a067d53bb1b0c9109ee561dc27a1edde9c109",
+        "urn:foxhole:cargo:6ef44bcfe7fdbe5e711c6c4077be1e8c1a7b229ba30ec9535791b299a9a054c9",
+        "urn:foxhole:cargo:750318918bc69024ff70568f9b53936f23c504a8f490e1a1459fba4f9f660a1a",
+        "urn:foxhole:cargo:82576b4221475543c55397dab08f57241fe59130393a806a876c99d7a8c42c3d",
+        "urn:foxhole:cargo:a49cf0c5a775307b7368e406ac13821c5c7a61dcf56d81a66b0b89383dc856aa",
+        "urn:foxhole:cargo:a812c55fcf5184c58052de5b7d2d58d9faae7eb793f028f2ee6c83328b26e4c6",
+        "urn:foxhole:cargo:a81ecf5f8d06c64e8e5b7434f42496c2a8ed08c8f94d6db32048d3597408ba17",
+        "urn:foxhole:cargo:aac6a21f4ad3aae570205a5f49ec1f044843b6de7001d78761f6b5c1666e8334",
+        "urn:foxhole:cargo:b46afb380e482614115ad2fd2334523fc08847cdb3664e0c3faf02e2d813afe5",
+        "urn:foxhole:cargo:ba3434bc4dee9866ed4431218cbe63ed36996b89525f71c0da5d457a3b6004de",
+        "urn:foxhole:cargo:c261a98bf279059bbd5c73788a074071d13141dd455e8718e91cdfaec8384239",
+        "urn:foxhole:cargo:c4df2ee4c6747326940005b1f65db9574a6d4aa3f9bd4b8af983209d16379db1",
+        "urn:foxhole:cargo:db09cb763d5d0002fb927800af552690ff0ba8ba86d4f8aa4ed170d74d262c65",
+        "urn:foxhole:cargo:f2b8eb6ed8331bd9c40e76832ab66dc6826024991f83b8fb488c1c92fcc24dda"
+      ],
+      "ref": "urn:foxhole:cargo:15b7b27e363aab3e739c64f357c36aaf7033cd50a0cd2ec2627ff97d43cddfb9"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:29f5faf5baaa7299dc71aaf227c3902e94d443ab156ed50678e232ab5877d3f6",
+        "urn:foxhole:cargo:5cdac9cace61296572dd5288b379113faefe55b381911c1328fb0df16e402bfc",
+        "urn:foxhole:cargo:d29cbefce14cd31dc5912400c7fb96638e4781b0807be0ab0e8e3ea6095454a5"
+      ],
+      "ref": "urn:foxhole:cargo:90d15f2d3323b0441d69477592bcc6039600b91c6b86d7348ae5660be30ebd6d"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:5ff916a1d981e10e920e10c24dee8d6909fa79c140c75131278f059c1dedf46a"
+      ],
+      "ref": "urn:foxhole:cargo:b7b88a286785013c1d5dbc319a71d43562152cba11093ddab57db1a142fd455d"
+    },
+    {
+      "dependsOn": [],
+      "ref": "urn:foxhole:cargo:afeec71311de3e792a1dd9b61ac680b84093f795a853a92eaf3c00a0eb177345"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:0f6442d57d05be225bb02deb09fba78d36da300d0dd328fa190d49fd772170b6",
+        "urn:foxhole:cargo:6b5d88f681b0a659ef671dbedb1c10c64910ea1e2b6634444fc073941a0d8491",
+        "urn:foxhole:cargo:72f6bec47beeaeee90c38a21d4947285bf91d279c04e6019a83ba262d02418c3",
+        "urn:foxhole:cargo:ccabd92ae66666212be2e9dfca6b094db23401a9f854af5f1a9c8fcb8026794e"
+      ],
+      "ref": "urn:foxhole:cargo:9469eca231d59eb8ee6903bbb00bbcf781c7da15aa96ae54c17927d0406b2605"
+    },
+    {
+      "dependsOn": [
+        "urn:foxhole:cargo:02bfd5c5aaf966ecaaa44444263fbda70c090f18ef31b7bae91bb6d2c4dec188",
+        "urn:foxhole:cargo:3519045bb4b8a24737bf48335d61905e02007e7a48cfa00c03aafb71935fb898",
+        "urn:foxhole:cargo:9f42fcbf7f46c7761923e94fa712edeb5e9116b5af2dd604779e24d198f90209",
+        "urn:foxhole:cargo:afeec71311de3e792a1dd9b61ac680b84093f795a853a92eaf3c00a0eb177345",
+        "urn:foxhole:cargo:c0ce4644965d263a6a8e3ed45b49b9db7ed3d4a8ecaabc32e7873a457507b663",
+        "urn:foxhole:cargo:e4820a8493a6ab12b5bf3d2777c49b462b53b442467abf16df5913d467e1b54b"
+      ],
+      "ref": "urn:foxhole:cargo:7281bd9bc87197a21306d12157e75956f50f0c0fa3683cdba723cbdbef7e62a1"
+    },
+    {
+      "dependsOn": [],
+      "ref": "urn:foxhole:cargo:bfa80998800166cc58abde8f47836bbceece99390092b6a7fd75f327b6687b6c"
+    }
+  ],
+  "metadata": {
+    "component": {
+      "bom-ref": "urn:foxhole:cargo:75bdef7d0781af4942331c3f8ffa5fa9ebed5ce09a6e605e21078e16c111536b",
+      "licenses": [
+        {
+          "license": {
+            "name": "GPL-3.0-or-later"
+          }
+        }
+      ],
+      "name": "foxhole-sentinel-yara",
+      "properties": [
+        {
+          "name": "cargo:workspace-manifest",
+          "value": "Cargo.toml"
+        },
+        {
+          "name": "cargo:source-revision",
+          "value": "7b15f5b614031181b5a2eab274acac6f15d961ff"
+        }
+      ],
+      "purl": "pkg:generic/foxhole/foxhole-sentinel-yara@0.1.0?core_commit=7b15f5b614031181b5a2eab274acac6f15d961ff",
+      "type": "library",
+      "version": "0.1.0"
+    },
+    "properties": [
+      {
+        "name": "foxhole:native:inventory",
+        "value": "public-sentinel-own-workspace-selected-normal-build-closure"
+      },
+      {
+        "name": "foxhole:native:target",
+        "value": "i686-linux-android"
+      },
+      {
+        "name": "foxhole:native:core-revision",
+        "value": "7b15f5b614031181b5a2eab274acac6f15d961ff"
+      },
+      {
+        "name": "foxhole:native:features",
+        "value": ""
+      },
+      {
+        "name": "foxhole:native:resolved-root-features",
+        "value": ""
+      },
+      {
+        "name": "foxhole:native:tree-sha256",
+        "value": "c57157e3f834d93cb4c74f2a98f3651cbdb54bbf55097eff0170c8022996dffc"
+      },
+      {
+        "name": "foxhole:native:metadata-sha256",
+        "value": "5c8b2f64b7b4530ec7a721a2a4cb921b6a3b122eee9428e51e9860b3bf801905"
+      },
+      {
+        "name": "foxhole:native:cargo-lock-sha256",
+        "value": "c62d9da8b639b8214553b338bda2bd95ef00967ad1d75536fd0f483ba73c5285"
+      },
+      {
+        "name": "foxhole:native:limitations",
+        "value": "Resolved normal/build Cargo graph only; not linked-binary, Core JNI, external I2pd/TorPT or toolchain provenance."
+      },
+      {
+        "name": "foxhole:native:explicit-workspace-components",
+        "value": "3"
+      },
+      {
+        "name": "foxhole:native:workspace-coverage",
+        "value": "Every selected workspace node is explicit"
+      },
+      {
+        "name": "foxhole:native:source-sbom-sha256",
+        "value": "466c62f2864d8f46dc6885cf6431fac67645a83795d668548f9b4c0d92bbfed9"
+      },
+      {
+        "name": "foxhole:native:android-delivery-profile",
+        "value": "android4"
+      },
+      {
+        "name": "foxhole:native:source-producer-profile",
+        "value": "android4"
+      },
+      {
+        "name": "foxhole:native:retained-original-Core-context",
+        "value": "543efe47cb002af1aa768b9c482a2adc79b323f1"
+      }
+    ]
+  },
+  "specVersion": "1.6",
+  "version": 1
+}

@@ -23,6 +23,7 @@ import org.junit.Test
 internal class SafeModeExpertInvariantTest {
     private val preserved =
         setOf(
+            "core",
             "unlockedAt",
             "warningAcknowledgedAt",
             "blockScreenshots",

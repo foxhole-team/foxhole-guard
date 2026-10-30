@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="guard_router_addon_settings_title">OpenWrt add-on settings</string>
+    <string name="guard_router_home_shortcut_label">Quick access on Home</string>
+    <string name="guard_router_dock_shortcut_label">Quick access in the dock</string>
+    <string name="guard_router_dock_title">OpenWrt</string>
+</resources>

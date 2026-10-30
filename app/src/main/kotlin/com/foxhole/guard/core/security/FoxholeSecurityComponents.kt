@@ -14,6 +14,8 @@ import com.foxhole.guard.guardian.GuardJournalReport
 import com.foxhole.guard.guardian.GuardJournalStatus
 import com.foxhole.guard.guardian.GuardJournalVerifier
 import com.foxhole.guard.guardian.GuardSentinel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.io.File
 
 class FoxholeSecurityComponents(
@@ -87,6 +89,8 @@ class FoxholeSecurityComponents(
             isActive = ::isEventMonitoringActive,
             lastJournalRecordAt = guardJournal::lastRecordWallClockMs,
             onReconciledPackageEvents = settingsRepository::reconcileQuarantineFromGuardEvents,
+            journalIfCurrent = guardJournal::appendIfCurrent,
+            onIoFailure = { failure -> recordSecurityDiagnostic("guard.lifecycle_io.${failure.name.lowercase()}") },
         )
     }
 
@@ -149,7 +153,7 @@ class FoxholeSecurityComponents(
         }
     }
 
-    fun resetAfterFactoryReset() {
+    suspend fun resetAfterFactoryReset() = withContext(Dispatchers.IO) {
         guardSentinel.clearHosts()
         guardJournal.deleteAll()
         inventorySnapshotStore.delete()

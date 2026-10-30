@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="guard_router_setup_license_title">FoxHole OpenWRT Client · 许可协议</string>
+    <string name="guard_router_setup_license_body">1. 必须严格依照适用法律使用本应用。\n\n2. FoxHole OpenWRT Client 不是杀毒软件，不保证检测或清除可执行恶意文件。\n\n3. 开发者不对使用本应用可能造成的损失承担责任。\n\n4. 使用本应用即表示完全接受所有内部组件和数据集的许可条款。\n\n5. 继续即确认同意本协议的全部条款。</string>
+    <string name="guard_router_setup_license_accept">我接受许可协议</string>
+    <string name="guard_router_setup_license_required">请先接受许可协议</string>
+</resources>

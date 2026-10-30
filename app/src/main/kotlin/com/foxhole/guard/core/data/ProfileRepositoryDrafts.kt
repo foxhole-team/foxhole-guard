@@ -1,11 +1,9 @@
 package com.foxhole.guard.core.data
 
-import androidx.room.withTransaction
 import com.foxhole.core.model.Profile
 import com.foxhole.core.model.ProfileSourceType
 import com.foxhole.core.model.ProtocolHint
 import com.foxhole.core.model.StoredProfileSecret
-import kotlinx.coroutines.sync.withLock
 import java.util.UUID
 
 suspend fun ProfileRepository.createDraftProfile(
@@ -13,7 +11,7 @@ suspend fun ProfileRepository.createDraftProfile(
     protocolHint: ProtocolHint,
     configJson: String,
 ): Profile =
-    profileImportMutex.withLock {
+    withProfileMutation { owner ->
         require(protocolHint != ProtocolHint.CUSTOM_CONFIG) { "a draft requires a supported protocol" }
         val normalizedConfig = configJson.trim().also { require(it.isNotEmpty()) { "draft config is empty" } }
         val secretRef = UUID.randomUUID().toString()
@@ -31,6 +29,7 @@ suspend fun ProfileRepository.createDraftProfile(
             )
         val id =
             executeSerializedSecretFirstMutation(
+                owner = owner,
                 secretStore = secretStore,
                 stagedWrites =
                 listOf(
@@ -45,13 +44,13 @@ suspend fun ProfileRepository.createDraftProfile(
                 ),
                 onCleanupFailure = ::recordSecretCleanupFailure,
             ) {
-                database.withTransaction {
+                owner.transaction(database) {
                     if (firstProfile) dao.clearActive()
                     dao.insert(entity)
                 }
             }
         val saved = requireProfile(id)
-        if (saved.isActive) persistCachedActiveProfile(saved)
+        if (saved.isActive) persistCachedActiveProfile(saved, owner)
         diagnosticsLogger.record("profile", "blank profile draft created")
         saved
     }

@@ -3,6 +3,7 @@ package com.foxhole.core.runtime
 import com.foxhole.core.model.AppTunnelLane
 import com.foxhole.core.model.DnsSettings
 import com.foxhole.core.model.ExpertSettings
+import com.foxhole.core.model.InterfaceMode
 import com.foxhole.core.model.LocalAuthSettings
 import com.foxhole.core.model.LocalSurfaceSettings
 import com.foxhole.core.model.PerAppRoutingMode
@@ -27,6 +28,26 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 internal class RuntimeConfigAssemblerFingerprintTest : RuntimeConfigAssemblerTestSupport() {
+    @Test
+    fun `interface switches do not invalidate the running configuration`() {
+        val settings = Settings(
+            traffic = TrafficSettings(mode = TrafficMode.PROXY, mtu = 1390),
+            expert = ExpertSettings(
+                killSwitchEnabled = true,
+                localSurfaces = LocalSurfaceSettings(
+                    proxyMode = ProxySurfaceMode.HTTP,
+                    http = ProxyInboundSettings(enabled = true, host = "127.0.0.1", port = 10809),
+                    auth = LocalAuthSettings(username = "owned-user", password = "owned-test-password"),
+                ),
+            ),
+        )
+        val before = assembler.runtimeFingerprint(settings, null)
+        for (mode in listOf(InterfaceMode.USER, InterfaceMode.EXPERT, InterfaceMode.USER)) {
+            val changed = settings.copy(ui = settings.ui.copy(interfaceMode = mode))
+            assertEquals(before, assembler.runtimeFingerprint(changed, null))
+        }
+    }
+
     @Test
     fun `runtime fingerprint changes when proxy auth changes`() {
         val runtimeSettings =

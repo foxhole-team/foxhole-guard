@@ -390,20 +390,24 @@ internal class CliMotionAndScaleContractTest {
     }
 
     @Test
-    fun `an unsatisfiable proxy scenario refuses instead of applying`() {
+    fun `a routing scenario without assigned apps refuses with top feedback instead of resizing the panel`() {
         val screen = cli("settings/CliRoutingScreen.kt")
         val section = cli("settings/CliRoutingModeSection.kt")
         val lanes = cli("settings/CliRoutingAppLanesSection.kt")
 
-        assertTrue(screen.contains("rememberCliRejectFeedback()"))
-        assertTrue(screen.contains("missingAppsFeedback.play()"))
-        assertTrue(screen.contains("if (rejectionAttempt == attempt) missingAppsTarget = null"))
+        assertTrue(screen.contains("viewModel.snackbars.emit("))
+        assertTrue(screen.contains("CliMissingAppsTarget.VPN -> R.string.split_tunnel_requires_apps"))
+        assertTrue(screen.contains("CliMissingAppsTarget.TOR -> R.string.privacy_route_select_apps_first"))
+        assertTrue(screen.contains("durationMillis = MISSING_APPS_WARNING_VISIBLE_MS"))
         assertTrue(section.contains("onMissingAppsRejected(CliMissingAppsTarget.VPN)"))
         assertTrue(section.contains("onMissingAppsRejected(CliMissingAppsTarget.TOR)"))
-        assertTrue(lanes.contains("if (missingAppsTarget != null) colors.err else colors.firewall"))
-        assertTrue(lanes.contains("missingAppsTarget == CliMissingAppsTarget.VPN"))
-        assertTrue(lanes.contains("missingAppsTarget == CliMissingAppsTarget.TOR"))
-        assertTrue(lanes.contains("Modifier.cliRejectShake(missingAppsFeedback)"))
+        assertFalse(lanes.contains("missingAppsTarget"))
+        assertTrue(lanes.contains("if (assigned.isEmpty() || torAppsMissing)"))
+        assertTrue(
+            lanes.contains(
+                "if (torAppsMissing) R.string.privacy_route_select_apps_first else R.string.cli_route_apps_empty",
+            ),
+        )
         val onSelect = section.substringAfter("onSelect = { id ->").substringBefore("},")
         assertTrue(onSelect.contains("} else {"))
         assertTrue(onSelect.contains("applyVpnConn("))

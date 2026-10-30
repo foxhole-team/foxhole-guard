@@ -19,6 +19,11 @@ class LicenseAbisTest(unittest.TestCase):
         self.assertEqual(4, len(paths))
         self.assertEqual({"arm64-v8a", "armeabi-v7a"}, {path.parts[-4] for _, path in paths})
 
+    def test_legacy_x86_inventory_includes_both_transport_binaries(self):
+        paths = MODULE.transport_binary_paths(["x86"])
+        self.assertEqual(["lyrebird", "conjure-client"], [name for name, _ in paths])
+        self.assertTrue(all("x86" in path.parts for _, path in paths))
+
     def test_unknown_and_repeated_abis_are_refused(self):
         for abis in ([], ["mips"], ["x86_64", "x86_64"]):
             with self.assertRaises(ValueError):

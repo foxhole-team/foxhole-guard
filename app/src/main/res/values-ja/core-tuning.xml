@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="cli_core_expert_title">詳細設定</string>
+    <string name="cli_core_expert_note">変更は接続中のトンネルに適用されます。コアのリソース設定を変更するとトンネルが再起動します。バッファーやフロー上限を増やすと、メモリー使用量が増えることがあります。</string>
+    <string name="cli_core_workers">コアのスレッド数</string>
+    <string name="cli_core_connect_timeout">接続のタイムアウト</string>
+    <string name="cli_core_handshake_timeout">ハンドシェイクのタイムアウト</string>
+    <string name="cli_core_relay_buffer">入出力バッファー</string>
+    <string name="cli_core_tcp_flows">TCP フローの上限</string>
+    <string name="cli_core_udp_flows">UDP フローの上限</string>
+    <string name="cli_core_dns_timeout">DNS のタイムアウト</string>
+    <string name="cli_core_dns_cache">DNS キャッシュの項目数</string>
+    <string name="cli_core_reset">コアの既定値に戻す</string>
+    <string name="cli_core_default">既定値</string>
+    <string name="cli_core_range">設定可能な範囲: %1$d–%2$d</string>
+</resources>

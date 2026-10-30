@@ -100,6 +100,8 @@ sealed class TorTransitionPrompt {
         val profileId: Long,
         val protocolOptionId: String,
         val protocolName: String,
+        val expectedProfile: Profile? = null,
+        val expectedConnection: ConnectionSnapshot? = null,
     ) : TorTransitionPrompt()
 }
 

@@ -1,0 +1,3 @@
+<resources>
+    <string name="error_flow_attribution_unavailable">Межсетевой экран и маршрутизация по приложениям требуют Android 10 или новее. Эта конфигурация не может работать на вашем устройстве.</string>
+</resources>

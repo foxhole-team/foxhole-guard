@@ -4,9 +4,7 @@ import android.Manifest
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
-import android.app.PendingIntent
 import android.content.Context
-import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.app.NotificationCompat
@@ -16,7 +14,6 @@ import androidx.core.content.getSystemService
 import com.foxhole.guard.R
 import com.foxhole.guard.WatchdogNames
 import com.foxhole.guard.core.data.WebAppEntity
-import com.foxhole.guard.ui.cli.CliMainActivity
 import com.foxhole.guard.withStoredAppLocale
 import kotlin.math.roundToInt
 
@@ -41,15 +38,7 @@ class WebAppsNotifier(
         }
         ensureChannel()
         val notificationId = notificationIdFor(app.id)
-        val contentIntent =
-            PendingIntent.getActivity(
-                appContext,
-                notificationId,
-                Intent(appContext, CliMainActivity::class.java)
-                    .putExtra(CliMainActivity.EXTRA_OPEN_WEB_APP_ID, app.id)
-                    .setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-            )
+        val contentIntent = WebAppOpenIntents.notificationPendingIntent(appContext, app.id, notificationId)
         val fallbackBody = appContext.getString(R.string.cli_webapps_notification_text, count)
         val body = content?.body ?: content?.title ?: fallbackBody
         val largeIcon =

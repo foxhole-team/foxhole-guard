@@ -38,7 +38,6 @@ class CliDataScreenContractTest {
         assertTrue(source.contains("R.string.cli_data_restore_confirm"))
         assertTrue(source.contains("viewModel.restoreBackup(document)"))
         assertTrue(source.contains("pendingRestore = null"))
-        assertTrue(source.contains("pendingRestoreUri = null"))
     }
 
     private fun sourceFile(): String = readSource("settings/CliDataSubScreen.kt")

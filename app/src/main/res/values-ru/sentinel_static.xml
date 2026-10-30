@@ -1,0 +1,33 @@
+<resources>
+    <string name="sentinel_static_expert">Экспертные настройки проверки APK</string>
+    <string name="sentinel_static_title">Проверка APK</string>
+    <string name="sentinel_static_reference_summary">%1$s: категорий статических ссылок API — %2$s, совпадений правил — %3$s. Эти наблюдения не доказывают выполнение кода или наличие вредоносного ПО.</string>
+    <string name="sentinel_static_notification_title">FoxHole Sentinel: статические наблюдения</string>
+    <string name="sentinel_static_select_app">Приложение</string>
+    <string name="sentinel_static_run">Проверить выбранное приложение</string>
+    <string name="sentinel_static_baseline">Проверить установленные приложения</string>
+    <string name="sentinel_static_cancel">Отменить проверку</string>
+    <string name="sentinel_static_dex">Проверки DEX</string>
+    <string name="sentinel_static_yara">Проверки YARA</string>
+    <string name="sentinel_static_notify">Уведомлять о находках</string>
+    <string name="sentinel_static_automatic">Проверять новые и обновлённые приложения</string>
+    <string name="sentinel_static_charging">Автопроверки при зарядке</string>
+    <string name="sentinel_static_battery">Автопроверки при достаточном заряде</string>
+    <string name="sentinel_static_cost">Бюджет проверки</string>
+    <string name="sentinel_static_economy">Экономный · 16 МиБ</string>
+    <string name="sentinel_static_balanced">Обычный · 64 МиБ</string>
+    <string name="sentinel_static_coverage_note">Список установленных приложений ограничен видимостью Android. Выполняются только ограниченные статические проверки APK/DEX. Неполная или отсутствующая проверка не означает, что приложение безопасно. Нативный и загруженный извне код не исследуется.</string>
+    <string name="sentinel_static_journal_deferred">Журнал заблокирован: результат сохранён в памяти, запись можно повторить после разблокировки.</string>
+    <string name="sentinel_static_status_disabled">Выключено</string>
+    <string name="sentinel_static_status_idle">Готово</string>
+    <string name="sentinel_static_status_waiting">Ожидание зарядки или достаточного заряда</string>
+    <string name="sentinel_static_status_running">Проверка</string>
+    <string name="sentinel_static_status_complete">Статические проверки завершены</string>
+    <string name="sentinel_static_status_partial">Неполная проверка</string>
+    <string name="sentinel_static_status_stale">Установка или настройки изменились</string>
+    <string name="sentinel_static_status_cancelled">Отменено</string>
+    <string name="sentinel_static_status_unavailable">Проверка недоступна</string>
+    <string name="sentinel_static_status_unsupported">Формат APK не поддерживается</string>
+    <string name="sentinel_static_engine_unavailable">В сборке нет доступного движка проверки для этого устройства.</string>
+    <string name="sentinel_static_type_label">Статические ссылки</string>
+</resources>

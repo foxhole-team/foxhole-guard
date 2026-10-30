@@ -75,19 +75,31 @@ internal class StatusWidgetPresentationTest {
 
     @Test
     fun `simplified widget keeps status text compact and scales down on either narrow axis`() {
-        val normal = statusWidgetSimpleMetrics(width = 400.dp, height = 80.dp)
-        val narrow = statusWidgetSimpleMetrics(width = 110.dp, height = 80.dp)
-        val short = statusWidgetSimpleMetrics(width = 400.dp, height = 48.dp)
+        val normal = statusWidgetSimpleMetrics(width = 400.dp, height = 200.dp)
+        val narrow = statusWidgetSimpleMetrics(width = 240.dp, height = 160.dp)
+        val short = statusWidgetSimpleMetrics(width = 400.dp, height = 160.dp)
 
         assertEquals(14, normal.statusFontSize)
         assertEquals(13, normal.locationFontSize)
         assertEquals(36.dp, normal.circleSize)
-        assertEquals(48.dp, statusWidgetSimpleSurfaceHeight(normal))
         listOf(narrow, short).forEach { compact ->
             assertEquals(11, compact.statusFontSize)
             assertEquals(10, compact.locationFontSize)
             assertEquals(30.dp, compact.circleSize)
-            assertEquals(34.dp, statusWidgetSimpleSurfaceHeight(compact))
+        }
+    }
+
+    @Test
+    fun `disconnecting widget cannot submit another command but connect cancellation stays available`() {
+        assertFalse(statusWidgetSimpleActionEnabled(StatusWidgetConnection.DISCONNECTING))
+        listOf(
+            StatusWidgetConnection.CONNECTED,
+            StatusWidgetConnection.CONNECTING,
+            StatusWidgetConnection.RECONNECTING,
+            StatusWidgetConnection.DISCONNECTED,
+            StatusWidgetConnection.ERROR,
+        ).forEach { connection ->
+            assertTrue(statusWidgetSimpleActionEnabled(connection))
         }
     }
 
@@ -443,10 +455,14 @@ internal class StatusWidgetPresentationTest {
     }
 
     @Test
-    fun `fox status frame is closed offline and open when static connected`() {
-        assertEquals(R.drawable.fhg_status_frame_4, foxStatusFrame(false, true, R.drawable.fhg_status_frame_2))
-        assertEquals(R.drawable.fhg_status_frame_1, foxStatusFrame(true, false, R.drawable.fhg_status_frame_4))
-        assertEquals(R.drawable.fhg_status_frame_6, foxStatusFrame(true, true, R.drawable.fhg_status_frame_6))
+    fun `fox widget always uses the transparent monochrome logo`() {
+        for (connected in listOf(false, true)) {
+            for (animationEnabled in listOf(false, true)) {
+                for (oldFrame in listOf(0, R.drawable.fhg_status_frame_2, R.drawable.fhg_status_frame_6)) {
+                    assertEquals(R.drawable.ic_launcher_openwrt, foxStatusFrame(connected, animationEnabled, oldFrame))
+                }
+            }
+        }
     }
 
     @Test

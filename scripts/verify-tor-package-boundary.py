@@ -21,14 +21,16 @@ def objects(text):
 
 
 def inventory(native, ndk, output):
-    go = native / "go1.26.8/bin/go"
-    version = subprocess.check_output([str(go), "version"], text=True)
-    if "go1.26.8 " not in version:
-        raise ValueError("Tor package evidence requires pinned Go 1.26.8")
-    environment = dict(os.environ, GOTOOLCHAIN="local", GOMODCACHE=str(native / "gomodcache"),
-                       GOOS="android", CGO_ENABLED="1", GOPROXY="off")
-    for key in ("GOROOT", "GOTOOLDIR", "GOFLAGS"):
+    go_root = Path(os.environ.get("FOXHOLE_GOROOT") or native / "go1.26.10")
+    go = go_root / "bin/go"
+    environment = dict(os.environ, GOTOOLCHAIN="local",
+                       GOMODCACHE=os.environ.get("FOXHOLE_GOMODCACHE") or str(native / "gomodcache"),
+                       GOROOT=str(go_root), GOOS="android", CGO_ENABLED="1", GOPROXY="off")
+    for key in ("GOTOOLDIR", "GOFLAGS"):
         environment.pop(key, None)
+    version = subprocess.check_output([str(go), "version"], env=environment, text=True)
+    if not version.startswith("go version go1.26.10 "):
+        raise ValueError("Tor package evidence requires pinned Go 1.26.10")
     host = "darwin-x86_64" if sys.platform == "darwin" else "linux-x86_64"
     components, packages = {}, {}
     for arch, compiler in (("arm64", "aarch64-linux-android26-clang"), ("arm", "armv7a-linux-androideabi26-clang")):
@@ -56,8 +58,8 @@ def inventory(native, ndk, output):
                 ref = "pkg:golang/" + urllib.parse.quote(module["Path"], safe="/") + "@" + module["Version"]
                 components[ref] = {"type": "library", "name": module["Path"], "version": module["Version"], "purl": ref, "bom-ref": ref}
             packages[f"{transport}/{arch}"] = sorted(names)
-    ref = "pkg:golang/stdlib@1.26.8"
-    components[ref] = {"type": "library", "name": "stdlib", "version": "1.26.8", "purl": ref, "bom-ref": ref}
+    ref = "pkg:golang/stdlib@1.26.10"
+    components[ref] = {"type": "library", "name": "stdlib", "version": "1.26.10", "purl": ref, "bom-ref": ref}
     source_digests = {str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest()
                       for p in sorted((ROOT / "config/native").rglob("*")) if p.is_file()}
     output.mkdir(parents=True, exist_ok=True)

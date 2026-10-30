@@ -2,6 +2,9 @@ package com.foxhole.guard.core.data
 
 import android.util.Log
 import com.foxhole.core.model.DiagnosticSanitizer
+import com.foxhole.core.model.DnsFilterCategory
+import com.foxhole.core.model.FoxCoreDnsRuleSetBootstrap
+import com.foxhole.core.model.FoxCoreSessionConfig
 import com.foxhole.core.model.PrivacyRouteMode
 import com.foxhole.core.model.Profile
 import com.foxhole.core.model.ProtocolHint
@@ -9,7 +12,8 @@ import com.foxhole.core.model.Settings
 import com.foxhole.core.model.StoredProfileSecret
 import com.foxhole.core.model.TrafficMode
 import com.foxhole.core.model.VpnSession
-import com.foxhole.core.model.disableUnverifiedRuleSetRuntimeDns
+import com.foxhole.core.model.dnsRuleSetFilteringEnabled
+import com.foxhole.core.model.enabledDnsFilterCategories
 import com.foxhole.core.model.isUdpTransport
 import com.foxhole.core.runtime.DnsFilterRuntimePaths
 import com.foxhole.core.runtime.FoxCoreConfigTranslator
@@ -31,8 +35,16 @@ import com.foxhole.guard.core.settings.SettingsRepository
 import com.foxhole.guard.core.settings.ensureNewAppQuarantineBaseline
 import com.foxhole.guard.runtime.DnsFilterAssetInstaller
 import com.foxhole.guard.runtime.FoxholeVpnService
+import com.foxhole.guard.runtime.dnsCategoryAttempt
 import com.foxhole.guard.runtime.forProtocolTestTrafficFreeze
+import com.foxhole.guard.runtime.requiredCategorizedDnsRuntimePaths
 import kotlinx.coroutines.CancellationException
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.contentOrNull
 import java.util.UUID
 
 internal class ProfileSessionFactory(
@@ -56,17 +68,18 @@ internal class ProfileSessionFactory(
         privateDnsState: PrivateDnsState? = null,
         deferTorRoute: Boolean = false,
         protocolTestTrafficFreeze: Boolean = false,
+        preparedSnapshot: PreparedProfileSessionSnapshot? = null,
     ): VpnSession {
-        val profile = profileProvider(profileId)
-        val secret = secretProvider(profile.secretRef) ?: error("profile secret is missing")
+        preparedSnapshot.requireMatchingRequest(profileId, protocolOptionIdOverride)
+        val profile = preparedSnapshot?.profile ?: profileProvider(profileId)
+        val secret = preparedSnapshot?.secret ?: secretProvider(profile.secretRef) ?: error("profile secret is missing")
         val selectedOption = secret.selectedStoredProtocolOptionForRuntime(protocolOptionIdOverride)
         val selectedProtocolHint = selectedOption?.protocolHint ?: profile.protocolHint
         val correlationId = newRuntimeCorrelationId()
-        val settings = settingsRepository.ensureNewAppQuarantineBaseline()
+        val settings = preparedSnapshot?.settings ?: settingsRepository.ensureNewAppQuarantineBaseline()
         val dnsFilterRuntimePaths = settings.prepareVerifiedDnsFilterRuntimePaths()
         val baseRuntimeSettings =
             settings
-                .disableUnverifiedDnsRuleSetFiltering(dnsFilterRuntimePaths)
                 .forProtocolTestTrafficFreeze(protocolTestTrafficFreeze)
 
         val requestedRuntimeSettings =
@@ -98,9 +111,9 @@ internal class ProfileSessionFactory(
             }
         val i2pEndpoint = startI2pEndpointOrNull(runtimeSettings)
         val assembled =
-            runCatching {
+            dnsCategoryAttempt {
                 runtimeConfigAssembler.assemble(
-                    baseConfigJson = resolvedConfigProvider(profileId, protocolOptionIdOverride),
+                    baseConfigJson = preparedSnapshot?.resolvedConfig ?: resolvedConfigProvider(profileId, protocolOptionIdOverride),
                     settings = runtimeSettings,
                     activePreset = activePreset,
                     privateDnsMode = privateDnsMode,
@@ -150,13 +163,14 @@ internal class ProfileSessionFactory(
             ),
             quarantinePolicyRevision = runtimeSettings.expert.quarantinePolicyRevision,
             i2pEndpointGeneration = i2pEndpoint?.generation,
+            coreTuning = runtimeSettings.expert.core,
         )
         return session.copy(
             foxCoreConfig =
             foxCoreConfigTranslator.translate(
                 session = session,
                 dnsRuleSetBootstrap = dnsFilterRuntimePaths?.foxCoreBootstrap,
-            ),
+            ).let { translated -> requireDnsFilterRuntimePolicy(runtimeSettings, session, translated) },
         )
     }
 
@@ -168,7 +182,7 @@ internal class ProfileSessionFactory(
         require(settings.privacyRoute.permitted && settings.privacyRoute.enabled) { "TOR route is disabled" }
         val correlationId = newRuntimeCorrelationId()
         val dnsFilterRuntimePaths = settings.prepareVerifiedDnsFilterRuntimePaths()
-        val runtimeSettings = settings.disableUnverifiedDnsRuleSetFiltering(dnsFilterRuntimePaths)
+        val runtimeSettings = settings
         requireI2pPrivateDnsCompatibility(
             i2pActive = runtimeSettings.i2pRuntimeActive(),
             privateDnsMode = privateDnsState?.mode ?: privateDnsMode,
@@ -177,7 +191,7 @@ internal class ProfileSessionFactory(
         val activePreset = routingRepository.currentPresetForRuntime()
         val i2pEndpoint = startI2pEndpointOrNull(runtimeSettings)
         val assembled =
-            runCatching {
+            dnsCategoryAttempt {
                 val torRuntimePaths =
                     torRuntimeInstaller
                         .prepare(runtimeSettings.privacyRoute.torBridgePolicy())
@@ -228,13 +242,14 @@ internal class ProfileSessionFactory(
             ),
             quarantinePolicyRevision = runtimeSettings.expert.quarantinePolicyRevision,
             i2pEndpointGeneration = i2pEndpoint?.generation,
+            coreTuning = runtimeSettings.expert.core,
         )
         return session.copy(
             foxCoreConfig =
             foxCoreConfigTranslator.translate(
                 session = session,
                 dnsRuleSetBootstrap = dnsFilterRuntimePaths?.foxCoreBootstrap,
-            ),
+            ).let { translated -> requireDnsFilterRuntimePolicy(runtimeSettings, session, translated) },
         )
     }
 
@@ -243,7 +258,7 @@ internal class ProfileSessionFactory(
             i2pdManager.stop()
             return null
         }
-        return runCatching { i2pdManager.ensureStarted(settings.i2p) }
+        return dnsCategoryAttempt { i2pdManager.ensureStarted(settings.i2p) }
             .onFailure { error ->
                 if (error is CancellationException) throw error
                 diagnosticsLogger.recordFailure("i2pd", "i2pd start failed")
@@ -273,24 +288,9 @@ internal class ProfileSessionFactory(
         if (expert.newAppQuarantineEnabled) expert.quarantineKnownApplications else emptyList()
 
     private suspend fun Settings.prepareVerifiedDnsFilterRuntimePaths(): DnsFilterRuntimePaths? {
-        if (!dns.filteringEnabled) {
-            return null
-        }
-        return dnsFilterAssetInstaller.prepareVerifiedOrNull()
-            ?: run {
-                diagnosticsLogger.record("dns", "dns rule-set runtime disabled: verified filter unavailable")
-                null
-            }
+        if (!dns.dnsRuleSetFilteringEnabled()) return null
+        return requiredCategorizedDnsRuntimePaths(dns, dnsFilterAssetInstaller.prepareCategorized(dns))
     }
-
-    private fun Settings.disableUnverifiedDnsRuleSetFiltering(
-        dnsFilterRuntimePaths: DnsFilterRuntimePaths?,
-    ): Settings =
-        if (dns.filteringEnabled && dnsFilterRuntimePaths == null) {
-            copy(dns = dns.disableUnverifiedRuleSetRuntimeDns())
-        } else {
-            this
-        }
 
     private fun newRuntimeCorrelationId(): String =
         "s-" + UUID.randomUUID().toString().replace("-", "").take(12)
@@ -331,3 +331,41 @@ internal fun sanitizedDiagnosticStackTrace(error: Throwable): String =
     }
 
 private const val MAX_DIAGNOSTIC_STACK_FRAMES = 64
+
+private fun PreparedProfileSessionSnapshot?.requireMatchingRequest(profileId: Long, optionId: String?) {
+    if (this != null) {
+        require(profile.id == profileId && protocolOptionId == optionId) {
+            "prepared profile session does not match the request"
+        }
+    }
+}
+
+internal class DnsFilterPolicyUnavailableException(val protocol: ProtocolHint) :
+    IllegalStateException("dns_filter_profile_policy_unavailable")
+
+internal fun requireDnsFilterRuntimePolicy(settings: Settings, session: VpnSession, config: FoxCoreSessionConfig): FoxCoreSessionConfig {
+    if (!settings.dns.dnsRuleSetFilteringEnabled()) return config
+    val bootstrap = config.dnsRuleSetBootstrap ?: throw DnsFilterPolicyUnavailableException(session.protocolHint)
+    val requested = settings.dns.enabledDnsFilterCategories()
+    if (!dnsPolicyRequiresSelectedCategories(config.engineConfigJson, bootstrap, requested) ||
+        !dnsPolicyRequiresSelectedCategories(config.policyConfigJson, bootstrap, requested)
+    ) {
+        throw DnsFilterPolicyUnavailableException(session.protocolHint)
+    }
+    return config
+}
+
+private fun dnsPolicyRequiresSelectedCategories(document: String, bootstrap: FoxCoreDnsRuleSetBootstrap, requested: Set<DnsFilterCategory>): Boolean {
+    val root = Json.parseToJsonElement(document) as? JsonObject ?: return false
+    val dns = root["dns"] as? JsonObject ?: return false
+    val rules = dns["rule_sets"] as? JsonArray ?: return false
+    val expected = requested.map { it.name.lowercase(java.util.Locale.US) }.toSet()
+    return rules.any { entry ->
+        val rule = entry as? JsonObject ?: return@any false
+        val name = (rule["name"] as? JsonPrimitive)?.contentOrNull
+        val required = (rule["required"] as? JsonPrimitive)?.booleanOrNull == true
+        val categories = rule["enabled_categories"] as? JsonArray ?: return@any false
+        val selected = categories.map { (it as? JsonPrimitive)?.contentOrNull }.toSet()
+        name == bootstrap.name && required && selected == expected
+    }
+}

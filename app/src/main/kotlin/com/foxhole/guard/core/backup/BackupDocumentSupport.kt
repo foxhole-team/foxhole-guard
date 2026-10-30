@@ -63,7 +63,10 @@ fun Settings.sanitizedForBackup(): Settings =
     copy(
         ui =
         ui.copy(
+            acceptedLicenseAgreementVersion = 0,
             alphaNoticeShownVersionCode = 0,
+            updateNoticeAcknowledgedContentId = "",
+            updateNoticeAcknowledgedRevision = 0L,
             profileListOrder = emptyList(),
             trafficMapHistoryClearedAtMs = 0L,
         ),
@@ -136,12 +139,20 @@ fun mergeRestoredSettings(
     return backup.copy(
         ui =
         backup.ui.copy(
+            acceptedLicenseAgreementVersion = current.ui.acceptedLicenseAgreementVersion,
             alphaNoticeShownVersionCode = current.ui.alphaNoticeShownVersionCode,
+            updateNoticeAcknowledgedContentId = current.ui.updateNoticeAcknowledgedContentId,
+            updateNoticeAcknowledgedRevision = current.ui.updateNoticeAcknowledgedRevision,
             profileListOrder = current.ui.profileListOrder,
             trafficMapHistoryClearedAtMs = current.ui.trafficMapHistoryClearedAtMs,
         ),
         updateSources =
         backup.updateSources.copy(
+            appReleasesUrl = if (current.updateSources.appReleasesToken.isNotBlank()) {
+                current.updateSources.appReleasesUrl
+            } else {
+                backup.updateSources.appReleasesUrl
+            },
             appReleasesToken = current.updateSources.appReleasesToken,
         ),
         expert = restoredExpert,

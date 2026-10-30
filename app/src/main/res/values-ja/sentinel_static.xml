@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="sentinel_static_expert">静的チェックの詳細設定</string>
+    <string name="sentinel_static_title">APK チェック</string>
+    <string name="sentinel_static_reference_summary">%1$s: 静的 API 参照の分類 %2$s 件、ルール一致 %3$s 件。これらの観測は、コードの実行やマルウェアの存在を証明しません。</string>
+    <string name="sentinel_static_notification_title">FoxHole Sentinel: 静的な観測結果</string>
+    <string name="sentinel_static_select_app">アプリ</string>
+    <string name="sentinel_static_run">選択したアプリをチェック</string>
+    <string name="sentinel_static_baseline">インストール済みアプリをチェック</string>
+    <string name="sentinel_static_cancel">チェックをキャンセル</string>
+    <string name="sentinel_static_dex">DEX チェック</string>
+    <string name="sentinel_static_yara">YARA チェック</string>
+    <string name="sentinel_static_notify">検出結果を通知</string>
+    <string name="sentinel_static_automatic">新規・更新アプリをチェック</string>
+    <string name="sentinel_static_charging">充電中に自動チェック</string>
+    <string name="sentinel_static_battery">バッテリー残量が低くないときに自動チェック</string>
+    <string name="sentinel_static_cost">スキャンのリソース上限</string>
+    <string name="sentinel_static_economy">省リソース · 16 MiB</string>
+    <string name="sentinel_static_balanced">バランス · 64 MiB</string>
+    <string name="sentinel_static_coverage_note">対象は Android から参照できるインストール済みアプリに限られます。リソース制限付きの静的 APK/DEX チェックのみを行います。対象外や部分的なチェックは、アプリの安全性を意味しません。ネイティブコードとダウンロードされたコードは評価しません。</string>
+    <string name="sentinel_static_journal_deferred">ジャーナルはロック中です。結果はメモリーに保持され、ロック解除後に記録できます。</string>
+    <string name="sentinel_static_status_disabled">無効</string>
+    <string name="sentinel_static_status_idle">準備完了</string>
+    <string name="sentinel_static_status_waiting">充電またはバッテリー条件を待機中</string>
+    <string name="sentinel_static_status_running">チェック中</string>
+    <string name="sentinel_static_status_complete">静的チェック完了</string>
+    <string name="sentinel_static_status_partial">部分的な対象範囲</string>
+    <string name="sentinel_static_status_stale">インストールまたは設定が変更されました</string>
+    <string name="sentinel_static_status_cancelled">キャンセル済み</string>
+    <string name="sentinel_static_status_unavailable">チェックできません</string>
+    <string name="sentinel_static_status_unsupported">APK 形式に対応していません</string>
+    <string name="sentinel_static_engine_unavailable">同梱のスキャナーエンジンは、この端末では利用できません。</string>
+    <string name="sentinel_static_type_label">静的な参照</string>
+</resources>

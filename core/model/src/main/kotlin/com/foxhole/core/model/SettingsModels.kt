@@ -17,6 +17,8 @@ data class UiSettings(
     val pixelArtEnabled: Boolean = true,
 
     val onboardingCompleted: Boolean = false,
+    // Completing or skipping setup never implies agreement with the license.
+    val acceptedLicenseAgreementVersion: Int = 0,
 
     val betaNoticeAcknowledged: Boolean = false,
 
@@ -50,8 +52,10 @@ data class UiSettings(
 
     val torEnabledAtMs: Long = 0L,
     val i2pEnabledAtMs: Long = 0L,
-    // Build whose alpha notice was acknowledged; 0 = never shown.
+    // Build whose release notice was acknowledged; 0 = never shown.
     val alphaNoticeShownVersionCode: Int = 0,
+    val updateNoticeAcknowledgedContentId: String = "",
+    val updateNoticeAcknowledgedRevision: Long = 0L,
     val dashboardCardOrder: List<DashboardCard> = DashboardCard.entries,
 
     val profileListOrder: List<Long> = emptyList(),
@@ -85,6 +89,8 @@ data class UiSettings(
     val statisticsWindow: StatisticsWindow = StatisticsWindow.DAY,
 
     val statisticsDockIconEnabled: Boolean = false,
+    // A missing field belongs to an existing installation or older backup.
+    val interfaceMode: InterfaceMode = InterfaceMode.EXPERT,
 )
 
 @Immutable
@@ -267,6 +273,7 @@ data class LocalSurfaceSettings(
 @Serializable
 @Immutable
 data class ExpertSettings(
+    val core: CoreTuningSettings = CoreTuningSettings(),
     val unlockedAt: Long? = null,
     val warningAcknowledgedAt: Long? = null,
     val blockScreenshots: Boolean = false,

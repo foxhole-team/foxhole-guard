@@ -1,6 +1,6 @@
 plugins {
     id("org.jetbrains.kotlin.jvm")
-    id("org.jetbrains.kotlin.plugin.serialization") version "2.4.20"
+    id("org.jetbrains.kotlin.plugin.serialization") version "2.4.21"
 }
 
 kotlin {
@@ -19,6 +19,7 @@ dependencies {
     implementation(project(":core:network"))
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.okhttp)
+    implementation("org.snakeyaml:snakeyaml-engine:3.2")
 
     testImplementation(libs.junit4)
 }

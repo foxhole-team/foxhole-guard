@@ -188,6 +188,20 @@ class UserFacingErrorsTest {
     }
 
     @Test
+    fun `unsupported app routing explains the platform requirement instead of asking for retries`() {
+        val constructor = FoxCoreRuntimeException::class.java
+            .getDeclaredConstructor(FoxCoreRuntimeFailure::class.java)
+            .apply { isAccessible = true }
+        val error = constructor.newInstance(FoxCoreRuntimeFailure.FLOW_ATTRIBUTION_UNAVAILABLE)
+
+        assertEquals(UserFacingErrorKind.APP_ROUTING_UNSUPPORTED, classifyUserFacingError(error))
+        assertEquals(
+            R.string.error_flow_attribution_unavailable,
+            userFacingErrorMessageRes(error, R.string.error_runtime_start_failed),
+        )
+    }
+
+    @Test
     fun `diagnostic label keeps a stable config rejection and non-hostlike json path`() {
         val constructor =
             FoxCoreConfigTranslationException::class.java

@@ -19,10 +19,10 @@ internal class WidgetUiContractTest {
         assertTrue(webApps.contains("android:minResizeWidth=\"110dp\""))
         assertTrue(status.contains("android:targetCellWidth=\"4\""))
         assertTrue(status.contains("android:maxResizeWidth=\"400dp\""))
-        assertTrue(status.contains("android:minHeight=\"80dp\""))
-        assertTrue(status.contains("android:minResizeHeight=\"48dp\""))
+        assertTrue(status.contains("android:minHeight=\"110dp\""))
+        assertTrue(status.contains("android:minResizeHeight=\"110dp\""))
         assertTrue(status.contains("android:targetCellHeight=\"1\""))
-        assertTrue(status.contains("android:maxResizeHeight=\"180dp\""))
+        assertTrue(status.contains("android:maxResizeHeight=\"240dp\""))
         assertTrue(status.contains("android:resizeMode=\"horizontal|vertical\""))
         assertTrue(webApps.contains("android:maxResizeWidth=\"400dp\""))
         assertTrue(webApps.contains("android:resizeMode=\"horizontal|vertical\""))
@@ -43,12 +43,15 @@ internal class WidgetUiContractTest {
         assertTrue(status.contains("STATUS_WIDGET_EXPANDED_HEIGHT = 162.dp"))
         assertTrue(status.contains("STATUS_WIDGET_CONTROL_HEIGHT = 32.dp"))
         assertTrue(status.contains(".padding(horizontal = 12.dp, vertical = 8.dp)"))
-        assertTrue(status.contains("height(statusWidgetSimpleSurfaceHeight(metrics))"))
+        assertTrue(status.contains("STATUS_WIDGET_SIMPLE_TOUCH_SIZE = 48.dp"))
         val simple = status.substringAfter("private fun StatusWidgetSimpleContent(")
             .substringBefore("private fun StatusWidgetSimpleLogo(")
-        assertTrue(simple.contains(".fillMaxSize()"))
+        assertFalse(simple.contains(".fillMaxSize()"))
+        assertTrue(simple.contains("GlanceModifier.fillMaxWidth(),"))
+        assertTrue(simple.contains("Spacer(modifier = GlanceModifier.height(6.dp))"))
+        assertFalse(simple.contains("GlanceModifier.fillMaxWidth().defaultWeight()"))
         assertTrue(simple.contains(".cornerRadius(WIDGET_SURFACE_CORNER_RADIUS)"))
-        assertTrue(simple.contains(".clickable(actionStartActivity<CliMainActivity>())"))
+        assertFalse(simple.contains("actionStartActivity<CliMainActivity>()"))
         assertTrue(typography.contains("max(pixelPaint.measureText(fittedText), monoPaint.measureText(fittedText))"))
         assertTrue(status.contains("countryName?.trim()?.takeIf(String::isNotBlank)"))
         assertFalse(status.contains("sectionLabel = context.getString(R.string.widget_status_section)"))
@@ -74,7 +77,6 @@ internal class WidgetUiContractTest {
         val connectButton = source("main/res/drawable/widget_simple_action_connect.xml")
         val stopButton = source("main/res/drawable/widget_simple_action_stop.xml")
         val splitDevice = source("main/res/drawable/widget_simple_device_vpn_tor.xml")
-        val logoCircle = source("main/res/drawable/widget_simple_logo_circle.xml")
         val launcherPreview = source("main/res/layout/widget_status_preview.xml")
         val english = source("main/res/values/strings.xml")
         val russian = source("main/res/values-ru/strings.xml")
@@ -150,8 +152,8 @@ internal class WidgetUiContractTest {
         assertTrue(status.contains("durableDefault = settings.widgets.statusLayoutMode"))
         assertTrue(status.contains("StatusWidgetSimpleContent("))
         assertTrue(status.contains("StatusWidgetExpandedContent("))
-        assertTrue(status.contains("R.string.widget_status_turn_on"))
-        assertTrue(status.contains("R.string.widget_status_turn_off"))
+        assertTrue(status.contains("R.string.widget_status_connect_action"))
+        assertTrue(status.contains("R.string.widget_status_disconnect_action"))
         assertTrue(status.contains("statusWidgetCountryFlagCode(identity?.countryCode)"))
         assertTrue(status.contains("refreshPhase == StatusWidgetRefreshPhase.IDLE"))
         assertFalse(status.contains("simpleRouteTokens()"))
@@ -167,35 +169,26 @@ internal class WidgetUiContractTest {
         assertTrue(status.contains("statusWidgetSimpleIdentityStatusRes("))
         assertTrue(status.contains("connection = presentation.connection"))
         assertTrue(status.contains("text = context.getString(refreshStatusRes)"))
-        assertTrue(simpleStatusBlock.contains("horizontalAlignment = Alignment.CenterHorizontally"))
+        assertTrue(simpleStatusBlock.contains("horizontalAlignment = Alignment.Start"))
         assertTrue(simpleStatusBlock.contains("StatusWidgetSimpleStatusText("))
         assertFalse(simpleStatusBlock.contains("Image("))
+        assertTrue(simpleLocation.contains("ImageProvider(countryFlag.bitmap)"))
         assertTrue(
-            simpleLocation.indexOf("ImageProvider(countryFlag.drawableId)") <
-                simpleLocation.indexOf("text = code ?: WIDGET_DASH"),
+            simpleLocation.indexOf("ImageProvider(countryFlag.bitmap)") <
+                simpleLocation.indexOf("text = identity?.city?.trim()"),
         )
         assertTrue(status.contains("R.drawable.lin_device"))
         assertTrue(status.contains("statusFontSize = 11"))
         assertTrue(status.contains("statusFontSize = 14"))
         assertTrue(status.contains("STATUS_WIDGET_SIMPLE_WIDE_WIDTH = 240.dp"))
-        assertTrue(status.contains("R.drawable.widget_simple_logo_circle"))
-        assertEquals(2, Regex("\\.size\\(metrics\\.circleSize\\)").findAll(status).count())
-        assertEquals(
-            2,
-            Regex("ColorFilter\\.tint\\(ColorProvider\\(background\\.icon\\)\\)")
-                .findAll(simpleLogo)
-                .count(),
-        )
-        assertEquals(
-            1,
-            Regex("StatusWidgetCommandReceiver\\.ACTION_REFRESH").findAll(simpleLogo).count(),
-        )
+        assertTrue(simpleLogo.contains("R.drawable.ic_launcher_openwrt"))
+        assertFalse(simpleLogo.contains("R.drawable.widget_simple_logo_circle"))
+        assertEquals(1, Regex("\\.size\\(metrics\\.circleSize\\)").findAll(status).count())
+        assertFalse(simpleLogo.contains("ColorFilter"))
+        assertFalse(simpleLogo.contains("StatusWidgetCommandReceiver.ACTION_REFRESH"))
         assertFalse(simpleLogo.contains("StatusWidgetCommandReceiver.ACTION_TOGGLE"))
-        assertFalse(simpleLogo.contains("actionStartActivity<CliMainActivity>()"))
-        assertEquals(
-            1,
-            Regex("actionStartActivity<CliMainActivity>\\(\\)").findAll(simpleContent).count(),
-        )
+        assertTrue(simpleLogo.contains("actionStartActivity<CliMainActivity>()"))
+        assertFalse(simpleContent.contains("actionStartActivity<CliMainActivity>()"))
         assertFalse(simpleContent.contains("StatusWidgetCommandReceiver.ACTION_TOGGLE"))
         assertEquals(
             1,
@@ -207,8 +200,29 @@ internal class WidgetUiContractTest {
         assertFalse(simplePowerButton.contains("actionStartActivity<CliMainActivity>()"))
         assertTrue(simplePowerButton.contains("R.drawable.widget_simple_action_connect"))
         assertTrue(simplePowerButton.contains("R.drawable.widget_simple_action_stop"))
-        assertTrue(simplePowerButton.contains("StatusWidgetSimplePowerAction.CONNECT -> WIDGET_OK"))
-        assertTrue(simplePowerButton.contains("StatusWidgetSimplePowerAction.STOP -> WIDGET_ERROR"))
+        assertTrue(
+            simplePowerButton.contains(
+                "StatusWidgetSimplePowerAction.CONNECT -> if (light) CliLightColors.ok else WIDGET_OK",
+            ),
+        )
+        assertTrue(
+            simplePowerButton.contains(
+                "StatusWidgetSimplePowerAction.STOP -> if (light) CliLightColors.err else WIDGET_ERROR",
+            ),
+        )
+        assertTrue(simplePowerButton.contains("val enabled = statusWidgetSimpleActionEnabled(connection)"))
+        assertTrue(simplePowerButton.contains("if (enabled)"))
+        assertTrue(simplePowerButton.contains("connection.text(context)"))
+        assertFalse(simplePowerButton.contains(".fillMaxWidth()"))
+        assertTrue(simplePowerButton.contains(".width(width)"))
+        assertTrue(simpleContent.contains("val availableWidth = contentWidth - metrics.horizontalPadding * 2"))
+        assertFalse(simpleContent.contains("logoInset"))
+        assertTrue(simpleContent.contains("val actionWidth = statusWidgetSimpleActionWidth(availableWidth)"))
+        assertTrue(simpleContent.contains("horizontalAlignment = Alignment.CenterHorizontally"))
+        assertFalse(simpleContent.contains("GlanceModifier.defaultWeight()"))
+        assertTrue(simpleContent.contains("width = actionWidth"))
+        assertFalse(simplePowerButton.contains("widget_simple_action_surface_"))
+        assertTrue(simplePowerButton.contains(".height(STATUS_WIDGET_SIMPLE_TOUCH_SIZE)"))
         assertTrue(refreshCommand.contains("refreshIdentities(application, dependencies, snapshot)"))
         assertTrue(identityRefresh.contains("refreshDeviceIpInfo(WIDGET_IP_INFO_FETCH_MODE)"))
         assertTrue(identityRefresh.contains("refreshIpInfo(WIDGET_IP_INFO_FETCH_MODE)"))
@@ -231,16 +245,14 @@ internal class WidgetUiContractTest {
         assertFalse(configLayoutSelector.contains("StatusWidgetLayoutMode.EXPANDED"))
         assertTrue(settingsLayoutSelector.contains("SELECTABLE_STATUS_WIDGET_LAYOUT_MODES"))
         assertFalse(settingsLayoutSelector.contains("StatusWidgetLayoutMode.EXPANDED"))
-        assertTrue(connectButton.contains("android:shape=\"oval\""))
+        assertTrue(connectButton.contains("android:shape=\"rectangle\""))
         assertTrue(connectButton.contains("@color/cli_ok"))
         assertTrue(stopButton.contains("@color/cli_err"))
         assertTrue(splitDevice.contains("#FF7FB34A"))
         assertTrue(splitDevice.contains("#FFFF7A1A"))
         assertEquals(2, Regex("<clip-path").findAll(splitDevice).count())
-        assertTrue(logoCircle.contains("android:shape=\"oval\""))
-        assertTrue(logoCircle.contains("@android:color/white"))
-        assertFalse(logoCircle.contains("@color/cli_accent"))
-        assertTrue(launcherPreview.contains("@drawable/widget_simple_logo_circle"))
+        assertFalse(launcherPreview.contains("@drawable/widget_simple_logo_circle"))
+        assertTrue(launcherPreview.contains("@drawable/ic_launcher_openwrt"))
         assertTrue(launcherPreview.contains("@drawable/widget_simple_action_connect"))
         assertTrue(launcherPreview.contains("@drawable/lin_device"))
         assertFalse(launcherPreview.contains("@string/widget_status_vpn_profile"))
@@ -253,21 +265,27 @@ internal class WidgetUiContractTest {
         assertTrue(configSimplePreview.contains("R.string.cli_home_status_connected_vpn"))
         assertFalse(configSimplePreview.contains("R.drawable.lin_shield"))
         assertTrue(
-            configSimplePreview.indexOf("painterResource(R.drawable.flag_nl)") <
+            configSimplePreview.indexOf("countryCode = WIDGET_PREVIEW_COUNTRY_CODE") <
                 configSimplePreview.indexOf("text = WIDGET_PREVIEW_COUNTRY_CODE"),
         )
+        assertTrue(configSimplePreview.contains("CliFlagIcon("))
+        assertTrue(settingsSimplePreview.contains("CliFlagIcon("))
         assertTrue(settingsSimplePreview.contains("R.string.cli_home_status_connected_vpn"))
         assertFalse(settingsSimplePreview.contains("R.drawable.lin_shield"))
         assertTrue(
-            settingsSimplePreview.indexOf("painterResource(R.drawable.flag_nl)") <
+            settingsSimplePreview.indexOf("countryCode = SIMPLE_PREVIEW_COUNTRY_CODE") <
                 settingsSimplePreview.indexOf("text = SIMPLE_PREVIEW_COUNTRY_CODE"),
         )
         assertTrue(config.contains("CliType.small"))
         assertTrue(config.contains("painterResource(R.drawable.lin_power)"))
-        assertTrue(config.contains(".border(2.dp, colors.err, CircleShape)"))
-        assertTrue(config.contains("colorFilter = ColorFilter.tint(colors.err)"))
-        assertTrue(config.contains(".size(34.dp)"))
-        assertTrue(config.contains(".border(2.dp, textTone, CircleShape)"))
+        assertTrue(configSimplePreview.substringAfter("val actionColor").contains(".fillMaxWidth()"))
+        assertFalse(configSimplePreview.contains(".width(168.dp)"))
+        assertTrue(settingsSimplePreview.substringAfter("val actionColor").contains(".fillMaxWidth()"))
+        assertFalse(settingsSimplePreview.contains(".width(168.dp)"))
+        assertTrue(configSimplePreview.contains(".height(48.dp)"))
+        assertTrue(configSimplePreview.contains(".border(2.dp, actionColor, RoundedCornerShape(24.dp))"))
+        assertTrue(configSimplePreview.contains("R.drawable.ic_launcher_openwrt"))
+        assertFalse(configSimplePreview.contains("CircleShape"))
         assertTrue(english.contains(">Simplified</string>"))
         assertTrue(english.contains(">Expanded</string>"))
         assertTrue(english.contains(">updating status</string>"))
@@ -361,8 +379,8 @@ internal class WidgetUiContractTest {
         assertFalse(preview.contains("@drawable/widget_restart_button"))
         assertFalse(preview.contains("<Space"))
         assertFalse(preview.contains("widget_refresh_button"))
-        assertTrue(preview.contains("@drawable/ic_qs_tile"))
-        assertTrue(preview.contains("@string/widget_status_refresh"))
+        assertTrue(preview.contains("@drawable/ic_launcher_openwrt"))
+        assertTrue(preview.contains("@string/widget_status_open_app"))
         assertTrue(receiver.contains("renderFrame = { StatusWidget().updateAll(application) }"))
         assertTrue(receiver.contains("FoxholeConnectionServiceContract.ACTION_DISCONNECT"))
         assertTrue(receiver.contains("suppressLocalGuard = false"))
@@ -560,11 +578,23 @@ internal class WidgetUiContractTest {
         assertTrue(metadata.contains("android:maxResizeWidth=\"400dp\""))
         assertFalse(widget.contains("WidgetFrame("))
         assertTrue(widget.contains("StatusWidgetCommandReceiver.ACTION_TOGGLE"))
-        assertTrue(widget.contains("FOX_STATUS_ANIMATION_KEY] ?: settings.widgets.foxAnimationEnabled"))
-        assertTrue(widget.contains("generation.incrementAndGet()"))
-        assertTrue(widget.contains("while (generation.get() == ownedGeneration)"))
-        assertTrue(widget.contains("animatedWidgetIds(context)"))
-        assertTrue(widget.contains("getAppWidgetState(context, PreferencesGlanceStateDefinition, id)"))
+        assertTrue(widget.contains("booleanPreferencesKey(\"fox_status_animation\")"))
+        assertFalse(widget.contains("settings.widgets.foxAnimationEnabled"))
+        assertFalse(
+            source(
+                "main/kotlin/com/foxhole/guard/widget/FoxStatusWidgetConfigActivity.kt",
+            ).contains("fox_status_widget_animate"),
+        )
+        assertFalse(
+            source(
+                "main/kotlin/com/foxhole/guard/ui/cli/settings/CliWidgetsSubScreen.kt",
+            ).contains("fox_status_widget_animate"),
+        )
+        assertTrue(widget.contains("R.drawable.ic_launcher_openwrt"))
+        assertTrue(widget.contains("FoxStatusWidget().updateAll(context)"))
+        assertFalse(widget.contains("while ("))
+        assertFalse(widget.contains("delay("))
+        assertFalse(widget.contains("animatedWidgetIds(context)"))
         assertTrue(widget.contains("FOX_STATUS_FRAME_DURATION_MS = 320L"))
         assertTrue(manifest.contains(".widget.FoxStatusWidgetReceiver"))
         assertTrue(manifest.contains("@xml/widget_fox_status_info"))

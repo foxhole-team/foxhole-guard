@@ -2,6 +2,7 @@ package com.foxhole.guard.ui
 
 import android.app.Application
 import android.content.Intent
+import android.os.SystemClock
 import androidx.lifecycle.viewModelScope
 import com.foxhole.core.model.ACTIVE_CONNECTION_STATES
 import com.foxhole.core.model.WebAppRoute
@@ -10,6 +11,7 @@ import com.foxhole.guard.FoxholeApplication
 import com.foxhole.guard.R
 import com.foxhole.guard.core.data.WebAppEntity
 import com.foxhole.guard.core.data.WebAppPreview
+import com.foxhole.guard.core.security.LockState
 import com.foxhole.guard.core.settings.updateShowFirewallStatus
 import com.foxhole.guard.core.settings.updateWebAppsDockScreen
 import com.foxhole.guard.core.settings.updateWebAppsEnabled
@@ -17,11 +19,12 @@ import com.foxhole.guard.core.settings.updateWebAppsIsolation
 import com.foxhole.guard.core.settings.updateWebAppsPollIntervalMinutes
 import com.foxhole.guard.core.settings.updateWebAppsPushService
 import com.foxhole.guard.core.webapps.WebAppForegroundSession
+import com.foxhole.guard.core.webapps.WebAppOpenIntents
 import com.foxhole.guard.core.webapps.WebAppProxyLease
+import com.foxhole.guard.core.webapps.awaitWebAppCommandUnlock
 import com.foxhole.guard.core.webapps.publishWebAppAcquisition
 import com.foxhole.guard.core.webapps.webAppRouteSatisfied
 import com.foxhole.guard.runtime.FoxholeVpnService
-import com.foxhole.guard.ui.cli.CliMainActivity
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
@@ -188,8 +191,9 @@ internal fun HomeViewModel.removeWebApp(id: Long) {
 internal fun HomeViewModel.openWebApp(id: Long) {
     val request = webAppOpenRequests.next()
     viewModelScope.launch {
+        if (!ownsUnlockedWebAppRequest(request)) return@launch
         val app = container.webAppsRepository.webApp(id) ?: return@launch
-        if (!webAppOpenRequests.owns(request)) return@launch
+        if (!ownsUnlockedWebAppRequest(request)) return@launch
         val webApps = container.settingsRepository.current().webApps
         val route = app.webAppRoute()
         if (
@@ -204,27 +208,31 @@ internal fun HomeViewModel.openWebApp(id: Long) {
             emitError(getApplication<Application>().getString(R.string.cli_webapps_route_required))
             return@launch
         }
+        if (!ownsUnlockedWebAppRequest(request)) return@launch
         container.webAppsRepository.resetBadge(app.id)
-        if (!webAppOpenRequests.owns(request)) return@launch
+        if (!ownsUnlockedWebAppRequest(request)) return@launch
         val watchdog = getApplication<FoxholeApplication>().appGraph.webAppsWatchdog
         val published = publishWebAppAcquisition(
-            isCurrent = { webAppOpenRequests.owns(request) },
+            isCurrent = { ownsUnlockedWebAppRequest(request) },
             acquire = {
                 watchdog.acquireForegroundProxy(
                     appId = app.id,
                     route = route,
                     blockWithoutTunnel = webApps.isolationEnabled,
-                    requestCurrent = { webAppOpenRequests.owns(request) },
+                    requestCurrent = { ownsUnlockedWebAppRequest(request) },
                 )
             },
             release = watchdog::releaseForegroundProxy,
             publish = { activation -> setOpenWebApp(WebAppForegroundSession(app, activation)) },
         )
-        if (!published && webAppOpenRequests.owns(request)) {
+        if (!published && ownsUnlockedWebAppRequest(request)) {
             emitError(getApplication<Application>().getString(R.string.cli_webapps_route_unavailable))
         }
     }
 }
+
+private fun HomeViewModel.ownsUnlockedWebAppRequest(request: Long): Boolean =
+    webAppOpenRequests.owns(request) && appLockManager.currentLockState() == LockState.UNLOCKED
 
 internal fun HomeViewModel.closeWebApp() {
     setOpenWebApp(null)
@@ -245,32 +253,40 @@ internal fun HomeViewModel.startWebAppRouteSupervision() {
             container.connectionController.snapshot,
             container.settingsRepository.settings.map { it.webApps },
             container.connectionController.i2pPhase,
-        ) { app, snapshot, webApps, i2p ->
-            app == null ||
-                webAppRouteSatisfied(
+            appLockManager.lockState,
+        ) { app, snapshot, webApps, i2p, lock ->
+            when {
+                app == null -> true
+                lock != LockState.UNLOCKED -> false
+                else -> webAppRouteSatisfied(
                     route = app.app.webAppRoute(),
                     blockWithoutTunnel = webApps.isolationEnabled,
                     snapshot = snapshot,
                     i2pReady = i2p.phase.networkUp,
                 )
+            }
         }
             .distinctUntilChanged()
             .collect { routeOk ->
-                if (!routeOk) setOpenWebApp(null)
+                if (!routeOk && openWebAppMutable.value != null) setOpenWebApp(null)
             }
     }
 }
 
 internal fun HomeViewModel.applyWebAppOpenIntent(intent: Intent?) {
-    if (intent == null) {
-        return
+    val command = WebAppOpenIntents.consume(getApplication(), intent) ?: return
+    setOpenWebApp(null)
+    appLockManager.onAppForegrounded()
+    val request = webAppOpenRequests.next()
+    viewModelScope.launch {
+        val unlocked = awaitWebAppCommandUnlock(
+            command = command,
+            lockState = appLockManager.lockState,
+            now = SystemClock::elapsedRealtime,
+            isCurrent = { webAppOpenRequests.owns(request) },
+        )
+        if (unlocked) openWebApp(command.appId)
     }
-    val id = intent.getLongExtra(CliMainActivity.EXTRA_OPEN_WEB_APP_ID, -1L)
-    if (id <= 0L) {
-        return
-    }
-    intent.removeExtra(CliMainActivity.EXTRA_OPEN_WEB_APP_ID)
-    openWebApp(id)
 }
 
 internal fun HomeViewModel.webAppPerAppClearSupported(): Boolean =

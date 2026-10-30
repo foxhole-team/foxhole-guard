@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="guard_router_setup_license_title">FoxHole OpenWRT Client · Lizenzvereinbarung</string>
+    <string name="guard_router_setup_license_body">1. Die App darf nur gemäß geltendem Recht genutzt werden.\n\n2. FoxHole OpenWRT Client ist keine Antivirensoftware und garantiert weder Erkennung noch Neutralisierung ausführbarer Schadsoftware.\n\n3. Die Entwickler haften nicht für mögliche Schäden durch die Nutzung der App.\n\n4. Die Nutzung gilt als vollständige Annahme der Lizenzbedingungen aller enthaltenen Komponenten und Datensätze.\n\n5. Durch Fortfahren stimmen Sie sämtlichen Bestimmungen dieser Vereinbarung zu.</string>
+    <string name="guard_router_setup_license_accept">Ich akzeptiere die Lizenzvereinbarung</string>
+    <string name="guard_router_setup_license_required">Zuerst die Lizenzvereinbarung akzeptieren</string>
+</resources>

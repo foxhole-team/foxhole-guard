@@ -18,9 +18,13 @@ internal fun ProfileImportNodeSupport.parseSip008Servers(
     allowPrivateOutboundHosts: Boolean,
 ): ParsedNodeLines? {
     val servers = document["servers"]?.let { element -> runCatching { element.jsonArray }.getOrNull() } ?: return null
-    if (servers.isEmpty() || servers.size > MAX_SUBSCRIPTION_ENTRY_LINES) {
-        return null
+    require(document.keys.all { it in setOf("version", "servers", "bytes_used", "bytes_remaining") }) {
+        "unsupported SIP008 document field"
     }
+    require(document["version"] == null || document["version"]?.jsonPrimitive?.intOrNull == 1) {
+        "unsupported SIP008 version"
+    }
+    require(servers.isNotEmpty() && servers.size <= MAX_SUBSCRIPTION_ENTRY_LINES) { "invalid SIP008 server count" }
     val nodes = mutableListOf<ProxyNode>()
     val reports = mutableListOf<SubscriptionEntryReport>()
     val rejected = mutableListOf<String>()
@@ -40,8 +44,8 @@ internal fun ProfileImportNodeSupport.parseSip008Servers(
                         status = SubscriptionEntryStatus.ACCEPTED,
                         sourceLine = index + 1,
                     )
-            }.onFailure { error ->
-                rejected += "entry ${index + 1}: ${error.message ?: error.javaClass.simpleName}"
+            }.onFailure {
+                rejected += "entry ${index + 1}: invalid server definition"
             }
     }
     require(rejected.isEmpty()) {
@@ -50,11 +54,33 @@ internal fun ProfileImportNodeSupport.parseSip008Servers(
     return ParsedNodeLines(nodes = nodes, reports = reports).takeIf { nodes.isNotEmpty() }
 }
 
+internal fun ProfileImportNodeSupport.parseOutlineServer(
+    document: JsonObject,
+    allowPrivateOutboundHosts: Boolean,
+): ParsedNodeLines? {
+    if (!document.keys.containsAll(setOf("server", "server_port", "method", "password"))) return null
+    val node = parseSip008Server(document, allowPrivateOutboundHosts).copy(protocolHint = ProtocolHint.OUTLINE)
+    return ParsedNodeLines(
+        nodes = listOf(node),
+        reports = listOf(SubscriptionEntryReport("OUTLINE", ProtocolHint.OUTLINE, SubscriptionEntryStatus.ACCEPTED, 1)),
+    )
+}
+
 private fun ProfileImportNodeSupport.parseSip008Server(
     server: JsonObject,
     allowPrivateOutboundHosts: Boolean,
 ): ProxyNode {
-    require(server["plugin"]?.jsonPrimitive?.contentOrNull.isNullOrBlank()) {
+    require(
+        server.keys.all {
+            it in setOf("id", "remarks", "server", "server_port", "method", "password", "plugin", "plugin_opts")
+        }
+    ) {
+        "unsupported SIP008/Outline server field"
+    }
+    require(
+        server["plugin"]?.jsonPrimitive?.contentOrNull.isNullOrBlank() &&
+            server["plugin_opts"]?.jsonPrimitive?.contentOrNull.isNullOrBlank()
+    ) {
         "shadowsocks plugins are not supported in v1"
     }
     val host = server.stringField("server") ?: error("missing server")

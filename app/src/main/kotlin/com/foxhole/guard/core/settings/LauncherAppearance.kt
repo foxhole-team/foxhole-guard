@@ -3,6 +3,10 @@ package com.foxhole.guard.core.settings
 import android.content.ComponentName
 import android.content.Context
 import android.content.pm.PackageManager
+import com.foxhole.core.model.ThemeMode
+
+internal fun launcherMonochromeEnabled(themeMode: ThemeMode, monochromeEnabled: Boolean): Boolean =
+    monochromeEnabled || themeMode == ThemeMode.OLED
 
 internal fun updateLauncherAppearance(context: Context, monochrome: Boolean) {
     val manager = context.packageManager

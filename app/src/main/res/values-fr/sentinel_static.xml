@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="sentinel_static_expert">Paramètres avancés des vérifications statiques</string>
+    <string name="sentinel_static_title">Vérifications APK</string>
+    <string name="sentinel_static_reference_summary">%1$s : %2$s catégories de références API statiques et %3$s correspondances de règles. Ces observations ne prouvent ni une exécution ni la présence de logiciels malveillants.</string>
+    <string name="sentinel_static_notification_title">FoxHole Sentinel : observations statiques</string>
+    <string name="sentinel_static_select_app">Application à vérifier</string>
+    <string name="sentinel_static_run">Vérifier l’application choisie</string>
+    <string name="sentinel_static_baseline">Vérifier les applications installées</string>
+    <string name="sentinel_static_cancel">Annuler la vérification</string>
+    <string name="sentinel_static_dex">Vérifications DEX</string>
+    <string name="sentinel_static_yara">Vérifications YARA</string>
+    <string name="sentinel_static_notify">Notifier les résultats</string>
+    <string name="sentinel_static_automatic">Vérifier les applications nouvelles ou mises à jour</string>
+    <string name="sentinel_static_charging">Vérifications automatiques pendant la charge</string>
+    <string name="sentinel_static_battery">Vérifications automatiques hors batterie faible</string>
+    <string name="sentinel_static_cost">Budget d’analyse</string>
+    <string name="sentinel_static_economy">Économique · 16 MiB</string>
+    <string name="sentinel_static_balanced">Équilibré · 64 MiB</string>
+    <string name="sentinel_static_coverage_note">Seules les applications rendues visibles par Android sont concernées. Seules des vérifications statiques APK/DEX à ressources limitées sont effectuées. Une couverture absente ou partielle ne signifie pas qu’une application est sûre. Le code natif et téléchargé n’est pas évalué.</string>
+    <string name="sentinel_static_journal_deferred">Journal verrouillé : le résultat reste en mémoire et pourra être enregistré après déverrouillage.</string>
+    <string name="sentinel_static_status_disabled">Désactivé</string>
+    <string name="sentinel_static_status_idle">Prêt</string>
+    <string name="sentinel_static_status_waiting">En attente des conditions de charge ou de batterie</string>
+    <string name="sentinel_static_status_running">Vérification en cours</string>
+    <string name="sentinel_static_status_complete">Vérifications statiques terminées</string>
+    <string name="sentinel_static_status_partial">Couverture partielle</string>
+    <string name="sentinel_static_status_stale">Installation ou paramètres modifiés</string>
+    <string name="sentinel_static_status_cancelled">Annulé</string>
+    <string name="sentinel_static_status_unavailable">Vérification indisponible</string>
+    <string name="sentinel_static_status_unsupported">Format APK non pris en charge</string>
+    <string name="sentinel_static_engine_unavailable">Le moteur d’analyse intégré est indisponible sur cet appareil.</string>
+    <string name="sentinel_static_type_label">Références statiques</string>
+</resources>

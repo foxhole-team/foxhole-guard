@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="router_beta_notice_title" formatted="false">Бета функция</string>
+    <string name="router_beta_notice_body" formatted="false">Автоматическая установка сейчас поддерживается только на роутерах с полностью стандартной конфигурацией OpenWrt. Сопряжение также возможно после ручной установки актуальной версии FoxHole OpenWrt Client. Для установки и сопряжения телефон и роутер должны находиться в одной локальной сети; роутеру нужен доступ к интернету.</string>
+    <string name="router_beta_notice_dont_show_again" formatted="false">Не показывать снова</string>
+</resources>

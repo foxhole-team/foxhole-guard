@@ -13,6 +13,7 @@ import androidx.compose.ui.res.stringResource
 import com.foxhole.core.model.AppLockMode
 import com.foxhole.core.model.AppLockTimeout
 import com.foxhole.core.model.GuardHostingMode
+import com.foxhole.core.model.InterfaceMode
 import com.foxhole.core.model.Settings
 import com.foxhole.guard.R
 import com.foxhole.guard.ui.HomeViewModel
@@ -63,6 +64,7 @@ internal fun CliSecuritySection(
     val mode = settings.appLock.mode
     CliPanel(
         title = stringResource(R.string.cli_cfg_group_security),
+        titleColor = colors.fg,
         icon = R.drawable.lin_lock,
         iconColor = colors.accent,
         modifier = Modifier.fillMaxWidth(),
@@ -114,7 +116,9 @@ internal fun CliSecuritySection(
             )
             CliRowDivider()
         }
-        CliSettingsAnimatedRows(visible = mode == AppLockMode.PASSWORD) {
+        CliSettingsAnimatedRows(
+            visible = mode == AppLockMode.PASSWORD && settings.ui.interfaceMode == InterfaceMode.EXPERT
+        ) {
             val eventMonitoringActive = settings.anomaly.enabled && settings.appLock.eventMonitoringEnabled
             CliToggleRow(
                 label = stringResource(R.string.cli_lock_event_monitoring),

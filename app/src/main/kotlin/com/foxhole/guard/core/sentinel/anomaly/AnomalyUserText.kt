@@ -5,6 +5,7 @@ import android.text.format.Formatter
 import com.foxhole.core.model.AnomalyEvent
 import com.foxhole.core.model.AnomalyType
 import com.foxhole.guard.R
+import com.foxhole.guard.core.sentinel.sentinelAttempt
 
 internal fun AnomalyEvent.userFacingMessage(context: Context): String {
     val appLabel = packageName?.let(context::labelForPackageName) ?: packageName
@@ -67,6 +68,12 @@ internal fun AnomalyEvent.userFacingMessage(context: Context): String {
                 evidence["idle_days"].orEmpty().ifBlank { "0" },
                 evidence["bytes"].asBytesText(context),
             )
+        AnomalyType.APP_STATIC_REFERENCE -> context.getString(
+            R.string.sentinel_static_reference_summary,
+            subject,
+            evidence["reference_count"].orEmpty().ifBlank { "0" },
+            evidence["rule_count"].orEmpty().ifBlank { "0" },
+        )
         AnomalyType.KNOWN_THREAT_DESTINATION ->
             context.getString(
                 R.string.anomaly_reason_known_threat_destination,
@@ -89,7 +96,7 @@ private fun String?.asBytesText(context: Context): String =
         ?: context.getString(R.string.statistics_no_data)
 
 private fun Context.labelForPackageName(packageName: String): String? =
-    runCatching {
+    sentinelAttempt {
         packageManager
             .getApplicationInfo(packageName, 0)
             .loadLabel(packageManager)

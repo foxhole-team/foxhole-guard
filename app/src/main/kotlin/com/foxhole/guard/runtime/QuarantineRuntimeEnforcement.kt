@@ -7,6 +7,8 @@ import com.foxhole.core.runtime.RuntimeCommandQueueSnapshot
 import com.foxhole.core.runtime.RuntimeInstanceStore
 import com.foxhole.core.runtime.RuntimeSupervisor
 import com.foxhole.core.runtime.isIdleWithoutAttachedRuntimeResources
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.filterNotNull
@@ -110,6 +112,15 @@ internal class QuarantineEnforcementCoordinator(
     private val dispatch: (revision: Long) -> Boolean,
     private val awaitReceipt: suspend (revision: Long) -> AppliedQuarantinePolicy?,
 ) {
+    suspend fun executeIfUnapplied(revision: Long, apply: suspend () -> Unit): Boolean {
+        currentCoroutineContext().ensureActive()
+        if (currentReceipt()?.isCurrentFor(revision, snapshot()) == true) {
+            return false
+        }
+        apply()
+        return true
+    }
+
     suspend fun enforce(revision: Long): QuarantineEnforcementOutcome {
         val before = snapshot()
         if (currentReceipt()?.isCurrentFor(revision, before) == true) {

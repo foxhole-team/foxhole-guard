@@ -1,0 +1,1889 @@
+diff --git a/Cargo.toml b/Cargo.toml
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -54,6 +54,7 @@
+ enum_no_repr_variant_discriminant_changed = "warn"
+ 
+ [features]
++chrome-hello = ["dep:brotli-decompressor", "std"]
+ aws-lc-rs = ["aws_lc_rs"]
+ aws_lc_rs = [
+     "dep:aws-lc-rs",
+@@ -123,7 +124,7 @@
+ default-features = false
+ 
+ [dependencies.brotli-decompressor]
+-version = "5.0.0"
++version = "=5.0.3"
+ optional = true
+ 
+ [dependencies.hashbrown]
+diff --git a/src/client/builder.rs b/src/client/builder.rs
+--- a/src/client/builder.rs
++++ b/src/client/builder.rs
+@@ -5,14 +5,14 @@
+ 
+ use super::client_conn::Resumption;
+ use crate::builder::{ConfigBuilder, WantsVerifier};
+-use crate::client::{ClientConfig, EchMode, ResolvesClientCert, handy};
++use crate::client::{handy, ClientConfig, EchMode, ResolvesClientCert};
+ use crate::error::Error;
+ use crate::key_log::NoKeyLog;
+ use crate::sign::{CertifiedKey, SingleCertAndKey};
+ use crate::sync::Arc;
+ use crate::versions::TLS13;
+ use crate::webpki::{self, WebPkiServerVerifier};
+-use crate::{WantsVersions, compress, verify, versions};
++use crate::{compress, verify, versions, WantsVersions};
+ 
+ impl ConfigBuilder<ClientConfig, WantsVersions> {
+     /// Enable Encrypted Client Hello (ECH) in the given mode.
+@@ -52,9 +52,7 @@
+         self,
+         root_store: impl Into<Arc<webpki::RootCertStore>>,
+     ) -> ConfigBuilder<ClientConfig, WantsClientCert> {
+-        let algorithms = self
+-            .provider
+-            .signature_verification_algorithms;
++        let algorithms = self.provider.signature_verification_algorithms;
+         self.with_webpki_verifier(
+             WebPkiServerVerifier::new_without_revocation(root_store, algorithms).into(),
+         )
+@@ -93,7 +91,7 @@
+ 
+     use crate::client::WantsClientCert;
+     use crate::sync::Arc;
+-    use crate::{ClientConfig, ConfigBuilder, WantsVerifier, verify};
++    use crate::{verify, ClientConfig, ConfigBuilder, WantsVerifier};
+ 
+     /// Accessor for dangerous configuration options.
+     #[derive(Debug)]
+@@ -167,6 +165,8 @@
+ 
+         ClientConfig {
+             provider: self.provider,
++            #[cfg(feature = "chrome-hello")]
++            chrome_151: false,
+             alpn_protocols: Vec::new(),
+             check_selected_alpn: true,
+             resumption: Resumption::default(),
+diff --git a/src/client/chrome_hello.rs b/src/client/chrome_hello.rs
+--- /dev/null
++++ b/src/client/chrome_hello.rs
+@@ -0,0 +1,289 @@
++//! Opt-in Chromium151 shape from FoxCore's independently captured chrome_151 vector.
++//! Encoding remains inside rustls: binders, transcript hashes and records see the same bytes.
++
++use crate::client::ClientConfig;
++use crate::common_state::Protocol;
++use crate::compress::{CertDecompressor, DecompressionFailed};
++use crate::enums::{
++    CertificateCompressionAlgorithm, CipherSuite, ProtocolVersion, SignatureScheme,
++};
++use crate::error::Error;
++use crate::msgs::base::PayloadU8;
++use crate::msgs::enums::{ExtensionType, NamedGroup};
++use crate::msgs::handshake::{
++    ClientExtensions, ClientHelloPayload, ClientSessionTicket, KeyShareEntry,
++};
++use alloc::vec;
++use alloc::vec::Vec;
++use brotli_decompressor::{BrotliDecompressStream, BrotliResult, BrotliState, StandardAlloc};
++
++const SIGNATURES: [u16; 11] = [
++    0x0904, 0x0905, 0x0906, 0x0403, 0x0804, 0x0401, 0x0503, 0x0805, 0x0501, 0x0806, 0x0601,
++];
++const CIPHERS: [u16; 15] = [
++    0x1301, 0x1302, 0x1303, 0xc02b, 0xc02f, 0xc02c, 0xc030, 0xcca9, 0xcca8, 0xc013, 0xc014, 0x009c,
++    0x009d, 0x002f, 0x0035,
++];
++const GROUPS: [u16; 4] = [0x11ec, 0x001d, 0x0017, 0x0018];
++const EXTENSIONS: [u16; 16] = [
++    0, 23, 65281, 10, 11, 35, 16, 5, 13, 18, 51, 45, 43, 27, 0x44cd, 0xfe0d,
++];
++
++pub(crate) fn signature_allowed(scheme: SignatureScheme) -> bool {
++    SIGNATURES.contains(&u16::from(scheme))
++}
++
++fn refuse(message: &str) -> Error {
++    Error::General(message.into())
++}
++
++pub(super) fn configure(config: &mut ClientConfig) -> Result<(), Error> {
++    if config.ech_mode.is_some() || config.enable_early_data || config.send_ticket_request.is_some()
++    {
++        return Err(refuse(
++            "Chrome151 cannot discard ECH, early-data or ticket-request requirements",
++        ));
++    }
++    if !config.supports_version(ProtocolVersion::TLSv1_2, Protocol::Tcp)
++        || !config.supports_version(ProtocolVersion::TLSv1_3, Protocol::Tcp)
++    {
++        return Err(refuse(
++            "Chrome151 requires its TLS1.2 and TLS1.3 version offer",
++        ));
++    }
++    let groups: Vec<_> = config
++        .provider
++        .kx_groups
++        .iter()
++        .map(|group| u16::from(group.name()))
++        .collect();
++    if groups != GROUPS {
++        return Err(refuse(
++            "Chrome151 requires its exact hybrid-first group order",
++        ));
++    }
++    if config.alpn_protocols.is_empty()
++        || config
++            .alpn_protocols
++            .iter()
++            .any(|protocol| protocol != b"h2" && protocol != b"http/1.1")
++    {
++        return Err(refuse("Chrome151 supports explicit h2/http/1.1 ALPN only"));
++    }
++    let schemes = config.verifier.supported_verify_schemes();
++    if SIGNATURES
++        .iter()
++        .any(|scheme| !schemes.contains(&SignatureScheme::from(*scheme)))
++    {
++        return Err(refuse(
++            "Chrome151 requires verification for every advertised signature, including ML-DSA",
++        ));
++    }
++    config.cert_decompressors = vec![&CHROME_BROTLI];
++    Ok(())
++}
++
++#[derive(Clone, Debug)]
++pub(crate) struct ChromeExtensions {
++    grease: [u16; 5],
++    permutation: u64,
++    ech: Vec<u8>,
++}
++
++impl ChromeExtensions {
++    pub(super) fn new(config: &ClientConfig) -> Result<Self, Error> {
++        let mut random = [0u8; 16];
++        config.provider.secure_random.fill(&mut random)?;
++        if random[3] & 0xf0 == random[4] & 0xf0 {
++            random[4] ^= 0x10;
++        }
++        let grease = core::array::from_fn(|index| {
++            let byte = (random[index] & 0xf0) | 0x0a;
++            u16::from_be_bytes([byte, byte])
++        });
++        let permutation = u64::from_be_bytes(random[5..13].try_into().unwrap());
++        let x25519 = config
++            .provider
++            .kx_groups
++            .iter()
++            .find(|group| group.name() == NamedGroup::X25519)
++            .ok_or_else(|| refuse("Chrome151 ECH GREASE requires X25519"))?
++            .start()?;
++        let enc = x25519.pub_key();
++        if enc.len() != 32 {
++            return Err(refuse("Chrome151 ECH GREASE key is not X25519"));
++        }
++        let payload_len = [128usize, 160, 192, 224][usize::from(random[14]) % 4] + 16;
++        let mut payload = vec![0u8; payload_len];
++        config.provider.secure_random.fill(&mut payload)?;
++        let mut ech = vec![0, 0, 1, 0, 1, random[13], 0, 32];
++        ech.extend_from_slice(enc);
++        ech.extend_from_slice(&(payload_len as u16).to_be_bytes());
++        ech.extend_from_slice(&payload);
++        Ok(Self {
++            grease,
++            permutation,
++            ech,
++        })
++    }
++
++    pub(super) fn apply(
++        &self,
++        hello: &mut ClientHelloPayload,
++        schemes: &[SignatureScheme],
++    ) -> Result<(), Error> {
++        if hello.server_name.is_none() || hello.protocols.is_none() {
++            return Err(refuse("Chrome151 requires DNS SNI and explicit ALPN"));
++        }
++        if SIGNATURES
++            .iter()
++            .any(|scheme| !schemes.contains(&SignatureScheme::from(*scheme)))
++        {
++            return Err(refuse("Chrome151 signature verifier changed"));
++        }
++        let allowed = [0, 23, 65281, 10, 11, 35, 16, 5, 13, 51, 45, 43, 27, 44, 41];
++        if hello
++            .collect_used()
++            .iter()
++            .any(|id| !allowed.contains(&u16::from(*id)))
++        {
++            return Err(refuse("Chrome151 cannot discard a configured extension"));
++        }
++        hello.cipher_suites = core::iter::once(self.grease[0])
++            .chain(CIPHERS)
++            .map(CipherSuite::from)
++            .collect();
++        hello.signature_schemes = Some(SIGNATURES.into_iter().map(SignatureScheme::from).collect());
++        let mut groups = vec![NamedGroup::from(self.grease[1])];
++        groups.extend(GROUPS.into_iter().map(NamedGroup::from));
++        hello.named_groups = Some(groups);
++        let shares = hello
++            .key_shares
++            .as_mut()
++            .ok_or_else(|| refuse("Chrome151 has no authenticated key share"))?;
++        shares.insert(
++            0,
++            KeyShareEntry::new(NamedGroup::from(self.grease[1]), &[0]),
++        );
++        hello.renegotiation_info = Some(PayloadU8::new(Vec::new()));
++        if hello.session_ticket.is_none() {
++            hello.session_ticket = Some(ClientSessionTicket::Request);
++        }
++        if hello.certificate_compression_algorithms.as_deref()
++            != Some(&[CertificateCompressionAlgorithm::Brotli])
++        {
++            return Err(refuse(
++                "Chrome151 Brotli certificate decompressor unavailable",
++            ));
++        }
++        hello.chrome = Some(self.clone());
++        Ok(())
++    }
++
++    pub(crate) fn order(&self, native: Vec<ExtensionType>) -> Vec<ExtensionType> {
++        let psk = native.contains(&ExtensionType::from(41));
++        let extras: Vec<_> = native
++            .into_iter()
++            .map(u16::from)
++            .filter(|id| !EXTENSIONS.contains(id) && *id != 41)
++            .collect();
++        let mut middle: Vec<u16> = EXTENSIONS.to_vec();
++        // Cookie/PSK are added only by rustls' real HRR/resumption state.
++        middle.retain(|id| *id != 41);
++        let mut state = self.permutation;
++        for index in (1..middle.len()).rev() {
++            state = state.wrapping_add(0x9e3779b97f4a7c15);
++            let mut mixed = state;
++            mixed = (mixed ^ (mixed >> 30)).wrapping_mul(0xbf58476d1ce4e5b9);
++            mixed = (mixed ^ (mixed >> 27)).wrapping_mul(0x94d049bb133111eb);
++            mixed ^= mixed >> 31;
++            middle.swap(index, (mixed % ((index + 1) as u64)) as usize);
++        }
++        middle.extend(extras);
++        let mut order = vec![ExtensionType::from(self.grease[3])];
++        order.extend(middle.into_iter().map(ExtensionType::from));
++        order.push(ExtensionType::from(self.grease[4]));
++        if psk {
++            order.push(ExtensionType::from(41));
++        }
++        order
++    }
++
++    pub(crate) fn encode_special(
++        &self,
++        id: ExtensionType,
++        extensions: &ClientExtensions<'_>,
++        output: &mut Vec<u8>,
++    ) -> bool {
++        let number = u16::from(id);
++        let body = if number == self.grease[3] {
++            Some(Vec::new())
++        } else if number == self.grease[4] {
++            Some(vec![0])
++        } else if number == 18 {
++            Some(Vec::new())
++        } else if number == 0x44cd {
++            Some(vec![0, 3, 2, b'h', b'2'])
++        } else if number == 0xfe0d {
++            Some(self.ech.clone())
++        } else if number == 43 {
++            let versions = extensions
++                .supported_versions
++                .as_ref()
++                .expect("Chrome151 has versions");
++            let mut raw = vec![0];
++            raw.extend_from_slice(&self.grease[2].to_be_bytes());
++            if versions.tls13 {
++                raw.extend_from_slice(&0x0304u16.to_be_bytes());
++            }
++            if versions.tls12 {
++                raw.extend_from_slice(&0x0303u16.to_be_bytes());
++            }
++            raw[0] = (raw.len() - 1) as u8;
++            Some(raw)
++        } else {
++            None
++        };
++        if let Some(body) = body {
++            output.extend_from_slice(&number.to_be_bytes());
++            output.extend_from_slice(&(body.len() as u16).to_be_bytes());
++            output.extend_from_slice(&body);
++            true
++        } else {
++            false
++        }
++    }
++}
++
++// The strict decompressor is the upstream rustls0.23.46 implementation, enabled
++// only for the opt-in profile instead of changing global compression defaults.
++#[derive(Debug)]
++struct ChromeBrotli;
++static CHROME_BROTLI: ChromeBrotli = ChromeBrotli;
++impl CertDecompressor for ChromeBrotli {
++    fn decompress(&self, input: &[u8], output: &mut [u8]) -> Result<(), DecompressionFailed> {
++        let mut state = BrotliState::new_strict(
++            StandardAlloc::default(),
++            StandardAlloc::default(),
++            StandardAlloc::default(),
++        );
++        let (mut available_in, mut input_offset) = (input.len(), 0);
++        let (mut available_out, mut output_offset, mut total_out) = (output.len(), 0, 0);
++        match BrotliDecompressStream(
++            &mut available_in,
++            &mut input_offset,
++            input,
++            &mut available_out,
++            &mut output_offset,
++            output,
++            &mut total_out,
++            &mut state,
++        ) {
++            BrotliResult::ResultSuccess if available_out == 0 && available_in == 0 => Ok(()),
++            _ => Err(DecompressionFailed),
++        }
++    }
++    fn algorithm(&self) -> CertificateCompressionAlgorithm {
++        CertificateCompressionAlgorithm::Brotli
++    }
++}
+diff --git a/src/client/client_conn.rs b/src/client/client_conn.rs
+--- a/src/client/client_conn.rs
++++ b/src/client/client_conn.rs
+@@ -7,8 +7,6 @@
+ 
+ use super::handy::NoClientSessionStorage;
+ use super::hs::{self, ClientHelloInput};
+-#[cfg(feature = "std")]
+-use crate::WantsVerifier;
+ use crate::builder::ConfigBuilder;
+ use crate::client::{EchMode, EchStatus};
+ use crate::common_state::{CommonState, Protocol, Side};
+@@ -27,9 +25,11 @@
+ use crate::time_provider::DefaultTimeProvider;
+ use crate::time_provider::TimeProvider;
+ use crate::unbuffered::{EncryptError, TransmitTlsData};
++#[cfg(feature = "std")]
++use crate::WantsVerifier;
++use crate::{compress, sign, verify, versions, KeyLog, WantsVersions};
+ #[cfg(doc)]
+-use crate::{DistinguishedName, crypto};
+-use crate::{KeyLog, WantsVersions, compress, sign, verify, versions};
++use crate::{crypto, DistinguishedName};
+ 
+ /// A trait for the ability to store client session data, so that sessions
+ /// can be resumed in future connections.
+@@ -245,6 +245,10 @@
+     /// Provides the current system time
+     pub time_provider: Arc<dyn TimeProvider>,
+ 
++    /// Use the opt-in Chrome151 wire shape. Certificate verification stays unchanged.
++    #[cfg(feature = "chrome-hello")]
++    pub(super) chrome_151: bool,
++
+     /// Source of randomness and other crypto.
+     pub(super) provider: Arc<CryptoProvider>,
+ 
+@@ -306,6 +310,15 @@
+ }
+ 
+ impl ClientConfig {
++    /// Enable the Chrome151 ClientHello shape while retaining this configuration's
++    /// certificate verifier, ALPN and key schedule. Unsupported combinations fail.
++    #[cfg(feature = "chrome-hello")]
++    pub fn enable_chrome_151(&mut self) -> Result<(), Error> {
++        super::chrome_hello::configure(self)?;
++        self.chrome_151 = true;
++        Ok(())
++    }
++
+     /// Create a builder for a client configuration with
+     /// [the process-default `CryptoProvider`][CryptoProvider#using-the-per-process-default-cryptoprovider]
+     /// and safe protocol version defaults.
+@@ -559,8 +572,8 @@
+ 
+ /// Container for unsafe APIs
+ pub(super) mod danger {
++    use super::verify::ServerCertVerifier;
+     use super::ClientConfig;
+-    use super::verify::ServerCertVerifier;
+     use crate::sync::Arc;
+ 
+     /// Accessor for dangerous configuration options.
+@@ -666,13 +679,13 @@
+     use pki_types::ServerName;
+ 
+     use super::{ClientConnectionData, ClientExtensionsInput};
+-    use crate::ClientConfig;
+     use crate::client::EchStatus;
+     use crate::common_state::Protocol;
+     use crate::conn::{ConnectionCommon, ConnectionCore};
+     use crate::error::Error;
+     use crate::suites::ExtractedSecrets;
+     use crate::sync::Arc;
++    use crate::ClientConfig;
+ 
+     /// Stub that implements io::Write and dispatches to `write_early_data`.
+     pub struct WriteEarlyData<'a> {
+@@ -687,12 +700,7 @@
+         /// How many bytes you may send.  Writes will become short
+         /// once this reaches zero.
+         pub fn bytes_left(&self) -> usize {
+-            self.sess
+-                .inner
+-                .core
+-                .data
+-                .early_data
+-                .bytes_left()
++            self.sess.inner.core.data.early_data.bytes_left()
+         }
+     }
+ 
+@@ -724,8 +732,7 @@
+ 
+     impl fmt::Debug for ClientConnection {
+         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+-            f.debug_struct("ClientConnection")
+-                .finish()
++            f.debug_struct("ClientConnection").finish()
+         }
+     }
+ 
+@@ -771,13 +778,7 @@
+         /// in this case the data is lost but the connection continues.  You
+         /// can tell this happened using `is_early_data_accepted`.
+         pub fn early_data(&mut self) -> Option<WriteEarlyData<'_>> {
+-            if self
+-                .inner
+-                .core
+-                .data
+-                .early_data
+-                .is_enabled()
+-            {
++            if self.inner.core.data.early_data.is_enabled() {
+                 Some(WriteEarlyData::new(self))
+             } else {
+                 None
+@@ -824,10 +825,7 @@
+                 .data
+                 .early_data
+                 .check_write(data.len())
+-                .map(|sz| {
+-                    self.inner
+-                        .send_early_plaintext(&data[..sz])
+-                })
++                .map(|sz| self.inner.send_early_plaintext(&data[..sz]))
+         }
+     }
+ 
+@@ -965,9 +963,7 @@
+     pub fn dangerous_into_kernel_connection(
+         self,
+     ) -> Result<(ExtractedSecrets, KernelConnection<ClientConnectionData>), Error> {
+-        self.inner
+-            .core
+-            .dangerous_into_kernel_connection()
++        self.inner.core.dangerous_into_kernel_connection()
+     }
+ 
+     /// Returns the number of TLS1.3 tickets that have been received.
+@@ -996,13 +992,7 @@
+     ///
+     /// IF allowed by the protocol
+     pub fn may_encrypt_early_data(&mut self) -> Option<MayEncryptEarlyData<'_>> {
+-        if self
+-            .conn
+-            .core
+-            .data
+-            .early_data
+-            .is_enabled()
+-        {
++        if self.conn.core.data.early_data.is_enabled() {
+             Some(MayEncryptEarlyData { conn: self.conn })
+         } else {
+             None
+diff --git a/src/client/common.rs b/src/client/common.rs
+--- a/src/client/common.rs
++++ b/src/client/common.rs
+@@ -6,7 +6,7 @@
+ use crate::msgs::enums::ExtensionType;
+ use crate::msgs::handshake::{CertificateChain, DistinguishedName, ProtocolName, ServerExtensions};
+ use crate::sync::Arc;
+-use crate::{CipherSuite, SignatureScheme, compress, sign};
++use crate::{compress, sign, CipherSuite, SignatureScheme};
+ 
+ #[derive(Debug)]
+ pub(super) struct ServerCertDetails<'a> {
+@@ -58,6 +58,15 @@
+         received_exts: &ServerExtensions<'_>,
+         allowed_unsolicited: &[ExtensionType],
+     ) -> bool {
++        #[cfg(feature = "chrome-hello")]
++        if self.sent_extensions.contains(&ExtensionType::from(0x44cd))
++            && received_exts
++                .unknown_extensions
++                .iter()
++                .any(|id| *id == 0x44cd || (id >> 8) == (id & 255) && (id & 15) == 10)
++        {
++            return true;
++        }
+         let mut extensions = received_exts.collect_used();
+         extensions.extend(
+             received_exts
+diff --git a/src/client/hs.rs b/src/client/hs.rs
+--- a/src/client/hs.rs
++++ b/src/client/hs.rs
+@@ -9,14 +9,13 @@
+ #[cfg(feature = "tls12")]
+ use super::tls12;
+ use super::{ResolvesClientCert, Tls12Resumption};
+-use crate::SupportedCipherSuite;
+ #[cfg(feature = "logging")]
+ use crate::bs_debug;
+ use crate::check::inappropriate_handshake_message;
+ use crate::client::client_conn::ClientConnectionData;
+ use crate::client::common::ClientHelloDetails;
+ use crate::client::ech::EchState;
+-use crate::client::{ClientConfig, EchMode, EchStatus, tls13};
++use crate::client::{tls13, ClientConfig, EchMode, EchStatus};
+ use crate::common_state::{CommonState, HandshakeKind, KxState, State};
+ use crate::conn::ConnectionRandoms;
+ use crate::crypto::{ActiveKeyExchange, KeyExchangeAlgorithm};
+@@ -40,6 +39,7 @@
+ use crate::sync::Arc;
+ use crate::tls13::key_schedule::KeyScheduleEarly;
+ use crate::verify::ServerCertVerifier;
++use crate::SupportedCipherSuite;
+ 
+ pub(super) type NextState<'a> = Box<dyn State<ClientConnectionData> + 'a>;
+ pub(super) type NextStateOrError<'a> = Result<NextState<'a>, Error>;
+@@ -75,6 +75,8 @@
+     pub(super) session_id: SessionId,
+     pub(super) server_name: ServerName<'static>,
+     pub(super) prev_ech_ext: Option<EncryptedClientHello>,
++    #[cfg(feature = "chrome-hello")]
++    chrome: Option<super::chrome_hello::ChromeExtensions>,
+ }
+ 
+ impl ClientHelloInput {
+@@ -84,6 +86,17 @@
+         cx: &mut ClientContext<'_>,
+         config: Arc<ClientConfig>,
+     ) -> Result<Self, Error> {
++        #[cfg(feature = "chrome-hello")]
++        let chrome = if config.chrome_151 {
++            if cx.common.is_quic() {
++                return Err(Error::General(
++                    "Chrome151 TCP hello cannot be used for QUIC".into(),
++                ));
++            }
++            Some(super::chrome_hello::ChromeExtensions::new(&config)?)
++        } else {
++            None
++        };
+         let mut resuming = ClientSessionValue::retrieve(&server_name, &config, cx);
+         let session_id = match &mut resuming {
+             Some(_resuming) => {
+@@ -120,10 +133,7 @@
+         };
+ 
+         let hello = ClientHelloDetails::new(
+-            extra_exts
+-                .protocols
+-                .clone()
+-                .unwrap_or_default(),
++            extra_exts.protocols.clone().unwrap_or_default(),
+             crate::rand::random_u16(config.provider.secure_random)?,
+         );
+ 
+@@ -135,6 +145,8 @@
+             session_id,
+             server_name,
+             prev_ech_ext: None,
++            #[cfg(feature = "chrome-hello")]
++            chrome,
+             config,
+         })
+     }
+@@ -145,11 +157,7 @@
+         cx: &mut ClientContext<'_>,
+     ) -> NextStateOrError<'static> {
+         let mut transcript_buffer = HandshakeHashBuffer::new();
+-        if self
+-            .config
+-            .client_auth_cert_resolver
+-            .has_certs()
+-        {
++        if self.config.client_auth_cert_resolver.has_certs() {
+             transcript_buffer.set_client_auth_enabled();
+         }
+ 
+@@ -224,11 +232,7 @@
+                 .collect(),
+         ),
+         supported_versions: Some(supported_versions),
+-        signature_schemes: Some(
+-            config
+-                .verifier
+-                .supported_verify_schemes(),
+-        ),
++        signature_schemes: Some(config.verifier.supported_verify_schemes()),
+         extended_master_secret_request: Some(()),
+         certificate_status_request: Some(CertificateStatusRequest::build_ocsp()),
+         protocols: extra_exts.protocols.clone(),
+@@ -299,13 +303,11 @@
+             // algorithm is also supported separately by our provider for this version
+             // (`find_kx_group` looks that up).
+             if let Some((component_group, component_share)) =
+-                key_share
+-                    .hybrid_component()
+-                    .filter(|(group, _)| {
+-                        config
+-                            .find_kx_group(*group, ProtocolVersion::TLSv1_3)
+-                            .is_some()
+-                    })
++                key_share.hybrid_component().filter(|(group, _)| {
++                    config
++                        .find_kx_group(*group, ProtocolVersion::TLSv1_3)
++                        .is_some()
++                })
+             {
+                 shares.push(KeyShareEntry::new(component_group, component_share));
+             }
+@@ -348,17 +350,11 @@
+             false
+         };
+ 
+-    if config
+-        .client_auth_cert_resolver
+-        .only_raw_public_keys()
+-    {
++    if config.client_auth_cert_resolver.only_raw_public_keys() {
+         exts.client_certificate_types = Some(vec![CertificateType::RawPublicKey]);
+     }
+ 
+-    if config
+-        .verifier
+-        .requires_raw_public_keys()
+-    {
++    if config.verifier.requires_raw_public_keys() {
+         exts.server_certificate_types = Some(vec![CertificateType::RawPublicKey]);
+     }
+ 
+@@ -402,17 +398,14 @@
+         extensions: exts,
+     };
+ 
+-    let ech_grease_ext = config
+-        .ech_mode
+-        .as_ref()
+-        .and_then(|mode| match mode {
+-            EchMode::Grease(cfg) => Some(cfg.grease_ext(
+-                config.provider.secure_random,
+-                input.server_name.clone(),
+-                &chp_payload,
+-            )),
+-            _ => None,
+-        });
++    let ech_grease_ext = config.ech_mode.as_ref().and_then(|mode| match mode {
++        EchMode::Grease(cfg) => Some(cfg.grease_ext(
++            config.provider.secure_random,
++            input.server_name.clone(),
++            &chp_payload,
++        )),
++        _ => None,
++    });
+ 
+     match (cx.data.ech_status, &mut ech_state) {
+         // If we haven't offered ECH, or have offered ECH but got a non-rejecting HRR, then
+@@ -422,9 +415,7 @@
+             chp_payload = ech_state.ech_hello(chp_payload, retryreq, &tls13_session)?;
+             cx.data.ech_status = EchStatus::Offered;
+             // Store the ECH extension in case we need to carry it forward in a subsequent hello.
+-            input.prev_ech_ext = chp_payload
+-                .encrypted_client_hello
+-                .clone();
++            input.prev_ech_ext = chp_payload.encrypted_client_hello.clone();
+         }
+         // If we haven't offered ECH, and have no ECH state, then consider whether to use GREASE
+         // ECH.
+@@ -442,8 +433,21 @@
+         _ => {}
+     }
+ 
+-    // Note what extensions we sent.
++    #[cfg(feature = "chrome-hello")]
++    if let Some(chrome) = &input.chrome {
++        chrome.apply(
++            &mut chp_payload,
++            &config.verifier.supported_verify_schemes(),
++        )?;
++        cx.data.ech_status = EchStatus::Grease;
++    }
++
++    // Shape before binder signing, transcript hashing and record emission.
+     input.hello.sent_extensions = chp_payload.collect_used();
++    #[cfg(feature = "chrome-hello")]
++    if input.chrome.is_some() {
++        input.hello.sent_extensions = chp_payload.used_extensions_in_encoding_order();
++    }
+     input.hello.offered_cipher_suites = chp_payload.cipher_suites.clone();
+ 
+     let mut chp = HandshakeMessagePayload(HandshakePayload::ClientHello(chp_payload));
+@@ -656,9 +660,7 @@
+ ) -> Result<Option<(ExtensionType, CertificateType)>, Error> {
+     process_cert_type_extension(
+         common,
+-        config
+-            .verifier
+-            .requires_raw_public_keys(),
++        config.verifier.requires_raw_public_keys(),
+         server_cert_extension.copied(),
+         ExtensionType::ServerCertificateType,
+     )
+@@ -671,9 +673,7 @@
+ ) -> Result<Option<(ExtensionType, CertificateType)>, Error> {
+     process_cert_type_extension(
+         common,
+-        config
+-            .client_auth_cert_resolver
+-            .only_raw_public_keys(),
++        config.client_auth_cert_resolver.only_raw_public_keys(),
+         client_cert_extension.copied(),
+         ExtensionType::ClientCertificateType,
+     )
+@@ -763,10 +763,7 @@
+             process_alpn_protocol(
+                 cx.common,
+                 &self.input.hello.alpn_protocols,
+-                server_hello
+-                    .selected_protocol
+-                    .as_ref()
+-                    .map(|s| s.as_ref()),
++                server_hello.selected_protocol.as_ref().map(|s| s.as_ref()),
+                 self.input.config.check_selected_alpn,
+             )?;
+         }
+@@ -821,9 +818,7 @@
+         }
+ 
+         // Start our handshake hash, and input the server-hello.
+-        let mut transcript = self
+-            .transcript_buffer
+-            .start_hash(suite.hash_provider());
++        let mut transcript = self.transcript_buffer.start_hash(suite.hash_provider());
+         transcript.add_message(&m);
+ 
+         let randoms = ConnectionRandoms::new(self.input.random, server_hello.random);
+@@ -1002,10 +997,7 @@
+         }
+ 
+         // This is the draft19 change where the transcript became a tree
+-        let transcript = self
+-            .next
+-            .transcript_buffer
+-            .start_hash(cs.hash_provider());
++        let transcript = self.next.transcript_buffer.start_hash(cs.hash_provider());
+         let mut transcript_buffer = transcript.into_hrr_buffer();
+         transcript_buffer.add_message(&m);
+ 
+@@ -1061,9 +1053,7 @@
+             MessagePayload::Handshake {
+                 parsed: HandshakeMessagePayload(HandshakePayload::ServerHello(..)),
+                 ..
+-            } => self
+-                .into_expect_server_hello()
+-                .handle(cx, m),
++            } => self.into_expect_server_hello().handle(cx, m),
+             MessagePayload::Handshake {
+                 parsed: HandshakeMessagePayload(HandshakePayload::HelloRetryRequest(..)),
+                 ..
+@@ -1154,9 +1144,7 @@
+ 
+         if let Some(resuming) = &found {
+             if cx.common.is_quic() {
+-                cx.common.quic.params = resuming
+-                    .tls13()
+-                    .map(|v| v.quic_params());
++                cx.common.quic.params = resuming.tls13().map(|v| v.quic_params());
+             }
+         }
+ 
+diff --git a/src/client/tls12.rs b/src/client/tls12.rs
+--- a/src/client/tls12.rs
++++ b/src/client/tls12.rs
+@@ -9,19 +9,18 @@
+ 
+ use super::client_conn::ClientConnectionData;
+ use super::hs::ClientContext;
+-use crate::ConnectionTrafficSecrets;
+ use crate::check::{inappropriate_handshake_message, inappropriate_message};
+ use crate::client::common::{ClientAuthDetails, ServerCertDetails};
+-use crate::client::{ClientConfig, hs};
++use crate::client::{hs, ClientConfig};
+ use crate::common_state::{CommonState, HandshakeKind, KxState, Side, State};
++use crate::conn::kernel::{Direction, KernelContext, KernelState};
+ use crate::conn::ConnectionRandoms;
+-use crate::conn::kernel::{Direction, KernelContext, KernelState};
+ use crate::crypto::KeyExchangeAlgorithm;
+ use crate::enums::{AlertDescription, ContentType, HandshakeType, ProtocolVersion};
+ use crate::error::{Error, InvalidMessage, PeerIncompatible, PeerMisbehaved};
+ use crate::hash_hs::HandshakeHash;
+ use crate::log::{debug, trace, warn};
+-use crate::msgs::base::{Payload, PayloadU8, PayloadU16};
++use crate::msgs::base::{Payload, PayloadU16, PayloadU8};
+ use crate::msgs::ccs::ChangeCipherSpecPayload;
+ use crate::msgs::handshake::{
+     CertificateChain, ClientDhParams, ClientEcdhParams, ClientKeyExchangeParams,
+@@ -35,6 +34,7 @@
+ use crate::sync::Arc;
+ use crate::tls12::{self, ConnectionSecrets, Tls12CipherSuite};
+ use crate::verify::{self, DigitallySignedStruct};
++use crate::ConnectionTrafficSecrets;
+ 
+ mod server_hello {
+     use super::*;
+@@ -104,9 +104,7 @@
+                 });
+ 
+             // Doing EMS?
+-            let using_ems = server_hello
+-                .extended_master_secret_ack
+-                .is_some();
++            let using_ems = server_hello.extended_master_secret_ack.is_some();
+             if config.require_ems && !using_ems {
+                 return Err({
+                     cx.common.send_fatal_alert(
+@@ -117,10 +115,7 @@
+             }
+ 
+             // Might the server send a ticket?
+-            let must_issue_new_ticket = if server_hello
+-                .session_ticket_ack
+-                .is_some()
+-            {
++            let must_issue_new_ticket = if server_hello.session_ticket_ack.is_some() {
+                 debug!("Server supports tickets");
+                 true
+             } else {
+@@ -129,9 +124,7 @@
+ 
+             // Might the server send a CertificateStatus between Certificate and
+             // ServerKeyExchange?
+-            let may_send_cert_status = server_hello
+-                .certificate_status_request_ack
+-                .is_some();
++            let may_send_cert_status = server_hello.certificate_status_request_ack.is_some();
+             if may_send_cert_status {
+                 debug!("Server may staple OCSP response");
+             }
+@@ -158,17 +151,12 @@
+                         &secrets.randoms.client,
+                         &secrets.master_secret,
+                     );
+-                    cx.common
+-                        .start_encryption_tls12(&secrets, Side::Client);
++                    cx.common.start_encryption_tls12(&secrets, Side::Client);
+ 
+                     // Since we're resuming, we verified the certificate and
+                     // proof of possession in the prior session.
+-                    cx.common.peer_certificates = Some(
+-                        resuming
+-                            .server_cert_chain()
+-                            .clone()
+-                            .into_owned(),
+-                    );
++                    cx.common.peer_certificates =
++                        Some(resuming.server_cert_chain().clone().into_owned());
+                     cx.common.handshake_kind = Some(HandshakeKind::Resumed);
+                     let cert_verified = verify::ServerCertVerified::assertion();
+                     let sig_verified = verify::HandshakeSignatureValid::assertion();
+@@ -464,14 +452,12 @@
+         )?;
+         self.transcript.add_message(&m);
+ 
+-        let kx = opaque_kx
+-            .unwrap_given_kxa(self.suite.kx)
+-            .ok_or_else(|| {
+-                cx.common.send_fatal_alert(
+-                    AlertDescription::DecodeError,
+-                    InvalidMessage::MissingKeyExchange,
+-                )
+-            })?;
++        let kx = opaque_kx.unwrap_given_kxa(self.suite.kx).ok_or_else(|| {
++            cx.common.send_fatal_alert(
++                AlertDescription::DecodeError,
++                InvalidMessage::MissingKeyExchange,
++            )
++        })?;
+ 
+         // Save the signature and signed parameters for later verification.
+         let mut kx_params = Vec::new();
+@@ -768,9 +754,7 @@
+         const NO_CONTEXT: Option<Vec<u8>> = None; // TLS 1.2 doesn't use a context.
+         let no_compression = None; // or compression
+         let client_auth = ClientAuthDetails::resolve(
+-            self.config
+-                .client_auth_cert_resolver
+-                .as_ref(),
++            self.config.client_auth_cert_resolver.as_ref(),
+             Some(&certreq.canames),
+             &signature_schemes,
+             NO_CONTEXT,
+@@ -889,10 +873,7 @@
+                 &st.server_cert.ocsp_response,
+                 now,
+             )
+-            .map_err(|err| {
+-                cx.common
+-                    .send_cert_verify_error_alert(err)
+-            })?;
++            .map_err(|err| cx.common.send_cert_verify_error_alert(err))?;
+ 
+         // 2.
+         // Build up the contents of the signed message.
+@@ -924,13 +905,18 @@
+                 ));
+             }
+ 
++            #[cfg(feature = "chrome-hello")]
++            if st.config.chrome_151 && !super::chrome_hello::signature_allowed(sig.scheme) {
++                return Err(cx.common.send_fatal_alert(
++                    AlertDescription::IllegalParameter,
++                    PeerMisbehaved::SignedHandshakeWithUnadvertisedSigScheme,
++                ));
++            }
++
+             st.config
+                 .verifier
+                 .verify_tls12_signature(&message, end_entity, sig)
+-                .map_err(|err| {
+-                    cx.common
+-                        .send_cert_verify_error_alert(err)
+-                })?
++                .map_err(|err| cx.common.send_cert_verify_error_alert(err))?
+         };
+         cx.common.peer_certificates = Some(st.server_cert.cert_chain.into_owned());
+ 
+@@ -977,9 +963,7 @@
+         let mut transcript = st.transcript;
+         emit_client_kx(&mut transcript, st.suite.kx, cx.common, kx.pub_key());
+         // Note: EMS handshake hash only runs up to ClientKeyExchange.
+-        let ems_seed = st
+-            .using_ems
+-            .then(|| transcript.current_hash());
++        let ems_seed = st.using_ems.then(|| transcript.current_hash());
+ 
+         // 4c.
+         if let Some(ClientAuthDetails::Verify { signer, .. }) = &st.client_auth {
+@@ -1011,11 +995,8 @@
+             &secrets.randoms.client,
+             &secrets.master_secret,
+         );
+-        cx.common
+-            .start_encryption_tls12(&secrets, Side::Client);
+-        cx.common
+-            .record_layer
+-            .start_encrypting();
++        cx.common.start_encryption_tls12(&secrets, Side::Client);
++        cx.common.record_layer.start_encrypting();
+ 
+         // 5.
+         emit_finished(&secrets, &mut transcript, cx.common);
+@@ -1156,9 +1137,7 @@
+         cx.common.check_aligned_handshake()?;
+ 
+         // Note: msgs layer validates trivial contents of CCS.
+-        cx.common
+-            .record_layer
+-            .start_decrypting();
++        cx.common.record_layer.start_decrypting();
+ 
+         Ok(Box::new(ExpectFinished {
+             config: self.config,
+@@ -1225,10 +1204,7 @@
+             self.session_id,
+             ticket,
+             self.secrets.master_secret(),
+-            cx.common
+-                .peer_certificates
+-                .clone()
+-                .unwrap_or_default(),
++            cx.common.peer_certificates.clone().unwrap_or_default(),
+             &self.config.verifier,
+             &self.config.client_auth_cert_resolver,
+             now,
+@@ -1281,14 +1257,11 @@
+ 
+         if st.resuming {
+             emit_ccs(cx.common);
+-            cx.common
+-                .record_layer
+-                .start_encrypting();
++            cx.common.record_layer.start_encrypting();
+             emit_finished(&st.secrets, &mut st.transcript, cx.common);
+         }
+ 
+-        cx.common
+-            .start_traffic(&mut cx.sendable_plaintext);
++        cx.common.start_traffic(&mut cx.sendable_plaintext);
+         Ok(Box::new(ExpectTraffic {
+             secrets: st.secrets,
+             _cert_verified: st.cert_verified,
+@@ -1332,9 +1305,7 @@
+         Self: 'm,
+     {
+         match m.payload {
+-            MessagePayload::ApplicationData(payload) => cx
+-                .common
+-                .take_received_plaintext(payload),
++            MessagePayload::ApplicationData(payload) => cx.common.take_received_plaintext(payload),
+             payload => {
+                 return Err(inappropriate_message(
+                     &payload,
+@@ -1351,14 +1322,12 @@
+         label: &[u8],
+         context: Option<&[u8]>,
+     ) -> Result<(), Error> {
+-        self.secrets
+-            .export_keying_material(output, label, context);
++        self.secrets.export_keying_material(output, label, context);
+         Ok(())
+     }
+ 
+     fn extract_secrets(&self) -> Result<PartiallyExtractedSecrets, Error> {
+-        self.secrets
+-            .extract_secrets(Side::Client)
++        self.secrets.extract_secrets(Side::Client)
+     }
+ 
+     fn into_external_state(self: Box<Self>) -> Result<Box<dyn KernelState + 'static>, Error> {
+diff --git a/src/client/tls13.rs b/src/client/tls13.rs
+--- a/src/client/tls13.rs
++++ b/src/client/tls13.rs
+@@ -10,12 +10,12 @@
+ use crate::check::inappropriate_handshake_message;
+ use crate::client::common::{ClientAuthDetails, ClientHelloDetails, ServerCertDetails};
+ use crate::client::ech::{self, EchState, EchStatus};
+-use crate::client::{ClientConfig, ClientSessionStore, hs};
++use crate::client::{hs, ClientConfig, ClientSessionStore};
+ use crate::common_state::{
+     CommonState, HandshakeFlightTls13, HandshakeKind, KxState, Protocol, Side, State,
+ };
++use crate::conn::kernel::{Direction, KernelContext, KernelState};
+ use crate::conn::ConnectionRandoms;
+-use crate::conn::kernel::{Direction, KernelContext, KernelState};
+ use crate::crypto::hash::Hash;
+ use crate::crypto::{ActiveKeyExchange, SharedSecret};
+ use crate::enums::{
+@@ -29,10 +29,10 @@
+ use crate::msgs::codec::{Codec, Reader};
+ use crate::msgs::enums::{ExtensionType, KeyUpdateRequest, NamedGroup};
+ use crate::msgs::handshake::{
+-    CERTIFICATE_MAX_SIZE_LIMIT, CertificatePayloadTls13, ClientExtensions, EchConfigPayload,
+-    HandshakeMessagePayload, HandshakePayload, KeyShareEntry, NewSessionTicketPayloadTls13,
+-    PresharedKeyBinder, PresharedKeyIdentity, PresharedKeyOffer, ServerExtensions,
+-    ServerHelloPayload,
++    CertificatePayloadTls13, ClientExtensions, EchConfigPayload, HandshakeMessagePayload,
++    HandshakePayload, KeyShareEntry, NewSessionTicketPayloadTls13, PresharedKeyBinder,
++    PresharedKeyIdentity, PresharedKeyOffer, ServerExtensions, ServerHelloPayload,
++    CERTIFICATE_MAX_SIZE_LIMIT,
+ };
+ use crate::msgs::message::{Message, MessagePayload};
+ use crate::msgs::persist::{self, Retrieved};
+@@ -44,10 +44,10 @@
+     KeyScheduleTraffic,
+ };
+ use crate::tls13::{
+-    Tls13CipherSuite, construct_client_verify_message, construct_server_verify_message,
++    construct_client_verify_message, construct_server_verify_message, Tls13CipherSuite,
+ };
+ use crate::verify::{self, DigitallySignedStruct};
+-use crate::{ConnectionTrafficSecrets, KeyLog, compress, crypto};
++use crate::{compress, crypto, ConnectionTrafficSecrets, KeyLog};
+ 
+ // Extensions we expect in plaintext in the ServerHello.
+ static ALLOWED_PLAINTEXT_EXTS: &[ExtensionType] = &[
+@@ -81,15 +81,12 @@
+ ) -> hs::NextStateOrError<'static> {
+     validate_server_hello(cx.common, server_hello)?;
+ 
+-    let their_key_share = server_hello
+-        .key_share
+-        .as_ref()
+-        .ok_or_else(|| {
+-            cx.common.send_fatal_alert(
+-                AlertDescription::MissingExtension,
+-                PeerMisbehaved::MissingKeyShare,
+-            )
+-        })?;
++    let their_key_share = server_hello.key_share.as_ref().ok_or_else(|| {
++        cx.common.send_fatal_alert(
++            AlertDescription::MissingExtension,
++            PeerMisbehaved::MissingKeyShare,
++        )
++    })?;
+ 
+     let ClientHelloInput {
+         config,
+@@ -203,9 +200,7 @@
+             // server hello message, and switch the relevant state to the copies for the
+             // inner client hello.
+             Some(mut accepted) => {
+-                accepted
+-                    .transcript
+-                    .add_message(server_hello_msg);
++                accepted.transcript.add_message(server_hello_msg);
+                 transcript = accepted.transcript;
+                 randoms.client = accepted.random.0;
+                 hello.sent_extensions = accepted.sent_extensions;
+@@ -263,9 +258,7 @@
+             return Ok(Self::Whole(our_key_share));
+         }
+ 
+-        let (component_group, _) = our_key_share
+-            .hybrid_component()
+-            .ok_or(())?;
++        let (component_group, _) = our_key_share.hybrid_component().ok_or(())?;
+ 
+         if component_group != their_key_share.group {
+             return Err(());
+@@ -323,6 +316,12 @@
+                 .expect("No kx groups configured")
+         });
+ 
++    #[cfg(feature = "chrome-hello")]
++    let group = if config.chrome_151 {
++        config.provider.kx_groups[0]
++    } else {
++        group
++    };
+     *kx_state = KxState::Start(group);
+     group.start()
+ }
+@@ -380,9 +379,7 @@
+     // PreSharedKey extension.
+     let max_early_data_size = resuming_session.max_early_data_size();
+     if config.enable_early_data && max_early_data_size > 0 && !doing_retry {
+-        cx.data
+-            .early_data
+-            .enable(max_early_data_size as usize);
++        cx.data.early_data.enable(max_early_data_size as usize);
+         exts.early_data_request = Some(());
+     }
+ 
+@@ -393,10 +390,7 @@
+     // the message it's contained in (!!!).
+     let obfuscated_ticket_age = resuming_session.obfuscated_ticket_age();
+ 
+-    let binder_len = resuming_suite
+-        .common
+-        .hash_provider
+-        .output_len();
++    let binder_len = resuming_suite.common.hash_provider.output_len();
+     let binder = vec![0u8; binder_len];
+ 
+     let psk_identity =
+@@ -455,6 +449,18 @@
+         return Err(common.send_fatal_alert(
+             AlertDescription::UnsupportedExtension,
+             PeerMisbehaved::UnsolicitedEncryptedExtension,
++        ));
++    }
++
++    #[cfg(feature = "chrome-hello")]
++    if hello.sent_extensions.contains(&ExtensionType::from(0x44cd))
++        && !exts.unknown_extensions.is_empty()
++    {
++        return Err(common.send_fatal_alert(
++            AlertDescription::UnsupportedExtension,
++            Error::General(
++                "Chrome151 peer negotiated an unsupported ALPS or GREASE extension".into(),
++            ),
+         ));
+     }
+ 
+@@ -529,9 +535,7 @@
+             // If we offered ECH, and it was rejected, store the retry configs (if any) from
+             // the server's ECH extension. We will return them in an error produced at the end
+             // of the handshake.
+-            (EchStatus::Rejected, ext) => ext
+-                .as_ref()
+-                .map(|ext| ext.retry_configs.to_vec()),
++            (EchStatus::Rejected, ext) => ext.as_ref().map(|ext| ext.retry_configs.to_vec()),
+             _ => None,
+         };
+ 
+@@ -566,15 +570,10 @@
+ 
+                 if was_early_traffic && !cx.common.early_traffic {
+                     // If no early traffic, set the encryption key for handshakes
+-                    self.key_schedule
+-                        .set_handshake_encrypter(cx.common);
++                    self.key_schedule.set_handshake_encrypter(cx.common);
+                 }
+ 
+-                cx.common.peer_certificates = Some(
+-                    resuming_session
+-                        .server_cert_chain()
+-                        .clone(),
+-                );
++                cx.common.peer_certificates = Some(resuming_session.server_cert_chain().clone());
+                 cx.common.handshake_kind = Some(HandshakeKind::Resumed);
+ 
+                 // We *don't* reverify the certificate chain here: resumption is a
+@@ -599,9 +598,7 @@
+                 if exts.early_data_ack.is_some() {
+                     return Err(PeerMisbehaved::EarlyDataExtensionWithoutResumption.into());
+                 }
+-                cx.common
+-                    .handshake_kind
+-                    .get_or_insert(HandshakeKind::Full);
++                cx.common.handshake_kind.get_or_insert(HandshakeKind::Full);
+ 
+                 Ok(if self.hello.offered_cert_compression {
+                     Box::new(ExpectCertificateOrCompressedCertificateOrCertReq {
+@@ -930,13 +927,8 @@
+             .cloned();
+ 
+         let client_auth = ClientAuthDetails::resolve(
+-            self.config
+-                .client_auth_cert_resolver
+-                .as_ref(),
+-            certreq
+-                .extensions
+-                .authority_names
+-                .as_deref(),
++            self.config.client_auth_cert_resolver.as_ref(),
++            certreq.extensions.authority_names.as_deref(),
+             &compat_sigschemes,
+             Some(certreq.context.0.clone()),
+             compat_compressor,
+@@ -1045,11 +1037,7 @@
+         trace!(
+             "Server certificate decompressed using {:?} ({} bytes -> {})",
+             compressed_cert.alg,
+-            compressed_cert
+-                .compressed
+-                .0
+-                .bytes()
+-                .len(),
++            compressed_cert.compressed.0.bytes().len(),
+             compressed_cert.uncompressed_len,
+         );
+ 
+@@ -1121,9 +1109,7 @@
+ 
+         let end_entity_ocsp = cert_chain.end_entity_ocsp().to_vec();
+         let server_cert = ServerCertDetails::new(
+-            cert_chain
+-                .into_certificate_chain()
+-                .into_owned(),
++            cert_chain.into_certificate_chain().into_owned(),
+             end_entity_ocsp,
+         );
+ 
+@@ -1196,10 +1182,15 @@
+                 &self.server_cert.ocsp_response,
+                 now,
+             )
+-            .map_err(|err| {
+-                cx.common
+-                    .send_cert_verify_error_alert(err)
+-            })?;
++            .map_err(|err| cx.common.send_cert_verify_error_alert(err))?;
++
++        #[cfg(feature = "chrome-hello")]
++        if self.config.chrome_151 && !super::chrome_hello::signature_allowed(cert_verify.scheme) {
++            return Err(cx.common.send_fatal_alert(
++                AlertDescription::IllegalParameter,
++                PeerMisbehaved::SignedHandshakeWithUnadvertisedSigScheme,
++            ));
++        }
+ 
+         // 2. Verify their signature on the handshake.
+         let handshake_hash = self.transcript.current_hash();
+@@ -1211,10 +1202,7 @@
+                 end_entity,
+                 cert_verify,
+             )
+-            .map_err(|err| {
+-                cx.common
+-                    .send_cert_verify_error_alert(err)
+-            })?;
++            .map_err(|err| cx.common.send_cert_verify_error_alert(err))?;
+ 
+         cx.common.peer_certificates = Some(self.server_cert.cert_chain.into_owned());
+         self.transcript.add_message(&m);
+@@ -1277,9 +1265,7 @@
+     certkey: Option<&CertifiedKey>,
+     auth_context: Option<Vec<u8>>,
+ ) {
+-    let certs = certkey
+-        .map(|ck| ck.cert.as_ref())
+-        .unwrap_or(&[][..]);
++    let certs = certkey.map(|ck| ck.cert.as_ref()).unwrap_or(&[][..]);
+     let mut cert_payload = CertificatePayloadTls13::new(certs.iter(), None);
+     cert_payload.context = PayloadU8::new(auth_context.unwrap_or_default());
+ 
+@@ -1356,9 +1342,7 @@
+             require_handshake_msg!(m, HandshakeType::Finished, HandshakePayload::Finished)?;
+ 
+         let handshake_hash = st.transcript.current_hash();
+-        let expect_verify_data = st
+-            .key_schedule
+-            .sign_server_finish(&handshake_hash);
++        let expect_verify_data = st.key_schedule.sign_server_finish(&handshake_hash);
+ 
+         let fin = match ConstantTimeEq::ct_eq(expect_verify_data.as_ref(), finished.bytes()).into()
+         {
+@@ -1379,8 +1363,7 @@
+             emit_end_of_early_data_tls13(&mut st.transcript, cx.common);
+             cx.common.early_traffic = false;
+             cx.data.early_data.finished();
+-            st.key_schedule
+-                .set_handshake_encrypter(cx.common);
++            st.key_schedule.set_handshake_encrypter(cx.common);
+         }
+ 
+         let mut flight = HandshakeFlightTls13::new(&mut st.transcript);
+@@ -1424,9 +1407,8 @@
+             }
+         }
+ 
+-        let (key_schedule_pre_finished, verify_data) = st
+-            .key_schedule
+-            .into_pre_finished_client_traffic(
++        let (key_schedule_pre_finished, verify_data) =
++            st.key_schedule.into_pre_finished_client_traffic(
+                 hash_after_handshake,
+                 flight.transcript.current_hash(),
+                 &*st.config.key_log,
+@@ -1463,8 +1445,7 @@
+             return Err(ech::fatal_alert_required(st.ech_retry_configs, cx.common));
+         }
+ 
+-        cx.common
+-            .start_traffic(&mut cx.sendable_plaintext);
++        cx.common.start_traffic(&mut cx.sendable_plaintext);
+ 
+         let st = ExpectTraffic {
+             config: st.config.clone(),
+@@ -1510,9 +1491,7 @@
+         cx: &mut KernelContext<'_>,
+         nst: &NewSessionTicketPayloadTls13,
+     ) -> Result<(), Error> {
+-        let secret = self
+-            .resumption
+-            .derive_ticket_psk(&nst.nonce.0);
++        let secret = self.resumption.derive_ticket_psk(&nst.nonce.0);
+ 
+         let now = self.config.current_time()?;
+ 
+@@ -1521,17 +1500,13 @@
+             self.suite,
+             nst.ticket.clone(),
+             secret.as_ref(),
+-            cx.peer_certificates
+-                .cloned()
+-                .unwrap_or_default(),
++            cx.peer_certificates.cloned().unwrap_or_default(),
+             &self.config.verifier,
+             &self.config.client_auth_cert_resolver,
+             now,
+             nst.lifetime,
+             nst.age_add,
+-            nst.extensions
+-                .max_early_data_size
+-                .unwrap_or_default(),
++            nst.extensions.max_early_data_size.unwrap_or_default(),
+         );
+ 
+         if cx.is_quic() {
+@@ -1561,10 +1536,7 @@
+             protocol: cx.common.protocol,
+             quic: &cx.common.quic,
+         };
+-        cx.common.tls13_tickets_received = cx
+-            .common
+-            .tls13_tickets_received
+-            .saturating_add(1);
++        cx.common.tls13_tickets_received = cx.common.tls13_tickets_received.saturating_add(1);
+         self.handle_new_ticket_impl(&mut kcx, nst)
+     }
+ 
+@@ -1584,13 +1556,11 @@
+         common.check_aligned_handshake()?;
+ 
+         if common.should_update_key(key_update_request)? {
+-            self.key_schedule
+-                .update_encrypter_and_notify(common);
++            self.key_schedule.update_encrypter_and_notify(common);
+         }
+ 
+         // Update our read-side keys.
+-        self.key_schedule
+-            .update_decrypter(common);
++        self.key_schedule.update_decrypter(common);
+         Ok(())
+     }
+ }
+@@ -1605,9 +1575,7 @@
+         Self: 'm,
+     {
+         match m.payload {
+-            MessagePayload::ApplicationData(payload) => cx
+-                .common
+-                .take_received_plaintext(payload),
++            MessagePayload::ApplicationData(payload) => cx.common.take_received_plaintext(payload),
+             MessagePayload::Handshake {
+                 parsed: HandshakeMessagePayload(HandshakePayload::NewSessionTicketTls13(new_ticket)),
+                 ..
+@@ -1644,8 +1612,7 @@
+     }
+ 
+     fn extract_secrets(&self) -> Result<PartiallyExtractedSecrets, Error> {
+-        self.key_schedule
+-            .extract_secrets(Side::Client)
++        self.key_schedule.extract_secrets(Side::Client)
+     }
+ 
+     fn into_external_state(self: Box<Self>) -> Result<Box<dyn KernelState + 'static>, Error> {
+@@ -1659,11 +1626,10 @@
+ 
+ impl KernelState for ExpectTraffic {
+     fn update_secrets(&mut self, dir: Direction) -> Result<ConnectionTrafficSecrets, Error> {
+-        self.key_schedule
+-            .refresh_traffic_secret(match dir {
+-                Direction::Transmit => Side::Client,
+-                Direction::Receive => Side::Server,
+-            })
++        self.key_schedule.refresh_traffic_secret(match dir {
++            Direction::Transmit => Side::Client,
++            Direction::Receive => Side::Server,
++        })
+     }
+ 
+     fn handle_new_session_ticket(
+@@ -1691,8 +1657,7 @@
+             HandshakeType::NewSessionTicket,
+             HandshakePayload::NewSessionTicketTls13
+         )?;
+-        self.0
+-            .handle_new_ticket_tls13(cx, nst)?;
++        self.0.handle_new_ticket_tls13(cx, nst)?;
+         Ok(self)
+     }
+ 
+@@ -1702,8 +1667,7 @@
+         label: &[u8],
+         context: Option<&[u8]>,
+     ) -> Result<(), Error> {
+-        self.0
+-            .export_keying_material(output, label, context)
++        self.0.export_keying_material(output, label, context)
+     }
+ 
+     fn into_external_state(self: Box<Self>) -> Result<Box<dyn KernelState + 'static>, Error> {
+diff --git a/src/lib.rs b/src/lib.rs
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -533,20 +533,20 @@
+ /// [`unbuffered-client`]: https://github.com/rustls/rustls/blob/main/examples/src/bin/unbuffered-client.rs
+ /// [`unbuffered-server`]: https://github.com/rustls/rustls/blob/main/examples/src/bin/unbuffered-server.rs
+ pub mod unbuffered {
+-    pub use crate::conn::UnbufferedConnectionCommon;
+     pub use crate::conn::unbuffered::{
+         AppDataRecord, ConnectionState, EncodeError, EncodeTlsData, EncryptError,
+         InsufficientSizeError, ReadEarlyData, ReadTraffic, TransmitTlsData, UnbufferedStatus,
+         WriteTraffic,
+     };
++    pub use crate::conn::UnbufferedConnectionCommon;
+ }
+ 
+ // The public interface is:
+ pub use crate::builder::{ConfigBuilder, ConfigSide, WantsVerifier, WantsVersions};
+ pub use crate::common_state::{CommonState, HandshakeKind, IoState, Side};
++pub use crate::conn::{kernel, ConnectionCommon, SideData};
+ #[cfg(feature = "std")]
+ pub use crate::conn::{Connection, Reader, Writer};
+-pub use crate::conn::{ConnectionCommon, SideData, kernel};
+ pub use crate::enums::{
+     AlertDescription, CertificateCompressionAlgorithm, CipherSuite, ContentType, HandshakeType,
+     ProtocolVersion, SignatureAlgorithm, SignatureScheme,
+@@ -575,12 +575,14 @@
+ pub use crate::tls12::Tls12CipherSuite;
+ pub use crate::tls13::Tls13CipherSuite;
+ pub use crate::verify::DigitallySignedStruct;
+-pub use crate::versions::{ALL_VERSIONS, DEFAULT_VERSIONS, SupportedProtocolVersion};
++pub use crate::versions::{SupportedProtocolVersion, ALL_VERSIONS, DEFAULT_VERSIONS};
+ pub use crate::webpki::RootCertStore;
+ 
+ /// Items for use in a client.
+ pub mod client {
+     pub(super) mod builder;
++    #[cfg(feature = "chrome-hello")]
++    pub(crate) mod chrome_hello;
+     mod client_conn;
+     mod common;
+     mod ech;
+@@ -613,8 +615,8 @@
+ 
+     pub use crate::msgs::persist::{Tls12ClientSessionValue, Tls13ClientSessionValue};
+     pub use crate::webpki::{
+-        ServerCertVerifierBuilder, VerifierBuilderError, WebPkiServerVerifier,
+-        verify_server_cert_signed_by_trust_anchor, verify_server_name,
++        verify_server_cert_signed_by_trust_anchor, verify_server_name, ServerCertVerifierBuilder,
++        VerifierBuilderError, WebPkiServerVerifier,
+     };
+ }
+ 
+@@ -682,7 +684,7 @@
+ /// Message signing interfaces.
+ pub mod sign {
+     pub use crate::crypto::signer::{
+-        CertifiedKey, Signer, SigningKey, SingleCertAndKey, public_key_to_spki,
++        public_key_to_spki, CertifiedKey, Signer, SigningKey, SingleCertAndKey,
+     };
+ }
+ 
+@@ -707,12 +709,12 @@
+ #[cfg(any(feature = "std", feature = "hashbrown"))]
+ mod hash_map {
+     #[cfg(feature = "std")]
++    pub(crate) use std::collections::hash_map::Entry;
++    #[cfg(feature = "std")]
+     pub(crate) use std::collections::HashMap;
+-    #[cfg(feature = "std")]
+-    pub(crate) use std::collections::hash_map::Entry;
+-
++
++    #[cfg(all(not(feature = "std"), feature = "hashbrown"))]
++    pub(crate) use hashbrown::hash_map::Entry;
+     #[cfg(all(not(feature = "std"), feature = "hashbrown"))]
+     pub(crate) use hashbrown::HashMap;
+-    #[cfg(all(not(feature = "std"), feature = "hashbrown"))]
+-    pub(crate) use hashbrown::hash_map::Entry;
+-}
++}
+diff --git a/src/msgs/handshake.rs b/src/msgs/handshake.rs
+--- a/src/msgs/handshake.rs
++++ b/src/msgs/handshake.rs
+@@ -20,7 +20,7 @@
+ #[cfg(feature = "tls12")]
+ use crate::ffdhe_groups::FfdheGroup;
+ use crate::log::warn;
+-use crate::msgs::base::{MaybeEmpty, NonEmpty, Payload, PayloadU8, PayloadU16, PayloadU24};
++use crate::msgs::base::{MaybeEmpty, NonEmpty, Payload, PayloadU16, PayloadU24, PayloadU8};
+ use crate::msgs::codec::{
+     self, Codec, LengthPrefixedBuffer, ListLength, Reader, TlsListElement, TlsListIter,
+ };
+@@ -308,9 +308,7 @@
+         ServerNameType::HostName.encode(server_name_list.buf);
+         let name_slice = dns_name.as_ref().as_bytes();
+         (name_slice.len() as u16).encode(server_name_list.buf);
+-        server_name_list
+-            .buf
+-            .extend_from_slice(name_slice);
++        server_name_list.buf.extend_from_slice(name_slice);
+     }
+ 
+     fn read(r: &mut Reader<'a>) -> Result<Self, InvalidMessage> {
+@@ -978,6 +976,8 @@
+ 
+         /// Extensions that must appear contiguously.
+         pub(crate) contiguous_extensions: Vec<ExtensionType>,
++        #[cfg(feature = "chrome-hello")]
++        pub(crate) chrome: Option<crate::client::chrome_hello::ChromeExtensions>,
+     }
+ }
+ 
+@@ -1010,6 +1010,8 @@
+             encrypted_client_hello_outer,
+             order_seed,
+             contiguous_extensions,
++            #[cfg(feature = "chrome-hello")]
++            chrome,
+         } = self;
+         ClientExtensions {
+             server_name: server_name.map(|x| x.into_owned()),
+@@ -1038,17 +1040,20 @@
+             encrypted_client_hello_outer,
+             order_seed,
+             contiguous_extensions,
++            #[cfg(feature = "chrome-hello")]
++            chrome,
+         }
+     }
+ 
+     pub(crate) fn used_extensions_in_encoding_order(&self) -> Vec<ExtensionType> {
++        #[cfg(feature = "chrome-hello")]
++        if let Some(chrome) = &self.chrome {
++            return chrome.order(self.collect_used());
++        }
+         let mut exts = self.order_insensitive_extensions_in_random_order();
+         exts.extend(&self.contiguous_extensions);
+ 
+-        if self
+-            .encrypted_client_hello_outer
+-            .is_some()
+-        {
++        if self.encrypted_client_hello_outer.is_some() {
+             exts.push(ExtensionType::EncryptedClientHelloOuterExtensions);
+         }
+         if self.encrypted_client_hello.is_some() {
+@@ -1105,6 +1110,14 @@
+ 
+         let body = LengthPrefixedBuffer::new(ListLength::U16, bytes);
+         for item in order {
++            #[cfg(feature = "chrome-hello")]
++            if self
++                .chrome
++                .as_ref()
++                .is_some_and(|chrome| chrome.encode_special(item, self, body.buf))
++            {
++                continue;
++            }
+             self.encode_one(item, body.buf);
+         }
+     }
+@@ -1142,9 +1155,7 @@
+     // ASCII encoding without a trailing dot"
+     if dns_name_str.ends_with('.') {
+         let trimmed = &dns_name_str[0..dns_name_str.len() - 1];
+-        DnsName::try_from(trimmed)
+-            .unwrap()
+-            .to_owned()
++        DnsName::try_from(trimmed).unwrap().to_owned()
+     } else {
+         dns_name.to_owned()
+     }
+@@ -1377,11 +1388,7 @@
+         self.key_shares
+             .as_ref()
+             .map(|entries| {
+-                has_duplicates::<_, _, u16>(
+-                    entries
+-                        .iter()
+-                        .map(|kse| u16::from(kse.group)),
+-                )
++                has_duplicates::<_, _, u16>(entries.iter().map(|kse| u16::from(kse.group)))
+             })
+             .unwrap_or_default()
+     }
+@@ -1494,11 +1501,7 @@
+     fn encode(&self, bytes: &mut Vec<u8>) {
+         let extensions = LengthPrefixedBuffer::new(ListLength::U16, bytes);
+ 
+-        for ext in self
+-            .order
+-            .as_deref()
+-            .unwrap_or(Self::ALL_EXTENSIONS)
+-        {
++        for ext in self.order.as_deref().unwrap_or(Self::ALL_EXTENSIONS) {
+             self.encode_one(*ext, extensions.buf);
+         }
+     }
+@@ -1571,12 +1574,7 @@
+             //
+             // See draft-ietf-tls-esni-18 7.2.1:
+             // <https://datatracker.ietf.org/doc/html/draft-ietf-tls-esni-18#name-sending-helloretryrequest-2>
+-            Encoding::EchConfirmation
+-                if self
+-                    .extensions
+-                    .encrypted_client_hello
+-                    .is_some() =>
+-            {
++            Encoding::EchConfirmation if self.extensions.encrypted_client_hello.is_some() => {
+                 let hrr_confirmation = [0u8; 8];
+                 HelloRetryRequestExtensions {
+                     encrypted_client_hello: Some(Payload::Borrowed(&hrr_confirmation)),
+@@ -1645,8 +1643,7 @@
+             extensions,
+         };
+ 
+-        r.expect_empty("ServerHelloPayload")
+-            .map(|_| ret)
++        r.expect_empty("ServerHelloPayload").map(|_| ret)
+     }
+ }
+ 
+@@ -1684,12 +1681,7 @@
+ 
+ impl CertificateChain<'_> {
+     pub(crate) fn into_owned(self) -> CertificateChain<'static> {
+-        CertificateChain(
+-            self.0
+-                .into_iter()
+-                .map(|c| c.into_owned())
+-                .collect(),
+-        )
++        CertificateChain(self.0.into_iter().map(|c| c.into_owned()).collect())
+     }
+ }
+ 
+@@ -1874,23 +1866,12 @@
+             .extensions
+             .status
+             .as_ref()
+-            .map(|status| {
+-                status
+-                    .ocsp_response
+-                    .0
+-                    .clone()
+-                    .into_vec()
+-            })
++            .map(|status| status.ocsp_response.0.clone().into_vec())
+             .unwrap_or_default()
+     }
+ 
+     pub(crate) fn into_certificate_chain(self) -> CertificateChain<'a> {
+-        CertificateChain(
+-            self.entries
+-                .into_iter()
+-                .map(|e| e.cert)
+-                .collect(),
+-        )
++        CertificateChain(self.entries.into_iter().map(|e| e.cert).collect())
+     }
+ }
+ 
+@@ -2793,9 +2774,7 @@
+ 
+     pub(crate) fn encoding_for_binder_signing(&self) -> Vec<u8> {
+         let mut ret = self.get_encoding();
+-        let ret_len = ret
+-            .len()
+-            .saturating_sub(self.total_binder_length());
++        let ret_len = ret.len().saturating_sub(self.total_binder_length());
+         ret.truncate(ret_len);
+         ret
+     }
+@@ -2805,9 +2784,7 @@
+             HandshakePayload::ClientHello(ch) => match &ch.preshared_key_offer {
+                 Some(offer) => {
+                     let mut binders_encoding = Vec::new();
+-                    offer
+-                        .binders
+-                        .encode(&mut binders_encoding);
++                    offer.binders.encode(&mut binders_encoding);
+                     binders_encoding.len()
+                 }
+                 _ => 0,
+@@ -2818,9 +2795,7 @@
+ 
+     pub(crate) fn payload_encode(&self, bytes: &mut Vec<u8>, encoding: Encoding) {
+         // output type, length, and encoded payload
+-        self.0
+-            .wire_handshake_type()
+-            .encode(bytes);
++        self.0.wire_handshake_type().encode(bytes);
+ 
+         let nested = LengthPrefixedBuffer::new(
+             ListLength::U24 {
+@@ -2893,8 +2868,7 @@
+         self.config_id.encode(bytes);
+         self.kem_id.encode(bytes);
+         self.public_key.encode(bytes);
+-        self.symmetric_cipher_suites
+-            .encode(bytes);
++        self.symmetric_cipher_suites.encode(bytes);
+     }
+ 
+     fn read(r: &mut Reader<'_>) -> Result<Self, InvalidMessage> {
+@@ -2919,11 +2893,7 @@
+     /// Returns true if there is more than one extension of a given
+     /// type.
+     pub(crate) fn has_duplicate_extension(&self) -> bool {
+-        has_duplicates::<_, _, u16>(
+-            self.extensions
+-                .iter()
+-                .map(|ext| ext.ext_type()),
+-        )
++        has_duplicates::<_, _, u16>(self.extensions.iter().map(|ext| ext.ext_type()))
+     }
+ 
+     /// Returns true if there is at least one mandatory unsupported extension.
+@@ -2952,13 +2922,9 @@
+             key_config: HpkeKeyConfig::read(r)?,
+             maximum_name_length: u8::read(r)?,
+             public_name: {
+-                DnsName::try_from(
+-                    PayloadU8::<MaybeEmpty>::read(r)?
+-                        .0
+-                        .as_slice(),
+-                )
+-                .map_err(|_| InvalidMessage::InvalidServerName)?
+-                .to_owned()
++                DnsName::try_from(PayloadU8::<MaybeEmpty>::read(r)?.0.as_slice())
++                    .map_err(|_| InvalidMessage::InvalidServerName)?
++                    .to_owned()
+             },
+             extensions: Vec::read(r)?,
+         })
+@@ -3050,8 +3016,7 @@
+             _ => Self::Unknown(UnknownExtension::read(typ, &mut sub)),
+         };
+ 
+-        sub.expect_empty("EchConfigExtension")
+-            .map(|_| ext)
++        sub.expect_empty("EchConfigExtension").map(|_| ext)
+     }
+ }
+ 
+@@ -3197,17 +3162,11 @@
+ }
+ 
+ fn low_quality_integer_hash(mut x: u32) -> u32 {
+-    x = x
+-        .wrapping_add(0x7ed55d16)
+-        .wrapping_add(x << 12);
++    x = x.wrapping_add(0x7ed55d16).wrapping_add(x << 12);
+     x = (x ^ 0xc761c23c) ^ (x >> 19);
+-    x = x
+-        .wrapping_add(0x165667b1)
+-        .wrapping_add(x << 5);
++    x = x.wrapping_add(0x165667b1).wrapping_add(x << 5);
+     x = x.wrapping_add(0xd3a2646c) ^ (x << 9);
+-    x = x
+-        .wrapping_add(0xfd7046c5)
+-        .wrapping_add(x << 3);
++    x = x.wrapping_add(0xfd7046c5).wrapping_add(x << 3);
+     x = (x ^ 0xb55a4f09) ^ (x >> 16);
+     x
+ }
+@@ -3223,9 +3182,7 @@
+             payload: Payload::new(vec![0x42]),
+         });
+         let mut config = config_template();
+-        config
+-            .extensions
+-            .push(unknown_ext.clone());
++        config.extensions.push(unknown_ext.clone());
+         config.extensions.push(unknown_ext);
+ 
+         assert!(config.has_duplicate_extension());
+@@ -3239,9 +3196,7 @@
+             payload: Payload::new(vec![0x42]),
+         });
+         let mut config = config_template();
+-        config
+-            .extensions
+-            .push(mandatory_unknown_ext);
++        config.extensions.push(mandatory_unknown_ext);
+ 
+         assert!(!config.has_duplicate_extension());
+         assert!(config.has_unknown_mandatory_extension());

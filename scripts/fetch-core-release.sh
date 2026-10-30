@@ -5,6 +5,10 @@ source_root="${1:?pinned Core source directory}"
 output="${2:?release download directory}"
 repository="${3:-foxhole-team/foxhole-core}"
 revision="$(tr -d '[:space:]' < config/foxcore-revision.txt)"
+if [[ -f config/foxcore-source-checkout.json ]]; then
+  echo 'Explicit Core source/producer binding requires the signed LAB handoff delivery adapter; legacy archive fetch is refused.' >&2
+  exit 1
+fi
 version="$(sed -n 's/^version = "\([^"]*\)"$/\1/p' "$source_root/Cargo.toml" | head -n 1)"
 [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ && "$revision" =~ ^[0-9a-f]{40}$ ]]
 mkdir -p "$output"

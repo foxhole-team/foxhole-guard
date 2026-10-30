@@ -49,6 +49,13 @@ internal class TrafficSettingsSafeModeTest : SettingsRepositoryTestSupport() {
     }
 
     @Test
+    fun `custom mtu cannot fall below the native ipv6 minimum`() {
+        assertEquals(1280, updateTrafficMtuIn(pristine, 576).traffic.mtu)
+        assertEquals(1280, pristine.copy(traffic = pristine.traffic.copy(mtu = 900)).normalized().traffic.mtu)
+        assertEquals(1500, pristine.traffic.mtu)
+    }
+
+    @Test
     fun `prefer ipv6 survives normalization and a reread on a fresh install`() {
         val stored = updatePreferIpv6In(pristine, true).normalized()
 

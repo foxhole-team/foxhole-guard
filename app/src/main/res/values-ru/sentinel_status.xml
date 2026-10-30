@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="cli_status_sentinel_notices">Уведомления Sentinel</string>
+    <string name="cli_status_sentinel_traffic_notices">Сигналы трафика</string>
+    <string name="cli_status_sentinel_static_notices">Статические проверки</string>
+    <string name="cli_status_sentinel_install_notices">Установка приложений</string>
+    <string name="cli_status_notices_off">Выключены в настройках</string>
+    <string name="cli_status_notices_allowed">Разрешены Android</string>
+    <string name="cli_status_notices_android_blocked">Заблокированы Android</string>
+    <string name="cli_status_notices_channel_blocked">Канал уведомлений выключен</string>
+    <string name="cli_status_notices_channel_pending">Канал уведомлений ещё не создан</string>
+    <string name="cli_status_notices_partly_blocked">Часть каналов уведомлений выключена</string>
+    <string name="cli_status_notices_unavailable">Доступ к уведомлениям не определён</string>
+</resources>

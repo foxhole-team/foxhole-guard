@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="error_flow_attribution_unavailable">アプリごとのファイアウォールとルーティングには Android 10 以降が必要です。この端末では、この設定で起動できません。</string>
+</resources>

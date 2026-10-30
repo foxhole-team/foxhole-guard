@@ -62,6 +62,9 @@ class FoxCoreConfigTranslator(
         expectedPolicyRevision: Long? = null,
         dnsRuleSetBootstrap: FoxCoreDnsRuleSetBootstrap? = null,
     ): FoxCoreSessionConfig {
+        if (!session.coreTuning.isValid()) {
+            rejectFoxCoreConfig(FoxCoreConfigRejection.INVALID_SHAPE, "$.core_tuning")
+        }
         session.foxCoreConfig?.let { prepared ->
             return prepared.withExpectedPolicyRevision(expectedPolicyRevision)
         }
@@ -78,6 +81,7 @@ class FoxCoreConfigTranslator(
             "$",
         )
         validateNonNetworkSurfaces(root)
+        val bootstrap = translateBootstrapDns(root)
 
         val tun = translateFoxCoreTun(root)
         val controlProxy = translateFoxCoreControlProxy(root)
@@ -98,7 +102,7 @@ class FoxCoreConfigTranslator(
                 forceFakeIpDns = session.forceFakeIpDns,
                 quarantineNewApps = session.quarantineNewApps,
                 knownApplications = session.knownApplications,
-            )
+            ).withCoreTuning(session.coreTuning)
         val advertisedDnsServers =
             if (outboundPlan.primaryIsPacketTunnel) {
                 listOfNotNull(policy.packetTunnelDnsAdvertise)
@@ -119,6 +123,11 @@ class FoxCoreConfigTranslator(
             buildJsonObject {
                 put("schema_version", FOXCORE_CONFIG_SCHEMA_VERSION)
                 put("outbound", outboundPlan.primary)
+                projectProfileBootstrapDns(
+                    bootstrap,
+                    listOf(outboundPlan.primary) + outboundPlan.named.map { it.asFoxCoreObject("$.outbounds") },
+                )
+                    ?.let { put("bootstrap_dns", it) }
                 if (outboundPlan.named.isNotEmpty()) {
                     put("outbounds", outboundPlan.named)
                 }
@@ -130,17 +139,13 @@ class FoxCoreConfigTranslator(
                         resolvedTun.ipv6Address?.let { put("ipv6", it) }
                     },
                 )
-                if (session.protocolHint == ProtocolHint.LOCAL_GUARD || controlProxy != null) {
-                    put(
-                        "runtime",
-                        buildJsonObject {
-                            if (session.protocolHint == ProtocolHint.LOCAL_GUARD) {
-                                put("local_guard", true)
-                            }
-                            controlProxy?.let { put("control_proxy", it) }
-                        },
+                val runtime =
+                    foxCoreRuntimeConfig(
+                        session.coreTuning,
+                        session.protocolHint == ProtocolHint.LOCAL_GUARD,
+                        controlProxy
                     )
-                }
+                if (runtime.isNotEmpty()) put("runtime", runtime)
                 put("dns", policy.dns)
                 if (policy.routes.isNotEmpty()) {
                     put("routes", policy.routes)
@@ -154,6 +159,15 @@ class FoxCoreConfigTranslator(
             dnsRuleSetBootstrap = dnsRuleSetBootstrap,
         )
     }
+
+    private fun translateBootstrapDns(root: JsonObject): JsonObject? =
+        try {
+            normalizeProfileBootstrapDns(root)
+        } catch (_: IllegalArgumentException) {
+            rejectFoxCoreConfig(FoxCoreConfigRejection.INVALID_SHAPE, "$.bootstrap_dns")
+        } catch (_: IllegalStateException) {
+            rejectFoxCoreConfig(FoxCoreConfigRejection.POLICY_UNREPRESENTABLE, "$.bootstrap_dns")
+        }
 
     private fun FoxCoreSessionConfig.withExpectedPolicyRevision(
         expectedPolicyRevision: Long?,
@@ -241,6 +255,7 @@ class FoxCoreConfigTranslator(
                 "endpoints",
                 "route",
                 "experimental",
+                "bootstrap_dns",
             )
     }
 }

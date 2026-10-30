@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="cli_release_notes_title">What’s new</string>
+    <string name="cli_release_notes_runtime">New subscription formats: compatible Clash/Mihomo YAML/JSON and Outline JSON.</string>
+    <string name="cli_release_notes_sentinel_network">Import v2rayTun links and FoxHole Guard JSON profiles; paste SIP008 JSON directly.</string>
+    <string name="cli_release_notes_sentinel_apps">Import v2rayTun links and FoxHole Guard JSON profiles; paste SIP008 JSON directly.</string>
+    <string name="cli_release_notes_backup">Added User and Expert interface modes.</string>
+    <string name="cli_release_notes_core">Install and manage VPN on a router running FoxHole OpenWrt Client, directly from the app.</string>
+    <string name="cli_release_notes_details">Details</string>
+    <string name="cli_release_notes_details_body">Subscription refresh, DNS, backups and FoxHole Sentinel app checks have also been improved.\nClash/Mihomo imports supported server entries from YAML/JSON; client rules and external providers are not imported. Outline supports standard JSON and dynamic ssconf:// keys.\nThe OpenWrt switch enables phone management after setup or pairing. Switching it off leaves the router VPN running.</string>
+    <string name="cli_release_notes_ack_failed">Could not save the notice choice. Please try again.</string>
+</resources>

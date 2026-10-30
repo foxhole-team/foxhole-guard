@@ -143,7 +143,7 @@ toolchain; no prebuilt transport executable is taken from a third-party bundle.
   contributors**.
 - License: **MIT**. The exact upstream notice is vendored at
   `third_party/icons/Tabler-MIT.txt`.
-- Shipped as 40 Android Vector conversions whose path data matches the pinned
+- Shipped as 41 Android Vector conversions whose path data matches the pinned
   24x24 outline SVGs. The Tor half-onion is the single FoxHole-owned exception.
 
 ---
@@ -219,7 +219,7 @@ release dependency inventory. The current Gradle CycloneDX output does not carry
 licence fields. Exact texts for the bundled native Android dependencies are
 therefore copied independently to `assets/licenses/android/`:
 
-- **SQLCipher Android 4.17.0** — BSD-3-Clause —
+- **SQLCipher Android 4.19.1** — BSD-3-Clause —
   https://github.com/sqlcipher/sqlcipher-android
 - **lazysodium-android** — MPL-2.0 — https://github.com/terl/lazysodium-android
 - **libsodium 1.0.20** — ISC — https://github.com/jedisct1/libsodium
@@ -237,3 +237,40 @@ The pinned Conjure v0.9.1 dependency uses STUN v3.1.5 for both client import sit
 folder and checks the original file hashes before applying this import migration.
 The original module identity and licenses remain in the delivery inventory;
 the patch script and input hashes are included in the bundled notices.
+
+## Sentinel static scanner
+
+The optional isolated scanner builds from `native/sentinel-yara` in the pinned FoxHole Core
+revision. Its standalone locked graph selects YARA-X1.21.0 and Wasmtime49.0.2 with Pulley;
+three explicit upstream patches are recorded in the bundled provenance. It does not reuse
+the VPN engine workspace or a downloaded compiled-rule blob.
+
+The APK licence bundle includes `sentinel/third-party/licenses.json`, the dependency notices,
+patches, `vendor/PROVENANCE.json`, the standalone CycloneDX SBOM and the exact Core revision.
+`SHA256SUMS` covers these files. The published ascii_tree crate declares MIT but its original
+licence file and copyright notice are unavailable; its declaration preserves that limitation
+and explicitly labels the SPDX template rather than inventing an owner.
+
+## Separately rebuilt Android native dependencies
+
+Graphics-path keeps its original Maven Java API `1.0.1`. Its native library is
+rebuilt from AndroidX release commit `8a05a22af450d589ef911d772a001a49dcb05b71`
+with NDK `29.0.14206865` and 16-KiB maximum/common linker page sizes.
+The twelve upstream SHA-256 and Git blob pins are checked before request timestamps
+are removed from the publisher transport to form a deterministic source tar.
+
+The original lazysodium Java AAR stays at `5.2.0`. The native libsodium `1.0.20`
+source includes the exact upstream CVE-2025-69277 backport
+`ad3004ec8731730e93fcfbbc824e67eadc1c1bae`. The modified source, patch and original
+ISC text remain separately recorded.
+
+Original Maven artifacts are verified independently. `licenses/derived-native/`
+contains the derived native producer/source/toolchain records and original
+notices. These records describe build and static checks; Android runtime and
+release acceptance remain separate.
+
+`licenses/maven-runtime/` preserves original legal files from the selected Maven
+runtime archives, POM declarations and exact publisher-source supplements. Its
+portable capture/report records the original evidence hashes and explicitly
+removes build-machine paths. This is the pre-R8 graph; native provenance remains
+separate. The private build requires its own captured runtime bundle.

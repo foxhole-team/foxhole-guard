@@ -56,7 +56,14 @@ internal class FoxCoreConfigTranslatorProtocolsTest : FoxCoreConfigTranslatorTes
             assertEquals(case.hint.name, case.targetType, translated.type())
             case.verify(translated)
             assertEquals(case.hint.name, 1, engine.getValue("schema_version").jsonPrimitive.content.toInt())
-            assertEquals(case.hint.name, setOf("schema_version", "outbound", "tun", "dns", "traffic"), engine.keys)
+            assertEquals(
+                case.hint.name,
+                setOf("schema_version", "outbound", "tun", "runtime", "dns", "traffic"),
+                engine.keys,
+            )
+            val runtime = engine.getValue("runtime").jsonObject
+            assertEquals(case.hint.name, setOf("worker_threads"), runtime.keys)
+            assertTrue(case.hint.name, runtime.getValue("worker_threads").jsonPrimitive.content.toInt() in 1..4)
             assertFalse(case.hint.name, engine.containsLegacyKey("server_port"))
             assertFalse(case.hint.name, engine.containsLegacyKey("tag"))
             assertFalse(case.hint.name, engine.containsKey("inbounds"))

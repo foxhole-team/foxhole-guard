@@ -2,6 +2,7 @@ package com.foxhole.guard
 
 import android.content.Context
 import android.net.ConnectivityManager
+import androidx.room.withTransaction
 import com.foxhole.core.importer.ProfileImportParser
 import com.foxhole.core.model.WebAppRoute
 import com.foxhole.core.model.effectiveDiagnosticsRetention
@@ -40,6 +41,7 @@ import com.foxhole.guard.core.diagnostics.DiagnosticsLoggerRuntimeDiagnosticsSin
 import com.foxhole.guard.core.security.FoxholeSecurityComponents
 import com.foxhole.guard.core.security.KeyboxDatabaseKeySource
 import com.foxhole.guard.core.security.KeystoreDatabaseKeySource
+import com.foxhole.guard.core.security.prepareFactoryResetJournal
 import com.foxhole.guard.core.security.vault.FoxholeVault
 import com.foxhole.guard.core.sentinel.AppNetworkCategoryResolver
 import com.foxhole.guard.core.sentinel.SentinelThreatIntelProvider
@@ -55,6 +57,8 @@ import com.foxhole.guard.core.webapps.WebAppsWatchdog
 import com.foxhole.guard.runtime.AppUpdateApkVerifier
 import com.foxhole.guard.runtime.AppUpdateClient
 import com.foxhole.guard.runtime.AppUpdateRepository
+import com.foxhole.guard.runtime.CategorizedDnsNativeActivation
+import com.foxhole.guard.runtime.CategorizedDnsStage
 import com.foxhole.guard.runtime.DnsFilterAssetInstaller
 import com.foxhole.guard.runtime.DnsFilterUpdateClient
 import com.foxhole.guard.runtime.DnsFilterUpdateRepository
@@ -71,6 +75,7 @@ import com.foxhole.guard.runtime.TlsFingerprintUpdateClient
 import com.foxhole.guard.runtime.TlsFingerprintUpdateRepository
 import com.foxhole.guard.runtime.TorBridgeUpdateClient
 import com.foxhole.guard.runtime.TorBridgeUpdateRepository
+import com.foxhole.guard.runtime.VerifiedCategorizedDnsRuleSet
 import com.foxhole.guard.runtime.enqueueQuarantineRuntimeEnforcement
 import com.foxhole.guard.runtime.foxholeDbBridgesManifestUrl
 import com.foxhole.guard.runtime.foxholeDbGeoIpManifestUrl
@@ -153,12 +158,17 @@ internal class FoxholeDataGraphModule(
     private val appContext: Context,
     private val core: FoxholeCoreGraphModule,
     private val security: () -> FoxholeSecurityComponents,
+    private val resetStaticScanWork: suspend () -> Unit,
     private val liveDnsRuleSetInstaller: suspend (
         name: String,
         manifest: ByteArray,
         signature: ByteArray,
         artifact: ByteArray,
     ) -> RuntimeDnsRuleSetInstallOutcome,
+    private val liveCategorizedDnsInstaller: suspend (
+        CategorizedDnsStage,
+        VerifiedCategorizedDnsRuleSet
+    ) -> CategorizedDnsNativeActivation,
 ) {
     val profileDatabase: ProfileDatabase by lazy {
         val components = security()
@@ -269,7 +279,7 @@ internal class FoxholeDataGraphModule(
             installedManifestProvider = { dnsFilterAssetInstaller.installedManifestOrNull() },
             installedRuleSetsProvider = { dnsFilterAssetInstaller.installedRuleSetsOrEmpty() },
             liveRuleSetInstaller = liveDnsRuleSetInstaller,
-        )
+        ).also { repository -> repository.categorizedInstaller = liveCategorizedDnsInstaller }
     }
     val appUpdateClient: AppUpdateClient by lazy {
         AppUpdateClient(
@@ -277,6 +287,7 @@ internal class FoxholeDataGraphModule(
             resolver = publicRemoteDns::lookup,
             releasesApiUrl = { core.settingsRepository.settings.value.updateSources.appReleasesUrl },
             releasesToken = { core.settingsRepository.settings.value.updateSources.appReleasesToken },
+            manifestAssetName = BuildConfig.UPDATE_MANIFEST_ASSET,
         )
     }
     val appUpdateRepository: AppUpdateRepository by lazy {
@@ -377,6 +388,13 @@ internal class FoxholeDataGraphModule(
             networkIocMatcher = SentinelThreatIntelProvider(appContext)::networkIocMatcher,
             appCategoryResolver = AppNetworkCategoryResolver(appContext)::categoryOf,
             awaitDatabaseReady = databaseReadyGate,
+            staticScanTransaction = { operation ->
+                try {
+                    profileDatabase.withTransaction { operation() }
+                } catch (_: com.foxhole.guard.core.sentinel.scanner.ScannerJournalOwnerChanged) {
+                    false
+                }
+            },
         )
     }
 
@@ -404,6 +422,14 @@ internal class FoxholeDataGraphModule(
             diagnosticsLogger = core.diagnosticsLogger,
             profileSecretStore = secretStore,
             dnsFilterAssetInstaller = dnsFilterAssetInstaller,
+            networkActivityClearer = { anomalyRepository.clearNetworkActivityEvents() },
+            prepareFactoryReset = {
+                resetStaticScanWork()
+                security().prepareFactoryResetJournal()
+            },
+            factoryDatabaseClearer = {
+                anomalyRepository.clearStoredDataForFactoryReset { profileDatabase.clearAllTables() }
+            },
         )
     }
 }

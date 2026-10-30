@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="interface_mode_title">インターフェース</string>
+    <string name="interface_mode_user">ユーザー</string>
+    <string name="interface_mode_expert">エキスパート</string>
+    <string name="interface_mode_description">インターフェースを変更しても、接続と詳細設定は維持されます。</string>
+    <string name="user_home_choose_profile">プロファイルを選択</string>
+    <string name="user_home_add_profile">VPN プロファイルを追加</string>
+    <string name="user_home_map_disabled">トラフィックマップのウィジェットは無効です</string>
+    <string name="user_home_map_setup">有効にする</string>
+    <string name="user_home_latency">遅延: %1$s</string>
+    <string name="user_home_city">都市</string>
+    <string name="user_home_city_unavailable">都市を取得できません</string>
+    <string name="user_home_stop_proxy">ローカルプロキシを停止</string>
+    <string name="user_settings_protection">保護</string>
+</resources>

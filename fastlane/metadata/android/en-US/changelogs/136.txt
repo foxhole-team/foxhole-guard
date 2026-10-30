@@ -1,0 +1,3 @@
+Preserve cancellation and fatal core errors during connection diagnostics.
+Graceful cancellation of settled core reloads; uncertain native calls still fail closed.
+Release Hysteria2 UDP sessions promptly on stop and reconnect.

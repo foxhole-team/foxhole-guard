@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="sentinel_static_progress_count">Applications traitées : %1$d sur %2$d</string>
+    <string name="sentinel_static_progress_percent">%1$d%%</string>
+    <string name="sentinel_static_progress_unknown">Le nombre total d’applications est encore inconnu.</string>
+    <string name="sentinel_static_current_app_unknown">Application actuelle indisponible</string>
+</resources>

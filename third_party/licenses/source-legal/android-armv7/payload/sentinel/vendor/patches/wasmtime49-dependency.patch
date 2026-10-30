@@ -1,0 +1,11 @@
+--- yara-x-1.21.0/Cargo.toml
++++ yara-x-1.21.0/Cargo.toml
+@@ -474,7 +474,7 @@
+ optional = true
+ 
+ [target.'cfg(not(target_family = "wasm"))'.dependencies.wasmtime]
+-version = "45.0.3"
++version = "=49.0.4"
+ features = [
+     "cranelift",
+     "runtime",

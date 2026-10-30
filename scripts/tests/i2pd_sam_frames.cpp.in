@@ -1,0 +1,236 @@
+#include <charconv>
+#include <cstdint>
+#include <cstring>
+#include <deque>
+#include <functional>
+#include <iostream>
+#include <limits>
+#include <map>
+#include <memory>
+#include <stdexcept>
+#include <string>
+#include <string_view>
+#include <utility>
+#include <vector>
+
+namespace boost {
+namespace system {
+struct error_code {
+    explicit operator bool() const { return false; }
+    std::string message() const { return {}; }
+    bool operator!=(int) const { return true; }
+};
+}
+namespace asio {
+namespace error { constexpr int operation_aborted = 1; }
+struct MutableBuffer { char* data; std::size_t size; };
+inline MutableBuffer buffer(char* data, std::size_t size) { return {data, size}; }
+template<class Service, class Callback> void post(Service& service, Callback callback) {
+    service.tasks.emplace_back(std::move(callback));
+}
+}
+}
+
+namespace i2p {
+namespace util {
+struct Mapping {
+    std::map<std::string, std::string> values;
+    void Insert(std::string_view key, std::string_view value) { values.emplace(std::string(key), std::string(value)); }
+    std::string_view operator[](const char* key) const {
+        auto value = values.find(key);
+        return value == values.end() ? std::string_view{} : std::string_view(value->second);
+    }
+};
+}
+namespace client {
+#ifdef FOXHOLE_SAM_SIZE32
+using size_t = std::uint32_t;
+#else
+using size_t = std::size_t;
+#endif
+
+enum { eLogDebug, eLogWarning, eLogError };
+template<class... Args> void LogPrint(Args&&...) {}
+
+@SAM_CONSTANTS@
+
+struct Session {
+    std::vector<std::string> payloads;
+    std::vector<size_t> unsafeLengths;
+    void SendDatagram(std::string_view, const std::uint8_t* data, size_t size, int, int) {
+        if (size > SAM_SOCKET_BUFFER_SIZE) unsafeLengths.push_back(size);
+        else payloads.emplace_back(reinterpret_cast<const char*>(data), size);
+    }
+};
+struct Service {
+    std::deque<std::function<void()>> tasks;
+    void drain() {
+        int budget = 100;
+        while (!tasks.empty()) {
+            if (--budget == 0) throw std::runtime_error("unbounded parser work");
+            auto task = std::move(tasks.front()); tasks.pop_front(); task();
+        }
+    }
+};
+struct Owner {
+    Service service;
+    std::shared_ptr<Session> session = std::make_shared<Session>();
+    Service& GetService() { return service; }
+    std::shared_ptr<Session> FindSession(std::string_view) { return session; }
+};
+struct Socket {
+    std::size_t readCapacity = 0;
+    bool zeroRead = false;
+    template<class Callback> void async_read_some(boost::asio::MutableBuffer bytes, Callback) {
+        readCapacity = bytes.size;
+        if (!bytes.size) zeroRead = true;
+    }
+};
+struct Stream { size_t GetSendBufferSize() { return 0; } };
+enum class SAMSocketType { eSAMSocketTypeUnknown, eSAMSocketTypeSession, eSAMSocketTypeStream, eSAMSocketTypeTerminated };
+
+struct SAMSocket : std::enable_shared_from_this<SAMSocket> {
+    Owner& m_Owner;
+    Socket m_Socket;
+    char m_Buffer[SAM_SOCKET_BUFFER_SIZE + 1]{};
+    size_t m_BufferOffset = 0;
+    SAMSocketType m_SocketType = SAMSocketType::eSAMSocketTypeSession;
+    bool m_IsReceiving = false;
+    Stream* m_Stream = nullptr;
+    std::string m_ID = "fixture";
+    std::string failure;
+    explicit SAMSocket(Owner& owner) : m_Owner(owner) {}
+    void Terminate(const char* reason) { failure = reason; m_SocketType = SAMSocketType::eSAMSocketTypeTerminated; }
+    bool terminated() const { return m_SocketType == SAMSocketType::eSAMSocketTypeTerminated; }
+    void HandleMessage(const boost::system::error_code&, std::size_t);
+    void Receive();
+    size_t ProcessDatagramSend(char*, size_t, const char*);
+    static i2p::util::Mapping ExtractParams(std::string_view);
+    void HandleReceived(const boost::system::error_code&, std::size_t) {}
+    void ProcessPing(std::string_view) {}
+    void ProcessSessionCreate(std::string_view) {}
+    void ProcessStreamConnect(const char*, std::size_t, std::size_t) {}
+    void ProcessStreamAccept(std::string_view) {}
+    void ProcessStreamForward(std::string_view) {}
+    void ProcessDestGenerate(std::string_view) {}
+    void ProcessNamingLookup(std::string_view) {}
+    void ProcessSessionAdd(std::string_view) {}
+    void ProcessSessionRemove(std::string_view) {}
+};
+
+@SAM_METHODS@
+
+void require(bool condition, const char* message) {
+    if (!condition) throw std::runtime_error(message);
+}
+struct Fixture {
+    Owner owner;
+    std::shared_ptr<SAMSocket> socket = std::make_shared<SAMSocket>(owner);
+    Fixture() { socket->Receive(); }
+    void feed(std::string_view bytes) {
+        require(!socket->terminated(), "feed after termination");
+        require(bytes.size() <= socket->m_Socket.readCapacity, "fixture exceeds pending read capacity");
+        std::memcpy(socket->m_Buffer + socket->m_BufferOffset, bytes.data(), bytes.size());
+        socket->HandleMessage({}, bytes.size());
+        owner.service.drain();
+    }
+};
+std::string header(std::string_view size, std::string_view destination = "fixture") {
+    return "DATAGRAM SEND DESTINATION=" + std::string(destination) + " SIZE=" + std::string(size) + "\n";
+}
+std::string frame(std::string_view payload, std::string_view destination = "fixture") {
+    return header(std::to_string(payload.size()), destination) + std::string(payload);
+}
+void invalid(std::string_view size) {
+    Fixture test;
+    test.feed(header(size));
+    require(test.socket->terminated(), "invalid size was not refused");
+    require(test.owner.session->payloads.empty() && test.owner.session->unsafeLengths.empty(), "invalid size reached datagram sender");
+    require(!test.socket->m_Socket.zeroRead, "invalid size scheduled a zero-capacity read");
+}
+void maximumFrame() {
+    std::size_t size = SAM_SOCKET_BUFFER_SIZE;
+    for (int i = 0; i < 5; ++i) size = SAM_SOCKET_BUFFER_SIZE - header(std::to_string(size)).size();
+    std::string payload(size, 'x');
+    auto encoded = frame(payload);
+    require(encoded.size() == SAM_SOCKET_BUFFER_SIZE, "exact frame boundary mismatch");
+    Fixture test;
+    test.feed(encoded);
+    require(!test.socket->terminated(), "valid maximum frame refused");
+    require(test.owner.session->payloads == std::vector<std::string>{payload}, "maximum payload changed");
+    require(!test.socket->m_Socket.zeroRead, "complete maximum frame scheduled zero read");
+}
+void overFrameCapacity() {
+    std::size_t size = SAM_SOCKET_BUFFER_SIZE;
+    for (int i = 0; i < 5; ++i) size = SAM_SOCKET_BUFFER_SIZE - header(std::to_string(size)).size();
+    invalid(std::to_string(size + 1));
+}
+void incompleteAndPipelined() {
+    std::string first("A\0\nBC", 5);
+    const auto one = frame(first, "longer-fixture-destination");
+    const auto two = frame("second");
+    Fixture test;
+    test.feed(std::string_view(one).substr(0, 7));
+    require(test.owner.session->payloads.empty(), "incomplete command sent data");
+    test.feed(std::string_view(one).substr(7, one.size() - 9));
+    require(test.owner.session->payloads.empty(), "incomplete payload sent data");
+    test.feed(one.substr(one.size() - 2) + two);
+    require(test.owner.session->payloads == std::vector<std::string>{first, "second"}, "fragmented or pipelined payload changed");
+    require(!test.socket->terminated() && !test.socket->m_Socket.zeroRead, "valid fragments refused");
+}
+void offsetExact() {
+    for (const auto* destination : {"x", "a-longer-destination-with-variable-header-length"}) {
+        Fixture test;
+        auto encoded = frame("1234567", destination);
+        const auto prefix = encoded.size() - 7;
+        test.feed(std::string_view(encoded).substr(0, prefix + 6));
+        require(test.owner.session->payloads.empty(), "off-by-one incomplete payload accepted");
+        test.feed(std::string_view(encoded).substr(prefix + 6));
+        require(test.owner.session->payloads == std::vector<std::string>{"1234567"}, "exact payload offset incorrect");
+    }
+}
+void oversizedHeader() {
+    Fixture test;
+    test.feed(std::string(SAM_SOCKET_BUFFER_SIZE, 'X'));
+    require(test.socket->terminated(), "full incomplete command not refused");
+    require(!test.socket->m_Socket.zeroRead, "full command scheduled zero read");
+}
+void emptyDatagram() {
+    Fixture test;
+    test.feed(frame(""));
+    require(!test.socket->terminated(), "valid empty datagram refused");
+    require(test.owner.session->payloads == std::vector<std::string>{""}, "empty datagram dropped");
+}
+void missingSize() {
+    Fixture test;
+    test.feed("DATAGRAM SEND DESTINATION=fixture\n");
+    require(test.socket->terminated(), "missing SIZE was not refused");
+    require(test.owner.session->payloads.empty() && test.owner.session->unsafeLengths.empty(), "missing SIZE reached sender");
+}
+int run() {
+    int failures = 0;
+    const std::vector<std::pair<const char*, std::function<void()>>> tests = {
+        {"SIZE_MAX", [] { invalid(std::to_string(std::numeric_limits<size_t>::max())); }},
+        {"decimal_overflow", [] { invalid(std::to_string(std::numeric_limits<size_t>::max()) + "0"); }},
+        {"partial_decimal", [] { invalid("5junk"); }},
+        {"empty_size", [] { invalid(""); }},
+        {"missing_size", missingSize},
+        {"negative_size", [] { invalid("-1"); }},
+        {"oversized_payload", [] { invalid("32768"); }},
+        {"maximum_frame", maximumFrame},
+        {"frame_capacity_plus_one", overFrameCapacity},
+        {"incomplete_and_pipelined", incompleteAndPipelined},
+        {"offset_exact", offsetExact},
+        {"oversized_header", oversizedHeader},
+        {"empty_datagram", emptyDatagram},
+    };
+    for (const auto& test : tests) {
+        try { test.second(); std::cout << "PASS " << test.first << '\n'; }
+        catch (const std::exception& error) { ++failures; std::cout << "FAIL " << test.first << ": " << error.what() << '\n'; }
+    }
+    std::cout << "size_t_bits=" << sizeof(size_t) * 8 << " tests=" << tests.size() << " failures=" << failures << '\n';
+    return failures ? 1 : 0;
+}
+}
+}
+int main() { return i2p::client::run(); }

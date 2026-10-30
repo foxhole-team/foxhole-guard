@@ -1,0 +1,9 @@
+<resources>
+    <string name="dns_category_prepared_pending">Выбранные DNS-фильтры подготовлены. Для активации нужна проверка ядром при запуске или перезагрузке подключения.</string>
+    <string name="dns_category_prepared_short">Ожидает активации</string>
+    <string name="dns_category_catalog_missing">Выбранные DNS-фильтры недоступны: в приложении отсутствует каталог категорий.</string>
+    <string name="dns_category_catalog_invalid">Выбранные DNS-фильтры недоступны: не удалось проверить встроенные данные категорий.</string>
+    <string name="dns_category_required_missing">Запрошенные категории DNS или вариант списков недоступны. Проверьте выбор списков и обновите их данные.</string>
+    <string name="dns_category_signed_invalid">Выбранные DNS-фильтры недоступны: не удалось проверить загруженные данные категорий.</string>
+    <string name="dns_category_profile_policy_unavailable">Это подключение не поддерживает выбранные DNS-фильтры в текущей сборке. Отключите фильтрацию или выберите поддерживаемый профиль.</string>
+</resources>

@@ -14,10 +14,12 @@ build_root="${I2PD_BUILD_ROOT:-$repo_root/build/i2pd}"
 output_root="${I2PD_OUTPUT_ROOT:-$repo_root/app/src/main/jniLibs}"
 verify_host_paths="$repo_root/scripts/verify-native-host-paths.sh"
 openssl_recipe="canonical-prefix-v1"
-boost_recipe="path-remap-v1"
+boost_recipe="path-remap-v2"
+cache_helper="$repo_root/scripts/i2pd-build-cache.py"
 openssl_prefix="/usr/local/foxhole-openssl"
 
 log() { printf '[build-i2pd] %s\n' "$*"; }
+has_cache_marker() { [[ -f "$1/$3" ]] && [[ "$(cat "$1/$3")" == "$2" ]]; }
 
 if [[ -z "${ANDROID_NDK_HOME:-}" ]]; then
   android_sdk_root="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
@@ -45,8 +47,19 @@ toolbin="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/$host_tag/bin"
 sysroot="$toolbin/../sysroot"
 jobs="${I2PD_BUILD_JOBS:-$( (command -v nproc >/dev/null 2>&1 && nproc) || sysctl -n hw.ncpu )}"
 mkdir -p "$work"
+ndk_key="$(python3 "$cache_helper" fingerprint \
+  --file "$ANDROID_NDK_HOME/source.properties" --tree "$(dirname "$toolchain")" \
+  --file "$toolbin/clang++" --file "$toolbin/ld.lld" \
+  --file "$toolbin/llvm-ar" --file "$toolbin/llvm-ranlib" \
+  --env CC --env CXX --env CFLAGS --env CXXFLAGS --env CPPFLAGS --env LDFLAGS \
+  --env AR --env AS --env LD --env RANLIB --env CPATH --env C_INCLUDE_PATH \
+  --env CPLUS_INCLUDE_PATH --env LIBRARY_PATH --env COMPILER_PATH --env MAKEFLAGS \
+  --env CMAKE_PREFIX_PATH --env CMAKE_INCLUDE_PATH --env CMAKE_LIBRARY_PATH \
+  --env PKG_CONFIG_PATH --env PKG_CONFIG_LIBDIR --env PKG_CONFIG_SYSROOT_DIR \
+  -- "$ANDROID_NDK_HOME" "$host_tag")"
 
 # F-Droid exports the app commit epoch; OpenSSL must use the pinned i2pd source epoch.
+source_revision="$(git -C "$i2pd_dir" rev-parse HEAD)"
 source_date_epoch="$(git -C "$i2pd_dir" show -s --format=%ct HEAD)"
 export SOURCE_DATE_EPOCH="$source_date_epoch"
 export ZERO_AR_DATE=1
@@ -67,8 +80,11 @@ remap_flags=(
 )
 remap_cflags="${remap_flags[*]}"
 boost_remap_flags=""
-for remap_flag in "${remap_flags[@]}"; do
-  boost_remap_flags+=" <compileflags>$remap_flag"
+# Boost compiles its own standalone sources, independent of the i2pd snapshot path.
+for boost_remap in "$work=/usr/src/i2pd-deps" "$ANDROID_NDK_HOME=/usr/src/android-ndk"; do
+  for remap_kind in file macro debug; do
+    boost_remap_flags+=" <compileflags>-f$remap_kind-prefix-map=$boost_remap"
+  done
 done
 
 fetch_verified "$openssl_url" "$work/openssl-$openssl_ver.tgz" "$openssl_sha256" "OpenSSL $openssl_ver"
@@ -125,29 +141,50 @@ normalize_i2pd_build_id() {
 log "building i2pd $(awk -F= '$1=="ref"{print $2}' "$version_file") for: ${abis[*]}"
 for abi in "${abis[@]}"; do
   ssl_target="$(ssl_target_for "$abi")"; clang="$(clang_for "$abi")"; triple="$(triple_for "$abi")"
-  openssl_stage="$work/openssl-$openssl_ver-$openssl_recipe-$source_date_epoch-$abi"
+  openssl_args=("$ssl_target" -D__ANDROID_API__="$api" no-shared no-tests no-apps
+    --prefix="$openssl_prefix" --openssldir=/etc/ssl --libdir=lib)
+  b2tag="clang-ndk${abi//[-_]/}"
+  boost_args=(
+    toolset="$b2tag" target-os=android architecture="$(b2arch_for "$abi")"
+    address-model="$(b2bits_for "$abi")" abi="$(b2abi_for "$abi")" binary-format=elf
+    link=static runtime-link=shared threading=multi variant=release cxxstd=17 --layout=system
+    --with-filesystem --with-program_options install
+  )
+  openssl_key="$(python3 "$cache_helper" fingerprint -- "$ndk_key" "$abi" "$api" \
+    "$openssl_ver" "$openssl_sha256" "$openssl_recipe" "$source_date_epoch" "${openssl_args[@]}")"
+  boost_key="$(python3 "$cache_helper" fingerprint -- "$ndk_key" "$abi" "$api" \
+    "$boost_ver" "$boost_sha256" "$boost_recipe" "$boost_remap_flags" \
+    "$source_date_epoch" "${boost_args[@]}")"
+  openssl_stage="$work/openssl-$openssl_ver-$openssl_recipe-$source_date_epoch-$abi-$openssl_key"
   openssl_out="$openssl_stage$openssl_prefix"
-  boost_out="$work/boost-$boost_recipe-$abi"
+  boost_out="$work/boost-$boost_ver-$boost_recipe-$abi-$boost_key"
+  boost_source="$work/$boost_us-$boost_sha256"
 
-  if [[ ! -f "$openssl_out/lib/libcrypto.a" && ! -f "$openssl_out/lib64/libcrypto.a" ]]; then
+  if ! has_cache_marker "$openssl_stage" "$openssl_key" .foxhole-build-complete || \
+      [[ ! -f "$openssl_out/lib/libcrypto.a" && ! -f "$openssl_out/lib64/libcrypto.a" ]]; then
     log "[$abi] OpenSSL"
-    openssl_source="$work/openssl-src-$openssl_ver-$openssl_recipe-$abi"
+    openssl_source="$work/openssl-src-$openssl_ver-$openssl_recipe-$abi-$openssl_key"
     rm -rf "$openssl_source" "$openssl_stage"; mkdir -p "$openssl_source"
     tar xf "$work/openssl-$openssl_ver.tgz" -C "$openssl_source" --strip-components=1
     ( cd "$openssl_source"
       ANDROID_NDK_ROOT="$ANDROID_NDK_HOME" PATH="$toolbin:$PATH" \
-        ./Configure "$ssl_target" -D__ANDROID_API__="$api" no-shared no-tests no-apps \
-          --prefix="$openssl_prefix" --openssldir=/etc/ssl --libdir=lib
+        ./Configure "${openssl_args[@]}"
       PATH="$toolbin:$PATH" make -j"$jobs" build_libs >/dev/null
       PATH="$toolbin:$PATH" make DESTDIR="$openssl_stage" install_dev >/dev/null )
+    printf '%s\n' "$openssl_key" > "$openssl_stage/.foxhole-build-complete"
   fi
   [[ -d "$openssl_out/lib64" ]] && ln -sfn lib64 "$openssl_out/lib" 2>/dev/null || true
 
-  if [[ ! -f "$boost_out/lib/libboost_filesystem.a" ]]; then
+  if ! has_cache_marker "$boost_out" "$boost_key" .foxhole-build-complete || \
+      [[ ! -f "$boost_out/lib/libboost_filesystem.a" ]]; then
     log "[$abi] Boost"
-    [[ -d "$work/$boost_us" ]] || tar xf "$work/$boost_us.tar.bz2" -C "$work"
-    b2tag="clang-ndk${abi//[-_]/}"
-    ( cd "$work/$boost_us"
+    rm -rf "$boost_out"
+    if ! has_cache_marker "$boost_source" "$boost_sha256" .foxhole-source-complete; then
+      rm -rf "$boost_source"; mkdir -p "$boost_source"
+      tar xf "$work/$boost_us.tar.bz2" -C "$boost_source" --strip-components=1
+      printf '%s\n' "$boost_sha256" > "$boost_source/.foxhole-source-complete"
+    fi
+    ( cd "$boost_source"
       [[ -x ./b2 ]] || ./bootstrap.sh --with-libraries=filesystem,program_options >/dev/null
       cat > "$work/user-config-$abi.jam" <<EOF
 using clang : ndk${abi//[-_]/}
@@ -156,33 +193,49 @@ using clang : ndk${abi//[-_]/}
   ;
 EOF
       ./b2 -q -j"$jobs" --user-config="$work/user-config-$abi.jam" \
-        --prefix="$boost_out" --build-dir="$work/boost-build-$boost_recipe-$abi" \
-        toolset="$b2tag" target-os=android architecture="$(b2arch_for "$abi")" \
-        address-model="$(b2bits_for "$abi")" abi="$(b2abi_for "$abi")" binary-format=elf \
-        link=static runtime-link=shared threading=multi variant=release cxxstd=17 --layout=system \
-        --with-filesystem --with-program_options install >/dev/null )
+        --prefix="$boost_out" --build-dir="$work/boost-build-$boost_recipe-$abi-$boost_key" \
+        "${boost_args[@]}" >/dev/null )
+    printf '%s\n' "$boost_key" > "$boost_out/.foxhole-build-complete"
   fi
 
   log "[$abi] i2pd"
   build_dir="$build_root/$abi"; out_dir="$output_root/$abi"
-  rm -rf "$build_dir"; mkdir -p "$build_dir" "$out_dir"
-  cmake -S "$i2pd_dir/build" -B "$build_dir" -G Ninja \
-    -DCMAKE_TOOLCHAIN_FILE="$toolchain" \
-    -DANDROID_ABI="$abi" -DANDROID_PLATFORM="android-$api" -DANDROID_STL=c++_static \
-    -DCMAKE_BUILD_TYPE=Release \
-    -DCMAKE_C_FLAGS="$remap_cflags" -DCMAKE_CXX_FLAGS="$remap_cflags" \
-    -DWITH_STATIC=OFF -DWITH_UPNP=OFF -DWITH_LIBRARY=OFF -DWITH_BINARY=ON -DWITH_ADDRSANITIZER=OFF \
-    -DCMAKE_FIND_PACKAGE_PREFER_CONFIG=TRUE -DCMAKE_FIND_ROOT_PATH_MODE_PACKAGE=BOTH \
-    -DOPENSSL_ROOT_DIR="$openssl_out" -DOPENSSL_USE_STATIC_LIBS=ON \
-    -DOpenSSL_DIR="$openssl_out/lib/cmake/OpenSSL" \
-    -DBoost_DIR="$boost_out/lib/cmake/Boost-$boost_ver" -DBOOST_ROOT="$boost_out" \
-    -DBoost_INCLUDE_DIR="$boost_out/include" -DBoost_USE_STATIC_LIBS=ON \
+  mkdir -p "$out_dir"
+  page_link_flags=""
+  case "$abi" in
+    arm64-v8a|x86_64) page_link_flags="-Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384" ;;
+  esac
+  cmake_args=(
+    -S "$i2pd_dir/build" -B "$build_dir" -G Ninja
+    -DCMAKE_TOOLCHAIN_FILE="$toolchain"
+    -DANDROID_ABI="$abi" -DANDROID_PLATFORM="android-$api" -DANDROID_STL=c++_static
+    -DCMAKE_BUILD_TYPE=Release
+    -DCMAKE_C_FLAGS="$remap_cflags" -DCMAKE_CXX_FLAGS="$remap_cflags"
+    -DWITH_STATIC=OFF -DWITH_UPNP=OFF -DWITH_LIBRARY=OFF -DWITH_BINARY=ON -DWITH_ADDRSANITIZER=OFF
+    -DCMAKE_FIND_PACKAGE_PREFER_CONFIG=TRUE -DCMAKE_FIND_ROOT_PATH_MODE_PACKAGE=BOTH
+    -DOPENSSL_ROOT_DIR="$openssl_out" -DOPENSSL_USE_STATIC_LIBS=ON
+    -DOpenSSL_DIR="$openssl_out/lib/cmake/OpenSSL"
+    -DBoost_DIR="$boost_out/lib/cmake/Boost-$boost_ver" -DBOOST_ROOT="$boost_out"
+    -DBoost_INCLUDE_DIR="$boost_out/include" -DBoost_USE_STATIC_LIBS=ON
     -DZLIB_INCLUDE_DIR="$sysroot/usr/include" -DZLIB_LIBRARY="$sysroot/usr/lib/$triple/$api/libz.so"
+  )
+  cache_key="$(python3 "$cache_helper" fingerprint \
+    --tree "$i2pd_dir" --tree "$openssl_out" --tree "$boost_out" \
+    --file "$sysroot/usr/lib/$triple/$api/libz.so" \
+    --file "$(command -v cmake)" --file "$(command -v ninja)" \
+    -- "$ndk_key" "$source_revision" "$source_date_epoch" "ninja-cache-v1" "${cmake_args[@]}")"
+  python3 "$cache_helper" prepare --root "$build_root" --build "$build_dir" \
+    --source "$i2pd_dir" --key "$cache_key"
+  # Link-only changes are left to CMake/Ninja so compiled objects can be reused.
+  cmake "${cmake_args[@]}" -DCMAKE_EXE_LINKER_FLAGS="$page_link_flags"
   cmake --build "$build_dir" --target i2pd -j"$jobs"
   cp "$build_dir/i2pd" "$out_dir/libi2pd.so"
   "$toolbin/llvm-strip" "$out_dir/libi2pd.so" 2>/dev/null || true
   normalize_i2pd_build_id "$out_dir/libi2pd.so" "$build_dir"
+  python3 "$repo_root/scripts/verify-native-pages.py" "$abi" "$out_dir/libi2pd.so"
   "$verify_host_paths" "$out_dir/libi2pd.so"
+  python3 "$cache_helper" commit --root "$build_root" --build "$build_dir" \
+    --source "$i2pd_dir" --key "$cache_key"
   log "wrote $out_dir/libi2pd.so"
 done
 

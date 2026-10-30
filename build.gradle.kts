@@ -9,7 +9,7 @@ buildscript {
             val coordinate = "${requested.group}:${requested.name}"
             when {
                 requested.group == "com.squareup.wire" && requested.name.startsWith("wire-runtime") ->
-                    useVersion("6.3.0")
+                    useVersion("6.4.5")
                 requested.group == "io.netty" && requested.name.startsWith("netty-") ->
                     useVersion("4.1.137.Final")
                 coordinate == "org.apache.commons:commons-lang3" ->
@@ -28,7 +28,7 @@ buildscript {
     }
     dependencies {
         classpath("com.android.tools.build:gradle:9.3.0")
-        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:2.4.20")
+        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:2.4.21")
     }
 }
 
@@ -40,7 +40,7 @@ if (enableSbom.get()) {
 
 allprojects {
     group = "com.foxhole"
-    version = "0.1.2"
+    version = "1.0.0"
 }
 
 val hardenedToolDependencyVersions =
@@ -57,7 +57,7 @@ allprojects {
             val coordinate = "${requested.group}:${requested.name}"
             when {
                 requested.group == "com.squareup.wire" && requested.name.startsWith("wire-runtime") ->
-                    useVersion("6.3.0")
+                    useVersion("6.4.5")
                 requested.group == "io.netty" && requested.name.startsWith("netty-") ->
                     useVersion("4.1.137.Final")
                 requested.group == "org.bouncycastle" && requested.name in

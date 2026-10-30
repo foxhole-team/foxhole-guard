@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -50,9 +51,11 @@ import com.foxhole.guard.ui.cli.components.CliElbowLine
 import com.foxhole.guard.ui.cli.components.CliIcon
 import com.foxhole.guard.ui.cli.components.CliLatencyKind
 import com.foxhole.guard.ui.cli.components.CliLatencyTone
+import com.foxhole.guard.ui.cli.components.CliProtocolBadge
 import com.foxhole.guard.ui.cli.components.CliRowDivider
 import com.foxhole.guard.ui.cli.components.cliLatencyTone
 import com.foxhole.guard.ui.cli.components.cliPressable
+import com.foxhole.guard.ui.cli.components.cliProtocolBadgeLabel
 import com.foxhole.guard.ui.smartProfileConnectDurations
 import com.foxhole.guard.ui.smartProfileDownOptionIds
 import com.foxhole.guard.ui.smartProfileMetricsUpdatedAt
@@ -212,19 +215,30 @@ internal fun CliProtocolOptionRow(
             CliActiveDot(active = true)
         }
         Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = presentation.name,
-                style = CliType.body,
-                color = presentation.nameColor(colors),
-                maxLines = 1,
-                overflow = TextOverflow.Clip,
-                modifier = Modifier
-                    .weight(1f)
-                    .basicMarquee(
-                        iterations = Int.MAX_VALUE,
-                        initialDelayMillis = PROTOCOL_NAME_MARQUEE_DELAY_MS,
-                        repeatDelayMillis = PROTOCOL_NAME_MARQUEE_REPEAT_MS,
-                    ),
+            if (
+                !presentation.name.equals(cliProtocolBadgeLabel(presentation.protocol), ignoreCase = true) &&
+                !presentation.name.equals(presentation.protocol, ignoreCase = true)
+            ) {
+                Text(
+                    text = presentation.name,
+                    style = CliType.body,
+                    color = presentation.nameColor(colors),
+                    maxLines = 1,
+                    overflow = TextOverflow.Clip,
+                    modifier = Modifier
+                        .weight(1f, fill = false)
+                        .basicMarquee(
+                            iterations = Int.MAX_VALUE,
+                            initialDelayMillis = PROTOCOL_NAME_MARQUEE_DELAY_MS,
+                            repeatDelayMillis = PROTOCOL_NAME_MARQUEE_REPEAT_MS,
+                        ),
+                )
+                Spacer(Modifier.width(6.dp))
+            }
+            CliProtocolBadge(
+                presentation.protocol,
+                Modifier.align(Alignment.Top).offset(y = (-5).dp),
+                textColor = presentation.nameColor(colors),
             )
             if (presentation.stars.isNotEmpty()) {
                 Text(text = " ${presentation.stars}", style = CliType.body, color = colors.accent)
@@ -379,6 +393,7 @@ internal fun protocolRowPresentation(
     val ranked = state.recommendedProtocolOptionsByProfileId[profile.id].orEmpty()
     return CliProtocolRowPresentation(
         name = option.displayName,
+        protocol = option.protocolHint.name,
         active = active,
         enabled = option.enabled,
         status = status,
@@ -498,6 +513,7 @@ internal fun protocolMetricColor(
 
 internal data class CliProtocolRowPresentation(
     val name: String,
+    val protocol: String,
     val active: Boolean,
     val enabled: Boolean,
     val stars: String,

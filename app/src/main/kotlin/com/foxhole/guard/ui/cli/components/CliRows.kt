@@ -31,6 +31,9 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.toggleableState
+import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -157,8 +160,10 @@ internal fun CliToggleRow(
     infoText: String? = null,
     enabled: Boolean = true,
     icon: Int? = null,
+    infoAlwaysActive: Boolean = false,
 ) {
     val colors = LocalCliColors.current
+    val controlAlpha = if (!enabled && infoAlwaysActive) 0.4f else 1f
     var infoOpen by rememberSaveable(label) { mutableStateOf(false) }
     if (infoOpen && infoText != null) {
         CliInfoSheet(
@@ -169,8 +174,9 @@ internal fun CliToggleRow(
     Column(modifier = modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier
-                .cliPanelRowPressable(enabled = enabled) { onToggle(!checked) }
-                .alpha(if (enabled) 1f else 0.4f),
+                .cliPanelRowPressable(enabled = enabled, role = Role.Switch) { onToggle(!checked) }
+                .semantics { toggleableState = if (checked) ToggleableState.On else ToggleableState.Off }
+                .alpha(if (enabled || infoAlwaysActive) 1f else 0.4f),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -181,14 +187,14 @@ internal fun CliToggleRow(
                 if (icon != null) {
                     CliRowLeadingIcon(
                         id = icon,
-                        tint = if (checked) colors.accent else colors.dim,
+                        tint = (if (checked) colors.accent else colors.dim).let { it.copy(alpha = it.alpha * controlAlpha) },
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                 }
                 Text(
                     text = cliLabelText(label),
                     style = cliRowTextStyle(),
-                    color = if (checked) colors.fg else colors.dim,
+                    color = (if (checked) colors.fg else colors.dim).let { it.copy(alpha = it.alpha * controlAlpha) },
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -196,7 +202,7 @@ internal fun CliToggleRow(
                     CliRowInfoGlyph(onTap = { infoOpen = true })
                 }
             }
-            CliCheckGlyph(checked = checked)
+            CliCheckGlyph(checked = checked, modifier = Modifier.alpha(controlAlpha))
         }
         note?.let {
             CliElbowLine(

@@ -4,6 +4,8 @@ import com.foxhole.core.model.AutoConnectReasonCode
 import com.foxhole.core.model.ConnectionSnapshot
 import com.foxhole.core.model.ConnectionState
 import com.foxhole.core.model.TrafficMode
+import com.foxhole.core.runtime.FoxCoreRuntimeException
+import com.foxhole.core.runtime.FoxCoreRuntimeFailure
 import com.foxhole.core.runtime.LocalGuardMode
 import com.foxhole.core.runtime.RuntimeAutoReconnectPolicy
 import com.foxhole.core.runtime.localGuardModeOrNull
@@ -28,6 +30,12 @@ private data class LocalGuardHealState(
 )
 
 private val localGuardHealStates = WeakHashMap<FoxholeVpnService, LocalGuardHealState>()
+
+internal fun shouldRetryLocalGuardStart(error: Throwable?): Boolean =
+    generateSequence(error) { it.cause }
+        .take(8)
+        .filterIsInstance<FoxCoreRuntimeException>()
+        .none { it.failure == FoxCoreRuntimeFailure.FLOW_ATTRIBUTION_UNAVAILABLE }
 
 private fun FoxholeVpnService.localGuardHealState(): LocalGuardHealState =
     synchronized(localGuardHealStates) {

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="error_route_excludes_android_version">Las exclusiones de rutas requieren Android 13 o posterior. Este perfil no puede iniciarse con seguridad en este dispositivo</string>
+    <string name="error_route_excludes_too_many">Este perfil tiene demasiadas exclusiones de rutas (%1$d; límite de Android: %2$d). Reduce las reglas y vuelve a intentarlo</string>
+    <string name="error_runtime_missing">Esta compilación no incluye la biblioteca nativa FoxCore</string>
+    <string name="error_vpn_package_split_unavailable">Algunas aplicaciones seleccionadas ya no están instaladas. Actualiza la lista de enrutamiento y reconecta</string>
+</resources>

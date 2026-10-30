@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="error_flow_attribution_unavailable">El cortafuegos y el enrutamiento por aplicación requieren Android 10 o posterior. Esta configuración no puede iniciarse en este dispositivo.</string>
+</resources>

@@ -45,6 +45,7 @@ internal data class RuntimeValidationRun(
     val preferIpv4Validation: Boolean,
     val probePlan: RuntimeValidationProbePlan,
     val diagnostics: RuntimeValidationDiagnosticFields,
+    val auditOwner: RuntimeValidationAuditOwner?,
 )
 
 private data class RuntimeValidationNetworkContext(
@@ -75,6 +76,7 @@ internal suspend fun FoxholeVpnService.prepareRuntimeValidationRun(
         preferIpv4Validation = shouldPreferIpv4TunnelValidation(activeProtocolHint, currentSession?.configJson),
         probePlan = probePlan,
         diagnostics = runtimeValidationDiagnosticFields(currentSession),
+        auditOwner = captureRuntimeValidationAuditOwner(),
     )
 }
 
@@ -133,7 +135,10 @@ internal suspend fun FoxholeVpnService.runTunnelConnectivityProbe(
             expectedFreshVpnNetworkHandle,
             expectedFreshVpnInterfaceName,
         )
-    }
+    }.observeValidationFailure(
+        observe = { error -> recordFailedRuntimeValidationAudit(validationRun, error) },
+        onObservationFailed = { recordRuntimeValidationAuditFailed(validationRun) },
+    )
 
 private suspend fun FoxholeVpnService.runTunnelValidationAttempt(
     validationRun: RuntimeValidationRun,

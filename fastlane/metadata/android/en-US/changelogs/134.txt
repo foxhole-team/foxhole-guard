@@ -1,0 +1,1 @@
+Fix cancellable Sentinel refresh and atomically publish feed data with its generation. Cap DoH response bodies. Keep ordinary DNS filtering when optional bypass metadata is unavailable; preserve required identity guards.

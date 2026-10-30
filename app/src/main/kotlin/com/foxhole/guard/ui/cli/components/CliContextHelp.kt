@@ -171,7 +171,7 @@ internal fun CliHeaderHelpButton(
 ) {
     val colors = LocalCliColors.current
     val pixelArtEnabled = LocalCliPixelArtEnabled.current
-    val topBarIconSize = CLI_TOP_BAR_ACTION_ICON_SIZE
+    val topBarIconSize = iconSize ?: CLI_TOP_BAR_ACTION_ICON_SIZE
     CliHeaderIconButton(
         icon = R.drawable.lin_help,
         contentDescription = contentDescription,
@@ -207,6 +207,9 @@ internal fun CliTopBarIconButton(
     modifier: Modifier = Modifier,
     tint: Color = Color.Unspecified,
     enabled: Boolean = true,
+    iconSize: Dp = CLI_TOP_BAR_ACTION_ICON_SIZE,
+    alignIconToFirstLine: Boolean = false,
+    firstLineText: String? = null,
 ) {
     val pixelArtEnabled = LocalCliPixelArtEnabled.current
     CliHeaderIconButton(
@@ -215,11 +218,15 @@ internal fun CliTopBarIconButton(
         onClick = onClick,
         modifier = modifier,
         controlSize = CliTopBarControlSize,
-        iconSize = CLI_TOP_BAR_ACTION_ICON_SIZE,
+        iconSize = iconSize,
         tint = tint,
         enabled = enabled,
-        contentAlignment = Alignment.CenterEnd,
-        iconOffsetY = cliTopBarIconLiftFor(pixelArtEnabled),
+        contentAlignment = if (alignIconToFirstLine) Alignment.TopEnd else Alignment.CenterEnd,
+        iconOffsetY = if (alignIconToFirstLine) {
+            cliHeaderHelpIconOffsetFor(true, true, firstLineText, pixelArtEnabled)
+        } else {
+            cliTopBarIconLiftFor(pixelArtEnabled)
+        },
     )
 }
 

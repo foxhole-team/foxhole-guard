@@ -4,6 +4,7 @@ import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.VpnService
+import android.os.Bundle
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.platform.app.InstrumentationRegistry
 import com.foxhole.core.model.ConnectionState
@@ -23,6 +24,16 @@ import org.junit.Assume.assumeTrue
 import org.junit.Test
 
 class CoreAuditPixelAndroidTest {
+    @Test
+    fun optInTeardownDiagnosticsRemainReadableAfterRestart() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        assumeTrue(InstrumentationRegistry.getArguments().getString("foxhole.teardownDiagnostics") == "1")
+        val app = ApplicationProvider.getApplicationContext<FoxholeApplication>()
+        val exported = app.appGraph.diagnosticsLogger.snapshotSanitizedForAboutExport()
+        assertTrue("Sanitized diagnostic export is empty", exported.isNotBlank())
+        instrumentation.sendStatus(0, Bundle().apply { putString("teardownDiagnostics", exported) })
+    }
+
     @Test
     fun activeProfileCarriesTrafficAcrossReloadsAndReconnects() = runBlocking {
         assumeTrue(InstrumentationRegistry.getArguments().getString("foxhole.coreAudit") == "1")

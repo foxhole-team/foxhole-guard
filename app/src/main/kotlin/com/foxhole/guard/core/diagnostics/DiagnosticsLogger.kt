@@ -3,9 +3,6 @@ package com.foxhole.guard.core.diagnostics
 import android.content.Context
 import android.os.Build
 import android.util.Log
-import androidx.work.ExistingWorkPolicy
-import androidx.work.OneTimeWorkRequestBuilder
-import androidx.work.WorkManager
 import com.foxhole.core.model.ConnectionState
 import com.foxhole.core.model.DiagnosticEntry
 import com.foxhole.core.model.DiagnosticSeverity
@@ -21,13 +18,13 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.ArrayDeque
 import java.util.Locale
 import java.util.UUID
-import java.util.concurrent.TimeUnit
 import java.util.zip.GZIPOutputStream
 
 internal const val MAX_LIVE_DIAGNOSTIC_ENTRIES = 500
@@ -63,12 +60,20 @@ internal fun processTerminationTombstoneMessage(
     )
 
 @Suppress("TooManyFunctions")
-class DiagnosticsLogger(
+class DiagnosticsLogger private constructor(
     private val context: Context,
-    private val nowProvider: () -> Long = System::currentTimeMillis,
-    private val retentionProvider: () -> RetentionPolicy = { RetentionPolicy() },
-    private val settingsSnapshotProvider: () -> Settings = { Settings() },
+    private val nowProvider: () -> Long,
+    private val retentionProvider: () -> RetentionPolicy,
+    private val settingsSnapshotProvider: () -> Settings,
+    backgroundWorkEnabled: Boolean,
 ) {
+    constructor(
+        context: Context,
+        nowProvider: () -> Long = System::currentTimeMillis,
+        retentionProvider: () -> RetentionPolicy = { RetentionPolicy() },
+        settingsSnapshotProvider: () -> Settings = { Settings() },
+    ) : this(context, nowProvider, retentionProvider, settingsSnapshotProvider, true)
+
     private val formatter =
         DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
             .withZone(ZoneId.systemDefault())
@@ -94,18 +99,20 @@ class DiagnosticsLogger(
     val entries: StateFlow<List<DiagnosticEntry>> = entriesMutable
 
     init {
-        recordScope.launch {
-            for (@Suppress("UNUSED_VARIABLE") wakeup in recordWakeups) {
-                drainRecordQueue().forEach { seed ->
-                    runCatching { processRecord(seed) }
-                        .onFailure { error ->
-                            Log.w(LOG_TAG, "diagnostic record dropped error=${error.javaClass.simpleName}")
-                        }
+        if (backgroundWorkEnabled) {
+            recordScope.launch {
+                for (@Suppress("UNUSED_VARIABLE") wakeup in recordWakeups) {
+                    drainRecordQueue().forEach { seed ->
+                        runCatching { processRecord(seed) }
+                            .onFailure { error ->
+                                Log.w(LOG_TAG, "diagnostic record dropped error=${error.javaClass.simpleName}")
+                            }
+                    }
                 }
             }
+            loadRecentEntriesAsync()
+            record("diagnostics", "Log session started")
         }
-        loadRecentEntriesAsync()
-        record("diagnostics", "Log session started")
     }
 
     fun record(tag: String, message: String) {
@@ -251,13 +258,18 @@ class DiagnosticsLogger(
         }
     }
 
-    fun snapshotSanitizedForAboutExport(): String {
+    fun snapshotSanitizedForAboutExport(): String = snapshotSanitizedForAboutExport(null)
+
+    internal fun snapshotSanitizedForAboutExport(
+        nativeCounters: NativeAggregateCounterSnapshot?,
+        aboutStore: DiagnosticsSessionStore = sessionStore,
+    ): String {
         val now = nowProvider()
-        val retention = currentRetention()
+        val retention = ordinaryDiagnosticsSnapshotAttempt(retentionProvider).getOrDefault(RetentionPolicy())
         val persistedSnapshot =
-            runCatching { sessionStore.loadRecentEntries(now, retention) }
+            ordinaryDiagnosticsSnapshotAttempt { aboutStore.loadRecentEntriesForAbout(now, retention) }
                 .getOrElse { error ->
-                    publishPersistenceFailure(error)
+                    publishPersistenceFailure(error, retention)
                     emptyList()
                 }
         val snapshot =
@@ -270,18 +282,30 @@ class DiagnosticsLogger(
             metadata = diagnosticsExportMetadata(retention),
             entries = snapshot,
             formatter = formatter,
+            nativeCounters = nativeCounters,
         )
     }
 
-    fun createSanitizedAboutExportFile(): File {
-        cleanupExpiredExports()
-        val targetDir = File(context.cacheDir, EXPORT_DIR_NAME).apply { mkdirs() }
-        val targetFile = File(targetDir, "foxhole-diagnostics-${UUID.randomUUID()}.log.gz")
-        GZIPOutputStream(targetFile.outputStream().buffered()).bufferedWriter(Charsets.UTF_8).use { writer ->
-            writer.write(snapshotSanitizedForAboutExport())
-        }
-        scheduleCleanup()
-        return targetFile
+    suspend fun createSanitizedAboutExportFile(): File =
+        createSanitizedAboutExportFile(null)
+
+    internal suspend fun createSanitizedAboutExportFile(
+        nativeCounters: NativeAggregateCounterSnapshot?,
+        aboutStore: DiagnosticsSessionStore = sessionStore,
+    ): File = withContext(Dispatchers.IO) {
+        writePreparedDiagnosticsArchive(
+            prepare = { snapshotSanitizedForAboutExport(nativeCounters, aboutStore) },
+            target = {
+                cleanupExportFiles(nowProvider())
+                val targetDir = File(context.cacheDir, EXPORT_DIR_NAME).apply { mkdirs() }
+                File(targetDir, "foxhole-diagnostics-${UUID.randomUUID()}.log.gz")
+            },
+            write = { targetFile, document ->
+                GZIPOutputStream(targetFile.outputStream().buffered()).bufferedWriter(Charsets.UTF_8).use { writer ->
+                    writer.write(document)
+                }
+            },
+        )
     }
 
     fun clearTag(tag: String) {
@@ -330,6 +354,10 @@ class DiagnosticsLogger(
         val retention = currentRetention()
         sessionStore.cleanup(now, retention)
         cleanupLegacySmartStartReplay(now, retention)
+        cleanupExportFiles(now)
+    }
+
+    private fun cleanupExportFiles(now: Long) {
         val cutoff = now - EXPORT_TTL_MS
         val exportDir = File(context.cacheDir, EXPORT_DIR_NAME)
         if (!exportDir.exists()) {
@@ -462,7 +490,7 @@ class DiagnosticsLogger(
             }
         }
 
-    private fun publishPersistenceFailure(error: Throwable) {
+    private fun publishPersistenceFailure(error: Throwable, capturedRetention: RetentionPolicy? = null) {
         val now = nowProvider()
         val shouldPublish =
             synchronized(persistenceLock) {
@@ -476,7 +504,7 @@ class DiagnosticsLogger(
         if (!shouldPublish) {
             return
         }
-        val retention = currentRetention()
+        val retention = capturedRetention ?: currentRetention()
         val failureEntry =
             DiagnosticEntry(
                 timestamp = now,
@@ -491,7 +519,7 @@ class DiagnosticsLogger(
         runCatching { retentionProvider() }.getOrDefault(RetentionPolicy())
 
     private fun diagnosticsExportMetadata(retention: RetentionPolicy): DiagnosticsExportMetadata {
-        val settings = runCatching(settingsSnapshotProvider).getOrDefault(Settings())
+        val settings = ordinaryDiagnosticsSnapshotAttempt(settingsSnapshotProvider).getOrDefault(Settings())
         return DiagnosticsExportMetadata(
             generatedAt = nowProvider(),
             appVersion = BuildConfig.VERSION_NAME,
@@ -499,7 +527,7 @@ class DiagnosticsLogger(
             coreVersion = BuildConfig.FOXCORE_SOURCE_VERSION,
             androidRelease = Build.VERSION.RELEASE.orEmpty().ifBlank { "unknown" },
             sdkInt = Build.VERSION.SDK_INT,
-            supportedAbis = Build.SUPPORTED_ABIS.filter(String::isNotBlank),
+            supportedAbis = Build.SUPPORTED_ABIS.orEmpty().filter(String::isNotBlank),
             themeMode = settings.ui.themeMode.name.lowercase(Locale.ROOT),
             locale = settings.ui.locale.tag.ifBlank { "system" },
             trafficMode = settings.traffic.mode.name.lowercase(Locale.ROOT),
@@ -519,18 +547,6 @@ class DiagnosticsLogger(
         }
     }
 
-    private fun scheduleCleanup() {
-        val request =
-            OneTimeWorkRequestBuilder<DiagnosticsCleanupWorker>()
-                .setInitialDelay(EXPORT_TTL_MS, TimeUnit.MILLISECONDS)
-                .build()
-        WorkManager.getInstance(context).enqueueUniqueWork(
-            DIAGNOSTIC_CLEANUP_WORK_NAME,
-            ExistingWorkPolicy.REPLACE,
-            request,
-        )
-    }
-
     private data class PendingDiagnosticWrite(
         val entry: DiagnosticEntry,
         val retention: RetentionPolicy,
@@ -538,6 +554,19 @@ class DiagnosticsLogger(
     )
 
     companion object {
+        internal fun forManualExportTests(
+            context: Context,
+            nowProvider: () -> Long = System::currentTimeMillis,
+            retentionProvider: () -> RetentionPolicy = { RetentionPolicy() },
+            settingsSnapshotProvider: () -> Settings = { Settings() },
+        ): DiagnosticsLogger = DiagnosticsLogger(
+            context,
+            nowProvider,
+            retentionProvider,
+            settingsSnapshotProvider,
+            false,
+        )
+
         private const val LOG_TAG = "FoxholeDiag"
         private const val THROTTLE_TTL_MS = 30 * 60 * 1000L
         private const val MAX_THROTTLED_KEYS = 4_096
@@ -552,7 +581,6 @@ class DiagnosticsLogger(
         private const val EXPORT_DIR_NAME = "diagnostics-export"
         private const val JOURNAL_DIR_NAME = "diagnostics-journal"
         private const val LEGACY_SMART_START_REPLAY_DIR_NAME = "smart-start-replay"
-        private const val DIAGNOSTIC_CLEANUP_WORK_NAME = "diagnostics-export-cleanup"
     }
 }
 

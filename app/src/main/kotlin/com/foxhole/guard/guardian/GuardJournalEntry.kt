@@ -38,6 +38,7 @@ enum class GuardEventType {
     CORE_OUTBOUND_RESTORED,
     CORE_FLOWS_REVOKED,
     CORE_EVENT_GAP,
+    PACKAGE_EVENT_GAP,
 }
 
 @Serializable

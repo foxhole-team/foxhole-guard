@@ -1,0 +1,3 @@
+<resources>
+    <string name="error_flow_attribution_unavailable">Per-app firewall and routing require Android 10 or later. This configuration cannot start on this device.</string>
+</resources>

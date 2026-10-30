@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="cli_logs_tab_sentinel">Sentinel</string>
+    <string name="cli_sentinel_installations">インストール済みアプリ</string>
+    <string name="cli_sentinel_recent_installations">最近のインストール</string>
+    <string name="cli_sentinel_view_all_installations">すべて表示 (%1$d)</string>
+    <string name="cli_sentinel_installations_empty">表示可能なインストール済みアプリはありません。</string>
+    <string name="cli_sentinel_install_history">記録されたアプリの変更</string>
+    <string name="cli_sentinel_install_history_retention">アプリの変更履歴</string>
+    <string name="cli_sentinel_history_detected">検出日時: %1$s</string>
+    <string name="cli_sentinel_history_empty">アプリの変更は記録されていません。</string>
+    <string name="cli_sentinel_activity_history">観測されたアプリの動作</string>
+    <string name="cli_sentinel_inventory_refresh">アプリ一覧を更新</string>
+    <string name="cli_sentinel_inventory_failed">インストール済みアプリの一覧を読み込めませんでした。</string>
+    <string name="cli_sentinel_apps_updated">更新済み</string>
+    <string name="cli_sentinel_module_history_note">インストールと検出結果は「ジャーナル → Sentinel」にあります。</string>
+</resources>

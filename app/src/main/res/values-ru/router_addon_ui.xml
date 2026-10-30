@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="guard_router_addon_settings_title">Настройки дополнения OpenWrt</string>
+    <string name="guard_router_home_shortcut_label">Быстрый доступ на главной</string>
+    <string name="guard_router_dock_shortcut_label">Быстрый доступ в доке</string>
+    <string name="guard_router_dock_title">OpenWrt</string>
+</resources>

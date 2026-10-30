@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="interface_mode_title">界面</string>
+    <string name="interface_mode_user">用户</string>
+    <string name="interface_mode_expert">专家</string>
+    <string name="interface_mode_description">切换界面不会影响连接和高级设置。</string>
+    <string name="user_home_choose_profile">选择配置</string>
+    <string name="user_home_add_profile">添加 VPN 配置</string>
+    <string name="user_home_map_disabled">流量地图小组件已停用</string>
+    <string name="user_home_map_setup">启用</string>
+    <string name="user_home_latency">延迟：%1$s</string>
+    <string name="user_home_city">城市</string>
+    <string name="user_home_city_unavailable">城市信息不可用</string>
+    <string name="user_home_stop_proxy">停止本地代理</string>
+    <string name="user_settings_protection">防护</string>
+</resources>

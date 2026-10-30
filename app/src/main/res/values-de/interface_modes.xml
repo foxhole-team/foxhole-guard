@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="interface_mode_title">Oberfläche</string>
+    <string name="interface_mode_user">Benutzer</string>
+    <string name="interface_mode_expert">Experte</string>
+    <string name="interface_mode_description">Ein Wechsel der Oberfläche erhält deine Verbindung und erweiterten Einstellungen.</string>
+    <string name="user_home_choose_profile">Profil auswählen</string>
+    <string name="user_home_add_profile">VPN-Profil hinzufügen</string>
+    <string name="user_home_map_disabled">Das Widget für die Verkehrskarte ist deaktiviert</string>
+    <string name="user_home_map_setup">Aktivieren</string>
+    <string name="user_home_latency">Latenz: %1$s</string>
+    <string name="user_home_city">Stadt</string>
+    <string name="user_home_city_unavailable">Stadt nicht verfügbar</string>
+    <string name="user_home_stop_proxy">Lokalen Proxy stoppen</string>
+    <string name="user_settings_protection">Schutz</string>
+</resources>

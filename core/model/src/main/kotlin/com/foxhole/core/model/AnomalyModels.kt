@@ -32,6 +32,7 @@ enum class AnomalyType {
     DORMANT_APP_NETWORK_ACTIVITY,
 
     KNOWN_THREAT_DESTINATION,
+    APP_STATIC_REFERENCE,
 }
 
 @Serializable
@@ -80,6 +81,7 @@ data class AnomalySettings(
     val historyRetention: AnomalyHistoryRetention = AnomalyHistoryRetention.DAYS_7,
 
     val excludedPackages: List<String> = emptyList(),
+    val apkScan: ApkScanSettings = ApkScanSettings(),
 )
 
 @Immutable

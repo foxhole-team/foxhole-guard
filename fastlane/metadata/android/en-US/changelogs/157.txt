@@ -1,0 +1,4 @@
+0.1.1 Stable
+
+- Makes the Network section collapsible in User settings, matching the other sections.
+- Preserves network preferences while expanding or collapsing the section.

@@ -3,14 +3,94 @@ import com.foxhole.core.model.DiagnosticEntry
 import com.foxhole.core.model.RetentionPolicy
 import com.foxhole.core.model.RetentionPreset
 import com.foxhole.guard.core.sentinel.FileCipher
+import kotlinx.coroutines.CancellationException
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
 import java.nio.file.Files
 
 class DiagnosticsSessionStoreTest {
+    @Test
+    fun `manual plaintext snapshot neither migrates nor deletes journal files`() {
+        val directory = Files.createTempDirectory("foxhole-about-legacy").toFile()
+        try {
+            val legacy = File(directory, "session-1-test.jsonl").apply {
+                writeText("{\"timestamp\":1000,\"tag\":\"t\",\"message\":\"owned\"}\ninvalid-json\n")
+            }
+            val bytes = legacy.readBytes()
+            var writes = 0
+            val cipher = object : FileCipher {
+                override fun readBytes(file: File): ByteArray = error("not used")
+                override fun writeBytesAtomic(file: File, plaintext: ByteArray) { writes += 1 }
+            }
+            val store = DiagnosticsSessionStore(directory, fileCipher = cipher)
+            val result = store.loadRecentEntriesForAbout(2_000L, RetentionPolicy(RetentionPreset.DAY))
+            assertEquals(listOf("owned"), result.map(DiagnosticEntry::message))
+            assertEquals(0, writes)
+            assertTrue(legacy.readBytes().contentEquals(bytes))
+            assertEquals(listOf(legacy.name), directory.list().orEmpty().toList())
+        } finally {
+            directory.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `manual unknown cipher refuses instead of invoking potentially creating reader`() {
+        val directory = Files.createTempDirectory("foxhole-about-unknown").toFile()
+        try {
+            val file = File(directory, "session-1-test.jsonl.enc").apply { writeText("owned") }
+            var reads = 0
+            var writes = 0
+            val cipher = object : FileCipher {
+                override fun readBytes(file: File): ByteArray {
+                    reads += 1
+                    return file.readBytes()
+                }
+                override fun writeBytesAtomic(file: File, plaintext: ByteArray) { writes += 1 }
+            }
+            val result = DiagnosticsSessionStore(directory, fileCipher = cipher)
+                .loadRecentEntriesForAbout(2_000L, RetentionPolicy(RetentionPreset.DAY))
+            assertEquals(1, result.size)
+            assertTrue(result.single().message.contains("journal read failed"))
+            assertEquals(0, reads)
+            assertEquals(0, writes)
+            assertTrue(file.exists())
+        } finally {
+            directory.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `manual read and decode preserve cancellation and fatal identity`() {
+        listOf(false, true).forEach { decoder ->
+            listOf<Throwable>(CancellationException("manual"), LinkageError("manual")).forEach { failure ->
+                assertManualReadBoundary(decoder, failure)
+            }
+        }
+    }
+
+    private fun assertManualReadBoundary(decoder: Boolean, failure: Throwable) {
+        val directory = Files.createTempDirectory("foxhole-about-read").toFile()
+        try {
+            val file = File(directory, "session-1-test.jsonl").apply { writeText("owned") }
+            val store = DiagnosticsSessionStore(
+                journalDir = directory,
+                aboutPlaintextReader = { if (!decoder) throw failure else "owned" },
+                aboutLineDecoder = { throw failure },
+            )
+            val actual = runCatching {
+                store.loadRecentEntriesForAbout(2_000L, RetentionPolicy())
+            }.exceptionOrNull()
+            assertSame(failure, actual)
+            assertEquals("owned", file.readText())
+        } finally {
+            directory.deleteRecursively()
+        }
+    }
+
     @Test
     fun `append writes encrypted entries and another store loads them`() {
         val directory = Files.createTempDirectory("foxhole-diagnostics-journal").toFile()

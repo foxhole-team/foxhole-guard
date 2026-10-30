@@ -1,9 +1,11 @@
 package com.foxhole.core.runtime
 
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import java.util.Base64
 
 internal fun translateFoxCoreProxyOutbound(
     source: JsonObject,
@@ -36,6 +38,7 @@ private fun translateVless(
         }
     }
     val flow = source.optionalString("flow", path)?.takeIf(String::isNotBlank)
+    val encryption = readVlessEncryption(source, path, flow)
     if (flow != null && flow != "xtls-rprx-vision") {
         rejectFoxCoreConfig(FoxCoreConfigRejection.UNSUPPORTED_TRANSPORT, "$path.flow")
     }
@@ -50,18 +53,23 @@ private fun translateVless(
             mandatory = false,
             allowReality = true,
         )
-    if (tls.reality != null && source["transport"] != null) {
+    val transport = source["transport"]?.asFoxCoreObject("$path.transport")
+    val resolvedTransport = if (tls.reality != null && transport?.optionalString("type", "$path.transport")?.lowercase() in setOf("xhttp", "splithttp") && transport?.optionalString("mode", "$path.transport").orEmpty() in setOf("", "auto")) {
+        JsonObject(checkNotNull(transport) + ("mode" to JsonPrimitive("stream-one")))
+    } else { transport }
+    if (tls.reality != null && source["transport"] != null && !isRealityStreamTransport(source, flow)) {
         rejectFoxCoreConfig(FoxCoreConfigRejection.UNSUPPORTED_TRANSPORT, "$path.transport")
     }
     return buildJsonObject {
         put("type", "vless")
         putCommonServer(source, path)
         put("uuid", source.requiredString("uuid", path))
+        encryption?.let { put("encryption", it) }
         flow?.let { put("flow", it) }
         put(
             "transport",
             translateFoxCoreTransport(
-                source["transport"]?.asFoxCoreObject("$path.transport"),
+                resolvedTransport,
                 "$path.transport",
             ),
         )
@@ -69,6 +77,28 @@ private fun translateVless(
         put("tls", tls.tls)
         tls.reality?.let { put("reality", it) }
     }
+}
+
+private fun readVlessEncryption(source: JsonObject, path: String, flow: String?): String? {
+    val encryption =
+        source.optionalString("encryption", path)?.trim()
+            ?.takeIf { it.isNotEmpty() && !it.equals("none", true) }
+    if (encryption != null && !isClientVlessEncryptionSpec(encryption)) {
+        rejectFoxCoreConfig(FoxCoreConfigRejection.INVALID_SHAPE, "$path.encryption")
+    }
+    if (encryption != null && flow != null) {
+        rejectFoxCoreConfig(FoxCoreConfigRejection.UNSUPPORTED_TRANSPORT, "$path.flow")
+    }
+    return encryption
+}
+
+private fun isRealityStreamTransport(source: JsonObject, flow: String?): Boolean {
+    if (flow != null) {
+        return false
+    }
+    val transport = source["transport"] as? JsonObject ?: return false
+    val type = transport["type"] as? JsonPrimitive ?: return false
+    return type.isString && type.content.lowercase() in setOf("grpc", "xhttp", "splithttp")
 }
 
 private fun translateVlessPacketEncoding(
@@ -177,14 +207,30 @@ private fun translateShadowsocks(
     if (source.optionalBoolean("udp_over_tcp", path) == true) {
         rejectFoxCoreConfig(FoxCoreConfigRejection.UNSUPPORTED_TRANSPORT, "$path.udp_over_tcp")
     }
+    val transport =
+        translateFoxCoreTransport(
+            source["transport"]?.asFoxCoreObject("$path.transport"),
+            "$path.transport",
+        )
+    val tls =
+        translateFoxCoreTls(
+            source["tls"]?.asFoxCoreObject("$path.tls"),
+            "$path.tls",
+            mandatory = false,
+            allowReality = false,
+        )
+    val streamCarrier = transport["type"] != JsonPrimitive("raw") || tls.tls["enabled"] == JsonPrimitive(true)
+    if (udp && streamCarrier) {
+        rejectFoxCoreConfig(FoxCoreConfigRejection.UNSUPPORTED_TRANSPORT, "$path.network")
+    }
     return buildJsonObject {
         put("type", "shadowsocks")
         putCommonServer(source, path)
         put("method", source.requiredString("method", path))
         put("password", source.requiredString("password", path))
         put("udp", udp)
-        put("transport", buildJsonObject { put("type", "raw") })
-        put("tls", buildJsonObject { put("enabled", false) })
+        put("transport", transport)
+        put("tls", tls.tls)
     }
 }
 
@@ -467,7 +513,7 @@ private val TCP_RELIABILITY_KEYS =
 private val VLESS_KEYS =
     COMMON_PROXY_KEYS +
         TCP_RELIABILITY_KEYS +
-        setOf("uuid", "flow", "network", "packet_encoding", "tls", "transport")
+        setOf("uuid", "flow", "network", "packet_encoding", "tls", "transport", "encryption")
 
 private val VMESS_KEYS =
     COMMON_PROXY_KEYS +
@@ -482,7 +528,7 @@ private val TROJAN_KEYS =
 private val SHADOWSOCKS_KEYS =
     COMMON_PROXY_KEYS +
         TCP_RELIABILITY_KEYS +
-        setOf("method", "password", "network", "udp_over_tcp")
+        setOf("method", "password", "network", "udp_over_tcp", "tls", "transport")
 
 private val HYSTERIA2_KEYS =
     COMMON_PROXY_KEYS +
@@ -530,3 +576,45 @@ private val ANYTLS_KEYS =
             "idle_session_timeout",
             "min_idle_session",
         )
+
+private fun isClientVlessEncryptionSpec(value: String): Boolean {
+    if (value.length > 65536 || value.any { it.isISOControl() || it.isWhitespace() }) return false
+    val fields = value.split('.')
+    if (!validClientEncryptionPrefix(fields)) return false
+    val rest = fields.drop(3)
+    val padding = rest.takeWhile { it.length < 20 }
+    val keys = rest.drop(padding.size)
+    return keys.isNotEmpty() && validClientEncryptionPadding(padding) && keys.all(::validClientEncryptionKey)
+}
+
+private fun validClientEncryptionPrefix(fields: List<String>): Boolean {
+    if (fields.size < 4 || fields[0] != "mlkem768x25519plus") return false
+    if (fields[1] !in setOf("native", "xorpub", "random")) return false
+    return fields[2] in setOf("0rtt", "1rtt")
+}
+
+private fun validClientEncryptionPadding(fields: List<String>): Boolean {
+    var total = 0L
+    for ((index, field) in fields.withIndex()) {
+        val values = clientEncryptionPaddingValues(field) ?: return false
+        if (index == 0 && !validFirstClientPadding(values)) return false
+        if (index % 2 == 0) total += maxOf(values[1], values[2])
+    }
+    return total <= 65553L
+}
+
+private fun clientEncryptionPaddingValues(field: String): List<Long>? {
+    val parts = field.split('-')
+    if (parts.size != 3) return null
+    val values = parts.map { it.toLongOrNull() ?: return null }
+    return values.takeIf { numbers -> numbers.all { it in 0..4294967295L } }
+}
+
+private fun validFirstClientPadding(values: List<Long>): Boolean =
+    values[0] >= 100 && values[1] >= 35 && values[2] >= 35
+
+private fun validClientEncryptionKey(value: String): Boolean {
+    if (!value.matches(Regex("[A-Za-z0-9_-]+"))) return false
+    val bytes = runCatching { Base64.getUrlDecoder().decode(value) }.getOrNull() ?: return false
+    return bytes.size in setOf(32, 1184) && Base64.getUrlEncoder().withoutPadding().encodeToString(bytes) == value
+}

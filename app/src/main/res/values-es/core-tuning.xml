@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="cli_core_expert_title">Ajustes avanzados</string>
+    <string name="cli_core_expert_note">Los cambios se aplican al túnel activo. Cambiar los recursos del núcleo lo reinicia. Los búferes y límites de flujos mayores pueden aumentar el uso de memoria.</string>
+    <string name="cli_core_workers">Hilos del núcleo</string>
+    <string name="cli_core_connect_timeout">Tiempo de espera de conexión</string>
+    <string name="cli_core_handshake_timeout">Tiempo de espera del protocolo de enlace</string>
+    <string name="cli_core_relay_buffer">Búfer de entrada y salida</string>
+    <string name="cli_core_tcp_flows">Límite de flujos TCP</string>
+    <string name="cli_core_udp_flows">Límite de flujos UDP</string>
+    <string name="cli_core_dns_timeout">Tiempo de espera de DNS</string>
+    <string name="cli_core_dns_cache">Entradas de la caché DNS</string>
+    <string name="cli_core_reset">Restaurar valores del núcleo</string>
+    <string name="cli_core_default">Predeterminado</string>
+    <string name="cli_core_range">Intervalo permitido: %1$d–%2$d</string>
+</resources>

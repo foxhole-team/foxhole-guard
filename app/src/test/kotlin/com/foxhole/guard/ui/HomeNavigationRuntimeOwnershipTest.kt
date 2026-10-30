@@ -42,6 +42,12 @@ class HomeNavigationRuntimeOwnershipTest {
             assertFalse("dashboard visibility must not call $operation", dashboardVisibility.contains(operation))
         }
         assertTrue(routeVisibility.contains("onDashboardUiVisibilityChanged(screen == CliScreen.HOME)"))
+        assertTrue(routeVisibility.contains("LifecycleStartEffect(screen, viewModel)"))
+        assertTrue(routeVisibility.contains("onStopOrDispose"))
+        assertTrue(routeVisibility.contains("onDashboardUiVisibilityChanged(false)"))
+        assertTrue(routeVisibility.contains("onProfilesUiVisibilityChanged(false)"))
+        assertTrue(routeVisibility.contains("onTrafficUiVisibilityChanged(false)"))
+        assertTrue(routeVisibility.contains("onStatisticsUiVisibilityChanged(false)"))
     }
 
     @Test

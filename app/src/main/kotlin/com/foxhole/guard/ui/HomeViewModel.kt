@@ -31,6 +31,7 @@ import com.foxhole.guard.core.data.WebAppEntity
 import com.foxhole.guard.core.settings.AppTrafficStatsRecorder
 import com.foxhole.guard.core.settings.acknowledgeBetaNotice
 import com.foxhole.guard.core.settings.applyUpdateNoticeChoice
+import com.foxhole.guard.core.settings.requiresOnboarding
 import com.foxhole.guard.core.settings.rotatePrivacyRouteIdentity
 import com.foxhole.guard.core.settings.updatePrivacyRouteAutoRotateExit
 import com.foxhole.guard.core.settings.updatePrivacyRouteAutoRotateInterval
@@ -220,6 +221,12 @@ class HomeViewModel(
     val uiState: StateFlow<HomeUiState> = stateProducer.uiState
     private val statisticsUiState: StateFlow<HomeUiState> = stateProducer.statisticsUiState
 
+    internal val interfaceMode: StateFlow<com.foxhole.core.model.InterfaceMode> =
+        container.settingsRepository.settings
+            .map { it.ui.interfaceMode }
+            .distinctUntilChanged()
+            .stateIn(viewModelScope, SharingStarted.Eagerly, initialSettings.ui.interfaceMode)
+
     val appearanceUiState: StateFlow<AppearanceUiState> =
         container.settingsRepository.settings
             .map { settings -> settings.ui.appearanceUiState() }
@@ -377,7 +384,9 @@ class HomeViewModel(
         combine(
             container.settingsRepository.hydrated,
             container.settingsRepository.settings,
-        ) { hydrated, settings -> hydrated && !settings.ui.onboardingCompleted }
+        ) { hydrated, settings ->
+            requiresOnboarding(hydrated, settings.ui.onboardingCompleted, settings.ui.acceptedLicenseAgreementVersion)
+        }
             .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     val betaNoticeRequired: StateFlow<Boolean> =
@@ -588,20 +597,32 @@ class HomeViewModel(
             }
     }
 
+    internal val updateNoticeState = UpdateNoticeState()
+
     val alphaNoticeVisible: StateFlow<Boolean> =
         container.settingsRepository.settings
-            .map { it.ui.alphaNoticeShownVersionCode != BuildConfig.VERSION_CODE }
+            .map { shouldShowUpdateNotice(it.ui, CURRENT_UPDATE_NOTICE) }
             .distinctUntilChanged()
             .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     fun dismissAlphaNotice(monochromeEnabled: Boolean) {
         viewModelScope.launch {
-            container.settingsRepository.applyUpdateNoticeChoice(
-                monochromeEnabled = monochromeEnabled,
-                shownVersionCode = BuildConfig.VERSION_CODE,
-            )
+            when (
+                updateNoticeState.acknowledge {
+                    container.settingsRepository.applyUpdateNoticeChoice(
+                        monochromeEnabled = monochromeEnabled,
+                        contentId = CURRENT_UPDATE_NOTICE.contentId,
+                        revision = CURRENT_UPDATE_NOTICE.revision,
+                    )
+                }
+            ) {
+                is UpdateNoticeAckResult.Failed -> snackbars.tryEmit(errorBanner(R.string.cli_release_notes_ack_failed))
+                UpdateNoticeAckResult.Saved, UpdateNoticeAckResult.AlreadyPending -> Unit
+            }
         }
     }
+
+    fun reopenUpdateNotice() = updateNoticeState.openForReading()
 
     fun onSelectProfile(profileId: Long) {
         cancelAutoConnect(clearUiOnly = true)

@@ -1,0 +1,43 @@
+{
+  "schema": 1,
+  "status": "derived-portable-runtime-capture-and-report",
+  "actualCaptureSha256": "f95d54be9840fe2e5eec4df4fe82d5dc1555f4cb426080b5536278bd098da413",
+  "portableCaptureSha256": "6846bce0b0bd6d47bc05012260162ac769b35d9cba23ff92f1742bcd09e108f5",
+  "actualCollectorReportSha256": "6ba294c123d6e9724908945c5d0eed03b26a6c773ca370de2ef85cebacf746e2",
+  "derivedCollectorReportSha256": "4c786605b1bdecd7fe634162f7e728f19eb14d76d8def441e18efa0f96892dde",
+  "actualSourceManifestSha256": "67c3b32f0b813f0b05afe50874ea4fd1d2ec5170093ea3bbd66bab1c4b9e5693",
+  "actualTerminalReceiptSha256": "90fe30248852e6fc88ae995468e5d8b2809b0b52fe5fa9204f8900c7ce3f4af0",
+  "removedFields": {
+    "artifact.path": 122,
+    "pom.original_query_failures": 169
+  },
+  "derivedLicenseChoices": [],
+  "transformation": "Only local artifact.path and pom.original_query_failures removed; every graph/archive/POM identity and original notice byte is retained. Fresh G6 normal capture includes the verified JSch coordinate. No native/APK/runtime acceptance.",
+  "sourceInputProjections": {
+    "app/build.gradle.kts": {
+      "mode": "exact-Core-android4-and-fdroid-source-native-rebind",
+      "capturedSha256": "31d354e6572649d9e5f47cd6cf0110ff8a766d63331fc819d3b80c949345a06b",
+      "previousBoundSourceSha256": "41f22b62565e33fe47432d7aaa9908cc770b64802b7c5f6ec0574d67bc573ee2",
+      "boundSourceSha256": "162ef6953c4dec3c34ba11a4a954dce585cfdd3c96184e24c96a32ac2a881ba1",
+      "sourceChangeScope": "Core checkout/source identity, explicit android4 dispatch, F-Droid-only source-native provenance/staging, and native-build log routing; Maven dependency declarations, plugins and repositories unchanged",
+      "fdroidUnsignedProjection": {
+        "mode": "exact-stock-fdroid-unsigned-source",
+        "originalBoundSourceSha256": "162ef6953c4dec3c34ba11a4a954dce585cfdd3c96184e24c96a32ac2a881ba1",
+        "unsignedSourceSha256": "21b8a7b1f65debd737883ae4114d2f03794c22a16627a4a0696c7e3ae8a59e2e",
+        "transformation": {
+          "function": "fdroidserver.common.remove_signing_keys",
+          "functionSha256": "9fe344aa703b2ab4414d3e9eb3b3ff90c7b76dd4168749f9eebe0d878b40d5cc",
+          "module": "fdroidserver/common.py",
+          "moduleSha256": "3dfa26b876ba70af14f4348bf2b297d1603f448c79fdcad514d51223ccb8607b",
+          "officialImage": "sha256:1c5999b794734ef08c6108fe491e21f063b8aed8e9a4fb60ff75e806690146b6",
+          "upstreamRepository": "https://gitlab.com/fdroid/fdroidserver",
+          "gitRevision": null,
+          "version": null
+        },
+        "scope": "Stock removal of release signing configuration only; exact full input/output hashes; dependency, plugin and repository declarations unchanged; no recapture or native/reproducibility acceptance"
+      }
+    }
+  },
+  "artifactIdentityAndHashProjectionSha256": "b7045e9725ea2e10401ede57faff57ee12b6d857c1cea7b2e5ae756b86f11ed6",
+  "oldG5Retagged": false
+}

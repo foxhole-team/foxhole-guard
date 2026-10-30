@@ -6,6 +6,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.os.Process
 import android.os.StrictMode
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.os.LocaleListCompat
@@ -32,7 +33,7 @@ import com.foxhole.core.runtime.FoxholeVpnRuntimeBridge
 import com.foxhole.guard.core.data.ProfileSecretCleanupWorker
 import com.foxhole.guard.core.data.cleanupOrphanProfileSecrets
 import com.foxhole.guard.core.diagnostics.DiagnosticsSessionStore
-import com.foxhole.guard.core.settings.readFastStoredAppLocale
+import com.foxhole.guard.core.sentinel.scanner.isStandardIsolatedScannerUid
 import com.foxhole.guard.guardian.GuardHeartbeatWorker
 import com.foxhole.guard.guardian.enqueuePendingQuarantineAnalysis
 import com.foxhole.guard.runtime.AppUpdatePolicy
@@ -74,6 +75,9 @@ class FoxholeApplication :
     lateinit var appGraph: FoxholeAppGraph
         private set
 
+    internal val runtimeOwnersInitialized: Boolean get() = ::appGraph.isInitialized
+    internal val routerProfileMonitor by lazy { com.foxhole.guard.router.GuardRouterProfileMonitor(this) }
+
     internal val container: FoxholeAppGraph
         get() = appGraph
 
@@ -96,10 +100,13 @@ class FoxholeApplication :
 
     override fun onCreate() {
         super.onCreate()
+        if (isStandardIsolatedScannerUid(Process.myUid())) return
 
         installUncaughtCrashHandler()
         installDebugStrictMode()
         appGraph = FoxholeAppGraph(this)
+        routerProfileMonitor // Observe only locally trusted marked profiles; ordinary profiles never probe a router.
+        startSentinelStaticPolicySync()
         FoxholeVpnRuntimeBridge.onWriteRejected = { mode, incoming ->
             appGraph.diagnosticsLogger.record(
                 "connection",
@@ -107,7 +114,7 @@ class FoxholeApplication :
             )
         }
         registerReceiver(screenOffKeyWipeReceiver, IntentFilter(Intent.ACTION_SCREEN_OFF))
-        applyAppLocale(readFastStoredAppLocale(this))
+        observeAppLanguageChanges(appScope) { appGraph.settingsRepository }
 
         appScope.launch {
             delay(BACKGROUND_INITIALIZATION_STARTUP_DELAY_MS)
@@ -143,7 +150,7 @@ class FoxholeApplication :
             enqueueQuarantineRuntimeEnforcement(settings.expert.quarantinePolicyRevision)
         }
         runProfileStartupOrDeferUntilUnlock(startupDependencies, settings.lastActiveProfile == null)
-        applyAppLocale(settings.ui.locale)
+        synchronizeGuardAppLanguage(this, startupDependencies.settingsRepository)
 
         refreshLocalizedNotificationChannels()
 

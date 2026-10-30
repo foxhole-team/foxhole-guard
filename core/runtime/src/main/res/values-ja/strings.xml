@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="error_route_excludes_android_version">ルート除外には Android 13 以降が必要です。この端末ではこのプロファイルを安全に開始できません</string>
+    <string name="error_route_excludes_too_many">ルート除外が多すぎます（%1$d、Android の上限は %2$d）。ルールを減らして再試行してください</string>
+    <string name="error_runtime_missing">このビルドには FoxCore ネイティブライブラリが含まれていません</string>
+    <string name="error_vpn_package_split_unavailable">選択した一部のアプリは既に削除されています。アプリのルーティング一覧を更新して再接続してください</string>
+</resources>

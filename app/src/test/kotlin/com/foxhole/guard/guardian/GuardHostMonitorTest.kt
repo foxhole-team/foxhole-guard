@@ -102,6 +102,31 @@ class GuardHostMonitorTest {
         assertTrue(monitor.hasHostOtherThan(FoxholeGuardService.HOST_NAME))
     }
 
+    @Test
+    fun `refused start is retried without announcing a false success`() {
+        var accepted = false
+        var attempts = 0
+        val stopped = mutableListOf<String>()
+        val monitor = GuardHostMonitor(
+            scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined),
+            monitoringActive = { true },
+            onHostStarted = {
+                attempts++
+                accepted
+            },
+            onHostStopped = { host, _ -> stopped += host },
+            onHeartbeat = {},
+            heartbeatIntervalMs = 60_000L,
+        )
+        monitor.attach("owned-host")
+        accepted = true
+        monitor.reconcile()
+        monitor.reconcile()
+        monitor.detach("owned-host", destroyed = true)
+        assertEquals(2, attempts)
+        assertEquals(listOf("owned-host"), stopped)
+    }
+
     private fun monitor(
         active: () -> Boolean,
         onStarted: (String) -> Unit = {},
@@ -111,7 +136,10 @@ class GuardHostMonitorTest {
         GuardHostMonitor(
             scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined),
             monitoringActive = active,
-            onHostStarted = onStarted,
+            onHostStarted = { host ->
+                onStarted(host)
+                true
+            },
             onHostStopped = onStopped,
             onHeartbeat = onHeartbeat,
             heartbeatIntervalMs = 60_000L,

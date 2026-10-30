@@ -86,6 +86,23 @@ internal interface FoxCoreNativeApi {
         host: RuntimeServiceHost,
     ): Long
 
+    fun retainDnsContinuation(handle: Long): Long = 0L
+
+    fun releaseDnsContinuation(token: Long) = Unit
+
+    fun startOnNetworkWithDnsContinuity(
+        tunFd: Int,
+        configJson: String,
+        networkHandle: Long,
+        token: Long,
+        name: String?,
+        manifest: ByteArray?,
+        signature: ByteArray?,
+        artifact: ByteArray?,
+        trusted: Boolean,
+        host: RuntimeServiceHost,
+    ): Long = 0L
+
     fun installDnsRuleSet(
         handle: Long,
         name: String,
@@ -224,6 +241,27 @@ internal object JniFoxCoreNativeApi : FoxCoreNativeApi {
             artifact,
             host,
         )
+
+    override fun retainDnsContinuation(handle: Long): Long =
+        FoxholeNativeEngine.nativeRetainDnsContinuation(handle)
+
+    override fun releaseDnsContinuation(token: Long) =
+        FoxholeNativeEngine.nativeReleaseDnsContinuation(token)
+
+    override fun startOnNetworkWithDnsContinuity(
+        tunFd: Int,
+        configJson: String,
+        networkHandle: Long,
+        token: Long,
+        name: String?,
+        manifest: ByteArray?,
+        signature: ByteArray?,
+        artifact: ByteArray?,
+        trusted: Boolean,
+        host: RuntimeServiceHost,
+    ): Long = FoxholeNativeEngine.nativeStartOnNetworkWithDnsContinuity(
+        tunFd, configJson, networkHandle, token, name, manifest, signature, artifact, trusted, host,
+    )
 
     override fun installDnsRuleSet(
         handle: Long,
@@ -369,6 +407,8 @@ enum class FoxCoreRuntimeFailure(
     TUN_ESTABLISH_FAILED("tun_establish_failed"),
     TUN_PLAN_CHANGED("tun_plan_changed"),
     NATIVE_START_FAILED("native_start_failed"),
+    FLOW_ATTRIBUTION_UNAVAILABLE("flow_attribution_unavailable"),
+    DNS_CONTINUATION_UNAVAILABLE("dns_continuation_unavailable"),
     NATIVE_STOP_FAILED("native_stop_failed"),
     POLICY_RELOAD_FAILED("policy_reload_failed"),
 

@@ -1,6 +1,7 @@
 package com.foxhole.guard.ui.cli.settings
 
 import android.net.Uri
+import androidx.activity.compose.ManagedActivityResultLauncher
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Column
@@ -13,7 +14,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -24,8 +25,12 @@ import androidx.compose.ui.res.stringResource
 import com.foxhole.guard.R
 import com.foxhole.guard.core.backup.BACKUP_PASSWORD_MIN_CHARS
 import com.foxhole.guard.core.backup.BackupDocument
-import com.foxhole.guard.core.backup.backupFileName
-import com.foxhole.guard.ui.BackupFileTooLargeException
+import com.foxhole.guard.core.backup.BackupExportSelection
+import com.foxhole.guard.core.backup.PendingBackupExport
+import com.foxhole.guard.core.backup.PreparedBackupImport
+import com.foxhole.guard.core.backup.completeBackupExportPicker
+import com.foxhole.guard.core.backup.launchBackupPicker
+import com.foxhole.guard.core.backup.launchPendingBackupExportPicker
 import com.foxhole.guard.ui.HomeViewModel
 import com.foxhole.guard.ui.clearProfilesAndSecretsLocalData
 import com.foxhole.guard.ui.cli.CliSpacing
@@ -44,9 +49,13 @@ import com.foxhole.guard.ui.cli.components.CliSheetActionsRow
 import com.foxhole.guard.ui.cli.components.CliToggleRow
 import com.foxhole.guard.ui.exportBackup
 import com.foxhole.guard.ui.factoryResetLocalData
-import com.foxhole.guard.ui.parseBackup
+import com.foxhole.guard.ui.prepareBackupImport
+import com.foxhole.guard.ui.reportBackupExportCancelled
+import com.foxhole.guard.ui.reportBackupPickerFailure
 import com.foxhole.guard.ui.resetApplicationSettingsToDefaults
 import com.foxhole.guard.ui.restoreBackup
+import com.foxhole.guard.ui.unlockPreparedBackup
+import kotlinx.coroutines.Job
 
 @Composable
 internal fun CliDataSubScreen(
@@ -55,26 +64,22 @@ internal fun CliDataSubScreen(
 ) {
     var includeProfiles by rememberSaveable { mutableStateOf(true) }
     var includeSettings by rememberSaveable { mutableStateOf(true) }
-    var pendingRestoreUri by rememberSaveable { mutableStateOf<Uri?>(null) }
+    var encryptBackup by rememberSaveable { mutableStateOf(false) }
     var pendingRestore by remember { mutableStateOf<BackupDocument?>(null) }
-    var pendingRestorePassword by remember { mutableStateOf<CharArray?>(null) }
-    var pendingExportPassword by remember { mutableStateOf<CharArray?>(null) }
-    var showExportPassword by remember { mutableStateOf(false) }
-    var showImportPassword by remember { mutableStateOf(false) }
+    var pendingEncryptedImport by remember { mutableStateOf<PreparedBackupImport.Encrypted?>(null) }
+    var pendingExportSelection by remember { mutableStateOf<BackupExportSelection?>(null) }
+    var pendingExport by remember { mutableStateOf<PendingBackupExport?>(null) }
+    var importJob by remember { mutableStateOf<Job?>(null) }
+    var importBusy by remember { mutableStateOf(false) }
     var confirmAction by rememberSaveable { mutableStateOf<String?>(null) }
-    LaunchedEffect(pendingRestoreUri, pendingRestorePassword) {
-        val uri = pendingRestoreUri ?: return@LaunchedEffect
-        val password = pendingRestorePassword ?: return@LaunchedEffect
-        try {
-            pendingRestore = viewModel.parseBackup(uri, password)
-            if (pendingRestore == null) {
-                pendingRestoreUri = null
-            }
-        } catch (_: BackupFileTooLargeException) {
+    DisposableEffect(Unit) {
+        onDispose {
+            importJob?.cancel()
+            pendingExport?.close()
+            pendingExport = null
+            pendingExportSelection = null
+            pendingEncryptedImport = null
             pendingRestore = null
-            pendingRestoreUri = null
-        } finally {
-            pendingRestorePassword = null
         }
     }
 
@@ -82,88 +87,142 @@ internal fun CliDataSubScreen(
         rememberLauncherForActivityResult(
             ActivityResultContracts.CreateDocument("application/octet-stream"),
         ) { uri: Uri? ->
-            val password = pendingExportPassword
-            pendingExportPassword = null
-            if (uri != null && password != null) {
-                viewModel.exportBackup(uri, includeProfiles, includeSettings, password)
-            } else {
-                password?.fill('\u0000')
-            }
+            val request = pendingExport
+            pendingExport = null
+            completeBackupExportPicker(
+                uri,
+                request,
+                { picked, pending -> viewModel.exportBackup(picked, pending) },
+                viewModel::reportBackupExportCancelled,
+            )
         }
     val importLauncher =
         rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
             if (uri != null) {
-                pendingRestoreUri = uri
-                showImportPassword = true
+                importJob = viewModel.prepareBackupImport(uri) { prepared ->
+                    importBusy = false
+                    when (prepared) {
+                        is PreparedBackupImport.Plain -> pendingRestore = prepared.document
+                        is PreparedBackupImport.Encrypted -> pendingEncryptedImport = prepared
+                        null -> Unit
+                    }
+                }
+            } else {
+                importBusy = false
             }
         }
 
-    if (showExportPassword) {
+    pendingExportSelection?.let { selection ->
         CliBackupPasswordSheet(
             exporting = true,
             onSubmit = { password ->
-                pendingExportPassword?.fill('\u0000')
-                pendingExportPassword = password
-                showExportPassword = false
-                exportLauncher.launch(backupFileName(includeProfiles, includeSettings))
+                pendingExportSelection = null
+                val request = PendingBackupExport.create(selection, password)
+                pendingExport = request
+                launchBackupExport(viewModel, request, exportLauncher) { pendingExport = null }
             },
-            onDismiss = { showExportPassword = false },
+            onDismiss = { pendingExportSelection = null },
         )
     }
-    if (showImportPassword) {
+    pendingEncryptedImport?.let { prepared ->
         CliBackupPasswordSheet(
             exporting = false,
             onSubmit = { password ->
-                pendingRestorePassword?.fill('\u0000')
-                pendingRestorePassword = password
-                showImportPassword = false
+                pendingEncryptedImport = null
+                importBusy = true
+                importJob = viewModel.unlockPreparedBackup(prepared, password) { document ->
+                    pendingRestore = document
+                    importBusy = false
+                }
             },
-            onDismiss = {
-                showImportPassword = false
-                pendingRestoreUri = null
-            },
+            onDismiss = { pendingEncryptedImport = null },
         )
     }
 
+    CliDataScreenLayout(
+        viewModel = viewModel,
+        modifier = modifier,
+        confirmAction = confirmAction,
+        onArm = { confirmAction = it },
+    ) {
+        CliDataBackupPanel(
+            includeProfiles = includeProfiles,
+            includeSettings = includeSettings,
+            encryptBackup = encryptBackup,
+            exportPending = pendingExportSelection != null || pendingExport != null,
+            importPending = importBusy || pendingEncryptedImport != null || pendingRestore != null,
+            pendingRestore = pendingRestore,
+            onIncludeProfiles = { includeProfiles = it },
+            onIncludeSettings = { includeSettings = it },
+            onEncryptBackup = { encryptBackup = it },
+            onExport = {
+                val selection = BackupExportSelection(includeProfiles, includeSettings, encryptBackup)
+                if (selection.encrypted) {
+                    pendingExportSelection = selection
+                } else {
+                    val request = PendingBackupExport.create(selection)
+                    pendingExport = request
+                    launchBackupExport(viewModel, request, exportLauncher) { pendingExport = null }
+                }
+            },
+            onImport = {
+                importBusy = true
+                launchBackupImport(viewModel, importLauncher) { importBusy = false }
+            },
+            onRestore = { document ->
+                viewModel.restoreBackup(document)
+                pendingRestore = null
+            },
+            onDismissRestore = { pendingRestore = null },
+        )
+    }
+}
+
+private fun launchBackupExport(
+    viewModel: HomeViewModel,
+    request: PendingBackupExport,
+    launcher: ManagedActivityResultLauncher<String, Uri?>,
+    clearPending: () -> Unit,
+) = launchPendingBackupExportPicker(
+    request = request,
+    clearPending = clearPending,
+    onFailure = { viewModel.reportBackupPickerFailure(exporting = true, error = it) },
+    launch = { launcher.launch(it) },
+)
+
+private fun launchBackupImport(
+    viewModel: HomeViewModel,
+    launcher: ManagedActivityResultLauncher<Array<String>, Uri?>,
+    clearBusy: () -> Unit,
+) = launchBackupPicker(
+    cleanup = clearBusy,
+    onFailure = { viewModel.reportBackupPickerFailure(exporting = false, error = it) },
+    launch = { launcher.launch(arrayOf("application/octet-stream", "application/json", "*/*")) },
+)
+
+@Composable
+private fun CliDataScreenLayout(
+    viewModel: HomeViewModel,
+    modifier: Modifier,
+    confirmAction: String?,
+    onArm: (String?) -> Unit,
+    backupPanel: @Composable () -> Unit,
+) {
     Column(
         modifier = modifier
             .fillMaxSize()
             .padding(horizontal = CliSpacing.md),
     ) {
         CliScreenHeader(label = stringResource(R.string.cli_cfg_more_data), icon = R.drawable.lin_export)
-
         Column(
-
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
                 .padding(bottom = LocalCliBottomChromeClearance.current),
-
         ) {
-            CliDataBackupPanel(
-                includeProfiles = includeProfiles,
-                includeSettings = includeSettings,
-                pendingRestore = pendingRestore,
-                onIncludeProfiles = { includeProfiles = it },
-                onIncludeSettings = { includeSettings = it },
-                onExport = { showExportPassword = true },
-                onImport = { importLauncher.launch(arrayOf("application/octet-stream", "application/json", "*/*")) },
-                onRestore = { document ->
-                    viewModel.restoreBackup(document)
-                    pendingRestore = null
-                    pendingRestoreUri = null
-                },
-                onDismissRestore = {
-                    pendingRestore = null
-                    pendingRestoreUri = null
-                },
-            )
+            backupPanel()
             Spacer(modifier = Modifier.height(CliSpacing.sm))
-            CliDataClearPanel(
-                viewModel = viewModel,
-                confirmAction = confirmAction,
-                onArm = { confirmAction = it },
-            )
+            CliDataClearPanel(viewModel, confirmAction, onArm)
             Spacer(modifier = Modifier.height(CliSpacing.sm))
         }
     }
@@ -173,9 +232,13 @@ internal fun CliDataSubScreen(
 private fun CliDataBackupPanel(
     includeProfiles: Boolean,
     includeSettings: Boolean,
+    encryptBackup: Boolean,
+    exportPending: Boolean,
+    importPending: Boolean,
     pendingRestore: BackupDocument?,
     onIncludeProfiles: (Boolean) -> Unit,
     onIncludeSettings: (Boolean) -> Unit,
+    onEncryptBackup: (Boolean) -> Unit,
     onExport: () -> Unit,
     onImport: () -> Unit,
     onRestore: (BackupDocument) -> Unit,
@@ -187,6 +250,12 @@ private fun CliDataBackupPanel(
         modifier = Modifier.fillMaxWidth(),
         infoText = stringResource(R.string.cli_data_encrypted_backup_note),
     ) {
+        CliToggleRow(
+            label = stringResource(R.string.cli_data_encrypt_backup),
+            icon = R.drawable.lin_lock,
+            checked = encryptBackup,
+            onToggle = onEncryptBackup,
+        )
         CliToggleRow(
             label = stringResource(R.string.cli_data_include_profiles),
             icon = R.drawable.lin_profiles,
@@ -202,12 +271,13 @@ private fun CliDataBackupPanel(
         CliActionRow(
             label = stringResource(R.string.cli_data_export),
             icon = R.drawable.lin_export,
-            enabled = includeProfiles || includeSettings,
+            enabled = (includeProfiles || includeSettings) && !exportPending,
             onTap = onExport,
         )
         CliActionRow(
             label = stringResource(R.string.cli_data_import),
             icon = R.drawable.lin_import,
+            enabled = !importPending,
             onTap = onImport,
         )
         pendingRestore?.let { document ->
@@ -275,6 +345,12 @@ private fun CliBackupPasswordSheet(
     var password by remember { mutableStateOf("") }
     var confirmation by remember { mutableStateOf("") }
     var attempted by remember { mutableStateOf(false) }
+    DisposableEffect(Unit) {
+        onDispose {
+            password = ""
+            confirmation = ""
+        }
+    }
     val colors = LocalCliColors.current
     val valid =
         if (exporting) {
@@ -283,7 +359,11 @@ private fun CliBackupPasswordSheet(
             password.isNotEmpty()
         }
     CliBottomSheet(
-        onDismiss = onDismiss,
+        onDismiss = {
+            password = ""
+            confirmation = ""
+            onDismiss()
+        },
         title = stringResource(
             if (exporting) R.string.cli_data_backup_password_title else R.string.cli_data_restore_password_title,
         ),

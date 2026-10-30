@@ -1,5 +1,7 @@
 package com.foxhole.core.runtime
 
+import com.foxhole.core.model.AmneziaContentPaddingRange
+import com.foxhole.core.model.AmneziaHeaderProtectionKey
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -102,16 +104,28 @@ private fun translateFoxCoreAmnezia(
     mtu: Int,
 ): JsonObject {
     source.requireOnlyKeys(AMNEZIA_KEYS, path)
-    val junkCount = source.amneziaSize("junk_packet_count", path, MAX_AMNEZIA_JUNK_PACKET_COUNT)
-    val junkMin = source.amneziaSize("junk_min_size", path, MAX_AMNEZIA_JUNK_SIZE)
-    val junkMax = source.amneziaSize("junk_max_size", path, MAX_AMNEZIA_JUNK_SIZE)
-    if (junkCount > 0) {
-        val fragments = junkMax >= mtu
-        if (junkMin > junkMax || junkMax == 0 || fragments) {
-            rejectFoxCoreConfig(FoxCoreConfigRejection.INVALID_SHAPE, "$path.junk_max_size")
-        }
-    }
+    val junk = translateAmneziaJunkPackets(source, path, mtu)
     val headers = amneziaHeaderRanges(source, path)
+    val contentPadding =
+        source["content_padding_addition"]?.let { value ->
+            try {
+                AmneziaContentPaddingRange.parseNormalized(value).normalizedJson()
+            } catch (_: IllegalArgumentException) {
+                rejectFoxCoreConfig(FoxCoreConfigRejection.INVALID_SHAPE, "$path.content_padding_addition")
+            }
+        }
+    val initSize = source.amneziaSize("init_junk_size", path, MAX_AMNEZIA_JUNK_SIZE)
+    val responseSize = source.amneziaSize("response_junk_size", path, MAX_AMNEZIA_JUNK_SIZE)
+    val cookieSize = source.amneziaSize("cookie_junk_size", path, MAX_AMNEZIA_JUNK_SIZE)
+    val transportSize = source.amneziaSize("transport_junk_size", path, MAX_AMNEZIA_JUNK_SIZE)
+    val headerProtection = translateAmneziaHeaderProtection(
+        source["header_protection_key"],
+        "$path.header_protection_key",
+        initSize,
+        responseSize,
+        cookieSize,
+        transportSize,
+    )
     val initPackets =
         source["init_packets"]?.asFoxCoreArray("$path.init_packets")?.also { packets ->
             if (packets.size > MAX_AMNEZIA_INIT_PACKETS) {
@@ -125,19 +139,58 @@ private fun translateFoxCoreAmnezia(
             }
         }
     return buildJsonObject {
-        put("junk_packet_count", junkCount)
-        put("junk_min_size", junkMin)
-        put("junk_max_size", junkMax)
-        put("init_junk_size", source.amneziaSize("init_junk_size", path, MAX_AMNEZIA_JUNK_SIZE))
-        put("response_junk_size", source.amneziaSize("response_junk_size", path, MAX_AMNEZIA_JUNK_SIZE))
-        put("cookie_junk_size", source.amneziaSize("cookie_junk_size", path, MAX_AMNEZIA_JUNK_SIZE))
-        put("transport_junk_size", source.amneziaSize("transport_junk_size", path, MAX_AMNEZIA_JUNK_SIZE))
+        put("junk_packet_count", junk.count)
+        put("junk_min_size", junk.minSize)
+        put("junk_max_size", junk.maxSize)
+        put("init_junk_size", initSize)
+        put("response_junk_size", responseSize)
+        put("cookie_junk_size", cookieSize)
+        put("transport_junk_size", transportSize)
+        source.optionalBoolean("random_trailers", path)?.let { put("random_trailers", it) }
+        contentPadding?.let { put("content_padding_addition", it) }
+        headerProtection?.let { put("header_protection_key", it) }
         AMNEZIA_HEADER_KEYS.forEachIndexed { index, key ->
             val (start, end) = headers[index]
             put(key, if (start == end) JsonPrimitive(start) else JsonPrimitive("$start-$end"))
         }
         initPackets?.let { put("init_packets", it) }
         source["timers"]?.let { put("timers", it.asFoxCoreObject("$path.timers")) }
+    }
+}
+
+private class AmneziaJunkPackets(
+    val count: Int,
+    val minSize: Int,
+    val maxSize: Int,
+)
+
+private fun translateAmneziaJunkPackets(source: JsonObject, path: String, mtu: Int): AmneziaJunkPackets {
+    val junkCount = source.amneziaSize("junk_packet_count", path, MAX_AMNEZIA_JUNK_PACKET_COUNT)
+    val junkMin = source.amneziaSize("junk_min_size", path, MAX_AMNEZIA_JUNK_SIZE)
+    val junkMax = source.amneziaSize("junk_max_size", path, MAX_AMNEZIA_JUNK_SIZE)
+    if (junkCount > 0) {
+        val fragments = junkMax >= mtu
+        if (junkMin > junkMax || junkMax == 0 || fragments) {
+            rejectFoxCoreConfig(FoxCoreConfigRejection.INVALID_SHAPE, "$path.junk_max_size")
+        }
+    }
+    return AmneziaJunkPackets(junkCount, junkMin, junkMax)
+}
+
+private fun translateAmneziaHeaderProtection(
+    value: JsonElement?,
+    path: String,
+    initSize: Int,
+    responseSize: Int,
+    cookieSize: Int,
+    transportSize: Int,
+): JsonPrimitive? = value?.let {
+    try {
+        AmneziaHeaderProtectionKey.parseNormalized(it).also { key ->
+            key.requireNoncePrefixes(initSize, responseSize, cookieSize, transportSize)
+        }.normalizedJson()
+    } catch (_: IllegalArgumentException) {
+        rejectFoxCoreConfig(FoxCoreConfigRejection.INVALID_SHAPE, path)
     }
 }
 
@@ -244,6 +297,9 @@ private val AMNEZIA_KEYS =
         "response_junk_size",
         "cookie_junk_size",
         "transport_junk_size",
+        "random_trailers",
+        "content_padding_addition",
+        "header_protection_key",
         "init_packets",
         "timers",
     ) + AMNEZIA_HEADER_KEYS

@@ -1,0 +1,6 @@
+<resources>
+    <string name="sentinel_static_progress_count">Apps processed: %1$d of %2$d</string>
+    <string name="sentinel_static_progress_percent">%1$d%%</string>
+    <string name="sentinel_static_progress_unknown">Total application count is not yet known.</string>
+    <string name="sentinel_static_current_app_unknown">Current application unavailable</string>
+</resources>

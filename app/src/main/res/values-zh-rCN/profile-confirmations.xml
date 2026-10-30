@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="cli_protocol_switch_confirmation_title">需要确认</string>
+    <string name="cli_protocol_switch_confirmation_body">此操作将替换当前 VPN 协议。\n是否继续？</string>
+    <string name="cli_profile_delete_confirmation_title">确认删除配置</string>
+    <string name="cli_profile_confirmation_cancel">取消</string>
+    <string name="cli_profile_confirmation_continue">继续</string>
+</resources>

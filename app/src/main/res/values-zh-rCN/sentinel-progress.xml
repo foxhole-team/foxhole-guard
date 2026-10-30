@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="sentinel_static_progress_count">已处理应用：%1$d / %2$d</string>
+    <string name="sentinel_static_progress_percent">%1$d%%</string>
+    <string name="sentinel_static_progress_unknown">应用总数尚不确定。</string>
+    <string name="sentinel_static_current_app_unknown">当前应用不可用</string>
+</resources>

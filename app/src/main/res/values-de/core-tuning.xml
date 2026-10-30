@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="cli_core_expert_title">Experteneinstellungen</string>
+    <string name="cli_core_expert_note">Änderungen gelten für den aktiven Tunnel. Änderungen der Kernressourcen starten ihn neu. Größere Puffer und höhere Verbindungslimits können den Speicherbedarf erhöhen.</string>
+    <string name="cli_core_workers">Kern-Threads</string>
+    <string name="cli_core_connect_timeout">Verbindungszeitlimit</string>
+    <string name="cli_core_handshake_timeout">Handshake-Zeitlimit</string>
+    <string name="cli_core_relay_buffer">E/A-Puffer</string>
+    <string name="cli_core_tcp_flows">TCP-Verbindungslimit</string>
+    <string name="cli_core_udp_flows">UDP-Verbindungslimit</string>
+    <string name="cli_core_dns_timeout">DNS-Zeitlimit</string>
+    <string name="cli_core_dns_cache">DNS-Cache-Einträge</string>
+    <string name="cli_core_reset">Kern-Standardwerte wiederherstellen</string>
+    <string name="cli_core_default">Standardwert</string>
+    <string name="cli_core_range">Zulässiger Bereich: %1$d–%2$d</string>
+</resources>

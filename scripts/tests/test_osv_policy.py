@@ -1,5 +1,6 @@
 import datetime
 import importlib.util
+import json
 import pathlib
 import unittest
 
@@ -26,6 +27,22 @@ class OsvPolicyTest(unittest.TestCase):
         self.assertFalse(policy.classify(report, {"exceptions": [exception]}, datetime.date(2026, 9, 8))[0])
         for key, value in (("version", "5.3.0"), ("advisory", "OTHER"), ("expires", "2026-09-07")):
             self.assertTrue(policy.classify(report, {"exceptions": [{**exception, key: value}]}, datetime.date(2026, 9, 8))[0])
+
+    def test_current_crypto_exception_cannot_exempt_other_versions_or_advisories(self):
+        exception_policy = json.loads((pathlib.Path(__file__).parents[2] / "config/osv-exceptions.json").read_text())
+        report = {"results": [{"source": {"path": "tor-source.cdx.json"}, "packages": [{
+            "package": {"name": "golang.org/x/crypto", "version": "v0.57.0", "ecosystem": "Go"},
+            "vulnerabilities": [{"id": "GO-2026-5932"}],
+        }]}]}
+        date = datetime.date(2026, 10, 12)
+        self.assertFalse(policy.classify(report, exception_policy, date)[0])
+        package = report["results"][0]["packages"][0]
+        for version in ("v0.56.0", "v0.58.0"):
+            package["package"]["version"] = version
+            self.assertTrue(policy.classify(report, exception_policy, date)[0])
+        package["package"]["version"] = "v0.57.0"
+        package["vulnerabilities"][0]["id"] = "UNREVIEWED-ADVISORY"
+        self.assertTrue(policy.classify(report, exception_policy, date)[0])
 
     def test_missing_and_malformed_results_fail(self):
         for report in ({}, {"results": None}, {"results": [{}]}):

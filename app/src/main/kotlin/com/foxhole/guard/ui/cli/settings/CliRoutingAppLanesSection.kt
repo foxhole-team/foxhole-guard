@@ -1,6 +1,5 @@
 package com.foxhole.guard.ui.cli.settings
 
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Spacer
@@ -25,7 +24,6 @@ import com.foxhole.guard.ui.HomeViewModel
 import com.foxhole.guard.ui.RoutingRouteUiState
 import com.foxhole.guard.ui.SettingsRouteUiState
 import com.foxhole.guard.ui.cli.CliColors
-import com.foxhole.guard.ui.cli.CliMotion
 import com.foxhole.guard.ui.cli.CliSpacing
 import com.foxhole.guard.ui.cli.LocalCliColors
 import com.foxhole.guard.ui.cli.components.CliActionRow
@@ -34,9 +32,7 @@ import com.foxhole.guard.ui.cli.components.CliDashedInfoNote
 import com.foxhole.guard.ui.cli.components.CliDropdownOption
 import com.foxhole.guard.ui.cli.components.CliDropdownRow
 import com.foxhole.guard.ui.cli.components.CliPanel
-import com.foxhole.guard.ui.cli.components.CliRejectFeedback
 import com.foxhole.guard.ui.cli.components.CliRowDivider
-import com.foxhole.guard.ui.cli.components.cliRejectShake
 import com.foxhole.guard.ui.onAppLaneChanged
 
 @Composable
@@ -46,8 +42,6 @@ internal fun CliAssignedAppsSection(
     state: SettingsRouteUiState,
     appState: RoutingRouteUiState,
     onAddApps: () -> Unit,
-    missingAppsTarget: CliMissingAppsTarget?,
-    missingAppsFeedback: CliRejectFeedback,
 ) {
     val colors = LocalCliColors.current
     val assignments = state.settings.expert.appAssignments
@@ -63,32 +57,18 @@ internal fun CliAssignedAppsSection(
         installedIndex[packageName]?.label?.ifEmpty { packageName }
             ?: if (inventoryReady) packageName else "…"
     }
-    val emptyNoteColor by animateColorAsState(
-        targetValue = if (missingAppsTarget != null) colors.err else colors.firewall,
-        animationSpec = CliMotion.standard(),
-        label = "missingAppsNote",
-    )
     val torAppsMissing = !state.settings.torScopeRunnable()
-    val emptyNoteIcon = when {
-        missingAppsTarget == CliMissingAppsTarget.VPN -> R.drawable.lin_shield
-        missingAppsTarget == CliMissingAppsTarget.TOR || torAppsMissing -> R.drawable.lin_tor
-        else -> R.drawable.lin_info
-    }
+    val emptyNoteIcon = if (torAppsMissing) R.drawable.lin_tor else R.drawable.lin_info
 
     CliPanel(
         icon = R.drawable.lin_apps,
         title = stringResource(R.string.cli_route_apps_title),
         modifier = Modifier.fillMaxWidth(),
     ) {
-        if (assigned.isEmpty() || torAppsMissing || missingAppsTarget != null) {
+        if (assigned.isEmpty() || torAppsMissing) {
             CliDashedInfoNote(
                 text = stringResource(
-                    when {
-                        missingAppsTarget == CliMissingAppsTarget.VPN -> R.string.split_tunnel_requires_apps
-                        missingAppsTarget == CliMissingAppsTarget.TOR || torAppsMissing ->
-                            R.string.privacy_route_select_apps_first
-                        else -> R.string.cli_route_apps_empty
-                    },
+                    if (torAppsMissing) R.string.privacy_route_select_apps_first else R.string.cli_route_apps_empty,
                 ),
                 icon = emptyNoteIcon,
                 centered = true,
@@ -96,8 +76,7 @@ internal fun CliAssignedAppsSection(
                 centeredIconFirstLine = true,
                 centeredIconGap = CliSpacing.sm,
                 outerVerticalPadding = CliSpacing.sm,
-                color = emptyNoteColor,
-                modifier = Modifier.cliRejectShake(missingAppsFeedback),
+                color = colors.firewall,
             )
         }
         var showAll by rememberSaveable { mutableStateOf(false) }

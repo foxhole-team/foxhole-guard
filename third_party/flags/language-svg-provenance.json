@@ -1,0 +1,84 @@
+{
+  "schema": 1,
+  "upstream": {
+    "repository": "https://github.com/lipis/flag-icons",
+    "commit": "086f7e97d657358203916dbe84f61c2bccaa81eb",
+    "tree": "c4c2a6afc33d534b412f7a1ed1ab372fb4b1e2d0",
+    "path": "flags/4x3"
+  },
+  "license": {
+    "spdx": "MIT",
+    "path": "third_party/flags/flag-icons-LICENSE.txt",
+    "sha256": "8f1195d55a2fd315a07d812328470ca9ba2abb78c8d317ff19619d5125e00cea"
+  },
+  "vectorGenerator": {
+    "artifact": "com.android.tools:sdk-common:32.2.1",
+    "class": "com.android.ide.common.vectordrawable.Svg2Vector",
+    "method": "parseSvgToXml",
+    "jarSHA256": "d95030eb74d9f8ee954c59fef895b8795e289b429aea4e7423cbf70d5075c547"
+  },
+  "files": {
+    "gb": {
+      "upstreamGitBlob": "799138319d8446a6407a3448185559f20b9e3415",
+      "svg": "third_party/flags/language-svg/gb.svg",
+      "svgSHA256": "c8be1e7208798a4ae692ee1e937065d498bb29e741943f6172b29118b8ed8066",
+      "vector": "app/src/main/res/drawable/flag_svg_gb.xml",
+      "vectorSHA256": "055b7f879a0beab07d40293ad8123cb46d7c05cf17cc0690057d6c6e799a0aea"
+    },
+    "ru": {
+      "upstreamGitBlob": "cf243011ae99e45cb43edf4ca6b7c51e08419c4c",
+      "svg": "third_party/flags/language-svg/ru.svg",
+      "svgSHA256": "7100aaae51ff3b6a2bf0ca932b3bc518bdc760814725e7cca31d821a26c3dd7c",
+      "vector": "app/src/main/res/drawable/flag_svg_ru.xml",
+      "vectorSHA256": "541818af7d1c710a8b298c6fb4fb9db16877fe3c885b4cb6900a0307ba6fb21b"
+    },
+    "de": {
+      "upstreamGitBlob": "71aa2d2c30f576d3577b5c93c7cc2cc9de740da7",
+      "svg": "third_party/flags/language-svg/de.svg",
+      "svgSHA256": "efd480af5a154a7651f29da23ee0d09dbc892410fb4041898ddf8face336c575",
+      "vector": "app/src/main/res/drawable/flag_svg_de.xml",
+      "vectorSHA256": "304826d7c6f098924c780ed5254afaea4187747f5e6384ab8833a6c4b55bcc72"
+    },
+    "fr": {
+      "upstreamGitBlob": "e682b90020218ddd39df6f81497f14b04bdacbda",
+      "svg": "third_party/flags/language-svg/fr.svg",
+      "svgSHA256": "a526851c372e3372b1596be71af355ea72b1650bbc4c06e6e2c226900d3de6cc",
+      "vector": "app/src/main/res/drawable/flag_svg_fr.xml",
+      "vectorSHA256": "5af5a0b793e81b98b7c5fb5c3307159851acb8ee8ec1c3b54109fd5aab5dc32c"
+    },
+    "es": {
+      "upstreamGitBlob": "a296ebf7e186054afaa06f6a27991aa1b569a5a8",
+      "svg": "third_party/flags/language-svg/es.svg",
+      "svgSHA256": "f9cfaff858e95f830733ade9591037b5322dfb5827a53b70956a3d190bb49b9a",
+      "vector": "app/src/main/res/drawable/flag_svg_es.xml",
+      "vectorSHA256": "008b861cd1650bbe5c75d5a4dee9efc66dd4364bafc30f1ded5b398c9f9e562e"
+    },
+    "jp": {
+      "upstreamGitBlob": "cc1c181ce9b2c22b5d29d04d7858d4d6ed0c878c",
+      "svg": "third_party/flags/language-svg/jp.svg",
+      "svgSHA256": "bfea80baf9989383dc4bf7ca594ed95be0df0ff125bfc88d0bfa878eb0198022",
+      "vector": "app/src/main/res/drawable/flag_svg_jp.xml",
+      "vectorSHA256": "34cdb09bdad117860a7cfcb5e05a25e8545c1bac4470ef9d26a233e0af93d223"
+    },
+    "cn": {
+      "upstreamGitBlob": "10d3489a0e60176c4db839ad958facf76717cbd1",
+      "svg": "third_party/flags/language-svg/cn.svg",
+      "svgSHA256": "981da9bdf82d48e31691f20578cefcb26cf7d0bd95e4ebd5c0df00bdfe988c1a",
+      "vector": "app/src/main/res/drawable/flag_svg_cn.xml",
+      "vectorSHA256": "32ead5252154f1b17537cfb0d2ed4f1bef8c390d0764ac140e23821dbb003f40"
+    }
+  },
+  "postProcessing": [
+    {
+      "file": "app/src/main/res/drawable/flag_svg_jp.xml",
+      "rawVectorSHA256": "2318b9565c9aa32d07a85853dfd324aef83e91676e7fcfbeae8498dc49402302",
+      "resultVectorSHA256": "34cdb09bdad117860a7cfcb5e05a25e8545c1bac4470ef9d26a233e0af93d223",
+      "operation": "remove-unused-stroke-width",
+      "attribute": "android:strokeWidth",
+      "value": "1pt",
+      "count": 2,
+      "precondition": "Both paths and their ancestors have no strokeColor; the SVG source uses the default no stroke.",
+      "reason": "AAPT2 requires a float strokeWidth. Removing the ineffective widths preserves the filled flag geometry and colors."
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="dns_category_prepared_pending">選択した DNS フィルターの準備ができました。接続の開始時または再読み込み時に、ネイティブ検証を行ってから有効になります。</string>
+    <string name="dns_category_prepared_short">有効化待ち</string>
+    <string name="dns_category_catalog_missing">選択した DNS フィルターは利用できません。同梱のカテゴリー一覧がありません。</string>
+    <string name="dns_category_catalog_invalid">選択した DNS フィルターは利用できません。同梱のカテゴリーデータを検証できませんでした。</string>
+    <string name="dns_category_required_missing">要求された DNS カテゴリーまたはリストの種類は利用できません。選択したリストを確認し、データを更新してください。</string>
+    <string name="dns_category_signed_invalid">選択した DNS フィルターは利用できません。ダウンロードしたカテゴリーデータを検証できませんでした。</string>
+    <string name="dns_category_profile_policy_unavailable">このビルドでは、このプロファイルに選択した DNS フィルターを適用できません。フィルタリングを無効にするか、対応するプロファイルを選んでください。</string>
+</resources>

@@ -1,0 +1,8 @@
+0.1.1 Stable
+
+- Protocol badges, loading placeholders and a cleaner Home.
+- Clearer profile actions; confirmation before switching an active protocol.
+- Portable links preserve protocol settings and WireGuard DNS; lossy copying is refused.
+- Import validates actual server IPs and reserved DNS metadata.
+- Grouped protocols keep independent configurations.
+- Top notices and IP refresh cancellation/HTTP cleanup fixes.

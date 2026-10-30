@@ -39,9 +39,15 @@ import com.foxhole.guard.core.data.SeenDestinationCountryEntity
 import com.foxhole.guard.core.data.TrafficWindowEntity
 import com.foxhole.guard.core.data.anomalyHourBucket
 import com.foxhole.guard.core.diagnostics.DiagnosticsLogger
+import com.foxhole.guard.core.diagnostics.DiagnosticsLoggerRuntimeDiagnosticsSink
+import com.foxhole.core.runtime.RuntimeDiagnosticsSink
+import com.foxhole.guard.core.sentinel.sentinelAttempt
 import com.foxhole.guard.core.settings.SettingsRepository
 import java.util.Locale
+import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emitAll
@@ -55,11 +61,11 @@ import kotlinx.coroutines.sync.withLock
 
 @OptIn(ExperimentalCoroutinesApi::class)
 @Suppress("TooManyFunctions")
-class AnomalyRepository(
+class AnomalyRepository internal constructor(
     daoProvider: () -> AnomalyDao,
-    private val settingsRepository: SettingsRepository,
-    private val diagnosticsLogger: DiagnosticsLogger,
-    private val notifier: SentinelDetectionNotifier,
+    private val settingsRepository: SentinelSettingsReader,
+    private val diagnosticsLogger: RuntimeDiagnosticsSink,
+    private val notify: (AnomalyEvent) -> Boolean,
     private val securityCore: FoxholeSentinel = FoxholeSentinel(),
 
     private val networkIocMatcher: () -> NetworkIocMatcher = { EMPTY_NETWORK_MATCHER },
@@ -67,11 +73,38 @@ class AnomalyRepository(
     private val appCategoryResolver: (String) -> AppNetworkUsageCategory = { AppNetworkUsageCategory.STANDARD },
     // Prevent database access before SQLCipher key installation.
     private val awaitDatabaseReady: suspend () -> Unit = {},
+    private val staticScanTransaction: (suspend (suspend () -> Boolean) -> Boolean)? = null,
 ) {
+    constructor(
+        daoProvider: () -> AnomalyDao,
+        settingsRepository: SettingsRepository,
+        diagnosticsLogger: DiagnosticsLogger,
+        notifier: SentinelDetectionNotifier,
+        securityCore: FoxholeSentinel = FoxholeSentinel(),
+        networkIocMatcher: () -> NetworkIocMatcher = { EMPTY_NETWORK_MATCHER },
+        nowProvider: () -> Long = System::currentTimeMillis,
+        appCategoryResolver: (String) -> AppNetworkUsageCategory = { AppNetworkUsageCategory.STANDARD },
+        awaitDatabaseReady: suspend () -> Unit = {},
+        staticScanTransaction: (suspend (suspend () -> Boolean) -> Boolean)? = null,
+    ) : this(
+        daoProvider = daoProvider,
+        settingsRepository = settingsRepository.asSentinelSettingsReader(),
+        diagnosticsLogger = DiagnosticsLoggerRuntimeDiagnosticsSink(diagnosticsLogger),
+        notify = notifier::notify,
+        securityCore = securityCore,
+        networkIocMatcher = networkIocMatcher,
+        nowProvider = nowProvider,
+        appCategoryResolver = appCategoryResolver,
+        awaitDatabaseReady = awaitDatabaseReady,
+        staticScanTransaction = staticScanTransaction,
+    )
+
     private val dao by lazy(LazyThreadSafetyMode.SYNCHRONIZED, daoProvider)
     private val baselineStore by lazy(LazyThreadSafetyMode.SYNCHRONIZED) { BaselineStore(dao) }
 
     private val recordMutex = Mutex()
+    private val networkActivityEpoch = AtomicLong(0L)
+    private val staticScanJournalEpoch = AtomicLong(0L)
     private var lastNetworkActivityCleanupAt = 0L
 
     val recentEvents: Flow<List<AnomalyEvent>> =
@@ -174,7 +207,7 @@ class AnomalyRepository(
         if (!settings.statistics.enabled) {
             return
         }
-        runCatching {
+        sentinelAttempt {
             dao.insertProtocolMetricEvent(ProtocolMetricEventEntity.from(event))
             dao.deleteProtocolMetricEventsBefore(
                 statisticsRetentionCutoff(nowProvider(), settings.statistics),
@@ -406,7 +439,27 @@ class AnomalyRepository(
         recordNetworkActivityEvents(listOf(event))
     }
 
-    suspend fun recordNetworkActivityEvents(events: List<NetworkActivityEvent>) = recordMutex.withLock {
+    fun captureNetworkActivityEpoch(): Long = networkActivityEpoch.get()
+
+    suspend fun clearNetworkActivityEvents() = recordMutex.withLock {
+        currentCoroutineContext().ensureActive()
+        networkActivityEpoch.incrementAndGet()
+        dao.deleteNetworkActivityEvents()
+    }
+
+    internal suspend fun clearStoredDataForFactoryReset(clear: suspend () -> Unit) = recordMutex.withLock {
+        staticScanJournalEpoch.incrementAndGet()
+        currentCoroutineContext().ensureActive()
+        networkActivityEpoch.incrementAndGet()
+        clear()
+    }
+
+    suspend fun recordNetworkActivityEvents(events: List<NetworkActivityEvent>) =
+        recordNetworkActivityEvents(events, captureNetworkActivityEpoch())
+
+    suspend fun recordNetworkActivityEvents(events: List<NetworkActivityEvent>, expectedEpoch: Long) = recordMutex.withLock {
+        if (expectedEpoch != networkActivityEpoch.get()) return@withLock
+
         val retainedEvents =
             events.filter { event ->
                 event.packageNames.isNotEmpty() && event.remoteHost.isNotBlank()
@@ -415,8 +468,10 @@ class AnomalyRepository(
             return@withLock
         }
         val settings = settingsRepository.current()
-        dao.insertNetworkActivityEvents(retainedEvents.map(NetworkActivityEventEntity::from))
-        cleanupNetworkActivityIfDue(settings)
+        if (settings.expert.networkActivityLogging) {
+            dao.insertNetworkActivityEvents(retainedEvents.map(NetworkActivityEventEntity::from))
+            cleanupNetworkActivityIfDue(settings)
+        }
         recordNetworkIocFindings(retainedEvents, settings)
     }
 
@@ -432,49 +487,41 @@ class AnomalyRepository(
             return
         }
         dedupeNetworkIocFindings(securityCore.matchNetworkIndicators(events, matcher)).forEach { finding ->
-            persistNetworkIocFinding(finding, settings)
+            networkIocJournalWriter.persist(finding, settings)
         }
     }
 
-    private suspend fun persistNetworkIocFinding(
-        finding: NetworkIocFinding,
-        settings: Settings,
-    ) {
-        if (anomalySuppressedForExcludedApp(settings.expert.appAssignments, finding.packageName)) {
-            diagnosticsLogger.record(ANOMALY_LOG_TAG, "network ioc hit suppressed for excluded app")
-            return
-        }
-        val severity = finding.hit.threatKind.networkIocSeverity()
-        val previousSeverity =
-            dao.latestAnomalyEventSince(
-                type = AnomalyType.KNOWN_THREAT_DESTINATION.name,
-                packageName = finding.packageName,
-                since = nowProvider() - ONGOING_EVENT_COALESCE_MS,
-            )?.let { entity -> runCatching { AnomalySeverity.valueOf(entity.severity) }.getOrNull() }
-        if (shouldCoalesceAnomalyEvent(previousSeverity, severity)) {
-            return
-        }
-        val shouldNotify =
-            settings.anomaly.notifyUnusualTraffic &&
+    private val networkIocJournalWriter by lazy {
+        NetworkIocJournalWriter(dao, diagnosticsLogger, notify, nowProvider, ::canNotify, ONGOING_EVENT_COALESCE_MS)
+    }
 
-                severity.ordinal >= AnomalySeverity.NOTIFICATION.ordinal &&
-                canNotify(AnomalyType.KNOWN_THREAT_DESTINATION.name, finding.packageName)
-        val event = networkIocAnomalyEvent(finding, nowMs = nowProvider(), notificationShown = false)
-        val persisted = event.copy(id = dao.insertAnomalyEvent(AnomalyEventEntity.from(event)))
-        diagnosticsLogger.recordStructured(
-            tag = ANOMALY_LOG_TAG,
-            headline = persisted.reason,
-            "package=${finding.packageName}",
-            "host=${finding.remoteHost}",
-            "indicator=${finding.hit.indicator}",
+    internal fun captureStaticScanJournalEpoch(): Long = staticScanJournalEpoch.get()
+    internal fun isStaticScanJournalCurrent(epoch: Long): Boolean = staticScanJournalEpoch.get() == epoch
+
+    private val staticScanJournalWriter by lazy {
+        StaticScanJournalWriter(
+            dao,
+            settingsRepository,
+            notify,
+            nowProvider,
+            staticScanTransaction,
+            ::isStaticScanJournalCurrent
         )
-        if (shouldNotify && notifier.notify(persisted)) {
-            dao.markAnomalyNotificationShown(persisted.id)
-        }
+    }
+
+    internal suspend fun recordStaticScan(
+        summary: com.foxhole.guard.core.sentinel.scanner.SentinelScanSummary,
+        current: () -> Boolean,
+    ): Boolean = recordMutex.withLock {
+        awaitDatabaseReady()
+        staticScanJournalWriter.record(summary, current)
     }
 
     suspend fun clearTrafficStatistics() =
         recordMutex.withLock {
+            currentCoroutineContext().ensureActive()
+            staticScanJournalEpoch.incrementAndGet()
+            networkActivityEpoch.incrementAndGet()
             dao.deleteTrafficWindowsBefore(Long.MAX_VALUE)
             dao.deleteAppTrafficWindowsBefore(Long.MAX_VALUE)
             dao.deleteTrafficBaselines()
@@ -570,7 +617,7 @@ class AnomalyRepository(
             persisted.packageName?.let { "package=$it" },
             persisted.evidence["country"]?.let { "country=$it" },
         )
-        if (shouldNotify && notifier.notify(persisted)) {
+        if (shouldNotify && notify(persisted)) {
             dao.markAnomalyNotificationShown(persisted.id)
         }
     }
@@ -605,10 +652,11 @@ class AnomalyRepository(
                     excludedType = AnomalyType.TOR_OR_I2P_ROUTE_MISMATCH.name,
                 ).map(AnomalyEventEntity::toDomain)
                 .forEach { event ->
+                    if (event.type == AnomalyType.APP_STATIC_REFERENCE) return@forEach
                     if (!canNotify(event.type.name, event.packageName)) {
                         return@forEach
                     }
-                    if (notifier.notify(event)) {
+                    if (notify(event)) {
                         dao.markAnomalyNotificationShown(event.id)
                     }
                 }

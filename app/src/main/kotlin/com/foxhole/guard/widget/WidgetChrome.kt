@@ -53,15 +53,16 @@ internal fun WidgetBrandHeader(
     context: Context,
     background: WidgetBackground,
     trailing: (@Composable () -> Unit)? = null,
+    connectionLogo: Boolean = false,
 ) {
     Row(
         modifier = GlanceModifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Image(
-            provider = ImageProvider(R.drawable.ic_qs_tile),
+            provider = ImageProvider(if (connectionLogo) R.drawable.ic_launcher_openwrt else R.drawable.ic_qs_tile),
             contentDescription = null,
-            colorFilter = ColorFilter.tint(ColorProvider(background.icon)),
+            colorFilter = if (connectionLogo) null else ColorFilter.tint(ColorProvider(background.icon)),
             modifier = GlanceModifier.size(24.dp),
         )
         Spacer(modifier = GlanceModifier.width(4.dp))

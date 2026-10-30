@@ -1,0 +1,6 @@
+Local backend validation build.
+Fix connection failover, cancellation and UDP framing in FoxCore; update Rustls.
+Add Expert core controls and four-ABI native builds.
+Preserve malformed settings and correct traffic rate timing.
+Allow bounded cooperative user Stop during policy reload.
+Verify native helper page alignment and cache compilation inputs.

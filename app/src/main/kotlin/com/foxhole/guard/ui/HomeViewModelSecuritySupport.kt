@@ -324,18 +324,20 @@ private fun encodeCharsToUtf8Bytes(chars: CharArray): ByteArray {
     return bytes
 }
 
-private fun HomeViewModel.journalSecuritySettingChange(
+private suspend fun HomeViewModel.journalSecuritySettingChange(
     field: String,
     from: String,
     to: String,
 ) {
-    if (!securityComponents.isPasswordProtectionActive()) {
-        return
+    withContext(Dispatchers.IO) {
+        if (!securityComponents.isPasswordProtectionActive()) {
+            return@withContext
+        }
+        securityComponents.journalEvent(
+            GuardEvent(
+                type = GuardEventType.SECURITY_SETTING_CHANGED,
+                detail = "$field:$from->$to",
+            ),
+        )
     }
-    securityComponents.journalEvent(
-        GuardEvent(
-            type = GuardEventType.SECURITY_SETTING_CHANGED,
-            detail = "$field:$from->$to",
-        ),
-    )
 }

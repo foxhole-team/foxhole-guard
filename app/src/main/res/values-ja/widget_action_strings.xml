@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="widget_status_connect_action">接続</string>
+    <string name="widget_status_disconnect_action">切断</string>
+    <string name="widget_status_open_app">FoxHole Guard を開く</string>
+</resources>

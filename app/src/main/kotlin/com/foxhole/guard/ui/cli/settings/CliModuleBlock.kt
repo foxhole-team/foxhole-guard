@@ -34,6 +34,8 @@ internal fun CliModuleBlock(
     settingsLabel: String? = null,
     settingsAttention: Boolean = false,
     settingsAttentionColor: Color = Color.Unspecified,
+    settingsModifier: Modifier = Modifier,
+    infoAlwaysActive: Boolean = false,
 ) {
     val colors = LocalCliColors.current
     val settingsActionColor = colors.accent
@@ -46,6 +48,7 @@ internal fun CliModuleBlock(
             note = note,
             infoText = infoText,
             enabled = toggleEnabled,
+            infoAlwaysActive = infoAlwaysActive,
         )
         Row(modifier = Modifier.offset(y = MODULE_SETTINGS_ROW_OFFSET)) {
             CliModuleSettingsConnector(color = settingsActionColor)
@@ -58,7 +61,7 @@ internal fun CliModuleBlock(
                 actionColor = settingsActionColor,
                 labelColor = colors.dim,
                 onTap = onOpenSettings,
-                modifier = Modifier.weight(1f),
+                modifier = settingsModifier.weight(1f),
             )
         }
     }

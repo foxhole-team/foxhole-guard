@@ -14,7 +14,6 @@ data class I2pdRuntimePaths(
 
 internal class I2pdRuntimeUnavailableException(message: String) : IllegalStateException(message)
 
-/** Prepares the packaged i2pd executable, private data, reseed certificates, and runtime paths. */
 class I2pdRuntimeInstaller(
     context: Context,
     private val diagnosticsLogger: RuntimeDiagnosticsSink? = null,

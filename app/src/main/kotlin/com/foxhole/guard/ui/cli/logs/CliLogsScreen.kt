@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -33,6 +34,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
@@ -55,9 +57,12 @@ import com.foxhole.guard.guardian.GuardEventType
 import com.foxhole.guard.guardian.GuardJournalEntry
 import com.foxhole.guard.guardian.GuardJournalReport
 import com.foxhole.guard.guardian.GuardJournalStatus
+import com.foxhole.guard.guardian.userFacingExportMessage
 import com.foxhole.guard.guardian.userFacingMessage
 import com.foxhole.guard.ui.HomeViewModel
 import com.foxhole.guard.ui.NETWORK_ACTIVITY_TAG
+import com.foxhole.guard.ui.NetworkJournalPresentation
+import com.foxhole.guard.ui.cancelSentinelScan
 import com.foxhole.guard.ui.clearDiagnosticsLocalData
 import com.foxhole.guard.ui.clearNetworkActivityLocalData
 import com.foxhole.guard.ui.cli.CLI_FIRST_LINE_GLYPH_DROP
@@ -68,6 +73,7 @@ import com.foxhole.guard.ui.cli.LocalCliColors
 import com.foxhole.guard.ui.cli.cliScaledDp
 import com.foxhole.guard.ui.cli.cliScaledSp
 import com.foxhole.guard.ui.cli.cliSlide
+import com.foxhole.guard.ui.cli.components.CliActionRow
 import com.foxhole.guard.ui.cli.components.CliBottomSheet
 import com.foxhole.guard.ui.cli.components.CliButton
 import com.foxhole.guard.ui.cli.components.CliChip
@@ -89,11 +95,16 @@ import com.foxhole.guard.ui.cli.components.CliTopBarSettingsButton
 import com.foxhole.guard.ui.cli.components.cliSemanticIcon
 import com.foxhole.guard.ui.emitError
 import com.foxhole.guard.ui.emitSuccess
-import com.foxhole.guard.ui.fallbackNetworkDiagnosticEntries
 import com.foxhole.guard.ui.loadGuardJournalReport
-import com.foxhole.guard.ui.networkActivityDiagnosticEntries
+import com.foxhole.guard.ui.loadInstalledApps
+import com.foxhole.guard.ui.networkJournalPresentations
 import com.foxhole.guard.ui.onDiagnosticsRetentionSelected
 import com.foxhole.guard.ui.onNetworkActivityLoggingChanged
+import com.foxhole.guard.ui.onQuarantinedAppResolved
+import com.foxhole.guard.ui.prepareJournalExportEntries
+import com.foxhole.guard.ui.redactedJournalExportEvent
+import com.foxhole.guard.ui.sentinelScanAvailable
+import com.foxhole.guard.ui.sentinelScanState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -102,6 +113,7 @@ private enum class CliLogTab(@StringRes val labelRes: Int) {
     APP(R.string.cli_logs_tab_app),
     NET(R.string.cli_logs_tab_net),
     SECURITY(R.string.cli_logs_tab_sec),
+    SENTINEL(R.string.cli_logs_tab_sentinel),
 }
 
 private enum class CliJournalActionsPage { ACTIONS, CONFIRM_CLEAR }
@@ -195,6 +207,13 @@ internal fun CliLogsScreen(
                 actionsOpen = actionsOpen,
                 onDismissActions = { actionsOpen = false },
             )
+            CliLogTab.SENTINEL -> CliSentinelLog(
+                viewModel = viewModel,
+                tab = tab,
+                onTabSelected = { tab = it },
+                actionsOpen = actionsOpen,
+                onDismissActions = { actionsOpen = false },
+            )
         }
         CliChromeTailSpacer()
     }
@@ -228,18 +247,20 @@ private fun CliJournalDock(
 ) {
     val colors = LocalCliColors.current
     Column(modifier = Modifier.fillMaxWidth().testTag(CLI_LOGS_DOCK_TAG)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(CliSpacing.sm),
-        ) {
-            CliLogTab.entries.forEach { candidate ->
-                CliChip(
-                    label = stringResource(candidate.labelRes),
-                    selected = tab == candidate,
-                    color = colors.accent,
-                    onClick = { onTabSelected(candidate) },
-                    modifier = Modifier.weight(1f),
-                )
+        CliLogTab.entries.chunked(2).forEach { candidates ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(CliSpacing.sm),
+            ) {
+                candidates.forEach { candidate ->
+                    CliChip(
+                        label = stringResource(candidate.labelRes),
+                        selected = tab == candidate,
+                        color = colors.accent,
+                        onClick = { onTabSelected(candidate) },
+                        modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+                    )
+                }
             }
         }
     }
@@ -254,6 +275,7 @@ private fun CliJournalActionsSheet(
     exportEntries: List<DiagnosticEntry>,
     exportTitle: String,
     exportFileName: String,
+    exportEntriesAreRedacted: Boolean = false,
     settings: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit,
 ) {
     val context = LocalContext.current
@@ -274,7 +296,10 @@ private fun CliJournalActionsSheet(
             } else {
                 scope.launch {
                     val payload = withContext(Dispatchers.Default) {
-                        formatRawJournalExport(exportTitle, exportEntries)
+                        formatRawJournalExport(
+                            exportTitle,
+                            prepareJournalExportEntries(exportEntries, exportEntriesAreRedacted)
+                        )
                     }
                     val written = writeJournalExport(context.contentResolver, uri, payload)
                     exporting = false
@@ -423,8 +448,9 @@ private fun androidx.compose.foundation.layout.ColumnScope.CliDiagnosticList(
     emptyText: String,
     grouped: Boolean = false,
     networkActivity: Boolean = false,
+    prebuiltRows: List<CliJournalRow>? = null,
 ) {
-    if (entries.isEmpty()) {
+    if (entries.isEmpty() && prebuiltRows.isNullOrEmpty()) {
         val colors = LocalCliColors.current
         Text(
             text = emptyText,
@@ -441,7 +467,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.CliDiagnosticList(
             entries.asReversed()
         }
     }
-    val rows = remember(ordered, networkActivity) {
+    val rows = prebuiltRows ?: remember(ordered, networkActivity) {
         ordered.map { entry ->
             if (networkActivity) networkJournalRow(entry) else diagnosticJournalRow(entry)
         }
@@ -600,26 +626,25 @@ private fun androidx.compose.foundation.layout.ColumnScope.CliNetworkLog(
     val state by viewModel.diagnosticsRouteState.collectAsStateWithLifecycle()
     val enabled = state.settings.expert.networkActivityLogging
     val context = LocalContext.current
+    val configuration = LocalConfiguration.current
     val appContext = remember(context) { context.applicationContext }
     val countryResolver = remember(appContext) { TorGeoIpCountryResolver(appContext) }
     val fallbackEntries = state.diagnosticEntries.takeIf { state.networkActivityEvents.isEmpty() }.orEmpty()
-    val formatted by produceState<List<DiagnosticEntry>>(
+    val formatted by produceState<List<NetworkJournalPresentation>>(
         emptyList(),
         state.networkActivityEvents,
         fallbackEntries,
         state.ipInfo,
+        configuration,
     ) {
         value = withContext(Dispatchers.Default) {
-            networkActivityDiagnosticEntries(
+            networkJournalPresentations(
                 events = state.networkActivityEvents,
-                context = appContext as Context,
+                fallbackEntries = fallbackEntries,
+                context = context,
                 countryResolver = countryResolver,
                 ipInfo = state.ipInfo,
-            ).ifEmpty {
-                fallbackNetworkDiagnosticEntries(
-                    entries = fallbackEntries,
-                )
-            }
+            )
         }
     }
     CliJournalLayout(
@@ -628,9 +653,9 @@ private fun androidx.compose.foundation.layout.ColumnScope.CliNetworkLog(
         content = {
             if (enabled) {
                 CliDiagnosticList(
-                    entries = formatted,
+                    entries = formatted.map { it.exportEntry },
                     emptyText = stringResource(R.string.cli_logs_empty),
-                    networkActivity = true,
+                    prebuiltRows = formatted.asReversed().map { it.row },
                 )
             } else {
                 CliNetworkJournalEnablePrompt(
@@ -644,9 +669,10 @@ private fun androidx.compose.foundation.layout.ColumnScope.CliNetworkLog(
                 onDismiss = onDismissActions,
                 viewModel = viewModel,
                 onClear = viewModel::clearNetworkActivityLocalData,
-                exportEntries = formatted,
+                exportEntries = formatted.map { it.exportEntry },
                 exportTitle = stringResource(R.string.cli_logs_tab_net),
                 exportFileName = "foxhole-network-journal.txt",
+                exportEntriesAreRedacted = true,
                 settings = {
                     if (!state.settingsHydrated) {
                         CliLoadingRow(
@@ -710,6 +736,75 @@ private sealed interface SecJournalItem {
     data class Anomaly(val event: AnomalyEvent) : SecJournalItem {
         override val timestamp: Long get() = event.createdAtMs
     }
+}
+
+@Composable
+private fun androidx.compose.foundation.layout.ColumnScope.CliSentinelLog(
+    viewModel: HomeViewModel,
+    tab: CliLogTab,
+    onTabSelected: (CliLogTab) -> Unit,
+    actionsOpen: Boolean,
+    onDismissActions: () -> Unit,
+) {
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val scan by viewModel.sentinelScanState.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    CliRefreshInstalledAppsOnResume(viewModel)
+    val retention = state.settings.expert.effectiveDiagnosticsRetention()
+    val now = remember(state.settings.installedAppInventoryAudit.recentChanges, state.anomalyEvents, retention) {
+        System.currentTimeMillis()
+    }
+    val cutoff = retention.cutoffOrNull(now) ?: Long.MIN_VALUE
+    val exportEntries = remember(
+        state.settings.installedAppInventoryAudit.recentChanges,
+        state.anomalyEvents,
+        cutoff,
+        context,
+    ) {
+        buildList {
+            sentinelInstallationHistory(state.settings.installedAppInventoryAudit.recentChanges, cutoff)
+                .forEach { add(SecJournalItem.AppChange(it)) }
+            state.anomalyEvents.forEach { add(SecJournalItem.Anomaly(it)) }
+        }.sortedByDescending(SecJournalItem::timestamp).map { it.toDiagnosticEntry(context) }
+    }
+    CliJournalLayout(
+        tab = tab,
+        onTabSelected = onTabSelected,
+        content = {
+            CliSentinelJournalContent(
+                state = state,
+                scan = scan,
+                scannerAvailable = viewModel.sentinelScanAvailable,
+                onResolveQuarantine = viewModel::onQuarantinedAppResolved,
+                onCancelScan = viewModel::cancelSentinelScan,
+            )
+        },
+        actions = {
+            CliJournalActionsSheet(
+                open = actionsOpen,
+                onDismiss = onDismissActions,
+                viewModel = viewModel,
+                onClear = null,
+                exportEntries = exportEntries,
+                exportTitle = stringResource(R.string.cli_logs_tab_sentinel),
+                exportFileName = "foxhole-sentinel-journal.txt",
+                exportEntriesAreRedacted = true,
+                settings = {
+                    CliActionRow(
+                        label = stringResource(R.string.cli_sentinel_inventory_refresh),
+                        enabled = !state.installedAppsLoading,
+                        onTap = { viewModel.loadInstalledApps(force = true) },
+                    )
+                    CliRetentionRow(
+                        label = stringResource(R.string.cli_sentinel_install_history_retention),
+                        icon = R.drawable.lin_clock,
+                        policy = retention,
+                        onSelect = viewModel::onDiagnosticsRetentionSelected,
+                    )
+                },
+            )
+        },
+    )
 }
 
 @Composable
@@ -779,6 +874,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.CliSecurityLog(
                 exportEntries = exportEntries,
                 exportTitle = stringResource(R.string.cli_logs_tab_sec),
                 exportFileName = "foxhole-security-journal.txt",
+                exportEntriesAreRedacted = true,
                 settings = {
                     CliSecurityHeader(
                         report = report,
@@ -804,7 +900,7 @@ private fun SecJournalItem.toDiagnosticEntry(context: Context): DiagnosticEntry 
             DiagnosticEntry(
                 timestamp = timestamp,
                 tag = "guard:${guardEntryTag(entry.event)}",
-                message = entry.userFacingMessage(context),
+                message = entry.userFacingExportMessage(context),
             )
         is SecJournalItem.AppChange ->
             DiagnosticEntry(
@@ -812,7 +908,7 @@ private fun SecJournalItem.toDiagnosticEntry(context: Context): DiagnosticEntry 
                 tag = "app-change:${change.type.name.lowercase()}",
                 message = buildString {
                     append("package=")
-                    append(change.packageName)
+                    append(context.getString(R.string.journal_redacted))
                     append(" · ")
                     append(
                         context.getString(
@@ -826,7 +922,8 @@ private fun SecJournalItem.toDiagnosticEntry(context: Context): DiagnosticEntry 
             DiagnosticEntry(
                 timestamp = timestamp,
                 tag = "anomaly:${event.severity.name.lowercase()}",
-                message = event.userFacingMessage(context),
+                message = event.redactedJournalExportEvent(context.getString(R.string.journal_redacted))
+                    .userFacingMessage(context),
             )
     }
 

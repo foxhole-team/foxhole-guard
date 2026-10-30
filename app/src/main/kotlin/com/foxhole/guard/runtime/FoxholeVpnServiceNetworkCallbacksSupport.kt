@@ -2,7 +2,6 @@ package com.foxhole.guard.runtime
 
 import android.net.Network
 import android.net.NetworkCapabilities
-import android.os.Build
 import com.foxhole.core.model.ACTIVE_CONNECTION_STATES
 import com.foxhole.core.model.AutoConnectReasonCode
 import com.foxhole.core.model.ConnectionSnapshot
@@ -24,19 +23,9 @@ internal fun FoxholeVpnService.registerNetworkCallbackIfNeeded() {
     upstreamNetworkHandles.clear()
     val registration =
         runCatching {
-            when {
-                Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ->
-                    connectivityManager.registerBestMatchingNetworkCallback(
-                        trackedNetworkRequest,
-                        networkCallback,
-                        mainHandler
-                    )
-                Build.VERSION.SDK_INT >= Build.VERSION_CODES.P ->
-                    connectivityManager.registerNetworkCallback(trackedNetworkRequest, networkCallback, mainHandler)
-                else -> connectivityManager.registerDefaultNetworkCallback(networkCallback, mainHandler)
-            }
+            registerUpstreamNetworkCallback(connectivityManager, trackedNetworkRequest, networkCallback, mainHandler)
         }.recoverCatching {
-            connectivityManager.registerDefaultNetworkCallback(networkCallback, mainHandler)
+            connectivityManager.registerNetworkCallback(trackedNetworkRequest, networkCallback)
         }
     registration
         .onSuccess { networkCallbackRegistered = true }

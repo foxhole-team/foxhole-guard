@@ -39,8 +39,9 @@ The script renders into a temporary directory, checks all generated files agains
   as 32x18 pixel art from the same upstream SVG collection.
 - Rendering: each source SVG is rasterised large and reduced by dominant colour
   per output cell. Nepal retains transparency around its non-rectangular flag.
-- Display: nearest-neighbour integer scaling and native colours, without theme
-  tinting.
+- Legacy pixel resources remain separately attributed. Current status widgets use
+  the canonical runtime SVG-rendered flags above, scaled to the adjacent capital
+  glyph height, preserving 4:3 proportions and native colours.
 
 The runtime asset set above is the set loaded by `CliFlagIcon`; it is distinct
 from these pixel resources. The earlier documentation incorrectly described only
@@ -50,3 +51,14 @@ the pixel resources while the runtime asset set was also shipped.
 
 The upstream source is Copyright (c) 2013 Panayiotis Lipiridis and licensed under
 the MIT License. The exact upstream text is vendored as `flag-icons-LICENSE.txt`.
+
+## Native language vectors
+
+Seven language flags use Android VectorDrawable XML derived from the pinned SVG
+source above. Exact source and output hashes are recorded in
+`language-svg-provenance.json` and `language-vectors.sha256`. The Android SDK
+converter is build tooling, with no added runtime SVG dependency. Two ineffective
+Japanese stroke-width attributes are omitted for Android resource compatibility;
+the source SVG and filled geometry are unchanged. Other country images retain the
+canonical runtime PNG set. Inline flags use the measured capital glyph height of
+the adjacent text, including its font scale.

@@ -69,6 +69,8 @@ import com.foxhole.guard.ui.cli.components.cliRejectShake
 import com.foxhole.guard.ui.cli.components.rememberCliRejectFeedback
 import com.foxhole.guard.ui.cli.fox.CliFoxHero
 import com.foxhole.guard.ui.onLocaleSelected
+import com.foxhole.guard.ui.onInterfaceModeSelected
+import com.foxhole.guard.ui.cli.settings.CliInterfaceModeRow
 import com.foxhole.guard.ui.onOnboardingDownload
 import com.foxhole.guard.ui.onOnboardingFinished
 import com.foxhole.guard.ui.onOnboardingSkipped
@@ -81,6 +83,7 @@ import kotlinx.coroutines.launch
 internal fun CliOnboardingWizard(viewModel: HomeViewModel) {
     val colors = LocalCliColors.current
     val progress by viewModel.onboardingProgress.collectAsStateWithLifecycle()
+    val settingsState by viewModel.settingsRouteState.collectAsStateWithLifecycle()
     var step by rememberSaveable { mutableIntStateOf(LICENSE_STEP) }
     var choices by rememberSaveable(stateSaver = OnboardingWizardChoicesSaver) {
         mutableStateOf(OnboardingWizardChoices())
@@ -99,7 +102,13 @@ internal fun CliOnboardingWizard(viewModel: HomeViewModel) {
                 confirmLabel = stringResource(R.string.cli_wizard_skip),
                 onConfirm = {
                     skipSetupConfirmationOpen = false
-                    viewModel.onOnboardingSkipped()
+                    if (choices.licenseAccepted) {
+                        viewModel.onOnboardingSkipped(licenseAccepted = choices.licenseAccepted)
+                    } else {
+                        step = LICENSE_STEP
+                        licenseValidationError = true
+                        feedbackScope.launch { licenseRejectFeedback.play() }
+                    }
                 },
                 onDismiss = { skipSetupConfirmationOpen = false },
             )
@@ -139,7 +148,11 @@ internal fun CliOnboardingWizard(viewModel: HomeViewModel) {
                         LICENSE_STEP -> {
                             if (choices.licenseAccepted) {
                                 licenseValidationError = false
-                                step = COMPONENTS_STEP
+                                if (settingsState.settings.ui.onboardingCompleted) {
+                                    viewModel.onOnboardingSkipped(licenseAccepted = choices.licenseAccepted)
+                                } else {
+                                    step = COMPONENTS_STEP
+                                }
                             } else {
                                 licenseValidationError = true
                                 feedbackScope.launch { licenseRejectFeedback.play() }
@@ -439,11 +452,21 @@ private fun WizardAppearancePanel(viewModel: HomeViewModel) {
         val systemLocaleLabel = stringResource(R.string.cli_cfg_locale_system)
         val russianLocaleLabel = stringResource(R.string.cli_cfg_locale_ru)
         val englishLocaleLabel = stringResource(R.string.cli_cfg_locale_en)
+        val japaneseLocaleLabel = stringResource(R.string.cli_cfg_locale_ja)
+        val germanLocaleLabel = stringResource(R.string.cli_cfg_locale_de)
+        val frenchLocaleLabel = stringResource(R.string.cli_cfg_locale_fr)
+        val spanishLocaleLabel = stringResource(R.string.cli_cfg_locale_es)
+        val chineseLocaleLabel = stringResource(R.string.cli_cfg_locale_zh)
         val localeLabel = { locale: AppLocale ->
             when (locale) {
                 AppLocale.SYSTEM -> systemLocaleLabel
                 AppLocale.RU -> russianLocaleLabel
                 AppLocale.EN -> englishLocaleLabel
+                AppLocale.JA -> japaneseLocaleLabel
+                AppLocale.DE -> germanLocaleLabel
+                AppLocale.FR -> frenchLocaleLabel
+                AppLocale.ES -> spanishLocaleLabel
+                AppLocale.ZH -> chineseLocaleLabel
             }
         }
         val selectedLocale = settingsState.settings.ui.locale
@@ -451,7 +474,7 @@ private fun WizardAppearancePanel(viewModel: HomeViewModel) {
             label = stringResource(R.string.cli_cfg_language),
             icon = R.drawable.lin_globe,
             value = localeLabel(selectedLocale),
-            options = AppLocale.entries.map { locale ->
+            options = com.foxhole.guard.GUARD_APP_LANGUAGE_CHOICES.map { locale ->
                 CliDropdownOption(
                     id = locale.name,
                     label = localeLabel(locale),
@@ -461,6 +484,12 @@ private fun WizardAppearancePanel(viewModel: HomeViewModel) {
             selectedId = selectedLocale.name,
             onSelect = { id -> viewModel.onLocaleSelected(AppLocale.valueOf(id)) },
             showSelectedOptionIcon = true,
+        )
+        CliRowDivider()
+        CliInterfaceModeRow(
+            mode = settingsState.settings.ui.interfaceMode,
+            onChanged = viewModel::onInterfaceModeSelected,
+            showInfo = false,
         )
         CliRowDivider()
         val systemLabel = stringResource(R.string.cli_cfg_appearance_system)
@@ -500,6 +529,11 @@ private fun wizardLocaleFlagCountry(locale: AppLocale): String? = when (locale) 
     AppLocale.SYSTEM -> null
     AppLocale.RU -> "ru"
     AppLocale.EN -> "gb"
+    AppLocale.JA -> "jp"
+    AppLocale.DE -> "de"
+    AppLocale.FR -> "fr"
+    AppLocale.ES -> "es"
+    AppLocale.ZH -> "cn"
 }
 
 @Composable
@@ -658,7 +692,7 @@ private fun WizardDownloadStep(
                 verified = progress.finished && progress.items.isNotEmpty() && progress.items.none { it.failed },
             )
             Spacer(modifier = Modifier.height(CliSpacing.xs))
-            progress.items.forEach { item -> WizardDownloadRow(item) }
+            progress.items.forEach { item -> WizardDownloadRow(item, running = progress.running) }
             if (progress.items.isEmpty()) {
                 if (dnsFilter) {
                     WizardPlannedRow(stringResource(R.string.cli_wizard_download_dns))
@@ -700,7 +734,7 @@ private fun WizardProgressBar(
 }
 
 @Composable
-private fun WizardDownloadRow(state: OnboardingDownloadState) {
+private fun WizardDownloadRow(state: OnboardingDownloadState, running: Boolean) {
     val colors = LocalCliColors.current
     val label = when (state.item) {
         OnboardingDownload.DNS_FILTER -> stringResource(R.string.cli_wizard_download_dns)
@@ -709,9 +743,10 @@ private fun WizardDownloadRow(state: OnboardingDownloadState) {
         OnboardingDownload.THREAT_INTEL -> stringResource(R.string.cli_wizard_download_sentinel)
         OnboardingDownload.TLS_FINGERPRINTS -> stringResource(R.string.cli_wizard_download_tls)
     }
-    val status = wizardDownloadStatus(state)
+    val status = wizardDownloadStatus(state, running)
     val tone = when {
         state.failed -> colors.warn
+        state.dnsPreparedForRuntimeVerification -> colors.dim
         state.done -> colors.ok
         else -> colors.dim
     }
@@ -725,9 +760,10 @@ private fun WizardDownloadRow(state: OnboardingDownloadState) {
 }
 
 @Composable
-private fun wizardDownloadStatus(state: OnboardingDownloadState): String =
+private fun wizardDownloadStatus(state: OnboardingDownloadState, running: Boolean): String =
     when {
         state.failed -> stringResource(R.string.cli_wizard_phase_failed)
+        state.dnsPreparedForRuntimeVerification -> stringResource(R.string.dns_category_prepared_short)
         state.done -> stringResource(R.string.cli_wizard_phase_done)
         state.phase == RemoteUpdatePhase.CHECKING -> stringResource(R.string.cli_wizard_phase_checking)
         state.phase == RemoteUpdatePhase.DOWNLOADING && state.totalBytes > 0L ->
@@ -737,6 +773,7 @@ private fun wizardDownloadStatus(state: OnboardingDownloadState): String =
             )
         state.phase == RemoteUpdatePhase.DOWNLOADING -> stringResource(R.string.cli_wizard_phase_downloading)
         state.phase == RemoteUpdatePhase.VERIFYING -> stringResource(R.string.cli_wizard_phase_verifying)
+        running && state.phase == null -> stringResource(R.string.cli_wizard_phase_queued)
         else -> "—"
     }
 
@@ -905,6 +942,7 @@ private fun HomeViewModel.startOnboardingDownloads(choices: OnboardingWizardChoi
 
 private fun HomeViewModel.finishOnboarding(choices: OnboardingWizardChoices) {
     onOnboardingFinished(
+        licenseAccepted = choices.licenseAccepted,
         torEnabled = choices.torEnabled,
         torBridges = choices.torBridges,
         bridgesFoxholeMirror = choices.bridgesMirror,

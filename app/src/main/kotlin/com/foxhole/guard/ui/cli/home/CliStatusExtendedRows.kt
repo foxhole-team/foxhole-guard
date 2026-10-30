@@ -27,7 +27,7 @@ internal fun cliExtendedStatusRows(
     extras: CliStatusExtras,
 ): List<CliTerminalRow> {
     val runtimes = activeRuntimes(home = home, torOnlyLive = torOnlyLive)
-    val moduleRows = cliStatusModuleRows(home = home, runtimes = runtimes)
+    val moduleRows = cliStatusModuleRows(home = home, runtimes = runtimes, includeNoticeDetails = true)
     val moduleBlock = if (moduleRows.isEmpty()) {
         emptyList()
     } else {
@@ -104,6 +104,8 @@ internal fun cliSecureDnsLabel(mode: SecureDnsMode): String = when (mode) {
     SecureDnsMode.DOH -> "DoH"
     SecureDnsMode.DOT -> "DoT"
     SecureDnsMode.PLAIN -> "UDP"
+    SecureDnsMode.DOQ -> "DoQ"
+    SecureDnsMode.DOH3 -> "DoH3"
 }
 
 @Composable
@@ -145,7 +147,7 @@ private fun extendedJournalRows(extras: CliStatusExtras): List<CliTerminalRow> {
                 cliEventColumnRow(
                     event = stringResource(event.type.cliSentinelTypeLabelRes()),
                     text = event.userFacingMessage(context),
-                    tone = CliLineTone.WARN,
+                    tone = cliSentinelEventTone(event.severity),
                 )
             }
     }
@@ -177,6 +179,7 @@ internal fun AnomalyType.cliSentinelTypeLabelRes(): Int = when (this) {
     AnomalyType.TOR_OR_I2P_ROUTE_MISMATCH -> R.string.cli_sentinel_type_legacy_route
     AnomalyType.DORMANT_APP_NETWORK_ACTIVITY -> R.string.cli_sentinel_type_dormant
     AnomalyType.KNOWN_THREAT_DESTINATION -> R.string.cli_sentinel_type_threat
+    AnomalyType.APP_STATIC_REFERENCE -> R.string.sentinel_static_type_label
 }
 
 internal fun isCriticalDiagnostic(entry: DiagnosticEntry): Boolean =

@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="sentinel_static_expert">Ajustes avanzados de comprobación estática</string>
+    <string name="sentinel_static_title">Comprobaciones de APK</string>
+    <string name="sentinel_static_reference_summary">%1$s: %2$s categorías de referencias estáticas a API y %3$s coincidencias de reglas. Estas observaciones no demuestran ejecución ni presencia de malware.</string>
+    <string name="sentinel_static_notification_title">FoxHole Sentinel: observaciones estáticas</string>
+    <string name="sentinel_static_select_app">Aplicación</string>
+    <string name="sentinel_static_run">Comprobar aplicación seleccionada</string>
+    <string name="sentinel_static_baseline">Comprobar aplicaciones instaladas</string>
+    <string name="sentinel_static_cancel">Cancelar comprobación</string>
+    <string name="sentinel_static_dex">Comprobaciones de DEX</string>
+    <string name="sentinel_static_yara">Comprobaciones de YARA</string>
+    <string name="sentinel_static_notify">Notificar hallazgos</string>
+    <string name="sentinel_static_automatic">Comprobar aplicaciones nuevas y actualizadas</string>
+    <string name="sentinel_static_charging">Comprobaciones automáticas durante la carga</string>
+    <string name="sentinel_static_battery">Comprobaciones automáticas con batería suficiente</string>
+    <string name="sentinel_static_cost">Presupuesto de análisis</string>
+    <string name="sentinel_static_economy">Ahorro · 16 MiB</string>
+    <string name="sentinel_static_balanced">Equilibrado · 64 MiB</string>
+    <string name="sentinel_static_coverage_note">Solo se incluyen las aplicaciones que Android permite ver. Únicamente se realizan comprobaciones estáticas y limitadas de APK/DEX. Una cobertura inexistente o parcial no significa que una aplicación sea segura. No se evalúa el código nativo ni descargado.</string>
+    <string name="sentinel_static_journal_deferred">Diario bloqueado: el resultado se conserva en memoria y podrá registrarse tras el desbloqueo.</string>
+    <string name="sentinel_static_status_disabled">Desactivado</string>
+    <string name="sentinel_static_status_idle">Listo</string>
+    <string name="sentinel_static_status_waiting">Esperando condiciones de carga o batería</string>
+    <string name="sentinel_static_status_running">Comprobando</string>
+    <string name="sentinel_static_status_complete">Comprobaciones estáticas completadas</string>
+    <string name="sentinel_static_status_partial">Cobertura parcial</string>
+    <string name="sentinel_static_status_stale">La instalación o los ajustes cambiaron</string>
+    <string name="sentinel_static_status_cancelled">Cancelado</string>
+    <string name="sentinel_static_status_unavailable">Comprobación no disponible</string>
+    <string name="sentinel_static_status_unsupported">Formato de APK no compatible</string>
+    <string name="sentinel_static_engine_unavailable">El motor de análisis incluido no está disponible para este dispositivo.</string>
+    <string name="sentinel_static_type_label">Referencias estáticas</string>
+</resources>

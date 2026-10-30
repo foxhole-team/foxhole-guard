@@ -111,9 +111,7 @@ internal class SettingsEncryptedStore(
             }
 
     private fun readSettingsPayload(payload: String): Settings =
-        runCatching { json.decodeFromString(Settings.serializer(), migratedPayload(payload)).normalized() }
-            .recoverCatching { json.decodeFromString(LegacyFlatSettings.serializer(), payload).toCurrent() }
-            .getOrThrow()
+        decodeStoredSettingsPayload(payload, json, ::migratedPayload)
 
     private fun migratedPayload(payload: String): String {
         val root = json.parseToJsonElement(payload) as? JsonObject ?: return payload

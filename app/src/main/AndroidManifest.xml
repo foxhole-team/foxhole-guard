@@ -4,6 +4,7 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_LOCAL_NETWORK" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-feature
@@ -63,6 +64,13 @@
 
         </activity>
 
+        <activity
+            android:name=".ui.cli.WebAppLaunchActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:theme="@android:style/Theme.NoDisplay" />
+
         <activity-alias
             android:name=".ui.cli.ColorLauncher"
             android:targetActivity=".ui.cli.CliMainActivity"
@@ -90,6 +98,13 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity-alias>
+
+        <service
+            android:name=".core.sentinel.scanner.IsolatedSentinelScannerService"
+            android:exported="false"
+            android:isolatedProcess="true"
+            android:process=":sentinel_scanner"
+            android:stopWithTask="true" />
 
         <service
             android:name=".runtime.FoxholeVpnService"

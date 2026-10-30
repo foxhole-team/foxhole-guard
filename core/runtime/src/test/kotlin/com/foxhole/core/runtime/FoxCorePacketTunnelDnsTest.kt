@@ -129,6 +129,33 @@ internal class FoxCorePacketTunnelDnsTest : FoxCoreConfigTranslatorTestSupport()
         assertTrue(result.tunPlan.advertisedDnsServers.isNotEmpty())
     }
 
+    @Test fun aSelectedQuicResolverCannotBeSilentlyIgnoredByAPacketTunnel() {
+        for (type in listOf("quic", "h3")) {
+            val remote = buildJsonObject {
+                put("tag", DNS_REMOTE_TAG); put("type", type); put("server", "resolver.example"); put("detour", "proxy")
+            }
+            val failure = assertThrows(FoxCoreConfigTranslationException::class.java) {
+                translate(ProtocolHint.WIREGUARD, wireGuard(), dnsServers = listOf(remote, wireGuardDnsServer()))
+            }
+            assertEquals(FoxCoreConfigRejection.POLICY_UNREPRESENTABLE, failure.rejection)
+            assertEquals("$.dns.servers[0].type", failure.path)
+        }
+    }
+
+    @Test fun providerDnsRemainsSelectedEvenWhenAnUnusedQuicResolverExists() {
+        for (type in listOf("quic", "h3")) {
+            val remote = buildJsonObject {
+                put("tag", DNS_REMOTE_TAG); put("type", type); put("server", "resolver.example"); put("detour", "proxy")
+            }
+            val result = translate(
+                ProtocolHint.WIREGUARD, wireGuard(),
+                dnsServers = listOf(remote, wireGuardDnsServer()), dnsFinal = WIREGUARD_DNS_TAG,
+            )
+            assertEquals(listOf("10.17.0.1"), result.tunPlan.advertisedDnsServers)
+            assertEquals(setOf("mode"), engine(result).getValue("dns").jsonObject.keys)
+        }
+    }
+
     private fun wireGuard(): JsonObject =
         primary("wireguard") {
             put("private_key", WIREGUARD_KEY)

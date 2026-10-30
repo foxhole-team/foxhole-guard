@@ -60,6 +60,8 @@ import com.foxhole.guard.ui.cli.components.CliTopBarSettingsButton
 import com.foxhole.guard.ui.cli.components.rememberNowMsTicker
 import com.foxhole.guard.ui.cli.home.activeRuntimes
 import com.foxhole.guard.ui.cli.home.isTorOnlyLive
+import com.foxhole.guard.ui.cli.logs.CliRecentInstallationsPreview
+import com.foxhole.guard.ui.cli.logs.CliRefreshInstalledAppsOnResume
 import com.foxhole.guard.ui.cli.settings.rememberCliAppIcon
 import com.foxhole.guard.ui.onStatisticsEnabledChanged
 import com.foxhole.guard.ui.onStatisticsWindowChanged
@@ -71,6 +73,7 @@ internal fun CliStatsScreen(
     modifier: Modifier = Modifier,
 ) {
     val state by viewModel.statisticsRouteState.collectAsStateWithLifecycle()
+    CliRefreshInstalledAppsOnResume(viewModel, enabled = state.settingsHydrated && state.settings.statistics.enabled)
     val home by viewModel.homeRouteState.collectAsStateWithLifecycle()
     var settingsOpen by rememberSaveable { mutableStateOf(false) }
 
@@ -270,6 +273,7 @@ private fun CliStatsBody(
         )
         CliStatsDnsPanel(state)
         CliStatsAppPanel(state)
+        CliRecentInstallationsPreview(state.installedApps)
         CliStatsTorPanel(state = state, home = home, hero = hero)
         CliStatsI2pPanel(state = state, home = home)
         Spacer(modifier = Modifier.height(CliSpacing.sm))

@@ -1,0 +1,5 @@
+0.1.1 Stable
+
+- Top notices use green for success, blue for information, orange for warnings and red for errors, including monochrome themes.
+- Routine routing-mode selections no longer add top popups; warnings, errors and app notices remain available.
+- APK checks are now at the bottom of Sentinel settings with a shorter title.

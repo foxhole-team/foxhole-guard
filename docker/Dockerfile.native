@@ -1,0 +1,42 @@
+ARG BASE_IMAGE=foxhole/android-rust-lab:1.97.1-ndk29
+FROM ${BASE_IMAGE}
+USER root
+
+ARG GO_VERSION
+ARG GO_SHA256
+RUN test "$(uname -m)" = x86_64 \
+    && test -n "$GO_VERSION" \
+    && test -n "$GO_SHA256" \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends ninja-build \
+    && rm -rf /var/lib/apt/lists/* \
+    && curl -fL --retry 4 --connect-timeout 20 --max-time 600 \
+        "https://go.dev/dl/${GO_VERSION}.linux-amd64.tar.gz" -o /tmp/go.tar.gz \
+    && printf '%s  %s\n' "$GO_SHA256" /tmp/go.tar.gz | sha256sum -c - \
+    && mkdir -p /opt/foxhole/go \
+    && tar -xzf /tmp/go.tar.gz --strip-components=1 -C /opt/foxhole/go \
+    && printf '%s\n' "$GO_SHA256" > /opt/foxhole/go/.foxhole-go-sha256 \
+    && rm /tmp/go.tar.gz \
+    && test "$(/opt/foxhole/go/bin/go env GOVERSION)" = "$GO_VERSION"
+
+ENV GO=/opt/foxhole/go/bin/go \
+    GOTOOLCHAIN=local \
+    GOMAXPROCS=2 \
+    GOMEMLIMIT=512MiB \
+    TMPDIR=/native/tmp \
+    GOCACHE=/native/gocache \
+    GOPATH=/native/gopath \
+    GOMODCACHE=/native/gomodcache \
+    FOXHOLE_NATIVE_DEPS_DIR=/native \
+    FOXHOLE_GOROOT=/opt/foxhole/go \
+    FOXHOLE_GOMODCACHE=/native/gomodcache \
+    I2PD_WORK_DIR=/native/i2pd-deps \
+    I2PD_BUILD_ROOT=/native/build/i2pd \
+    TOR_TRANSPORT_WORK_DIR=/native/tor-transports
+
+LABEL org.foxhole.native.go.version=$GO_VERSION \
+    org.foxhole.native.go.sha256=$GO_SHA256 \
+    org.foxhole.native.ndk.version=29.0.14206865
+
+WORKDIR /repo
+USER 1000:1000

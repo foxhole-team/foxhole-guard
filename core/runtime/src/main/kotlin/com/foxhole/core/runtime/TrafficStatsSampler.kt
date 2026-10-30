@@ -19,26 +19,27 @@ internal object AndroidTrafficByteSource : TrafficByteSource {
 class TrafficStatsSampler(
     private val uid: Int = Process.myUid(),
     private val byteSource: TrafficByteSource = AndroidTrafficByteSource,
+    private val elapsedNowProvider: () -> Long = { System.nanoTime() / 1_000_000L },
     private val nowProvider: () -> Long = System::currentTimeMillis,
 ) {
     private var baselineRx = 0L
     private var baselineTx = 0L
     private var lastRx = 0L
     private var lastTx = 0L
-    private var lastSampleAt = 0L
+    private var lastSampleElapsedMs = 0L
     private var started = false
 
     fun start() {
         val rx = byteSource.uidRxBytes(uid)
         val tx = byteSource.uidTxBytes(uid)
-        val now = nowProvider()
+        val elapsedNow = elapsedNowProvider()
         if (rx == TrafficStats.UNSUPPORTED.toLong() || tx == TrafficStats.UNSUPPORTED.toLong()) {
             started = false
             baselineRx = 0L
             baselineTx = 0L
             lastRx = 0L
             lastTx = 0L
-            lastSampleAt = now
+            lastSampleElapsedMs = elapsedNow
             return
         }
         started = true
@@ -46,7 +47,7 @@ class TrafficStatsSampler(
         baselineTx = tx
         lastRx = rx
         lastTx = tx
-        lastSampleAt = now
+        lastSampleElapsedMs = elapsedNow
     }
 
     fun sample(resetRateBaseline: Boolean = false): TrafficSnapshot {
@@ -54,6 +55,7 @@ class TrafficStatsSampler(
         if (!started) {
             return TrafficSnapshot(sampledAt = now)
         }
+        val elapsedNow = elapsedNowProvider()
         val rx = byteSource.uidRxBytes(uid)
         val tx = byteSource.uidTxBytes(uid)
         if (rx == TrafficStats.UNSUPPORTED.toLong() || tx == TrafficStats.UNSUPPORTED.toLong()) {
@@ -65,7 +67,7 @@ class TrafficStatsSampler(
         if (resetRateBaseline) {
             lastRx = rx
             lastTx = tx
-            lastSampleAt = now
+            lastSampleElapsedMs = elapsedNow
             return TrafficSnapshot(
                 available = true,
                 rxBytesPerSec = 0L,
@@ -75,12 +77,12 @@ class TrafficStatsSampler(
                 sampledAt = now,
             )
         }
-        val elapsed = (now - lastSampleAt).coerceAtLeast(1L)
+        val elapsed = (elapsedNow - lastSampleElapsedMs).coerceAtLeast(1L)
         val rxRate = ((rx - lastRx).coerceAtLeast(0L) * 1000L) / elapsed
         val txRate = ((tx - lastTx).coerceAtLeast(0L) * 1000L) / elapsed
         lastRx = rx
         lastTx = tx
-        lastSampleAt = now
+        lastSampleElapsedMs = elapsedNow
         return TrafficSnapshot(
             available = true,
             rxBytesPerSec = rxRate,
@@ -97,7 +99,7 @@ class TrafficStatsSampler(
         baselineTx = 0L
         lastRx = 0L
         lastTx = 0L
-        lastSampleAt = 0L
+        lastSampleElapsedMs = 0L
         return TrafficSnapshot()
     }
 }

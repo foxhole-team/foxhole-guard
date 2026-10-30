@@ -10,6 +10,7 @@ internal fun formatSanitizedAboutDiagnosticsExport(
     metadata: DiagnosticsExportMetadata,
     entries: List<DiagnosticEntry>,
     formatter: DateTimeFormatter,
+    nativeCounters: NativeAggregateCounterSnapshot? = null,
 ): String =
     buildString {
         appendLine("Foxhole Diagnostics Export")
@@ -26,6 +27,9 @@ internal fun formatSanitizedAboutDiagnosticsExport(
         appendLine(
             "App Network Activity Logging: ${if (metadata.networkActivityLoggingEnabled) "enabled" else "disabled"}",
         )
+        nativeCounters?.let { snapshot ->
+            nativeAggregateCounterLines(snapshot).forEach { line -> appendLine(line) }
+        }
         appendLine()
         if (entries.isEmpty()) {
             append("No retained diagnostics entries.")

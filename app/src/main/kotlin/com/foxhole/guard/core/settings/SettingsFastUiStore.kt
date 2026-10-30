@@ -6,6 +6,7 @@ import com.foxhole.core.model.AppLocale
 import com.foxhole.core.model.AppLockMode
 import com.foxhole.core.model.AppLockSettings
 import com.foxhole.core.model.AppearanceUiState
+import com.foxhole.core.model.InterfaceMode
 import com.foxhole.core.model.TrafficCardView
 import com.foxhole.core.model.UiSettings
 import com.foxhole.core.model.appearanceUiState
@@ -20,14 +21,36 @@ internal class SettingsFastUiStore(
     fun readLocale(): AppLocale? =
         parseOptionalStoredAppLocale(fastUiPreferences.getString(FAST_LOCALE_KEY, null))
 
+    fun readRouterHomeShortcutVisible(): Boolean =
+        fastUiPreferences.getBoolean(FAST_ROUTER_HOME_SHORTCUT_VISIBLE_KEY, true)
+
+    fun writeRouterHomeShortcutVisible(value: Boolean) {
+        fastUiPreferences.edit { putBoolean(FAST_ROUTER_HOME_SHORTCUT_VISIBLE_KEY, value) }
+    }
+
+    fun readRouterDockShortcutVisible(): Boolean =
+        fastUiPreferences.getBoolean(FAST_ROUTER_DOCK_SHORTCUT_VISIBLE_KEY, false)
+
+    fun writeRouterDockShortcutVisible(value: Boolean) {
+        fastUiPreferences.edit { putBoolean(FAST_ROUTER_DOCK_SHORTCUT_VISIBLE_KEY, value) }
+    }
+
+    fun readDockOptionalOrder(): List<String> = fastUiPreferences.getString("dock_optional_order", null)
+        .orEmpty().take(128).split(',').filter { it in setOf("WEBAPPS", "STATS", "ROUTER") }.distinct()
+
+    fun writeDockOptionalOrder(value: List<String>) {
+        fastUiPreferences.edit { putString("dock_optional_order", value.joinToString(",")) }
+    }
+
     fun readBootstrapUi(
         defaults: UiSettings,
         encryptedUiFallback: () -> UiSettings,
     ): UiSettings {
         val fastAppearance = readAppearanceUiOrNull()
         val fastLocale = readLocale()
+        val dashboardComplete = hasDashboardUi() && readInterfaceMode() != null
         val storedUi =
-            if (hasDashboardUi() && fastAppearance != null && fastLocale != null) {
+            if (dashboardComplete && fastAppearance != null && fastLocale != null) {
                 defaults
             } else {
                 encryptedUiFallback()
@@ -62,6 +85,7 @@ internal class SettingsFastUiStore(
 
     fun writeUiSnapshot(value: UiSettings) {
         fastUiPreferences.edit {
+            putString(FAST_INTERFACE_MODE_KEY, value.interfaceMode.name)
             putString(FAST_THEME_MODE_KEY, value.themeMode.name)
             remove(RETIRED_VISUAL_STYLE_KEY)
             putString(FAST_ACCENT_COLOR_KEY, value.accentColor.name)
@@ -121,6 +145,7 @@ internal class SettingsFastUiStore(
 
     private fun readDashboardUi(fallback: UiSettings): UiSettings =
         fallback.copy(
+            interfaceMode = readInterfaceMode() ?: fallback.interfaceMode,
             networkCardEnabled =
             fastUiPreferences.getBoolean(
                 FAST_NETWORK_CARD_ENABLED_KEY,
@@ -183,9 +208,16 @@ internal class SettingsFastUiStore(
                 fallback.statisticsDockIconEnabled,
             ),
         )
+    private fun readInterfaceMode(): InterfaceMode? =
+        fastUiPreferences.getString(FAST_INTERFACE_MODE_KEY, null)?.let { stored ->
+            InterfaceMode.entries.firstOrNull { it.name == stored }
+        }
 }
 
 private const val RETIRED_VISUAL_STYLE_KEY = "visual_style"
+private const val FAST_INTERFACE_MODE_KEY = "interface_mode"
+private const val FAST_ROUTER_HOME_SHORTCUT_VISIBLE_KEY = "router_home_shortcut_visible"
+private const val FAST_ROUTER_DOCK_SHORTCUT_VISIBLE_KEY = "router_dock_shortcut_visible"
 
 private fun parseOptionalStoredTrafficCardView(value: String?): TrafficCardView? =
     value?.let { stored -> TrafficCardView.entries.firstOrNull { it.name == stored } }

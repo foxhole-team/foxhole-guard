@@ -1,0 +1,4 @@
+0.1.1 Stable
+
+- User Home respects the saved map/route view.
+- The large map remains visible by default; terminal visibility controls remain in Expert mode.

@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="error_flow_attribution_unavailable">Le pare-feu et le routage par application nécessitent Android 10 ou version ultérieure. Cette configuration ne peut pas démarrer sur cet appareil.</string>
+</resources>

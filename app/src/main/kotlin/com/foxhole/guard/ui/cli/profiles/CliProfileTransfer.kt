@@ -42,6 +42,7 @@ import com.foxhole.guard.core.data.readLocalProfileImportUtf8Capped
 import com.foxhole.guard.ui.HomeViewModel
 import com.foxhole.guard.ui.ProfilesExportSelectionState
 import com.foxhole.guard.ui.cli.CliSpacing
+import com.foxhole.guard.ui.cli.CliTopNoticeHost
 import com.foxhole.guard.ui.cli.CliType
 import com.foxhole.guard.ui.cli.LocalCliColors
 import com.foxhole.guard.ui.cli.LocalCliPanelAppearance
@@ -51,12 +52,14 @@ import com.foxhole.guard.ui.cli.components.CliModalCloseButton
 import com.foxhole.guard.ui.cli.components.CliPanel
 import com.foxhole.guard.ui.cli.components.CliSpinner
 import com.foxhole.guard.ui.cli.components.cliModalSurfaceColor
+import com.foxhole.guard.ui.emitError
 import com.foxhole.guard.ui.emitInfo
 import com.foxhole.guard.ui.importProfileRaw
 import com.foxhole.guard.ui.isReady
 import com.foxhole.guard.ui.onPasteFromClipboard
 import com.foxhole.guard.ui.requests
 import com.foxhole.guard.ui.subscriptionQrProfileIdOrNull
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -169,8 +172,15 @@ private fun rememberCliImportLauncher(
 private suspend fun resolveExportsForSaf(
     viewModel: HomeViewModel,
     selection: ProfilesExportSelectionState,
-): List<CliProfileConfigExport> =
-    runCatching { viewModel.cliResolveExportConfigs(selection.requests()) }.getOrDefault(emptyList())
+): List<CliProfileConfigExport> = try {
+    viewModel.cliResolveExportConfigs(selection.requests())
+} catch (cancelled: CancellationException) {
+    throw cancelled
+} catch (_: RuntimeException) {
+    emptyList()
+} catch (_: java.io.IOException) {
+    emptyList()
+}
 
 @Composable
 private fun rememberCliSingleExportLauncher(
@@ -193,7 +203,7 @@ private fun rememberCliSingleExportLauncher(
                     viewModel.emitInfo(resources.getString(R.string.cli_prof_exp_saved, savedName))
                     onSelectionCleared()
                 } else {
-                    viewModel.emitInfo(resources.getString(R.string.cli_prof_exp_failed))
+                    viewModel.emitError(resources.getString(R.string.cli_prof_exp_failed))
                 }
             }
         }
@@ -221,7 +231,7 @@ private fun rememberCliTreeExportLauncher(
                     )
                     onSelectionCleared()
                 } else {
-                    viewModel.emitInfo(resources.getString(R.string.cli_prof_exp_failed))
+                    viewModel.emitError(resources.getString(R.string.cli_prof_exp_failed))
                 }
             }
         }
@@ -242,10 +252,16 @@ private fun launchResolvedExports(
         try {
             val exports = resolveExportsForSaf(viewModel, selection)
             if (exports.isEmpty()) {
-                viewModel.emitInfo(context.getString(R.string.cli_prof_exp_failed))
+                viewModel.emitError(context.getString(R.string.cli_prof_exp_failed))
             } else {
                 block(exports)
             }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: RuntimeException) {
+            viewModel.emitError(context.getString(R.string.cli_prof_exp_failed))
+        } catch (_: java.io.IOException) {
+            viewModel.emitError(context.getString(R.string.cli_prof_exp_failed))
         } finally {
             state.exportBusy = false
         }
@@ -331,9 +347,12 @@ private fun handleClipboardTransfer(
         return
     }
     runExport { exports ->
-        cliCopyConfigsToClipboard(context, exports)
-        viewModel.emitInfo(context.getString(R.string.cli_prof_exp_copied))
-        onSelectionCleared()
+        if (cliCopyConfigsToClipboard(context, exports)) {
+            viewModel.emitInfo(context.getString(R.string.cli_prof_exp_copied))
+            onSelectionCleared()
+        } else {
+            viewModel.emitError(context.getString(R.string.cli_prof_exp_failed))
+        }
     }
 }
 
@@ -484,6 +503,7 @@ private fun CliQrExportOverlay(
             decorFitsSystemWindows = true,
         ),
     ) {
+        CliTopNoticeHost()
         Box(
             modifier = Modifier
                 .fillMaxSize()

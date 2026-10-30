@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="router_beta_notice_title" formatted="false">测试版功能</string>
+    <string name="router_beta_notice_body" formatted="false">目前，自动安装仅支持使用完全默认 OpenWrt 配置的路由器。 手动安装最新版 FoxHole OpenWrt Client 后也可进行配对。 设置和配对时，手机和路由器必须位于同一局域网，且路由器需要能够访问互联网。</string>
+    <string name="router_beta_notice_dont_show_again" formatted="false">不再显示</string>
+</resources>

@@ -4,6 +4,8 @@ import com.foxhole.core.model.DnsSettings
 import com.foxhole.core.model.SecureDnsMode
 import com.foxhole.core.model.Settings
 import com.foxhole.core.model.disableUnverifiedRuleSetRuntimeDns
+import com.foxhole.core.model.dnsRuleSetTag
+import com.foxhole.core.model.enabledDnsFilterCategories
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -250,10 +252,12 @@ internal fun foxholeRemoteDnsServer(
             put("server", effectiveDnsSettings.server)
             put("type", effectiveDnsSettings.secureMode.configType)
             put("server_port", effectiveDnsSettings.secureMode.defaultPort)
-            if (effectiveDnsSettings.secureMode == SecureDnsMode.DOH) {
+            if (effectiveDnsSettings.secureMode in setOf(SecureDnsMode.DOH, SecureDnsMode.DOH3)) {
                 put("path", "/dns-query")
             }
-            if (effectiveDnsSettings.server.requiresDnsDomainResolver()) {
+            if (effectiveDnsSettings.secureMode !in setOf(SecureDnsMode.DOQ, SecureDnsMode.DOH3) &&
+                effectiveDnsSettings.server.requiresDnsDomainResolver()
+            ) {
                 put("domain_resolver", bootstrapResolverTag)
             }
         }
@@ -283,9 +287,11 @@ internal fun remoteResolverRequiresBootstrap(
             ?.takeIf { state -> state.mode == PrivateDnsMode.STRICT }
             ?.hostname
             ?.takeIf(String::isNotBlank)
-    val resolverServer =
-        strictHost
-            ?: dnsSettings.torDetourSafeDnsSettings(detourTag, torSocksDetour, tunnelCarriesUdp).server
+    val effectiveDnsSettings = dnsSettings.torDetourSafeDnsSettings(detourTag, torSocksDetour, tunnelCarriesUdp)
+    if (strictHost == null && effectiveDnsSettings.secureMode in setOf(SecureDnsMode.DOQ, SecureDnsMode.DOH3)) {
+        return false
+    }
+    val resolverServer = strictHost ?: effectiveDnsSettings.server
     return resolverServer.requiresDnsDomainResolver()
 }
 
@@ -345,9 +351,18 @@ internal fun buildDnsRules(
             )
         }
         run {
-            val categoryRuleSets = dnsSettings.activeDnsFilterCategoryRuleSets(dnsFilterRuntimePaths)
-            if (categoryRuleSets.isNotEmpty()) {
-                categoryRuleSets.forEach { (tag, _) ->
+            val bootstrap = dnsFilterRuntimePaths.foxCoreBootstrap
+            val categoryTags = if (bootstrap?.categoryVariant != null) {
+                val requested = dnsSettings.enabledDnsFilterCategories()
+                require(bootstrap.availableCategories?.containsAll(requested) == true) {
+                    "required DNS category is unavailable"
+                }
+                requested.map { it.dnsRuleSetTag }
+            } else {
+                dnsSettings.activeDnsFilterCategoryRuleSets(dnsFilterRuntimePaths).map { it.first }
+            }
+            if (categoryTags.isNotEmpty()) {
+                categoryTags.forEach { tag ->
                     add(
                         buildJsonObject {
                             putJsonArray("rule_set") {

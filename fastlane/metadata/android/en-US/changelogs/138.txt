@@ -1,0 +1,4 @@
+Improve Sentinel journaling and certificate inspection. Preserve cancellation and retry incomplete analysis.
+Network IOC analysis no longer requires complete history; live toggles and IPv6/ownership handling improved.
+Match equivalent IPv6 address spellings and reject malformed numeric indicators locally.
+Add Auto core threads (max 4). Correct notification accounting and backup cancellation; keep saved manual values.

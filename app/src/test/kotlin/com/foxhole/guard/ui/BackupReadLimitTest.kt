@@ -3,6 +3,7 @@ package com.foxhole.guard.ui
 import kotlinx.coroutines.CancellationException
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertThrows
 import org.junit.Test
 import java.io.ByteArrayInputStream
@@ -38,6 +39,15 @@ class BackupReadLimitTest {
     @Test
     fun `backup read helper maps ordinary provider failure to null`() {
         assertNull(backupReadOrNull<String> { throw IOException("provider failed") })
+    }
+
+    @Test
+    fun `backup read helper propagates fatal provider errors unchanged`() {
+        val fatal = AssertionError("owned provider fatal marker")
+        val thrown = assertThrows(AssertionError::class.java) {
+            backupReadOrNull<String> { throw fatal }
+        }
+        assertSame(fatal, thrown)
     }
 }
 

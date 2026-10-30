@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="error_flow_attribution_unavailable">按应用设置防火墙和路由需要 Android 10 或更高版本。此配置无法在该设备上启动。</string>
+</resources>

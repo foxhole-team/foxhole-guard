@@ -554,8 +554,8 @@ class CliVisualPolishContractTest {
         assertTrue(lanes.contains("centeredIconFirstLine = true"))
         assertTrue(lanes.contains("centeredIconGap = CliSpacing.sm"))
         assertTrue(lanes.contains("outerVerticalPadding = CliSpacing.sm"))
-        assertTrue(lanes.contains("if (missingAppsTarget != null) colors.err else colors.firewall"))
-        assertTrue(lanes.contains("else -> R.drawable.lin_info"))
+        assertTrue(lanes.contains("color = colors.firewall"))
+        assertTrue(lanes.contains("if (torAppsMissing) R.drawable.lin_tor else R.drawable.lin_info"))
         val sites = cli("settings/CliRoutingSiteRulesSection.kt")
         assertTrue(sites.contains("centeredIconFirstLine = true"))
         assertTrue(sites.contains("centeredIconGap = CliSpacing.sm"))
@@ -669,8 +669,8 @@ class CliVisualPolishContractTest {
 
         val english = resource("values/strings.xml")
         val russian = resource("values-ru/strings.xml")
-        assertTrue(english.contains("Beta version information"))
-        assertTrue(russian.contains("Информация о бета-версии"))
+        assertTrue(english.contains("Stable release information"))
+        assertTrue(russian.contains("Информация о стабильном выпуске"))
         assertTrue(english.contains("Accept the license agreement first"))
         assertTrue(russian.contains("Сначала примите лицензионное соглашение"))
     }
@@ -795,7 +795,7 @@ class CliVisualPolishContractTest {
             Regex("Spacer\\(modifier = Modifier\\.height\\(CliSpacing\\.sm\\)\\)")
                 .findAll(primarySections)
                 .count()
-        assertEquals(6, rootSectionSpacers)
+        assertEquals(7, rootSectionSpacers)
         assertTrue(root.indexOf("CliExtrasSection(") < root.indexOf("CliApplicationSection("))
         assertTrue(root.indexOf("CliApplicationSection(") < root.indexOf("CliMoreSection("))
 

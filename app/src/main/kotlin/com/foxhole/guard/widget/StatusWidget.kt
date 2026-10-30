@@ -1,6 +1,7 @@
 package com.foxhole.guard.widget
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.content.Intent
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -8,6 +9,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.datastore.preferences.core.Preferences
 import androidx.glance.ColorFilter
@@ -42,6 +44,9 @@ import com.foxhole.core.model.IpInfo
 import com.foxhole.core.model.networkUp
 import com.foxhole.guard.FoxholeApplication
 import com.foxhole.guard.R
+import com.foxhole.guard.flags.countryFlagBitmap
+import com.foxhole.guard.flags.countryFlagCode
+import com.foxhole.guard.ui.cli.CliLightColors
 import com.foxhole.guard.ui.cli.CliMainActivity
 import java.util.Locale
 
@@ -149,8 +154,7 @@ private fun StatusWidgetExpandedContent(
             GlanceModifier
                 .fillMaxSize()
                 .padding(horizontal = 12.dp, vertical = 8.dp)
-                .cornerRadius(WIDGET_SURFACE_CORNER_RADIUS)
-                .clickable(actionStartActivity<CliMainActivity>()),
+                .cornerRadius(WIDGET_SURFACE_CORNER_RADIUS),
         ) {
             StatusWidgetHeader(context, background, refreshPhase, refreshFrame)
             Spacer(modifier = GlanceModifier.height(2.dp))
@@ -187,80 +191,75 @@ private fun StatusWidgetSimpleContent(
     )
     val size = LocalSize.current
     val metrics = statusWidgetSimpleMetrics(size.width, size.height)
-    Box(
-        modifier = GlanceModifier
-            .fillMaxSize()
-            .cornerRadius(WIDGET_SURFACE_CORNER_RADIUS)
-            .clickable(actionStartActivity<CliMainActivity>()),
-        contentAlignment = Alignment.Center,
-    ) {
-        WidgetFrame(
-            background = background,
-            outlined = outlined,
-            modifier = GlanceModifier.fillMaxWidth().height(statusWidgetSimpleSurfaceHeight(metrics)),
-        ) {
-            Row(
-                modifier =
-                GlanceModifier
-                    .fillMaxSize()
-                    .padding(
-                        horizontal = metrics.horizontalPadding,
-                        vertical = metrics.verticalPadding,
-                    ),
-                verticalAlignment = Alignment.CenterVertically,
+    val contentWidth = statusWidgetSimpleContentWidth(size.width)
+    val availableWidth = contentWidth - metrics.horizontalPadding * 2
+    val actionWidth = statusWidgetSimpleActionWidth(availableWidth)
+    WidgetFrame(background = background, outlined = outlined) {
+        Box(modifier = GlanceModifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
+            Column(
+                modifier = GlanceModifier
+                    .width(contentWidth)
+                    .padding(horizontal = metrics.horizontalPadding, vertical = 4.dp)
+                    .cornerRadius(WIDGET_SURFACE_CORNER_RADIUS),
+                horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                StatusWidgetSimpleLogo(
-                    context = context,
-                    background = background,
-                    metrics = metrics,
-                )
-                Spacer(modifier = GlanceModifier.width(metrics.sideSpacing))
-                StatusWidgetSimpleStatusBlock(
-                    context = context,
-                    text = context.getString(status.labelRes),
-                    color = status.color,
-                    identityContent = identityContent,
-                    deviceTone = presentation.simpleDeviceTone(),
-                    background = background,
-                    metrics = metrics,
-                    modifier = GlanceModifier.defaultWeight(),
-                )
-                Spacer(modifier = GlanceModifier.width(metrics.sideSpacing))
-                StatusWidgetSimplePowerButton(context, presentation.simplePowerAction(), metrics)
+                Row(
+                    modifier = GlanceModifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    StatusWidgetSimpleLogo(context = context, metrics = metrics)
+                    Spacer(modifier = GlanceModifier.width(8.dp))
+                    StatusWidgetSimpleStatusBlock(
+                        context = context,
+                        text = context.getString(status.labelRes),
+                        color = status.color,
+                        identityContent = identityContent,
+                        deviceTone = presentation.simpleDeviceTone(),
+                        background = background,
+                        metrics = metrics,
+                        availableWidth = (availableWidth - STATUS_WIDGET_SIMPLE_TOUCH_SIZE - 8.dp).coerceAtLeast(0.dp),
+                        modifier = GlanceModifier,
+                    )
+                }
+                Spacer(modifier = GlanceModifier.height(6.dp))
+                Row(
+                    modifier = GlanceModifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    StatusWidgetSimplePowerButton(
+                        context = context,
+                        action = presentation.simplePowerAction(),
+                        connection = presentation.connection,
+                        background = background,
+                        metrics = metrics,
+                        width = actionWidth,
+                    )
+                }
             }
         }
     }
 }
 
+internal fun statusWidgetSimpleContentWidth(width: Dp): Dp = width.coerceAtMost(STATUS_WIDGET_SIMPLE_WIDE_WIDTH)
+
+internal fun statusWidgetSimpleActionWidth(available: Dp): Dp = available.coerceAtLeast(0.dp)
+
 @Composable
 private fun StatusWidgetSimpleLogo(
     context: Context,
-    background: WidgetBackground,
     metrics: StatusWidgetSimpleMetrics,
 ) {
     Box(
         modifier = GlanceModifier
-            .size(metrics.circleSize)
-            .cornerRadius(WIDGET_CIRCLE_CORNER_RADIUS)
-            .clickable(
-                actionSendBroadcast(
-                    Intent(context, StatusWidgetCommandReceiver::class.java)
-                        .setAction(StatusWidgetCommandReceiver.ACTION_REFRESH),
-                ),
-            ),
+            .size(STATUS_WIDGET_SIMPLE_TOUCH_SIZE)
+            .clickable(actionStartActivity<CliMainActivity>()),
         contentAlignment = Alignment.Center,
     ) {
         Image(
-            provider = ImageProvider(R.drawable.widget_simple_logo_circle),
-            contentDescription = null,
-            colorFilter = ColorFilter.tint(ColorProvider(background.icon)),
-            modifier = GlanceModifier.fillMaxSize(),
-        )
-        Image(
-            provider = ImageProvider(R.drawable.ic_qs_tile),
-            contentDescription = context.getString(R.string.widget_status_refresh),
-            colorFilter = ColorFilter.tint(ColorProvider(background.icon)),
-            modifier = GlanceModifier.size(metrics.logoSize),
+            provider = ImageProvider(R.drawable.ic_launcher_openwrt),
+            contentDescription = context.getString(R.string.widget_status_open_app),
+            modifier = GlanceModifier.size(metrics.circleSize),
         )
     }
 }
@@ -274,21 +273,23 @@ private fun StatusWidgetSimpleStatusBlock(
     deviceTone: StatusWidgetSimpleDeviceTone,
     background: WidgetBackground,
     metrics: StatusWidgetSimpleMetrics,
+    availableWidth: Dp,
     modifier: GlanceModifier,
 ) {
+    if (availableWidth <= 0.dp) return
     Box(
         modifier = modifier,
-        contentAlignment = Alignment.Center,
+        contentAlignment = Alignment.CenterStart,
     ) {
         Column(
-            modifier = GlanceModifier.fillMaxWidth(),
-            horizontalAlignment = Alignment.CenterHorizontally,
+            horizontalAlignment = Alignment.Start,
         ) {
             StatusWidgetSimpleStatusText(
                 context = context,
                 text = text,
                 color = color,
                 fontSize = metrics.statusFontSize,
+                maxWidth = availableWidth,
             )
             Spacer(modifier = GlanceModifier.height(1.dp))
             StatusWidgetSimpleIdentityRow(
@@ -297,6 +298,7 @@ private fun StatusWidgetSimpleStatusBlock(
                 deviceTone = deviceTone,
                 background = background,
                 metrics = metrics,
+                maxWidth = availableWidth,
             )
         }
     }
@@ -308,6 +310,7 @@ private fun StatusWidgetSimpleStatusText(
     text: String,
     color: Color,
     fontSize: Int,
+    maxWidth: Dp,
 ) {
     StyledWidgetText(
         context = context,
@@ -315,6 +318,7 @@ private fun StatusWidgetSimpleStatusText(
         color = color,
         fontSize = fontSize,
         uppercase = true,
+        maxWidth = maxWidth,
     )
 }
 
@@ -325,7 +329,10 @@ private fun StatusWidgetSimpleIdentityRow(
     deviceTone: StatusWidgetSimpleDeviceTone,
     background: WidgetBackground,
     metrics: StatusWidgetSimpleMetrics,
+    maxWidth: Dp,
 ) {
+    val contentWidth = (maxWidth - metrics.deviceIconSize - metrics.tokenSpacing).coerceAtLeast(0.dp)
+    if (contentWidth <= 0.dp) return
     Row(verticalAlignment = Alignment.CenterVertically) {
         StatusWidgetSimpleDeviceIcon(
             context = context,
@@ -350,18 +357,36 @@ private fun StatusWidgetSimpleIdentityRow(
                 text = context.getString(refreshStatusRes),
                 color = refreshColor,
                 fontSize = metrics.locationFontSize,
+                maxWidth = contentWidth,
             )
         } else {
+            val tokenCount = content.tokens.size.coerceAtLeast(1)
+            val separatorWidth = if (tokenCount > 1) {
+                measureStyledWidgetTextWidth(context, " · ", metrics.locationFontSize)
+                    .coerceAtMost(contentWidth / tokenCount)
+            } else {
+                0.dp
+            }
+            val tokenWidth = (
+                (contentWidth - separatorWidth * (tokenCount - 1)) / tokenCount
+            ).coerceAtLeast(0.dp)
             content.tokens.forEachIndexed { index, token ->
-                if (index > 0) {
+                if (index > 0 && separatorWidth > 0.dp) {
                     StyledWidgetText(
                         context = context,
                         text = " · ",
                         color = background.secondaryText,
                         fontSize = metrics.locationFontSize,
+                        maxWidth = separatorWidth,
                     )
                 }
-                StatusWidgetSimpleLocation(context, token.identity, background, metrics)
+                StatusWidgetSimpleLocation(
+                    context = context,
+                    identity = token.identity,
+                    background = background,
+                    metrics = metrics,
+                    maxWidth = tokenWidth,
+                )
             }
         }
     }
@@ -428,72 +453,109 @@ private fun StatusWidgetSimpleLocation(
     identity: IpInfo?,
     background: WidgetBackground,
     metrics: StatusWidgetSimpleMetrics,
+    maxWidth: Dp,
 ) {
     val code = statusWidgetCountryFlagCode(identity?.countryCode)?.uppercase(Locale.US)
     val countryFlag = statusWidgetCountryFlag(context, code)
+    val flagSize = countryFlag?.let {
+        styledWidgetFlagSize(context, it.bitmap, metrics.locationFontSize, LocalWidgetPixelArtEnabled.current)
+    } ?: DpSize.Zero
+    val showFlag = countryFlag != null && flagSize.height > 0.dp && maxWidth > flagSize.width + 3.dp
+    val textWidth = (maxWidth - if (showFlag) flagSize.width + 3.dp else 0.dp).coerceAtLeast(0.dp)
+    if (textWidth <= 0.dp) return
     Row(verticalAlignment = Alignment.CenterVertically) {
-        if (countryFlag != null) {
+        if (showFlag && countryFlag != null) {
             Image(
-                provider = ImageProvider(countryFlag.drawableId),
+                provider = ImageProvider(countryFlag.bitmap),
                 contentDescription = countryFlag.countryCode,
-                modifier = GlanceModifier.width(metrics.flagWidth).height(metrics.flagHeight),
+                modifier = GlanceModifier.width(flagSize.width).height(flagSize.height),
             )
             Spacer(modifier = GlanceModifier.width(3.dp))
         }
         StyledWidgetText(
             context = context,
-            text = code ?: WIDGET_DASH,
+            text = identity?.city?.trim()?.takeIf(String::isNotBlank) ?: code ?: WIDGET_DASH,
             color = background.text,
             fontSize = metrics.locationFontSize,
+            maxWidth = textWidth,
         )
     }
 }
 
-internal fun statusWidgetSimpleSurfaceHeight(metrics: StatusWidgetSimpleMetrics): Dp =
-    metrics.circleSize + metrics.verticalPadding + metrics.verticalPadding
+internal fun statusWidgetSimpleActionEnabled(connection: StatusWidgetConnection): Boolean =
+    connection != StatusWidgetConnection.DISCONNECTING
 
 @Composable
 private fun StatusWidgetSimplePowerButton(
     context: Context,
     action: StatusWidgetSimplePowerAction,
+    connection: StatusWidgetConnection,
+    background: WidgetBackground,
     metrics: StatusWidgetSimpleMetrics,
+    width: Dp,
 ) {
-    val background =
-        when (action) {
-            StatusWidgetSimplePowerAction.CONNECT -> R.drawable.widget_simple_action_connect
-            StatusWidgetSimplePowerAction.STOP -> R.drawable.widget_simple_action_stop
-        }
-    val color =
-        when (action) {
-            StatusWidgetSimplePowerAction.CONNECT -> WIDGET_OK
-            StatusWidgetSimplePowerAction.STOP -> WIDGET_ERROR
-        }
+    val outline = when (action) {
+        StatusWidgetSimplePowerAction.CONNECT -> R.drawable.widget_simple_action_connect
+        StatusWidgetSimplePowerAction.STOP -> R.drawable.widget_simple_action_stop
+    }
+    val light = background.text == Color.Black
+    val color = when (action) {
+        StatusWidgetSimplePowerAction.CONNECT -> if (light) CliLightColors.ok else WIDGET_OK
+        StatusWidgetSimplePowerAction.STOP -> if (light) CliLightColors.err else WIDGET_ERROR
+    }
+    val enabled = statusWidgetSimpleActionEnabled(connection)
+    val label = if (enabled) {
+        context.getString(
+            when (action) {
+                StatusWidgetSimplePowerAction.CONNECT -> R.string.widget_status_connect_action
+                StatusWidgetSimplePowerAction.STOP -> R.string.widget_status_disconnect_action
+            },
+        )
+    } else {
+        connection.text(context)
+    }
     Box(
-        modifier =
-        GlanceModifier
-            .size(metrics.circleSize)
-            .cornerRadius(WIDGET_CIRCLE_CORNER_RADIUS)
-            .background(ImageProvider(background))
-            .clickable(
-                actionSendBroadcast(
-                    Intent(context, StatusWidgetCommandReceiver::class.java)
-                        .setAction(StatusWidgetCommandReceiver.ACTION_TOGGLE),
-                ),
-            ),
+        modifier = GlanceModifier
+            .width(width)
+            .height(STATUS_WIDGET_SIMPLE_TOUCH_SIZE)
+            .cornerRadius(STATUS_WIDGET_SIMPLE_ACTION_RADIUS)
+            .let { base ->
+                if (enabled) {
+                    base.clickable(
+                        actionSendBroadcast(
+                            Intent(context, StatusWidgetCommandReceiver::class.java)
+                                .setAction(StatusWidgetCommandReceiver.ACTION_TOGGLE),
+                        ),
+                    )
+                } else {
+                    base
+                }
+            },
         contentAlignment = Alignment.Center,
     ) {
         Image(
-            provider = ImageProvider(R.drawable.lin_power),
-            contentDescription =
-            context.getString(
-                when (action) {
-                    StatusWidgetSimplePowerAction.CONNECT -> R.string.widget_status_turn_on
-                    StatusWidgetSimplePowerAction.STOP -> R.string.widget_status_turn_off
-                },
-            ),
+            provider = ImageProvider(outline),
+            contentDescription = null,
             colorFilter = ColorFilter.tint(ColorProvider(color)),
-            modifier = GlanceModifier.size(metrics.powerSize),
+            modifier = GlanceModifier.fillMaxSize(),
         )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Image(
+                provider = ImageProvider(R.drawable.lin_power),
+                contentDescription = null,
+                colorFilter = ColorFilter.tint(ColorProvider(color)),
+                modifier = GlanceModifier.size(metrics.powerSize),
+            )
+            Spacer(modifier = GlanceModifier.width(8.dp))
+            StyledWidgetText(
+                context = context,
+                text = label,
+                color = color,
+                fontSize = 12,
+                uppercase = true,
+                maxWidth = 128.dp,
+            )
+        }
     }
 }
 
@@ -506,49 +568,34 @@ internal fun statusWidgetSimpleMetrics(
     return if (compact) {
         StatusWidgetSimpleMetrics(
             circleSize = 30.dp,
-            logoSize = 20.dp,
             powerSize = 18.dp,
             deviceIconSize = 12.dp,
             statusFontSize = 11,
             locationFontSize = 10,
             horizontalPadding = 5.dp,
-            verticalPadding = 2.dp,
-            sideSpacing = 4.dp,
             tokenSpacing = 2.dp,
-            flagWidth = 16.dp,
-            flagHeight = 10.dp,
         )
     } else {
         StatusWidgetSimpleMetrics(
             circleSize = 36.dp,
-            logoSize = 24.dp,
             powerSize = 20.dp,
             deviceIconSize = 15.dp,
             statusFontSize = 14,
             locationFontSize = 13,
             horizontalPadding = 10.dp,
-            verticalPadding = 6.dp,
-            sideSpacing = 8.dp,
             tokenSpacing = 3.dp,
-            flagWidth = 20.dp,
-            flagHeight = 12.dp,
         )
     }
 }
 
 internal data class StatusWidgetSimpleMetrics(
     val circleSize: Dp,
-    val logoSize: Dp,
     val powerSize: Dp,
     val deviceIconSize: Dp,
     val statusFontSize: Int,
     val locationFontSize: Int,
     val horizontalPadding: Dp,
-    val verticalPadding: Dp,
-    val sideSpacing: Dp,
     val tokenSpacing: Dp,
-    val flagWidth: Dp,
-    val flagHeight: Dp,
 )
 
 @Composable
@@ -758,12 +805,15 @@ private fun StatusFactRow(
             maxWidth = statusWidgetFactValueMaxWidth(LocalSize.current.width),
         )
         countryFlag?.let { flag ->
-            Spacer(modifier = GlanceModifier.width(3.dp))
-            Image(
-                provider = ImageProvider(flag.drawableId),
-                contentDescription = flag.countryCode,
-                modifier = GlanceModifier.width(12.dp).height(7.dp),
-            )
+            val flagSize = styledWidgetFlagSize(context, flag.bitmap, 8, LocalWidgetPixelArtEnabled.current)
+            if (flagSize.height > 0.dp) {
+                Spacer(modifier = GlanceModifier.width(3.dp))
+                Image(
+                    provider = ImageProvider(flag.bitmap),
+                    contentDescription = flag.countryCode,
+                    modifier = GlanceModifier.width(flagSize.width).height(flagSize.height),
+                )
+            }
         }
     }
 }
@@ -1029,7 +1079,7 @@ private fun IpInfo?.widgetIdentityText(): String {
 }
 
 internal data class StatusWidgetCountryFlag(
-    val drawableId: Int,
+    val bitmap: Bitmap,
     val countryCode: String,
 )
 
@@ -1038,19 +1088,11 @@ internal fun statusWidgetCountryFlag(
     countryCode: String?,
 ): StatusWidgetCountryFlag? {
     val code = statusWidgetCountryFlagCode(countryCode) ?: return null
-
-    @Suppress("DiscouragedApi")
-    val drawableId = context.resources.getIdentifier("flag_$code", "drawable", context.packageName)
-    return drawableId.takeIf { it != 0 }?.let {
-        StatusWidgetCountryFlag(drawableId = it, countryCode = code.uppercase(Locale.US))
-    }
+    val bitmap = countryFlagBitmap(context, code) ?: return null
+    return StatusWidgetCountryFlag(bitmap, code.uppercase(Locale.ROOT))
 }
 
-internal fun statusWidgetCountryFlagCode(countryCode: String?): String? =
-    countryCode
-        ?.trim()
-        ?.lowercase(Locale.US)
-        ?.takeIf { value -> value.length == 2 && value.all { it in 'a'..'z' } }
+internal fun statusWidgetCountryFlagCode(countryCode: String?): String? = countryFlagCode(countryCode)
 
 private fun Long?.widgetLatencyText(context: Context): String =
     this?.takeIf { it > 0L }?.let { context.getString(R.string.widget_status_latency_value, it) }
@@ -1060,7 +1102,9 @@ private fun String?.orDash(): String = this?.takeIf(String::isNotBlank) ?: WIDGE
 
 internal val STATUS_WIDGET_EXPANDED_HEIGHT = 162.dp
 private val STATUS_WIDGET_SIMPLE_WIDE_WIDTH = 240.dp
-private val STATUS_WIDGET_SIMPLE_TALL_HEIGHT = 64.dp
+private val STATUS_WIDGET_SIMPLE_TALL_HEIGHT = 180.dp
+private val STATUS_WIDGET_SIMPLE_TOUCH_SIZE = 48.dp
+private val STATUS_WIDGET_SIMPLE_ACTION_RADIUS = 24.dp
 private val STATUS_WIDGET_CONTROL_HEIGHT = 32.dp
 private val STATUS_WIDGET_FACT_LABEL_MAX_WIDTH = 88.dp
 private val STATUS_WIDGET_FACT_RESERVED_WIDTH = 150.dp

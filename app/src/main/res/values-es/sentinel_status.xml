@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="cli_status_sentinel_notices">Avisos de Sentinel</string>
+    <string name="cli_status_sentinel_traffic_notices">Alertas de tráfico</string>
+    <string name="cli_status_sentinel_static_notices">Avisos de comprobación estática</string>
+    <string name="cli_status_sentinel_install_notices">Avisos de instalación de aplicaciones</string>
+    <string name="cli_status_notices_off">Desactivado en ajustes</string>
+    <string name="cli_status_notices_allowed">Permitido por Android</string>
+    <string name="cli_status_notices_android_blocked">Bloqueado por Android</string>
+    <string name="cli_status_notices_channel_blocked">Canal de notificaciones desactivado</string>
+    <string name="cli_status_notices_channel_pending">Canal de notificaciones sin inicializar</string>
+    <string name="cli_status_notices_partly_blocked">Algunos canales de notificaciones están desactivados</string>
+    <string name="cli_status_notices_unavailable">Acceso a notificaciones no disponible</string>
+</resources>

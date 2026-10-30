@@ -14,9 +14,12 @@ import com.foxhole.core.model.SubscriptionRefreshInterval
 import com.foxhole.core.model.ThemeMode
 import com.foxhole.core.model.TrafficSettings
 import com.foxhole.core.runtime.AndroidApplicationIdentityResolver
+import com.foxhole.guard.core.data.ProfileMutationCoordinator
+import com.foxhole.guard.core.data.ProfileMutationLease
 import com.foxhole.guard.core.sentinel.InstalledAppSecurityAnalyzer
 import com.foxhole.guard.core.sentinel.SentinelThreatIntelProvider
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.sync.Mutex
@@ -38,17 +41,46 @@ class SettingsRepository(
     }
     internal val storage = SettingsRepositoryStorage(appContext)
     private val lock = Mutex()
+    internal val profileMutationCoordinator = ProfileMutationCoordinator()
     private val settingsMutable: MutableStateFlow<Settings>
     private val hydratedMutable = MutableStateFlow(false)
+    private val routerHomeShortcutVisibleMutable = MutableStateFlow(storage.readRouterHomeShortcutVisible())
+    private val routerDockShortcutVisibleMutable = MutableStateFlow(storage.readRouterDockShortcutVisible())
+    private val dockOptionalOrderMutable = MutableStateFlow(storage.readDockOptionalOrder())
 
-    @Volatile
-    private var initializationResult: Result<Settings>? = null
+    private val hydration = SettingsHydration()
 
     val settings: StateFlow<Settings>
         get() = settingsMutable
 
     val hydrated: StateFlow<Boolean>
         get() = hydratedMutable
+
+    internal val dockOptionalOrder: StateFlow<List<String>>
+        get() = dockOptionalOrderMutable
+
+    internal fun updateDockOptionalOrder(value: List<String>) {
+        val normalized = value.filter { it in setOf("WEBAPPS", "STATS", "ROUTER") }.distinct()
+        if (dockOptionalOrderMutable.value == normalized) return
+        storage.writeDockOptionalOrder(normalized)
+        dockOptionalOrderMutable.value = normalized
+    }
+
+    internal val routerHomeShortcutVisible: StateFlow<Boolean>
+        get() = routerHomeShortcutVisibleMutable
+
+    internal fun updateRouterHomeShortcutVisible(value: Boolean) {
+        storage.writeRouterHomeShortcutVisible(value)
+        routerHomeShortcutVisibleMutable.value = value
+    }
+
+    internal val routerDockShortcutVisible: StateFlow<Boolean>
+        get() = routerDockShortcutVisibleMutable
+
+    internal fun updateRouterDockShortcutVisible(value: Boolean) {
+        storage.writeRouterDockShortcutVisible(value)
+        routerDockShortcutVisibleMutable.value = value
+    }
 
     init {
         val bootstrapSettings = storage.bootstrapInitialSettings()
@@ -71,11 +103,55 @@ class SettingsRepository(
             withContext(Dispatchers.IO) {
                 storage.writeEncrypted(normalized)
             }
-            initializationResult = Result.success(normalized)
+            hydration.replace(normalized)
             settingsMutable.value = normalized
             hydratedMutable.value = true
             storage.writeFastUiSnapshot(normalized.ui)
             storage.writeFastAppLockUi(normalized.appLock)
+        }
+    }
+
+    internal suspend fun <T> readRestoreSnapshot(owner: ProfileMutationLease, block: suspend (Settings) -> T): T {
+        ensureInitialized()
+        return readSettingsSnapshotUnderOwner(lock, profileMutationCoordinator, owner, { settingsMutable.value }, block)
+    }
+
+    internal suspend fun <T> withRestoreSettings(
+        owner: ProfileMutationLease,
+        block: suspend (SettingsRestoreSession) -> T,
+    ): T {
+        ensureInitialized()
+        return lock.withLock(owner) {
+            owner.requireOwner(profileMutationCoordinator)
+            val initial = settingsMutable.value
+            val session = SettingsRestoreSession(
+                checkpoint = initial,
+                requireOwner = { check(lock.holdsLock(owner)) { "restore settings lock is not owned" } },
+                write = { value ->
+                    withContext(Dispatchers.IO) {
+                        storage.writeEncrypted(value)
+                        storage.writeFastUiSnapshot(value.ui)
+                        storage.writeFastAppLockUi(value.appLock)
+                    }
+                },
+                publish = { value ->
+                    hydration.replace(value)
+                    settingsMutable.value = value
+                    hydratedMutable.value = true
+                    if (value.expert.quarantinePolicyRevision != initial.expert.quarantinePolicyRevision) {
+                        val revision = value.expert.quarantinePolicyRevision
+                        owner.afterCommit(
+                            retryKey = "quarantine-policy"
+                        ) { onQuarantinePolicyRevisionChanged(revision) }
+                    }
+                },
+            )
+            owner.bindSettings(session)
+            try {
+                block(session)
+            } finally {
+                session.close()
+            }
         }
     }
 
@@ -90,9 +166,34 @@ class SettingsRepository(
     }
 
     suspend fun updateLocale(value: AppLocale) {
+        updateLocaleIfCurrent(value, null)
+    }
+
+    internal suspend fun updateLocaleIfCurrent(value: AppLocale, expected: AppLocale?): Boolean {
         ensureInitialized()
-        storage.writeFastLocale(value)
-        update { it.copy(ui = it.ui.copy(locale = value)) }
+        return lock.withLock {
+            val current = settingsMutable.value
+            if (expected != null && current.ui.locale != expected) return@withLock false
+            val next = current.copy(ui = current.ui.copy(locale = value))
+            if (next == current) return@withLock true
+            val committed = java.util.concurrent.atomic.AtomicBoolean(false)
+            try {
+                withContext(Dispatchers.IO) {
+                    storage.writeEncrypted(next)
+                    committed.set(true)
+                }
+            } finally {
+                if (committed.get()) {
+                    // Publish an already durable locale commit even after IO prompt cancellation.
+                    withContext(NonCancellable) {
+                        hydration.replace(next)
+                        settingsMutable.value = next
+                        withContext(Dispatchers.IO) { storage.writeFastLocale(value) }
+                    }
+                }
+            }
+            true
+        }
     }
 
     suspend fun updateSupportBotHandleOverride(value: String?) =
@@ -163,28 +264,30 @@ class SettingsRepository(
         }
 
     private suspend fun ensureInitialized(): Settings {
-        val cachedResult = initializationResult
-        return if (cachedResult != null) {
-            cachedResult.getOrThrow()
+        val cached = hydration.cached()
+        return if (cached != null) {
+            cached
         } else {
             lock.withLock {
-                val lockedResult = initializationResult
-                if (lockedResult != null) {
-                    lockedResult.getOrThrow()
+                val locked = hydration.cached()
+                if (locked != null) {
+                    locked
                 } else {
-                    val loadedResult = runCatching { storage.loadAndFinalizeInitialSettings() }
-                    initializationResult = loadedResult
-                    loadedResult.onSuccess { initialized ->
-                        settingsMutable.value = initialized
-                        hydratedMutable.value = true
-                    }
-                    loadedResult.getOrThrow()
+                    val initialized = hydration.load { storage.loadAndFinalizeInitialSettings() }
+                    settingsMutable.value = initialized
+                    hydratedMutable.value = true
+                    initialized
                 }
             }
         }
     }
 
-    internal suspend fun update(transform: (Settings) -> Settings) {
+    internal suspend fun update(transform: (Settings) -> Settings) = updateVerified(transform) {}
+
+    internal suspend fun updateVerified(
+        transform: (Settings) -> Settings,
+        verifyPersisted: (Settings) -> Unit,
+    ) {
         ensureInitialized()
         var changedQuarantineRevision: Long? = null
         lock.withLock {
@@ -195,12 +298,14 @@ class SettingsRepository(
                 changedQuarantineRevision = next.expert.quarantinePolicyRevision
             }
             if (next == current) {
+                withContext(Dispatchers.IO) { verifyPersisted(next) }
                 return@withLock
             }
             withContext(Dispatchers.IO) {
                 storage.writeEncrypted(next)
+                verifyPersisted(next)
             }
-            initializationResult = Result.success(next)
+            hydration.replace(next)
             settingsMutable.value = next
             storage.writeFastUiSnapshot(next.ui)
             storage.writeFastAppLockUi(next.appLock)

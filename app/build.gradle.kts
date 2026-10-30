@@ -4,6 +4,9 @@ import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.provider.SetProperty
 import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.InputDirectory
+import org.gradle.api.tasks.OutputDirectory
+import org.gradle.api.tasks.Exec
+import com.android.build.api.artifact.SingleArtifact
 import org.gradle.api.tasks.Sync
 import org.gradle.api.tasks.TaskAction
 import org.gradle.api.tasks.bundling.Zip
@@ -12,6 +15,11 @@ import org.gradle.testing.jacoco.tasks.JacocoReport
 import java.security.MessageDigest
 import java.util.Properties
 import java.util.zip.ZipFile
+
+abstract class PreparePageAlignedNativeTask : Exec() {
+    @get:OutputDirectory
+    abstract val nativeDirectory: DirectoryProperty
+}
 
 abstract class VerifyBundledNativeRuntimeInReleaseApkTask : DefaultTask() {
     @get:InputDirectory
@@ -33,6 +41,7 @@ abstract class VerifyBundledNativeRuntimeInReleaseApkTask : DefaultTask() {
         val requiredLibraries =
             listOf(
                 "libfoxhole_native.so",
+                "libfoxhole_sentinel_yara.so",
                 "liblyrebird.so",
                 "libconjure_client.so",
                 "libi2pd.so",
@@ -49,6 +58,7 @@ abstract class VerifyBundledNativeRuntimeInReleaseApkTask : DefaultTask() {
                     .map { entry -> entry.name }
                     .filter { entryName ->
                         entryName.endsWith("/libfoxhole_native.so") ||
+                            entryName.endsWith("/libfoxhole_sentinel_yara.so") ||
                             entryName.endsWith("/liblyrebird.so") ||
                             entryName.endsWith("/libconjure_client.so") ||
                             entryName.endsWith("/libi2pd.so")
@@ -103,6 +113,9 @@ abstract class VerifyBundledLicenseAssetsInReleaseApkTask : DefaultTask() {
     @get:InputDirectory
     abstract val apkDirectory: DirectoryProperty
 
+    @get:Input
+    abstract val expectedAbis: SetProperty<String>
+
     @TaskAction
     fun verify() {
         val apks =
@@ -112,6 +125,13 @@ abstract class VerifyBundledLicenseAssetsInReleaseApkTask : DefaultTask() {
                 .files
                 .sortedBy { it.name }
         require(apks.isNotEmpty()) { "release APK is missing from ${apkDirectory.get().asFile}" }
+        val requiredCoreInventory = when (expectedAbis.get()) {
+            setOf("armeabi-v7a") -> "assets/licenses/foxcore/foxcore-armv7-linux-androideabi.cdx.json"
+            setOf("arm64-v8a", "x86_64"),
+            setOf("arm64-v8a", "armeabi-v7a", "x86_64"),
+            setOf("arm64-v8a", "armeabi-v7a", "x86", "x86_64") -> "assets/licenses/foxcore/foxcore-aarch64-linux-android.cdx.json"
+            else -> error("Unsupported bundled license ABI profile: ${expectedAbis.get()}")
+        }
         val required =
             setOf(
                 "assets/licenses/FoxHole-Guard-GPL-3.0-or-later.txt",
@@ -130,7 +150,6 @@ abstract class VerifyBundledLicenseAssetsInReleaseApkTask : DefaultTask() {
                 "assets/licenses/fonts/Tiny5-OFL.txt",
                 "assets/licenses/foxcore/FoxHole-Core-GPL-3.0-or-later.txt",
                 "assets/licenses/foxcore/THIRD_PARTY_NOTICES.md",
-                "assets/licenses/foxcore/foxcore-aarch64-linux-android.cdx.json",
                 "assets/licenses/i2pd/Android-NDK-29-NOTICE.txt",
                 "assets/licenses/i2pd/Android-NDK-29-NOTICE.toolchain.txt",
                 "assets/licenses/i2pd/Boost-1.84.0-BSL-1.0.txt",
@@ -138,7 +157,7 @@ abstract class VerifyBundledLicenseAssetsInReleaseApkTask : DefaultTask() {
                 "assets/licenses/i2pd/i2pd-BSD-3-Clause.txt",
                 "assets/licenses/icons/Tabler-MIT.txt",
                 "assets/licenses/tor/GO-MODULES.json",
-                "assets/licenses/tor/Go-1.26.8-BSD-3-Clause.txt",
+                "assets/licenses/tor/Go-1.26.10-BSD-3-Clause.txt",
                 "assets/licenses/tor/conjure-client-BSD-3-Clause.txt",
                 "assets/licenses/tor/lyrebird-BSD-3-Clause.txt",
                 "assets/licenses/tor/lyrebird-GPL-3.0-or-later.txt",
@@ -147,7 +166,7 @@ abstract class VerifyBundledLicenseAssetsInReleaseApkTask : DefaultTask() {
                 "assets/licenses/tor-config/upstream-members/README.CONJURE.md",
                 "assets/licenses/tor-config/upstream-members/pt_config.json",
                 "assets/licenses/tor-config/upstream-members/torrc-defaults.txt",
-            )
+            ) + requiredCoreInventory
         apks.forEach { apk ->
             ZipFile(apk).use { zip ->
                 val entries = zip.entries().asSequence().map { it.name }.toSet()
@@ -197,8 +216,8 @@ abstract class VerifyBundledLicenseAssetsInReleaseApkTask : DefaultTask() {
 plugins {
     id("com.android.application")
     id("com.google.devtools.ksp") version "2.3.10"
-    id("org.jetbrains.kotlin.plugin.compose") version "2.4.20"
-    id("org.jetbrains.kotlin.plugin.serialization") version "2.4.20"
+    id("org.jetbrains.kotlin.plugin.compose") version "2.4.21"
+    id("org.jetbrains.kotlin.plugin.serialization") version "2.4.21"
     jacoco
 }
 
@@ -257,10 +276,22 @@ val releaseSigningStoreFile =
                 }
             candidates.firstOrNull(File::isFile)
         }
+val baseAppVersionCode = 174
+val localBuildNumber = providers.gradleProperty("foxhole.localBuildNumber").orNull?.let { raw ->
+    requireNotNull(raw.toIntOrNull()?.takeIf { it in (baseAppVersionCode + 1)..2_100_000_000 }) {
+        "foxhole.localBuildNumber must exceed $baseAppVersionCode and be at most 2100000000"
+    }
+}
+
 val appUpdateChannel =
     providers.gradleProperty("foxhole.updateChannel").orNull?.trim()?.takeIf(String::isNotEmpty) ?: "github"
 require(appUpdateChannel in setOf("github", "fdroid")) {
     "foxhole.updateChannel must be github or fdroid"
+}
+val sourceNativeManifest =
+    providers.gradleProperty("foxhole.sourceNativeManifest").orNull?.let { rootProject.file(it) }
+require(sourceNativeManifest == null || appUpdateChannel == "fdroid") {
+    "Source-built native provenance is restricted to the F-Droid channel"
 }
 
 val appUpdateFloorVersionCode =
@@ -288,6 +319,22 @@ val pinnedFoxCoreRevision =
         ?.trim()
         ?.takeIf { revision -> revision.matches(Regex("^[0-9a-f]{40}$")) }
         ?: error("config/foxcore-revision.txt must contain one full Git commit SHA")
+val pinnedFoxCoreCheckoutRevision =
+    if (rootProject.file("config/foxcore-source-checkout.json").isFile) {
+        providers.exec {
+            commandLine(
+                "python3", "-B", rootProject.file("scripts/core-source-binding.py").absolutePath,
+                "--app-root", rootProject.projectDir.absolutePath,
+                "--core-root", foxCoreSourceRoot.absolutePath,
+                "--producer-revision", pinnedFoxCoreRevision,
+                "--print-source-commit",
+            )
+        }.standardOutput.asText.get().trim().also { revision ->
+            check(revision.matches(Regex("^[0-9a-f]{40}$")))
+        }
+    } else {
+        pinnedFoxCoreRevision
+    }
 val checkedOutFoxCoreRevision: String? =
     runCatching {
         val git =
@@ -304,7 +351,7 @@ val requirePinnedFoxCoreRevision =
     providers.gradleProperty("foxhole.requirePinnedFoxCore").orNull?.trim()?.toBooleanStrictOrNull()
         ?: gradle.startParameter.taskNames.any { task -> task.contains("elease") }
 when (checkedOutFoxCoreRevision) {
-    pinnedFoxCoreRevision -> Unit
+    pinnedFoxCoreCheckoutRevision -> Unit
     null ->
         logger.warn(
             "\n! FoxCore revision unverified: no Git HEAD readable at ${foxCoreSourceRoot.absolutePath}." +
@@ -317,9 +364,10 @@ when (checkedOutFoxCoreRevision) {
                 append("\n")
                 append("!".repeat(96)).append("\n")
                 append("! FoxCore revision mismatch — this build would NOT be the pinned core.\n")
-                append("!   pinned  (config/foxcore-revision.txt): $pinnedFoxCoreRevision\n")
+                append("!   compiled producer: $pinnedFoxCoreRevision\n")
+                append("!   pinned checkout: $pinnedFoxCoreCheckoutRevision\n")
                 append("!   checked out (${foxCoreSourceRoot.absolutePath}): $checkedOutFoxCoreRevision\n")
-                append("! Fix with: git -C ${foxCoreSourceRoot.absolutePath} checkout $pinnedFoxCoreRevision\n")
+                append("! Fix with: git -C ${foxCoreSourceRoot.absolutePath} checkout $pinnedFoxCoreCheckoutRevision\n")
                 append("! or update config/foxcore-revision.txt if the new revision is the one to ship.\n")
                 append("!".repeat(96)).append("\n")
             }
@@ -330,7 +378,13 @@ when (checkedOutFoxCoreRevision) {
     }
 }
 
-val foxCoreAndroidBuildScript = foxCoreSourceRoot.resolve("scripts/android-build.sh")
+val buildFoxCoreInDocker =
+    providers.gradleProperty("foxhole.coreDocker")
+        .map(String::toBooleanStrict)
+        .orElse(System.getProperty("os.name").startsWith("Mac"))
+val foxCoreAndroidBuildScript = foxCoreSourceRoot.resolve(
+    if (buildFoxCoreInDocker.get()) "scripts/docker-android.sh" else "scripts/android-build.sh",
+)
 val foxCoreVersion =
     Regex("""(?m)^version\s*=\s*"([^"]+)"\s*$""")
         .find(foxCoreSourceRoot.resolve("Cargo.toml").readText())
@@ -339,10 +393,19 @@ val foxCoreVersion =
         ?: error("FoxCore workspace version is missing")
 val generatedFoxCoreNativeLibs = layout.buildDirectory.dir("generated/foxCoreNativeLibs")
 val shippedAndroidAbis =
-    (providers.gradleProperty("foxhole.abis").orNull ?: "arm64-v8a")
+    (providers.gradleProperty("foxhole.abis").orNull ?: "arm64-v8a armeabi-v7a x86 x86_64")
         .split(" ", ",")
         .map(String::trim)
         .filter(String::isNotEmpty)
+require(shippedAndroidAbis.isNotEmpty() && shippedAndroidAbis.distinct().size == shippedAndroidAbis.size) {
+    "foxhole.abis must contain unique Android ABIs"
+}
+require(shippedAndroidAbis.all { it in setOf("arm64-v8a", "armeabi-v7a", "x86", "x86_64") }) {
+    "foxhole.abis supports arm64-v8a, armeabi-v7a, x86 and x86_64"
+}
+require(shippedAndroidAbis.toSet() != setOf("arm64-v8a", "armeabi-v7a", "x86_64") || appUpdateChannel == "fdroid") {
+    "The android3 ABI profile is reserved for the F-Droid channel"
+}
 
 val artiVersion =
     Regex("""(?ms)\[\[package]]\s*name\s*=\s*"arti-client"\s*version\s*=\s*"([^"]+)"""")
@@ -402,20 +465,49 @@ fun publicReleaseBundleFile(): File {
 val nativeBootstrapOffline =
     providers.gradleProperty("foxhole.nativeOffline").orNull?.toBooleanStrictOrNull() ?: gradle.startParameter.isOffline
 
+val buildPrivacyNativeInDocker =
+    providers.gradleProperty("foxhole.nativeDocker")
+        .map(String::toBooleanStrict)
+        .orElse(System.getProperty("os.name").startsWith("Mac"))
+val dockerNativeBuildScript = rootProject.file("scripts/docker-native.sh")
+
 val prepareBundledI2pd = tasks.register("prepareBundledI2pd") {
     val buildI2pdScript = rootProject.file("scripts/build-i2pd.sh")
     val nativeDepsScript = rootProject.file("scripts/native-deps.sh")
     val i2pdPatches = rootProject.fileTree("scripts/patches") { include("i2pd-*.patch") }
+    val i2pdSourceInputsScript = rootProject.file("scripts/i2pd-source-inputs.py")
+    val i2pdTrackedSourceFingerprint =
+        providers.exec {
+            workingDir(rootProject.projectDir)
+            commandLine(
+                "python3",
+                i2pdSourceInputsScript.absolutePath,
+                rootProject.file("third_party/i2pd").absolutePath,
+            )
+        }.standardOutput.asText.map(String::trim)
     val i2pdLibraries = shippedAndroidAbis.map { abi -> file("src/main/jniLibs/$abi/libi2pd.so") }
 
-    inputs.files(buildI2pdScript, nativeDepsScript)
+    inputs.files(buildI2pdScript, nativeDepsScript, dockerNativeBuildScript, rootProject.file("docker/Dockerfile.native"))
+    inputs.file(rootProject.file("scripts/verify-native-pages.py"))
+    inputs.file(rootProject.file("scripts/i2pd-build-cache.py"))
+    inputs.file(rootProject.file("third_party/i2pd.version"))
+    inputs.file(i2pdSourceInputsScript)
+    inputs.property("trackedSourceFingerprint", i2pdTrackedSourceFingerprint)
+    inputs.property("buildInDocker", buildPrivacyNativeInDocker)
+    inputs.property("abis", shippedAndroidAbis)
     inputs.files(i2pdPatches)
     outputs.files(i2pdLibraries)
 
     doLast {
         require(buildI2pdScript.isFile) { "missing i2pd bootstrap script: ${buildI2pdScript.absolutePath}" }
         val process =
-            ProcessBuilder(buildI2pdScript.absolutePath)
+            ProcessBuilder(
+                if (buildPrivacyNativeInDocker.get()) {
+                    listOf(dockerNativeBuildScript.absolutePath, "i2pd")
+                } else {
+                    listOf(buildI2pdScript.absolutePath)
+                },
+            )
                 .directory(rootProject.projectDir)
                 .also { builder ->
                     builder.environment()["FOXHOLE_NATIVE_OFFLINE"] = if (nativeBootstrapOffline) "1" else "0"
@@ -464,7 +556,9 @@ val prepareBundledTorTransports = tasks.register("prepareBundledTorTransports") 
             }
         }
 
-    inputs.files(buildTransportsScript, rootProject.file("scripts/native-deps.sh"), rootProject.file("scripts/prepare-tor-dependency.py"))
+    inputs.files(buildTransportsScript, rootProject.file("scripts/native-deps.sh"), rootProject.file("scripts/prepare-tor-dependency.py"), dockerNativeBuildScript, rootProject.file("docker/Dockerfile.native"))
+    inputs.file(rootProject.file("scripts/verify-native-pages.py"))
+    inputs.property("buildInDocker", buildPrivacyNativeInDocker)
     inputs.files(rootProject.fileTree("config/native"))
     inputs.property("abis", shippedAndroidAbis)
     outputs.files(transports)
@@ -474,7 +568,13 @@ val prepareBundledTorTransports = tasks.register("prepareBundledTorTransports") 
             "missing Tor transport build script: ${buildTransportsScript.absolutePath}"
         }
         val process =
-            ProcessBuilder(buildTransportsScript.absolutePath)
+            ProcessBuilder(
+                if (buildPrivacyNativeInDocker.get()) {
+                    listOf(dockerNativeBuildScript.absolutePath, "transports")
+                } else {
+                    listOf(buildTransportsScript.absolutePath)
+                },
+            )
                 .directory(rootProject.projectDir)
                 .also {
                     it.environment()["TOR_TRANSPORT_ABIS"] = shippedAndroidAbis.joinToString(" ")
@@ -491,7 +591,27 @@ val prepareBundledTorTransports = tasks.register("prepareBundledTorTransports") 
     }
 }
 
+fun verifyFdroidSourceNative(manifest: File, kind: String) {
+    val command = listOf(
+        "python3", "-B", rootProject.file("scripts/verify-fdroid-source-native.py").absolutePath,
+        "--app-root", rootProject.projectDir.absolutePath,
+        "--core-root", foxCoreSourceRoot.absolutePath,
+        "--manifest", manifest.absolutePath,
+        "--install-kind", kind,
+    )
+    val log = layout.buildDirectory.file("reports/native/fdroid-$kind-verification.log").get().asFile
+    log.parentFile.mkdirs()
+    val process = ProcessBuilder(command).directory(rootProject.projectDir)
+        .redirectErrorStream(true).redirectOutput(log).start()
+    check(process.waitFor() == 0) {
+        "F-Droid source-built native verification failed:\n${log.readText().takeLast(8_000)}"
+    }
+}
+
 val prebuiltFoxCoreDirectory = providers.environmentVariable("FOXCORE_PREBUILT_DIR").orNull?.let(::File)
+require(prebuiltFoxCoreDirectory == null || sourceNativeManifest == null) {
+    "Reference prebuilt JNI and F-Droid source-built JNI cannot be combined"
+}
 
 val prepareFoxCoreNative = tasks.register("prepareFoxCoreNative") {
     group = "build"
@@ -505,8 +625,14 @@ val prepareFoxCoreNative = tasks.register("prepareFoxCoreNative") {
                 "rust-toolchain.toml",
                 "crates/**/Cargo.toml",
                 "crates/**/*.rs",
+                "vendor/rustls/**",
+                "config/source-forks/**",
+                "patches/rustls-0.23.46-chrome151.patch",
                 "scripts/android-build.sh",
                 "scripts/android-elf-gate.sh",
+                "scripts/android-path-leaks.py",
+                "scripts/docker-android.sh",
+                "docker/Dockerfile.android",
             )
             exclude("target/**", "android-testapp/**/build/**")
         },
@@ -518,10 +644,17 @@ val prepareFoxCoreNative = tasks.register("prepareFoxCoreNative") {
             }
         }
     outputs.files(expectedLibraries)
+    inputs.property("buildInDocker", buildFoxCoreInDocker)
     inputs.property("prebuiltCore", prebuiltFoxCoreDirectory?.absolutePath.orEmpty())
     prebuiltFoxCoreDirectory?.let { inputs.dir(it) }
+    sourceNativeManifest?.let {
+        inputs.file(it)
+        inputs.file(rootProject.file("scripts/verify-fdroid-source-native.py"))
+        inputs.dir(layout.buildDirectory.dir("fdroidNativeSource/core"))
+    }
 
     doLast {
+        sourceNativeManifest?.let { verifyFdroidSourceNative(it, "core"); return@doLast }
         if (prebuiltFoxCoreDirectory != null) {
             val command = listOf(
                 "python3", rootProject.file("scripts/verify-core-release.py").absolutePath,
@@ -542,17 +675,26 @@ val prepareFoxCoreNative = tasks.register("prepareFoxCoreNative") {
         }
         val outputDirectory = generatedFoxCoreNativeLibs.get().asFile
         outputDirectory.mkdirs()
+        val buildLog = layout.buildDirectory.file("reports/native/foxcore-build.log").get().asFile
+        buildLog.parentFile.mkdirs()
         val process =
-            ProcessBuilder(foxCoreAndroidBuildScript.absolutePath)
+            ProcessBuilder(
+                if (buildFoxCoreInDocker.get()) {
+                    listOf(foxCoreAndroidBuildScript.absolutePath, "build")
+                } else {
+                    listOf(foxCoreAndroidBuildScript.absolutePath)
+                },
+            )
                 .directory(foxCoreSourceRoot)
-                .inheritIO()
+                .redirectErrorStream(true)
+                .redirectOutput(buildLog)
                 .apply {
                     environment()["FOXCORE_JNI_OUTPUT"] = outputDirectory.absolutePath
                     environment()["FOXCORE_ANDROID_ABIS"] = shippedAndroidAbis.joinToString(" ")
                 }.start()
         val exitCode = process.waitFor()
         check(exitCode == 0) {
-            "FoxCore Android build failed with exit code $exitCode"
+            "FoxCore Android build failed with exit code $exitCode:\n${buildLog.readText().takeLast(8_000)}"
         }
         val missing =
             expectedLibraries
@@ -563,6 +705,52 @@ val prepareFoxCoreNative = tasks.register("prepareFoxCoreNative") {
         }
     }
 }
+
+val sentinelSource = foxCoreSourceRoot.resolve("native/sentinel-yara")
+val sentinelOutput = layout.buildDirectory.dir("generated/sentinelNative")
+val localOutput = layout.buildDirectory.dir("generated/localNativeLibs")
+
+val prepareLocalNativeLibs = tasks.register<Sync>("prepareLocalNativeLibs") {
+    dependsOn(prepareBundledI2pd)
+    from("src/main/jniLibs") {
+        exclude("**/libfoxhole_native.so", "**/libfoxhole_sentinel_yara.so")
+    }
+    into(localOutput)
+}
+
+val prepareSentinelNative = tasks.register("prepareSentinelNative") {
+    group = "build"
+    description = "Build the pinned isolated scanner from its locked source workspace."
+    inputs.files(fileTree(sentinelSource) { exclude("target/**") })
+    inputs.files(foxCoreSourceRoot.resolve("scripts/docker-sentinel-yara.sh"), foxCoreSourceRoot.resolve("scripts/sentinel-android-build.sh"))
+    inputs.property("androidAbis", shippedAndroidAbis.joinToString(" "))
+    inputs.property("buildInDocker", buildFoxCoreInDocker.get())
+    outputs.files(shippedAndroidAbis.map { abi -> sentinelOutput.map { it.file("jniLibs/$abi/libfoxhole_sentinel_yara.so") } })
+    sourceNativeManifest?.let {
+        inputs.file(it)
+        inputs.file(rootProject.file("scripts/verify-fdroid-source-native.py"))
+        inputs.dir(layout.buildDirectory.dir("fdroidNativeSource/sentinel/jniLibs"))
+    }
+    doLast {
+        sourceNativeManifest?.let { verifyFdroidSourceNative(it, "sentinel"); return@doLast }
+        require(sentinelSource.resolve("Cargo.lock").isFile) { "Pinned Sentinel source workspace is missing" }
+        val script = foxCoreSourceRoot.resolve(if (buildFoxCoreInDocker.get()) "scripts/docker-sentinel-yara.sh" else "scripts/sentinel-android-build.sh")
+        val args = mutableListOf("bash", script.absolutePath)
+        if (buildFoxCoreInDocker.get()) args.add("build")
+        val process = ProcessBuilder(args).directory(foxCoreSourceRoot).inheritIO().apply {
+            environment()["FOXCORE_SENTINEL_SOURCE_ROOT"] = sentinelSource.absolutePath
+            environment()["FOXCORE_SENTINEL_OUTPUT_ROOT"] = sentinelOutput.get().asFile.absolutePath
+            environment()["FOXCORE_SENTINEL_ABIS"] = shippedAndroidAbis.joinToString(" ")
+        }.start()
+        check(process.waitFor() == 0) { "Sentinel source build failed" }
+        require(shippedAndroidAbis.all { sentinelOutput.get().file("jniLibs/$it/libfoxhole_sentinel_yara.so").asFile.isFile }) {
+            "Sentinel source build did not produce every selected ABI"
+        }
+    }
+}
+
+tasks.matching { it.name.endsWith("JniLibFolders") || it.name.startsWith("merge") && it.name.endsWith("NativeLibs") }
+    .configureEach { dependsOn(prepareLocalNativeLibs, prepareSentinelNative) }
 
 val verifyFoxCoreJniSeam = tasks.register("verifyFoxCoreJniSeam") {
     group = "verification"
@@ -622,10 +810,105 @@ val preparePrivacyNativeLibs = tasks.register<Sync>("preparePrivacyNativeLibs") 
 
 val prepareBundledLicenseAssets = tasks.register("prepareBundledLicenseAssets") {
     val generator = rootProject.file("scripts/generate-license-assets.py")
+    sourceNativeManifest?.let { inputs.file(it) }
+
+    val selectedCoreSbom =
+        providers.gradleProperty("foxhole.licenseCoreSbom").orNull?.let { rootProject.file(it) }
+    val selectedCoreReceipt =
+        providers.gradleProperty("foxhole.licenseCoreSbomReceipt").orNull?.let { rootProject.file(it) }
+    require((selectedCoreSbom == null) == (selectedCoreReceipt == null)) {
+        "Selected FoxCore license inventory and its producer receipt must be supplied together"
+    }
+    if (selectedCoreSbom != null && selectedCoreReceipt != null) {
+        inputs.files(selectedCoreSbom, selectedCoreReceipt)
+        // The receipt binds external native/capture inputs, which must be revalidated on each generation.
+        outputs.upToDateWhen { false }
+        outputs.doNotCacheIf("Selected native legal inputs require validation") { true }
+    }
+    val selectedSentinelSbom =
+        providers.gradleProperty("foxhole.licenseSentinelSbom").orNull?.let { rootProject.file(it) }
+    val selectedSentinelReceipt =
+        providers.gradleProperty("foxhole.licenseSentinelSbomReceipt").orNull?.let { rootProject.file(it) }
+    require((selectedSentinelSbom == null) == (selectedSentinelReceipt == null)) {
+        "Selected Sentinel license inventory and its producer receipt must be supplied together"
+    }
+    if (selectedSentinelSbom != null && selectedSentinelReceipt != null) {
+        inputs.files(selectedSentinelSbom, selectedSentinelReceipt)
+        outputs.upToDateWhen { false }
+        outputs.doNotCacheIf("Selected Sentinel legal inputs require validation") { true }
+    }
+    val retainedSentinelRole =
+        providers.gradleProperty("foxhole.licenseSentinelRetainedRole").orNull?.let { rootProject.file(it) }
+    val retainedSentinelCurrentSource =
+        providers.gradleProperty("foxhole.licenseSentinelCurrentSourceManifest").orNull?.let { rootProject.file(it) }
+    val retainedSentinelCurrentProducer =
+        providers.gradleProperty("foxhole.licenseSentinelCurrentProducer").orNull?.let { rootProject.file(it) }
+    val retainedSentinelCurrentStage =
+        providers.gradleProperty("foxhole.licenseSentinelCurrentStage").orNull?.let { rootProject.file(it) }
+    val retainedSentinelInputs = listOf(
+        retainedSentinelRole, retainedSentinelCurrentSource, retainedSentinelCurrentProducer, retainedSentinelCurrentStage,
+    )
+    val canonicalDeliveryProfile = when (shippedAndroidAbis.toSet()) {
+        setOf("arm64-v8a", "x86_64") -> "android64"
+        setOf("armeabi-v7a") -> "android-armv7"
+        setOf("arm64-v8a", "armeabi-v7a", "x86_64") -> "android3"
+        setOf("arm64-v8a", "armeabi-v7a", "x86", "x86_64") -> "android4"
+        else -> null
+    }
+    val sourceLegalSnapshot =
+        providers.gradleProperty("foxhole.sourceLegalSnapshot").orNull?.let { rootProject.file(it) }
+            ?: if (selectedCoreSbom == null && selectedCoreReceipt == null &&
+                selectedSentinelSbom == null && selectedSentinelReceipt == null &&
+                retainedSentinelInputs.all { it == null }) {
+                canonicalDeliveryProfile?.let {
+                    rootProject.file("third_party/licenses/source-legal/$it/snapshot.json")
+                }
+            } else null
+    require(retainedSentinelInputs.all { it == null } || retainedSentinelInputs.all { it != null }) {
+        "Retained Sentinel role and all three current native proof files must be supplied together"
+    }
+    if (retainedSentinelRole != null) {
+        require(selectedCoreSbom != null && selectedCoreReceipt != null && selectedSentinelSbom != null && selectedSentinelReceipt != null) {
+            "Retained Sentinel requires both selected current Core and original Sentinel inventories/receipts"
+        }
+        require(shippedAndroidAbis == listOf("arm64-v8a", "x86_64")) {
+            "Retained Sentinel consumer requires exactly the android64 ABI profile"
+        }
+        inputs.files(retainedSentinelInputs.filterNotNull())
+        outputs.upToDateWhen { false }
+        outputs.doNotCacheIf("Retained Sentinel/current native proofs require validation") { true }
+    }
+    if (sourceLegalSnapshot != null) {
+        require(selectedCoreSbom == null && selectedCoreReceipt == null &&
+            selectedSentinelSbom == null && selectedSentinelReceipt == null &&
+            retainedSentinelInputs.all { it == null }) {
+            "Canonical source legal data and raw selected delivery inputs must be separate"
+        }
+        inputs.file(sourceLegalSnapshot)
+        inputs.dir(sourceLegalSnapshot.parentFile.resolve("payload"))
+        inputs.dir(generatedFoxCoreNativeLibs)
+        inputs.dir(sentinelOutput.map { it.dir("jniLibs") })
+        outputs.upToDateWhen { false }
+        outputs.doNotCacheIf("Canonical legal data requires fresh native validation") { true }
+        dependsOn(prepareFoxCoreNative, prepareSentinelNative)
+    }
     dependsOn(prepareBundledI2pd)
     dependsOn(prepareBundledTorTransports)
+    dependsOn("preparePageAlignedNative")
+    inputs.dir(layout.buildDirectory.dir("generated/pageAlignedNative"))
+    inputs.file(rootProject.file("scripts/copy-maven-runtime-licenses.py"))
+    inputs.dir(rootProject.file("third_party/maven-runtime"))
     inputs.files(
         generator,
+        rootProject.file("scripts/selected-license-sbom.py"),
+        rootProject.file("scripts/source-legal-snapshot.py"),
+        rootProject.file("scripts/android-delivery-profile.py"),
+        rootProject.file("scripts/rustls-fork-origin.py"),
+        rootProject.file("config/foxcore-android-delivery.json"),
+        rootProject.file("config/foxcore-source-manifest.json"),
+        rootProject.file("scripts/selected-sentinel-sbom.py"),
+        rootProject.file("scripts/retained-sentinel-role.py"),
+        rootProject.file("config/sentinel-retained-authority.json"),
         rootProject.file("LICENSE"),
         rootProject.file("THIRD_PARTY_NOTICES.md"),
         rootProject.file("scripts/native-deps.sh"),
@@ -643,6 +926,10 @@ val prepareBundledLicenseAssets = tasks.register("prepareBundledLicenseAssets") 
         foxCoreSourceRoot.resolve("LICENSE"),
         foxCoreSourceRoot.resolve("THIRD_PARTY_NOTICES.md"),
         foxCoreSourceRoot.resolve("sbom/foxcore-aarch64-linux-android.cdx.json"),
+        fileTree(foxCoreSourceRoot.resolve("native/sentinel-yara/third-party")),
+        foxCoreSourceRoot.resolve("sbom/sentinel-yara-all-targets.cdx.json"),
+        foxCoreSourceRoot.resolve("native/sentinel-yara/vendor/PROVENANCE.json"),
+        fileTree(foxCoreSourceRoot.resolve("native/sentinel-yara/vendor/patches")),
     )
     inputs.property("androidAbis", shippedAndroidAbis.joinToString(" "))
     shippedAndroidAbis.forEach { abi ->
@@ -658,17 +945,74 @@ val prepareBundledLicenseAssets = tasks.register("prepareBundledLicenseAssets") 
         delete(output)
         val buildLog = layout.buildDirectory.file("reports/native/license-assets.log").get().asFile
         buildLog.parentFile.mkdirs()
+        val arguments = mutableListOf(
+            "python3",
+            generator.absolutePath,
+            "--output",
+            output.absolutePath,
+            "--foxcore-root",
+            foxCoreSourceRoot.absolutePath,
+            "--android-abis",
+            shippedAndroidAbis.joinToString(" "),
+            "--derived-native-root",
+            layout.buildDirectory.dir("generated/pageAlignedNative").get().asFile.absolutePath,
+        )
+        sourceNativeManifest?.let {
+            arguments.addAll(listOf("--source-native-manifest", it.absolutePath))
+        }
+        if (sourceLegalSnapshot != null) {
+            arguments.addAll(
+                listOf(
+                    "--source-legal-snapshot", sourceLegalSnapshot.absolutePath,
+                    "--fresh-core-native-root", generatedFoxCoreNativeLibs.get().asFile.absolutePath,
+                    "--fresh-sentinel-native-root", sentinelOutput.get().dir("jniLibs").asFile.absolutePath,
+                ),
+            )
+        }
+        if (selectedCoreSbom != null && selectedCoreReceipt != null) {
+            arguments.addAll(
+                listOf(
+                    "--core-delivery-profile",
+                    when (shippedAndroidAbis.toSet()) {
+                        setOf("arm64-v8a", "x86_64") -> "android64"
+                        setOf("armeabi-v7a") -> "android-armv7"
+                        setOf("arm64-v8a", "armeabi-v7a", "x86_64") -> "android3"
+                        setOf("arm64-v8a", "armeabi-v7a", "x86", "x86_64") -> "android4"
+                        else -> error("Selected Core delivery requires the exact android64, android-armv7, android3 or android4 ABI profile")
+                    },
+                    "--foxcore-sbom",
+                    selectedCoreSbom.absolutePath,
+                    "--foxcore-sbom-receipt",
+                    selectedCoreReceipt.absolutePath,
+                ),
+            )
+        }
+        if (selectedSentinelSbom != null && selectedSentinelReceipt != null) {
+            arguments.addAll(
+                listOf(
+                    "--sentinel-sbom",
+                    selectedSentinelSbom.absolutePath,
+                    "--sentinel-sbom-receipt",
+                    selectedSentinelReceipt.absolutePath,
+                ),
+            )
+        }
+        if (retainedSentinelRole != null) {
+            arguments.addAll(
+                listOf(
+                    "--sentinel-retained-role",
+                    retainedSentinelRole.absolutePath,
+                    "--sentinel-current-source-manifest",
+                    requireNotNull(retainedSentinelCurrentSource).absolutePath,
+                    "--sentinel-current-producer",
+                    requireNotNull(retainedSentinelCurrentProducer).absolutePath,
+                    "--sentinel-current-stage",
+                    requireNotNull(retainedSentinelCurrentStage).absolutePath,
+                ),
+            )
+        }
         val process =
-            ProcessBuilder(
-                "python3",
-                generator.absolutePath,
-                "--output",
-                output.absolutePath,
-                "--foxcore-root",
-                foxCoreSourceRoot.absolutePath,
-                "--android-abis",
-                shippedAndroidAbis.joinToString(" "),
-            ).directory(rootProject.projectDir)
+            ProcessBuilder(arguments).directory(rootProject.projectDir)
                 .redirectErrorStream(true)
                 .redirectOutput(buildLog)
                 .start()
@@ -736,6 +1080,7 @@ val verifyReleaseContainsLicenseAssets =
     tasks.register<VerifyBundledLicenseAssetsInReleaseApkTask>("verifyReleaseContainsLicenseAssets") {
         dependsOn("assembleRelease")
         apkDirectory.set(layout.buildDirectory.dir("outputs/apk/release"))
+        expectedAbis.set(shippedAndroidAbis)
     }
 
 val verifyReleaseBuildConfigDefaults = tasks.register("verifyReleaseBuildConfigDefaults") {
@@ -806,6 +1151,7 @@ val verifyPublicReleaseNativeInventory = tasks.register("verifyPublicReleaseNati
                 "libconjure_client.so",
                 "libdatastore_shared_counter.so",
                 "libfoxhole_native.so",
+                "libfoxhole_sentinel_yara.so",
                 "libi2pd.so",
                 "libjnidispatch.so",
                 "liblyrebird.so",
@@ -816,6 +1162,7 @@ val verifyPublicReleaseNativeInventory = tasks.register("verifyPublicReleaseNati
             setOf(
                 "libconjure_client.so",
                 "libfoxhole_native.so",
+                "libfoxhole_sentinel_yara.so",
                 "libi2pd.so",
                 "liblyrebird.so",
             )
@@ -900,7 +1247,8 @@ val verifyReleaseSbom = tasks.register("verifyReleaseSbom") {
                 "jna" to ("5.19.1" to "pkg:maven/net.java.dev.jna/jna@5.19.1"),
                 "lazysodium-android" to ("5.2.0" to "pkg:maven/com.goterl/lazysodium-android@5.2.0"),
                 "okhttp" to ("5.4.0" to "pkg:maven/com.squareup.okhttp3/okhttp@5.4.0"),
-                "sqlcipher-android" to ("4.17.0" to "pkg:maven/net.zetetic/sqlcipher-android@4.17.0"),
+                "jsch" to ("2.28.8" to "pkg:maven/com.github.mwiede/jsch@2.28.8"),
+                "sqlcipher-android" to ("4.19.1" to "pkg:maven/net.zetetic/sqlcipher-android@4.19.1"),
                 "zxing-android-embedded" to
                     ("4.3.0" to "pkg:maven/com.journeyapps/zxing-android-embedded@4.3.0"),
             )
@@ -919,6 +1267,9 @@ val verifyReleaseSbom = tasks.register("verifyReleaseSbom") {
 }
 
 val publicReleasePreflight = tasks.register("publicReleasePreflight") {
+    doFirst {
+        require(localBuildNumber == null) { "Local QA builds cannot pass public release preflight" }
+    }
     group = "verification"
     description = "Verify public release signing, privacy flags, bundle contents, mapping, symbols, locale config, and SBOM."
 
@@ -1071,12 +1422,17 @@ android {
         applicationId = publicApplicationId
         minSdk = 26
         targetSdk = 37
-        versionCode = 129
-        versionName = project.version.toString()
+        versionCode = localBuildNumber ?: baseAppVersionCode
+        versionName = project.version.toString() + localBuildNumber?.let { "-Local.$it" }.orEmpty()
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
         buildConfigField("String", "DEFAULT_IP_INFO_ENDPOINT", "\"https://ipwho.is/\"")
         buildConfigField("String", "UPDATE_CHANNEL", "\"$appUpdateChannel\"")
+        buildConfigField(
+            "String",
+            "UPDATE_MANIFEST_ASSET",
+            if (shippedAndroidAbis == listOf("armeabi-v7a")) "\"update-manifest-armeabi-v7a.json\"" else "\"update-manifest.json\"",
+        )
         buildConfigField("long", "UPDATE_FLOOR_VERSION_CODE", "${appUpdateFloorVersionCode}L")
         buildConfigField("long", "UPDATE_SUPPORTED_UNTIL_EPOCH_DAY", "${appUpdateSupportedUntilEpochDay}L")
         buildConfigField("String", "DEFAULT_SUPPORT_BOT_HANDLE", "\"@foxhole_repo_support_bot\"")
@@ -1160,6 +1516,7 @@ android {
     }
 
     compileOptions {
+        isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
@@ -1171,11 +1528,14 @@ android {
 
     androidResources {
         generateLocaleConfig = true
-        localeFilters += listOf("en", "ru")
+        localeFilters += listOf("en", "ru", "de", "fr", "es", "ja", "zh-rCN")
     }
 
     sourceSets {
         getByName("main") {
+            jniLibs.directories.clear()
+            jniLibs.directories.add(layout.buildDirectory.dir("generated/localNativeLibs").get().asFile.path)
+            jniLibs.directories.add(layout.buildDirectory.dir("generated/sentinelNative/jniLibs").get().asFile.path)
             jniLibs.directories.add(layout.buildDirectory.dir("generated/privacyNativeLibs").get().asFile.path)
             jniLibs.directories.add(generatedFoxCoreNativeLibs.get().asFile.path)
             assets.directories.clear()
@@ -1191,6 +1551,7 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
         jniLibs.useLegacyPackaging = true
+        jniLibs.pickFirsts += setOf("**/libandroidx.graphics.path.so", "**/libsodium.so")
         jniLibs.keepDebugSymbols +=
             listOf(
                 "**/libandroidx.graphics.path.so",
@@ -1199,8 +1560,13 @@ android {
                 "**/libfoxhole_native.so",
                 "**/libi2pd.so",
                 "**/liblyrebird.so",
+                "**/libsodium.so",
                 "**/libsqlcipher.so",
             )
+        if (shippedAndroidAbis.toSet() == setOf("armeabi-v7a") ||
+            shippedAndroidAbis.toSet() == setOf("arm64-v8a", "armeabi-v7a", "x86_64")) {
+            jniLibs.keepDebugSymbols += "**/libfoxhole_sentinel_yara.so"
+        }
     }
 
     lint {
@@ -1214,7 +1580,7 @@ android {
                 isEnable = true
                 reset()
                 include(*shippedAndroidAbis.toTypedArray())
-                isUniversalApk = false
+                isUniversalApk = true
             }
         }
     }
@@ -1233,8 +1599,87 @@ android {
     }
 }
 
+val pageAlignedNdk = providers.environmentVariable("ANDROID_NDK_HOME")
+    .orElse(providers.environmentVariable("ANDROID_NDK_ROOT"))
+    .orElse(
+        providers.environmentVariable("ANDROID_SDK_ROOT")
+            .orElse(providers.environmentVariable("ANDROID_HOME"))
+            .map { "$it/ndk/29.0.14206865" },
+    )
+
+val preparePageAlignedNative = tasks.register<PreparePageAlignedNativeTask>("preparePageAlignedNative") {
+    nativeDirectory.set(layout.buildDirectory.dir("generated/pageAlignedNative"))
+    inputs.file(rootProject.file("config/native/page-aligned-native.json"))
+    inputs.dir(rootProject.file("config/native/libsodium"))
+    inputs.files(
+        listOf(
+            "build-page-aligned-native.sh", "prepare-page-aligned-native-inputs.py",
+            "build-graphics-page-aligned.py", "build-sodium-page-aligned.py", "page_aligned_native_common.py",
+            "verify-native-pages.py", "verify-native-host-paths.sh",
+        ).map { rootProject.file("scripts/$it") },
+    )
+    inputs.file(pageAlignedNdk.map { rootProject.file("$it/source.properties") })
+    inputs.files(pageAlignedNdk.map { ndk ->
+        listOf("clang", "clang++", "ld.lld", "llvm-strip", "llvm-ar", "llvm-ranlib", "llvm-nm", "llvm-readelf")
+            .map { rootProject.file("$ndk/toolchains/llvm/prebuilt/linux-x86_64/bin/$it") }
+    })
+    doFirst {
+        environment("FOXHOLE_NATIVE_OFFLINE", providers.gradleProperty("foxhole.nativeOffline").orElse("false").get().let {
+            if (it.toBoolean()) "1" else "0"
+        })
+        commandLine(
+            "bash", rootProject.file("scripts/build-page-aligned-native.sh").absolutePath,
+            nativeDirectory.get().asFile.absolutePath,
+            layout.buildDirectory.dir("pageAlignedNativeWork").get().asFile.absolutePath,
+            pageAlignedNdk.get(),
+        )
+    }
+}
+
 androidComponents {
     onVariants { variant ->
+        variant.sources.jniLibs?.addGeneratedSourceDirectory(preparePageAlignedNative) { it.nativeDirectory }
+        val variantName = variant.name.replaceFirstChar(Char::uppercaseChar)
+        val verifyMerged = tasks.register<Exec>("verify${variantName}PageAlignedNative") {
+            dependsOn(preparePageAlignedNative)
+            val merged = variant.artifacts.get(SingleArtifact.MERGED_NATIVE_LIBS)
+            inputs.dir(merged)
+            inputs.dir(preparePageAlignedNative.flatMap { it.nativeDirectory })
+            doFirst {
+                commandLine(
+                    listOf(
+                        "python3", rootProject.file("scripts/verify-page-aligned-native.py").absolutePath,
+                        "--repo", rootProject.projectDir.absolutePath,
+                        "--native", preparePageAlignedNative.get().nativeDirectory.get().asFile.absolutePath,
+                        "--merged", merged.get().asFile.absolutePath,
+                        "--abis",
+                    ) + shippedAndroidAbis,
+                )
+            }
+        }
+        val verifyApk = tasks.register<Exec>("verify${variantName}PageAlignedNativeApk") {
+            dependsOn(preparePageAlignedNative)
+            val apks = variant.artifacts.get(SingleArtifact.APK)
+            inputs.dir(apks)
+            inputs.dir(preparePageAlignedNative.flatMap { it.nativeDirectory })
+            doFirst {
+                commandLine(
+                    listOf(
+                        "python3", rootProject.file("scripts/verify-page-aligned-native.py").absolutePath,
+                        "--repo", rootProject.projectDir.absolutePath,
+                        "--native", preparePageAlignedNative.get().nativeDirectory.get().asFile.absolutePath,
+                        "--apk-directory", apks.get().asFile.absolutePath,
+                        "--abis",
+                    ) + shippedAndroidAbis,
+                )
+            }
+        }
+        tasks.matching { it.name == "assemble$variantName" }.configureEach {
+            dependsOn(verifyMerged, verifyApk)
+        }
+        tasks.matching { it.name == "bundle$variantName" }.configureEach {
+            dependsOn(verifyMerged)
+        }
         if (appUpdateChannel == "github") {
             variant.sources.manifests.addStaticManifestFile("src/githubUpdater/AndroidManifest.xml")
         }
@@ -1747,6 +2192,7 @@ tasks.register("verifyRequiredBehaviorTests") {
 }
 
 dependencies {
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
     implementation(project(":core:importer"))
     implementation(project(":core:model"))
     implementation(project(":core:network"))
@@ -1792,6 +2238,7 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.okhttp)
+    implementation("com.github.mwiede:jsch:2.28.8")
     implementation(libs.zxing.android.embedded)
 
     implementation(platform(libs.compose.bom))
@@ -1802,6 +2249,7 @@ dependencies {
     ksp(libs.androidx.room.compiler)
 
     testImplementation(libs.junit4)
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.11.0")
     testImplementation(libs.konsist)
     testImplementation(libs.androidx.test.core)
 

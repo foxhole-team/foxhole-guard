@@ -1,0 +1,29 @@
+Subject: [PATCH] Preserve fragmented SAM datagrams and drain pipelined frames
+
+Keep the full command when its payload needs another read, and process buffered
+commands immediately after a complete datagram instead of waiting for new bytes.
+
+--- a/libi2pd_client/SAM.cpp
++++ b/libi2pd_client/SAM.cpp
+@@ -289,12 +289,19 @@ namespace client
+ 						size_t processed = ProcessDatagramSend (separator + 1, len, eol + 1);
+ 						if (processed < len)
+ 						{
+-							m_BufferOffset = len - processed;
+ 							if (processed > 0)
++							{
++								m_BufferOffset = len - processed;
+ 								memmove (m_Buffer, separator + 1 + processed, m_BufferOffset);
++								// Drain coalesced commands before waiting for another socket read.
++								boost::asio::post (m_Owner.GetService (), std::bind (&SAMSocket::HandleMessage,
++									shared_from_this (), boost::system::error_code (), 0));
++								return;
++							}
+ 							else
+ 							{
+-								// restore string back
++								// Preserve the command prefix as well as the incomplete payload.
++								m_BufferOffset = bytes_transferred;
+ 								*separator = ' ';
+ 								*eol = '\n';
+ 							}

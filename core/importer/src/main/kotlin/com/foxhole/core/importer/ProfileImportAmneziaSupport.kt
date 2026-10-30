@@ -1,5 +1,7 @@
 package com.foxhole.core.importer
 
+import com.foxhole.core.model.AmneziaContentPaddingRange
+import com.foxhole.core.model.AmneziaHeaderProtectionKey
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -34,6 +36,15 @@ private val AMNEZIA_EXTENSION_KEYS =
         "rejectaftertime",
         "keepalivetimeout",
         "maxhandshakeattempts",
+        "randomtrailers",
+        AMNEZIA_HEADER_PROTECTION_KEY,
+        AMNEZIA_CONTENT_PADDING,
+    )
+
+private val AMNEZIA_HEADER_PROTECTION_DEFAULTS =
+    mapOf(
+        "jc" to "0", "jmin" to "0", "jmax" to "0", "s1" to "0", "s2" to "0",
+        "h1" to "1", "h2" to "2", "h3" to "3", "h4" to "4",
     )
 
 private val AMNEZIA_TIMER_KEYS =
@@ -46,10 +57,11 @@ private val AMNEZIA_TIMER_KEYS =
     )
 
 private const val AMNEZIA_HEADER_PROTECTION_KEY = "headerprotectionkey"
+private const val AMNEZIA_CONTENT_PADDING = "contentpaddingaddition"
 
 internal val AMNEZIA_URI_QUERY_KEYS: List<String> =
     AMNEZIA_OBFUSCATION_KEYS + AMNEZIA_EXTENSION_KEYS +
-        listOf("advancedsecurity", AMNEZIA_HEADER_PROTECTION_KEY)
+        listOf("advancedsecurity")
 
 internal const val AMNEZIAWG_PROTOCOL_LABEL = "AMNEZIAWG"
 
@@ -64,33 +76,90 @@ internal fun amneziaBlockFromInterface(
     val values = lowercasedFirstValues(interfaceSection)
     val peerValues = lowercasedFirstValues(peerSection)
 
-    require(AMNEZIA_HEADER_PROTECTION_KEY !in values && AMNEZIA_HEADER_PROTECTION_KEY !in peerValues) {
-        "AmneziaWG HeaderProtectionKey (3.0 header encryption) is not supported"
+    val parameters = parseAmneziaInterfaceParameters(values, peerValues, mtu) ?: return null
+    val contentPadding = values[AMNEZIA_CONTENT_PADDING]?.let(AmneziaContentPaddingRange::parse)
+    return buildJsonObject {
+        put("junk_packet_count", parameters.junk.count)
+        put("junk_min_size", parameters.junk.minSize)
+        put("junk_max_size", parameters.junk.maxSize)
+        put("init_junk_size", parameters.junk.initSize)
+        put("response_junk_size", parameters.junk.responseSize)
+        put("cookie_junk_size", parameters.cookieSize)
+        put("transport_junk_size", parameters.transportSize)
+        values["randomtrailers"]?.let { raw ->
+            put("random_trailers", parseAmneziaRandomTrailers(raw))
+        }
+        contentPadding?.let { put("content_padding_addition", it.normalizedJson()) }
+        parameters.headerProtection?.let { put("header_protection_key", it.normalizedJson()) }
+        putAmneziaHeaders(parameters.effective, parameters.obfuscatedHeaders)
+        amneziaInitPackets(values)?.let { put("init_packets", it) }
+        amneziaTimers(values)?.let { put("timers", it) }
     }
+}
+private class AmneziaInterfaceParameters(
+    val effective: Map<String, String>,
+    val junk: AmneziaJunk,
+    val cookieSize: Int,
+    val transportSize: Int,
+    val headerProtection: AmneziaHeaderProtectionKey?,
+    val obfuscatedHeaders: Boolean,
+)
+
+private fun parseAmneziaInterfaceParameters(
+    values: Map<String, String>,
+    peerValues: Map<String, String>,
+    mtu: Int,
+): AmneziaInterfaceParameters? {
+    requireSupportedAmneziaFeatures(peerValues)
+    val headerProtection = values[AMNEZIA_HEADER_PROTECTION_KEY]?.let(AmneziaHeaderProtectionKey::parse)
     val present = AMNEZIA_OBFUSCATION_KEYS.filter { it in values }
     val hasExtensions = AMNEZIA_EXTENSION_KEYS.any { it in values }
     if (present.isEmpty() && !hasExtensions) {
         return null
     }
 
-    require(present.isEmpty() || present.size == AMNEZIA_OBFUSCATION_KEYS.size) {
+    require(headerProtection != null || present.isEmpty() || present.size == AMNEZIA_OBFUSCATION_KEYS.size) {
         val missing = AMNEZIA_OBFUSCATION_KEYS.filterNot { it in present }
         "AmneziaWG config is incomplete, missing: ${missing.joinToString(", ")}"
     }
     requireAdvancedSecurityAgrees(peerValues, values)
-    val junk = if (present.isEmpty()) null else junkParameters(values, mtu)
-    return buildJsonObject {
-        put("junk_packet_count", junk?.count ?: 0)
-        put("junk_min_size", junk?.minSize ?: 0)
-        put("junk_max_size", junk?.maxSize ?: 0)
-        put("init_junk_size", junk?.initSize ?: 0)
-        put("response_junk_size", junk?.responseSize ?: 0)
-        put("cookie_junk_size", amneziaJunkSize(values, "s3"))
-        put("transport_junk_size", amneziaJunkSize(values, "s4"))
-        putAmneziaHeaders(values, present.isNotEmpty())
-        amneziaInitPackets(values)?.let { put("init_packets", it) }
-        amneziaTimers(values)?.let { put("timers", it) }
+    val effective = if (headerProtection == null) values else AMNEZIA_HEADER_PROTECTION_DEFAULTS + values
+    val junk =
+        if (present.isEmpty() && headerProtection == null) {
+            AmneziaJunk(0, 0, 0, 0, 0)
+        } else {
+            junkParameters(effective, mtu)
+        }
+    val cookieSize = amneziaJunkSize(effective, "s3")
+    val transportSize = amneziaJunkSize(effective, "s4")
+    headerProtection?.requireNoncePrefixes(junk.initSize, junk.responseSize, cookieSize, transportSize)
+    return AmneziaInterfaceParameters(
+        effective,
+        junk,
+        cookieSize,
+        transportSize,
+        headerProtection,
+        present.isNotEmpty() || headerProtection != null,
+    )
+}
+
+private fun parseAmneziaRandomTrailers(raw: String): Boolean =
+    when (raw.trim().lowercase()) {
+        "on", "true", "1", "yes" -> true
+        "off", "false", "0", "no" -> false
+        else -> throw IllegalArgumentException("AmneziaWG RandomTrailers must be a boolean")
     }
+
+private fun requireSupportedAmneziaFeatures(
+    peerValues: Map<String, String>,
+) {
+    require(AMNEZIA_HEADER_PROTECTION_KEY !in peerValues) {
+        "AmneziaWG HeaderProtectionKey must be declared in Interface"
+    }
+    require(AMNEZIA_CONTENT_PADDING !in peerValues) {
+        "AmneziaWG ContentPaddingAddition must be declared in Interface"
+    }
+    require("randomtrailers" !in peerValues) { "AmneziaWG RandomTrailers must be declared in Interface" }
 }
 
 private fun requireAdvancedSecurityAgrees(
@@ -351,5 +420,8 @@ private fun lowercasedFirstValues(section: Map<String, List<String>>): Map<Strin
     section
         .asSequence()
         .mapNotNull { (key, values) ->
-            values.firstOrNull()?.trim()?.takeIf(String::isNotBlank)?.let { key.lowercase() to it }
+            values.firstOrNull()?.trim()?.takeIf {
+                it.isNotBlank() || key.equals(AMNEZIA_CONTENT_PADDING, ignoreCase = true) ||
+                    key.equals(AMNEZIA_HEADER_PROTECTION_KEY, ignoreCase = true)
+            }?.let { key.lowercase() to it }
         }.toMap()

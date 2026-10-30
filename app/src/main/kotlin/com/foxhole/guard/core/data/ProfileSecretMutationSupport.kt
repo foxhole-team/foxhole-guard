@@ -1,6 +1,10 @@
 package com.foxhole.guard.core.data
 
-import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.withContext
 
 internal suspend fun <T> executeSecretFirstMutation(
     secretStore: ProfileSecretStore,
@@ -11,35 +15,52 @@ internal suspend fun <T> executeSecretFirstMutation(
 ): T {
     val stagedSecretRefs = stagedWrites.map(StagedProfileSecretWrite::secretRef).toSet()
     val writtenSecretRefs = mutableListOf<String>()
-    try {
+    val result = try {
         stagedWrites.forEach { write ->
             secretStore.write(write.secretRef, write.value)
             writtenSecretRefs += write.secretRef
         }
-        val result = mutation()
-        cleanupSecretRefsAfterSuccess
-            .distinct()
-            .filterNot(stagedSecretRefs::contains)
-            .forEach { secretRef ->
-                cleanupProfileSecretRef(
-                    secretStore = secretStore,
-                    secretRef = secretRef,
-                    onCleanupFailure = onCleanupFailure,
-                )
-            }
-        return result
+        mutation()
     } catch (error: Throwable) {
-        writtenSecretRefs
-            .asReversed()
-            .forEach { secretRef ->
-                cleanupProfileSecretRef(
-                    secretStore = secretStore,
-                    secretRef = secretRef,
-                    onCleanupFailure = onCleanupFailure,
-                )
-            }
+        settleProfileSecretCleanup(secretStore, writtenSecretRefs.asReversed(), onCleanupFailure, error)
         throw error
     }
+    // A retired-secret failure must not delete newly committed references.
+    settleProfileSecretCleanup(
+        secretStore,
+        cleanupSecretRefsAfterSuccess.distinct().filterNot(stagedSecretRefs::contains),
+        onCleanupFailure,
+        null,
+    )?.let { throw it }
+    currentCoroutineContext().ensureActive()
+    return result
+}
+
+private suspend fun settleProfileSecretCleanup(
+    store: ProfileSecretStore,
+    refs: List<String>,
+    onCleanupFailure: (String, Throwable) -> Unit,
+    operationFailure: Throwable?,
+): Throwable? {
+    var primary = operationFailure
+    try {
+        withContext(NonCancellable) {
+            refs.forEach { ref ->
+                try {
+                    cleanupProfileSecretRef(store, ref, onCleanupFailure)
+                } catch (error: Throwable) {
+                    if (primary == null) {
+                        primary = error
+                    } else if (primary !== error) primary!!.addSuppressed(error)
+                }
+            }
+        }
+    } catch (handoffFailure: Throwable) {
+        if (primary == null) {
+            primary = handoffFailure
+        } else if (primary !== handoffFailure) primary!!.addSuppressed(handoffFailure)
+    }
+    return primary
 }
 
 private suspend fun cleanupProfileSecretRef(
@@ -47,27 +68,29 @@ private suspend fun cleanupProfileSecretRef(
     secretRef: String,
     onCleanupFailure: (secretRef: String, error: Throwable) -> Unit,
 ) {
-    runCatching { secretStore.delete(secretRef) }
-        .fold(
-            onSuccess = { deleted ->
-                if (!deleted) {
-                    onCleanupFailure(secretRef, IllegalStateException("profile secret cleanup returned false"))
-                }
-            },
-            onFailure = { error ->
-                onCleanupFailure(secretRef, error)
-            },
-        )
+    val failure = try {
+        if (secretStore.delete(secretRef)) {
+            null
+        } else {
+            IllegalStateException("profile secret cleanup returned false")
+        }
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (error: Exception) {
+        error
+    }
+    if (failure != null) onCleanupFailure(secretRef, failure)
 }
 
-suspend fun ProfileRepository.cleanupOrphanProfileSecrets(): Int {
-    return secretMutationMutex.withLock {
-        val activeSecretRefs = dao.getAllProfiles().map(ProfileEntity::secretRef).toSet()
-        val deletedCount = secretStore.deleteOrphans(activeSecretRefs)
-        if (deletedCount > 0) {
-            diagnosticsLogger.record("profile", "orphan profile secret cleanup removed $deletedCount entries")
+suspend fun ProfileRepository.cleanupOrphanProfileSecrets(): Int = withProfileMutation { owner ->
+    owner.secrets(secretMutationMutex) {
+        val refs = dao.getAllProfiles().map(ProfileEntity::secretRef).toSet()
+        val removed = secretStore.deleteOrphans(refs)
+        if (removed > 0) {
+            owner.markLocalCommit()
+            diagnosticsLogger.record("profile", "orphan profile secret cleanup removed $removed entries")
         }
-        deletedCount
+        removed
     }
 }
 
@@ -81,16 +104,10 @@ internal fun ProfileRepository.recordSecretCleanupFailure(
     )
 }
 
-internal suspend fun ProfileRepository.cleanupProfileSecret(secretRef: String) {
-    runCatching { secretStore.delete(secretRef) }
-        .onSuccess { deleted ->
-            if (!deleted) {
-                recordSecretCleanupFailure(
-                    secretRef,
-                    IllegalStateException("profile secret cleanup returned false"),
-                )
-            }
-        }.onFailure { error ->
-            recordSecretCleanupFailure(secretRef, error)
+internal suspend fun ProfileRepository.cleanupProfileSecret(secretRef: String) =
+    withProfileMutation { owner ->
+        owner.secrets(secretMutationMutex) {
+            owner.recordingSecrets(secretStore).delete(secretRef)
+            owner.markLocalCommit()
         }
-}
+    }

@@ -1,0 +1,3 @@
+Local validation of cooperative Stop during policy reload.
+Preserve emergency teardown for stuck operations and explicit Kill.
+Verify fresh ARM64 core, native helpers and encrypted storage on 16 KB Android.

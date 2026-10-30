@@ -1,0 +1,16 @@
+<resources>
+    <string name="cli_logs_tab_sentinel">Sentinel</string>
+    <string name="cli_sentinel_installations">Installed applications</string>
+    <string name="cli_sentinel_recent_installations">Recent installations</string>
+    <string name="cli_sentinel_view_all_installations">View all (%1$d)</string>
+    <string name="cli_sentinel_installations_empty">No visible installed applications.</string>
+    <string name="cli_sentinel_install_history">Recorded app changes</string>
+    <string name="cli_sentinel_install_history_retention">App change history</string>
+    <string name="cli_sentinel_history_detected">Detected: %1$s</string>
+    <string name="cli_sentinel_history_empty">No recorded app changes.</string>
+    <string name="cli_sentinel_activity_history">Observed app activity</string>
+    <string name="cli_sentinel_inventory_refresh">Refresh applications</string>
+    <string name="cli_sentinel_inventory_failed">The installed application list could not be loaded.</string>
+    <string name="cli_sentinel_apps_updated">Updated</string>
+    <string name="cli_sentinel_module_history_note">Installations and findings are in Journals → Sentinel.</string>
+</resources>

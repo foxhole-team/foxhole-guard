@@ -2,10 +2,17 @@ package com.foxhole.guard.guardian
 
 import android.content.Context
 import androidx.annotation.StringRes
+import com.foxhole.core.model.DiagnosticSanitizer
 import com.foxhole.guard.R
 
 internal fun GuardJournalEntry.userFacingMessage(context: Context): String {
     val event = event ?: return context.getString(R.string.guard_event_sealed, record.seq)
+    event.packageGapUserFacingMessage(
+        text = context::journalText
+    )?.let { return it }
+    event.coreUserFacingMessage(
+        text = context::journalText
+    )?.let { return it }
     val facts = mutableListOf(context.getString(event.type.userLabelRes()))
     event.packageName?.takeIf(String::isNotBlank)?.let(facts::add)
     event.service?.takeIf(String::isNotBlank)?.let { service ->
@@ -61,6 +68,7 @@ internal fun GuardEventType.userLabelRes(): Int =
         GuardEventType.CORE_OUTBOUND_RESTORED -> R.string.guard_event_core_outbound_restored
         GuardEventType.CORE_FLOWS_REVOKED -> R.string.guard_event_core_flows_revoked
         GuardEventType.CORE_EVENT_GAP -> R.string.guard_event_core_event_gap
+        GuardEventType.PACKAGE_EVENT_GAP -> R.string.journal_package_gap_title
     }
 
 private fun GuardEvent.localizedDetail(context: Context): String? {
@@ -137,3 +145,22 @@ private val DETAIL_FIELD = Regex("([A-Za-z_]+)=([^\\s]+)")
 private const val RECONCILED_DETAIL_VALUE = "reconciled"
 private const val MAX_DETAIL_FIELDS = 4
 private const val MAX_DETAIL_VALUE_LENGTH = 80
+
+internal fun GuardJournalEntry.userFacingExportMessage(context: Context): String {
+    val text: JournalText = context::journalText
+    event?.coreUserFacingMessage(text, forExport = true)?.let { return it }
+    event?.packageGapUserFacingMessage(text)?.let { return it }
+    val redacted = event?.copy(
+        packageName = event.packageName?.let { text(R.string.journal_redacted, emptyList()) },
+        service = event.service?.let { text(R.string.journal_redacted, emptyList()) },
+        detail = event.detail?.let { DiagnosticSanitizer.sanitizeForExport(it.take(MAX_EXPORT_DETAIL_LENGTH)) },
+    )
+    return copy(event = redacted).userFacingMessage(context)
+}
+
+private const val MAX_EXPORT_DETAIL_LENGTH = 2048
+
+internal fun Context.journalText(@StringRes resource: Int, arguments: List<Any>): String {
+    require(arguments.size <= 1)
+    return if (arguments.isEmpty()) getString(resource) else getString(resource, arguments.single())
+}

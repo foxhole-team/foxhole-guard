@@ -16,6 +16,9 @@ internal class DiagnosticsSessionStore(
     private val journalDir: File,
     private val sessionIdProvider: () -> String = { UUID.randomUUID().toString() },
     private val fileCipher: FileCipher = AndroidKeystoreFileCipher("foxhole.diagnostics.journal"),
+    private val aboutEncryptedReader: ((File) -> ByteArray)? = null,
+    private val aboutPlaintextReader: (File) -> String = { it.readText(Charsets.UTF_8) },
+    private val aboutLineDecoder: ((String) -> DiagnosticEntry?)? = null,
 ) {
     private val json =
         Json {
@@ -25,6 +28,44 @@ internal class DiagnosticsSessionStore(
     private var currentSessionFile: File? = null
     private var currentSessionEntries: MutableList<DiagnosticEntry>? = null
     private var lastCleanupAt = 0L
+
+    @Synchronized
+    internal fun loadRecentEntriesForAbout(now: Long, retention: RetentionPolicy): List<DiagnosticEntry> {
+        val cutoff = retention.cutoffOrNull(now) ?: Long.MIN_VALUE
+        return sessionFiles()
+            .filter { it.lastModified() >= cutoff }
+            .takeLast(MAX_SESSION_FILES)
+            .flatMap { file ->
+                ordinaryDiagnosticsSnapshotAttempt { readAboutEntries(file) }
+                    .getOrElse { error -> listOf(journalReadFailureEntry(now, file, error)) }
+            }
+            .filter { it.timestamp >= cutoff }
+            .takeLast(retention.maxEntries)
+    }
+
+    private fun readAboutEntries(file: File): List<DiagnosticEntry> {
+        val text = if (file.name.endsWith(".jsonl.enc")) {
+            val bytes = if (aboutEncryptedReader != null) {
+                aboutEncryptedReader.invoke(file)
+            } else {
+                val cipher = fileCipher as? AndroidKeystoreFileCipher
+                    ?: throw UnsupportedOperationException("read-only journal reader unavailable")
+                cipher.readBytesExistingKey(file)
+            }
+            bytes.toString(Charsets.UTF_8)
+        } else {
+            aboutPlaintextReader(file)
+        }
+        return text.lineSequence().filter(String::isNotBlank).mapNotNull { line ->
+            ordinaryDiagnosticsSnapshotAttempt {
+                if (aboutLineDecoder != null) {
+                    aboutLineDecoder.invoke(line)
+                } else {
+                    json.decodeFromString<PersistedDiagnosticEntry>(line).toDiagnosticEntry()
+                }
+            }.getOrNull()
+        }.toList()
+    }
 
     @Synchronized
     fun loadRecentEntries(

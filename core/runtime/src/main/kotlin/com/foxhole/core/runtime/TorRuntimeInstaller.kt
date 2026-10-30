@@ -2,6 +2,7 @@ package com.foxhole.core.runtime
 
 import android.content.Context
 import android.os.Build
+import android.os.Process
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -43,6 +44,13 @@ fun TorRuntimePaths.withIdentityVersion(identityVersion: Long): TorRuntimePaths 
     return copy(dataDirectory = identityDirectory.absolutePath)
 }
 
+internal fun selectTorRuntimeAssetAbi(
+    processIs64Bit: Boolean,
+    supported64BitAbis: List<String>,
+    supported32BitAbis: List<String>,
+    assetExists: (String) -> Boolean,
+): String? = (if (processIs64Bit) supported64BitAbis else supported32BitAbis).firstOrNull(assetExists)
+
 internal class TorRuntimeUnavailableException(message: String) : IllegalStateException(message)
 
 class TorRuntimeInstaller(
@@ -60,8 +68,12 @@ class TorRuntimeInstaller(
         installMutex.withLock {
             withContext(Dispatchers.IO) {
                 val assetAbi =
-                    Build.SUPPORTED_ABIS
-                        .firstOrNull { abi -> assetFileExists(torrcAssetPath(abi)) }
+                    selectTorRuntimeAssetAbi(
+                        processIs64Bit = Process.is64Bit(),
+                        supported64BitAbis = Build.SUPPORTED_64_BIT_ABIS.orEmpty().toList(),
+                        supported32BitAbis = Build.SUPPORTED_32_BIT_ABIS.orEmpty().toList(),
+                        assetExists = { abi -> assetFileExists(torrcAssetPath(abi)) },
+                    )
                         ?: throw TorRuntimeUnavailableException(
                             "TOR bridge inventory is missing for this device ABI",
                         )

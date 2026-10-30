@@ -43,6 +43,7 @@ internal class FoxCoreNativeEngineOperations(
         network: Network,
         host: RuntimeServiceHost,
         translated: FoxCoreSessionConfig,
+        dnsContinuation: Long? = null,
     ): ActiveFoxCoreSession? =
         starter
             .start(
@@ -50,6 +51,7 @@ internal class FoxCoreNativeEngineOperations(
                 network = network,
                 host = host,
                 translated = translated,
+                dnsContinuation = dnsContinuation,
             )?.let { started ->
                 ActiveFoxCoreSession(
                     handle = started.handle,
@@ -64,6 +66,27 @@ internal class FoxCoreNativeEngineOperations(
                     dnsServers = emptyList(),
                 )
             }
+
+    suspend fun <T> withDnsContinuation(
+        handle: Long,
+        isCurrent: () -> Boolean,
+        stop: suspend () -> NativeStopOutcome,
+        replace: suspend (Long, NativeStopOutcome) -> T,
+    ): FoxCoreDnsContinuation<T> =
+        withStoppedDnsContinuation(
+            native = native,
+            handle = handle,
+            isCurrent = isCurrent,
+            stop = stop,
+            onReleaseFailure = { failure ->
+                diagnostics.recordStructured(
+                    "foxcore",
+                    "DNS continuation release failed",
+                    "type=${failure.javaClass.simpleName.take(96)}",
+                )
+            },
+            replace = replace,
+        )
 
     fun immutableFingerprint(translated: FoxCoreSessionConfig): String? =
         starter.immutableEngineFingerprint(
@@ -85,10 +108,11 @@ internal class FoxCoreNativeEngineOperations(
     suspend fun stop(
         handle: Long,
         policy: RuntimeStopPolicy,
+        callTimeoutMs: Long = nativeStopCallTimeoutMs(policy),
     ): NativeStopOutcome {
         val result = AtomicInteger(FoxholeNativeEngine.STOP_PANICKED)
         val completed =
-            runBlockingRuntimeClose(nativeStopCallTimeoutMs(policy)) {
+            runBlockingRuntimeClose(callTimeoutMs) {
                 result.set(native.stop(handle))
             }
         val stopped =

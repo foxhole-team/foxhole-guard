@@ -23,20 +23,21 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.foxhole.core.model.InstalledAppOption
 import com.foxhole.guard.R
+import com.foxhole.guard.ui.FoxholeBannerEvent
+import com.foxhole.guard.ui.FoxholeBannerTone
 import com.foxhole.guard.ui.HomeViewModel
 import com.foxhole.guard.ui.RoutingRouteUiState
 import com.foxhole.guard.ui.SettingsRouteUiState
@@ -58,11 +59,9 @@ import com.foxhole.guard.ui.cli.components.CliTopBarHelpButton
 import com.foxhole.guard.ui.cli.components.CliTopBarHelpPresentation
 import com.foxhole.guard.ui.cli.components.LocalCliIconMetricOverrides
 import com.foxhole.guard.ui.cli.components.cliPressable
-import com.foxhole.guard.ui.cli.components.rememberCliRejectFeedback
 import com.foxhole.guard.ui.confirmPendingRoutingScenario
 import com.foxhole.guard.ui.dismissPendingRoutingScenario
 import com.foxhole.guard.ui.loadInstalledApps
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @Composable
@@ -176,22 +175,22 @@ private fun CliRoutingRootSections(
     appState: RoutingRouteUiState,
     onAddApps: () -> Unit,
 ) {
-    val missingAppsFeedback = rememberCliRejectFeedback()
+    val resources = LocalContext.current.resources
     val scope = rememberCoroutineScope()
-    var missingAppsTarget by remember { mutableStateOf<CliMissingAppsTarget?>(null) }
-    var rejectionAttempt by remember { mutableIntStateOf(0) }
-    LaunchedEffect(state.settings.expert.appAssignments) {
-        rejectionAttempt += 1
-        missingAppsTarget = null
-    }
     val onMissingAppsRejected: (CliMissingAppsTarget) -> Unit = { target ->
-        rejectionAttempt += 1
-        val attempt = rejectionAttempt
-        missingAppsTarget = target
-        scope.launch { missingAppsFeedback.play() }
         scope.launch {
-            delay(MISSING_APPS_WARNING_VISIBLE_MS)
-            if (rejectionAttempt == attempt) missingAppsTarget = null
+            viewModel.snackbars.emit(
+                FoxholeBannerEvent(
+                    message = resources.getString(
+                        when (target) {
+                            CliMissingAppsTarget.VPN -> R.string.split_tunnel_requires_apps
+                            CliMissingAppsTarget.TOR -> R.string.privacy_route_select_apps_first
+                        },
+                    ),
+                    tone = FoxholeBannerTone.INFO,
+                    durationMillis = MISSING_APPS_WARNING_VISIBLE_MS,
+                ),
+            )
         }
     }
     Column(modifier = Modifier.fillMaxWidth()) {
@@ -206,8 +205,6 @@ private fun CliRoutingRootSections(
             state = state,
             appState = appState,
             onAddApps = onAddApps,
-            missingAppsTarget = missingAppsTarget,
-            missingAppsFeedback = missingAppsFeedback,
         )
         Spacer(modifier = Modifier.height(CliSpacing.sm))
         CliSiteRulesSection(viewModel = viewModel, activePreset = appState.activePreset)

@@ -1,0 +1,5 @@
+<resources>
+    <string name="widget_status_connect_action">CONNECT</string>
+    <string name="widget_status_disconnect_action">DISCONNECT</string>
+    <string name="widget_status_open_app">Open FoxHole Guard</string>
+</resources>

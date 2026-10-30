@@ -5,12 +5,33 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
 class FoxCoreDnsRuleSetInstallTest {
+    @Test
+    fun `native cancellation propagates rather than returning rejection`() = runBlocking {
+        val cancelled = kotlinx.coroutines.CancellationException("owned cancellation")
+        val thrown = try {
+            installDnsRuleSetGenerationSafe(DnsRuleSetInstallTarget(11, 3), { throw cancelled }, { _, _ -> true })
+            null
+        } catch (failure: Throwable) { failure }
+        assertSame(cancelled, thrown)
+    }
+
+    @Test
+    fun `native fatal propagates rather than returning rejection`() = runBlocking {
+        val fatal = object : Error("owned fatal") { val marker = Any() }
+        val thrown = try {
+            installDnsRuleSetGenerationSafe(DnsRuleSetInstallTarget(11, 3), { throw fatal }, { _, _ -> true })
+            null
+        } catch (failure: Throwable) { failure }
+        assertSame(fatal, thrown)
+    }
+
     @Test
     fun `no running generation defers activation`() =
         runBlocking {

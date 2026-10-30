@@ -9,6 +9,8 @@ import com.foxhole.core.model.TorTrafficStats
 import com.foxhole.core.model.TunnelAppTrafficStats
 import com.foxhole.core.runtime.FoxholeVpnRuntimeBridge
 import com.foxhole.core.runtime.RuntimeUpdatePolicy
+import com.foxhole.guard.core.security.captureJournalWriteEpoch
+import com.foxhole.guard.core.security.journalEventAtEpoch
 import com.foxhole.guard.core.sentinel.anomaly.sentinelTrafficWindowCollectionEnabled
 import com.foxhole.guard.guardian.GuardEvent
 import com.foxhole.guard.guardian.GuardEventType
@@ -18,10 +20,18 @@ import com.foxhole.guard.traffic.RuntimeNetworkActivityContext
 import com.foxhole.guard.traffic.TrafficMapRuntimeSnapshotSamples
 import com.foxhole.guard.traffic.toTrafficMapConnectionSamples
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.launch
 
@@ -36,6 +46,7 @@ internal fun FoxholeVpnService.startAppTrafficStatsUpdates() {
         id = FoxholeVpnService.TICKER_TASK_APP_TRAFFIC,
         fireImmediately = true,
         intervalMs = { FoxholeVpnService.APP_TRAFFIC_SAMPLE_INTERVAL_MS },
+        runOn = Dispatchers.IO,
     ) {
         if (!appTrafficStatsRuntimeEnabled(container.settingsRepository.settings.value)) {
             sessionTicker.unregister(FoxholeVpnService.TICKER_TASK_APP_TRAFFIC)
@@ -174,10 +185,12 @@ internal fun FoxholeVpnService.startRuntimeConnectionStatsUpdates(
 ) {
     dnsRuntimeStatsJob?.cancel()
     dnsRuntimeStatsJob = null
-    if (!runtimeConnectionStatsEnabled(settings)) {
-        return
-    }
-    val snapshots = runtimeConnectionSnapshots ?: runtimeConnectionSnapshots(settings)
+    val sharedSnapshots = runtimeConnectionSnapshots ?: runtimeConnectionSnapshots(settings)
+    val snapshots = runtimeConnectionStatsSnapshots(
+        settings = container.settingsRepository.settings,
+        enabled = { current -> runtimeConnectionStatsEnabled(current) },
+        snapshots = { sharedSnapshots },
+    )
     dnsRuntimeStatsJob =
         dnsRuntimeStatsTracker.start(
             scope = scope,
@@ -194,21 +207,17 @@ internal fun FoxholeVpnService.startRuntimeConnectionStatsUpdates(
             torOnlyRuntimeActive = {
                 activeSession?.profileId == FoxholeVpnService.TOR_ONLY_PROFILE_ID
             },
-            networkActivityContext = {
-                RuntimeNetworkActivityContext(
-                    profileId = activeSession?.profileId ?: LOCAL_GUARD_PROFILE_ID.takeIf { activeLocalGuardMode != null },
-                    sessionId = activeSession?.correlationId,
-                )
-            },
+            networkActivityContext = ::captureRuntimeActivityContext,
             countryCodeForDestination = runtimeCountryResolver::countryCodeForDestination,
-            onNetworkActivityEvents = { events ->
+            onEpochNetworkActivityEvents = { events, epoch ->
                 scope.launch(Dispatchers.IO) {
-                    container.anomalyRepository.recordNetworkActivityEvents(events)
+                    container.anomalyRepository.recordNetworkActivityEvents(events, epoch)
                 }
             },
             onRuntimeAuditEvents = { events, droppedAudit, droppedTraffic ->
+                val journalEpoch = container.securityComponents.captureJournalWriteEpoch()
                 scope.launch(Dispatchers.IO) {
-                    journalRuntimeAuditEvents(events, droppedAudit, droppedTraffic)
+                    journalRuntimeAuditEvents(events, droppedAudit, droppedTraffic, journalEpoch)
                 }
             },
         )
@@ -218,38 +227,42 @@ private fun FoxholeVpnService.journalRuntimeAuditEvents(
     events: List<RuntimeAuditEvent>,
     droppedAudit: Long,
     droppedTraffic: Long,
+    journalEpoch: Long,
 ) {
     events.filterIsInstance<RuntimeAuditEvent.Blocked>()
         .groupBy { event -> Triple(event.reason, event.transport, event.packageName) }
         .forEach { (key, blocked) ->
-            container.securityComponents.journalEvent(
+            container.securityComponents.journalEventAtEpoch(
                 GuardEvent(
                     type = GuardEventType.CORE_FLOW_BLOCKED,
                     packageName = key.third,
                     uid = blocked.firstOrNull()?.uid,
                     detail = "reason=${key.first} transport=${key.second} count=${blocked.size}",
                 ),
+                journalEpoch,
             )
         }
     events.filterIsInstance<RuntimeAuditEvent.DnsBlocked>()
         .groupBy { event -> Triple(event.reason, event.category?.name, event.packageName) }
         .forEach { (key, blocked) ->
-            container.securityComponents.journalEvent(
+            container.securityComponents.journalEventAtEpoch(
                 GuardEvent(
                     type = GuardEventType.CORE_DNS_BLOCKED,
                     packageName = key.third,
                     detail = "reason=${key.first ?: "unknown"} category=${key.second ?: "none"} count=${blocked.size}",
                 ),
+                journalEpoch,
             )
         }
     events.mapNotNull(::ungroupedRuntimeAuditGuardEvent)
-        .forEach(container.securityComponents::journalEvent)
+        .forEach { event -> container.securityComponents.journalEventAtEpoch(event, journalEpoch) }
     if (droppedAudit > 0L || droppedTraffic > 0L) {
-        container.securityComponents.journalEvent(
+        container.securityComponents.journalEventAtEpoch(
             GuardEvent(
                 type = GuardEventType.CORE_EVENT_GAP,
                 detail = "audit_dropped=$droppedAudit traffic_dropped=$droppedTraffic",
             ),
+            journalEpoch,
         )
     }
 }
@@ -301,11 +314,24 @@ private fun FoxholeVpnService.runtimeConnectionStatsEnabled(settings: Settings):
         appTrafficStatsRuntimeEnabled(settings) ||
         laneTrafficStatsRuntimeEnabled(settings)
 
+private fun FoxholeVpnService.captureRuntimeActivityContext(): RuntimeNetworkActivityContext {
+    val session = activeSession
+    return RuntimeNetworkActivityContext(
+        profileId = session?.profileId ?: LOCAL_GUARD_PROFILE_ID.takeIf { activeLocalGuardMode != null },
+        sessionId = session?.correlationId,
+    )
+}
+
 private fun FoxholeVpnService.runtimeConnectionSnapshots(settings: Settings): SharedFlow<RuntimeConnectionSnapshot> =
     runtimeConnectionSnapshotFlow
         ?: runtimeConnectionObserver
             .connectionSnapshots(
-                runtimeAvailable = flowOf(runtimeConnectionObserverNeeded(settings)),
+                resetEpoch = container.anomalyRepository::captureNetworkActivityEpoch,
+                activityContext = ::captureRuntimeActivityContext,
+                runtimeAvailable = container.settingsRepository.settings
+                    .map { current -> runtimeConnectionObserverNeeded(current) }
+                    .onStart { emit(runtimeConnectionObserverNeeded(settings)) }
+                    .distinctUntilChanged(),
                 includeProcessInfo = {
                     val current = container.settingsRepository.settings.value
                     shouldIncludeRuntimeProcessInfo(
@@ -325,6 +351,47 @@ internal fun shouldIncludeRuntimeProcessInfo(
     networkActivityEnabled: Boolean,
     appTrafficEnabled: Boolean,
 ): Boolean = networkActivityEnabled || appTrafficEnabled
+
+@OptIn(ExperimentalCoroutinesApi::class)
+internal fun runtimeConnectionStatsSnapshots(
+    settings: Flow<Settings>,
+    enabled: (Settings) -> Boolean,
+    snapshots: () -> Flow<RuntimeConnectionSnapshot>,
+): Flow<RuntimeConnectionSnapshot> = flow {
+    var previousPolicy: List<Boolean>? = null
+    emitAll(
+        settings
+            .map { current ->
+                listOf(
+                    enabled(current),
+                    current.expert.networkActivityLogging,
+                    current.statistics.enabled,
+                    current.statistics.appTrafficEnabled,
+                    current.statistics.dnsFilteringEnabled,
+                    current.appTrafficStatsEnabled,
+                    current.appTrafficUsageAccessConsent,
+                    current.anomaly.enabled,
+                )
+            }
+            .distinctUntilChanged()
+            .flatMapLatest { policy ->
+                val reset = previousPolicy != null
+                val wasEnabled = previousPolicy?.firstOrNull() == true
+                previousPolicy = policy
+                if (!policy.first()) {
+                    flowOf(RuntimeConnectionSnapshot())
+                } else {
+                    flow {
+                        val source = snapshots()
+                        // Replayed counters can include a disabled interval; wait for a fresh sample.
+                        val cached = if (reset) (source as? SharedFlow<RuntimeConnectionSnapshot>)?.replayCache?.lastOrNull() else null
+                        if (reset && wasEnabled) emit(RuntimeConnectionSnapshot())
+                        emitAll(source.filter { next -> next !== cached })
+                    }
+                }
+            },
+    )
+}
 
 internal fun FoxholeVpnService.startDnsGuardWindowUpdates() {
     stopDnsGuardWindowUpdates()

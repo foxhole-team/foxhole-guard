@@ -1,11 +1,15 @@
 package com.foxhole.guard.runtime
 
+import com.foxhole.core.model.DEFAULT_DNS_FILTER_UPDATE_URL
 import com.foxhole.core.model.DnsSettings
 import com.foxhole.core.model.dnsRuleSetFilteringEnabled
 import com.foxhole.core.model.requestedDnsRuleSetTags
 import com.foxhole.core.runtime.RuntimeDiagnosticsSink
 import com.foxhole.core.runtime.RuntimeDnsRuleSetInstallOutcome
 import com.foxhole.core.runtime.RuntimeSettings
+import kotlinx.coroutines.CancellationException
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import java.io.IOException
 
 class DnsFilterUpdateRepository(
     private val settingsRepository: RuntimeSettings,
@@ -23,8 +27,32 @@ class DnsFilterUpdateRepository(
         RuntimeDnsRuleSetInstallOutcome.Deferred
     },
 ) {
+    internal var categorizedInstaller: suspend (
+        CategorizedDnsStage,
+        VerifiedCategorizedDnsRuleSet
+    ) -> CategorizedDnsNativeActivation =
+        { stage, bundle ->
+            CategorizedDnsNativeActivation(
+                liveRuleSetInstaller(stage.name, bundle.manifestBytes, bundle.signatureBytes, bundle.artifactBytes),
+                isOwnerCurrent = { false },
+            )
+        }
+
     suspend fun checkForUpdate(dnsSettingsOverride: DnsSettings? = null): DnsFilterUpdateCheck {
         val dnsSettings = dnsSettingsOverride ?: settingsRepository.current().dns
+        val categorized = (store as? DnsFilterAssetInstaller)?.categorizedStore
+        if (categorized != null) {
+            val selection = dnsSettings.categorizedDnsSelection()
+            val state = categorized.state(selection.variant)
+            val check = client.checkCategorized(
+                selectedManifestUrl(dnsSettings, selection),
+                selection,
+                state.active,
+                state.pending,
+            )
+            if (check.availability != DnsFilterUpdateAvailability.UNKNOWN) settingsRepository.markDnsFiltersChecked()
+            return check
+        }
         val installedCommit = installedManifestProvider()?.source?.commit
         val check =
             client.checkForUpdate(
@@ -86,6 +114,13 @@ class DnsFilterUpdateRepository(
         onProgress: (RemoteDownloadProgress) -> Unit = {},
     ): DnsFilterUpdateResult {
         val dnsSettings = dnsSettingsOverride ?: settingsRepository.current().dns
+        val categorized = (store as? DnsFilterAssetInstaller)?.categorizedStore
+        val categoryRefreshEnabled = dnsSettings.dnsRuleSetFilteringEnabled() && (!requireAutoEnabled || dnsSettings.autoUpdateFilters)
+        if (categorized != null && categoryRefreshEnabled) {
+            val result = refreshCategorized(dnsSettings, categorized, onPhase, onProgress)
+            recordRefreshResult(result, result.liveActivation)
+            return result
+        }
         var liveActivation: RuntimeDnsRuleSetInstallOutcome? = null
         val activatingStore =
             LiveActivatingDnsRuleSetStore(
@@ -113,6 +148,51 @@ class DnsFilterUpdateRepository(
         recordRefreshResult(result, liveActivation)
         return result.copy(liveActivation = liveActivation)
     }
+
+    private fun selectedManifestUrl(settings: DnsSettings, selection: CategorizedDnsSelection): String =
+        selection.manifestUrl(
+            settings.dnsFilterUpdateUrl.toHttpUrl(),
+            DEFAULT_DNS_FILTER_UPDATE_URL.toHttpUrl()
+        ).toString()
+
+    private suspend fun refreshCategorized(
+        settings: DnsSettings,
+        stagedStore: CategorizedDnsStagedStore,
+        onPhase: (RemoteUpdatePhase) -> Unit,
+        onProgress: (RemoteDownloadProgress) -> Unit,
+    ): DnsFilterUpdateResult {
+        val selection = settings.categorizedDnsSelection()
+        return try {
+            val state = stagedStore.state(selection.variant)
+            val bundle = client.downloadCategorized(
+                selectedManifestUrl(settings, selection),
+                selection,
+                state.active,
+                onPhase,
+                onProgress,
+                pending = state.pending,
+                reusableArtifact = { manifest, bytes ->
+                    stagedStore.reusableArtifact(state, manifest, bytes, client::verifyCategorizedManifest)
+                },
+            )
+            val stage = stagedStore.stage(bundle, client::verifyCategorizedManifest)
+            activateCategorizedDnsStage(stage, bundle, stagedStore, categorizedInstaller)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (failure: IOException) {
+            categorizedFailure(failure, selection, retryable = true)
+        } catch (failure: Exception) {
+            categorizedFailure(failure, selection, retryable = false)
+        }
+    }
+
+    private fun categorizedFailure(failure: Exception, selection: CategorizedDnsSelection, retryable: Boolean) =
+        DnsFilterUpdateResult(
+            status = DnsFilterUpdateStatus.FAILED,
+            retryable = retryable,
+            reason = failure.message,
+            requestedVariant = selection.variant,
+        )
 
     private suspend fun recordRefreshResult(
         result: DnsFilterUpdateResult,

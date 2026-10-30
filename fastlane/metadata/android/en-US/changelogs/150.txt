@@ -1,0 +1,5 @@
+Add optional isolated APK/DEX and YARA static checks with basic and expert controls.
+Bound automatic scans, resume exact baseline chunks, and reject stale results after cancellation, policy changes or app replacement.
+Explain security/network events and coalesce finding notifications.
+Keep backups passwordless by default; optional encryption and restore now preserve device credentials with their original update source.
+Build Sentinel from pinned Core sources and bundle verified notices and SBOM.

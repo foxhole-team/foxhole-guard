@@ -79,6 +79,12 @@ internal open class ProfileImportConfigBuildSupport(
     }
 
     private fun amneziaUriInterfaceLines(query: Map<String, String>): List<String> {
+        query["contentpaddingaddition"]?.let { value ->
+            require(value.isNotBlank()) { "AmneziaWG ContentPaddingAddition must be N or N-M in 0..4294967295" }
+        }
+        query["headerprotectionkey"]?.let { value ->
+            require(value.isNotBlank()) { "AmneziaWG HeaderProtectionKey must be 32 canonical base64-encoded bytes" }
+        }
         val declared =
             AMNEZIA_URI_QUERY_KEYS.mapNotNull { key ->
                 query[key]?.trim()?.takeIf(String::isNotBlank)?.let { key to it }
@@ -530,10 +536,8 @@ internal open class ProfileImportConfigBuildSupport(
                     }
                 }
             }
-            "grpc" -> buildJsonObject {
-                put("type", "grpc")
-                put("service_name", query.firstValue("serviceName", "service_name") ?: query["path"].orEmpty())
-            }
+            "grpc", "gun" -> ProfileImportGrpcSupport.fromQuery(query)
+            "xhttp", "splithttp" -> ProfileImportXhttpSupport.fromQuery(query)
             "httpupgrade" -> buildJsonObject {
                 put("type", "httpupgrade")
                 query["host"]?.takeIf { it.isNotBlank() }?.let { put("host", it) }

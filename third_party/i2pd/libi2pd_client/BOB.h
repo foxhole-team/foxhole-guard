@@ -1,0 +1,328 @@
+/*
+* Copyright (c) 2013-2026, The PurpleI2P Project
+*
+* This file is part of Purple i2pd project and licensed under BSD3
+*
+* See full license text in LICENSE file at top of project tree
+*/
+
+#ifndef BOB_H__
+#define BOB_H__
+
+#include <inttypes.h>
+#include <thread>
+#include <memory>
+#include <map>
+#include <string>
+#include <string_view>
+#include <vector>
+#include <optional>
+#include <boost/asio.hpp>
+#include "util.h"
+#include "I2PTunnel.h"
+#include "I2PService.h"
+#include "Identity.h"
+#include "LeaseSet.h"
+#include "SOCKS.h"
+#include "HTTPProxy.h"
+
+namespace i2p
+{
+namespace client
+{
+	const size_t BOB_COMMAND_BUFFER_SIZE = 1024;
+	const int BOB_PING_TIMEOUT = 8000; // in milliseconds
+
+	constexpr std::string_view BOB_COMMAND_ZAP { "zap" };
+	constexpr std::string_view BOB_COMMAND_QUIT { "quit" };
+	constexpr std::string_view BOB_COMMAND_START { "start" };
+	constexpr std::string_view BOB_COMMAND_STOP { "stop" };
+	constexpr std::string_view BOB_COMMAND_SETNICK { "setnick" };
+	constexpr std::string_view BOB_COMMAND_GETNICK { "getnick" };
+	constexpr std::string_view BOB_COMMAND_NEWKEYS { "newkeys" };
+	constexpr std::string_view BOB_COMMAND_GETKEYS { "getkeys" };
+	constexpr std::string_view BOB_COMMAND_SETKEYS { "setkeys" };
+	constexpr std::string_view BOB_COMMAND_GETDEST { "getdest" };
+	constexpr std::string_view BOB_COMMAND_OUTHOST { "outhost" };
+	constexpr std::string_view BOB_COMMAND_OUTPORT { "outport" };
+	constexpr std::string_view BOB_COMMAND_INHOST { "inhost" };
+	constexpr std::string_view BOB_COMMAND_INPORT { "inport" };
+	constexpr std::string_view BOB_COMMAND_QUIET { "quiet" };
+	constexpr std::string_view BOB_COMMAND_LOOKUP { "lookup" };
+	constexpr std::string_view BOB_COMMAND_LOOKUP_LOCAL { "lookuplocal" };
+	constexpr std::string_view BOB_COMMAND_PING { "ping" };
+	constexpr std::string_view BOB_COMMAND_CLEAR { "clear" };
+	constexpr std::string_view BOB_COMMAND_LIST { "list" };
+	constexpr std::string_view BOB_COMMAND_OPTION { "option" };
+	constexpr std::string_view BOB_COMMAND_STATUS { "status" };
+	constexpr std::string_view BOB_COMMAND_HELP { "help" };
+	constexpr std::string_view BOB_COMMAND_SETTUNNELTYPE {"settunneltype" };
+
+	constexpr std::string_view BOB_HELP_ZAP { "zap - Shuts down BOB." };
+	constexpr std::string_view BOB_HELP_QUIT { "quit - Quits this session with BOB." };
+	constexpr std::string_view BOB_HELP_START { "start - Starts the current nicknamed tunnel." };
+	constexpr std::string_view BOB_HELP_STOP { "stop - Stops the current nicknamed tunnel." };
+	constexpr std::string_view BOB_HELP_SETNICK { "setnick <NICKNAME> - Creates a new nickname." };
+	constexpr std::string_view BOB_HELP_GETNICK { "getnick <TUNNELNAME> - Sets the nickname from the database." };
+	constexpr std::string_view BOB_HELP_NEWKEYS { "newkeys - Generate a new keypair for the current nickname." };
+	constexpr std::string_view BOB_HELP_GETKEYS { "getkeys - Return the keypair for the current nickname." };
+	constexpr std::string_view BOB_HELP_SETKEYS { "setkeys <BASE64_KEYPAIR> - Sets the keypair for the current nickname." };
+	constexpr std::string_view BOB_HELP_GETDEST { "getdest - Return the destination for the current nickname." };
+	constexpr std::string_view BOB_HELP_OUTHOST { "outhost <HOSTNAME|IP> - Set the outhound hostname or IP." };
+	constexpr std::string_view BOB_HELP_OUTPORT { "outport <PORT_NUMBER> - Set the outbound port that nickname contacts." };
+	constexpr std::string_view BOB_HELP_INHOST { "inhost <HOSTNAME|IP> - Set the inbound hostname or IP." };
+	constexpr std::string_view BOB_HELP_INPORT { "inport <PORT_NUMBER> - Set the inbound port number nickname listens on." };
+	constexpr std::string_view BOB_HELP_QUIET { "quiet <True|False> - Whether to send the incoming destination." };
+	constexpr std::string_view BOB_HELP_LOOKUP { "lookup <I2P_HOSTNAME> - Look up an I2P hostname in the network." };
+	constexpr std::string_view BOB_HELP_LOOKUP_LOCAL { "lookuplocal <I2P_HOSTNAME> - Look up an I2P hostname in local netDb only." };
+	constexpr std::string_view BOB_HELP_CLEAR { "clear - Clear the current nickname out of the list." };
+	constexpr std::string_view BOB_HELP_LIST { "list - List all tunnels." };
+	constexpr std::string_view BOB_HELP_OPTION { "option <KEY>=<VALUE> - Set an option. NOTE: Don't use any spaces." };
+	constexpr std::string_view BOB_HELP_STATUS { "status <NICKNAME> - Display status of a nicknamed tunnel." };
+	constexpr std::string_view BOB_HELP_SETTUNNELTYPE { "settunneltype <socks|httpproxy> - Sets socks or http proxy tunnel type." };
+	constexpr std::string_view BOB_HELP_PING { "ping <I2P_HOSTNAME> - Send ping to I2P Hostname. Responds with pong or timeout." };
+	constexpr std::string_view BOB_HELP_HELP { "help <COMMAND> - Get help on a command." };
+
+	class BOBI2PTunnelIncomingConnection: public I2PTunnelConnection
+	{
+		public:
+
+			BOBI2PTunnelIncomingConnection (I2PService * owner, std::shared_ptr<i2p::stream::Stream> stream,
+				const boost::asio::ip::tcp::endpoint& target, bool quiet):
+				I2PTunnelConnection (owner, stream, target), m_IsQuiet (quiet) {};
+
+		protected:
+
+			void Established () override;
+
+		private:
+
+			bool m_IsQuiet; // don't send destination
+	};
+
+	class BOBI2PTunnel: public I2PService
+	{
+		public:
+
+			BOBI2PTunnel (std::shared_ptr<ClientDestination> localDestination):
+				I2PService (localDestination) {};
+
+			virtual void Start () {};
+			virtual void Stop () {};
+	};
+
+	class BOBI2PInboundTunnel: public BOBI2PTunnel
+	{
+		struct AddressReceiver
+		{
+			std::shared_ptr<boost::asio::ip::tcp::socket> socket;
+			char buffer[BOB_COMMAND_BUFFER_SIZE + 1]; // for destination base64 address
+			uint8_t * data; // pointer to buffer
+			size_t dataLen, bufferOffset;
+
+			AddressReceiver (): data (nullptr), dataLen (0), bufferOffset (0) {};
+		};
+
+		public:
+
+			BOBI2PInboundTunnel (const boost::asio::ip::tcp::endpoint& ep, std::shared_ptr<ClientDestination> localDestination);
+			~BOBI2PInboundTunnel ();
+
+			void Start ();
+			void Stop ();
+
+		private:
+
+			void Accept ();
+			void HandleAccept (const boost::system::error_code& ecode, std::shared_ptr<AddressReceiver> receiver);
+
+			void ReceiveAddress (std::shared_ptr<AddressReceiver> receiver);
+			void HandleReceivedAddress (const boost::system::error_code& ecode, std::size_t bytes_transferred,
+				std::shared_ptr<AddressReceiver> receiver);
+
+			void HandleDestinationRequestComplete (std::shared_ptr<i2p::data::LeaseSet> leaseSet, std::shared_ptr<AddressReceiver> receiver);
+
+			void CreateConnection (std::shared_ptr<AddressReceiver> receiver, std::shared_ptr<const i2p::data::LeaseSet> leaseSet);
+
+		private:
+
+			boost::asio::ip::tcp::acceptor m_Acceptor;
+	};
+
+	class BOBI2POutboundTunnel: public BOBI2PTunnel
+	{
+		public:
+
+			BOBI2POutboundTunnel (const std::string& outhost, uint16_t port, std::shared_ptr<ClientDestination> localDestination, bool quiet);
+
+			void Start ();
+			void Stop ();
+
+			void SetQuiet () { m_IsQuiet = true; };
+
+		private:
+
+			void Accept ();
+			void HandleAccept (std::shared_ptr<i2p::stream::Stream> stream);
+
+		private:
+
+			boost::asio::ip::tcp::endpoint m_Endpoint;
+			bool m_IsQuiet;
+	};
+
+
+	class BOBDestination
+	{
+		public:
+
+			BOBDestination (std::shared_ptr<ClientDestination> localDestination,
+					const std::string &nickname, const std::string &inhost, const std::string &outhost,
+					const uint16_t inport, const uint16_t outport, const bool quiet);
+			~BOBDestination ();
+
+			void Start ();
+			void Stop ();
+			void StopTunnels ();
+			void CreateInboundTunnel (uint16_t port, const std::string& inhost);
+			void CreateOutboundTunnel (const std::string& outhost, uint16_t port, bool quiet);
+			const std::string& GetNickname() const { return m_Nickname; }
+			const std::string& GetInHost() const { return m_InHost; }
+			const std::string& GetOutHost() const { return m_OutHost; }
+			uint16_t GetInPort() const { return m_InPort; }
+			uint16_t GetOutPort() const { return m_OutPort; }
+			bool GetQuiet() const { return m_Quiet; }
+			bool IsRunning() const { return m_IsRunning; }
+			const i2p::data::PrivateKeys& GetKeys () const { return m_LocalDestination->GetPrivateKeys (); };
+			std::shared_ptr<ClientDestination> GetLocalDestination () const { return m_LocalDestination; };
+
+		private:
+
+			std::shared_ptr<ClientDestination> m_LocalDestination;
+			BOBI2POutboundTunnel * m_OutboundTunnel;
+			BOBI2PInboundTunnel * m_InboundTunnel;
+
+			std::string m_Nickname;
+			std::string m_InHost, m_OutHost;
+			uint16_t m_InPort, m_OutPort;
+			bool m_Quiet;
+			bool m_IsRunning;
+	};
+
+	class BOBCommandChannel;
+	class BOBCommandSession: public std::enable_shared_from_this<BOBCommandSession>
+	{
+		public:
+
+			BOBCommandSession (BOBCommandChannel& owner);
+			~BOBCommandSession ();
+			void Terminate ();
+
+			boost::asio::ip::tcp::socket& GetSocket () { return m_Socket; };
+			void SendVersion ();
+
+			// command handlers
+			void ZapCommandHandler (const char * operand, size_t len);
+			void QuitCommandHandler (const char * operand, size_t len);
+			void StartCommandHandler (const char * operand, size_t len);
+			void StopCommandHandler (const char * operand, size_t len);
+			void SetNickCommandHandler (const char * operand, size_t len);
+			void GetNickCommandHandler (const char * operand, size_t len);
+			void NewkeysCommandHandler (const char * operand, size_t len);
+			void SetkeysCommandHandler (const char * operand, size_t len);
+			void GetkeysCommandHandler (const char * operand, size_t len);
+			void GetdestCommandHandler (const char * operand, size_t len);
+			void OuthostCommandHandler (const char * operand, size_t len);
+			void OutportCommandHandler (const char * operand, size_t len);
+			void InhostCommandHandler (const char * operand, size_t len);
+			void InportCommandHandler (const char * operand, size_t len);
+			void QuietCommandHandler (const char * operand, size_t len);
+			void LookupCommandHandler (const char * operand, size_t len);
+			void LookupLocalCommandHandler (const char * operand, size_t len);
+			void PingCommandHandler (const char * operand, size_t len);
+			void ClearCommandHandler (const char * operand, size_t len);
+			void ListCommandHandler (const char * operand, size_t len);
+			void OptionCommandHandler (const char * operand, size_t len);
+			void StatusCommandHandler (const char * operand, size_t len);
+			void HelpCommandHandler (const char * operand, size_t len);
+			void SetTunnelTypeCommandHandler (const char * operand, size_t len);
+
+		private:
+
+			void Receive ();
+			void HandleReceivedLine(const boost::system::error_code& ecode, std::size_t bytes_transferred);
+			void HandleReceived (const boost::system::error_code& ecode, std::size_t bytes_transferred);
+
+			void Send ();
+			void HandleSent (const boost::system::error_code& ecode, std::size_t bytes_transferred);
+			void SendReplyOK (std::string_view msg);
+			void SendReplyOK (const std::vector<std::string_view>& strings);
+			void SendReplyError (std::string_view msg);
+			void SendRaw (std::string_view data);
+
+			void BuildStatusLine(bool currentTunnel, std::shared_ptr<BOBDestination> destination, std::string &out);
+
+			void SendPing (std::shared_ptr<const i2p::data::LeaseSet> ls);
+
+		private:
+
+			BOBCommandChannel& m_Owner;
+			boost::asio::ip::tcp::socket m_Socket;
+			boost::asio::streambuf m_ReceiveBuffer, m_SendBuffer;
+			bool m_IsOpen, m_IsQuiet, m_IsActive;
+			std::string m_Nickname, m_InHost, m_OutHost;
+			uint16_t m_InPort, m_OutPort;
+			i2p::data::PrivateKeys m_Keys;
+			i2p::util::Mapping m_Options;
+			std::shared_ptr<BOBDestination> m_CurrentDestination;
+
+			enum class TunnelType
+			{
+				SOCKS = 0,
+				HTTP_PROXY = 1
+			};
+			std::optional<TunnelType> m_tunnelType;
+	};
+	typedef void (BOBCommandSession::*BOBCommandHandler)(const char * operand, size_t len);
+
+	class BOBCommandChannel: private i2p::util::RunnableService
+	{
+		public:
+
+			BOBCommandChannel (const std::string& address, uint16_t port);
+			~BOBCommandChannel ();
+
+			void Start ();
+			void Stop ();
+
+			auto& GetService () { return GetIOService (); };
+			void AddDestination (const std::string& name, std::shared_ptr<BOBDestination> dest);
+			void DeleteDestination (const std::string& name);
+			std::shared_ptr<BOBDestination> FindDestination (const std::string& name);
+			void SetProxy (const std::string& name, std::unique_ptr<I2PService> proxy);
+			const I2PService* GetProxy(const std::string& name) const;
+			void RemoveProxy(const std::string& name);
+
+		private:
+
+			void Accept ();
+			void HandleAccept(const boost::system::error_code& ecode, std::shared_ptr<BOBCommandSession> session);
+
+		private:
+
+			boost::asio::ip::tcp::acceptor m_Acceptor;
+			std::map<std::string, std::shared_ptr<BOBDestination> > m_Destinations;
+			std::map<std::string_view, BOBCommandHandler> m_CommandHandlers;
+			std::map<std::string_view, std::string_view> m_HelpStrings;
+			std::map<std::string, std::unique_ptr<I2PService>> m_proxy;
+
+		public:
+
+			const decltype(m_CommandHandlers)& GetCommandHandlers () const { return m_CommandHandlers; };
+			const decltype(m_HelpStrings)& GetHelpStrings () const { return m_HelpStrings; };
+			const decltype(m_Destinations)& GetDestinations () const { return m_Destinations; };
+	};
+}
+}
+
+#endif

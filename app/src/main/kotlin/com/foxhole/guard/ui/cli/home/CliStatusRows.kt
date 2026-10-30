@@ -284,6 +284,7 @@ private fun statusRulesRow(preset: RoutingPreset?): CliTerminalRow? {
 internal fun cliStatusModuleRows(
     home: HomeRouteUiState,
     runtimes: CliActiveRuntimes,
+    includeNoticeDetails: Boolean = false,
 ): List<CliTerminalRow> {
     val settings = home.settings
     val firewallRows = if (settings.expert.firewallEnabled) {
@@ -310,7 +311,8 @@ internal fun cliStatusModuleRows(
     } else {
         emptyList()
     }
-    return firewallRows + listOfNotNull(statusI2pRow(home = home), statusDnsFilterRow(settings = settings))
+    return firewallRows + listOfNotNull(statusI2pRow(home = home), statusDnsFilterRow(settings = settings)) +
+        cliSentinelNoticeRows(settings, detailed = includeNoticeDetails)
 }
 
 @Composable

@@ -6,10 +6,12 @@ import android.os.Debug
 import android.util.Log
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.filters.SdkSuppress
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.By
 import androidx.test.uiautomator.UiDevice
 import androidx.test.uiautomator.Until
+import com.foxhole.core.model.AppTunnelLane
 import com.foxhole.core.model.ConnectionState
 import com.foxhole.core.model.StatisticsMetric
 import com.foxhole.core.model.TrafficMode
@@ -17,7 +19,7 @@ import com.foxhole.core.model.networkUp
 import com.foxhole.core.runtime.network.DNS_INDEPENDENT_IP_INFO_ENDPOINT
 import com.foxhole.core.runtime.network.IpInfoFetchMode
 import com.foxhole.guard.FoxholeApplication
-import com.foxhole.guard.ui.cli.CliMainActivity
+import com.foxhole.guard.R
 import com.foxhole.guard.core.settings.updateAppTrafficStatsEnabled
 import com.foxhole.guard.core.settings.updateBlockAppsAlways
 import com.foxhole.guard.core.settings.updateBlockedPackages
@@ -31,9 +33,11 @@ import com.foxhole.guard.core.settings.updateTrafficMapEnabled
 import com.foxhole.guard.runtime.FoxholeConnectionServiceContract
 import com.foxhole.guard.runtime.FoxholeVpnService
 import com.foxhole.guard.ui.HomeViewModel
+import com.foxhole.guard.ui.cli.CliMainActivity
 import java.io.FileInputStream
 import java.net.InetAddress
 import java.util.regex.Pattern
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
@@ -42,6 +46,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
 import org.junit.Test
@@ -50,6 +55,7 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class LiveLocalFirewallGuardRuntimeTest {
     @Test
+    @SdkSuppress(minSdkVersion = 29)
     fun localFirewallGuardStartsAndStopsVpnNetwork() =
         runBlocking {
             val app = liveLocalGuardApp()
@@ -84,6 +90,7 @@ class LiveLocalFirewallGuardRuntimeTest {
         }
 
     @Test
+    @SdkSuppress(minSdkVersion = 29)
     fun localFirewallGuardPreservesDashboardInternetAndDns() =
         runBlocking {
             val app = liveLocalGuardApp()
@@ -155,6 +162,7 @@ class LiveLocalFirewallGuardRuntimeTest {
         }
 
     @Test
+    @SdkSuppress(minSdkVersion = 29)
     fun enablingI2pBesideFirewallKeepsFirewallPolicyAndInternet() =
         runBlocking {
             val app = liveLocalGuardApp()
@@ -214,6 +222,7 @@ class LiveLocalFirewallGuardRuntimeTest {
         }
 
     @Test
+    @SdkSuppress(minSdkVersion = 29)
     fun firewallToggleThirtyTimesNoRuntimeLeak() =
         runBlocking {
             assumeTrue(
@@ -267,6 +276,58 @@ class LiveLocalFirewallGuardRuntimeTest {
             )
             assertLocalGuardStressMemoryStable(samples)
             assertNoFoxholeVpn(app)
+        }
+
+    @Test
+    @SdkSuppress(minSdkVersion = 26, maxSdkVersion = 28)
+    fun perAppFirewallFailsClosedWithoutRetryWhenFlowAttributionIsUnsupported() =
+        runBlocking {
+            val app = liveLocalGuardApp()
+            val blockedPackage = firstInstalledPackageExcept(app.packageName)
+            var connectedObserved = false
+            val snapshots = launch(start = CoroutineStart.UNDISPATCHED) {
+                app.container.connectionController.snapshot.collect { snapshot ->
+                    if (snapshot.state == ConnectionState.CONNECTED) connectedObserved = true
+                }
+            }
+            try {
+                configureLocalFirewallGuard(app, blockedPackage)
+                val message = app.getString(R.string.error_flow_attribution_unavailable)
+                assertTrue(
+                    "unsupported per-app firewall did not publish its platform requirement",
+                    waitForCondition(timeoutMs = 20_000L) {
+                        val snapshot = app.container.connectionController.snapshot.value
+                        snapshot.state == ConnectionState.ERROR && snapshot.message == message
+                    },
+                )
+                assertNoFoxholeVpn(app)
+                val native = app.container.runtimeInstanceStore.nativeSnapshot()
+                assertFalse("unsupported firewall retained a native engine", native.hasEngineHandle)
+                assertFalse("unsupported firewall retained its TUN", native.hasTunFileDescriptor)
+                assertFalse("unsupported firewall briefly claimed CONNECTED", connectedObserved)
+                assertTrue(
+                    "native attribution refusal diagnostic missing",
+                    app.container.diagnosticsLogger.entries.value.any {
+                        it.tag == "foxcore" && it.message.contains("flow_attribution_unavailable")
+                    },
+                )
+                assertFalse(
+                    "unsupported firewall scheduled a futile automatic retry",
+                    app.container.diagnosticsLogger.entries.value.any {
+                        it.message.contains("local guard heal scheduled")
+                    },
+                )
+                val settings = app.container.settingsRepository.current()
+                assertEquals(
+                    "unsupported firewall erased its saved rule",
+                    AppTunnelLane.BLOCK,
+                    settings.expert.appAssignments[blockedPackage],
+                )
+                assertEquals(LocalGuardMode.FIREWALL, settings.localGuardModeOrNull())
+            } finally {
+                snapshots.cancel()
+                stopLocalFirewallGuard(app)
+            }
         }
 
     private suspend fun baselineReachableHttpEndpoints(
@@ -377,16 +438,7 @@ class LiveLocalFirewallGuardRuntimeTest {
         app: FoxholeApplication,
         blockedPackage: String,
     ) {
-        app.container.settingsRepository.updateStatisticsEnabled(true)
-        app.container.settingsRepository.updateStatisticsMetricEnabled(StatisticsMetric.APP_TRAFFIC, true)
-        app.container.settingsRepository.updateStatisticsMetricEnabled(StatisticsMetric.COUNTRY_TRAFFIC, true)
-        app.container.settingsRepository.updateTrafficMapEnabled(true)
-        app.container.settingsRepository.updateAppTrafficStatsEnabled(true)
-        app.container.settingsRepository.updateNetworkActivityLogging(true)
-        app.container.settingsRepository.updateBlockedPackages(listOf(blockedPackage))
-        app.container.settingsRepository.updateBlockAppsAlways(true)
-        app.container.settingsRepository.updateFirewallEnabled(true)
-        app.container.connectionController.syncLocalGuard()
+        configureLocalFirewallGuard(app, blockedPackage)
 
         assertTrue(
             "local firewall guard did not expose an active VPN network",
@@ -395,12 +447,16 @@ class LiveLocalFirewallGuardRuntimeTest {
                     hasActiveFoxholeVpnNetwork(app.packageName)
             },
         )
+        val connected = waitForCondition(timeoutMs = 25_000L) {
+            app.container.connectionController.snapshot.value.state == ConnectionState.CONNECTED &&
+                app.container.connectionController.snapshot.value.profileId == FoxholeVpnService.LOCAL_GUARD_PROFILE_ID
+        }
         assertTrue(
-            "local firewall guard did not publish connected snapshot",
-            waitForCondition(timeoutMs = 25_000L) {
-                app.container.connectionController.snapshot.value.state == ConnectionState.CONNECTED &&
-                    app.container.connectionController.snapshot.value.profileId == FoxholeVpnService.LOCAL_GUARD_PROFILE_ID
-            },
+            "local firewall guard did not publish connected snapshot: " +
+                "${app.container.connectionController.snapshot.value} | " +
+                app.container.diagnosticsLogger.entries.value.takeLast(80)
+                    .joinToString(" | ") { "[${it.tag}] ${it.message}" },
+            connected,
         )
         assertEquals(ConnectionState.CONNECTED, app.container.connectionController.snapshot.value.state)
         assertEquals(FoxholeVpnService.LOCAL_GUARD_PROFILE_ID, app.container.connectionController.snapshot.value.profileId)
@@ -427,6 +483,22 @@ class LiveLocalFirewallGuardRuntimeTest {
                 .assembleLocalGuard(app.container.settingsRepository.current(), LocalGuardMode.FIREWALL)
                 .contains(app.packageName),
         )
+    }
+
+    private suspend fun configureLocalFirewallGuard(
+        app: FoxholeApplication,
+        blockedPackage: String,
+    ) {
+        app.container.settingsRepository.updateStatisticsEnabled(true)
+        app.container.settingsRepository.updateStatisticsMetricEnabled(StatisticsMetric.APP_TRAFFIC, true)
+        app.container.settingsRepository.updateStatisticsMetricEnabled(StatisticsMetric.COUNTRY_TRAFFIC, true)
+        app.container.settingsRepository.updateTrafficMapEnabled(true)
+        app.container.settingsRepository.updateAppTrafficStatsEnabled(true)
+        app.container.settingsRepository.updateNetworkActivityLogging(true)
+        app.container.settingsRepository.updateBlockedPackages(listOf(blockedPackage))
+        app.container.settingsRepository.updateBlockAppsAlways(true)
+        app.container.settingsRepository.updateFirewallEnabled(true)
+        app.container.connectionController.syncLocalGuard()
     }
 
     private suspend fun stopLocalFirewallGuard(app: FoxholeApplication) {

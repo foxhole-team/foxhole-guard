@@ -9,7 +9,7 @@ import com.foxhole.core.runtime.torAllAppsCollidesWithVpnIncludeSplit
 import com.foxhole.guard.R
 import com.foxhole.guard.core.data.InsecureTlsProfileConsentRequiredException
 import com.foxhole.guard.core.data.SubscriptionProtocolOptionUnavailableException
-import com.foxhole.guard.core.data.prepareProfileForConnection
+import com.foxhole.guard.core.settings.onboardingLicenseAccepted
 import com.foxhole.guard.diagnosticFailureLabel
 import kotlinx.coroutines.CancellationException
 
@@ -108,6 +108,14 @@ internal suspend fun FoxholeVpnService.resolveVpnStartOrReject(
     protocolTestTrafficFreeze: Boolean = false,
 ): ResolvedVpnStart? {
     val storedSettings = container.settingsRepository.current()
+    if (!onboardingLicenseAccepted(storedSettings.ui.acceptedLicenseAgreementVersion)) {
+        disconnect(
+            message = getString(R.string.cli_wizard_license_required),
+            commandStartId = commandStartId,
+            suppressLocalGuard = true,
+        )
+        return null
+    }
     val settings = storedSettings.forProtocolTestTrafficFreeze(protocolTestTrafficFreeze)
     val resolvedProfileId =
         resolveRuntimeConnectProfileId(
@@ -126,14 +134,20 @@ internal suspend fun FoxholeVpnService.resolveVpnStartOrReject(
             null
         } else {
             try {
-                container.profileRepository.prepareProfileForConnection(
+                container.profileRepository.prepareVpnStartupProfile(
                     profileId = resolvedProfileId,
-                    requestedProtocolOptionId = protocolOptionId,
+                    requestedOptionId = protocolOptionId,
                     refreshSubscription = !subscriptionRefreshPrepared,
+                    onCacheUsed = {
+                        container.diagnosticsLogger.record(
+                            "connection",
+                            "subscription transport unavailable; using validated cached profile"
+                        )
+                    },
                 )
             } catch (cancelled: CancellationException) {
                 throw cancelled
-            } catch (error: Throwable) {
+            } catch (error: Exception) {
                 container.diagnosticsLogger.recordFailure(
                     "connection",
                     "subscription pre-connect failed: ${diagnosticFailureLabel(error)}",
@@ -150,11 +164,12 @@ internal suspend fun FoxholeVpnService.resolveVpnStartOrReject(
                 return null
             }
         }
-    val preparedProfileId = prepared?.profile?.id ?: resolvedProfileId
-    val preparedProtocolOptionId = prepared?.protocolOptionId ?: protocolOptionId
+    val preparedProfileId = prepared?.connection?.profile?.id ?: resolvedProfileId
+    val preparedProtocolOptionId = prepared?.connection?.protocolOptionId ?: protocolOptionId
+    val currentSettings = prepared?.settings?.forProtocolTestTrafficFreeze(protocolTestTrafficFreeze) ?: settings
     val rejected =
         rejectBlockedVpnTorStart(
-            settings = settings,
+            settings = currentSettings,
             requestedProfileId = requestedProfileId,
             resolvedProfileId = preparedProfileId,
             protocolOptionId = preparedProtocolOptionId,
@@ -168,7 +183,7 @@ internal suspend fun FoxholeVpnService.resolveVpnStartOrReject(
         container.diagnosticsLogger.record("profile", "connect recovered missing service profile id")
     }
     return ResolvedVpnStart(
-        settings = settings,
+        settings = currentSettings,
         profileId = profileId,
         protocolOptionId = preparedProtocolOptionId,
         torOnly = torOnly,

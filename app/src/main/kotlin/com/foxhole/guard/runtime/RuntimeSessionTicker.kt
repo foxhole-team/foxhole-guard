@@ -4,6 +4,7 @@ import android.os.SystemClock
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
@@ -91,17 +92,25 @@ internal class RuntimeSessionTicker(
         while (currentCoroutineContext().isActive) {
             val due = claimDueTasks() ?: break
             due.forEach { task ->
-                if (task.runOn == null) {
-                    runTaskSafely(task)
-                    finishTask(task)
-                } else {
-                    dispatchTask(task)
-                }
+                runTaskIfRegistered(task)
             }
             val sleepMs = sleepUntilNextDeadlineMs()
             if (sleepMs > 0L) {
                 withTimeoutOrNull(sleepMs) { wake.receive() }
             }
+        }
+    }
+
+    private suspend fun runTaskIfRegistered(task: Task) {
+        if (!synchronized(lock) { tasks[task.id] === task }) return
+        if (task.runOn == null) {
+            try {
+                runTaskSafely(task)
+            } finally {
+                finishTask(task)
+            }
+        } else {
+            dispatchTask(task)
         }
     }
 
@@ -130,7 +139,7 @@ internal class RuntimeSessionTicker(
 
     private fun dispatchTask(task: Task) {
         val job =
-            scope.launch(task.runOn ?: loopDispatcher) {
+            scope.launch(task.runOn ?: loopDispatcher, start = CoroutineStart.LAZY) {
                 try {
                     runTaskSafely(task)
                 } finally {
@@ -145,6 +154,7 @@ internal class RuntimeSessionTicker(
                 job.cancel()
             }
         }
+        job.start()
     }
 
     private fun finishTask(task: Task) {

@@ -1,0 +1,9 @@
+0.1.1 Stable
+
+- Adds an outlined profile picker below the User map.
+- Shows a flag beside the IP address and a city icon.
+- Hides latency while disconnected.
+- Shows app feedback above dialogs without shifting their content.
+- Reports clipboard copy failures without clearing the selected profiles.
+- Copies portable profile links with all selected protocols and refuses lossy conversions.
+- Fixes IP refresh cancellation and HTTP response size and cleanup handling.

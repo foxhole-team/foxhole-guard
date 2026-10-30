@@ -6,6 +6,7 @@ import androidx.work.WorkerParameters
 import com.foxhole.core.model.GuardHostingMode
 import com.foxhole.guard.FoxholeApplication
 import com.foxhole.guard.WatchdogNames
+import com.foxhole.guard.core.sentinel.sentinelAttempt
 
 class GuardHeartbeatWorker(
     context: Context,
@@ -18,10 +19,8 @@ class GuardHeartbeatWorker(
             return Result.success()
         }
         val sentinel = security.guardSentinel
-        val tick = runCatching {
-            sentinel.detectBlackout()
-            sentinel.emitHeartbeat("worker")
-            sentinel.reconcileInventory()
+        val tick = sentinelAttempt {
+            sentinel.runGuardHeartbeatTick()
         }.onFailure { error ->
             graph.diagnosticsLogger.recordFailure(
                 WatchdogNames.GUARD_ID,
@@ -35,7 +34,7 @@ class GuardHeartbeatWorker(
             security.guardHostingMode() == GuardHostingMode.REINFORCED &&
             !sentinel.hasAttachedHosts()
         ) {
-            runCatching { FoxholeGuardService.start(applicationContext) }
+            sentinelAttempt { FoxholeGuardService.start(applicationContext) }
         }
         return Result.success()
     }
@@ -43,4 +42,12 @@ class GuardHeartbeatWorker(
     companion object {
         const val WORK_NAME = WatchdogNames.GUARD_ID
     }
+}
+
+internal suspend fun GuardSentinel.runGuardHeartbeatTick() {
+    detectBlackout()
+    emitHeartbeat("worker")
+    drainPackageChanges()
+    reconcileInventory(force = false)
+    wakePendingPackageChanges()
 }

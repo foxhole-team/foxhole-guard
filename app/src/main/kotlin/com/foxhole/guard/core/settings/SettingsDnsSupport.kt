@@ -27,6 +27,7 @@ internal fun normalizedDnsServer(value: String): String {
         .removePrefix("tls://")
         .removePrefix("udp://")
         .removePrefix("quic://")
+        .removePrefix("h3://")
         .removeSuffix("/dns-query")
         .trim()
         .ifBlank { DEFAULT_DNS_SERVER }

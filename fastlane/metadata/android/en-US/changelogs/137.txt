@@ -1,0 +1,2 @@
+- Add owned FoxCore counters to manual diagnostic exports.
+- Preserve cancellation and fatal errors during export; read journals with existing keys only.

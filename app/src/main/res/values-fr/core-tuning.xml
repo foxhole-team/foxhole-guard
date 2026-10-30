@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="cli_core_expert_title">Paramètres avancés</string>
+    <string name="cli_core_expert_note">Les modifications concernent le tunnel actif. Modifier les ressources du noyau le redémarre. Des tampons et des limites de flux plus élevés peuvent augmenter la consommation de mémoire.</string>
+    <string name="cli_core_workers">Threads du noyau</string>
+    <string name="cli_core_connect_timeout">Délai de connexion</string>
+    <string name="cli_core_handshake_timeout">Délai de négociation</string>
+    <string name="cli_core_relay_buffer">Tampon d’entrée-sortie</string>
+    <string name="cli_core_tcp_flows">Limite de flux TCP</string>
+    <string name="cli_core_udp_flows">Limite de flux UDP</string>
+    <string name="cli_core_dns_timeout">Délai DNS</string>
+    <string name="cli_core_dns_cache">Entrées du cache DNS</string>
+    <string name="cli_core_reset">Rétablir les valeurs du noyau</string>
+    <string name="cli_core_default">Par défaut</string>
+    <string name="cli_core_range">Plage autorisée : %1$d–%2$d</string>
+</resources>

@@ -4,7 +4,6 @@ import android.content.Context
 import com.foxhole.core.model.AppLocale
 import com.foxhole.core.model.AppLockMode
 import com.foxhole.core.model.AppLockSettings
-import com.foxhole.core.model.ConnectionSettings
 import com.foxhole.core.model.Settings
 import com.foxhole.core.model.UiSettings
 import com.foxhole.guard.BuildConfig
@@ -35,16 +34,33 @@ internal class SettingsRepositoryStorage(
     }
 
     fun defaultSettings(): Settings =
-        Settings(
-            connection = ConnectionSettings(ipInfoEndpoint = BuildConfig.DEFAULT_IP_INFO_ENDPOINT),
-        )
+        newInstallationSettings(BuildConfig.DEFAULT_IP_INFO_ENDPOINT)
 
     fun writeEncrypted(value: Settings) {
         encryptedStore.write(value)
     }
 
+    fun readAcceptedLicenseAgreementVersion(): Int =
+        encryptedStore.readStoredUiOrDefault(UiSettings()).acceptedLicenseAgreementVersion
+
     fun writeFastLocale(value: AppLocale) {
         fastUiStore.writeLocale(value)
+    }
+
+    fun readRouterHomeShortcutVisible(): Boolean = fastUiStore.readRouterHomeShortcutVisible()
+
+    fun writeRouterHomeShortcutVisible(value: Boolean) {
+        fastUiStore.writeRouterHomeShortcutVisible(value)
+    }
+
+    fun readRouterDockShortcutVisible(): Boolean = fastUiStore.readRouterDockShortcutVisible()
+
+    fun readDockOptionalOrder(): List<String> = fastUiStore.readDockOptionalOrder()
+
+    fun writeDockOptionalOrder(value: List<String>) = fastUiStore.writeDockOptionalOrder(value)
+
+    fun writeRouterDockShortcutVisible(value: Boolean) {
+        fastUiStore.writeRouterDockShortcutVisible(value)
     }
 
     fun writeFastUiSnapshot(value: UiSettings) {

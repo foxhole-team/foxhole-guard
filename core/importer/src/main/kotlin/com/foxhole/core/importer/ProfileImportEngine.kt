@@ -7,7 +7,7 @@ import com.foxhole.core.model.ProfileSourceType
 import com.foxhole.core.model.ProtocolHint
 import com.foxhole.core.model.StoredProfileProtocolOption
 import com.foxhole.core.network.RemoteHostResolver
-import com.foxhole.core.network.ensurePublicUrl
+import com.foxhole.core.network.ensurePublicSubscriptionUrl
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -75,8 +75,7 @@ internal class ProfileImportEngine(
         override fun tryParse(context: UserInputStrategyContext): ParsedImport? {
             val candidate = extractSubscriptionUrlCandidate(context.input) ?: return null
             val url =
-                candidate.ensurePublicUrl(
-                    allowHttp = false,
+                candidate.ensurePublicSubscriptionUrl(
                     resolveHost = true,
                     resolver = remoteHostResolver,
                 )
@@ -84,9 +83,13 @@ internal class ProfileImportEngine(
             return ParsedImport(
                 sourceType = ProfileSourceType.SUBSCRIPTION_URL,
                 protocolHint = ProtocolHint.UNKNOWN,
-                displayName = url.host.ifBlank { "subscription" },
+                displayName = if (candidate.startsWith("ssconf://", ignoreCase = true)) {
+                    url.fragment?.filterNot(Char::isISOControl)?.take(160)?.takeIf(String::isNotBlank) ?: url.host
+                } else {
+                    url.host.ifBlank { "subscription" }
+                },
                 normalizedConfigJson = null,
-                sourceUrl = url.toString(),
+                sourceUrl = if (candidate.startsWith("ssconf://", ignoreCase = true)) candidate else url.toString(),
             )
         }
     }
@@ -146,6 +149,7 @@ internal class ProfileImportEngine(
             if (!looksLikeXrayJson(objectValue)) {
                 return null
             }
+            require(!objectValue.containsKey("bootstrap_dns")) { "bootstrap DNS requires canonical profile JSON" }
             val converted =
                 normalizeRawXrayConfig(
                     objectValue = objectValue,
@@ -218,7 +222,8 @@ internal class ProfileImportEngine(
 
         override fun tryParse(context: UserInputStrategyContext): ParsedImport? {
             val directNodes =
-                parseNodeLines(
+                parseClashNodeLines(context.input, context.allowPrivateOutboundHosts, context.allowInsecureTls)
+                    ?: parseSip008NodeLines(context.input, context.allowPrivateOutboundHosts) ?: parseNodeLines(
                     raw = context.input,
                     allowPrivateOutboundHosts = context.allowPrivateOutboundHosts,
                     allowInsecureTls = context.allowInsecureTls,
@@ -227,18 +232,37 @@ internal class ProfileImportEngine(
             if (nodes.isEmpty()) {
                 return null
             }
+            val options = isolatedDirectProtocolOptions(nodes, context.allowPrivateOutboundHosts)
             return ParsedImport(
                 sourceType = ProfileSourceType.SHARE_URI,
                 protocolHint = nodes.first().protocolHint,
                 displayName = nodes.first().displayName,
-                normalizedConfigJson =
-                buildConfigFromNodes(
-                    nodes,
-                    allowPrivateOutboundHosts = context.allowPrivateOutboundHosts,
-                ),
+                normalizedConfigJson = options.first().normalizedConfigJson,
                 nodesCount = nodes.size,
                 subscriptionExpiresAt = nodes.mapNotNull(ProxyNode::subscriptionExpiresAt).minOrNull(),
+                protocolOptions = options.takeIf { nodes.size > 1 }.orEmpty(),
+                selectedProtocolOptionId = options.first().id.takeIf { nodes.size > 1 },
                 entryReports = directNodes.reports,
+            )
+        }
+    }
+
+    private fun isolatedDirectProtocolOptions(
+        nodes: List<ProxyNode>,
+        allowPrivateOutboundHosts: Boolean,
+    ): List<StoredProfileProtocolOption> {
+        require(nodes.size <= MAX_PORTABLE_CONFIGS) { "too many profile choices" }
+        var totalBytes = 0L
+        return nodes.mapIndexed { index, node ->
+            val config = buildConfigFromNodes(listOf(node), allowPrivateOutboundHosts)
+            totalBytes += config.toByteArray(Charsets.UTF_8).size
+            require(totalBytes <= MAX_PORTABLE_BYTES) { "profile choices exceed the materialized size limit" }
+            StoredProfileProtocolOption(
+                id = "${node.protocolHint.name.lowercase()}-${index + 1}",
+                displayName = subscriptionOptionDisplayName(node),
+                protocolHint = node.protocolHint,
+                normalizedConfigJson = config,
+                requiresInsecureTls = hasInsecureTls(json.parseToJsonElement(config)),
             )
         }
     }
@@ -433,7 +457,8 @@ internal class ProfileImportEngine(
             return null
         }
         val parsedLines =
-            parseSip008NodeLines(raw, allowPrivateOutboundHosts)
+            parseClashNodeLines(raw, allowPrivateOutboundHosts, allowInsecureTls)
+                ?: parseSip008NodeLines(raw, allowPrivateOutboundHosts)
                 ?: parseNodeLines(raw, allowPrivateOutboundHosts, allowInsecureTls)
         val nodes = deduplicateNodeIdentities(parsedLines.nodes)
         if (nodes.isEmpty()) {
@@ -470,7 +495,8 @@ internal class ProfileImportEngine(
             return null
         }
         val parsedLines =
-            parseSip008NodeLines(raw, allowPrivateOutboundHosts)
+            parseClashNodeLines(raw, allowPrivateOutboundHosts, allowInsecureTls)
+                ?: parseSip008NodeLines(raw, allowPrivateOutboundHosts)
                 ?: parseNodeLines(raw, allowPrivateOutboundHosts, allowInsecureTls)
         val nodes = deduplicateNodeIdentities(parsedLines.nodes)
         if (nodes.isEmpty()) {
@@ -547,7 +573,7 @@ internal class ProfileImportEngine(
             return null
         }
         val document = runCatching { json.parseToJsonElement(raw).jsonObject }.getOrNull() ?: return null
-        return parseSip008Servers(document, allowPrivateOutboundHosts)
+        return (parseSip008Servers(document, allowPrivateOutboundHosts) ?: parseOutlineServer(document, allowPrivateOutboundHosts))
             ?.let { sip008 -> ParsedNodeLines(nodes = sip008.nodes, reports = sip008.reports) }
     }
 
@@ -569,13 +595,22 @@ internal class ProfileImportEngine(
         allowPrivateOutboundHosts: Boolean = false,
         allowInsecureTls: Boolean = false,
     ): String {
-        val objectValue =
-            normalizeTlsSettings(
-                json.parseToJsonElement(normalizeLegacyResolvedRoutePorts(raw)).jsonObject,
-                allowInsecureTls = allowInsecureTls,
-            )
+        val decoded = json.parseToJsonElement(normalizeLegacyResolvedRoutePorts(raw)).jsonObject
+        val bootstrap = normalizeProfileBootstrapDns(decoded)
+        val objectValue = normalizeTlsSettings(
+            if (bootstrap == null) decoded else JsonObject(decoded + ("bootstrap_dns" to bootstrap)),
+            allowInsecureTls = allowInsecureTls,
+        )
         val outbounds = objectValue["outbounds"]?.jsonArray ?: error("resolved config must define outbounds")
-        requireAllowedOutboundHosts(outbounds, allowPrivateOutboundHosts)
+        val scopedNames = (bootstrap?.get("domains") as? JsonArray).orEmpty().map { it.jsonPrimitive.content }.toSet()
+        requireAllowedOutboundHosts(
+            JsonArray(
+                outbounds.filterNot {
+                    it.jsonObject.string("server")?.lowercase()?.removeSuffix(".") in scopedNames
+                }
+            ),
+            allowPrivateOutboundHosts
+        )
         val experimental = objectValue["experimental"]?.jsonObject
         require(experimental?.containsKey("clash_api") != true) { "clash api is not allowed" }
         require(experimental?.containsKey("v2ray_api") != true) { "v2ray api is not allowed" }

@@ -46,13 +46,15 @@ internal fun CliModulesSection(
     onOpenI2p: () -> Unit,
     onOpenFirewall: () -> Unit,
     onOpenAnomaly: () -> Unit,
+    showAdvanced: Boolean = true,
 ) {
     val colors = LocalCliColors.current
     val firewallActionRequired = settings.expert.pendingQuarantinePackages.isNotEmpty()
     var torActivation by remember { mutableStateOf<DatasetActivationState?>(null) }
     var sentinelActivation by remember { mutableStateOf<DatasetActivationState?>(null) }
     CliPanel(
-        title = stringResource(R.string.cli_cfg_group_privacy),
+        title = stringResource(if (showAdvanced) R.string.cli_cfg_group_privacy else R.string.user_settings_protection),
+        titleColor = colors.fg,
         icon = R.drawable.lin_incognito,
         iconColor = colors.accent,
         modifier = Modifier.fillMaxWidth(),
@@ -62,17 +64,19 @@ internal fun CliModulesSection(
         attention = firewallActionRequired && !expanded,
         attentionColor = colors.firewall,
     ) {
-        CliTorModuleBlock(
-            viewModel = viewModel,
-            settings = settings,
-            onOpenSettings = onOpenTor,
-            onActivationRequested = {
-                torActivation = DatasetActivationState(DatasetActivationFeature.TOR_BRIDGES)
-            },
-        )
-        CliDivider(color = colors.borderBright)
-        CliI2pModuleBlock(viewModel = viewModel, settings = settings, onOpenSettings = onOpenI2p)
-        CliDivider(color = colors.borderBright)
+        if (showAdvanced) {
+            CliTorModuleBlock(
+                viewModel = viewModel,
+                settings = settings,
+                onOpenSettings = onOpenTor,
+                onActivationRequested = {
+                    torActivation = DatasetActivationState(DatasetActivationFeature.TOR_BRIDGES)
+                },
+            )
+            CliDivider(color = colors.borderBright)
+            CliI2pModuleBlock(viewModel = viewModel, settings = settings, onOpenSettings = onOpenI2p)
+            CliDivider(color = colors.borderBright)
+        }
         CliFirewallModuleBlock(
             viewModel = viewModel,
             settings = settings,

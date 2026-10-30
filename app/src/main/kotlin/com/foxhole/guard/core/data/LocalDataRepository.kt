@@ -3,11 +3,12 @@ package com.foxhole.guard.core.data
 import android.content.Context
 import com.foxhole.guard.core.diagnostics.DiagnosticsLogger
 import com.foxhole.guard.core.settings.SettingsRepository
-import com.foxhole.guard.core.settings.clearProfileLocalData
-import com.foxhole.guard.core.settings.resetAllLocalSettings
 import com.foxhole.guard.core.settings.updateAppTrafficStatsEnabled
 import com.foxhole.guard.runtime.DnsFilterAssetInstaller
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import java.io.File
 
@@ -18,6 +19,9 @@ class LocalDataRepository(
     private val diagnosticsLogger: DiagnosticsLogger,
     private val profileSecretStore: ProfileSecretStore,
     private val dnsFilterAssetInstaller: DnsFilterAssetInstaller,
+    private val networkActivityClearer: (suspend () -> Unit)? = null,
+    private val prepareFactoryReset: (suspend () -> Unit)? = null,
+    private val factoryDatabaseClearer: (suspend () -> Unit)? = null,
 ) {
     private val appContext = context.applicationContext
     private val database: ProfileDatabase by lazy(LazyThreadSafetyMode.SYNCHRONIZED, databaseProvider)
@@ -29,7 +33,7 @@ class LocalDataRepository(
 
     suspend fun clearNetworkActivity(): LocalDataClearResult =
         withContext(Dispatchers.IO) {
-            database.anomalyDao().deleteNetworkActivityEvents()
+            networkActivityClearer?.invoke() ?: database.anomalyDao().deleteNetworkActivityEvents()
             LocalDataClearResult()
         }
 
@@ -44,28 +48,63 @@ class LocalDataRepository(
         }
     }
 
-    suspend fun clearProfilesAndSecrets(): LocalDataClearResult {
-        settingsRepository.clearProfileLocalData()
-        val deletedSecrets =
-            withContext(Dispatchers.IO) {
-                database.profileDao().deleteAll()
-                profileSecretStore.deleteAll()
+    suspend fun clearProfilesAndSecrets(): LocalDataClearResult = withProfileMutation { owner ->
+        owner.secrets(settingsRepository.profileMutationCoordinator.secretMutex) {
+            settingsRepository.withRestoreSettings(owner) { session ->
+                session.update { current ->
+                    current.copy(
+                        lastActiveProfile = null,
+                        profileTrafficTotals = emptyList(),
+                        smartProfilePreferences = emptyList(),
+                    )
+                }
+                executeSettledLocalReset(
+                    commitSettings = {
+                        session.persist()
+                        session.publishCommitted()
+                        owner.markRestoreCommitted()
+                    },
+                    clearOwnedData = {
+                        database.profileDao().deleteAll()
+                        LocalDataClearResult(deletedFiles = profileSecretStore.deleteAll())
+                    },
+                )
             }
-        return LocalDataClearResult(deletedFiles = deletedSecrets)
-    }
-
-    suspend fun factoryReset(): LocalDataClearResult {
-        settingsRepository.resetAllLocalSettings()
-        return withContext(Dispatchers.IO) {
-            database.clearAllTables()
-            val deletedFiles =
-                profileSecretStore.deleteAll() +
-                    diagnosticsLogger.clearLocalFiles() +
-                    dnsFilterAssetInstaller.clearLocalCache() +
-                    deleteLocalDataTargets(runtimeFactoryResetFileTargets(appContext))
-            LocalDataClearResult(deletedFiles = deletedFiles)
         }
     }
+
+    suspend fun factoryReset(): LocalDataClearResult = withProfileMutation { owner ->
+        owner.secrets(settingsRepository.profileMutationCoordinator.secretMutex) {
+            settingsRepository.withRestoreSettings(owner) { session ->
+                session.update { settingsRepository.storage.defaultSettings() }
+                executeSettledLocalReset(
+                    commitSettings = {
+                        session.persist()
+                        session.publishCommitted()
+                        owner.markRestoreCommitted()
+                    },
+                    clearOwnedData = {
+                        prepareFactoryReset?.invoke()
+                        factoryDatabaseClearer?.invoke() ?: database.clearAllTables()
+                        val deleted = profileSecretStore.deleteAll() + diagnosticsLogger.clearLocalFiles() +
+                            dnsFilterAssetInstaller.clearLocalCache() + deleteLocalDataTargets(runtimeFactoryResetFileTargets(appContext))
+                        LocalDataClearResult(deletedFiles = deleted)
+                    },
+                )
+            }
+        }
+    }
+
+    private suspend fun <T> withProfileMutation(block: suspend (ProfileMutationLease) -> T): T =
+        settingsRepository.profileMutationCoordinator.write(
+            onEffectFailure = { error ->
+                diagnosticsLogger.recordFailure(
+                    "settings",
+                    "post-commit effect failed error=${error.javaClass.simpleName}",
+                )
+            },
+            block = block,
+        )
 }
 
 data class LocalDataClearResult(
@@ -133,3 +172,26 @@ private const val SECURE_DIR_NAME = "secure"
 private const val GUARD_DIR_NAME = "guard"
 private const val PROFILE_SECURE_DB_NAME = "foxhole.secure.db"
 private const val LEGACY_PROFILE_DB_NAME = "foxhole.db"
+
+internal suspend fun <T> executeSettledLocalReset(
+    commitSettings: suspend () -> Unit,
+    clearOwnedData: suspend () -> T,
+): T {
+    currentCoroutineContext().ensureActive()
+    var outcome: Result<T>? = null
+    try {
+        withContext(NonCancellable + Dispatchers.IO) {
+            outcome = try {
+                commitSettings()
+                Result.success(clearOwnedData())
+            } catch (error: Throwable) { Result.failure(error) }
+        }
+    } catch (handoffFailure: Throwable) {
+        val primary = outcome?.exceptionOrNull()
+        if (primary != null && primary !== handoffFailure) primary.addSuppressed(handoffFailure)
+        outcome = Result.failure(primary ?: handoffFailure)
+    }
+    val result = checkNotNull(outcome).getOrThrow()
+    currentCoroutineContext().ensureActive()
+    return result
+}

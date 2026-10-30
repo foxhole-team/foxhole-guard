@@ -1,10 +1,23 @@
 package com.foxhole.guard.ui.cli.home
 
+import android.view.HapticFeedbackConstants
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.MutableTransitionState
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.updateTransition
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Surface
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,6 +27,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
@@ -34,13 +48,23 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntRect
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.foxhole.core.model.ConnectionState
 import com.foxhole.core.model.HomeAdditionalInfoCategory
+import com.foxhole.core.model.InterfaceMode
 import com.foxhole.core.model.IpInfo
 import com.foxhole.core.model.RoutingModePreset
 import com.foxhole.core.model.TorNetworkPhase
@@ -52,7 +76,9 @@ import com.foxhole.guard.ui.HomeViewModel
 import com.foxhole.guard.ui.PendingRoutingScenarioChange
 import com.foxhole.guard.ui.TorTransitionPrompt
 import com.foxhole.guard.ui.cli.CliCommands
+import com.foxhole.guard.ui.cli.CliRadius
 import com.foxhole.guard.ui.cli.CliSpacing
+import com.foxhole.guard.ui.cli.CliTopNoticeHost
 import com.foxhole.guard.ui.cli.LocalCliColors
 import com.foxhole.guard.ui.cli.cliBootstrapFade
 import com.foxhole.guard.ui.cli.cliBootstrapSwap
@@ -75,6 +101,7 @@ import com.foxhole.guard.ui.confirmPendingRoutingScenario
 import com.foxhole.guard.ui.dismissPendingRoutingScenario
 import com.foxhole.guard.ui.isPrimaryConnectionRuntime
 import com.foxhole.guard.ui.loadInstalledApps
+import com.foxhole.guard.ui.onLocalProxyLanAccessChanged
 import com.foxhole.guard.ui.onQuickSelectorSingleProfileSelected
 import com.foxhole.guard.ui.refreshIpInfo
 import com.foxhole.guard.ui.trafficmap.TrafficMapAssetState
@@ -90,9 +117,12 @@ internal fun CliHomeScreen(
     terminalFollowsOutput: Boolean,
     onTerminalFollowsOutputChanged: (Boolean) -> Unit,
     onOpenMap: () -> Unit,
+    onOpenProfiles: () -> Unit,
+    onOpenRouter: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val home by viewModel.homeRouteState.collectAsStateWithLifecycle()
+    val routerShortcutVisible by viewModel.container.settingsRepository.routerHomeShortcutVisible.collectAsStateWithLifecycle()
     val subscriptionRefreshInProgress by
         viewModel.manualSubscriptionRefreshInProgress.collectAsStateWithLifecycle()
     val torIdentityProbe by viewModel.torIdentityProbe.collectAsStateWithLifecycle()
@@ -124,6 +154,26 @@ internal fun CliHomeScreen(
         CliQuickStartSheetContent(onDismiss = { quickStartOpen = false })
     }
 
+    if (home.settings.ui.interfaceMode == InterfaceMode.USER) {
+        CliUserHomeScreen(
+            viewModel = viewModel,
+            terminal = terminal,
+            onOpenMap = onOpenMap,
+            onOpenProfiles = onOpenProfiles,
+            onHelpRequested = { quickStartOpen = true },
+            onRouterRequested = {
+                profileSelector.close()
+                onOpenRouter()
+            },
+            routerShortcutVisible = routerShortcutVisible,
+            profileSelector = profileSelector,
+            pendingModeCycle = pendingModeCycle,
+            onPendingModeCycleChanged = { pendingModeCycle = it },
+            modifier = modifier,
+        )
+        return
+    }
+
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -141,6 +191,11 @@ internal fun CliHomeScreen(
             onInteraction = profileSelector.close,
             onClearRequested = { clearTerminalOpen = true },
             onHelpRequested = { quickStartOpen = true },
+            onRouterRequested = {
+                profileSelector.close()
+                onOpenRouter()
+            },
+            routerShortcutVisible = routerShortcutVisible,
             contentAfterHeader = {
                 CliHomeAdditionalInfoSlot(
                     viewModel = viewModel,
@@ -367,7 +422,7 @@ internal fun rememberCliHomeMapAssetsReady(
         assetState is TrafficMapAssetState.Error
 }
 
-private fun HomeAdditionalInfoCategory.cliMapOverviewContent(): CliMapOverviewContent =
+internal fun HomeAdditionalInfoCategory.cliMapOverviewContent(): CliMapOverviewContent =
     when (this) {
         HomeAdditionalInfoCategory.MAP -> CliMapOverviewContent.MAP
         HomeAdditionalInfoCategory.ROUTE -> CliMapOverviewContent.ROUTE
@@ -550,11 +605,14 @@ private fun CliHomeProfileArea(
     onSelectorOpen: () -> Unit,
     onSelectorClose: () -> Unit,
     onProfileHold: () -> Unit,
+    factsContent: (@Composable (Modifier) -> Unit)? = null,
+    minimumSelectorHeight: Dp = 0.dp,
 ) {
     var profileAreaMeasuredHeightPx by rememberSaveable { mutableIntStateOf(0) }
     val smartSelectorHeightActive = expandedSmartId != null
     val density = LocalDensity.current
     val profileAreaMeasuredHeight = with(density) { profileAreaMeasuredHeightPx.toDp() }
+        .coerceAtLeast(minimumSelectorHeight)
     val selectorHeightConstraint = if (
         cliProfileSelectorUsesFixedHeight(
             measuredHeightPx = profileAreaMeasuredHeightPx,
@@ -615,24 +673,42 @@ private fun CliHomeProfileArea(
                     modifier = selectorHeightModifier,
                 )
             CliProfileAreaSurface.LOADING ->
-                CliHomeBootLoadingPanel(viewModel = viewModel, home = home)
-            CliProfileAreaSurface.FACTS ->
-                CliConnectionFactsPanel(
-                    viewModel = viewModel,
-                    home = home,
-                    torIdentityProbe = torIdentityProbe,
-                    connected = connected,
-                    onProfileTap = onSelectorOpen,
-                    onProfileHold = {
-                        onSelectorClose()
-                        onProfileHold()
-                    },
-                    modifier = Modifier
-                        .onSizeChanged { size ->
-                            profileAreaMeasuredHeightPx = size.height
+                CliHomeProfileLoading(viewModel = viewModel, home = home, factsContent = factsContent)
+            CliProfileAreaSurface.FACTS -> {
+                val factsModifier = Modifier.onSizeChanged { size ->
+                    profileAreaMeasuredHeightPx = size.height
+                }
+                if (factsContent != null) {
+                    factsContent(factsModifier)
+                } else {
+                    CliConnectionFactsPanel(
+                        viewModel = viewModel,
+                        home = home,
+                        torIdentityProbe = torIdentityProbe,
+                        connected = connected,
+                        onProfileTap = onSelectorOpen,
+                        onProfileHold = {
+                            onSelectorClose()
+                            onProfileHold()
                         },
-                )
+                        modifier = factsModifier,
+                    )
+                }
+            }
         }
+    }
+}
+
+@Composable
+private fun CliHomeProfileLoading(
+    viewModel: HomeViewModel,
+    home: HomeRouteUiState,
+    factsContent: (@Composable (Modifier) -> Unit)?,
+) {
+    if (factsContent != null) {
+        factsContent(Modifier)
+    } else {
+        CliHomeBootLoadingPanel(viewModel = viewModel, home = home)
     }
 }
 
@@ -955,4 +1031,172 @@ internal enum class CliConnectMode(
     VPN("VPN", RoutingModePreset.VPN),
     TOR("TOR", RoutingModePreset.TOR),
     VPN_TOR("VPN+TOR", RoutingModePreset.VPN_TOR),
+}
+
+@Composable
+@Suppress("LongParameterList")
+private fun CliUserHomeScreen(
+    viewModel: HomeViewModel,
+    terminal: CliTerminalState,
+    onOpenMap: () -> Unit,
+    onOpenProfiles: () -> Unit,
+    onHelpRequested: () -> Unit,
+    onRouterRequested: () -> Unit,
+    routerShortcutVisible: Boolean,
+    profileSelector: CliProfileSelectorCoordinator,
+    pendingModeCycle: CliConnectMode?,
+    onPendingModeCycleChanged: (CliConnectMode?) -> Unit,
+    modifier: Modifier,
+) {
+    val home by viewModel.homeRouteState.collectAsStateWithLifecycle()
+    // Preserve sample timestamps; the dashboard coalesces equal rates.
+    val traffic by viewModel.container.connectionController.traffic.collectAsStateWithLifecycle()
+    val subscriptionRefreshInProgress by viewModel.manualSubscriptionRefreshInProgress.collectAsStateWithLifecycle()
+    val pendingRoutingChange by viewModel.pendingRoutingScenarioConfirmation.collectAsStateWithLifecycle()
+    val profiles by viewModel.profilesRouteState.collectAsStateWithLifecycle()
+    val connected = home.connection.isRouteConnection()
+    val busy = home.connection.isRouteTransition()
+    val map by viewModel.trafficMapUiState.collectAsStateWithLifecycle()
+    val onCycleMode = rememberCliModeCycleAction(
+        viewModel = viewModel,
+        terminal = terminal,
+        home = home,
+        atomicModePromptPending = pendingRoutingChange is PendingRoutingScenarioChange.OperatingMode,
+        pendingModeCycle = pendingModeCycle,
+        onPendingModeCycleChanged = onPendingModeCycleChanged,
+    )
+    CliUserHomeContent(
+        home = home,
+        traffic = traffic,
+        map = map,
+        subscriptionRefreshInProgress = subscriptionRefreshInProgress,
+        onOpenMap = {
+            profileSelector.close()
+            onOpenMap()
+        },
+        onPrimaryAction = {
+            profileSelector.close()
+            performPrimaryAction(
+                viewModel,
+                terminal,
+                home,
+                connected,
+                busy,
+                mainButtonAction(connected, busy),
+                configuredConnectMode(home.settings),
+            )
+        },
+        onCycleMode = {
+            profileSelector.close()
+            onCycleMode()
+        },
+        onToggleI2p = {
+            profileSelector.close()
+            performCliI2pToggle(viewModel, terminal, home.settings)
+        },
+        onStopProxy = { viewModel.onLocalProxyLanAccessChanged(false) },
+        header = {
+            CliTerminalHeader(
+                home = home,
+                onHelpRequested = onHelpRequested,
+                onRouterRequested = onRouterRequested,
+                routerShortcutVisible = routerShortcutVisible,
+            )
+        },
+        confirmation = {
+            CliHomeConfirmationSlot(viewModel, terminal, pendingRoutingChange, home.torTransitionPrompt)
+        },
+        profileContent = { availableHeight ->
+            CliUserHomeProfileArea(
+                viewModel = viewModel,
+                home = home,
+                hasProfiles = profiles.profiles.isNotEmpty(),
+                profilesLoaded = home.profilesLoaded && profiles.profilesLoaded,
+                profileSelector = profileSelector,
+                availableHeight = availableHeight,
+                onOpenProfiles = onOpenProfiles,
+            )
+        },
+        modifier = modifier.pointerInput(profileSelector.open) {
+            if (profileSelector.open) detectTapGestures { profileSelector.close() }
+        },
+    )
+}
+
+@Composable
+private fun CliUserHomeProfileArea(
+    viewModel: HomeViewModel,
+    home: HomeRouteUiState,
+    hasProfiles: Boolean,
+    profilesLoaded: Boolean,
+    profileSelector: CliProfileSelectorCoordinator,
+    availableHeight: Dp,
+    onOpenProfiles: () -> Unit,
+) {
+    val visibility = remember { MutableTransitionState(false) }
+    var anchorWidthPx by remember { mutableIntStateOf(0) }
+    val density = LocalDensity.current
+    val view = LocalView.current
+    val colors = LocalCliColors.current
+    var lastOpen by remember { mutableStateOf(profileSelector.open) }
+    visibility.targetState = profileSelector.open
+    LaunchedEffect(profileSelector.open) {
+        if (profileSelector.open != lastOpen) view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+        lastOpen = profileSelector.open
+    }
+    LaunchedEffect(profileSelector.collapsePending, profileSelector.expandedSmartId) {
+        if (profileSelector.collapsePending && profileSelector.expandedSmartId == null) profileSelector.finishCollapse()
+    }
+    LaunchedEffect(visibility.isIdle, visibility.currentState, visibility.targetState, profileSelector.selectionCommitPending) {
+        if (visibility.isIdle && !visibility.currentState && !visibility.targetState) {
+            profileSelector.changeExpanded(null)
+            if (profileSelector.selectionCommitPending) profileSelector.finishSelection()
+        }
+    }
+    val showing = visibility.currentState || visibility.targetState
+    val position = remember {
+        object : PopupPositionProvider {
+            override fun calculatePosition(anchorBounds: IntRect, windowSize: IntSize,
+                layoutDirection: LayoutDirection, popupContentSize: IntSize): IntOffset {
+                val start = if (layoutDirection == LayoutDirection.Rtl) anchorBounds.right - popupContentSize.width else anchorBounds.left
+                return IntOffset(start.coerceIn(0, (windowSize.width - popupContentSize.width).coerceAtLeast(0)),
+                    (anchorBounds.bottom - popupContentSize.height).coerceAtLeast(0))
+            }
+        }
+    }
+    Box(Modifier.onSizeChanged { anchorWidthPx = it.width }) {
+        CliUserProfileCard(home = home, hasProfiles = hasProfiles, profilesLoaded = profilesLoaded,
+            onClick = if (hasProfiles) profileSelector.openSelector else onOpenProfiles,
+            modifier = if (showing) Modifier.alpha(0f).clearAndSetSemantics { } else Modifier)
+        if (showing && availableHeight > 0.dp && anchorWidthPx > 0) {
+            val width = with(density) { anchorWidthPx.toDp() }
+            Popup(popupPositionProvider = position, onDismissRequest = profileSelector.close,
+                properties = PopupProperties(focusable = true)) {
+                Surface(shape = RoundedCornerShape(CliRadius.control), color = colors.bg,
+                    border = BorderStroke(1.dp, colors.border),
+                    modifier = Modifier.width(width)
+                        .animateContentSize(if (visibility.isIdle && profileSelector.open) tween(180) else snap(), alignment = Alignment.BottomStart)
+                        .heightIn(max = availableHeight)) {
+                    Column {
+                        AnimatedVisibility(visibleState = visibility, modifier = Modifier.weight(1f, fill = false),
+                            enter = expandVertically(tween(180), expandFrom = Alignment.Bottom) + fadeIn(tween(180)),
+                            exit = shrinkVertically(tween(180), shrinkTowards = Alignment.Bottom) + fadeOut(tween(180))) {
+                            CliProfileQuickSelector(viewModel = viewModel,
+                                expandedSmartId = profileSelector.expandedSmartId,
+                                onExpandedSmartChange = { id ->
+                                    if (id != profileSelector.expandedSmartId) view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                                    profileSelector.changeExpanded(id)
+                                },
+                                onProfileSelected = profileSelector.selectProfile,
+                                onProtocolSelected = profileSelector.selectProtocol,
+                                onDone = profileSelector.close, fillAvailableHeight = true, framed = false)
+                        }
+                        CliUserProfileCard(home = home, hasProfiles = hasProfiles, profilesLoaded = profilesLoaded,
+                            onClick = profileSelector.close, expanded = profileSelector.open, showFrame = false)
+                    }
+                }
+                CliTopNoticeHost()
+            }
+        }
+    }
 }

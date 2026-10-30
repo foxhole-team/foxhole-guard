@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="cli_logs_tab_sentinel">Sentinel</string>
+    <string name="cli_sentinel_installations">已安装的应用</string>
+    <string name="cli_sentinel_recent_installations">最近安装</string>
+    <string name="cli_sentinel_view_all_installations">查看全部（%1$d）</string>
+    <string name="cli_sentinel_installations_empty">没有可见的已安装应用。</string>
+    <string name="cli_sentinel_install_history">已记录的应用更改</string>
+    <string name="cli_sentinel_install_history_retention">应用更改历史</string>
+    <string name="cli_sentinel_history_detected">检测时间：%1$s</string>
+    <string name="cli_sentinel_history_empty">没有已记录的应用更改。</string>
+    <string name="cli_sentinel_activity_history">观测到的应用活动</string>
+    <string name="cli_sentinel_inventory_refresh">刷新应用列表</string>
+    <string name="cli_sentinel_inventory_failed">无法加载已安装应用列表。</string>
+    <string name="cli_sentinel_apps_updated">已更新</string>
+    <string name="cli_sentinel_module_history_note">安装记录和发现项位于“日志 → Sentinel”。</string>
+</resources>

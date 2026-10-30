@@ -3,12 +3,18 @@ package com.foxhole.guard.ui
 import androidx.lifecycle.viewModelScope
 import com.foxhole.core.model.AccentColor
 import com.foxhole.core.model.HomeAdditionalInfoCategory
+import com.foxhole.core.model.InterfaceMode
 import com.foxhole.guard.core.settings.updateAccentColor
 import com.foxhole.guard.core.settings.updateHomeAdditionalInfoCategory
+import com.foxhole.guard.core.settings.updateInterfaceMode
 import com.foxhole.guard.core.settings.updateMonochromeEnabled
 import com.foxhole.guard.core.settings.updatePixelArtEnabled
 import com.foxhole.guard.core.settings.updateShowHomeAdditionalInfo
 import kotlinx.coroutines.launch
+
+internal fun HomeViewModel.onInterfaceModeSelected(value: InterfaceMode) {
+    viewModelScope.launch { container.settingsRepository.updateInterfaceMode(value) }
+}
 
 internal fun HomeViewModel.onAccentColorSelected(value: AccentColor) {
     viewModelScope.launch {

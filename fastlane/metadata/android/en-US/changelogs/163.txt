@@ -1,0 +1,4 @@
+0.1.1 Stable
+
+- The Home header uses a static monochrome fox.
+- Expandable settings headings are easier to read.

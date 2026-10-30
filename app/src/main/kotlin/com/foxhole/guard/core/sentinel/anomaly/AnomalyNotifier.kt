@@ -1,83 +1,46 @@
 package com.foxhole.guard.core.sentinel.anomaly
 
-import android.Manifest
-import android.app.Notification
-import android.app.NotificationChannel
-import android.app.NotificationManager
 import android.content.Context
-import android.content.pm.PackageManager
-import android.os.Build
-import androidx.core.app.NotificationCompat
-import androidx.core.app.NotificationManagerCompat
-import androidx.core.content.ContextCompat
-import androidx.core.content.getSystemService
 import com.foxhole.core.model.AnomalyEvent
-import com.foxhole.core.model.AnomalySeverity
 import com.foxhole.core.model.AnomalyType
-import com.foxhole.guard.R
-import com.foxhole.guard.withStoredAppLocale
+import com.foxhole.guard.core.sentinel.sentinelAttempt
 
-class AnomalyNotifier(
-    context: Context,
+class AnomalyNotifier internal constructor(
+    private val delivery: AnomalyNotificationDelivery,
 ) {
-    private val baseAppContext = context.applicationContext
-    private val appContext get() = baseAppContext.withStoredAppLocale()
-    private val notificationManager by lazy { appContext.getSystemService<NotificationManager>() }
+    constructor(context: Context) : this(AndroidAnomalyNotificationDelivery(context))
 
-    fun notify(event: AnomalyEvent): Boolean {
-        if (
-            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-            ContextCompat.checkSelfPermission(appContext, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-        ) {
-            return false
-        }
-        return runCatching {
-            ensureChannel()
-            val title = appContext.getString(event.notificationTitleRes())
-            val body = event.userFacingMessage(appContext)
-            val notification =
-                NotificationCompat.Builder(appContext, CHANNEL_ID)
-                    .setSmallIcon(R.drawable.ic_notification_anomaly)
-                    .setContentTitle(title)
-                    .setContentText(body)
-                    .setStyle(NotificationCompat.BigTextStyle().bigText(body))
-                    .setCategory(NotificationCompat.CATEGORY_STATUS)
-                    .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-                    .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
-                    .setAutoCancel(true)
-                    .build()
-            NotificationManagerCompat.from(appContext).notify(NOTIFICATION_ID_BASE + event.type.ordinal, notification)
+    fun notify(event: AnomalyEvent): Boolean =
+        sentinelAttempt {
+            if (!delivery.isAppEnabled()) return@sentinelAttempt false
+            delivery.ensureChannel()
+            if (!delivery.isChannelEnabled()) return@sentinelAttempt false
+            delivery.submit(event, anomalyNotificationId(event.type))
             true
         }.getOrDefault(false)
-    }
 
     fun cancelAll() {
-        val manager = NotificationManagerCompat.from(appContext)
-        AnomalyType.entries.forEach { type -> manager.cancel(NOTIFICATION_ID_BASE + type.ordinal) }
+        AnomalyType.entries.forEach { type -> delivery.cancel(anomalyNotificationId(type)) }
     }
 
-    private fun AnomalyEvent.notificationTitleRes(): Int =
-        when {
-            severity == AnomalySeverity.HIGH || score >= 85 -> R.string.anomaly_notification_red_flag_title
-            score >= 75 -> R.string.anomaly_notification_orange_flag_title
-            else -> R.string.anomaly_notification_yellow_flag_title
-        }
-
-    internal fun ensureChannel() {
-        notificationManager?.createNotificationChannel(
-            NotificationChannel(
-                CHANNEL_ID,
-                appContext.getString(R.string.anomaly_notification_channel_name),
-                NotificationManager.IMPORTANCE_DEFAULT,
-            ).apply {
-                lockscreenVisibility = Notification.VISIBILITY_PRIVATE
-                description = appContext.getString(R.string.anomaly_notification_channel_description)
-            },
-        )
-    }
+    internal fun ensureChannel() = delivery.ensureChannel()
 
     companion object {
         const val CHANNEL_ID = "foxhole_anomaly"
-        private const val NOTIFICATION_ID_BASE = 8400
     }
 }
+
+internal fun anomalyNotificationId(type: AnomalyType): Int =
+    when (type) {
+        AnomalyType.APP_UPLOAD_SPIKE -> 8400
+        AnomalyType.APP_BACKGROUND_TRAFFIC -> 8401
+        AnomalyType.TOTAL_TRAFFIC_SPIKE -> 8402
+        AnomalyType.NEW_DESTINATION_COUNTRY -> 8403
+        AnomalyType.DNS_BLOCK_RATIO_SPIKE -> 8404
+        AnomalyType.RECONNECT_STORM -> 8405
+        AnomalyType.LATENCY_SHIFT -> 8406
+        AnomalyType.TOR_OR_I2P_ROUTE_MISMATCH -> 8407
+        AnomalyType.DORMANT_APP_NETWORK_ACTIVITY -> 8408
+        AnomalyType.KNOWN_THREAT_DESTINATION -> 8409
+        AnomalyType.APP_STATIC_REFERENCE -> 8410
+    }

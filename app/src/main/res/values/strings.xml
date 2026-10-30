@@ -26,7 +26,7 @@
     <string name="export_diagnostics_share_subject">App journal</string>
     <string name="export_diagnostics_share_text">The FoxHole Guard journal is pre-cleaned of private user data and contains no IP addresses, app lists, VPN profile data, connection history, or other confidential information. It contains only the technical information required to diagnose app problems.</string>
     <string name="clipboard_empty">Clipboard is empty</string>
-    <string name="profile_not_refreshable">Updates are available only for the v2raytun format</string>
+    <string name="profile_not_refreshable">Only saved subscriptions can be refreshed</string>
     <string name="profile_refreshed">VPN profile refreshed successfully</string>
     <string name="profile_refreshed_protocol_changes">VPN profile refreshed. Available: %1$d\nAdded: %2$s\nRemoved: %3$s\nUnavailable: %4$s</string>
     <string name="profile_protocol_changes_none">none</string>
@@ -44,8 +44,8 @@
     <string name="profile_import_failed">Failed to import the VPN profile</string>
     <string name="profile_import_invalid_config">Invalid VPN configuration. Check the link or file and try again.</string>
     <string name="profile_update_failed">Failed to update the VPN profile</string>
-    <string name="profile_import_https_only">Only HTTPS v2raytun subscription links are supported</string>
-    <string name="profile_import_subscription_invalid">The v2raytun subscription link is invalid or the server returned an unsupported response</string>
+    <string name="profile_import_https_only">Use an HTTPS subscription link or an Outline dynamic key (ssconf://)</string>
+    <string name="profile_import_subscription_invalid">The subscription link is invalid or the server returned an unsupported response</string>
     <string name="profile_import_insecure_tls_required">This configuration requires insecure TLS consent</string>
     <string name="profile_config_saved">Configuration saved</string>
     <string name="profile_config_saved_reconnecting">Configuration saved. Reconnecting</string>
@@ -284,6 +284,7 @@
     <string name="database_downgrade_body">Your profiles and settings were saved by a newer version of FoxHole Guard. To keep them intact, this build will not open the database. Install the latest version to continue. Reinstalling or clearing app data would erase the saved profiles.</string>
     <string name="backup_saved_banner">backup saved</string>
     <string name="backup_save_failed">Could not create the backup</string>
+    <string name="backup_export_cancelled_banner">Backup export cancelled</string>
     <string name="backup_parse_not_a_backup">not a valid FoxHole Guard backup</string>
     <string name="backup_parse_newer_version">The file was created by a newer app version</string>
     <string name="backup_parse_newer_settings">The backup uses a newer settings schema</string>
@@ -785,6 +786,11 @@
     <string name="cli_cfg_locale_system">Automatic</string>
     <string name="cli_cfg_locale_ru">русский</string>
     <string name="cli_cfg_locale_en">english</string>
+    <string name="cli_cfg_locale_ja">日本語</string>
+    <string name="cli_cfg_locale_de">Deutsch</string>
+    <string name="cli_cfg_locale_fr">français</string>
+    <string name="cli_cfg_locale_es">español</string>
+    <string name="cli_cfg_locale_zh">简体中文</string>
     <string name="cli_cfg_nr_wifi">VPN rule on Wi-Fi</string>
     <string name="cli_cfg_nr_cellular">VPN rule on the mobile network</string>
     <string name="cli_cfg_nr_auto_connect">auto-connect</string>
@@ -860,10 +866,10 @@
     <string name="cli_lan_proxy_auth">auth</string>
     <string name="cli_lan_proxy_copy_pass">copy password</string>
     <string name="cli_extras_proxy_server">proxy server</string>
-    <string name="cli_beta_notice_title">Beta version information</string>
-    <string name="cli_beta_notice_body">The FoxHole Core network engine and the firewall, FoxHole Sentinel, and DNS filtering modules are not yet stable and remain in active development and testing, as do a number of other features. If a critical error occurs, force-stop the app and clear its cache.\nWhen exporting logs to support, personal identifiers and confidential data are removed automatically.\nYou can support and accelerate project development on the official project page on GitHub.</string>
+    <string name="cli_beta_notice_title">Stable release information</string>
+    <string name="cli_beta_notice_body">FoxHole Guard and FoxHole Core use the Stable release channel. Feature and protocol limitations are documented in Help. If a critical error occurs, force-stop the app and clear its cache.\nWhen exporting logs to support, personal identifiers and confidential data are removed automatically.\nYou can support and accelerate project development on the official project page on GitHub.</string>
     <string name="cli_beta_notice_dns_protocols">DNS filtering does not apply to WireGuard or AmneziaWG.</string>
-    <string name="cli_beta_notice_ack">i understand</string>
+    <string name="cli_beta_notice_ack">I understand</string>
     <string name="cli_update_notice_title">What’s new</string>
     <string name="cli_update_notice_body">More reliable VPN, DNS and connection protection\nProfile and WebApp fixes\nNew white accent and monochrome mode</string>
     <string name="cli_extras_open_settings">open settings</string>
@@ -1022,7 +1028,8 @@
     <string name="cli_data_import">restore from file</string>
     <string name="cli_data_restore_preview">file: v%1$s · profiles: %2$d · settings: %3$s</string>
     <string name="cli_data_restore_confirm">restore this backup?</string>
-    <string name="cli_data_encrypted_backup_note">password-encrypted; profiles can contain access credentials</string>
+    <string name="cli_data_encrypt_backup">Encrypt backup</string>
+    <string name="cli_data_encrypted_backup_note">Encryption is optional; profiles can contain access credentials</string>
     <string name="cli_data_backup_password_title">protect the backup</string>
     <string name="cli_data_restore_password_title">unlock the backup</string>
     <string name="cli_data_backup_password_note">choose at least %1$d characters; a forgotten password cannot be recovered</string>
@@ -1051,7 +1058,7 @@
     <string name="cli_help_routing_title">Routing Rules</string>
     <string name="cli_help_routing_body">Traffic routing rules for apps and web resources are applied atomically.\nIn the “whole device” scenario, app routing rules are ignored but remain saved in the configuration. They apply only in the proxy scenario, where routing for VPN and Tor is configured separately and traffic from specified apps can be sent through the tunnel or excluded from it.\nBlocking network access for apps works while a VPN/Tor tunnel is active or the firewall is enabled.\nImportant: the firewall started by I2P in transparent mode does not apply general routing rules—blocking and DNS interception are disabled, and only .i2p domain traffic is routed.</string>
     <string name="cli_help_logs_title">Event Journals</string>
-    <string name="cli_help_logs_body">The Main Journal records FoxHole Guard events: module starts and stops, state changes, and system events. The Network Journal records individual network connections (timestamp, app, protocol, destination country, and data volume). The Security Journal stores FoxHole Sentinel events, including app changes and network anomalies. All journals are stored locally in encrypted form and are never sent to external servers.</string>
+    <string name="cli_help_logs_body">The Main Journal records app diagnostics, module state changes and system events. The Network Journal records observed app traffic: timestamp, available UID/package attribution, TCP/UDP transport, destination country and byte counts. An observation does not prove a successful connection. Shared or unavailable owners remain explicit; country is attached to the observed destination. The Security Journal records FoxHole Sentinel findings, installation/update/removal observations, monitoring gaps and structured Core refusal or confirmation events. Reasons explain cause, result and the next action where known; an unfamiliar code does not imply a successful action.\nJournals remain local. Exports redact identifiers and endpoints according to the selected privacy policy. Clearing network history fences old queued writes; one boundary polling batch may be omitted from history while aggregate traffic counters continue.</string>
     <string name="cli_help_stats_title">Statistics</string>
     <string name="cli_help_stats_body">The Statistics module collects traffic, active-session, and DNS-query metrics locally. It lets you analyze VPN profiles, apps, DNS blocks, firewall events, and Tor/I2P networks over a selected period. The module is disabled by default. When enabled, you can configure the collection interval, retention period, and individual metrics. Data is aggregated by day, week, and month and is stored only on the device.</string>
     <string name="cli_help_firewall_title">Firewall and App Quarantine</string>
@@ -1062,9 +1069,9 @@
     <string name="cli_help_killswitch_body">Kill Switch uses Android’s system “Block connections without VPN” mechanism. If the VPN connection drops, the operating system blocks all network traffic and prevents data from leaking to the open network. Configure it in the device’s system VPN settings.</string>
     <string name="cli_help_killswitch_link">Open System VPN Settings</string>
     <string name="cli_help_backup_title">Backup</string>
-    <string name="cli_help_backup_body">Settings → Application → Encryption and lock. This section exports FoxHole Guard profiles and transferable settings to an encrypted (AES) backup file. Important: profiles may contain credentials such as VPN accounts or subscriptions, so store the backup file and its decryption password separately. A forgotten password cannot be recovered.\nDuring restore (import), the app applies profiles and transferable settings but retains this device’s local values: the FoxHole Guard PIN, update token, OS permissions (Usage Access), generated local-proxy passwords, and local FoxHole Sentinel databases. The backup contents are shown for confirmation before import. \nThe same section provides selective clearing of journals, statistics, and profiles, as well as a complete and irreversible Factory Reset.</string>
+    <string name="cli_help_backup_body">Settings → Application → App database. Export includes the selected profiles and transferable settings. Encrypt backup is off by default: the file is plaintext and no password is requested. Enable it to create an AES-encrypted file with a password. Profiles may contain access credentials; keep plaintext files private and store encrypted files separately from their passwords. A forgotten password cannot be recovered.\nImport detects the format automatically and requests a password only for encrypted files. Review the backup summary and confirm before restoring. Device-local values stay on this device: the FoxHole Guard PIN, update token, OS permissions (Usage Access), generated local-proxy passwords and local FoxHole Sentinel databases.\nThe same section provides selective clearing of journals, statistics and profiles, plus a complete and irreversible Factory Reset.</string>
     <string name="cli_help_dns_title">DNS Management</string>
-    <string name="cli_help_dns_body">DNS settings apply to traffic inside supported tunnels. When “Device DNS protection” is enabled, FoxHole Guard starts a local DNS resolver, allowing DNS filtering to work even without an active VPN or Tor connection. Filter lists are downloaded from FoxHole DB. Configured exclusions send DNS requests from specified apps or domains to the device’s system DNS servers.\n\nLimitations: DNS filtering does not apply to WireGuard or AmneziaWG (WireGuard uses the DNS specified by its profile; AmneziaWG currently does not support DNS interception).\n\nDNS monitoring: the app tracks the system DNS server configuration. A sudden complete replacement of the current server set is recorded in the Security Journal as a potential indicator of compromise (DNS hijacking).</string>
+    <string name="cli_help_dns_body">DNS settings apply inside supported tunnels. Device DNS protection starts a local resolver even without an active VPN or Tor connection. Ads, trackers, OEM telemetry and malicious domains have independent switches. Verified packaged lists support offline preparation; downloads retain signature, hash and version checks. A prepared update is shown separately from data actually applied by Core. Missing requested data is reported explicitly.\nNormal trackers combines unconditional EasyPrivacy and AdGuard third-party tracking sections. Pro adds AdGuard first-party and mobile tracking sections. Telemetry covers the named Huawei, Samsung, OPPO/Realme, Vivo and Xiaomi lists and does not cover every Android app or all Google telemetry. Malicious Medium/Full selects the corresponding HaGezi threat-intelligence list; Full uses more storage and download data. Unsupported contextual, path and regex rules are omitted.\nApp/domain exclusions are a separate explicit policy. DNS filtering is unavailable for the current WireGuard/AmneziaWG packet-tunnel path; provider DNS follows the profile. DNS server changes are observations in the Security Journal, not proof of compromise.</string>
     <string name="cli_help_net_rules_title">VPN Rules for Different Networks</string>
     <string name="cli_help_net_rules_body">This feature binds a specific VPN profile to a Wi-Fi or mobile network. When the network interface changes, FoxHole Guard sends a push notification suggesting that you activate the profile or automatically connects the selected VPN profile.</string>
     <string name="cli_help_lan_proxy_title">Local Proxy Server</string>
@@ -1076,7 +1083,7 @@
     <string name="cli_help_security_title">Data Encryption</string>
     <string name="cli_help_security_body">The Security section controls access to the app through a FoxHole Guard PIN or system biometrics.\nAll profiles and settings are stored locally in encrypted form by default; encryption keys are generated and protected by hardware-backed Android Keystore. \nSystem biometrics serve as an authentication gate and do not re-encrypt the data. When a FoxHole Guard PIN is used, biometric sign-in asks Keystore for a separate key that requires authentication for every operation and unlocks the primary PIN-protected keybox. \nThe Security Journal is encrypted with a separate key and protected by a cryptographic hash chain. Biometrics do not add another encryption layer to the journal: after successful sign-in, the app decrypts the journal and verifies the chain against its pinned checkpoint. Sensitive data is never sent to FoxHole Team infrastructure servers.</string>
     <string name="cli_help_sentinel_title">FoxHole Sentinel security module</string>
-    <string name="cli_help_sentinel_body">FoxHole Sentinel is a behavioral-analysis module based on OS and network metadata. It does not inspect traffic payloads and is not an antivirus. FoxHole Sentinel signals indicate potentially malicious anomalies but do not guarantee that malicious code is present.\nApp analysis: the installation source and requested privileges are checked against built-in security lists (Security IOCs). Indicators of compromise, including stalkerware IOCs, are updated through FoxHole DB. The baseline stalkerware indicator list is based on AssoEchap/stalkerware-indicators (CC-BY-4.0).\nNetwork analysis: the traffic detector compares aggregate network-activity windows minute by minute. Signals that require analysis of individual apps’ background traffic also use local OS statistics.\nWhen a PIN and event monitoring are enabled, FoxHole Sentinel records app installations and removals, the background service heartbeat, and suspicious monitoring gaps in a cryptographically protected hash-chained journal.\nOperating modes: Economy does not use a permanent foreground service; Reinforced runs a persistent service with a system notification, improving reliability at the cost of higher battery use. \nLimitations: force-stopping the app in Android settings pauses monitoring. FoxHole Sentinel cannot prevent user actions, processes with root privileges, or clearing app data through the system.</string>
+    <string name="cli_help_sentinel_body">FoxHole Sentinel analyzes available OS and network metadata. It does not inspect traffic payloads. A risk signal or an unfamiliar installation source does not prove malicious code. App checks use installation identity, requested capabilities, available signing certificates and the enabled indicator lists. The stalkerware baseline comes from AssoEchap/stalkerware-indicators under CC-BY-4.0.\nUnchanged installation metadata reuses cached signer facts. App-change bursts are processed in bounded batches; incomplete package visibility is not treated as removal or a clean result. When password protection and event monitoring are enabled, a sealed hash-chained journal records observed installations, updates, removals and monitoring gaps. Queue gaps are reported explicitly.\nPassive network IOC matching is separate from optional full network history. Per-app network ownership needs Android 10 or later and is not available for every short or shared-UID flow. Background traffic and country analysis retain separate opt-in controls.\nEconomy uses events and system-scheduled repair without a permanent foreground host. Reinforced adds a foreground service and notification. Neither mode bypasses Android Doze or guarantees an exact repair interval. Force-stop, root access and system app-data clearing remain outside FoxHole Sentinel control. No measured battery-saving percentage is implied.\nStatic APK checks are optional and run in a separate isolated process. Select an installed app or check the apps currently visible to Android. Open Expert static-check settings on this page for DEX references, YARA rules, finding notifications, automatic new or updated app checks, charging and battery constraints, and the 16 or 64 MiB artifact budget. Heavy and automatic checks default off. Critical or unknown battery state and low storage pause scans. Cancel, policy changes and app replacement prevent outdated results from being published. Incomplete checks stay partial and are not cached as complete. The bundled rules report static API references; a MITRE candidate mapping does not prove that a technique ran. Locked journals defer results until unlock; optional finding notifications use a shared cooldown.</string>
     <string name="cli_help_updates_title">FoxHole DB repository</string>
     <string name="cli_help_updates_body">FoxHole DB is the app’s artifact repository and contains five data sets: DNS filter lists, Tor bridges, IOC lists (FoxHole Sentinel), IP geodatabases, and TLS fingerprint tables. The app downloads only the data sets required by enabled features. Every artifact is cryptographically verified before it is applied atomically. Settings → Updates shows FoxHole DB synchronization status and lets you start an update manually or configure an automatic schedule.</string>
     <string name="cli_context_help_title">Help</string>
@@ -1347,6 +1354,7 @@
     <string name="cli_wizard_download_auto_note">checks the selected data sets for updates in the background</string>
     <string name="cli_wizard_download_skip_note">you can skip the download and run it later in Settings → Updates</string>
     <string name="cli_wizard_download_none">no data sets selected - download skipped</string>
+    <string name="cli_wizard_phase_queued">Queued</string>
     <string name="cli_wizard_phase_checking">checking</string>
     <string name="cli_wizard_phase_downloading">downloading</string>
     <string name="cli_wizard_phase_downloading_percent">downloading %1$d%%</string>
@@ -1369,7 +1377,7 @@
     <string name="cli_prof_exp_qr_pick_one">Select a v2raytun subscription</string>
     <string name="cli_prof_config_save_action">save</string>
     <string name="cli_prof_tpl_pick">choose a template</string>
-    <string name="cli_badge_beta">beta</string>
+    <string name="cli_badge_beta">Stable</string>
     <string name="cli_secret_action_edit">edit</string>
     <string name="cli_secret_action_reveal">hold to reveal</string>
     <string name="cli_secret_action_show">show password</string>
@@ -1412,4 +1420,5 @@
     <string name="cli_prof_edit_immediate_changes">Adding or removing a protocol saves pending protocol edits immediately. Cancel only discards changes made since the last save.</string>
     <string name="cli_cfg_monochrome">Monochrome mode</string>
     <string name="cli_cfg_accent_white">White</string>
+    <string name="cli_wizard_license_save_failed">Could not save your license agreement. Please try again.</string>
 </resources>

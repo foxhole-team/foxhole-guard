@@ -8,7 +8,9 @@ import android.graphics.Bitmap
 import android.net.Uri
 import android.os.PersistableBundle
 import android.provider.DocumentsContract
+import com.foxhole.core.importer.PortableProfileExportFailure
 import com.foxhole.core.model.ProfileSourceType
+import com.foxhole.core.profile.exportPortableProfileConfigs
 import com.foxhole.core.profile.exportableProfileChoices
 import com.foxhole.guard.ui.HomeViewModel
 import com.foxhole.guard.ui.ProfileExportSelectionRequest
@@ -65,23 +67,56 @@ internal suspend fun HomeViewModel.cliResolveExportConfigs(
         )
     }
 
-internal fun cliCopyConfigsToClipboard(
+internal fun cliPortableClipboardText(exports: List<CliProfileConfigExport>): String {
+    if (
+        exports.sumOf { it.configs.size.toLong() } > MAX_CLIPBOARD_CONFIGS ||
+        exports.sumOf { export ->
+            export.configs.sumOf { it.length.toLong() }
+        } > MAX_CLIPBOARD_BYTES ||
+        exports.sumOf { export ->
+            export.configs.sumOf { it.toByteArray(Charsets.UTF_8).size.toLong() }
+        } > MAX_CLIPBOARD_BYTES
+    ) {
+        throw PortableProfileExportFailure()
+    }
+    val text = StringBuilder()
+    var bytes = 0
+    exports.forEach { export ->
+        val next = exportPortableProfileConfigs(export.profileName, export.configs)
+        bytes += next.toByteArray(Charsets.UTF_8).size + if (text.isEmpty()) 0 else 1
+        if (bytes > MAX_CLIPBOARD_BYTES) throw PortableProfileExportFailure()
+        if (text.isNotEmpty()) text.append('\n')
+        text.append(next)
+    }
+    return text.toString()
+}
+
+internal suspend fun cliCopyConfigsToClipboard(
     context: Context,
     exports: List<CliProfileConfigExport>,
-) {
-    val clipboard = context.getSystemService(ClipboardManager::class.java) ?: return
-    val text =
-        exports
-            .flatMap { export -> export.configs }
-            .joinToString(separator = "\n") { config -> config.trim() }
-    val clip =
-        ClipData.newPlainText("FoxHole profiles", text).apply {
-            description.extras =
-                PersistableBundle().apply {
-                    putBoolean("android.content.extra.IS_SENSITIVE", true)
+): Boolean {
+    val text = try {
+        withContext(Dispatchers.Default) { cliPortableClipboardText(exports) }
+    } catch (_: PortableProfileExportFailure) {
+        return false
+    }
+    if (text.isBlank()) return false
+    return withContext(Dispatchers.Main.immediate) {
+        try {
+            val clipboard = context.getSystemService(ClipboardManager::class.java) ?: return@withContext false
+            val clip =
+                ClipData.newPlainText("FoxHole profiles", text).apply {
+                    description.extras =
+                        PersistableBundle().apply {
+                            putBoolean("android.content.extra.IS_SENSITIVE", true)
+                        }
                 }
+            clipboard.setPrimaryClip(clip)
+            true
+        } catch (_: RuntimeException) {
+            false
         }
-    clipboard.setPrimaryClip(clip)
+    }
 }
 
 internal suspend fun cliWriteExportToUri(
@@ -162,3 +197,5 @@ private fun cliSanitizeExportName(value: String): String =
 
 private const val QR_INK = 0xFF000000.toInt()
 private const val QR_PAPER = 0xFFFFFFFF.toInt()
+private const val MAX_CLIPBOARD_BYTES = 4 * 1024 * 1024
+private const val MAX_CLIPBOARD_CONFIGS = 256

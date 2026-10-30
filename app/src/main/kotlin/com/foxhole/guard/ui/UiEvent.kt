@@ -7,6 +7,7 @@ internal data class FoxholeBannerEvent(
     val action: FoxholeBannerAction? = null,
     val durationMillis: Long? = null,
     val expiresAtElapsedMs: Long? = null,
+    val showInTopNotice: Boolean = true,
 )
 
 internal enum class FoxholeBannerTone {

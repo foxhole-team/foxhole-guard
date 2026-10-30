@@ -5,6 +5,8 @@ import org.junit.Test
 import java.io.File
 
 class StringResourceParityTest {
+    private val translatedQualifiers = listOf("values-ru", "values-de", "values-fr", "values-es", "values-ja", "values-zh-rCN")
+    private val allQualifiers = listOf("values") + translatedQualifiers
     private val stringName = Regex("""<string\s+[^>]*name="([^"]+)"""")
     private val stringEntry =
         Regex(
@@ -30,24 +32,14 @@ class StringResourceParityTest {
     @Test
     fun `every default string is translated and every translation has a default`() {
         val default = names("values")
-        val russian = names("values-ru")
-
-        assertEquals(
-            "Keys present in values/ but missing from values-ru/ — add the Russian translation.",
-            emptyList<String>(),
-            (default - russian).sorted(),
-        )
-        assertEquals(
-            "Keys present in values-ru/ but missing from values/ — orphaned after a rename or " +
-                "deletion; remove them or restore the English default.",
-            emptyList<String>(),
-            (russian - default).sorted(),
-        )
+        translatedQualifiers.forEach { qualifier ->
+            assertEquals("String keys differ in $qualifier", default.sorted(), names(qualifier).sorted())
+        }
     }
 
     @Test
     fun `no catalogue declares the same key twice`() {
-        listOf("values", "values-ru").forEach { qualifier ->
+        allQualifiers.forEach { qualifier ->
             val all = allNames(qualifier)
             val duplicates = all.groupingBy { it }.eachCount().filterValues { it > 1 }.keys.sorted()
 
@@ -58,20 +50,21 @@ class StringResourceParityTest {
     @Test
     fun `translated strings preserve format placeholders`() {
         val default = entries("values")
-        val russian = entries("values-ru")
-
-        default.keys.sorted().forEach { key ->
-            assertEquals(
-                "Format placeholders differ for $key",
-                placeholders(default.getValue(key)),
-                placeholders(russian.getValue(key)),
-            )
+        translatedQualifiers.forEach { qualifier ->
+            val translated = entries(qualifier)
+            default.keys.sorted().forEach { key ->
+                assertEquals(
+                    "Format placeholders differ for $qualifier/$key",
+                    placeholders(default.getValue(key)),
+                    placeholders(translated.getValue(key)),
+                )
+            }
         }
     }
 
     @Test
     fun `visible strings use complete FoxHole product names`() {
-        listOf("values", "values-ru").forEach { qualifier ->
+        allQualifiers.forEach { qualifier ->
             entries(qualifier).forEach { (key, value) ->
                 check(!incompleteFoxHoleBrand.containsMatchIn(value)) {
                     "$qualifier/$key contains a shortened FoxHole product name"
@@ -88,38 +81,68 @@ class StringResourceParityTest {
     @Test
     fun `translated strings preserve explicit line structure`() {
         val default = entries("values")
-        val russian = entries("values-ru")
-
-        default.keys.sorted().forEach { key ->
-            assertEquals(
-                "Explicit newline count differs for $key",
-                default.getValue(key).windowed(2).count { it == "\\n" },
-                russian.getValue(key).windowed(2).count { it == "\\n" },
-            )
+        translatedQualifiers.forEach { qualifier ->
+            val translated = entries(qualifier)
+            default.keys.sorted().forEach { key ->
+                assertEquals(
+                    "Explicit newline count differs for $qualifier/$key",
+                    default.getValue(key).windowed(2).count { it == "\\n" },
+                    translated.getValue(key).windowed(2).count { it == "\\n" },
+                )
+            }
         }
     }
 
     @Test
     fun `plural catalogues and placeholder signatures stay compatible`() {
         val default = plurals("values")
-        val russian = plurals("values-ru")
-        assertEquals(default.keys.sorted(), russian.keys.sorted())
-
-        default.forEach { (key, defaultQuantities) ->
-            val russianQuantities = russian.getValue(key)
-            listOf("one", "other").forEach { quantity ->
-                assertEquals(
-                    "Plural placeholders differ for $key/$quantity",
-                    placeholders(defaultQuantities.getValue(quantity)),
-                    placeholders(russianQuantities.getValue(quantity)),
-                )
+        translatedQualifiers.forEach { qualifier ->
+            val translated = plurals(qualifier)
+            assertEquals(default.keys.sorted(), translated.keys.sorted())
+            default.forEach { (key, defaultQuantities) ->
+                val quantities = translated.getValue(key)
+                assertEquals(true, quantities.containsKey("other"))
+                quantities.forEach { (quantity, value) ->
+                    assertEquals(
+                        "Plural placeholders differ for $qualifier/$key/$quantity",
+                        placeholders(defaultQuantities[quantity] ?: defaultQuantities.getValue("other")),
+                        placeholders(value),
+                    )
+                }
             }
-            russianQuantities.values.forEach { value ->
-                assertEquals(
-                    "Russian plural variants for $key must use one placeholder signature",
-                    placeholders(russianQuantities.getValue("other")),
-                    placeholders(value),
-                )
+        }
+    }
+
+    @Test
+    fun `language names remain readable in every selected language`() {
+        val endonyms = mapOf(
+            "ru" to "русский", "en" to "english", "ja" to "日本語", "de" to "Deutsch",
+            "fr" to "français", "es" to "español", "zh" to "简体中文",
+        )
+        allQualifiers.forEach { qualifier ->
+            val translated = entries(qualifier)
+            endonyms.forEach { (tag, label) ->
+                assertEquals("Endonym differs in $qualifier", label, translated.getValue("cli_cfg_locale_$tag"))
+            }
+        }
+    }
+
+    @Test
+    fun `runtime errors and widget actions have matching locale keys and placeholders`() {
+        listOf(
+            "app/src/main/res" to "widget_action_strings.xml",
+            "core/runtime/src/main/res" to "strings.xml",
+        ).forEach { (directory, filename) ->
+            fun catalogue(qualifier: String) = stringEntry.findAll(
+                repoRoot().resolve("$directory/$qualifier/$filename").readText(),
+            ).associate { it.groupValues[1] to it.groupValues[2] }
+            val default = catalogue("values")
+            translatedQualifiers.forEach { qualifier ->
+                val translated = catalogue(qualifier)
+                assertEquals("Keys differ for $directory/$qualifier", default.keys.sorted(), translated.keys.sorted())
+                default.forEach { (key, value) ->
+                    assertEquals(placeholders(value), placeholders(translated.getValue(key)))
+                }
             }
         }
     }

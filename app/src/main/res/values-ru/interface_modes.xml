@@ -1,0 +1,15 @@
+<resources>
+    <string name="interface_mode_title">Режим интерфейса</string>
+    <string name="interface_mode_user">Пользовательский</string>
+    <string name="interface_mode_expert">Экспертный</string>
+    <string name="interface_mode_description">Смена интерфейса сохраняет подключение и расширенные настройки.</string>
+    <string name="user_home_choose_profile">Выбрать профиль</string>
+    <string name="user_home_add_profile">Добавить профиль VPN</string>
+    <string name="user_home_map_disabled">Виджет карты трафика отключён</string>
+    <string name="user_home_map_setup">Включить</string>
+    <string name="user_home_latency">Задержка: %1$s</string>
+    <string name="user_home_city">Город</string>
+    <string name="user_home_city_unavailable">Город недоступен</string>
+    <string name="user_home_stop_proxy">Остановить локальный прокси</string>
+    <string name="user_settings_protection">Защита</string>
+</resources>

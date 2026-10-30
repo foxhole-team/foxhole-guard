@@ -71,11 +71,19 @@ private fun NetworkActivityEvent.networkActivityCountryLabel(
     val matchingIpInfo =
         ipInfo
             ?.takeIf { info -> remote == info.ip || remote == info.ipv4 || remote == info.ipv6 }
-    val resolvedCode =
-        normalizedCountryCode(countryCode)
-            ?: normalizedCountryCode(countryCodeForDestination(remoteHost))
-            ?: normalizedCountryCode(matchingIpInfo?.countryCode)
+    val resolvedCode = networkActivityCountryCode(countryCodeForDestination, ipInfo)
     val country = resolvedCode?.let { code -> "${countryDisplayName(code)} ($code)" } ?: "?"
     val city = matchingIpInfo?.city?.takeIf(String::isNotBlank)
     return listOfNotNull(country, city).joinToString(separator = " • ")
+}
+
+internal fun NetworkActivityEvent.networkActivityCountryCode(
+    countryCodeForDestination: (String) -> String?,
+    ipInfo: IpInfo?,
+): String? {
+    val remote = remoteHost.connectionHost()
+    val matchingIpInfo = ipInfo?.takeIf { info -> remote == info.ip || remote == info.ipv4 || remote == info.ipv6 }
+    return normalizedCountryCode(countryCode)
+        ?: normalizedCountryCode(countryCodeForDestination(remoteHost))
+        ?: normalizedCountryCode(matchingIpInfo?.countryCode)
 }

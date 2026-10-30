@@ -45,8 +45,6 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 import java.util.concurrent.atomic.AtomicBoolean
 
-/** Runtime stop / fail-closed teardown helpers for [FoxholeVpnService]. */
-
 internal enum class RuntimeInterfaceDisposition {
     STOP,
     RETIRE_FOR_HANDOVER,

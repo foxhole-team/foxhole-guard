@@ -1,6 +1,5 @@
 package com.foxhole.guard.core.data
 
-import androidx.room.withTransaction
 import com.foxhole.core.model.ParsedSubscriptionImport
 import com.foxhole.core.model.Profile
 import com.foxhole.core.model.ProfileSourceType
@@ -8,12 +7,11 @@ import com.foxhole.core.model.ProtocolHint
 import com.foxhole.core.model.Settings
 import com.foxhole.core.model.SubscriptionEntryStatus
 import com.foxhole.core.model.storedProtocolHintOrNull
-import com.foxhole.core.network.ensurePublicUrl
+import com.foxhole.core.network.ensurePublicSubscriptionUrl
 import com.foxhole.core.network.requirePublicUrl
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 suspend fun ProfileRepository.refreshProfile(
@@ -21,41 +19,28 @@ suspend fun ProfileRepository.refreshProfile(
     excludeInsecureTlsOptions: Boolean = false,
     allowInsecureTlsForProfile: Boolean = false,
     callTimeoutMs: Long? = null,
-): Profile =
-    profileImportMutex.withLock {
-        refreshProfileWithReportLocked(
-            profileId = profileId,
-            excludeInsecureTlsOptions = excludeInsecureTlsOptions,
-            allowInsecureTlsForProfile = allowInsecureTlsForProfile,
-            callTimeoutMs = callTimeoutMs,
-        ).profile
-    }
+): Profile = refreshProfileWithReport(
+    profileId,
+    excludeInsecureTlsOptions,
+    allowInsecureTlsForProfile,
+    callTimeoutMs
+).profile
 
 internal suspend fun ProfileRepository.refreshProfileWithReport(
     profileId: Long,
     excludeInsecureTlsOptions: Boolean = false,
     allowInsecureTlsForProfile: Boolean = false,
     callTimeoutMs: Long? = null,
-): ProfileRefreshResult =
-    profileImportMutex.withLock {
-        refreshProfileWithReportLocked(
-            profileId = profileId,
-            excludeInsecureTlsOptions = excludeInsecureTlsOptions,
-            allowInsecureTlsForProfile = allowInsecureTlsForProfile,
-            callTimeoutMs = callTimeoutMs,
-        )
-    }
-
-internal suspend fun ProfileRepository.refreshProfileWithReportLocked(
-    profileId: Long,
-    excludeInsecureTlsOptions: Boolean = false,
-    allowInsecureTlsForProfile: Boolean = false,
-    callTimeoutMs: Long? = null,
 ): ProfileRefreshResult {
-    val entity = dao.getById(profileId) ?: error("profile not found")
-    require(entity.sourceType == ProfileSourceType.SUBSCRIPTION_URL.name) { "profile is not refreshable" }
-    val secret = secretStore.read(entity.secretRef) ?: error("profile secret is missing")
-    val sourceUrl = secret.subscriptionUrl ?: error("subscription url is missing")
+    val snapshot = mutationCoordinator.readCommitted {
+        val entity = dao.getById(profileId) ?: error("profile not found")
+        require(entity.sourceType == ProfileSourceType.SUBSCRIPTION_URL.name) { "profile is not refreshable" }
+        val secret = secretStore.read(entity.secretRef) ?: error("profile secret is missing")
+        val source = secret.subscriptionUrl ?: error("subscription url is missing")
+        Triple(entity, source, loadSubscriptionGroup(source))
+    }
+    val entity = snapshot.first
+    val sourceUrl = snapshot.second
     diagnosticsLogger.record(
         "profile",
         "subscription refresh started profileId=$profileId etagPresent=${!entity.lastEtag.isNullOrBlank()}",
@@ -64,7 +49,7 @@ internal suspend fun ProfileRepository.refreshProfileWithReportLocked(
     val safeUrl =
         withContext(Dispatchers.IO) {
             sourceUrl
-                .ensurePublicUrl(allowHttp = false)
+                .ensurePublicSubscriptionUrl()
                 .requirePublicUrl(
                     allowHttp = false,
                     resolveHost = true,
@@ -80,8 +65,10 @@ internal suspend fun ProfileRepository.refreshProfileWithReportLocked(
                 callTimeoutMs = callTimeoutMs,
             )
         }.getOrElse { error ->
-            if (error is CancellationException) throw error
-            throw IllegalStateException(describeSubscriptionTransportFailure(sourceUrl, error), error)
+            throw when (error) {
+                is CancellationException, is Error, is SubscriptionFetchConnectivityFailure -> error
+                else -> IllegalStateException(describeSubscriptionTransportFailure(sourceUrl, error), error)
+            }
         }
     diagnosticsLogger.record(
         "profile",
@@ -91,14 +78,16 @@ internal suspend fun ProfileRepository.refreshProfileWithReportLocked(
     )
     diagnosticsLogger.record("profile", response.metadata.redactedSummary())
 
-    val subscriptionGroup = loadSubscriptionGroup(sourceUrl)
+    val subscriptionGroup = snapshot.third
     val protocolsBefore = subscriptionGroup.subscriptionProtocolHints()
     if (response.notModified) {
-        diagnosticsLogger.record("profile", "subscription not modified")
-        return ProfileRefreshResult(
-            profile = resolveDomainProfile(entity),
-            protocolChanges = profileRefreshProtocolChanges(protocolsBefore, protocolsBefore),
-        )
+        return mutationCoordinator.readCommitted {
+            requirePreparedImportCurrent(loadSubscriptionGroup(sourceUrl) == subscriptionGroup)
+            ProfileRefreshResult(
+                profile = resolveDomainProfile(entity),
+                protocolChanges = profileRefreshProtocolChanges(protocolsBefore, protocolsBefore),
+            )
+        }
     }
 
     val parsed =
@@ -110,33 +99,40 @@ internal suspend fun ProfileRepository.refreshProfileWithReportLocked(
             excludeInsecureTlsOptions = excludeInsecureTlsOptions,
             subscriptionGroup = subscriptionGroup,
         )
-    val refreshedProfile = applyFetchedSubscriptionProfiles(
-        sourceUrl = sourceUrl,
-        parsed = parsed,
-        response = response,
-        targetProfileId = profileId,
-        activateFirstIfNoProfiles = false,
-        subscriptionGroup = subscriptionGroup,
-        grantInsecureTlsConsent = allowInsecureTlsForProfile,
-    )
-    val protocolsAfter = loadSubscriptionGroup(sourceUrl).subscriptionProtocolHints()
-    val changes =
-        profileRefreshProtocolChanges(
-            before = protocolsBefore,
-            after = protocolsAfter,
-            unavailableProtocolLabels =
-            parsed.entryReports
-                .filter { report -> report.status == SubscriptionEntryStatus.IGNORED_UNSUPPORTED }
-                .map { report -> report.protocolLabel },
+    return withProfileMutation { owner ->
+        requirePreparedImportCurrent(
+            owner.currentSettings(settingsRepository).importPolicy() == settings.importPolicy() &&
+                loadSubscriptionGroup(sourceUrl) == subscriptionGroup
         )
-    diagnosticsLogger.record(
-        "profile",
-        "subscription protocols available=${changes.availableProtocolLabels.size} " +
-            "added=${changes.addedProtocolLabels.joinToString().ifBlank { "none" }} " +
-            "removed=${changes.removedProtocolLabels.joinToString().ifBlank { "none" }} " +
-            "unavailable=${changes.unavailableProtocolLabels.joinToString().ifBlank { "none" }}",
-    )
-    return ProfileRefreshResult(profile = refreshedProfile, protocolChanges = changes)
+        val refreshedProfile = applyFetchedSubscriptionProfiles(
+            sourceUrl = sourceUrl,
+            parsed = parsed,
+            response = response,
+            targetProfileId = profileId,
+            activateFirstIfNoProfiles = false,
+            subscriptionGroup = subscriptionGroup,
+            grantInsecureTlsConsent = allowInsecureTlsForProfile,
+            owner = owner,
+        )
+        val protocolsAfter = loadSubscriptionGroup(sourceUrl).subscriptionProtocolHints()
+        val changes =
+            profileRefreshProtocolChanges(
+                before = protocolsBefore,
+                after = protocolsAfter,
+                unavailableProtocolLabels =
+                parsed.entryReports
+                    .filter { report -> report.status == SubscriptionEntryStatus.IGNORED_UNSUPPORTED }
+                    .map { report -> report.protocolLabel },
+            )
+        diagnosticsLogger.record(
+            "profile",
+            "subscription protocols available=${changes.availableProtocolLabels.size} " +
+                "added=${changes.addedProtocolLabels.joinToString().ifBlank { "none" }} " +
+                "removed=${changes.removedProtocolLabels.joinToString().ifBlank { "none" }} " +
+                "unavailable=${changes.unavailableProtocolLabels.joinToString().ifBlank { "none" }}",
+        )
+        ProfileRefreshResult(profile = refreshedProfile, protocolChanges = changes)
+    }
 }
 
 internal data class PreparedProfileConnection(
@@ -152,51 +148,38 @@ internal suspend fun ProfileRepository.prepareProfileForConnection(
     profileId: Long,
     requestedProtocolOptionId: String?,
     refreshSubscription: Boolean,
-): PreparedProfileConnection =
-    profileImportMutex.withLock {
-        val entityBefore = dao.getById(profileId) ?: error("profile not found")
-        val profileBefore = resolveDomainProfile(entityBefore)
-        if (profileBefore.sourceType != ProfileSourceType.SUBSCRIPTION_URL) {
-            return@withLock PreparedProfileConnection(profileBefore, requestedProtocolOptionId)
-        }
-        val secretBefore = secretStore.read(entityBefore.secretRef) ?: error("profile secret is missing")
-        val requestedId = requestedProtocolOptionId?.trim()?.takeIf(String::isNotBlank)
-        val requestedFingerprint =
-            requestedId
-                ?.let { id -> secretBefore.protocolOptions.firstOrNull { option -> option.id == id } }
-                ?.stableProtocolOptionFingerprint()
-        val refreshedProfile =
-            if (refreshSubscription) {
-                refreshProfileWithReportLocked(
-                    profileId = profileId,
-
-                    allowInsecureTlsForProfile = false,
-                ).profile
-            } else {
-                profileBefore
-            }
-        val refreshedEntity = dao.getById(refreshedProfile.id) ?: error("profile not found after refresh")
-        val refreshedSecret = secretStore.read(refreshedEntity.secretRef) ?: error("profile secret is missing")
-        val resolvedRequestedId =
-            requestedId?.let { id ->
-                refreshedSecret.protocolOptions.firstOrNull { option -> option.id == id }?.id
-                    ?: requestedFingerprint
-                        ?.let { fingerprint ->
-                            refreshedSecret.protocolOptions
-                                .filter { option -> option.stableProtocolOptionFingerprint() == fingerprint }
-                                .singleOrNull()
-                                ?.id
-                        }
-                    ?: throw SubscriptionProtocolOptionUnavailableException()
-            }
-        PreparedProfileConnection(
-            profile = resolveDomainProfile(refreshedEntity),
-            protocolOptionId = resolvedRequestedId,
-        )
+): PreparedProfileConnection {
+    val before = mutationCoordinator.readCommitted {
+        val entity = dao.getById(profileId) ?: error("profile not found")
+        val secret = secretStore.read(entity.secretRef) ?: error("profile secret is missing")
+        resolveDomainProfile(entity) to secret
     }
+    val requestedId = requestedProtocolOptionId?.trim()?.takeIf(String::isNotBlank)
+    val fingerprint = requestedId?.let { id -> before.second.protocolOptions.firstOrNull { it.id == id } }
+        ?.stableProtocolOptionFingerprint()
+    val refreshed = if (refreshSubscription && before.first.sourceType == ProfileSourceType.SUBSCRIPTION_URL) {
+        refreshProfileWithReport(profileId, allowInsecureTlsForProfile = false).profile
+    } else {
+        before.first
+    }
+    return mutationCoordinator.readCommitted {
+        val entity = dao.getById(refreshed.id) ?: error("profile not found after refresh")
+        val secret = secretStore.read(entity.secretRef) ?: error("profile secret is missing")
+        val selected = requestedId?.let { id ->
+            secret.protocolOptions.firstOrNull { it.id == id }?.id
+                ?: fingerprint?.let { key ->
+                    secret.protocolOptions.filter {
+                        it.stableProtocolOptionFingerprint() == key
+                    }.singleOrNull()?.id
+                }
+                ?: throw SubscriptionProtocolOptionUnavailableException()
+        }
+        PreparedProfileConnection(resolveDomainProfile(entity), selected)
+    }
+}
 
 internal suspend fun ProfileRepository.subscriptionRefreshRepresentatives(): List<Profile> =
-    profileImportMutex.withLock {
+    mutationCoordinator.readCommitted {
         val seenSources = linkedSetOf<String>()
         buildList {
             dao.getAllProfiles()
@@ -275,15 +258,14 @@ internal suspend fun ProfileRepository.applyFetchedSubscriptionProfiles(
     activateFirstIfNoProfiles: Boolean,
     subscriptionGroup: List<SubscriptionGroupMember>? = null,
     grantInsecureTlsConsent: Boolean = false,
+    owner: ProfileMutationLease,
 ): Profile {
+    owner.requireOwner(mutationCoordinator)
     val resolvedSubscriptionGroup = subscriptionGroup ?: loadSubscriptionGroup(sourceUrl)
     val refreshPlan = parsed.planRefreshAgainst(resolvedSubscriptionGroup)
     val matchedProfiles = refreshPlan.assignments.count { assignment -> assignment.existingProfileId != null }
     val insertedProfiles = refreshPlan.assignments.size - matchedProfiles
-    diagnosticsLogger.record(
-        "profile",
-        "subscription apply plan prepared matched=$matchedProfiles inserted=$insertedProfiles deleted=${refreshPlan.deletedProfileIds.size}",
-    )
+    recordPreparedSubscriptionRefresh(matchedProfiles, insertedProfiles, refreshPlan.deletedProfileIds.size)
     val subscriptionGroupById = resolvedSubscriptionGroup.associateBy { it.entity.id }
     val now = System.currentTimeMillis()
     val removedProfiles = refreshPlan.deletedProfileIds.mapNotNull(subscriptionGroupById::get)
@@ -299,6 +281,7 @@ internal suspend fun ProfileRepository.applyFetchedSubscriptionProfiles(
         )
     val committedRefresh =
         executeSerializedSecretFirstMutation(
+            owner = owner,
             secretStore = secretStore,
             stagedWrites = preparedProfiles.stagedSecretWrites(),
             cleanupSecretRefsAfterSuccess =
@@ -308,7 +291,7 @@ internal suspend fun ProfileRepository.applyFetchedSubscriptionProfiles(
         ) {
             val committedProfiles = mutableListOf<AppliedSubscriptionProfile>()
             var replacementActiveId: Long? = null
-            database.withTransaction {
+            owner.transaction(database) {
                 preparedProfiles.forEach { prepared ->
                     val existingEntity = prepared.existingEntity
                     if (existingEntity != null) {
@@ -380,8 +363,7 @@ internal suspend fun ProfileRepository.applyFetchedSubscriptionProfiles(
                 replacementActiveId = replacementActiveId,
             )
         }
-    val appliedProfiles = committedRefresh.appliedProfiles
-    dao.getActiveProfile()?.let { entity -> persistCachedActiveProfile(resolveDomainProfile(entity)) }
+    dao.getActiveProfile()?.let { entity -> persistCachedActiveProfile(resolveDomainProfile(entity), owner) }
     diagnosticsLogger.record(
         "profile",
         "subscription apply finished updated=$matchedProfiles inserted=$insertedProfiles deleted=${removedProfiles.size} replacementActive=${committedRefresh.replacementActiveId != null}",
@@ -436,3 +418,10 @@ private fun List<SubscriptionGroupMember>.subscriptionProtocolHints(): Set<Proto
                 )
             }
     }.filterTo(linkedSetOf()) { protocolHint -> protocolHint != ProtocolHint.UNKNOWN }
+
+private fun ProfileRepository.recordPreparedSubscriptionRefresh(matched: Int, inserted: Int, deleted: Int) {
+    diagnosticsLogger.record(
+        "profile",
+        "subscription apply plan prepared matched=$matched inserted=$inserted deleted=$deleted"
+    )
+}

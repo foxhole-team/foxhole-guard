@@ -219,10 +219,26 @@ internal suspend fun runBlockingRuntimeClose(
         }
     }
 
+private const val RUNTIME_RELOAD_CANCEL_SETTLEMENT_MS = 250L
+private const val RUNTIME_RELOAD_CANCEL_GRACE_MS = 500L
+
+internal interface RuntimeSettledCancellationOwner {
+    suspend fun abortSettledNativeTransition(
+        generation: Long,
+        reason: String,
+        deadlineNanos: Long,
+    ): RuntimeKillResult?
+}
+
+internal fun remainingRuntimeCancellationMillis(deadlineNanos: Long): Long =
+    ((deadlineNanos - System.nanoTime()) / 1_000_000L).coerceAtLeast(0L)
+
 internal suspend fun <T : Any> runAbandonableNativeRuntimeCall(
     operation: String,
     timeoutMs: Long,
     registry: RuntimeNativeCallRegistry = RuntimeAbandonedCloseRegistry,
+    cancellationSettlementTimeoutMs: Long = 0L,
+    onCancellationSettlement: (Boolean, Long) -> Unit = { _, _ -> },
     block: suspend () -> T,
 ): T? {
     val outcome = CompletableDeferred<Result<T>>()
@@ -250,7 +266,19 @@ internal suspend fun <T : Any> runAbandonableNativeRuntimeCall(
             settled.getOrThrow()
         }
     } catch (cancelled: CancellationException) {
-        lease.markAbandonedIf { !outcome.isCompleted }
+        val cancelledAt = System.nanoTime()
+        withContext(NonCancellable) {
+            val settled = if (cancellationSettlementTimeoutMs > 0L) {
+                withTimeoutOrNull(cancellationSettlementTimeoutMs) {
+                    outcome.await()
+                    true
+                } == true
+            } else {
+                outcome.isCompleted
+            }
+            onCancellationSettlement(settled, cancelledAt)
+            lease.markAbandonedIf { !outcome.isCompleted }
+        }
         throw cancelled
     }
 }
@@ -418,11 +446,20 @@ suspend fun FoxholeRuntime.reloadFailClosed(
 ): Result<Unit> {
     val fencedRuntime = this as? RuntimeNativeStartFenceOwner
     val permit = fencedRuntime?.openNativeStartPermit("reload:$owner")
+    val settledCancellationOwner = this as? RuntimeSettledCancellationOwner
+    var cancellationSettled = false
+    var cancellationStartedAt = 0L
     try {
         val result =
             runAbandonableNativeRuntimeCall(
                 operation = "reload",
                 timeoutMs = timeoutMs,
+                cancellationSettlementTimeoutMs =
+                if (settledCancellationOwner != null) RUNTIME_RELOAD_CANCEL_SETTLEMENT_MS else 0L,
+                onCancellationSettlement = { settled, startedAt ->
+                    cancellationSettled = settled
+                    cancellationStartedAt = startedAt
+                },
             ) {
                 if (fencedRuntime != null && permit != null) {
                     fencedRuntime.reloadWithNativePermit(session, host, permit)
@@ -459,20 +496,42 @@ suspend fun FoxholeRuntime.reloadFailClosed(
                 ?: Result.failure(IllegalStateException("android: runtime reload timed out"))
         }
     } catch (cancelled: CancellationException) {
-        val kill =
-            if (fencedRuntime != null && permit != null) {
-                withContext(NonCancellable + Dispatchers.IO) {
-                    fencedRuntime.abortNativeTransition(permit, "${owner}_reload_cancelled")
+        withContext(NonCancellable) {
+            val kill =
+                if (fencedRuntime != null && permit != null) {
+                    fencedRuntime.abortCancelledReload(
+                        generation = permit,
+                        reason = "${owner}_reload_cancelled",
+                        nativeCallSettled = cancellationSettled,
+                        deadlineNanos = cancellationStartedAt + RUNTIME_RELOAD_CANCEL_GRACE_MS * 1_000_000L,
+                    )
+                } else {
+                    null
                 }
-            } else {
-                null
-            }
-        kill?.forceStopOutcome
-            ?.takeIf(NativeForceStopOutcome::processPoisoned)
-            ?.let { outcome ->
-                throw NativeForceStopPoisonedCancellationException(outcome, "reload_cancelled", cancelled)
-            }
+            kill.throwIfPoisonedReloadCancellation(cancelled)
+        }
         throw cancelled
+    }
+}
+
+private fun RuntimeKillResult?.throwIfPoisonedReloadCancellation(cancelled: CancellationException) {
+    val outcome = this?.forceStopOutcome ?: return
+    if (outcome.processPoisoned) {
+        throw NativeForceStopPoisonedCancellationException(outcome, "reload_cancelled", cancelled)
+    }
+}
+
+private suspend fun RuntimeNativeStartFenceOwner.abortCancelledReload(
+    generation: Long,
+    reason: String,
+    nativeCallSettled: Boolean,
+    deadlineNanos: Long,
+): RuntimeKillResult? {
+    val gracefulOwner = this as? RuntimeSettledCancellationOwner
+    return if (nativeCallSettled && gracefulOwner != null) {
+        gracefulOwner.abortSettledNativeTransition(generation, reason, deadlineNanos)
+    } else {
+        abortNativeTransition(generation, reason)
     }
 }
 

@@ -1,0 +1,16 @@
+<resources>
+    <string name="cli_logs_tab_sentinel">Sentinel</string>
+    <string name="cli_sentinel_installations">Установленные приложения</string>
+    <string name="cli_sentinel_recent_installations">Последние установки</string>
+    <string name="cli_sentinel_view_all_installations">Показать все (%1$d)</string>
+    <string name="cli_sentinel_installations_empty">Нет видимых установленных приложений.</string>
+    <string name="cli_sentinel_install_history">Записанные изменения приложений</string>
+    <string name="cli_sentinel_install_history_retention">История изменений приложений</string>
+    <string name="cli_sentinel_history_detected">Обнаружено: %1$s</string>
+    <string name="cli_sentinel_history_empty">Нет записанных изменений приложений.</string>
+    <string name="cli_sentinel_activity_history">Активность приложений</string>
+    <string name="cli_sentinel_inventory_refresh">Обновить список приложений</string>
+    <string name="cli_sentinel_inventory_failed">Не удалось загрузить список установленных приложений.</string>
+    <string name="cli_sentinel_apps_updated">Обновлено</string>
+    <string name="cli_sentinel_module_history_note">Установки и результаты проверок — в Журналах → Sentinel.</string>
+</resources>

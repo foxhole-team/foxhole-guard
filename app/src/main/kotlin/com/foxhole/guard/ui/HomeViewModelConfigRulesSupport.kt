@@ -9,7 +9,11 @@ import com.foxhole.core.model.ConnectionState
 import com.foxhole.core.model.RoutingPresetSource
 import com.foxhole.core.model.RoutingRuleAction
 import com.foxhole.guard.R
+import com.foxhole.guard.core.diagnostics.collectNativeAggregateCounters
+import com.foxhole.guard.core.diagnostics.prepareNativeDiagnosticsArchive
 import com.foxhole.guard.userFacingErrorMessage
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import java.io.File
 
@@ -170,17 +174,22 @@ private fun HomeViewModel.siteRuleName(
     return "$prefix: ${token ?: getApplication<Application>().getString(R.string.site_exception_default_name)}"
 }
 
-internal fun HomeViewModel.createSanitizedAboutDiagnosticsArchive(): File =
-    container.diagnosticsLogger.createSanitizedAboutExportFile()
+internal suspend fun HomeViewModel.createSanitizedAboutDiagnosticsArchive(): File =
+    prepareNativeDiagnosticsArchive(
+        capture = { collectNativeAggregateCounters(container.runtimeInstanceStore::current) },
+        write = { snapshot -> container.diagnosticsLogger.createSanitizedAboutExportFile(snapshot) },
+    )
 
-internal fun HomeViewModel.exportSanitizedDiagnosticsFromAbout(
-    file: File = createSanitizedAboutDiagnosticsArchive(),
+internal suspend fun HomeViewModel.exportSanitizedDiagnosticsFromAbout(
+    file: File? = null,
 ): Intent {
+    val archive = file ?: createSanitizedAboutDiagnosticsArchive()
+    currentCoroutineContext().ensureActive()
     val uri =
         FileProvider.getUriForFile(
             getApplication(),
             "${getApplication<Application>().packageName}.fileprovider",
-            file,
+            archive,
         )
     val subject = getApplication<Application>().getString(R.string.export_diagnostics_share_subject)
     return Intent(Intent.ACTION_SEND).apply {

@@ -17,6 +17,7 @@ import com.foxhole.guard.core.sentinel.InstalledAppSecurityAnalyzer
 import com.foxhole.guard.core.sentinel.InstalledAppSecurityNotifier
 import com.foxhole.guard.core.sentinel.InstalledAppSecuritySummary
 import com.foxhole.guard.core.sentinel.SentinelThreatIntelProvider
+import com.foxhole.guard.core.sentinel.sentinelAttempt
 import com.foxhole.guard.core.settings.enrichInstalledAppChange
 import com.foxhole.guard.core.settings.incompleteQuarantineAnalyses
 import com.foxhole.guard.core.settings.recordInstalledAppChange
@@ -79,13 +80,19 @@ class InstalledAppChangeReceiver : BroadcastReceiver() {
                 }
 
                 if (guardChange != null && app.appGraph.securityComponents.isEventMonitoringActive()) {
-                    runCatching {
-                        app.appGraph.securityComponents.guardSentinel.recordPackageChange(
+                    sentinelAttempt {
+                        app.appGraph.securityComponents.guardSentinel.enqueuePackageChange(
                             guardChange.second,
                             guardChange.first,
                         )
+                    }.onFailure { error ->
+                        app.container.diagnosticsLogger.record(
+                            "guard-package-reconcile",
+                            "guard package admission failed error=${error.javaClass.simpleName}",
+                        )
                     }
                 }
+                app.enqueueOptionalStaticScan(guardChange)
                 if (preparedChange != null) {
                     app.enrichPackageInventoryChange(preparedChange)
                 }
@@ -95,6 +102,15 @@ class InstalledAppChangeReceiver : BroadcastReceiver() {
 
     private companion object {
         const val PACKAGE_CHANGE_TIMEOUT_MS = 8_000L
+    }
+}
+
+private suspend fun FoxholeApplication.enqueueOptionalStaticScan(change: Pair<String, GuardEventType>?) {
+    if (change?.second !in setOf(GuardEventType.PACKAGE_ADDED, GuardEventType.PACKAGE_REPLACED)) return
+    val settings = appGraph.settingsRepository.current()
+    val scan = settings.anomaly.apkScan
+    if (settings.anomaly.enabled && scan.dexEnabled && scan.automaticNewUpdatedApps) {
+        appGraph.sentinelScanGateway.enqueueAutomatic(requireNotNull(change).first)
     }
 }
 
@@ -168,7 +184,7 @@ private suspend fun FoxholeApplication.preparePackageInventoryChange(
         }
     } catch (error: CancellationException) {
         throw error
-    } catch (error: Throwable) {
+    } catch (error: Exception) {
         PackageChangePreparation.Failed(error)
     }
 
@@ -207,7 +223,7 @@ private suspend fun FoxholeApplication.preflightPackageChange(
         quarantineAnalysisComplete = !quarantinedInstall,
     )
     if (quarantinedInstall || quarantineIdentity != null || relevance.runtimeRelevant) {
-        runCatching { applyQuarantineToActiveRuntime() }
+        sentinelAttempt { applyQuarantineToActiveRuntime() }
             .onFailure { error ->
                 container.diagnosticsLogger.record(
                     "app-inventory",
@@ -245,7 +261,7 @@ private suspend fun FoxholeApplication.enrichPackageInventoryChange(prepared: Pr
         installedIdentity = quarantineIdentity ?: installedIdentity,
     )
     if (outcome.routeChanged) {
-        runCatching { applyQuarantineToActiveRuntime() }
+        sentinelAttempt { applyQuarantineToActiveRuntime() }
             .onFailure { error ->
                 container.diagnosticsLogger.record(
                     "app-inventory",
@@ -330,7 +346,7 @@ internal suspend fun FoxholeApplication.reconcilePendingQuarantineAnalyses(): Bo
     if (candidates.isEmpty()) return false
     val analyzer = InstalledAppSecurityAnalyzer(this, SentinelThreatIntelProvider(this)::current)
     candidates.forEach { candidate ->
-        val identityResult = runCatching { repository.currentQuarantineIdentity(candidate.packageName) }
+        val identityResult = sentinelAttempt { repository.currentQuarantineIdentity(candidate.packageName) }
         if (identityResult.isFailure) {
             container.diagnosticsLogger.record(
                 "app-inventory",
@@ -342,13 +358,14 @@ internal suspend fun FoxholeApplication.reconcilePendingQuarantineAnalyses(): Bo
         val identity = identityResult.getOrNull()
         if (identity == null) {
             if (repository.removeMissingIncompleteQuarantine(candidate.packageName, candidate.detectedAt)) {
-                runCatching { applyQuarantineToActiveRuntime() }
+                sentinelAttempt { applyQuarantineToActiveRuntime() }
             }
             return@forEach
         }
         val summary =
             analyzer.analyzePackageResult(candidate.packageName, candidate.label)
                 .onFailure { error ->
+                    if (error is kotlinx.coroutines.CancellationException || error is Error) throw error
                     container.diagnosticsLogger.record(
                         "app-inventory",
                         "pending quarantine analysis deferred " +
@@ -370,7 +387,7 @@ internal suspend fun FoxholeApplication.reconcilePendingQuarantineAnalyses(): Bo
                 installedIdentity = identity,
             )
         if (outcome.routeChanged) {
-            runCatching { applyQuarantineToActiveRuntime() }
+            sentinelAttempt { applyQuarantineToActiveRuntime() }
         }
         if (outcome.analysisCompletedNow && outcome.pendingAfterCommit) {
             InstalledAppSecurityNotifier(this).notifyInstalledApp(summary = summary, quarantined = true)
@@ -443,7 +460,7 @@ private fun Context.packageInventoryInfo(
     val packageManager = packageManager
     val appInfo =
         if (changeType == InstalledAppChangeType.INSTALLED) {
-            runCatching {
+            sentinelAttempt {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                     packageManager.getApplicationInfo(packageName, PackageManager.ApplicationInfoFlags.of(0))
                 } else {
@@ -456,7 +473,7 @@ private fun Context.packageInventoryInfo(
         }
     val installedPackageInfo =
         if (changeType == InstalledAppChangeType.INSTALLED) {
-            runCatching {
+            sentinelAttempt {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                     packageManager.getPackageInfo(
                         packageName,

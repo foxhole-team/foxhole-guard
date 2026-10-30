@@ -35,7 +35,7 @@ internal class CliScenarioManagementRowHeightContractTest {
         val toggle = rows
             .substringAfter("internal fun CliToggleRow(")
             .substringBefore("internal fun CliRowInfoGlyph(")
-        assertTrue(toggle.contains(".cliPanelRowPressable(enabled = enabled)"))
+        assertTrue(toggle.contains(".cliPanelRowPressable(enabled = enabled, role = Role.Switch)"))
         assertTrue(rows.contains("CLI_MENU_ROW_MIN_HEIGHT = 44.dp"))
     }
 

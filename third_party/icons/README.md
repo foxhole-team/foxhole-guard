@@ -6,11 +6,13 @@
   `5a0fe38e97784d94279ce4eb1bf85f9a91bf027e`.
 - Author: Paweł Kuna and contributors.
 - License: MIT; the exact upstream license is vendored as `Tabler-MIT.txt`.
-- Shipped as 40 converted Android Vector drawables with the upstream 24x24 geometry,
+- Shipped as 41 converted Android Vector drawables with the upstream 24x24 geometry,
   2px stroke, and round caps/joins. The conversion changes only XML representation and
   tint source; path data stays equal to the pinned upstream SVG.
 - `lin_tor` is the sole FoxHole-owned exception because Tabler does not provide a Tor
   onion glyph; similarly named brand icons describe other products and are not used.
+- `lin_eye` and `lin_eye_off` retain the project's existing visibility geometry rather
+  than the pinned Tabler paths.
 
 | FoxHole semantic id | Tabler outline icon |
 | --- | --- |
@@ -19,6 +21,7 @@
 | arrow_down | chevron-down |
 | arrow_right | chevron-right |
 | check | check |
+| city | building-community |
 | clock | clock |
 | copy | copy |
 | cross | x |
@@ -27,6 +30,8 @@
 | edit | pencil |
 | error | circle-x |
 | export | file-export |
+| eye | existing project visibility glyph |
+| eye_off | existing project visibility glyph |
 | fire | flame |
 | forbidden | ban |
 | globe | world |

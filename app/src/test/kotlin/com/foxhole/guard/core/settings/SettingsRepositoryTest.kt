@@ -100,6 +100,20 @@ internal class SettingsRepositoryTest : SettingsRepositoryTestSupport() {
         assertEquals("", AppLocale.SYSTEM.appLanguageTags())
         assertEquals("en", AppLocale.EN.appLanguageTags())
         assertEquals("ru", AppLocale.RU.appLanguageTags())
+        assertEquals("ja", AppLocale.JA.appLanguageTags())
+        assertEquals("de", AppLocale.DE.appLanguageTags())
+        assertEquals("fr", AppLocale.FR.appLanguageTags())
+        assertEquals("es", AppLocale.ES.appLanguageTags())
+        assertEquals("zh-CN", AppLocale.ZH.appLanguageTags())
+    }
+
+    @Test
+    fun `stored locales accept supported names without changing unknown fallback`() {
+        AppLocale.entries.forEach { locale ->
+            assertEquals(locale, parseOptionalStoredAppLocale("  ${locale.name.lowercase()}  "))
+        }
+        assertNull(parseOptionalStoredAppLocale("unsupported"))
+        assertNull(parseOptionalStoredAppLocale(null))
     }
 
     @Test

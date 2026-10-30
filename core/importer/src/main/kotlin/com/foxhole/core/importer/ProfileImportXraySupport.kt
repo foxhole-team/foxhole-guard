@@ -446,16 +446,18 @@ internal open class ProfileImportXraySupport(
                         }
                 }
             }
-            "grpc" -> {
-                val grpcSettings = streamSettings?.get("grpcSettings")?.jsonObject
-                buildJsonObject {
-                    put("type", "grpc")
-                    put(
-                        "service_name",
-                        grpcSettings?.get("serviceName")?.jsonPrimitive?.contentOrNull
-                            ?: error("missing grpc service name"),
-                    )
-                }
+            "xhttp", "splithttp" -> {
+                val settings = streamSettings?.get("xhttpSettings") ?: streamSettings?.get("splithttpSettings")
+                require(settings == null || settings is JsonObject) { "invalid XHTTP settings" }
+                ProfileImportXhttpSupport.fromXray(
+                    settings as? JsonObject,
+                    streamSettings?.get("security")?.jsonPrimitive?.contentOrNull,
+                )
+            }
+            "grpc", "gun" -> {
+                val settings = streamSettings?.get("grpcSettings")
+                require(settings == null || settings is JsonObject) { "invalid grpc settings" }
+                ProfileImportGrpcSupport.fromXray(settings as? JsonObject)
             }
             "http" -> {
                 val httpSettings = streamSettings?.get("httpSettings")?.jsonObject

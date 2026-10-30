@@ -58,6 +58,5 @@ class LocalDataRepositoryTest {
         assertTrue(source.contains("LEGACY_PROFILE_DB_NAME = \"foxhole.db\""))
         assertTrue(source.contains("database.clearAllTables()"))
         assertTrue(source.contains("runtimeFactoryResetFileTargets(appContext)"))
-        assertTrue(source.contains("settingsRepository.resetAllLocalSettings()"))
     }
 }

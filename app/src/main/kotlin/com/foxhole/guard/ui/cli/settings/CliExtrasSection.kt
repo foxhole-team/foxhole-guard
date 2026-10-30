@@ -6,6 +6,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import com.foxhole.core.model.Settings
 import com.foxhole.guard.R
+import com.foxhole.guard.router.ui.GuardRouterSettingsEntry
 import com.foxhole.guard.ui.cli.LocalCliColors
 import com.foxhole.guard.ui.cli.components.CliDivider
 import com.foxhole.guard.ui.cli.components.CliPanel
@@ -19,10 +20,12 @@ internal fun CliExtrasSection(
     onProxyServerEnabledChanged: (Boolean) -> Unit,
     onOpenWebApps: () -> Unit,
     onOpenProxyServer: () -> Unit,
+    onOpenRouter: () -> Unit,
 ) {
     val colors = LocalCliColors.current
     CliPanel(
         title = stringResource(R.string.cli_cfg_group_extras),
+        titleColor = colors.fg,
         icon = R.drawable.lin_link,
         iconColor = colors.accent,
         modifier = Modifier.fillMaxWidth(),
@@ -49,5 +52,7 @@ internal fun CliExtrasSection(
             onOpenSettings = onOpenProxyServer,
             settingsLabel = stringResource(R.string.cli_extras_open_settings),
         )
+        CliDivider(color = colors.borderBright)
+        GuardRouterSettingsEntry(onOpen = onOpenRouter)
     }
 }

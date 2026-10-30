@@ -1,0 +1,1 @@
+Update FoxCore with checked Amnezia header protection and content padding. Preserve DNS across Expert runtime changes, fix legacy DNS attribution, and reject incomplete shared-UID metadata. Support ARM64, ARMv7, x86 and x86_64 native builds.

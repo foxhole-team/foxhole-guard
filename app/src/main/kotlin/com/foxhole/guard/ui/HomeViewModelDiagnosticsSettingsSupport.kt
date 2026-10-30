@@ -45,6 +45,8 @@ internal fun HomeViewModel.onNotifyUnusualTrafficChanged(value: Boolean) {
 internal fun HomeViewModel.onAnomalyEnabledChanged(value: Boolean) {
     updateRuntimeSettingAndMaybeReload {
         container.settingsRepository.updateAnomalyEnabled(value)
+        getApplication<com.foxhole.guard.FoxholeApplication>().appGraph.sentinelScanGateway.refreshPolicy()
+        if (!value) getApplication<com.foxhole.guard.FoxholeApplication>().appGraph.sentinelScanGateway.clearAutomaticQueue()
         val settings = container.settingsRepository.current()
         val app = getApplication<Application>()
         app.applyThreatIntelUpdateSchedule(

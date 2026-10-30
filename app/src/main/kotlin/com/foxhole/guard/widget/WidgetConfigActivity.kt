@@ -23,7 +23,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
@@ -58,6 +57,8 @@ import androidx.glance.state.PreferencesGlanceStateDefinition
 import androidx.lifecycle.lifecycleScope
 import com.foxhole.guard.FoxholeApplication
 import com.foxhole.guard.R
+import com.foxhole.guard.ui.cli.CliColors
+import com.foxhole.guard.ui.cli.CliLightColors
 import com.foxhole.guard.ui.cli.CliSpacing
 import com.foxhole.guard.ui.cli.CliTheme
 import com.foxhole.guard.ui.cli.CliType
@@ -68,6 +69,7 @@ import com.foxhole.guard.ui.cli.cliTypography
 import com.foxhole.guard.ui.cli.components.CliButton
 import com.foxhole.guard.ui.cli.components.CliDropdownOption
 import com.foxhole.guard.ui.cli.components.CliDropdownRow
+import com.foxhole.guard.ui.cli.components.CliFlagIcon
 import com.foxhole.guard.ui.cli.components.CliIcon
 import com.foxhole.guard.ui.cli.components.CliToggleRow
 import com.foxhole.guard.ui.cli.components.cliDashedBorder
@@ -447,7 +449,13 @@ private fun WidgetConfigPreview(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(112.dp)
+            .height(
+                if (kind == WidgetPreviewKind.STATUS && layoutMode == StatusWidgetLayoutMode.SIMPLE) {
+                    WIDGET_SIMPLE_PREVIEW_HEIGHT
+                } else {
+                    112.dp
+                },
+            )
             .clip(shape)
             .drawBehind {
                 val cell = 8.dp.toPx()
@@ -512,74 +520,83 @@ private fun WidgetSimpleStatusConfigPreview(
     val colors = LocalCliColors.current
     val smallType = cliTypography().small
     val pixelType = cliTypography().button
-    Row(
+    Column(
         modifier =
         Modifier
             .fillMaxWidth()
             .height(WIDGET_SIMPLE_PREVIEW_HEIGHT)
             .background(fill)
             .let { base -> if (outlined) base.cliDashedBorder(colors.accent) else base }
-            .padding(horizontal = CliSpacing.sm + CliSpacing.xs, vertical = CliSpacing.xs),
-        verticalAlignment = Alignment.CenterVertically,
+            .padding(horizontal = CliSpacing.sm + CliSpacing.xs, vertical = 6.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Box(
-            modifier = Modifier
-                .size(34.dp)
-                .border(2.dp, textTone, CircleShape),
-            contentAlignment = Alignment.Center,
+        Row(
+            modifier = Modifier.fillMaxWidth().weight(1f),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Image(
-                painter = painterResource(R.drawable.ic_qs_tile),
-                contentDescription = stringResource(R.string.app_name),
-                colorFilter = ColorFilter.tint(textTone),
-                modifier = Modifier.size(22.dp),
-            )
-        }
-        Spacer(modifier = Modifier.width(CliSpacing.sm))
-        Column(
-            modifier = Modifier.weight(1f),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Text(
-                text = stringResource(R.string.cli_home_status_connected_vpn).uppercase(),
-                style = pixelType.copy(fontSize = 14.sp, lineHeight = 15.sp),
-                color = colors.ok,
-                maxLines = 1,
-            )
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(modifier = Modifier.size(48.dp), contentAlignment = Alignment.Center) {
                 Image(
-                    painter = painterResource(R.drawable.lin_device),
-                    contentDescription = stringResource(R.string.cli_rt_device),
-                    colorFilter = ColorFilter.tint(colors.vpn),
-                    modifier = Modifier.size(14.dp),
-                )
-                Spacer(modifier = Modifier.width(3.dp))
-                Image(
-                    painter = painterResource(R.drawable.flag_nl),
-                    contentDescription = WIDGET_PREVIEW_COUNTRY_CODE,
-                    modifier = Modifier.width(18.dp).height(11.dp),
-                )
-                Spacer(modifier = Modifier.width(3.dp))
-                Text(
-                    text = WIDGET_PREVIEW_COUNTRY_CODE,
-                    style = smallType.copy(fontSize = 13.sp, lineHeight = 15.sp),
-                    color = textTone,
+                    painter = painterResource(R.drawable.ic_launcher_openwrt),
+                    contentDescription = stringResource(R.string.widget_status_open_app),
+                    modifier = Modifier.size(36.dp),
                 )
             }
+            Spacer(modifier = Modifier.width(8.dp))
+            Column(
+                modifier = Modifier.weight(1f),
+                horizontalAlignment = Alignment.Start,
+                verticalArrangement = Arrangement.Center,
+            ) {
+                Text(
+                    text = stringResource(R.string.cli_home_status_connected_vpn).uppercase(),
+                    style = pixelType.copy(fontSize = 14.sp, lineHeight = 15.sp),
+                    color = colors.ok,
+                    maxLines = 2,
+                    softWrap = true,
+                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Image(
+                        painter = painterResource(R.drawable.lin_device),
+                        contentDescription = stringResource(R.string.cli_rt_device),
+                        colorFilter = ColorFilter.tint(colors.vpn),
+                        modifier = Modifier.size(14.dp),
+                    )
+                    Spacer(modifier = Modifier.width(3.dp))
+                    CliFlagIcon(
+                        countryCode = WIDGET_PREVIEW_COUNTRY_CODE,
+                        style = smallType.copy(fontSize = 13.sp, lineHeight = 15.sp),
+                    )
+                    Spacer(modifier = Modifier.width(3.dp))
+                    Text(
+                        text = WIDGET_PREVIEW_COUNTRY_CODE,
+                        style = smallType.copy(fontSize = 13.sp, lineHeight = 15.sp),
+                        color = textTone,
+                    )
+                }
+            }
         }
-        Spacer(modifier = Modifier.width(CliSpacing.sm))
-        Box(
-            modifier =
-            Modifier
-                .size(34.dp)
-                .border(2.dp, colors.err, CircleShape),
-            contentAlignment = Alignment.Center,
+        val actionColor = if (textTone == Color.Black) CliLightColors.err else CliColors().err
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(48.dp)
+                .background(if (textTone == Color.Black) Color.White else Color.Black, RoundedCornerShape(24.dp))
+                .border(2.dp, actionColor, RoundedCornerShape(24.dp)),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center,
         ) {
             Image(
                 painter = painterResource(R.drawable.lin_power),
-                contentDescription = stringResource(R.string.widget_status_turn_off),
-                colorFilter = ColorFilter.tint(colors.err),
+                contentDescription = null,
+                colorFilter = ColorFilter.tint(actionColor),
                 modifier = Modifier.size(19.dp),
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = stringResource(R.string.widget_status_disconnect_action),
+                style = pixelType.copy(fontSize = 12.sp),
+                color = actionColor,
+                maxLines = 1,
             )
         }
     }
@@ -682,4 +699,4 @@ private fun ConfigurableWidgetProvider.previewKind(): WidgetPreviewKind =
 private val WIDGET_OPACITY_SLIDER_HEIGHT = 48.dp
 private const val WIDGET_PREVIEW_WEB_APP_COUNT = 4
 private const val WIDGET_PREVIEW_COUNTRY_CODE = "NL"
-private val WIDGET_SIMPLE_PREVIEW_HEIGHT = 56.dp
+private val WIDGET_SIMPLE_PREVIEW_HEIGHT = 160.dp

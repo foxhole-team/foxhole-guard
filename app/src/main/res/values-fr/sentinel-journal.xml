@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="cli_logs_tab_sentinel">Sentinel</string>
+    <string name="cli_sentinel_installations">Applications installées</string>
+    <string name="cli_sentinel_recent_installations">Installations récentes</string>
+    <string name="cli_sentinel_view_all_installations">Tout afficher (%1$d)</string>
+    <string name="cli_sentinel_installations_empty">Aucune application installée visible.</string>
+    <string name="cli_sentinel_install_history">Modifications d’applications enregistrées</string>
+    <string name="cli_sentinel_install_history_retention">Historique des modifications d’applications</string>
+    <string name="cli_sentinel_history_detected">Détecté : %1$s</string>
+    <string name="cli_sentinel_history_empty">Aucune modification d’application enregistrée.</string>
+    <string name="cli_sentinel_activity_history">Activité des applications observée</string>
+    <string name="cli_sentinel_inventory_refresh">Actualiser les applications</string>
+    <string name="cli_sentinel_inventory_failed">Impossible de charger la liste des applications installées.</string>
+    <string name="cli_sentinel_apps_updated">Actualisées</string>
+    <string name="cli_sentinel_module_history_note">Les installations et résultats se trouvent dans Journaux → Sentinel.</string>
+</resources>

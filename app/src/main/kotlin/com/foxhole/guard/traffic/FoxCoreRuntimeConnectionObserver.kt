@@ -3,6 +3,7 @@ package com.foxhole.guard.traffic
 import com.foxhole.core.model.DnsFilterCategory
 import com.foxhole.core.runtime.FoxholeRuntime
 import com.foxhole.guard.core.diagnostics.DiagnosticsLogger
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.currentCoroutineContext
@@ -29,68 +30,106 @@ import kotlinx.serialization.json.longOrNull
 internal class FoxCoreRuntimeConnectionObserver(
     private val runtimeProvider: () -> FoxholeRuntime,
     private val diagnosticsLogger: DiagnosticsLogger? = null,
+    private val pollingIntervalMillis: Long = 3_000L,
 ) {
+    init { require(pollingIntervalMillis > 0L) }
     fun connectionSnapshots(
         runtimeAvailable: Flow<Boolean>,
         includeProcessInfo: () -> Boolean = { false },
+        resetEpoch: () -> Long = { 0L },
+        activityContext: () -> RuntimeNetworkActivityContext = { RuntimeNetworkActivityContext() },
     ): Flow<RuntimeConnectionSnapshot> =
         runtimeAvailable
             .distinctUntilChanged()
             .flatMapLatest { available ->
                 if (available) {
-                    pollingSnapshots(includeProcessInfo)
+                    pollingSnapshots(includeProcessInfo, resetEpoch, activityContext)
                 } else {
                     flowOf(RuntimeConnectionSnapshot())
                 }
             }.distinctUntilChanged()
 
-    private fun pollingSnapshots(includeProcessInfo: () -> Boolean): Flow<RuntimeConnectionSnapshot> =
+    private fun pollingSnapshots(
+        includeProcessInfo: () -> Boolean,
+        resetEpoch: () -> Long,
+        activityContext: () -> RuntimeNetworkActivityContext,
+    ): Flow<RuntimeConnectionSnapshot> =
         flow {
-            while (currentCoroutineContext().isActive) {
-                val runtime = runtimeProvider()
-                val auditDrain =
-                    runtime
-                        .drainRuntimeAuditEventsJson(MAX_AUDIT_EVENT_BATCH)
-                        ?.let(::parseRuntimeAuditDrain)
-                        ?: RuntimeAuditDrain()
-                val trafficDrain =
-                    runtime
-                        .drainRuntimeTrafficEventsJson(MAX_TRAFFIC_EVENT_BATCH)
-                        ?.let(::parseRuntimeTrafficDrain)
-                        ?: RuntimeTrafficDrain()
-                val liveSnapshot =
-                    runtime
-                        .runtimeTrafficMapJson()
-                        ?.let { document -> parseTrafficMap(document, includeProcessInfo()) }
-                        ?: RuntimeConnectionSnapshot()
-                val snapshot =
-                    liveSnapshot.copy(
-                        connections = mergeLiveAndClosedConnections(
-                            live = liveSnapshot.connections,
-                            closed = trafficDrain.closedConnections,
-                        ),
-                        truncated = liveSnapshot.truncated || trafficDrain.dropped > 0L,
-                        auditEvents = auditDrain.events,
-                        droppedAuditEvents = auditDrain.dropped,
-                        droppedTrafficEvents = trafficDrain.dropped,
+            val reducer = RuntimeConnectionEventReducer()
+            // A post-clear drain may still contain old native events; only history skips that boundary.
+            var lastHistoryEpoch = 0L
+            try {
+                while (currentCoroutineContext().isActive) {
+                    val runtime = runtimeProvider()
+                    val includeOwners = includeProcessInfo()
+                    val epoch = resetEpoch()
+                    val observedContext = activityContext()
+                    val preceding = runtime.runtimeTrafficMapJson()
+                        ?.let { parseTrafficMap(it, includeOwners) } ?: RuntimeConnectionSnapshot()
+                    val auditDrain =
+                        runtime
+                            .drainRuntimeAuditEventsJson(MAX_AUDIT_EVENT_BATCH)
+                            ?.let(::parseRuntimeAuditDrain)
+                            ?: RuntimeAuditDrain()
+                    val trafficDrain =
+                        runtime
+                            .drainRuntimeTrafficEventsJson(MAX_TRAFFIC_EVENT_BATCH)
+                            ?.let { parseRuntimeTrafficDrain(it, includeOwners) }
+                            ?: RuntimeTrafficDrain()
+                    val liveSnapshot =
+                        runtime
+                            .runtimeTrafficMapJson()
+                            ?.let { document -> parseTrafficMap(document, includeOwners) }
+                            ?: RuntimeConnectionSnapshot()
+                    val sameOwner = sameRuntimeObservationOwner(
+                        preceding.generation,
+                        liveSnapshot.generation,
+                        epoch == resetEpoch(),
+                        includeOwners == includeProcessInfo(),
                     )
-                emit(snapshot)
-                delay(SAMPLE_INTERVAL_MS)
-            }
-        }.catch {
+                    val stableContext = observedContext == activityContext()
+                    val snapshot = if (sameOwner) {
+                        reducer.reduce(liveSnapshot, trafficDrain, preceding.connections, epoch, includeOwners).copy(
+                            observationEpoch = epoch,
+                            historyObservationEligible = epoch == lastHistoryEpoch && stableContext,
+                            capturedActivityContext = observedContext.takeIf { stableContext } ?: RuntimeNetworkActivityContext(),
+                            auditEvents = auditDrain.events,
+                            droppedAuditEvents = auditDrain.dropped,
+                            droppedTrafficEvents = trafficDrain.dropped,
+                        )
+                    } else {
+                        reducer.reset()
+                        RuntimeConnectionSnapshot()
+                    }
+                    if (sameOwner) lastHistoryEpoch = epoch
+                    emit(snapshot)
+                    delay(pollingIntervalMillis)
+                }
+            } finally { reducer.reset() }
+        }.catch { failure ->
+            rethrowObserverCancellationOrFatal(failure)
             diagnosticsLogger?.recordFailure("connection", "FoxCore traffic-map polling failed")
             emit(RuntimeConnectionSnapshot())
         }.flowOn(Dispatchers.IO)
 
     private companion object {
-        const val SAMPLE_INTERVAL_MS = 3_000L
         const val MAX_AUDIT_EVENT_BATCH = 512
         const val MAX_TRAFFIC_EVENT_BATCH = 4_096
     }
 }
 
+private fun sameRuntimeObservationOwner(preceding: Long, current: Long, stableEpoch: Boolean, stableOwners: Boolean): Boolean =
+    preceding > 0L && preceding == current && stableEpoch && stableOwners
+
+private fun rethrowObserverCancellationOrFatal(failure: Throwable) {
+    if (failure is CancellationException || failure !is Exception) throw failure
+}
+
 internal data class RuntimeConnectionSnapshot(
     val generation: Long = 0L,
+    val observationEpoch: Long = 0L,
+    val historyObservationEligible: Boolean = true,
+    val capturedActivityContext: RuntimeNetworkActivityContext? = null,
     val connections: List<RuntimeConnectionRecord> = emptyList(),
     val lanes: List<RuntimeLaneTraffic> = emptyList(),
     val truncated: Boolean = false,
@@ -170,6 +209,7 @@ internal data class RuntimeAuditDrain(
 internal data class RuntimeTrafficDrain(
     val closedConnections: List<RuntimeConnectionRecord> = emptyList(),
     val dropped: Long = 0L,
+    val openedConnections: List<RuntimeConnectionRecord> = emptyList(),
 )
 
 internal data class RuntimeConnectionRecord(
@@ -241,7 +281,9 @@ internal fun parseRuntimeAuditDrain(source: String): RuntimeAuditDrain =
         )
     }.getOrDefault(RuntimeAuditDrain())
 
-internal fun parseRuntimeTrafficDrain(source: String): RuntimeTrafficDrain =
+internal fun parseRuntimeTrafficDrain(source: String): RuntimeTrafficDrain = parseRuntimeTrafficDrain(source, true)
+
+internal fun parseRuntimeTrafficDrain(source: String, includeProcessInfo: Boolean): RuntimeTrafficDrain =
     runCatching {
         val root = trafficMapJson.parseToJsonElement(source).jsonObject
         RuntimeTrafficDrain(
@@ -250,10 +292,22 @@ internal fun parseRuntimeTrafficDrain(source: String): RuntimeTrafficDrain =
                 .mapNotNull { element -> element as? JsonObject }
                 .filter { event -> event.string("type") == "closed" }
                 .take(MAX_TRACKED_CONNECTIONS)
-                .map { event -> event.toRuntimeConnectionRecord(includeProcessInfo = true) },
+                .map(JsonObject::toClosedRuntimeConnectionRecord),
             dropped = root.long("dropped").coerceAtLeast(0L),
+            openedConnections = root.array("events")
+                .mapNotNull { element -> element as? JsonObject }
+                .filter { event -> event.string("type") == "opened" }
+                .take(MAX_TRACKED_CONNECTIONS)
+                .map { event -> event.toRuntimeConnectionRecord(includeProcessInfo) },
         )
     }.getOrDefault(RuntimeTrafficDrain())
+
+private fun JsonObject.toClosedRuntimeConnectionRecord(): RuntimeConnectionRecord = RuntimeConnectionRecord(
+    connectionId = string("id") ?: long("id").toString(),
+    lane = null, outboundType = null, outboundTag = null, destination = null,
+    domain = null, network = null, protocol = null,
+    bytesTx = long("bytes_up").coerceAtLeast(0L), bytesRx = long("bytes_down").coerceAtLeast(0L),
+)
 
 internal fun mergeLiveAndClosedConnections(
     live: List<RuntimeConnectionRecord>,
@@ -384,6 +438,7 @@ private fun JsonObject.toRuntimeConnectionRecord(includeProcessInfo: Boolean): R
     val destination = when {
         host == null -> null
         port == null -> host
+        ':' in host && !host.startsWith("[") -> "[$host]:$port"
         else -> "$host:$port"
     }
     val attribution = objectValue("attribution")

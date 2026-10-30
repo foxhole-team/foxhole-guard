@@ -5,7 +5,9 @@ import com.foxhole.core.model.I2pTrafficStats
 import com.foxhole.core.model.NetworkActivityEvent
 import com.foxhole.core.model.TorTrafficStats
 import com.foxhole.core.model.TunnelAppTrafficStats
+import com.foxhole.core.runtime.RuntimeDiagnosticsSink
 import com.foxhole.guard.core.diagnostics.DiagnosticsLogger
+import com.foxhole.guard.core.diagnostics.DiagnosticsLoggerRuntimeDiagnosticsSink
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -16,8 +18,10 @@ import kotlinx.coroutines.launch
 import java.util.Locale
 
 internal class FoxCoreRuntimeStatsTracker(
-    private val diagnosticsLogger: DiagnosticsLogger,
+    private val diagnosticsLogger: RuntimeDiagnosticsSink,
 ) {
+    constructor(diagnosticsLogger: DiagnosticsLogger) : this(DiagnosticsLoggerRuntimeDiagnosticsSink(diagnosticsLogger))
+
     @Suppress("LongParameterList")
     fun start(
         scope: CoroutineScope,
@@ -30,6 +34,7 @@ internal class FoxCoreRuntimeStatsTracker(
         countryCodeForDestination: (String) -> String? = { null },
         onNetworkActivityEvents: (List<NetworkActivityEvent>) -> Unit = {},
         onRuntimeAuditEvents: (List<RuntimeAuditEvent>, Long, Long) -> Unit = { _, _, _ -> },
+        onEpochNetworkActivityEvents: ((List<NetworkActivityEvent>, Long) -> Unit)? = null,
     ): Job =
         scope.launch(Dispatchers.Default) {
             val trafficTotals = mutableMapOf<String, RuntimeConnectionTrafficTotals>()
@@ -37,12 +42,16 @@ internal class FoxCoreRuntimeStatsTracker(
             val i2pTrafficTotals = mutableMapOf<String, RuntimeConnectionTrafficTotals>()
             val laneTrafficCursor = RuntimeLaneTrafficCursor()
             val dnsVerdictCursor = RuntimeDnsVerdictCursor()
+            var primeTrafficAfterPause = false
+            var connectionGeneration = 0L
             runtimeConnectionSnapshots
-                .catch {
+                .catch { failure ->
+                    if (failure is kotlinx.coroutines.CancellationException || failure !is Exception) throw failure
                     diagnosticsLogger.recordFailure("dns", "runtime stats snapshot stream failed")
                 }
                 .collect { snapshot ->
                     if (!enabled()) {
+                        primeTrafficAfterPause = true
                         trafficTotals.clear()
                         torTrafficTotals.clear()
                         i2pTrafficTotals.clear()
@@ -50,6 +59,20 @@ internal class FoxCoreRuntimeStatsTracker(
                         dnsVerdictCursor.advanceWithoutRecording(snapshot)
                         return@collect
                     }
+                    // A local pause control resets per-app cursors without changing native aggregate accounting.
+                    if (snapshot.generation == 0L) {
+                        trafficTotals.clear()
+                        primeTrafficAfterPause = true
+                        return@collect
+                    }
+                    if (connectionGeneration != snapshot.generation) {
+                        trafficTotals.clear()
+                        torTrafficTotals.clear()
+                        i2pTrafficTotals.clear()
+                        connectionGeneration = snapshot.generation
+                    }
+                    val primeTraffic = primeTrafficAfterPause
+                    primeTrafficAfterPause = false
                     dnsVerdictCursor.recordVerdictDelta(snapshot)
                     recordAuditEvents(snapshot, onRuntimeAuditEvents)
                     val authoritativeLaneDeltas = laneTrafficCursor.record(snapshot)
@@ -78,13 +101,20 @@ internal class FoxCoreRuntimeStatsTracker(
                         recordRuntimeConnections(
                             snapshot = snapshot,
                             trafficTotals = trafficTotals,
+                            primeTraffic = primeTraffic,
                             networkActivityEnabled = networkActivityEnabled,
                             tunnelAppTrafficEnabled = tunnelAppTrafficEnabled,
-                            networkActivityContext = networkActivityContext,
+                            networkActivityContext = { snapshot.capturedActivityContext ?: networkActivityContext() },
                             countryCodeForDestination = countryCodeForDestination,
                         )
                     if (networkActivityEvents.isNotEmpty()) {
-                        onNetworkActivityEvents(networkActivityEvents)
+                        if (onEpochNetworkActivityEvents != null) {
+                            if (snapshot.historyObservationEligible) {
+                                onEpochNetworkActivityEvents(networkActivityEvents, snapshot.observationEpoch)
+                            }
+                        } else {
+                            onNetworkActivityEvents(networkActivityEvents)
+                        }
                     }
                 }
         }
@@ -217,6 +247,7 @@ internal class FoxCoreRuntimeStatsTracker(
     private fun recordRuntimeConnections(
         snapshot: RuntimeConnectionSnapshot,
         trafficTotals: MutableMap<String, RuntimeConnectionTrafficTotals>,
+        primeTraffic: Boolean,
         networkActivityEnabled: () -> Boolean,
         tunnelAppTrafficEnabled: () -> Boolean,
         networkActivityContext: () -> RuntimeNetworkActivityContext,
@@ -243,6 +274,7 @@ internal class FoxCoreRuntimeStatsTracker(
                     connection = connection,
                     trafficTotals = trafficTotals,
                     shouldRecordActivity = shouldRecordActivity,
+                    primeTraffic = primeTraffic,
                     shouldRecordTunnelAppTraffic = shouldRecordTunnelAppTraffic,
                     activityContext = { activityContext },
                     countryCodeForDestination = countryCodeForDestination,
@@ -263,6 +295,7 @@ internal class FoxCoreRuntimeStatsTracker(
         connection: RuntimeConnectionRecord,
         trafficTotals: MutableMap<String, RuntimeConnectionTrafficTotals>,
         shouldRecordActivity: Boolean,
+        primeTraffic: Boolean,
         shouldRecordTunnelAppTraffic: Boolean,
         activityContext: () -> RuntimeNetworkActivityContext,
         countryCodeForDestination: (String) -> String?,
@@ -272,10 +305,12 @@ internal class FoxCoreRuntimeStatsTracker(
             RuntimeConnectionTrafficTotals(
                 bytesTx = connection.bytesTx,
                 bytesRx = connection.bytesRx,
+                hasOwner = connection.packageNames.isNotEmpty(),
             )
-        val previousTotals = trafficTotals[connection.connectionId]
+        val previousTotals =
+            if (primeTraffic) currentTotals else trafficTotals[connection.connectionId]
         trafficTotals[connection.connectionId] = currentTotals
-        if (shouldRecordTunnelAppTraffic) {
+        if (shouldRecordTunnelAppTraffic && !primeTraffic) {
             val rxDelta = currentTotals.bytesRx.deltaFrom(previousTotals?.bytesRx)
             val txDelta = currentTotals.bytesTx.deltaFrom(previousTotals?.bytesTx)
             connection.packageNames.firstOrNull()?.let { packageName ->
@@ -286,6 +321,7 @@ internal class FoxCoreRuntimeStatsTracker(
             connection.toNetworkActivityEvent(
                 context = activityContext(),
                 previousTotals = previousTotals,
+                primeTraffic = primeTraffic,
                 currentTotals = currentTotals,
                 countryCodeForDestination = countryCodeForDestination,
             )?.takeIf { activityEvents.size < MAX_NETWORK_ACTIVITY_EVENTS_PER_SAMPLE }
@@ -417,6 +453,7 @@ internal data class RuntimeNetworkActivityContext(
 internal data class RuntimeConnectionTrafficTotals(
     val bytesTx: Long,
     val bytesRx: Long,
+    val hasOwner: Boolean = false,
 )
 
 internal data class RuntimeConnectionEndpoint(
@@ -427,6 +464,7 @@ internal data class RuntimeConnectionEndpoint(
 private fun RuntimeConnectionRecord.toNetworkActivityEvent(
     context: RuntimeNetworkActivityContext,
     previousTotals: RuntimeConnectionTrafficTotals?,
+    primeTraffic: Boolean,
     currentTotals: RuntimeConnectionTrafficTotals,
     countryCodeForDestination: (String) -> String?,
 ): NetworkActivityEvent? {
@@ -434,7 +472,12 @@ private fun RuntimeConnectionRecord.toNetworkActivityEvent(
     val remoteHost = destinationEndpoint.host.takeIf(String::isNotBlank)
     val bytesTx = currentTotals.bytesTx.deltaFrom(previousTotals?.bytesTx)
     val bytesRx = currentTotals.bytesRx.deltaFrom(previousTotals?.bytesRx)
-    return if (packageNames.isNotEmpty() && remoteHost != null && bytesTx + bytesRx > 0L) {
+    // Ownership can arrive after the last byte, so attribution itself is an observation.
+    val ownershipArrived = currentTotals.hasOwner && previousTotals?.hasOwner == false
+    val observedExistingTraffic =
+        (primeTraffic || ownershipArrived) && (currentTotals.bytesTx > 0L || currentTotals.bytesRx > 0L)
+    val hasTrafficObservation = bytesTx + bytesRx > 0L || observedExistingTraffic
+    return if (packageNames.isNotEmpty() && remoteHost != null && hasTrafficObservation) {
         NetworkActivityEvent(
             timestampMs = System.currentTimeMillis(),
             packageNames = packageNames,

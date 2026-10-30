@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="cli_status_sentinel_notices">Sentinel の通知</string>
+    <string name="cli_status_sentinel_traffic_notices">通信の警告</string>
+    <string name="cli_status_sentinel_static_notices">静的チェックの通知</string>
+    <string name="cli_status_sentinel_install_notices">アプリのインストール通知</string>
+    <string name="cli_status_notices_off">設定でオフ</string>
+    <string name="cli_status_notices_allowed">Android で許可済み</string>
+    <string name="cli_status_notices_android_blocked">Android によってブロック</string>
+    <string name="cli_status_notices_channel_blocked">通知チャンネルは無効</string>
+    <string name="cli_status_notices_channel_pending">通知チャンネルは未初期化</string>
+    <string name="cli_status_notices_partly_blocked">一部の通知チャンネルは無効</string>
+    <string name="cli_status_notices_unavailable">通知へのアクセスを利用できません</string>
+</resources>

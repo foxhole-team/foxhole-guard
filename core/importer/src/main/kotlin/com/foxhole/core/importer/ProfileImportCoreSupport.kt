@@ -53,9 +53,17 @@ internal open class ProfileImportCoreSupport(
         it.isImportPadding()
     }.trimEnd { it.isImportPadding() }
 
+    private fun looksLikeStructuredProfile(input: String): Boolean =
+        looksLikeWireGuard(input) || SMART_CONFIG_HEADING_REGEX.containsMatchIn(input) || PROFILE_YAML_MARKER_REGEX.containsMatchIn(input)
+
     internal fun extractSubscriptionUrlCandidate(input: String): String? {
-        if (input.startsWith("https://", ignoreCase = true) || input.startsWith("http://", ignoreCase = true)) {
+        if (input.startsWith("https://", ignoreCase = true) || input.startsWith("http://", ignoreCase = true) || input.startsWith("ssconf://", ignoreCase = true)) {
             return input
+        }
+        if (
+            input.startsWith('{') || input.startsWith('[') || looksLikeStructuredProfile(input)
+        ) {
+            return null
         }
         val matches =
             SUBSCRIPTION_URL_REGEX
@@ -88,8 +96,12 @@ internal open class ProfileImportCoreSupport(
         internal val SMART_CONFIG_EXPIRE_REGEX = Regex("""(?:^|[;\s])expire=(\d{10,13})(?:$|[;\s])""")
         internal val SMART_CONFIG_PROFILE_ID_REGEX = Regex("""(?:^|[;\s])profile_id=([^;\s]+)(?:$|[;\s])""")
         internal val SUBSCRIPTION_URL_REGEX = Regex(
-            """(?<![A-Za-z0-9+.-])https?://[^\s<>"']+""",
+            """(?<![A-Za-z0-9+.-])(?:https?|ssconf)://[^\s<>"']+""",
             RegexOption.IGNORE_CASE
+        )
+        private val PROFILE_YAML_MARKER_REGEX = Regex(
+            """^\s*(proxies|proxy-groups|proxy-providers|server|auth|obfs|bandwidth|tun|tls)\s*:""",
+            setOf(RegexOption.IGNORE_CASE, RegexOption.MULTILINE),
         )
         internal val SHARE_URI_REGEX =
             Regex(
@@ -423,10 +435,14 @@ internal open class ProfileImportCoreSupport(
         }
 
         val hosts = extractNormalizedRemoteHosts(config)
-        hosts.dialled.distinct().forEach { host ->
+        val scopedNames = (config["bootstrap_dns"] as? JsonObject)?.get("domains")?.jsonArray
+            .orEmpty().map { it.jsonPrimitive.content }.toSet()
+        hosts.dialled.distinct().filterNot { it.lowercase().removeSuffix(".") in scopedNames }.forEach { host ->
             host.requirePublicRemoteHost(resolveHost = true, resolver = remoteHostResolver)
         }
-        hosts.presented.distinct().forEach(::requirePresentedRemoteName)
+        hosts.presented.distinct().filterNot {
+            it.lowercase().removeSuffix(".") in scopedNames
+        }.forEach(::requirePresentedRemoteName)
     }
 
     private fun requirePresentedRemoteName(host: String) {
@@ -475,6 +491,7 @@ internal open class ProfileImportCoreSupport(
                 ?.contentOrNull
                 ?.let(::normalizeRemoteHostValue)
                 ?.let(dialled::add)
+            outbound.string("server_ip")?.let(::normalizeRemoteHostValue)?.let(dialled::add)
             outbound["peers"]?.jsonArray?.forEach { peerElement ->
                 peerElement.jsonObject["server"]
                     ?.jsonPrimitive
@@ -498,8 +515,10 @@ internal open class ProfileImportCoreSupport(
                     ?.let(dialled::add)
             }
         }
+        val wireGuardPacket = isWireGuardPacketRoute(config)
         config["dns"]?.jsonObject?.get("servers")?.jsonArray?.forEach { serverElement ->
-            extractDnsServerHost(serverElement)?.let(dialled::add)
+            extractDnsServerHost(serverElement, wireGuardPacket)?.let(dialled::add)
+            (serverElement as? JsonObject)?.string("server_ip")?.let(::normalizeRemoteHostValue)?.let(dialled::add)
         }
         return NormalizedConfigHosts(dialled = dialled, presented = presented)
     }
@@ -511,10 +530,10 @@ internal open class ProfileImportCoreSupport(
             else -> emptyList()
         }
 
-    private fun extractDnsServerHost(element: JsonElement): String? =
+    private fun extractDnsServerHost(element: JsonElement, wireGuardPacket: Boolean): String? =
         when (element) {
             is JsonObject ->
-                if (element["tag"]?.jsonPrimitive?.contentOrNull == WIREGUARD_DNS_SERVER_TAG) {
+                if (wireGuardPacket && isWireGuardTunnelDnsRecord(element)) {
                     null
                 } else {
                     element["server"]

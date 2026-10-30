@@ -7,8 +7,14 @@ import com.foxhole.core.model.LanProxyStatusSnapshot
 import com.foxhole.core.model.LanProxyUnavailableReason
 import com.foxhole.core.model.LocalProxyStatusSnapshot
 import com.foxhole.core.model.VpnSession
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 
 @Suppress("LargeClass")
 // Single Android owner of the JNI handle and master TUN; stale native work commits only under its generation.
@@ -20,9 +26,12 @@ internal class FoxCoreRuntime internal constructor(
     private val shareRuntime: FoxCoreShareRuntimeAdapter = FoxCoreShareRuntimeAdapter(shareNative),
 ) : FoxholeRuntime,
     RuntimeNativeStartFenceOwner,
+    RuntimeSettledCancellationOwner,
+    RuntimeNativeStatsSource,
     FoxCoreShareRuntime by shareRuntime {
     private val transitionMutex = Mutex()
     private val stateLock = Any()
+    private val networkChanges = NetworkChangeController()
 
     private val lanProxy = LanProxyController(native)
     private val localProxy = LocalProxyController(native)
@@ -237,7 +246,7 @@ internal class FoxCoreRuntime internal constructor(
                     when (val tun = prepareTun(translated, host, underlying, generation)) {
                         is NativeTransitionPreparation.Failed -> tun.failure
                         is NativeTransitionPreparation.Ready ->
-                            startAndCommit(translated, host, underlying, tun.value, generation)
+                            startWithDnsBootstrapReader(translated, host, underlying, tun.value, generation)
                     }
             }
         }
@@ -269,6 +278,25 @@ internal class FoxCoreRuntime internal constructor(
                 }
             }
 
+        private suspend fun startWithDnsBootstrapReader(
+            translated: FoxCoreSessionConfig,
+            host: RuntimeServiceHost,
+            underlying: android.net.Network,
+            tun: ParcelFileDescriptor,
+            generation: Long,
+        ): Result<Unit> {
+            val bootstrap = translated.dnsRuleSetBootstrap
+            val reader = if (bootstrap?.stagedBundleToken != null) {
+                host.captureDnsBootstrapReadLease(bootstrap)
+                    ?: return finishPreparedStartFailure(generation, foxCoreFailure(FoxCoreRuntimeFailure.NATIVE_START_FAILED))
+            } else {
+                null
+            }
+            return runWithDnsBootstrapReader(reader, {
+                diagnosticsLogger.recordFailure("dns", "DNS bootstrap reader cleanup pending")
+            }) { startAndCommit(translated, host, underlying, tun, generation) }
+        }
+
         private suspend fun startAndCommit(
             translated: FoxCoreSessionConfig,
             host: RuntimeServiceHost,
@@ -276,7 +304,11 @@ internal class FoxCoreRuntime internal constructor(
             tun: ParcelFileDescriptor,
             generation: Long,
         ): Result<Unit> {
-            val started = nativeEngine.start(tun, underlying, host, translated)
+            val started = try {
+                nativeEngine.start(tun, underlying, host, translated)
+            } catch (error: FoxCoreRuntimeException) {
+                return finishPreparedStartFailure(generation, Result.failure(error))
+            }
                 ?: return finishPreparedStartFailure(
                     generation,
                     foxCoreFailure(FoxCoreRuntimeFailure.NATIVE_START_FAILED),
@@ -303,11 +335,49 @@ internal class FoxCoreRuntime internal constructor(
                 }
             return if (committed) {
                 recordPublished(next)
+                announceVerifiedDnsBootstrap(translated, host)
                 Result.success(Unit)
             } else {
                 discardSupersededNativeStart(next, generation)
             }
         }
+
+        private fun commitReloadOutcome(
+            prepared: PreparedNativeReload,
+            outcome: NativeReloadOutcome,
+            generation: Long,
+        ): Result<Unit> =
+            when (outcome) {
+                is NativeReloadOutcome.PolicyApplied -> {
+                    publish(
+                        prepared.current.copy(
+                            translated = outcome.translated,
+                            policyRevision = outcome.revision,
+                        ),
+                        generation,
+                    )
+                    Result.success(Unit)
+                }
+                is NativeReloadOutcome.Replaced -> {
+                    publish(outcome.session, generation)
+                    Result.success(Unit)
+                }
+                is NativeReloadOutcome.RestoredFailure -> {
+                    outcome.restored?.let { restored -> publish(restored, generation) }
+                    restoreRunningFailure(outcome.failure)
+                }
+                NativeReloadOutcome.PolicyCallFailed ->
+                    restoreRunningFailure(FoxCoreRuntimeFailure.POLICY_RELOAD_FAILED)
+                is NativeReloadOutcome.PolicyRefused ->
+                    restoreRunningFailure(policyReloadFailure(outcome.code))
+                NativeReloadOutcome.StopFailed -> {
+                    clearActive(reason = "replace_stop_failed")
+                    setState(RuntimeState.ERROR)
+                    foxCoreFailure(FoxCoreRuntimeFailure.NATIVE_STOP_FAILED)
+                }
+                NativeReloadOutcome.Superseded ->
+                    rejectSupersededNativeStart(stage = "reload_native")
+            }
 
         suspend fun finishReload(
             prepared: PreparedNativeReload,
@@ -350,44 +420,67 @@ internal class FoxCoreRuntime internal constructor(
                 ?: discarded
                 ?: rejectSupersededNativeStart(stage = "reload_commit")
         }
-    }
 
-    private fun commitReloadOutcome(
-        prepared: PreparedNativeReload,
-        outcome: NativeReloadOutcome,
-        generation: Long,
-    ): Result<Unit> =
-        when (outcome) {
-            is NativeReloadOutcome.PolicyApplied -> {
-                publish(
-                    prepared.current.copy(
-                        translated = outcome.translated,
-                        policyRevision = outcome.revision,
-                    ),
-                    generation,
+        suspend fun stopLocked(
+            policy: RuntimeStopPolicy,
+            nativeCallTimeoutMs: Long = nativeStopCallTimeoutMs(policy),
+        ): RuntimeStopResult {
+            val startedAt = System.nanoTime()
+            val pendingTunClosed = cancelPendingTransition("stop")
+            val current = active
+            if (current == null) {
+                setState(RuntimeState.IDLE)
+                return RuntimeStopResult(
+                    closeServiceOk = true,
+                    closeServerOk = true,
+                    tunClosed = pendingTunClosed,
+                    escalatedToKill = false,
+                    elapsedMs = elapsedMillis(startedAt),
+                    forceStopOutcome = forceStopPoison.current,
                 )
-                Result.success(Unit)
             }
-            is NativeReloadOutcome.Replaced -> {
-                publish(outcome.session, generation)
-                Result.success(Unit)
-            }
-            is NativeReloadOutcome.RestoredFailure -> {
-                outcome.restored?.let { restored -> publish(restored, generation) }
-                restoreRunningFailure(outcome.failure)
-            }
-            NativeReloadOutcome.PolicyCallFailed ->
-                restoreRunningFailure(FoxCoreRuntimeFailure.POLICY_RELOAD_FAILED)
-            is NativeReloadOutcome.PolicyRefused ->
-                restoreRunningFailure(policyReloadFailure(outcome.code))
-            NativeReloadOutcome.StopFailed -> {
-                clearActive(reason = "replace_stop_failed")
-                setState(RuntimeState.ERROR)
-                foxCoreFailure(FoxCoreRuntimeFailure.NATIVE_STOP_FAILED)
-            }
-            NativeReloadOutcome.Superseded ->
-                rejectSupersededNativeStart(stage = "reload_native")
+            setState(RuntimeState.STOPPING)
+            cleanupDraining = true
+            val wasQuiesced = handoverQuiesced
+            val stop =
+                when {
+                    forceStopPoison.processPoisoned ->
+                        NativeStopOutcome(
+                            stopped = false,
+                            escalated = false,
+                            forceStopOutcome = forceStopPoison.current,
+                        )
+                    wasQuiesced -> NativeStopOutcome(stopped = true, escalated = false)
+                    else -> nativeEngine.stop(current.handle, policy, nativeCallTimeoutMs)
+                }
+            val forceStopOutcome = forceStopPoison.remember(stop.forceStopOutcome, current.host)
+            val nativeStopped = stop.stopped
+            val nativeTunProbe =
+                if (wasQuiesced) NativeTunDescriptorProbe.CLOSED else probeTunDescriptor(current.nativeTunFd)
+            val tunClosed =
+                if (shouldCloseMasterTun(nativeTunProbe)) {
+                    tunOwner.close(current.tun)
+                } else {
+                    false
+                }
+            applyTeardownSettlement(nativeReleased = nativeStopped, tunClosed = tunClosed, reason = "stop")
+            tunOwner.recordOwnershipAfterClose(
+                session = current,
+                nativeTunProbe = nativeTunProbe,
+                masterTunClosed = tunClosed,
+                reason = "stop",
+            )
+            cleanupDraining = false
+            return RuntimeStopResult(
+                closeServiceOk = nativeStopped,
+                closeServerOk = nativeStopped,
+                tunClosed = tunClosed,
+                escalatedToKill = stop.escalated,
+                elapsedMs = elapsedMillis(startedAt),
+                forceStopOutcome = forceStopOutcome,
+            )
         }
+    }
 
     private fun ownsPendingReload(
         generation: Long,
@@ -428,48 +521,82 @@ internal class FoxCoreRuntime internal constructor(
         if (transitionMutex.withLock { forceStopPoison.processPoisoned }) {
             return NativeReloadOutcome.StopFailed
         }
-        val stopped = nativeEngine.stop(prepared.current.handle, REPLACEMENT_STOP_POLICY)
-        val forceStopOutcome =
-            transitionMutex.withLock {
-                forceStopPoison.remember(stopped.forceStopOutcome, prepared.current.host)
-            }
-        val network = host.currentUnderlyingNetwork()
-        return when {
-            !stopped.stopped || forceStopOutcome.processPoisoned -> NativeReloadOutcome.StopFailed
-            !nativeStartOwnership.isCurrent(generation) -> NativeReloadOutcome.Superseded
-            network == null || network.networkHandle <= 0L ->
-                NativeReloadOutcome.RestoredFailure(
-                    restored = restorePreviousNativeSession(prepared.current, generation),
-                    failure = FoxCoreRuntimeFailure.UNDERLYING_NETWORK_UNAVAILABLE,
-                )
-            else -> {
-                val replacement =
-                    nativeEngine.start(prepared.current.tun, network, host, prepared.translated)
-                        ?.copy(
-                            immutableFingerprint = prepared.nextFingerprint,
-                            dnsServers = prepared.current.dnsServers,
+        val replacement = try {
+            nativeEngine.withDnsContinuation(
+                handle = prepared.current.handle,
+                isCurrent = { nativeStartOwnership.isCurrent(generation) },
+                stop = { nativeEngine.stop(prepared.current.handle, REPLACEMENT_STOP_POLICY) },
+            ) { token, stopped ->
+                val forceStopOutcome =
+                    transitionMutex.withLock {
+                        forceStopPoison.remember(stopped.forceStopOutcome, prepared.current.host)
+                    }
+                val network = host.currentUnderlyingNetwork()
+                when {
+                    !stopped.stopped || forceStopOutcome.processPoisoned -> NativeReloadOutcome.StopFailed
+                    !nativeStartOwnership.isCurrent(generation) -> NativeReloadOutcome.Superseded
+                    network == null || network.networkHandle <= 0L ->
+                        NativeReloadOutcome.RestoredFailure(
+                            restored = restorePreviousNativeSession(prepared.current, generation, token),
+                            failure = FoxCoreRuntimeFailure.UNDERLYING_NETWORK_UNAVAILABLE,
                         )
-                replacement?.let(NativeReloadOutcome::Replaced)
-                    ?: NativeReloadOutcome.RestoredFailure(
-                        restored = restorePreviousNativeSession(prepared.current, generation),
-                        failure = FoxCoreRuntimeFailure.NATIVE_START_FAILED,
-                    )
+                    else -> {
+                        val next = try {
+                            nativeEngine.start(prepared.current.tun, network, host, prepared.translated, token)
+                                ?.copy(
+                                    immutableFingerprint = prepared.nextFingerprint,
+                                    dnsServers = prepared.current.dnsServers,
+                                )
+                        } catch (error: FoxCoreRuntimeException) {
+                            return@withDnsContinuation NativeReloadOutcome.RestoredFailure(
+                                restored = restorePreviousNativeSession(prepared.current, generation, token),
+                                failure = error.failure,
+                            )
+                        }
+                        next?.let(NativeReloadOutcome::Replaced)
+                            ?: NativeReloadOutcome.RestoredFailure(
+                                restored = restorePreviousNativeSession(prepared.current, generation, token),
+                                failure = FoxCoreRuntimeFailure.NATIVE_START_FAILED,
+                            )
+                    }
+                }
             }
+        } catch (poisoned: NativeForceStopPoisonedException) {
+            transitionMutex.withLock {
+                forceStopPoison.remember(poisoned.forceStopOutcome, prepared.current.host)
+                setState(RuntimeState.ERROR)
+            }
+            return NativeReloadOutcome.StopFailed
+        }
+        return when (replacement) {
+            is FoxCoreDnsContinuation.Completed -> replacement.value
+            FoxCoreDnsContinuation.Unavailable -> NativeReloadOutcome.RestoredFailure(
+                restored = prepared.current,
+                failure = FoxCoreRuntimeFailure.DNS_CONTINUATION_UNAVAILABLE,
+            )
+            FoxCoreDnsContinuation.Superseded -> NativeReloadOutcome.Superseded
         }
     }
 
     private fun restorePreviousNativeSession(
         previous: ActiveFoxCoreSession,
         generation: Long,
+        dnsContinuation: Long,
     ): ActiveFoxCoreSession? {
         if (!nativeStartOwnership.isCurrent(generation)) return null
         val network = previous.host.currentUnderlyingNetwork() ?: return null
-        return nativeEngine.start(
-            tun = previous.tun,
-            network = network,
-            host = previous.host,
-            translated = previous.translated,
-        )?.copy(
+        val restored = try {
+            nativeEngine.start(
+                tun = previous.tun,
+                network = network,
+                host = previous.host,
+                translated = previous.translated,
+                dnsContinuation = dnsContinuation,
+            )
+        } catch (_: FoxCoreRuntimeException) {
+            null
+        }
+        return restored?.copy(
             policyRevision = previous.policyRevision,
             dnsServers = previous.dnsServers,
         )
@@ -520,62 +647,7 @@ internal class FoxCoreRuntime internal constructor(
         }
 
     override suspend fun stop(policy: RuntimeStopPolicy): RuntimeStopResult =
-        transitionMutex.withLock {
-            val startedAt = System.nanoTime()
-            val pendingTunClosed = cancelPendingTransition("stop")
-            val current = active
-            if (current == null) {
-                setState(RuntimeState.IDLE)
-                return@withLock RuntimeStopResult(
-                    closeServiceOk = true,
-                    closeServerOk = true,
-                    tunClosed = pendingTunClosed,
-                    escalatedToKill = false,
-                    elapsedMs = elapsedMillis(startedAt),
-                    forceStopOutcome = forceStopPoison.current,
-                )
-            }
-            setState(RuntimeState.STOPPING)
-            cleanupDraining = true
-            val wasQuiesced = handoverQuiesced
-            val stop =
-                when {
-                    forceStopPoison.processPoisoned ->
-                        NativeStopOutcome(
-                            stopped = false,
-                            escalated = false,
-                            forceStopOutcome = forceStopPoison.current,
-                        )
-                    wasQuiesced -> NativeStopOutcome(stopped = true, escalated = false)
-                    else -> nativeEngine.stop(current.handle, policy)
-                }
-            val forceStopOutcome = forceStopPoison.remember(stop.forceStopOutcome, current.host)
-            val nativeStopped = stop.stopped
-            val nativeTunProbe =
-                if (wasQuiesced) NativeTunDescriptorProbe.CLOSED else probeTunDescriptor(current.nativeTunFd)
-            val tunClosed =
-                if (shouldCloseMasterTun(nativeTunProbe)) {
-                    tunOwner.close(current.tun)
-                } else {
-                    false
-                }
-            applyTeardownSettlement(nativeReleased = nativeStopped, tunClosed = tunClosed, reason = "stop")
-            tunOwner.recordOwnershipAfterClose(
-                session = current,
-                nativeTunProbe = nativeTunProbe,
-                masterTunClosed = tunClosed,
-                reason = "stop",
-            )
-            cleanupDraining = false
-            RuntimeStopResult(
-                closeServiceOk = nativeStopped,
-                closeServerOk = nativeStopped,
-                tunClosed = tunClosed,
-                escalatedToKill = stop.escalated,
-                elapsedMs = elapsedMillis(startedAt),
-                forceStopOutcome = forceStopOutcome,
-            )
-        }
+        transitionMutex.withLock { transitionExecutor.stopLocked(policy) }
 
     override suspend fun forceKill(reason: String): RuntimeKillResult =
         transitionMutex.withLock {
@@ -593,6 +665,42 @@ internal class FoxCoreRuntime internal constructor(
             nativeStartOwnership.invalidate(generation, reason)
             forceKillLocked(reason)
         }
+
+    override suspend fun abortSettledNativeTransition(
+        generation: Long,
+        reason: String,
+        deadlineNanos: Long,
+    ): RuntimeKillResult? {
+        while (!transitionMutex.tryLock()) {
+            val remaining = remainingRuntimeCancellationMillis(deadlineNanos)
+            if (remaining == 0L) return abortNativeTransition(generation, reason)
+            delay(minOf(remaining, 10L))
+        }
+        var requireForceAbort = false
+        val result = try {
+            val ownsPending = pendingTransition?.generation == generation
+            val ownsActive = activeTransitionGeneration == generation
+            if (!ownsPending && !ownsActive) return null
+            nativeStartOwnership.invalidate(generation, reason)
+            val remaining = remainingRuntimeCancellationMillis(deadlineNanos)
+            if (remaining == 0L) {
+                requireForceAbort = true
+                null
+            } else {
+                val stopped = transitionExecutor.stopLocked(RuntimeStopPolicy(), nativeCallTimeoutMs = remaining)
+                RuntimeKillResult(
+                    reason = safeReason(reason),
+                    tunClosed = stopped.tunClosed,
+                    serverDetached = stopped.closeServerOk,
+                    closeDetached = !stopped.closeServerOk || !stopped.tunClosed,
+                    forceStopOutcome = stopped.forceStopOutcome,
+                )
+            }
+        } finally {
+            transitionMutex.unlock()
+        }
+        return if (requireForceAbort) abortNativeTransition(generation, reason) else result
+    }
 
     private suspend fun forceKillLocked(reason: String): RuntimeKillResult {
         val pendingTunClosed = cancelPendingTransition("force_kill:$reason")
@@ -675,29 +783,232 @@ internal class FoxCoreRuntime internal constructor(
     override fun currentDnsServerAddress(): String? = active?.dnsServers?.firstOrNull()
 
     override fun onDefaultNetworkAvailable() {
-        val current = active ?: return
-        val network = current.host.currentUnderlyingNetwork() ?: return
-        if (network.networkHandle <= 0L || network.networkHandle == current.networkHandle) {
-            return
-        }
-        runCatching {
-            native.networkChangedWithHandle(current.handle, network.networkHandle)
-            synchronized(stateLock) {
-                active?.takeIf { it.sessionIdentity === current.sessionIdentity }?.let { latest ->
-                    active = latest.copy(networkHandle = network.networkHandle)
-                }
-            }
-        }.onFailure {
-            diagnosticsLogger.record("network", "foxcore network handoff failed")
-        }
+        val owner = synchronized(stateLock) { networkChanges.runningNetworkOwner()?.let { it to generation } } ?: return
+        val network = owner.first.host.currentUnderlyingNetwork() ?: return
+        networkChanges.submitCompatibilityNetworkChange(network.networkHandle, owner)
     }
 
     override fun onDefaultNetworkLost() {
-        val current = active ?: return
-        runCatching { native.networkChanged(current.handle) }
-            .onFailure {
-                diagnosticsLogger.record("network", "foxcore network-loss notification failed")
+        val owner = synchronized(stateLock) { networkChanges.runningNetworkOwner()?.let { it to generation } } ?: return
+        networkChanges.submitCompatibilityNetworkChange(null, owner)
+    }
+
+    override fun captureNetworkChangeLease(
+        networkHandle: Long?,
+        isServiceOwnerCurrent: () -> Boolean,
+    ): RuntimeNetworkChangeLease? {
+        val request = networkChanges.captureNativeNetworkChange(networkHandle, isServiceOwnerCurrent) ?: return null
+        return object : RuntimeNetworkChangeLease {
+            override suspend fun submit(): RuntimeNetworkChangeOutcome {
+                try {
+                    return withContext(Dispatchers.IO) {
+                        transitionMutex.withLock {
+                            val callerContext = currentCoroutineContext()
+                            callerContext.ensureActive()
+                            networkChanges.submitNativeNetworkChange(request) { callerContext.ensureActive() }
+                        }
+                    }
+                } finally {
+                    networkChanges.failIncompleteNetworkChange(request)
+                }
             }
+
+            override fun abandon() = networkChanges.abandon(request)
+        }
+    }
+
+    private inner class NetworkChangeController {
+        private var networkChangeRevision = 0L
+        private var lastNetworkChange: NativeNetworkChangeRequest? = null
+        private var latestNetworkLossRevision = 0L
+        private var completedNetworkLossRevision = 0L
+        fun captureNativeNetworkChange(
+            networkHandle: Long?,
+            isServiceOwnerCurrent: () -> Boolean,
+            expectedOwner: Pair<ActiveFoxCoreSession, Long>? = null,
+        ): NativeNetworkChangeRequest? {
+            if (networkHandle != null && networkHandle <= 0L) return null
+            return synchronized(stateLock) {
+                val current = runningNetworkOwner() ?: return@synchronized null
+                if (expectedOwner != null && !networkOwnerMatches(expectedOwner, current)) return@synchronized null
+                val previous = lastNetworkChange
+                val sameOwner = previous?.matches(current, generation) == true
+                if (previous != null && duplicateNetworkChange(previous, current, networkHandle)) {
+                    return@synchronized null
+                }
+                if (!sameOwner) {
+                    latestNetworkLossRevision = 0L
+                    completedNetworkLossRevision = 0L
+                }
+                val revision = ++networkChangeRevision
+                if (networkHandle == null) latestNetworkLossRevision = revision
+                NativeNetworkChangeRequest(
+                    current.sessionIdentity,
+                    current.handle,
+                    generation,
+                    networkHandle,
+                    latestNetworkLossRevision,
+                    isServiceOwnerCurrent,
+                ).also { lastNetworkChange = it }
+            }
+        }
+
+        private fun duplicateNetworkChange(
+            request: NativeNetworkChangeRequest,
+            current: ActiveFoxCoreSession,
+            networkHandle: Long?,
+        ): Boolean {
+            val live = request.phase == NetworkChangePhase.PENDING || request.phase == NetworkChangePhase.SUCCEEDED
+            return request.matches(current, generation) && request.networkHandle == networkHandle &&
+                live && request.isServiceOwnerCurrent()
+        }
+
+        private fun networkOwnerMatches(owner: Pair<ActiveFoxCoreSession, Long>, current: ActiveFoxCoreSession): Boolean =
+            owner.first.sessionIdentity === current.sessionIdentity && owner.first.handle == current.handle &&
+                owner.second == generation
+
+        fun submitCompatibilityNetworkChange(networkHandle: Long?, owner: Pair<ActiveFoxCoreSession, Long>) {
+            val request = captureNativeNetworkChange(networkHandle, { true }, owner) ?: return
+            if (!transitionMutex.tryLock()) {
+                failIncompleteNetworkChange(request)
+                return
+            }
+            try {
+                submitNativeNetworkChange(request) {}
+            } finally {
+                transitionMutex.unlock()
+                failIncompleteNetworkChange(request)
+            }
+        }
+
+        fun submitNativeNetworkChange(
+            request: NativeNetworkChangeRequest,
+            beforeNative: () -> Unit,
+        ): RuntimeNetworkChangeOutcome {
+            if (!request.isServiceOwnerCurrent()) return RuntimeNetworkChangeOutcome.SUPERSEDED
+            val preparation = synchronized(stateLock) { prepareNetworkChange(request) }
+            if (preparation != null) return preparation
+            if (!request.isServiceOwnerCurrent()) return RuntimeNetworkChangeOutcome.SUPERSEDED
+            beforeNative()
+            try {
+                if (request.networkHandle == null) {
+                    native.networkChanged(request.handle)
+                } else {
+                    native.networkChangedWithHandle(request.handle, request.networkHandle)
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                diagnosticsLogger.record("network", "foxcore network handoff failed")
+                return RuntimeNetworkChangeOutcome.FAILED
+            }
+            return synchronized(stateLock) { commitNetworkChange(request) }
+        }
+
+        private fun prepareNetworkChange(request: NativeNetworkChangeRequest): RuntimeNetworkChangeOutcome? {
+            if (request.phase == NetworkChangePhase.ABANDONED) return RuntimeNetworkChangeOutcome.SUPERSEDED
+            val owner = runningNetworkOwner() ?: return RuntimeNetworkChangeOutcome.UNAVAILABLE
+            if (lastNetworkChange !== request || !request.matches(owner, generation)) {
+                return RuntimeNetworkChangeOutcome.SUPERSEDED
+            }
+            val needsRebind = request.networkHandle == null || request.networkHandle != owner.networkHandle ||
+                latestNetworkLossRevision > completedNetworkLossRevision
+            return if (needsRebind) {
+                null
+            } else {
+                request.phase = NetworkChangePhase.SUCCEEDED
+                RuntimeNetworkChangeOutcome.UNCHANGED
+            }
+        }
+
+        private fun commitNetworkChange(request: NativeNetworkChangeRequest): RuntimeNetworkChangeOutcome {
+            val owner = runningNetworkOwner() ?: return RuntimeNetworkChangeOutcome.UNAVAILABLE
+            if (!request.matches(owner, generation)) return RuntimeNetworkChangeOutcome.SUPERSEDED
+            request.networkHandle?.let { networkHandle ->
+                active = owner.copy(networkHandle = networkHandle)
+                completedNetworkLossRevision = maxOf(completedNetworkLossRevision, request.lossRevision)
+            }
+            request.phase = NetworkChangePhase.SUCCEEDED
+            return RuntimeNetworkChangeOutcome.SUBMITTED
+        }
+
+        fun runningNetworkOwner(): ActiveFoxCoreSession? {
+            if (state != RuntimeState.RUNNING || pendingTransition != null || generation <= 0L) return null
+            if (cleanupDraining || handoverQuiesced) return null
+            return active
+        }
+
+        fun abandon(request: NativeNetworkChangeRequest) {
+            synchronized(stateLock) {
+                if (request.phase != NetworkChangePhase.SUCCEEDED) request.phase = NetworkChangePhase.ABANDONED
+            }
+        }
+
+        fun failIncompleteNetworkChange(request: NativeNetworkChangeRequest) {
+            synchronized(stateLock) {
+                if (request.phase == NetworkChangePhase.PENDING) request.phase = NetworkChangePhase.FAILED
+            }
+        }
+    }
+
+    private enum class NetworkChangePhase { PENDING, SUCCEEDED, FAILED, ABANDONED }
+
+    private class NativeNetworkChangeRequest(
+        val sessionIdentity: Any,
+        val handle: Long,
+        val generation: Long,
+        val networkHandle: Long?,
+        val lossRevision: Long,
+        val isServiceOwnerCurrent: () -> Boolean,
+    ) {
+        var phase = NetworkChangePhase.PENDING
+
+        fun matches(current: ActiveFoxCoreSession, currentGeneration: Long): Boolean =
+            current.sessionIdentity === sessionIdentity && current.handle == handle && currentGeneration == generation
+    }
+
+    override fun captureStatsReadLease(): RuntimeStatsReadLease? = NativeStatsLeaseReader().capture()
+
+    private inner class NativeStatsLeaseReader {
+        fun capture(): RuntimeStatsReadLease? {
+            val owner = withRunningOwner { current, epoch -> current to epoch } ?: return null
+            return RuntimeStatsReadLease {
+                if (!matches(owner)) return@RuntimeStatsReadLease null
+                val raw = try {
+                    native.stats(owner.first.handle)
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    return@RuntimeStatsReadLease null
+                }
+                raw.takeIf { matches(owner) }
+            }
+        }
+
+        private fun matches(owner: Pair<ActiveFoxCoreSession, Long>): Boolean =
+            withRunningOwner { current, epoch ->
+                current.handle == owner.first.handle &&
+                    current.sessionIdentity === owner.first.sessionIdentity && epoch == owner.second
+            } == true
+
+        private fun <T> withRunningOwner(read: (ActiveFoxCoreSession, Long) -> T): T? {
+            // Preserve transition -> publication lock order without waiting for native work.
+            if (!transitionMutex.tryLock()) return null
+            return try {
+                synchronized(stateLock) {
+                    if (state != RuntimeState.RUNNING || pendingTransition != null || generation <= 0L) {
+                        return@synchronized null
+                    }
+                    if (cleanupDraining || handoverQuiesced) {
+                        return@synchronized null
+                    }
+                    val current = active ?: return@synchronized null
+                    read(current, generation)
+                }
+            } finally {
+                transitionMutex.unlock()
+            }
+        }
     }
 
     override fun runtimeStatsJson(): String? =
@@ -723,43 +1034,132 @@ internal class FoxCoreRuntime internal constructor(
                 .getOrNull()
         }
 
+    override fun drainRuntimeAuditEventsJson(max: Int, expectedNativeGeneration: Long): String? {
+        val handle = synchronized(stateLock) {
+            when {
+                expectedNativeGeneration <= 0L || generation != expectedNativeGeneration -> null
+                state != RuntimeState.RUNNING || pendingTransition != null -> null
+                handoverQuiesced || cleanupDraining -> null
+                else -> active?.handle
+            }
+        } ?: return null
+        return try {
+            native.drainEvents(handle, max.coerceIn(1, MAX_EVENT_BATCH))
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            null
+        }
+    }
+
     override suspend fun installDnsRuleSet(
         name: String,
         manifest: ByteArray,
         signature: ByteArray,
         artifact: ByteArray,
-    ): RuntimeDnsRuleSetInstallOutcome {
-        val target =
-            transitionMutex.withLock {
-                active
-                    ?.takeIf { state == RuntimeState.RUNNING && pendingTransition == null }
-                    ?.let { current -> DnsRuleSetInstallTarget(current.handle, generation) }
+    ): RuntimeDnsRuleSetInstallOutcome =
+        captureDnsRuleSetInstallLease()?.install(name, manifest, signature, artifact)
+            ?: RuntimeDnsRuleSetInstallOutcome.Deferred
+
+    override suspend fun captureDnsRuleSetInstallLease(
+        isOwnerCurrent: () -> Boolean,
+    ): RuntimeDnsRuleSetInstallLease? {
+        currentCoroutineContext().ensureActive()
+        if (!isOwnerCurrent()) return null
+        val captured = transitionMutex.withLock {
+            active?.takeIf {
+                state == RuntimeState.RUNNING && pendingTransition == null && !cleanupDraining && !handoverQuiesced && !forceStopPoison.processPoisoned
+            }?.let { current ->
+                CapturedDnsRuleSetOwner(DnsRuleSetInstallTarget(current.handle, generation), current.sessionIdentity, current.host)
             }
-        return installDnsRuleSetGenerationSafe(
-            target = target,
-            install = { handle ->
-                native.installDnsRuleSet(handle, name, manifest, signature, artifact)
-            },
-            commit = { installedTarget, revision ->
-                transitionMutex.withLock {
-                    synchronized(stateLock) {
-                        val current =
-                            active.forDnsRuleSetCommit(
-                                target = installedTarget,
-                                currentGeneration = generation,
-                                currentState = state,
-                                transitionPending = pendingTransition != null,
-                            )
-                        if (current == null) {
+        } ?: return null
+        if (!isOwnerCurrent()) return null
+        return DnsRuleSetOwnerLease(captured, isOwnerCurrent)
+    }
+
+    private val dnsOwnerStable: Boolean get() = !cleanupDraining && !handoverQuiesced && !forceStopPoison.processPoisoned
+
+    private data class CapturedDnsRuleSetOwner(
+        val target: DnsRuleSetInstallTarget,
+        val sessionIdentity: Any,
+        val host: RuntimeServiceHost,
+    )
+
+    private inner class DnsRuleSetOwnerLease(
+        private val captured: CapturedDnsRuleSetOwner,
+        private val ownerCurrent: () -> Boolean,
+    ) : RuntimeDnsRuleSetInstallLease {
+        override fun isCurrent(): Boolean {
+            if (!ownerCurrent() || !captured.host.isDnsRuntimeOwnerCurrent()) return false
+            val current = synchronized(stateLock) {
+                !cleanupDraining && !handoverQuiesced && !forceStopPoison.processPoisoned &&
+                    active.forDnsRuleSetCommit(captured.target, generation, state, pendingTransition != null)
+                        ?.sessionIdentity === captured.sessionIdentity
+            }
+            return current && ownerCurrent() && captured.host.isDnsRuntimeOwnerCurrent()
+        }
+
+        override suspend fun install(
+            name: String,
+            manifest: ByteArray,
+            signature: ByteArray,
+            artifact: ByteArray,
+        ): RuntimeDnsRuleSetInstallOutcome {
+            currentCoroutineContext().ensureActive()
+            if (!isCurrent()) return RuntimeDnsRuleSetInstallOutcome.Superseded
+            val manifestBytes = manifest.copyOf()
+            val signatureBytes = signature.copyOf()
+            val artifactBytes = artifact.copyOf()
+            return withContext(Dispatchers.IO) {
+                if (!isCurrent()) return@withContext RuntimeDnsRuleSetInstallOutcome.Superseded
+                installDnsRuleSetGenerationSafe(
+                    target = captured.target,
+                    install = { handle ->
+                        native.installDnsRuleSet(
+                            handle,
+                            name,
+                            manifestBytes,
+                            signatureBytes,
+                            artifactBytes
+                        )
+                    },
+                    commit = { installedTarget, revision ->
+                        if (!ownerCurrent() || !captured.host.isDnsRuntimeOwnerCurrent()) {
                             false
                         } else {
-                            active = current.copy(policyRevision = revision)
-                            true
+                            transitionMutex.withLock {
+                                synchronized(stateLock) {
+                                    val current = active.forDnsRuleSetCommit(
+                                        installedTarget,
+                                        generation,
+                                        state,
+                                        pendingTransition != null
+                                    )
+                                    if (current == null || current.sessionIdentity !== captured.sessionIdentity || !dnsOwnerStable) {
+                                        false
+                                    } else {
+                                        active = current.copy(policyRevision = revision)
+                                        true
+                                    }
+                                }
+                            }
                         }
-                    }
-                }
-            },
-        )
+                    },
+                )
+            }
+        }
+    }
+
+    private suspend fun announceVerifiedDnsBootstrap(translated: FoxCoreSessionConfig, host: RuntimeServiceHost) {
+        val bootstrap = translated.dnsRuleSetBootstrap ?: return
+        try {
+            val owner = captureDnsRuleSetInstallLease(host::isDnsRuntimeOwnerCurrent)
+            if (owner != null) host.onDnsBootstrapVerified(bootstrap, owner::isCurrent)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            diagnosticsLogger.recordFailure("dns", "DNS bootstrap promotion pending")
+        }
     }
 
     private fun publish(
@@ -1049,8 +1449,13 @@ internal suspend fun installDnsRuleSetGenerationSafe(
 ): RuntimeDnsRuleSetInstallOutcome {
     target ?: return RuntimeDnsRuleSetInstallOutcome.Deferred
     val revision =
-        runCatching { install(target.handle) }
-            .getOrNull()
+        try {
+            install(target.handle)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            null
+        }
             ?.takeIf { value -> value > 0L }
             ?: return RuntimeDnsRuleSetInstallOutcome.Rejected
     return if (commit(target, revision)) {

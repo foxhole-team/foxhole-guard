@@ -1,0 +1,18 @@
+FoxHole DNS category data
+
+AdGuard: Copyright Adguard Software Ltd. and contributors. GPL-3.0.
+https://github.com/AdguardTeam/AdguardFilters
+HaGezi DNS blocklists: Copyright Gerd Zwerger and contributors. GPL-3.0.
+https://github.com/hagezi/dns-blocklists
+EasyPrivacy: Copyright The EasyList authors. Used under GPL-3.0-or-later.
+https://github.com/easylist/easylist
+https://easylist.to/pages/licence.html
+
+Original input paths, immutable source commits and SHA-256 digests are in each source-info.json.
+Only DNS-representable unconditional suffix rules are included; unsupported rule forms are skipped.
+OEM telemetry coverage is limited to the named Huawei, Samsung, OPPO/Realme, Vivo and Xiaomi inputs.
+Normal trackers: EasyPrivacy plus AdGuard third-party tracking servers.
+Pro trackers additionally include AdGuard first-party and mobile sections.
+Medium/full malicious domains use the corresponding HaGezi TIF inputs.
+
+GPL-3.0 text accompanies these assets as COPYING.txt.

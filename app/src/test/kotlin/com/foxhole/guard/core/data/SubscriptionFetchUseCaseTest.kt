@@ -27,6 +27,18 @@ import javax.net.SocketFactory
 
 class SubscriptionFetchUseCaseTest {
     @Test
+    fun `Outline source title survives an HTTPS fetch without provider title`() = runBlocking {
+        val useCase = fetchUseCase(scriptedClient("https://example.com/sub" to TestResponse.ok(body = "payload")))
+        val response = useCase.fetchSubscriptionResponse(
+            sourceUrl = "ssconf://example.com/sub#My%20VPN",
+            safeUrl = "https://example.com/sub".toHttpUrl(),
+            lastEtag = null,
+            allowHttp = false,
+        )
+        assertEquals("My VPN", response.metadataTitle)
+    }
+
+    @Test
     fun `returns not modified without reading body`() =
         runBlocking {
             val useCase =

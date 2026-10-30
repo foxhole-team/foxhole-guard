@@ -1,12 +1,15 @@
 package com.foxhole.guard.guardian
 
 import com.foxhole.guard.core.security.GuardCrypto
+import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.Json
 import java.io.File
 import java.io.FileOutputStream
+import java.io.IOException
 import java.io.RandomAccessFile
 import java.security.MessageDigest
 import java.util.Base64
+import java.util.concurrent.atomic.AtomicLong
 
 // Append-only sealed hash chain; recovery may discard only a trailing torn fragment, never valid later records.
 internal class GuardJournal(
@@ -30,37 +33,62 @@ internal class GuardJournal(
     )
 
     private var head: HeadState? = null
+    private val writeEpoch = AtomicLong()
 
     fun isActive(): Boolean = publicKeyProvider() != null
 
     @Synchronized
     fun lastRecordWallClockMs(): Long? = loadHead().lastWallClock.takeIf { timestamp -> timestamp > 0L }
 
+    fun captureWriteEpoch(): Long = writeEpoch.get()
+
+    fun append(event: GuardEvent): Boolean = appendIfCurrent(event) { true }
+
+    internal fun appendAtEpoch(event: GuardEvent, expectedEpoch: Long): Boolean =
+        appendIfCurrent(event) { expectedEpoch == writeEpoch.get() }
+
     @Synchronized
-    fun append(event: GuardEvent): Boolean {
-        val publicKey = publicKeyProvider() ?: return false
-        return runCatching {
-            val state = loadHead()
-            if (state.nextSeq == 0L && event.type != GuardEventType.GENESIS) {
-                appendRecord(state, publicKey, GuardEvent(type = GuardEventType.GENESIS, detail = randomChainId()))
-            }
-            appendRecord(state, publicKey, event)
-            pruneCheckpointedFiles()
-            true
-        }.getOrElse {
+    internal fun appendIfCurrent(event: GuardEvent, current: () -> Boolean): Boolean {
+        return try {
+            if (!current()) return false
+            val publicKey = publicKeyProvider() ?: return false
+            appendLocked(event, publicKey)
+        } catch (cancelled: CancellationException) {
+            head = null
+            throw cancelled
+        } catch (_: Exception) {
             head = null
             false
+        } catch (fatal: Error) {
+            head = null
+            throw fatal
         }
     }
 
+    private fun appendLocked(event: GuardEvent, publicKey: ByteArray): Boolean {
+        val state = loadHead()
+        if (state.nextSeq == 0L && event.type != GuardEventType.GENESIS) {
+            appendRecord(state, publicKey, GuardEvent(type = GuardEventType.GENESIS, detail = randomChainId()))
+        }
+        appendRecord(state, publicKey, event)
+        pruneCheckpointedFiles()
+        return true
+    }
+
     @Synchronized
-    fun deleteAll() {
-        journalFiles().forEach(File::delete)
+    fun deleteAll(beforeDelete: () -> Unit = {}) {
+        writeEpoch.incrementAndGet()
+        beforeDelete()
+        journalFiles().forEach(::deleteOwnedFile)
         directory
             .listFiles { file -> file.isFile && file.name.endsWith(STAGED_SUFFIX) }
             .orEmpty()
-            .forEach(File::delete)
+            .forEach(::deleteOwnedFile)
         head = null
+    }
+
+    private fun deleteOwnedFile(file: File) {
+        if (file.exists() && !file.delete()) throw IOException("guard journal cleanup failed")
     }
 
     private fun appendRecord(

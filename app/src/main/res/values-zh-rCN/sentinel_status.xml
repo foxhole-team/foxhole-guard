@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="cli_status_sentinel_notices">Sentinel 通知</string>
+    <string name="cli_status_sentinel_traffic_notices">流量提醒</string>
+    <string name="cli_status_sentinel_static_notices">静态检查通知</string>
+    <string name="cli_status_sentinel_install_notices">应用安装通知</string>
+    <string name="cli_status_notices_off">已在设置中关闭</string>
+    <string name="cli_status_notices_allowed">Android 已允许</string>
+    <string name="cli_status_notices_android_blocked">被 Android 阻止</string>
+    <string name="cli_status_notices_channel_blocked">通知渠道已停用</string>
+    <string name="cli_status_notices_channel_pending">通知渠道尚未初始化</string>
+    <string name="cli_status_notices_partly_blocked">部分通知渠道已停用</string>
+    <string name="cli_status_notices_unavailable">通知访问不可用</string>
+</resources>

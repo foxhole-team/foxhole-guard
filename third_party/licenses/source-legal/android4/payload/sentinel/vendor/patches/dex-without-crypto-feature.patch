@@ -1,0 +1,11 @@
+--- yara-x1.21.0/src/modules/utils/mod.rs
++++ yara-x1.21.0/src/modules/utils/mod.rs
+@@ -7,7 +7,7 @@
+ #[cfg(feature = "crypto")]
+ pub mod crypto;
+ 
+-#[cfg(feature = "crypto")]
++#[cfg(any(feature = "crypto", feature = "dex-module"))]
+ pub mod leb128;
+ #[cfg(any(
+     feature = "olecf-module",

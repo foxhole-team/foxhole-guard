@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="dns_category_prepared_pending">Die ausgewählten DNS-Filter sind vorbereitet. Die Aktivierung erfordert eine native Prüfung beim Start oder Neuladen der Verbindung.</string>
+    <string name="dns_category_prepared_short">Aktivierung ausstehend</string>
+    <string name="dns_category_catalog_missing">Die ausgewählten DNS-Filter sind nicht verfügbar: Der mitgelieferte Kategorienkatalog fehlt.</string>
+    <string name="dns_category_catalog_invalid">Die ausgewählten DNS-Filter sind nicht verfügbar: Die mitgelieferten Kategoriedaten konnten nicht verifiziert werden.</string>
+    <string name="dns_category_required_missing">Die angeforderten DNS-Kategorien oder Listenvarianten sind nicht verfügbar. Prüfe die ausgewählten Listen und aktualisiere ihre Daten.</string>
+    <string name="dns_category_signed_invalid">Die ausgewählten DNS-Filter sind nicht verfügbar: Die heruntergeladenen Kategoriedaten konnten nicht verifiziert werden.</string>
+    <string name="dns_category_profile_policy_unavailable">Dieses Profil kann die ausgewählten DNS-Filter in diesem Build nicht anwenden. Deaktiviere die Filterung oder wähle ein unterstütztes Profil.</string>
+</resources>

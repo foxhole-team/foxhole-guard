@@ -1,0 +1,7 @@
+0.1.1 Stable
+
+- User Home keeps the map above the profile and places IP information and connection controls below.
+- Adds a left-aligned VPN profile icon and moves User/Expert selection into Application settings.
+- Reports Sentinel notification access and preserves cleared journals.
+- Protects saved WebApp launches and prevents redundant quarantine restarts.
+- Includes the Sentinel engine and its dependencies in release checks.

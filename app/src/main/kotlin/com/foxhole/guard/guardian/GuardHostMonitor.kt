@@ -11,14 +11,16 @@ import kotlinx.coroutines.launch
 internal class GuardHostMonitor(
     private val scope: CoroutineScope,
     private val monitoringActive: () -> Boolean,
-    private val onHostStarted: (String) -> Unit,
+    private val onHostStarted: (String) -> Boolean,
     private val onHostStopped: (String, Boolean) -> Unit,
     private val onHeartbeat: () -> Unit,
     private val heartbeatIntervalMs: Long,
+    private val onInvalidated: () -> Unit = {},
 ) {
     private val hosts = mutableSetOf<String>()
     private val announcedHosts = mutableSetOf<String>()
     private var heartbeatJob: Job? = null
+    private var monitoringWasActive = false
 
     @Synchronized
     fun attach(host: String) {
@@ -55,8 +57,10 @@ internal class GuardHostMonitor(
 
     @Synchronized
     fun clear() {
+        onInvalidated()
         hosts.clear()
         announcedHosts.clear()
+        monitoringWasActive = false
         stopHeartbeatLocked()
     }
 
@@ -66,12 +70,13 @@ internal class GuardHostMonitor(
             hosts
                 .filterNot(announcedHosts::contains)
                 .forEach { host ->
-                    onHostStarted(host)
-                    announcedHosts += host
+                    if (onHostStarted(host)) announcedHosts += host
                 }
         } else {
+            if (monitoringWasActive) onInvalidated()
             announcedHosts.clear()
         }
+        monitoringWasActive = active
         if (hosts.isNotEmpty() && active) {
             startHeartbeatLocked()
         } else {

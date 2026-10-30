@@ -14,6 +14,7 @@ import android.os.Looper
 import com.foxhole.core.model.AutoConnectReasonCode
 import com.foxhole.core.model.ConnectionState
 import com.foxhole.core.model.ConnectivityHealthState
+import com.foxhole.core.model.FoxCoreDnsRuleSetBootstrap
 import com.foxhole.core.model.LanProxyUnavailableReason
 import com.foxhole.core.model.RuntimeTeardownPhase
 import com.foxhole.core.model.TrafficMode
@@ -25,6 +26,7 @@ import com.foxhole.core.runtime.FoxholeVpnRuntimeBridge
 import com.foxhole.core.runtime.LocalGuardMode
 import com.foxhole.core.runtime.NativeForceStopOutcome
 import com.foxhole.core.runtime.RuntimeCommandPriority
+import com.foxhole.core.runtime.RuntimeDnsBootstrapReadLease
 import com.foxhole.core.runtime.RuntimeNetworkCallbackKind
 import com.foxhole.core.runtime.RuntimeServiceHost
 import com.foxhole.core.runtime.RuntimeServiceOwnerLease
@@ -45,6 +47,8 @@ import com.foxhole.core.sentinel.detection.TrafficWindowAggregator
 import com.foxhole.guard.FoxholeApplication
 import com.foxhole.guard.FoxholeRuntimeDependencies
 import com.foxhole.guard.R
+import com.foxhole.guard.router.GuardRouterSocketOwners
+import com.foxhole.guard.router.GuardRouterSocketOwnerSnapshot
 import com.foxhole.guard.core.diagnostics.DiagnosticsLoggerRuntimeDiagnosticsSink
 import com.foxhole.guard.core.sentinel.anomaly.AndroidNetworkTypeProvider
 import com.foxhole.guard.core.settings.AppTrafficStatsRecorder
@@ -74,6 +78,26 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
     }
 
     internal val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+
+    override fun isDnsRuntimeOwnerCurrent(): Boolean = isCurrentNetworkCallbackOwner()
+
+    override suspend fun captureDnsBootstrapReadLease(bootstrap: FoxCoreDnsRuleSetBootstrap): RuntimeDnsBootstrapReadLease? {
+        if (!isDnsRuntimeOwnerCurrent()) return null
+        val captured = container.dnsFilterAssetInstaller.captureCategorizedBootstrapReadLease(bootstrap) ?: return null
+        if (!isDnsRuntimeOwnerCurrent()) {
+            captured.release()
+            return null
+        }
+        return object : RuntimeDnsBootstrapReadLease {
+            override suspend fun release() = captured.release()
+        }
+    }
+
+    override suspend fun onDnsBootstrapVerified(bootstrap: FoxCoreDnsRuleSetBootstrap, isOwnerCurrent: () -> Boolean) {
+        container.dnsFilterAssetInstaller.promoteCategorizedBootstrap(bootstrap) {
+            isDnsRuntimeOwnerCurrent() && isOwnerCurrent()
+        }
+    }
 
     override fun onNativeProcessPoisoned(outcome: NativeForceStopOutcome) {
         processLifetimeScope.launch(Dispatchers.IO) {
@@ -108,6 +132,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
     internal val trackedVpnNetworkRequest by lazy {
         NetworkRequest.Builder()
             .addTransportType(NetworkCapabilities.TRANSPORT_VPN)
+            .removeCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN)
             .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
             .build()
     }
@@ -124,6 +149,10 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
                 "source=${if (result.downloaded) "downloaded" else "built-in"}" +
                 result.reason?.let { reason -> " reason=$reason" }.orEmpty(),
         )
+    }
+
+    internal val tlsFingerprintInstallGate by lazy {
+        TlsFingerprintInstallGate(scope = scope, install = ::installTlsFingerprintTables)
     }
 
     internal val runtimeInstanceStore
@@ -290,9 +319,10 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
     override fun onCreate() {
         super.onCreate()
         runtimeServiceOwner = runtimeInstanceStore.claimServiceOwner()
+        GuardRouterSocketOwners.register(runtimeServiceOwner, ::captureRouterSocketOwner) { socket -> protect(socket) }
         FoxholeConnectionServiceContract.markServiceCreated()
-        installTlsFingerprintTables()
         claimForegroundSlotEarly(notificationManager)
+        tlsFingerprintInstallGate.start()
         startTorNotificationPhaseMonitoring()
         startI2pNotificationPhaseMonitoring()
         startLanProxyNotificationPhaseMonitoring()
@@ -360,6 +390,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
     }
 
     override fun onDestroy() {
+        if (::runtimeServiceOwner.isInitialized) GuardRouterSocketOwners.invalidate(runtimeServiceOwner)
         FoxholeConnectionServiceContract.markServiceDestroyed()
         detachGuardDaemon("vpn-service")
         FoxholeVpnRuntimeBridge.updateSocketProtector(null)
@@ -420,6 +451,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         }
 
         sessionTicker.stop()
+        upstreamNetworkChanges.close()
         scope.cancel()
         if (networkCallbackRegistered) {
             runCatching { connectivityManager.unregisterNetworkCallback(networkCallback) }
@@ -490,6 +522,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
     }
 
     override fun onRevoke() {
+        GuardRouterSocketOwners.invalidate(runtimeServiceOwner)
         beginRuntimeTransition("permission_revoked")
         launchPriorityCommand(RuntimeCommandPriority.KILL, "permission_revoked") {
             disconnect(message = getString(R.string.vpn_permission_revoked))
@@ -518,6 +551,48 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         AndroidApplicationIdentityResolver(this).signingCertificateSha256(packageName)
 
     override fun currentUnderlyingNetwork(): Network? = currentUpstreamNetworkOrNull()
+
+    private val upstreamNetworkChanges = UpstreamNetworkChangeMailbox(
+        scope = scope,
+        isOwnerCurrent = ::isCurrentNetworkCallbackOwner,
+        onFailure = {
+            container.diagnosticsLogger.recordFailure("network", "upstream network handoff submission failed")
+        },
+    )
+
+    private fun captureRouterSocketOwner(): GuardRouterSocketOwnerSnapshot? {
+        if (scope.coroutineContext[Job]?.isActive != true || !hasVpnPermission() ||
+            !runtimeInstanceStore.isCurrentServiceOwner(runtimeServiceOwner)) return null
+        val current = runtimeInstanceStore.currentForServiceOwner(runtimeServiceOwner) ?: return null
+        val ownership = runtimeSupervisor.ownership.value
+        if (ownership.activeMode != TrafficMode.TUNNEL) return null
+        val tunnelOwner = ownership.activeSession ?: ownership.activeLocalGuardMode ?: return null
+        val generation = runtimeSupervisor.currentGeneration()
+        val queue = runtimeSupervisor.queueSnapshot()
+        if (queue.closed) return null
+        val owner = runtimeCommandOwner.id
+        if (scope.coroutineContext[Job]?.isActive != true || !hasVpnPermission() ||
+            runtimeInstanceStore.currentForServiceOwner(runtimeServiceOwner) !== current ||
+            runtimeSupervisor.currentGeneration() != generation) return null
+        val after = runtimeSupervisor.queueSnapshot()
+        if (after.closed || after.lastSequence != queue.lastSequence) return null
+        val afterOwnership = runtimeSupervisor.ownership.value
+        if (afterOwnership.activeMode != TrafficMode.TUNNEL ||
+            (afterOwnership.activeSession ?: afterOwnership.activeLocalGuardMode) !== tunnelOwner) return null
+        return GuardRouterSocketOwnerSnapshot(current, tunnelOwner, runtimeServiceOwner.generation, generation, queue.lastSequence, owner)
+    }
+
+    internal fun isCurrentNetworkCallbackOwner(): Boolean =
+        runtimeInstanceStore.isCurrentServiceOwner(runtimeServiceOwner)
+
+    internal fun dispatchUpstreamNetworkChange(network: Network?): Boolean {
+        if (scope.coroutineContext[Job]?.isActive != true) return false
+        val current = runtimeInstanceStore.currentForServiceOwner(runtimeServiceOwner) ?: return false
+        val lease = current.captureNetworkChangeLease(network?.networkHandle) {
+            runtimeInstanceStore.currentForServiceOwner(runtimeServiceOwner) === current
+        } ?: return false
+        return upstreamNetworkChanges.offer(lease)
+    }
 
     internal fun beginRuntimeTransition(reason: String): Long {
         val outgoingProbeOwner = activeSession

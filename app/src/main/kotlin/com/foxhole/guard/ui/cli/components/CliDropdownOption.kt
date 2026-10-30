@@ -42,7 +42,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import com.foxhole.guard.ui.cli.CliSpacing
-import com.foxhole.guard.ui.cli.CliType
 import com.foxhole.guard.ui.cli.LocalCliColors
 import com.foxhole.guard.ui.cli.LocalCliPanelAppearance
 import com.foxhole.guard.ui.cli.cliLabelText
@@ -228,7 +227,7 @@ private fun CliSelectedOptionIcon(
 ) {
     if (option == null || !visible) return
     if (option.flagCountry != null) {
-        CliFlagIcon(countryCode = option.flagCountry, style = CliType.body)
+        CliFlagIcon(countryCode = option.flagCountry, style = cliRowTextStyle())
         Spacer(modifier = Modifier.width(4.dp))
         return
     }
@@ -300,7 +299,7 @@ private fun CliDropdownOptionLine(
             Spacer(modifier = Modifier.width(6.dp))
         }
         option.flagCountry?.let { country ->
-            CliFlagIcon(countryCode = country, style = CliType.body)
+            CliFlagIcon(countryCode = country, style = cliRowTextStyle())
             Spacer(modifier = Modifier.width(6.dp))
         }
         if (option.flagCountry == null) {

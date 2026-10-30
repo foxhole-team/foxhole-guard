@@ -82,6 +82,6 @@ internal const val SITE_REGEX_PREFIX = "re:"
 
 internal val TCP_RELIABILITY_OUTBOUND_TYPES = setOf("vless", "trojan", "vmess", "shadowsocks", "http", "socks")
 
-internal val TCP_RELIABILITY_TRANSPORT_TYPES = setOf("tcp", "ws", "grpc", "http", "httpupgrade")
+internal val TCP_RELIABILITY_TRANSPORT_TYPES = setOf("tcp", "ws", "grpc", "http", "httpupgrade", "xhttp", "splithttp")
 
 internal val PORT_RANGE_REGEX = Regex("""\d{1,5}-\d{1,5}""")

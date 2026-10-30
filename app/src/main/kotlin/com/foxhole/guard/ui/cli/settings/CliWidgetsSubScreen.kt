@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
@@ -44,6 +43,8 @@ import com.foxhole.core.model.WidgetKindAppearance
 import com.foxhole.guard.R
 import com.foxhole.guard.ui.HomeViewModel
 import com.foxhole.guard.ui.HomeWidgetKind
+import com.foxhole.guard.ui.cli.CliColors
+import com.foxhole.guard.ui.cli.CliLightColors
 import com.foxhole.guard.ui.cli.CliSpacing
 import com.foxhole.guard.ui.cli.CliType
 import com.foxhole.guard.ui.cli.LocalCliBottomChromeClearance
@@ -52,17 +53,16 @@ import com.foxhole.guard.ui.cli.cliTypography
 import com.foxhole.guard.ui.cli.components.CliActionRow
 import com.foxhole.guard.ui.cli.components.CliDropdownOption
 import com.foxhole.guard.ui.cli.components.CliDropdownRow
+import com.foxhole.guard.ui.cli.components.CliFlagIcon
 import com.foxhole.guard.ui.cli.components.CliIcon
 import com.foxhole.guard.ui.cli.components.CliInputModal
 import com.foxhole.guard.ui.cli.components.CliPanel
 import com.foxhole.guard.ui.cli.components.CliRowDivider
 import com.foxhole.guard.ui.cli.components.CliScreenHeader
-import com.foxhole.guard.ui.cli.components.CliToggleRow
 import com.foxhole.guard.ui.cli.components.cliDashedBorder
 import com.foxhole.guard.ui.cli.home.isRouteConnection
 import com.foxhole.guard.ui.cli.home.isRouteTransition
 import com.foxhole.guard.ui.onAddHomeWidget
-import com.foxhole.guard.ui.onFoxWidgetAnimationChanged
 import com.foxhole.guard.ui.onStatusWidgetLayoutModeChanged
 import com.foxhole.guard.ui.onWidgetAlphaPercentChanged
 import com.foxhole.guard.ui.onWidgetBlackBackgroundChanged
@@ -137,8 +137,6 @@ internal fun CliWidgetsSubScreen(
             Spacer(modifier = Modifier.height(CliSpacing.sm))
             CliFoxWidgetPanel(
                 viewModel = viewModel,
-                connected = connected,
-                animationEnabled = widgets.foxAnimationEnabled,
             )
             Spacer(modifier = Modifier.height(CliSpacing.sm))
         }
@@ -218,8 +216,6 @@ private fun CliStatusWidgetLayoutRow(
 @Composable
 private fun CliFoxWidgetPanel(
     viewModel: HomeViewModel,
-    connected: Boolean,
-    animationEnabled: Boolean,
 ) {
     CliPanel(
         title = stringResource(R.string.fox_status_widget_label),
@@ -229,9 +225,7 @@ private fun CliFoxWidgetPanel(
     ) {
         CliWidgetPreviewSurface(fill = Color.Transparent, outlined = false) {
             Image(
-                painter = painterResource(
-                    if (connected) R.drawable.fhg_status_frame_1 else R.drawable.fhg_status_frame_4,
-                ),
+                painter = painterResource(R.drawable.ic_launcher_openwrt),
                 contentDescription = null,
                 modifier = Modifier.size(FOX_PREVIEW_SIZE),
             )
@@ -241,12 +235,6 @@ private fun CliFoxWidgetPanel(
             label = stringResource(R.string.cli_widget_add_home),
             icon = R.drawable.lin_home,
             onTap = { viewModel.onAddHomeWidget(HomeWidgetKind.STATUS) },
-        )
-        CliRowDivider()
-        CliToggleRow(
-            label = stringResource(R.string.fox_status_widget_animate),
-            checked = animationEnabled,
-            onToggle = viewModel::onFoxWidgetAnimationChanged,
         )
     }
 }
@@ -334,80 +322,96 @@ private fun CliSimpleStatusWidgetPreview(
     val colors = LocalCliColors.current
     val active = connected || transition
     val smallType = cliTypography().small
-    Row(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .height(SIMPLE_PREVIEW_HEIGHT)
-            .padding(horizontal = CliSpacing.sm + CliSpacing.xs, vertical = CliSpacing.xs),
-        verticalAlignment = Alignment.CenterVertically,
+            .padding(horizontal = CliSpacing.sm + CliSpacing.xs, vertical = 6.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Box(
-            modifier = Modifier
-                .size(SIMPLE_PREVIEW_CONTROL_SIZE)
-                .border(2.dp, textTone, CircleShape),
-            contentAlignment = Alignment.Center,
+        Row(
+            modifier = Modifier.fillMaxWidth().weight(1f),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Image(
-                painter = painterResource(R.drawable.ic_qs_tile),
-                contentDescription = null,
-                colorFilter = ColorFilter.tint(textTone),
-                modifier = Modifier.size(22.dp),
-            )
-        }
-        Spacer(modifier = Modifier.width(CliSpacing.sm))
-        Column(
-            modifier = Modifier.weight(1f),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Text(
-                text = stringResource(
-                    when {
-                        connected -> R.string.cli_home_status_connected_vpn
-                        transition -> R.string.cli_home_status_connecting
-                        else -> R.string.cli_home_status_none
-                    },
-                ),
-                style = smallType.copy(fontSize = 14.sp, lineHeight = 15.sp),
-                color = when {
-                    connected -> colors.ok
-                    transition -> colors.info
-                    else -> colors.err
-                },
-                maxLines = 1,
-            )
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(modifier = Modifier.size(48.dp), contentAlignment = Alignment.Center) {
                 Image(
-                    painter = painterResource(R.drawable.lin_device),
-                    contentDescription = stringResource(R.string.cli_rt_device),
-                    colorFilter = ColorFilter.tint(if (connected) colors.vpn else colors.dim),
-                    modifier = Modifier.size(14.dp),
-                )
-                Spacer(modifier = Modifier.width(3.dp))
-                Image(
-                    painter = painterResource(R.drawable.flag_nl),
-                    contentDescription = SIMPLE_PREVIEW_COUNTRY_CODE,
-                    modifier = Modifier.width(18.dp).height(11.dp),
-                )
-                Spacer(modifier = Modifier.width(3.dp))
-                Text(
-                    text = SIMPLE_PREVIEW_COUNTRY_CODE,
-                    style = smallType.copy(fontSize = 13.sp, lineHeight = 15.sp),
-                    color = textTone,
+                    painter = painterResource(R.drawable.ic_launcher_openwrt),
+                    contentDescription = stringResource(R.string.widget_status_open_app),
+                    modifier = Modifier.size(36.dp),
                 )
             }
+            Spacer(modifier = Modifier.width(8.dp))
+            Column(
+                modifier = Modifier.weight(1f),
+                horizontalAlignment = Alignment.Start,
+                verticalArrangement = Arrangement.Center,
+            ) {
+                Text(
+                    text = stringResource(
+                        when {
+                            connected -> R.string.cli_home_status_connected_vpn
+                            transition -> R.string.cli_home_status_connecting
+                            else -> R.string.cli_home_status_none
+                        },
+                    ),
+                    style = smallType.copy(fontSize = 14.sp, lineHeight = 15.sp),
+                    color = when {
+                        connected -> colors.ok
+                        transition -> colors.info
+                        else -> colors.err
+                    },
+                    maxLines = 2,
+                    softWrap = true,
+                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Image(
+                        painter = painterResource(R.drawable.lin_device),
+                        contentDescription = stringResource(R.string.cli_rt_device),
+                        colorFilter = ColorFilter.tint(if (connected) colors.vpn else colors.dim),
+                        modifier = Modifier.size(14.dp),
+                    )
+                    Spacer(modifier = Modifier.width(3.dp))
+                    CliFlagIcon(
+                        countryCode = SIMPLE_PREVIEW_COUNTRY_CODE,
+                        style = smallType.copy(fontSize = 13.sp, lineHeight = 15.sp),
+                    )
+                    Spacer(modifier = Modifier.width(3.dp))
+                    Text(
+                        text = SIMPLE_PREVIEW_COUNTRY_CODE,
+                        style = smallType.copy(fontSize = 13.sp, lineHeight = 15.sp),
+                        color = textTone,
+                    )
+                }
+            }
         }
-        Spacer(modifier = Modifier.width(CliSpacing.sm))
-        Box(
+        val actionColor = if (textTone == Color.Black) {
+            if (active) CliLightColors.err else CliLightColors.ok
+        } else {
+            if (active) CliColors().err else CliColors().ok
+        }
+        Row(
             modifier = Modifier
-                .size(SIMPLE_PREVIEW_CONTROL_SIZE)
-                .border(2.dp, if (active) colors.err else colors.ok, CircleShape),
-            contentAlignment = Alignment.Center,
+                .fillMaxWidth()
+                .height(48.dp)
+                .background(if (textTone == Color.Black) Color.White else Color.Black, RoundedCornerShape(24.dp))
+                .border(2.dp, actionColor, RoundedCornerShape(24.dp)),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center,
         ) {
             Image(
                 painter = painterResource(R.drawable.lin_power),
                 contentDescription = null,
-                colorFilter = ColorFilter.tint(if (active) colors.err else colors.ok),
+                colorFilter = ColorFilter.tint(actionColor),
                 modifier = Modifier.size(19.dp),
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = stringResource(
+                    if (active) R.string.widget_status_disconnect_action else R.string.widget_status_connect_action,
+                ),
+                style = smallType.copy(fontSize = 12.sp),
+                color = actionColor,
+                maxLines = 1,
             )
         }
     }
@@ -670,8 +674,7 @@ private const val PREVIEW_TILE_ALPHA = 0.2f
 private const val SIMPLE_PREVIEW_COUNTRY_CODE = "NL"
 private val PREVIEW_TILE_SIZE = 36.dp
 private val PREVIEW_BUTTON_HEIGHT = 24.dp
-private val SIMPLE_PREVIEW_CONTROL_SIZE = 34.dp
-private val SIMPLE_PREVIEW_HEIGHT = 56.dp
+private val SIMPLE_PREVIEW_HEIGHT = 160.dp
 private val PREVIEW_CORNER_RADIUS = 8.dp
 private val PREVIEW_CHECKER_CELL = 8.dp
 private val PREVIEW_CHECKER_DARK = Color(0xFF2A2A2A)

@@ -229,7 +229,7 @@ internal class FoxCoreConfigTranslatorRejectionTest : FoxCoreConfigTranslatorTes
                     FoxCoreConfigRejection.UNSUPPORTED_SECURITY,
                 ),
                 RejectionCase(
-                    "uTLS outside Reality cannot be silently removed",
+                    "unsupported uTLS outside Reality cannot be silently removed",
                     ProtocolHint.VLESS,
                     legacyConfig(
                         vless {
@@ -240,7 +240,7 @@ internal class FoxCoreConfigTranslatorRejectionTest : FoxCoreConfigTranslatorTes
                                         "utls",
                                         buildJsonObject {
                                             put("enabled", true)
-                                            put("fingerprint", "chrome")
+                                            put("fingerprint", "qq")
                                         },
                                     )
                                 },

@@ -23,7 +23,9 @@ internal class FoxCoreNativeSessionStarter(
         network: Network,
         host: RuntimeServiceHost,
         translated: FoxCoreSessionConfig,
+        dnsContinuation: Long? = null,
     ): FoxCoreNativeSessionStart? {
+        if (dnsContinuation != null && dnsContinuation <= 0L) return null
         val immutableFingerprint =
             immutableEngineFingerprint(
                 configJson = translated.engineConfigJson,
@@ -37,6 +39,7 @@ internal class FoxCoreNativeSessionStarter(
                 host = host,
                 translated = translated,
                 dnsPayload = dnsPayload,
+                dnsContinuation = dnsContinuation,
             ) ?: return null
         return FoxCoreNativeSessionStart(
             handle = nativeHandle.handle,
@@ -105,13 +108,14 @@ internal class FoxCoreNativeSessionStarter(
         host: RuntimeServiceHost,
         translated: FoxCoreSessionConfig,
         dnsPayload: FoxCoreDnsStartPayload,
+        dnsContinuation: Long?,
     ): FoxCoreNativeHandle? {
         val duplicatedFd =
             runCatching { ParcelFileDescriptor.dup(tun.fileDescriptor).detachFd() }
                 .getOrNull()
                 ?: return null
         val handle =
-            runCatching {
+            invokeNativeStartWithDiagnostics(diagnosticsLogger) {
                 invokeFoxCoreNativeStart(
                     native = native,
                     tunFd = duplicatedFd,
@@ -119,15 +123,10 @@ internal class FoxCoreNativeSessionStarter(
                     networkHandle = network.networkHandle,
                     dnsPayload = dnsPayload,
                     host = host,
+                    dnsContinuation = dnsContinuation,
                 )
-            }.onFailure { error ->
-
-                diagnosticsLogger.recordStructured(
-                    "foxcore",
-                    "native start rejected",
-                    "reason=${nativeStartFailureReason(error)}",
-                )
-            }.getOrNull()
+            }
+        if (dnsContinuation != null && handle != null) rejectPoisonedDnsContinuityStart(handle)
         val acceptedHandle = handle?.takeIf { candidate -> candidate > 0L }
         if (acceptedHandle == null) {
             diagnosticsLogger.record("foxcore", "native start returned no handle")
@@ -169,29 +168,6 @@ internal class FoxCoreNativeSessionStarter(
     private fun ByteArray.startsWith(prefix: ByteArray): Boolean =
         size >= prefix.size && copyOfRange(0, prefix.size).contentEquals(prefix)
 
-    private fun nativeStartFailureReason(error: Throwable): String {
-        val message = error.message.orEmpty().lowercase()
-        return when {
-            "previous foxcore worker" in message -> "worker_lease_busy"
-            message.containsAny("start named loopback inbound", "address already in use") ->
-                "loopback_inbound_start_failed"
-            "start runtime control proxy" in message -> "control_proxy_start_failed"
-            message.containsAny("uid/package routing", "flow attribution") ->
-                "flow_attribution_unavailable"
-            "initialization timed out" in message -> "initialization_timeout"
-            "initialize outbounds" in message -> "outbound_initialization_failed"
-            "initialize dns policy" in message -> "dns_policy_initialization_failed"
-            "open tun descriptor" in message -> "tun_open_failed"
-            "engine config" in message -> "config_parse_failed"
-            "panic inside foxcore" in message -> "native_panic"
-            error is SecurityException -> "security_exception"
-            error is IllegalArgumentException -> "invalid_argument"
-            else -> "native_exception"
-        }
-    }
-
-    private fun String.containsAny(vararg fragments: String): Boolean = fragments.any(::contains)
-
     private companion object {
         const val INITIAL_POLICY_REVISION = 1L
         const val MAX_DNS_RULE_SET_BYTES = 64L * 1024L * 1024L
@@ -199,7 +175,7 @@ internal class FoxCoreNativeSessionStarter(
         const val MAX_DNS_RULE_SET_SIGNATURE_BYTES = 256L
         const val DNS_RULE_SET_TRUST_KEY = "dns_rule_set_trust"
 
-        val IMMUTABLE_ENGINE_KEYS = listOf("schema_version", "outbound", "outbounds", "tun", "runtime")
+        val IMMUTABLE_ENGINE_KEYS = listOf("schema_version", "outbound", "outbounds", "tun", "runtime", "bootstrap_dns")
         val FOXCORE_DNS_RULE_SET_MAGIC =
             byteArrayOf(
                 'F'.code.toByte(),
@@ -249,8 +225,23 @@ internal fun invokeFoxCoreNativeStart(
     networkHandle: Long,
     dnsPayload: FoxCoreDnsStartPayload,
     host: RuntimeServiceHost,
-): Long =
-    when (dnsPayload) {
+    dnsContinuation: Long? = null,
+): Long {
+    if (dnsContinuation != null) {
+        require(dnsContinuation > 0L) { "DNS continuation token must be positive" }
+        return when (dnsPayload) {
+            FoxCoreDnsStartPayload.None -> native.startOnNetworkWithDnsContinuity(
+                tunFd, configJson, networkHandle, dnsContinuation, null, null, null, null, false, host,
+            )
+            is FoxCoreDnsStartPayload.Trusted -> native.startOnNetworkWithDnsContinuity(
+                tunFd, configJson, networkHandle, dnsContinuation, dnsPayload.name, null, null, dnsPayload.artifact, true, host,
+            )
+            is FoxCoreDnsStartPayload.Signed -> native.startOnNetworkWithDnsContinuity(
+                tunFd, configJson, networkHandle, dnsContinuation, dnsPayload.name, dnsPayload.manifest, dnsPayload.signature, dnsPayload.artifact, false, host,
+            )
+        }
+    }
+    return when (dnsPayload) {
         FoxCoreDnsStartPayload.None ->
             native.startWithNetwork(tunFd, configJson, networkHandle, host)
         is FoxCoreDnsStartPayload.Trusted ->
@@ -274,3 +265,4 @@ internal fun invokeFoxCoreNativeStart(
                 host,
             )
     }
+}

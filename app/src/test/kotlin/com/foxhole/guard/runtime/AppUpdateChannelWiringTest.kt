@@ -1,11 +1,26 @@
 package com.foxhole.guard.runtime
 
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.async
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.runTest
+import okhttp3.OkHttpClient
+import okhttp3.ResponseBody.Companion.toResponseBody
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
 import java.io.File
+import java.net.InetAddress
+import java.security.MessageDigest
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class AppUpdateChannelWiringTest {
+    @get:Rule val temporary = TemporaryFolder()
+
     @Test
     fun `the scheduled check follows the worker conventions`() {
         val application = projectSource("app/src/main/kotlin/com/foxhole/guard/FoxholeApplication.kt")
@@ -60,29 +75,66 @@ class AppUpdateChannelWiringTest {
     }
 
     @Test
-    fun `a background failure never paints the updates screen red`() {
-        val repository = runtimeSource("AppUpdateRepository.kt")
-        val backgroundCheck =
-            repository
-                .substringAfter("suspend fun checkInBackground")
-                .substringBefore("suspend fun download")
+    fun `a background failure never paints the updates screen red`() = runTest {
+        val factory = AppUpdateCancellationTest.HeldFactory()
+        val repository = AppUpdateRepository(
+            controlledClient(factory, StandardTestDispatcher(testScheduler)),
+            1,
+            temporary.newFolder(),
+            currentVersionName = "0.1.0"
+        )
+        val first = async { repository.check() }
+        runCurrent()
+        factory.calls.last().respond("""{"tag_name":"v0.1.2","assets":[]}""".toResponseBody())
+        runCurrent()
+        first.await()
+        val previous = repository.state.value
+        val background = async { repository.checkInBackground() }
+        runCurrent()
+        factory.calls.last().respond("unavailable".toResponseBody(), 503)
+        runCurrent()
 
-        assertTrue(backgroundCheck.contains("is AppUpdateCheck.Failed -> Unit"))
-        assertFalse(backgroundCheck.contains("AppUpdateState.Failed"))
+        assertTrue(background.await() is AppUpdateCheck.Failed)
+        assertEquals(previous, repository.state.value)
     }
 
     @Test
-    fun `the downloaded state is unreachable without the package identity gate`() {
-        val repository = runtimeSource("AppUpdateRepository.kt")
-        val download =
-            repository
-                .substringAfter("suspend fun download(update: AppUpdateCheck.Available)")
-                .substringBefore("fun reset()")
+    fun `the downloaded state is unreachable without the package identity gate`() = runTest {
+        val factory = AppUpdateCancellationTest.HeldFactory()
+        val directory = temporary.newFolder()
+        val repository = AppUpdateRepository(
+            controlledClient(factory, StandardTestDispatcher(testScheduler)),
+            1,
+            directory,
+            apkVerifier = { _, _ -> Result.failure(AppUpdateVerificationException("fixture foreign package")) },
+            currentVersionName = "0.1.0",
+            verifierDispatcher = StandardTestDispatcher(testScheduler),
+        )
+        val bytes = ByteArray(32) { it.toByte() }
+        val digest = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
+        val update = AppUpdateCheck.Available(
+            AppUpdateManifest(2, "0.1.2", "foxhole.apk", digest),
+            "https://cdn.example/foxhole.apk",
+            bytes.size.toLong()
+        )
+        val operation = async { repository.download(update) }
+        runCurrent()
+        factory.calls.last().respond(bytes.toResponseBody())
+        runCurrent()
 
-        assertTrue("the verifier must run before Downloaded is published", download.contains("apkVerifier("))
-        assertTrue("a rejected artifact must not stay on disk", download.contains("apk.delete()"))
-        assertTrue(download.indexOf("apkVerifier(") < download.indexOf("AppUpdateState.Downloaded"))
+        assertTrue(operation.await().isFailure)
+        assertEquals(AppUpdateFailure.VERIFICATION, (repository.state.value as AppUpdateState.Failed).failure)
+        assertTrue(directory.listFiles().orEmpty().isEmpty())
     }
+
+    private fun controlledClient(factory: AppUpdateCancellationTest.HeldFactory, dispatcher: kotlinx.coroutines.CoroutineDispatcher) = AppUpdateClient(
+        OkHttpClient(),
+        resolver = { listOf(InetAddress.getByName("8.8.8.8")) },
+        releasesApiUrl = { "https://api.example/release" },
+        operationTimeoutMs = 10000,
+        ioDispatcher = dispatcher,
+        callFactory = factory,
+    )
 
     @Test
     fun `the verifier refuses a foreign package, version or certificate`() {

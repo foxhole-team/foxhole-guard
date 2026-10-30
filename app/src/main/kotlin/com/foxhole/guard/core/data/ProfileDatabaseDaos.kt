@@ -276,7 +276,7 @@ interface AnomalyDao {
     @Query(
         """
         select * from anomaly_events
-        where notificationShown = 0 and createdAtMs >= :since and type != :excludedType
+        where notificationShown = 0 and createdAtMs >= :since and type != :excludedType and type != 'APP_STATIC_REFERENCE'
         order by createdAtMs asc, id asc
         limit :limit
         """,
@@ -437,6 +437,9 @@ interface AnomalyDao {
         packageName: String?,
         since: Long,
     ): Int
+
+    @Query("select count(*) from anomaly_events where type = :type and createdAtMs >= :since and notificationShown = 1")
+    suspend fun globalNotificationCountSince(type: String, since: Long): Int
 
     @Query("delete from traffic_windows where startedAtMs < :cutoff")
     suspend fun deleteTrafficWindowsBefore(cutoff: Long)

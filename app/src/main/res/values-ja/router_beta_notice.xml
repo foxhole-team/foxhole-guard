@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="router_beta_notice_title" formatted="false">ベータ機能</string>
+    <string name="router_beta_notice_body" formatted="false">現在、自動インストールに対応するのは、OpenWrt の設定がすべて初期値のルーターのみです。 最新の FoxHole OpenWrt Client を手動でインストールしたルーターともペアリングできます。 セットアップとペアリングには、スマートフォンとルーターが同じ LAN に接続され、ルーターからインターネットにアクセスできる必要があります。</string>
+    <string name="router_beta_notice_dont_show_again" formatted="false">今後表示しない</string>
+</resources>

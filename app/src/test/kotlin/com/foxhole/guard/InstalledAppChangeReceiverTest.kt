@@ -67,14 +67,18 @@ class InstalledAppChangeReceiverTest {
             source.substringAfter("private suspend fun FoxholeApplication.preflightPackageChange")
                 .substringBefore("private suspend fun FoxholeApplication.enrichPackageInventoryChange")
 
+        assertTrue(receiveBody.indexOf("preparePackageInventoryChange(it)") >= 0)
+        assertTrue(receiveBody.indexOf("guardSentinel.enqueuePackageChange") >= 0)
+        assertTrue(receiveBody.indexOf("enrichPackageInventoryChange(preparedChange)") >= 0)
+
         assertTrue(
             "The fail-closed package path must run before the sealed journal can consume the deadline",
             receiveBody.indexOf("preparePackageInventoryChange(it)") <
-                receiveBody.indexOf("guardSentinel.recordPackageChange"),
+                receiveBody.indexOf("guardSentinel.enqueuePackageChange"),
         )
         assertTrue(
-            "The sealed event must be recorded before FoxHole Sentinel enrichment",
-            receiveBody.indexOf("guardSentinel.recordPackageChange") <
+            "Durable Guard package admission must precede optional enrichment",
+            receiveBody.indexOf("guardSentinel.enqueuePackageChange") <
                 receiveBody.indexOf("enrichPackageInventoryChange(preparedChange)"),
         )
         assertTrue(
@@ -83,6 +87,12 @@ class InstalledAppChangeReceiverTest {
                 .substringBefore("is PackageChangePreparation.Persisted")
                 .contains("return@finishPendingBroadcast"),
         )
+        assertTrue(preparationBody.contains("catch (error: CancellationException)"))
+        assertTrue(preparationBody.contains("catch (error: Exception)"))
+        assertTrue(!preparationBody.contains("catch (error: Throwable)"))
+        assertTrue(!source.contains("runCatching"))
+        assertTrue(preflightBody.contains("sentinelAttempt { applyQuarantineToActiveRuntime() }"))
+
         assertTrue(
             "Preparation must return only after the durable preflight",
             preparationBody.contains("preflight = preflightPackageChange(change, relevance)"),

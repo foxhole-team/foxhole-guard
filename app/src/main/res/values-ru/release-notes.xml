@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="cli_release_notes_title">Что нового</string>
+    <string name="cli_release_notes_runtime">Новые форматы подписок: совместимые Clash/Mihomo YAML/JSON и Outline JSON.</string>
+    <string name="cli_release_notes_sentinel_network">Импорт ссылок v2rayTun, JSON-профилей FoxHole Guard и прямая вставка SIP008 JSON.</string>
+    <string name="cli_release_notes_sentinel_apps">Импорт ссылок v2rayTun, JSON-профилей FoxHole Guard и прямая вставка SIP008 JSON.</string>
+    <string name="cli_release_notes_backup">Добавлены пользовательский и экспертный режимы интерфейса.</string>
+    <string name="cli_release_notes_core">Поддержка установки и управления VPN на роутере с установленным пакетом FoxHole OpenWrt Client прямо из приложения.</string>
+    <string name="cli_release_notes_details">Подробнее</string>
+    <string name="cli_release_notes_details_body">Также улучшены обновление подписок, DNS, резервные копии и проверки приложений FoxHole Sentinel.\nClash/Mihomo импортирует поддерживаемые серверы из YAML/JSON; правила клиента и внешние провайдеры не переносятся. Для Outline поддержаны стандартный JSON и динамические ключи ssconf://.\nПереключатель OpenWrt управляет доступом с телефона после настройки или сопряжения. Его выключение сохраняет работающий VPN роутера.</string>
+    <string name="cli_release_notes_ack_failed">Не удалось сохранить выбор. Попробуйте ещё раз.</string>
+</resources>

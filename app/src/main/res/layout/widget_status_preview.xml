@@ -1,85 +1,91 @@
-<?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
-    android:layout_height="match_parent"
+    android:layout_height="wrap_content"
     android:background="@drawable/widget_preview_bg"
     android:contentDescription="@string/cli_status_widget_label"
-    android:gravity="center_vertical"
-    android:orientation="horizontal"
-    android:paddingHorizontal="10dp"
-    android:paddingVertical="6dp"
+    android:gravity="center_horizontal"
+    android:orientation="vertical"
+    android:paddingHorizontal="12dp"
+    android:paddingVertical="4dp"
     tools:ignore="HardcodedText">
 
-    <FrameLayout
-        android:layout_width="36dp"
-        android:layout_height="36dp"
-        android:background="@drawable/widget_simple_logo_circle">
-
-        <ImageView
-            android:layout_width="24dp"
-            android:layout_height="24dp"
-            android:layout_gravity="center"
-            android:contentDescription="@string/widget_status_refresh"
-            android:src="@drawable/ic_qs_tile"
-            app:tint="@color/cli_fg" />
-    </FrameLayout>
-
     <LinearLayout
-        android:layout_width="0dp"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginHorizontal="8dp"
-        android:layout_weight="1"
-        android:gravity="center"
-        android:orientation="vertical">
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:fontFamily="@font/tiny5_regular"
-            android:text="@string/widget_status_unprotected"
-            android:textAllCaps="true"
-            android:textColor="@color/cli_dim"
-            android:textSize="14sp" />
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+        <FrameLayout android:layout_width="48dp" android:layout_height="48dp">
+            <ImageView
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:layout_gravity="center"
+                android:contentDescription="@string/widget_status_open_app"
+                android:src="@drawable/ic_launcher_openwrt" />
+        </FrameLayout>
 
         <LinearLayout
-            android:layout_width="wrap_content"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginTop="1dp"
-            android:gravity="center_vertical"
-            android:orientation="horizontal">
-
-            <ImageView
-                android:layout_width="15dp"
-                android:layout_height="15dp"
-                android:importantForAccessibility="no"
-                android:src="@drawable/lin_device"
-                app:tint="@color/cli_dim" />
-
+            android:layout_marginStart="8dp"
+            android:layout_weight="1"
+            android:gravity="start|center_vertical"
+            android:orientation="vertical">
             <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:fontFamily="@font/tiny5_regular"
+                android:gravity="start|center_vertical"
+                android:maxLines="2"
+                android:text="@string/widget_status_unprotected"
+                android:textAllCaps="true"
+                android:textColor="@color/cli_dim"
+                android:textSize="14sp" />
+            <LinearLayout
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="3dp"
-                android:fontFamily="@font/tiny5_regular"
-                android:text="—"
-                android:textAllCaps="true"
-                android:textColor="@color/cli_fg"
-                android:textSize="13sp" />
+                android:layout_marginTop="2dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+                <ImageView
+                    android:layout_width="15dp"
+                    android:layout_height="15dp"
+                    android:importantForAccessibility="no"
+                    android:src="@drawable/lin_device"
+                    app:tint="@color/cli_dim" />
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="3dp"
+                    android:fontFamily="@font/jetbrains_mono_bold"
+                    android:text="—"
+                    android:textColor="@color/cli_fg"
+                    android:textSize="13sp" />
+            </LinearLayout>
         </LinearLayout>
     </LinearLayout>
 
-    <FrameLayout
-        android:layout_width="36dp"
-        android:layout_height="36dp"
-        android:background="@drawable/widget_simple_action_connect">
-
+    <LinearLayout
+        android:layout_width="168dp"
+        android:layout_height="48dp"
+        android:layout_marginTop="6dp"
+        android:background="@drawable/widget_simple_action_connect"
+        android:gravity="center"
+        android:orientation="horizontal">
         <ImageView
-            android:layout_width="20dp"
-            android:layout_height="20dp"
-            android:layout_gravity="center"
-            android:contentDescription="@string/widget_status_turn_on"
+            android:layout_width="18dp"
+            android:layout_height="18dp"
+            android:importantForAccessibility="no"
             android:src="@drawable/lin_power"
             app:tint="@color/cli_ok" />
-    </FrameLayout>
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:fontFamily="@font/jetbrains_mono_bold"
+            android:text="@string/widget_status_connect_action"
+            android:textColor="@color/cli_ok"
+            android:textSize="12sp" />
+    </LinearLayout>
 </LinearLayout>

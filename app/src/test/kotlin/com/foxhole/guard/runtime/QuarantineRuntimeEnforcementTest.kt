@@ -5,6 +5,7 @@ import com.foxhole.core.model.ExpertSettings
 import com.foxhole.core.model.ProtocolHint
 import com.foxhole.core.model.Settings
 import com.foxhole.core.model.VpnSession
+import com.foxhole.core.runtime.LocalGuardMode
 import com.foxhole.core.runtime.NativeRuntimeSnapshot
 import com.foxhole.core.runtime.RuntimeCommandPriority
 import com.foxhole.core.runtime.RuntimeCommandQueueSnapshot
@@ -76,6 +77,96 @@ class QuarantineRuntimeEnforcementTest {
 
             assertEquals(QuarantineEnforcementOutcome.APPLIED, coordinator.enforce(3L))
             assertEquals(0, dispatches)
+        }
+
+    @Test
+    fun `queued enforcement skips reload when preceding start already applied its policy`() =
+        runBlocking {
+            val tracker = QuarantineRuntimeEnforcementTracker()
+            val owner = QuarantineRuntimeOwner.LocalGuard(LocalGuardMode.FIREWALL)
+            var current = queuedStartSnapshot(generation = 7L)
+            var queuedRevision: Long? = null
+            var reloads = 0
+            val coordinator =
+                QuarantineEnforcementCoordinator(
+                    snapshot = { current },
+                    currentReceipt = { tracker.applied.value },
+                    dispatch = { revision ->
+                        queuedRevision = revision
+                        true
+                    },
+                    awaitReceipt = { null },
+                )
+
+            assertEquals(QuarantineEnforcementOutcome.RETRY, coordinator.enforce(3L))
+            assertEquals(3L, checkNotNull(queuedRevision))
+            current = activeSnapshot(owner, 8L)
+            tracker.acknowledge(
+                session(revision = 3L),
+                runtimeGeneration = 8L,
+                localGuardMode = LocalGuardMode.FIREWALL,
+            )
+
+            val executed = coordinator.executeIfUnapplied(checkNotNull(queuedRevision)) { reloads += 1 }
+
+            assertTrue(!executed)
+            assertEquals(0, reloads)
+        }
+
+    @Test
+    fun `queued enforcement still applies a newer persisted policy`() =
+        runBlocking {
+            val owner = QuarantineRuntimeOwner.LocalGuard(LocalGuardMode.FIREWALL)
+            val current = activeSnapshot(owner, 8L)
+            val applied = receipt(3L, owner, 8L)
+            var reloads = 0
+            val coordinator =
+                QuarantineEnforcementCoordinator(
+                    snapshot = { current },
+                    currentReceipt = { applied },
+                    dispatch = { error("Execution must not enqueue another command") },
+                    awaitReceipt = { error("Execution must not wait for itself") },
+                )
+
+            assertTrue(coordinator.executeIfUnapplied(4L) { reloads += 1 })
+            assertEquals(1, reloads)
+        }
+
+    @Test
+    fun `queued enforcement rejects an applied receipt from a previous runtime owner`() =
+        runBlocking {
+            val oldOwner = QuarantineRuntimeOwner.LocalGuard(LocalGuardMode.FIREWALL)
+            val newOwner = QuarantineRuntimeOwner.Profile(profileId = 5L, correlationId = "replacement")
+            val applied = receipt(3L, oldOwner, 8L)
+            var reloads = 0
+            val coordinator =
+                QuarantineEnforcementCoordinator(
+                    snapshot = { activeSnapshot(newOwner, 8L) },
+                    currentReceipt = { applied },
+                    dispatch = { false },
+                    awaitReceipt = { null },
+                )
+
+            assertTrue(coordinator.executeIfUnapplied(3L) { reloads += 1 })
+            assertEquals(1, reloads)
+        }
+
+    @Test
+    fun `queued enforcement rejects an applied receipt from a previous runtime generation`() =
+        runBlocking {
+            val owner = QuarantineRuntimeOwner.LocalGuard(LocalGuardMode.FIREWALL)
+            val applied = receipt(3L, owner, 8L)
+            var reloads = 0
+            val coordinator =
+                QuarantineEnforcementCoordinator(
+                    snapshot = { activeSnapshot(owner, 9L) },
+                    currentReceipt = { applied },
+                    dispatch = { false },
+                    awaitReceipt = { null },
+                )
+
+            assertTrue(coordinator.executeIfUnapplied(3L) { reloads += 1 })
+            assertEquals(1, reloads)
         }
 
     @Test

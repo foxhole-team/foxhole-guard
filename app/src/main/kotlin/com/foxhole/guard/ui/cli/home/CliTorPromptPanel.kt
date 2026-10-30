@@ -17,6 +17,7 @@ import com.foxhole.guard.ui.cli.LocalCliColors
 import com.foxhole.guard.ui.cli.components.CliBottomSheet
 import com.foxhole.guard.ui.cli.components.CliSheetAction
 import com.foxhole.guard.ui.cli.components.CliSheetActionsRow
+import com.foxhole.guard.ui.cli.profiles.CliProtocolSwitchConfirmation
 import com.foxhole.guard.ui.confirmDisableTorForUdpProtocol
 import com.foxhole.guard.ui.confirmKeepTorOnDeviceAndStartVpn
 import com.foxhole.guard.ui.confirmLiveModeSwitch
@@ -27,6 +28,7 @@ import com.foxhole.guard.ui.confirmSwitchProtocolWhileConnected
 import com.foxhole.guard.ui.confirmVpnTorModeChoice
 import com.foxhole.guard.ui.confirmVpnTorStopAll
 import com.foxhole.guard.ui.confirmVpnTorStopTor
+import com.foxhole.guard.ui.dismissProtocolSwitchConfirmation
 import com.foxhole.guard.ui.dismissTorTransitionPrompt
 import com.foxhole.guard.ui.onEnableDirectTorQuickStart
 
@@ -36,6 +38,13 @@ internal fun CliTorPromptPanel(
     prompt: TorTransitionPrompt,
     onLiveModeSwitchConfirmed: (RoutingModePreset) -> Unit = {},
 ) {
+    if (prompt is TorTransitionPrompt.SwitchProtocolWhileConnected) {
+        CliProtocolSwitchConfirmation(
+            onContinue = { viewModel.confirmSwitchProtocolWhileConnected(prompt) },
+            onDismiss = { viewModel.dismissProtocolSwitchConfirmation(prompt) },
+        )
+        return
+    }
     val colors = LocalCliColors.current
     val secondsLeft = (prompt as? TorTransitionPrompt.LiveModeSwitch)?.secondsLeft
     CliBottomSheet(

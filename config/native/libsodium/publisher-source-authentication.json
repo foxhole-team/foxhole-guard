@@ -1,0 +1,12 @@
+{
+  "verifiedAtUtc": "2026-10-12T18:51:51.679434+00:00",
+  "archiveSha256": "ebb65ef6ca439333c2bb41a0c1990587288da07f6c7fd07cb3a18cc18d30ce19",
+  "bytes": 1925167,
+  "signatureSha256": "693ea59f639f70164d99f5549fa48b14beaed8efd625785b78da19463d7af0d0",
+  "publisherPublicKey": "RWQf6LRCGA9i53mlYecO4IzT51TGPpvWucNSCh1CBM0QTaLn73Y7GFO3",
+  "keySource": "https://download.libsodium.org/libsodium/releases/README.html",
+  "minisignPrehashedEd25519AndTrustedCommentVerified": true,
+  "tamperNegativeRejected": true,
+  "verificationLibrary": "cryptography 50.0.0",
+  "scope": "Originalpublisher1.0.20pointarchive authentication only; containsknownCVE2025-69277 untilapprovedbackport, notproductioncompiled."
+}

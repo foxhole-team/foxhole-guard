@@ -5,7 +5,9 @@ import com.foxhole.core.model.SubscriptionEntryReport
 import com.foxhole.core.model.SubscriptionEntryStatus
 import com.foxhole.core.network.RemoteHostResolver
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
@@ -64,9 +66,7 @@ internal open class ProfileImportNodeSupport(
         validateOutboundHost(host, allowPrivateOutboundHosts)
         val port = uri.port.takeIf { it > 0 } ?: 443
         val displayName = displayNameFromUri(uri, host)
-        val encryption = query["encryption"]?.trim()?.lowercase().orEmpty()
-
-        require(encryption.isEmpty() || encryption == "none") { "unsupported vless encryption: $encryption" }
+        val encryption = readClientVlessEncryption(query)
         val outbound =
             buildJsonObject {
                 put("type", "vless")
@@ -74,6 +74,7 @@ internal open class ProfileImportNodeSupport(
                 put("server", host)
                 put("server_port", port)
                 put("uuid", uri.userInfo?.takeIf(String::isNotBlank) ?: error("missing uuid"))
+                encryption?.let { put("encryption", it) }
                 query["flow"]?.takeIf { it.isNotBlank() }?.let { put("flow", it) }
                 buildVlessNetwork(query)?.let { put("network", it) }
                 query.firstValue(
@@ -198,7 +199,7 @@ internal open class ProfileImportNodeSupport(
         val decodedPart: String
         val hostPortPart: String
         if (base.contains("@")) {
-            val credentials = base.substringBefore('@')
+            val credentials = uriDecode(base.substringBefore('@'))
             decodedPart = decodeBase64IfNeeded(credentials)
             hostPortPart = base.substringAfter('@').substringBefore('?').removeSuffix("/")
         } else {
@@ -214,7 +215,16 @@ internal open class ProfileImportNodeSupport(
         validateOutboundHost(host, allowPrivateOutboundHosts)
         val port = endpoint.port ?: error("shadowsocks port is missing")
         val queryPart = base.substringAfter('?', missingDelimiterValue = "")
-        require(!queryPart.contains("plugin=")) { "shadowsocks plugins are not supported in v1" }
+        val carrier =
+            sip003Carrier(
+                queryPart,
+                parseQueryParameters(queryPart),
+                ::uriDecode,
+                { item -> item.toFlexibleBoolean() },
+            )
+        val udpEnabled = parseQueryParameters(queryPart)["udp"]?.let {
+            it.toFlexibleBoolean() ?: error("invalid shadowsocks UDP option")
+        } ?: (carrier == null)
         val displayName = fragment.takeIf { it.isNotBlank() }?.let(::uriDecode) ?: host
         val hint =
             if (value.contains("outline", ignoreCase = true)) {
@@ -230,6 +240,11 @@ internal open class ProfileImportNodeSupport(
                 put("server_port", port)
                 put("method", method)
                 put("password", password)
+                if (!udpEnabled) put("network", "tcp")
+                carrier?.let { (transport, tls) ->
+                    put("transport", transport)
+                    put("tls", tls)
+                }
             }
         return ProxyNode(displayName, hint, outbound)
     }
@@ -264,7 +279,9 @@ internal open class ProfileImportNodeSupport(
         validateOutboundHost(host, allowPrivateOutboundHosts)
         val port = objectValue["port"]?.jsonPrimitive?.contentOrNull?.toIntOrNull() ?: 443
         val displayName = objectValue["ps"]?.jsonPrimitive?.contentOrNull ?: host
-        val network = objectValue["net"]?.jsonPrimitive?.contentOrNull.orEmpty()
+        val requestedNetwork = objectValue["net"]?.jsonPrimitive?.contentOrNull.orEmpty()
+        val network = normalizedVmessNetwork(requestedNetwork)
+        validateVmessShareFlags(objectValue, network)
         val security = objectValue["tls"]?.jsonPrimitive?.contentOrNull.orEmpty()
         val query =
             buildMap {
@@ -272,6 +289,19 @@ internal open class ProfileImportNodeSupport(
                 put("path", objectValue["path"]?.jsonPrimitive?.contentOrNull.orEmpty())
                 put("host", objectValue["host"]?.jsonPrimitive?.contentOrNull.orEmpty())
                 put("serviceName", objectValue["path"]?.jsonPrimitive?.contentOrNull.orEmpty())
+                if (network.lowercase() in setOf("grpc", "gun")) {
+                    val mode = objectValue["type"]?.jsonPrimitive?.contentOrNull.orEmpty().lowercase()
+                    require(mode in setOf("", "none", "gun", "multi")) { "unsupported grpc mode" }
+                    put("mode", if (mode == "multi") "multi" else "gun")
+                    objectValue["host"]?.jsonPrimitive?.contentOrNull?.takeIf(
+                        String::isNotEmpty
+                    )?.let { put("authority", it) }
+                    for (key in VMESS_GRPC_TUNING_FIELDS) {
+                        objectValue[key]?.jsonPrimitive?.let { element ->
+                            put(key, element.content)
+                        }
+                    }
+                }
                 put("security", security)
                 put("sni", objectValue["sni"]?.jsonPrimitive?.contentOrNull.orEmpty())
                 put("fp", objectValue["fp"]?.jsonPrimitive?.contentOrNull.orEmpty())
@@ -342,6 +372,9 @@ internal open class ProfileImportNodeSupport(
                         )
                     }
                     parseHysteriaCertificatePins(query.firstNonBlank("pinsha256", "pin-sha256"))
+                        .takeIf(List<String>::isNotEmpty)
+                        ?.let { pins -> put("certificate_sha256", buildStringArray(pins)) }
+                    parseHysteriaCertificatePins(query["pinned_spki_sha256"])
                         .takeIf(List<String>::isNotEmpty)
                         ?.let { pins -> put("certificate_public_key_sha256", buildStringArray(pins)) }
                 }
@@ -417,7 +450,7 @@ internal open class ProfileImportNodeSupport(
                     }
                     parseHysteriaCertificatePins(fields.firstNonBlank("tls.pinsha256", "tls.pin-sha256"))
                         .takeIf(List<String>::isNotEmpty)
-                        ?.let { pins -> put("certificate_public_key_sha256", buildStringArray(pins)) }
+                        ?.let { pins -> put("certificate_sha256", buildStringArray(pins)) }
                 }
                 buildHysteria2Obfs(
                     type = fields["obfs.type"],
@@ -706,3 +739,174 @@ private val SUPPORTED_SHARE_URI_SCHEMES =
 private const val MAX_PROTOCOL_LABEL_LENGTH = 32
 
 private val hysteriaBandwidthRegex = Regex("""^(\d+(?:\.\d+)?)\s*([kmgt]?)(?:bps|b|bit/s|bits/s)?$""")
+
+private fun sip003Carrier(
+    queryPart: String,
+    query: Map<String, String>,
+    decode: (String) -> String,
+    parseBoolean: (String) -> Boolean?,
+): Pair<JsonObject, JsonObject>? {
+    val encoded = query["plugin"] ?: return null
+    require(query.keys.all { it.lowercase() in setOf("plugin", "udp") }) { "unsupported SIP003 query option" }
+    val keys = queryPart.split(
+        '&'
+    ).filter(String::isNotBlank).map { decode(it.substringBefore('=')).trim().lowercase() }
+    require(keys.distinct().size == keys.size) { "duplicate SIP003 query option" }
+    val fields = parseSip003Fields(encoded)
+    require(fields["mode"] == null || fields["mode"] == "websocket") { "unsupported SIP003 mode" }
+    require(fields["mux"]?.toIntOrNull() == 0) { "SIP003 requires explicit mux=0 for the native carrier" }
+    require(query["udp"]?.let(parseBoolean) != true) { "SIP003 stream carrier cannot enable UDP" }
+    val host = fields["host"] ?: "cloudfront.com"
+    val path = fields["path"] ?: "/"
+    require(validSip003Host(host)) { "invalid SIP003 host" }
+    require(validSip003Path(path)) { "invalid SIP003 path" }
+    val transport = buildJsonObject {
+        put("type", "ws")
+        put("path", path)
+        putJsonObject("headers") { put("Host", host) }
+    }
+    val tls = buildJsonObject {
+        put("enabled", "tls" in fields)
+        if ("tls" in fields) put("server_name", host)
+    }
+    return transport to tls
+}
+
+private fun parseSip003Fields(value: String): Map<String, String?> {
+    require(value.toByteArray(Charsets.UTF_8).size <= 8192) { "SIP003 options too large" }
+    require(value.none(Char::isISOControl)) { "invalid SIP003 option" }
+    val fields = sip003Tokens(value)
+    require(fields.firstOrNull() == ("v2ray-plugin" to null)) { "unsupported SIP003 plugin" }
+    val result = linkedMapOf<String, String?>()
+    for ((key, item) in fields.drop(1)) {
+        if (key.isEmpty() && item == null) continue
+        require(key in setOf("mode", "mux", "tls", "host", "path")) { "unsupported SIP003 option" }
+        require(key !in result) { "duplicate SIP003 option" }
+        require(key == "tls" || !item.isNullOrEmpty()) { "missing SIP003 option value" }
+        result[key] = item
+    }
+    return result
+}
+
+private fun sip003Tokens(value: String): List<Pair<String, String?>> {
+    val result = mutableListOf<Pair<String, String?>>()
+    val token = StringBuilder()
+    var key: String? = null
+    var escaped = false
+    for (char in value) {
+        when {
+            escaped -> {
+                require(char in ";=\\") { "invalid SIP003 escape" }
+                token.append(char)
+                escaped = false
+            }
+            char == '\\' -> escaped = true
+            char == '=' -> {
+                require(key == null) { "unescaped SIP003 option delimiter" }
+                key = token.toString()
+                token.setLength(0)
+            }
+            char == ';' -> {
+                result += sip003Field(key, token.toString())
+                key = null
+                token.setLength(0)
+            }
+            else -> token.append(char)
+        }
+    }
+    require(!escaped) { "unfinished SIP003 escape" }
+    result += sip003Field(key, token.toString())
+    return result
+}
+
+private fun sip003Field(key: String?, tail: String): Pair<String, String?> =
+    if (key == null) tail to null else key to tail
+
+internal fun validSip003Host(value: String): Boolean =
+    value.length in 1..255 && value.all { validSip003Ascii(it, "/?#@") }
+
+internal fun validSip003Path(value: String): Boolean =
+    value.startsWith('/') && value.length <= 2048 && value.all { validSip003Ascii(it, "#") }
+
+private fun validSip003Ascii(value: Char, forbidden: String): Boolean = value.code in 0x21..0x7e && value !in forbidden
+
+internal fun isClientVlessEncryptionSpec(value: String): Boolean {
+    if (value.length > 65536 || value.any { it.isISOControl() || it.isWhitespace() }) return false
+    val fields = value.split('.')
+    if (!validClientEncryptionPrefix(fields)) return false
+    val rest = fields.drop(3)
+    val padding = rest.takeWhile { it.length < 20 }
+    val keys = rest.drop(padding.size)
+    return keys.isNotEmpty() && validClientEncryptionPadding(padding) && keys.all(::validClientEncryptionKey)
+}
+
+private fun validClientEncryptionPrefix(fields: List<String>): Boolean {
+    if (fields.size < 4 || fields[0] != "mlkem768x25519plus") return false
+    if (fields[1] !in setOf("native", "xorpub", "random")) return false
+    return fields[2] in setOf("0rtt", "1rtt")
+}
+
+private fun validClientEncryptionPadding(fields: List<String>): Boolean {
+    var total = 0L
+    for ((index, field) in fields.withIndex()) {
+        val values = clientEncryptionPaddingValues(field) ?: return false
+        if (index == 0 && !validFirstClientPadding(values)) return false
+        if (index % 2 == 0) total += maxOf(values[1], values[2])
+    }
+    return total <= 65553L
+}
+
+private fun clientEncryptionPaddingValues(field: String): List<Long>? {
+    val parts = field.split('-')
+    if (parts.size != 3) return null
+    val values = parts.map { it.toLongOrNull() ?: return null }
+    return values.takeIf { numbers -> numbers.all { it in 0..4294967295L } }
+}
+
+private fun validFirstClientPadding(values: List<Long>): Boolean =
+    values[0] >= 100 && values[1] >= 35 && values[2] >= 35
+
+private fun validClientEncryptionKey(value: String): Boolean {
+    if (!value.matches(Regex("[A-Za-z0-9_-]+"))) return false
+    val bytes = runCatching { Base64.getUrlDecoder().decode(value) }.getOrNull() ?: return false
+    return bytes.size in setOf(32, 1184) && Base64.getUrlEncoder().withoutPadding().encodeToString(bytes) == value
+}
+
+private fun readClientVlessEncryption(query: Map<String, String>): String? {
+    val encryption = query["encryption"]?.trim()?.takeIf { it.isNotEmpty() && !it.equals("none", true) }
+    require(encryption == null || isClientVlessEncryptionSpec(encryption)) {
+        "unsupported vless encryption: invalid or unsupported grammar"
+    }
+    require(encryption == null || query["flow"].isNullOrBlank()) { "VLESS Encryption with Vision is unsupported" }
+    return encryption
+}
+
+private fun validateVmessShareFlags(document: JsonObject, network: String) {
+    val muxValue = document["mux"]
+    if (muxValue != null && muxValue != JsonNull) {
+        val mux = requireNotNull(muxValue as? JsonPrimitive) { "invalid VMess mux option" }
+        require(mux.content.lowercase() in setOf("0", "false", "no")) { "unsupported VMess mux option" }
+    }
+    if (network.lowercase() in setOf("grpc", "gun")) return
+    require(document.keys.none { it in VMESS_GRPC_TUNING_FIELDS }) { "VMess gRPC options require gRPC transport" }
+    val headerValue = document["type"]
+    if (headerValue != null && headerValue != JsonNull) {
+        val header = requireNotNull(headerValue as? JsonPrimitive) { "invalid VMess header type" }
+        require(header.isString && header.content in setOf("", "none")) { "unsupported VMess header type" }
+    }
+}
+
+private fun normalizedVmessNetwork(value: String): String = if (value.equals("h2", ignoreCase = true)) "http" else value
+
+private val VMESS_GRPC_TUNING_FIELDS =
+    listOf(
+        "rpc_path",
+        "user_agent",
+        "idle_timeout",
+        "idle_timeout_ms",
+        "health_check_timeout",
+        "ping_timeout",
+        "health_check_timeout_ms",
+        "permit_without_stream",
+        "initial_windows_size",
+    )

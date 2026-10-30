@@ -43,6 +43,7 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.Placeholder
 import androidx.compose.ui.text.PlaceholderVerticalAlign
@@ -59,6 +60,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
+import com.foxhole.core.model.ThemeMode
 import com.foxhole.core.model.ConnectionState
 import com.foxhole.core.model.networkUp
 import com.foxhole.guard.R
@@ -73,6 +75,7 @@ import com.foxhole.guard.ui.cli.cliTypography
 import com.foxhole.guard.ui.cli.components.CliBadge
 import com.foxhole.guard.ui.cli.components.CliFlagIcon
 import com.foxhole.guard.ui.cli.components.CliHeaderHelpButton
+import com.foxhole.guard.ui.cli.components.CliTopBarIconButton
 import com.foxhole.guard.ui.cli.components.CliHomeSectionGap
 import com.foxhole.guard.ui.cli.components.CliIcon
 import com.foxhole.guard.ui.cli.components.CliLatencyKind
@@ -86,7 +89,6 @@ import com.foxhole.guard.ui.cli.components.cliFlagIconSize
 import com.foxhole.guard.ui.cli.components.cliLatencyTone
 import com.foxhole.guard.ui.cli.components.cliSemanticIcon
 import com.foxhole.guard.ui.cli.components.cliSystemMotionEnabled
-import com.foxhole.guard.ui.cli.fox.CliFoxHero
 import com.foxhole.guard.ui.cli.settings.rememberCliAppIcon
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
@@ -102,15 +104,22 @@ internal fun CliTerminalPanel(
     onInteraction: () -> Unit,
     onClearRequested: () -> Unit,
     onHelpRequested: () -> Unit,
+    onRouterRequested: () -> Unit,
     contentAfterHeader: @Composable () -> Unit,
     modifier: Modifier = Modifier,
+    routerShortcutVisible: Boolean = true,
 ) {
     val colors = LocalCliColors.current
     val density = LocalDensity.current
     val haptics = LocalHapticFeedback.current
     val timestampMetrics = rememberCliTerminalTimestampMetrics()
     Column(modifier = modifier) {
-        CliTerminalHeader(home = home, onHelpRequested = onHelpRequested)
+        CliTerminalHeader(
+            home = home,
+            onHelpRequested = onHelpRequested,
+            onRouterRequested = onRouterRequested,
+            routerShortcutVisible = routerShortcutVisible,
+        )
         CliHomeSectionGap()
         contentAfterHeader()
         CliHomeSectionTypography {
@@ -538,15 +547,23 @@ private fun CliPromptRow(
 
 @Composable
 @Suppress("LongMethod")
-private fun CliTerminalHeader(
+internal fun CliTerminalHeader(
     home: com.foxhole.guard.ui.HomeRouteUiState,
     onHelpRequested: () -> Unit,
+    onRouterRequested: () -> Unit,
+    routerShortcutVisible: Boolean = true,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        CliFoxHero(size = HOME_HEADER_FOX_SIZE)
+        val coloredLogo = !home.settings.ui.monochromeEnabled &&
+            home.settings.ui.themeMode in setOf(ThemeMode.DARK, ThemeMode.LIGHT)
+        Image(
+            painter = painterResource(if (coloredLogo) R.drawable.ic_launcher_foreground else R.drawable.ic_launcher_openwrt),
+            contentDescription = null,
+            modifier = Modifier.size(HOME_HEADER_FOX_SIZE),
+        )
         Spacer(modifier = Modifier.width(CliSpacing.xs))
         BoxWithConstraints(modifier = Modifier.weight(1f)) {
             val availableHeaderWidth = maxWidth
@@ -670,8 +687,22 @@ private fun CliTerminalHeader(
                 }
             }
         }
+        if (routerShortcutVisible) {
+            CliTopBarIconButton(
+                icon = R.drawable.lin_router,
+                contentDescription = stringResource(R.string.guard_router_settings_title),
+                tint = LocalCliColors.current.accent,
+                iconSize = 28.dp,
+                alignIconToFirstLine = true,
+                firstLineText = "FOXHOLE GUARD",
+                modifier = Modifier.testTag("guard_home_openwrt_shortcut"),
+                onClick = onRouterRequested,
+            )
+        }
         CliHeaderHelpButton(
             contentDescription = stringResource(R.string.cli_quick_start_title),
+            iconSize = 28.dp,
+            modifier = Modifier.testTag("guard_home_help_shortcut"),
             topBar = true,
             alignIconToFirstLine = true,
             firstLineText = "FOXHOLE GUARD",

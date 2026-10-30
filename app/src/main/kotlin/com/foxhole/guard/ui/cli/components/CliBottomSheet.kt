@@ -50,6 +50,7 @@ import com.foxhole.guard.R
 import com.foxhole.guard.ui.cli.CLI_ICON_OPTICAL_OFFSET
 import com.foxhole.guard.ui.cli.CliRadius
 import com.foxhole.guard.ui.cli.CliSpacing
+import com.foxhole.guard.ui.cli.CliTopNoticeHost
 import com.foxhole.guard.ui.cli.LocalCliColors
 import com.foxhole.guard.ui.cli.LocalCliPanelAppearance
 import com.foxhole.guard.ui.cli.LocalCliPixelArtEnabled
@@ -76,6 +77,7 @@ internal fun CliBottomSheet(
     autoDismissAfterMillis: Long? = null,
     footerLeading: (@Composable RowScope.() -> Unit)? = null,
     footerTrailing: (@Composable RowScope.() -> Unit)? = null,
+    footerContent: (@Composable ColumnScope.() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val colors = LocalCliColors.current
@@ -109,6 +111,7 @@ internal fun CliBottomSheet(
         contentWindowInsets = { BottomSheetDefaults.windowInsets },
         dragHandle = { CliSheetHandle() },
     ) {
+        CliTopNoticeHost()
         SideEffect {
             MaterialSheetMotion.applySlowSpatialSpec(sheetState, sheetMotionSpec)
         }
@@ -185,6 +188,7 @@ internal fun CliBottomSheet(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .then(if (footerContent == null) Modifier else Modifier.weight(1f, fill = false))
                         .heightIn(max = bodyMaxHeight)
                         .then(
                             if (contentScrollEnabled) {
@@ -195,6 +199,7 @@ internal fun CliBottomSheet(
                         ),
                     content = content,
                 )
+                footerContent?.invoke(this)
                 Spacer(modifier = Modifier.height(CliSpacing.md))
                 CliSheetFooter(footerLeading, footerTrailing, requestDismiss, closeLabel, closeActionTag)
             }

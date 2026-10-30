@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_language_save_failed">No se pudo guardar el idioma de la aplicación. Inténtalo de nuevo.</string>
+</resources>

@@ -8,6 +8,7 @@ import java.nio.file.AtomicMoveNotSupportedException
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import java.security.KeyStore
+import java.security.KeyStoreException
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
@@ -16,6 +17,21 @@ import javax.crypto.spec.GCMParameterSpec
 internal class AndroidKeystoreFileCipher(
     private val keyAlias: String,
 ) : FileCipher {
+    internal fun readBytesExistingKey(
+        file: File,
+        existingEntry: () -> KeyStore.Entry? = ::existingKeyEntry,
+    ): ByteArray {
+        val key = (existingEntry() as? KeyStore.SecretKeyEntry)?.secretKey
+            ?: throw KeyStoreException("diagnostics journal key unavailable")
+        val envelope = AesGcmFileEnvelope.decode(file.readBytes())
+        val cipher = Cipher.getInstance(TRANSFORMATION)
+        cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(GCM_TAG_LENGTH_BITS, envelope.iv))
+        return cipher.doFinal(envelope.ciphertext)
+    }
+
+    private fun existingKeyEntry(): KeyStore.Entry? =
+        KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }.getEntry(keyAlias, null)
+
     override fun readBytes(file: File): ByteArray {
         val envelope = AesGcmFileEnvelope.decode(file.readBytes())
         val cipher = Cipher.getInstance(TRANSFORMATION)

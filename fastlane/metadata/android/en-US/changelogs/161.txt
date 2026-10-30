@@ -1,0 +1,6 @@
+0.1.1 Stable
+
+- Sentinel now says “Check installed apps”; Android visibility limits remain clear.
+- Manual checks show the current app, progress bar, percentage and processed-app counts.
+- Unknown totals use an indeterminate bar; incomplete or unavailable checks keep their own status.
+- Installed inventory, retained history and pending decisions remain separate.

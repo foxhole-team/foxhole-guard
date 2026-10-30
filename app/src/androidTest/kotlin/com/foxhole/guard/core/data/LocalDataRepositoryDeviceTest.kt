@@ -3,7 +3,9 @@ package com.foxhole.guard.core.data
 import androidx.sqlite.db.SimpleSQLiteQuery
 import androidx.test.platform.app.InstrumentationRegistry
 import com.foxhole.guard.FoxholeApplication
+import com.foxhole.guard.core.security.KeystoreDatabaseKeySource
 import kotlinx.coroutines.runBlocking
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -23,6 +25,8 @@ class LocalDataRepositoryDeviceTest {
                 "vless://11111111-1111-1111-1111-111111111111@1.1.1.1:443?encryption=none&security=none&type=tcp#Reset%20Proof",
             )
             seedSensitiveRows(database)
+            val retainedKeyFile = File(app.filesDir, "keys/profile-db.passphrase")
+            val retainedKeyCiphertext = retainedKeyFile.readBytes()
             seedSensitiveFiles(app)
 
             assertTrue(countRows(database, "profiles") > 0)
@@ -54,6 +58,18 @@ class LocalDataRepositoryDeviceTest {
             nonDatabaseFactoryResetTargets(app).forEach { target ->
                 assertFalse("Expected factory reset to delete ${target.absolutePath}", target.exists())
             }
+            assertArrayEquals(retainedKeyCiphertext, retainedKeyFile.readBytes())
+            assertDatabaseReopensAfterReset(app)
+        }
+    }
+
+    private fun assertDatabaseReopensAfterReset(app: FoxholeApplication) {
+        val reopened = ProfileDatabase.create(app, KeystoreDatabaseKeySource(app, keyboxExists = { false }))
+        try {
+            assertEquals(0, countRows(reopened, "profiles"))
+            assertEquals(0, countRows(reopened, "anomaly_events"))
+        } finally {
+            reopened.close()
         }
     }
 
@@ -161,7 +177,6 @@ class LocalDataRepositoryDeviceTest {
         writeProofFile(File(app.filesDir, "diagnostics-journal/session.log"))
         writeProofFile(File(app.cacheDir, "diagnostics-export/export.zip"))
         writeProofFile(File(app.filesDir, "dns-rule-sets/user-cache.srs"))
-        writeProofFile(File(app.filesDir, "keys/profile-db.passphrase"))
         databaseFiles(app, "foxhole.db").forEach(::writeProofFile)
     }
 

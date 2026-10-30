@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="widget_status_connect_action">连接</string>
+    <string name="widget_status_disconnect_action">断开</string>
+    <string name="widget_status_open_app">打开 FoxHole Guard</string>
+</resources>

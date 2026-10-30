@@ -42,6 +42,7 @@ internal suspend fun FoxholeVpnService.startRuntimeWithHealthMetrics(
     session: VpnSession,
     owner: String,
 ): Result<Unit> {
+    tlsFingerprintInstallGate.awaitReady()
     val runtimeStartAtMs = SystemClock.elapsedRealtime()
     val runtimeStartTimeoutMs = runtimeStartTimeoutMsForSession(session)
     val result =

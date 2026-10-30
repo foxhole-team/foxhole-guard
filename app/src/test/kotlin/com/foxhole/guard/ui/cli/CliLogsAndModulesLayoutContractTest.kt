@@ -67,7 +67,7 @@ class CliLogsAndModulesLayoutContractTest {
         assertTrue(!dock.contains("actions()"))
         assertTrue(!dock.contains("cli_logs_clear"))
         assertTrue(!dock.contains("cli_logs_save"))
-        assertTrue(dock.contains("CliLogTab.entries.forEach"))
+        assertTrue(dock.contains("CliLogTab.entries.chunked(2)"))
         assertTrue(dock.contains("modifier = Modifier.weight(1f)"))
         assertTrue(sheet.contains("if (open)"))
         assertTrue(sheet.contains("CliBottomSheet("))
@@ -81,7 +81,9 @@ class CliLogsAndModulesLayoutContractTest {
         assertTrue(sheet.contains("CliJournalClearConfirmation("))
         assertTrue(sheet.contains("ActivityResultContracts.CreateDocument(\"text/plain\")"))
         assertTrue(sheet.contains("documentLauncher.launch(exportFileName)"))
-        assertTrue(sheet.contains("formatRawJournalExport(exportTitle, exportEntries)"))
+        assertTrue(sheet.contains("withContext(Dispatchers.Default)"))
+        assertTrue(sheet.contains("formatRawJournalExport("))
+        assertTrue(sheet.contains("prepareJournalExportEntries(exportEntries, exportEntriesAreRedacted)"))
         assertTrue(sheet.contains("exporting = true"))
         assertTrue(sheet.contains("scope.launch { viewModel.emitError(saveFailedMessage) }"))
         assertTrue(!sheet.contains("Intent.createChooser"))
@@ -150,7 +152,7 @@ class CliLogsAndModulesLayoutContractTest {
             securityTab.substringAfter("settings = {")
                 .contains("CliRetentionRow("),
         )
-        assertEquals(3, Regex("CliRetentionRow\\(").findAll(source).count())
+        assertEquals(4, Regex("CliRetentionRow\\(").findAll(source).count())
     }
 
     @Test
@@ -187,7 +189,10 @@ class CliLogsAndModulesLayoutContractTest {
         assertTrue(about.contains("viewModel.exportSanitizedDiagnosticsFromAbout()"))
         assertTrue(about.contains("Intent.createChooser("))
         assertTrue(export.contains("HomeViewModel.createSanitizedAboutDiagnosticsArchive()"))
-        assertTrue(export.contains("container.diagnosticsLogger.createSanitizedAboutExportFile()"))
+        assertTrue(export.contains("prepareNativeDiagnosticsArchive("))
+        assertTrue(export.contains("container.diagnosticsLogger.createSanitizedAboutExportFile(snapshot)"))
+        assertTrue(export.contains("file: File? = null"))
+        assertFalse(export.contains("file: File = createSanitizedAboutDiagnosticsArchive()"))
         assertTrue(export.contains("HomeViewModel.exportSanitizedDiagnosticsFromAbout("))
         assertTrue(export.contains("type = \"application/gzip\""))
         assertTrue(export.contains("putExtra(Intent.EXTRA_STREAM, uri)"))

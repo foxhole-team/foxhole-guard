@@ -39,13 +39,22 @@ internal suspend fun FoxholeVpnService.enforceQuarantine(requestedRevision: Long
     if (persistedRevision < requestedRevision) {
         return
     }
-    val localGuardMode = activeLocalGuardMode
-    if (localGuardMode != null) {
-        reloadLocalGuardRuntime(localGuardMode, requestedRevision)
-        return
+    val executed =
+        container.connectionController.quarantineEnforcementCoordinator.executeIfUnapplied(persistedRevision) {
+            val localGuardMode = activeLocalGuardMode
+            if (localGuardMode != null) {
+                reloadLocalGuardRuntime(localGuardMode, requestedRevision)
+            } else {
+                activeSession?.let { reloadRuntime(it.profileId, requestedRevision) }
+            }
+        }
+    if (!executed) {
+        container.diagnosticsLogger.recordStructured(
+            "runtime",
+            "quarantine enforcement already applied by current runtime",
+            "revision=$persistedRevision",
+        )
     }
-    val session = activeSession ?: return
-    reloadRuntime(session.profileId, requestedRevision)
 }
 
 private suspend fun FoxholeVpnService.reloadRuntime(

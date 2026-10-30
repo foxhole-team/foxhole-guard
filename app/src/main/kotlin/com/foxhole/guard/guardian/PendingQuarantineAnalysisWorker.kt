@@ -8,6 +8,7 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.foxhole.guard.FoxholeApplication
+import com.foxhole.guard.core.sentinel.sentinelAttempt
 import com.foxhole.guard.reconcilePendingQuarantineAnalyses
 import java.util.concurrent.TimeUnit
 
@@ -18,7 +19,7 @@ class PendingQuarantineAnalysisWorker(
     override suspend fun doWork(): Result {
         val app = applicationContext as FoxholeApplication
         val remaining =
-            runCatching { app.reconcilePendingQuarantineAnalyses() }
+            sentinelAttempt { app.reconcilePendingQuarantineAnalyses() }
                 .onFailure { error ->
                     app.container.diagnosticsLogger.record(
                         "app-inventory",

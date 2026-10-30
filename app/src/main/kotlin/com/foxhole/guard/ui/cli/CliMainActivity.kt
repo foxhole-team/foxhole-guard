@@ -79,10 +79,13 @@ class CliMainActivity : AppCompatActivity() {
         setContent {
             val appearance by homeViewModel.appearanceUiState.collectAsStateWithLifecycle()
             val resolvedThemeMode = cliResolvedThemeMode(appearance.themeMode)
-            LaunchedEffect(appearance.monochromeEnabled) {
+            LaunchedEffect(appearance.monochromeEnabled, resolvedThemeMode) {
                 com.foxhole.guard.core.settings.updateLauncherAppearance(
                     this@CliMainActivity,
-                    appearance.monochromeEnabled
+                    com.foxhole.guard.core.settings.launcherMonochromeEnabled(
+                        resolvedThemeMode,
+                        appearance.monochromeEnabled,
+                    ),
                 )
             }
             LaunchedEffect(resolvedThemeMode) {

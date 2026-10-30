@@ -8,6 +8,9 @@ import com.foxhole.core.runtime.FoxCoreConfigTranslationException
 import com.foxhole.core.runtime.FoxCoreRuntimeException
 import com.foxhole.core.runtime.FoxCoreRuntimeFailure
 import com.foxhole.core.runtime.TOR_ALL_APPS_NEEDS_FULL_TUNNEL_MARKER
+import com.foxhole.guard.core.data.DnsFilterPolicyUnavailableException
+import com.foxhole.guard.runtime.CategorizedDnsUnavailable
+import com.foxhole.guard.runtime.DnsFilterUnavailableException
 import java.util.Locale
 
 // Stable categories only: exception text stays out of UI because it may contain endpoints or credentials.
@@ -18,6 +21,8 @@ internal enum class UserFacingErrorKind {
     TLS_HANDSHAKE,
     SERVER_UNREACHABLE,
     DNS_VALIDATION,
+    DNS_FILTER_UNAVAILABLE,
+    DNS_FILTER_POLICY_UNAVAILABLE,
     TOR_VALIDATION,
 
     RUNTIME_ABI_MISMATCH,
@@ -27,6 +32,8 @@ internal enum class UserFacingErrorKind {
     RUNTIME_START_TIMEOUT,
 
     FOXCORE_RUNTIME_FAILURE,
+
+    APP_ROUTING_UNSUPPORTED,
 
     PACKET_TUNNEL_DNS_MISSING,
 
@@ -123,11 +130,12 @@ private fun foxCoreRuntimeUserFacingErrorKind(error: Throwable?): UserFacingErro
             .filterIsInstance<FoxCoreRuntimeException>()
             .firstOrNull()
             ?.failure
-            ?: return null
+            ?: return dnsFilterUserFacingErrorKind(error)
     return when (failure) {
         FoxCoreRuntimeFailure.ABI_MISMATCH -> UserFacingErrorKind.RUNTIME_ABI_MISMATCH
         FoxCoreRuntimeFailure.NATIVE_UNAVAILABLE -> UserFacingErrorKind.RUNTIME_LIBRARY_MISSING
         FoxCoreRuntimeFailure.CONFIG_REJECTED -> UserFacingErrorKind.PROFILE_CONFIG_INVALID
+        FoxCoreRuntimeFailure.FLOW_ATTRIBUTION_UNAVAILABLE -> UserFacingErrorKind.APP_ROUTING_UNSUPPORTED
         else -> UserFacingErrorKind.FOXCORE_RUNTIME_FAILURE
     }
 }
@@ -174,8 +182,31 @@ internal fun userFacingErrorMessageRes(
         UserFacingErrorKind.RUNTIME_LIBRARY_MISSING -> R.string.error_runtime_missing
         UserFacingErrorKind.RUNTIME_START_TIMEOUT -> R.string.error_runtime_start_timeout
         UserFacingErrorKind.FOXCORE_RUNTIME_FAILURE -> R.string.error_foxcore_runtime_failed
+        UserFacingErrorKind.APP_ROUTING_UNSUPPORTED -> R.string.error_flow_attribution_unavailable
+        UserFacingErrorKind.DNS_FILTER_UNAVAILABLE -> dnsFilterUnavailableMessageRes(error)
+        UserFacingErrorKind.DNS_FILTER_POLICY_UNAVAILABLE -> R.string.dns_category_profile_policy_unavailable
         UserFacingErrorKind.UNKNOWN -> fallbackRes
     }
+
+private fun dnsFilterUserFacingErrorKind(error: Throwable?): UserFacingErrorKind? {
+    val causes = generateSequence(error) { cause -> cause.cause }.take(MAX_ERROR_CAUSE_DEPTH)
+    if (causes.any { it is DnsFilterPolicyUnavailableException }) return UserFacingErrorKind.DNS_FILTER_POLICY_UNAVAILABLE
+    return error.dnsFilterUnavailableReasonOrNull()?.let { UserFacingErrorKind.DNS_FILTER_UNAVAILABLE }
+}
+
+private fun Throwable?.dnsFilterUnavailableReasonOrNull(): CategorizedDnsUnavailable? =
+    generateSequence(this) { cause -> cause.cause }
+        .take(MAX_ERROR_CAUSE_DEPTH)
+        .filterIsInstance<DnsFilterUnavailableException>()
+        .firstOrNull()?.reason
+
+private fun dnsFilterUnavailableMessageRes(error: Throwable?): Int = when (error.dnsFilterUnavailableReasonOrNull()) {
+    CategorizedDnsUnavailable.CATALOG_MISSING -> R.string.dns_category_catalog_missing
+    CategorizedDnsUnavailable.CATALOG_INVALID -> R.string.dns_category_catalog_invalid
+    CategorizedDnsUnavailable.REQUIRED_CATEGORY_MISSING -> R.string.dns_category_required_missing
+    CategorizedDnsUnavailable.SIGNED_DATA_INVALID -> R.string.dns_category_signed_invalid
+    null -> R.string.dns_filter_refresh_failed
+}
 
 internal const val RUNTIME_START_TIMEOUT_MARKER = "foxcore_runtime_start_timeout"
 

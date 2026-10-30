@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="sentinel_static_expert">Erweiterte Einstellungen für statische Prüfungen</string>
+    <string name="sentinel_static_title">APK-Prüfungen</string>
+    <string name="sentinel_static_reference_summary">%1$s: %2$s Kategorien statischer API-Verweise und %3$s Regeltreffer. Diese Beobachtungen beweisen weder Ausführung noch Schadsoftware.</string>
+    <string name="sentinel_static_notification_title">FoxHole Sentinel: statische Beobachtungen</string>
+    <string name="sentinel_static_select_app">Anwendung</string>
+    <string name="sentinel_static_run">Ausgewählte App prüfen</string>
+    <string name="sentinel_static_baseline">Installierte Apps prüfen</string>
+    <string name="sentinel_static_cancel">Prüfung abbrechen</string>
+    <string name="sentinel_static_dex">DEX-Prüfungen</string>
+    <string name="sentinel_static_yara">YARA-Prüfungen</string>
+    <string name="sentinel_static_notify">Über Befunde benachrichtigen</string>
+    <string name="sentinel_static_automatic">Neue und aktualisierte Apps prüfen</string>
+    <string name="sentinel_static_charging">Automatische Prüfungen beim Laden</string>
+    <string name="sentinel_static_battery">Automatische Prüfungen bei ausreichendem Akku</string>
+    <string name="sentinel_static_cost">Scan-Budget</string>
+    <string name="sentinel_static_economy">Sparsam · 16 MiB</string>
+    <string name="sentinel_static_balanced">Ausgewogen · 64 MiB</string>
+    <string name="sentinel_static_coverage_note">Erfasst werden nur Apps, die Android sichtbar macht. Es erfolgen ausschließlich begrenzte statische APK/DEX-Prüfungen. Fehlende oder teilweise Abdeckung bedeutet nicht, dass eine App sicher ist. Nativer und nachgeladener Code werden nicht bewertet.</string>
+    <string name="sentinel_static_journal_deferred">Journal gesperrt: Das Ergebnis bleibt im Arbeitsspeicher und kann nach dem Entsperren aufgezeichnet werden.</string>
+    <string name="sentinel_static_status_disabled">Deaktiviert</string>
+    <string name="sentinel_static_status_idle">Bereit</string>
+    <string name="sentinel_static_status_waiting">Warten auf Lade- oder Akkubedingungen</string>
+    <string name="sentinel_static_status_running">Prüfung läuft</string>
+    <string name="sentinel_static_status_complete">Statische Prüfungen abgeschlossen</string>
+    <string name="sentinel_static_status_partial">Teilweise Abdeckung</string>
+    <string name="sentinel_static_status_stale">Installation oder Einstellungen geändert</string>
+    <string name="sentinel_static_status_cancelled">Abgebrochen</string>
+    <string name="sentinel_static_status_unavailable">Prüfung nicht verfügbar</string>
+    <string name="sentinel_static_status_unsupported">APK-Format nicht unterstützt</string>
+    <string name="sentinel_static_engine_unavailable">Die mitgelieferte Scan-Engine ist auf diesem Gerät nicht verfügbar.</string>
+    <string name="sentinel_static_type_label">Statische Verweise</string>
+</resources>

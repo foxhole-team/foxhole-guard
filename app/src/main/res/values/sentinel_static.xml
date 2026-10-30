@@ -1,0 +1,33 @@
+<resources>
+    <string name="sentinel_static_expert">Expert static-check settings</string>
+    <string name="sentinel_static_title">APK checks</string>
+    <string name="sentinel_static_reference_summary">%1$s: %2$s static API reference categories and %3$s rule matches. These observations do not prove execution or malware.</string>
+    <string name="sentinel_static_notification_title">FoxHole Sentinel: static observations</string>
+    <string name="sentinel_static_select_app">Application</string>
+    <string name="sentinel_static_run">Check selected app</string>
+    <string name="sentinel_static_baseline">Check installed apps</string>
+    <string name="sentinel_static_cancel">Cancel check</string>
+    <string name="sentinel_static_dex">DEX checks</string>
+    <string name="sentinel_static_yara">YARA checks</string>
+    <string name="sentinel_static_notify">Notify about findings</string>
+    <string name="sentinel_static_automatic">Check new and updated apps</string>
+    <string name="sentinel_static_charging">Automatic checks while charging</string>
+    <string name="sentinel_static_battery">Automatic checks above low battery</string>
+    <string name="sentinel_static_cost">Scan budget</string>
+    <string name="sentinel_static_economy">Economy · 16 MiB</string>
+    <string name="sentinel_static_balanced">Balanced · 64 MiB</string>
+    <string name="sentinel_static_coverage_note">Installed apps are limited to those Android makes visible. Only bounded static APK/DEX checks are performed. Missing or partial coverage does not mean an app is safe. Native and downloaded code are not assessed.</string>
+    <string name="sentinel_static_journal_deferred">Journal locked: this result is kept in memory and can be recorded after unlock.</string>
+    <string name="sentinel_static_status_disabled">Disabled</string>
+    <string name="sentinel_static_status_idle">Ready</string>
+    <string name="sentinel_static_status_waiting">Waiting for charging or battery conditions</string>
+    <string name="sentinel_static_status_running">Checking</string>
+    <string name="sentinel_static_status_complete">Static checks completed</string>
+    <string name="sentinel_static_status_partial">Partial coverage</string>
+    <string name="sentinel_static_status_stale">Installation or settings changed</string>
+    <string name="sentinel_static_status_cancelled">Cancelled</string>
+    <string name="sentinel_static_status_unavailable">Check unavailable</string>
+    <string name="sentinel_static_status_unsupported">APK format not supported</string>
+    <string name="sentinel_static_engine_unavailable">The packaged scanner engine is unavailable for this device.</string>
+    <string name="sentinel_static_type_label">Static references</string>
+</resources>

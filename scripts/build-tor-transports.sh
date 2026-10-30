@@ -83,9 +83,15 @@ fetch_source() {
 
 build_one() {
   local name="$1" src_dir="$2" pkg="$3" abi="$4" out="$5"
-  local goarch cc
+  local goarch cc linker_flags
   read -r goarch cc <<<"$(go_target_for "$abi")"
 
+  linker_flags="-s -w -buildid= -checklinkname=0"
+  case "$abi" in
+    arm64-v8a|x86_64)
+      linker_flags+=" -linkmode=external -extldflags '-Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384'"
+      ;;
+  esac
   mkdir -p "$(dirname "$out")"
   local proxy_env=()
   if native_offline; then
@@ -106,9 +112,10 @@ build_one() {
         -modfile="$repo_root/config/native/${name/conjure-client/conjure}/go.mod" \
         -trimpath \
         -buildvcs=false \
-        -ldflags "-s -w -buildid= -checklinkname=0" \
+        -ldflags "$linker_flags" \
         -o "$out" \
         "$pkg" )
+  python3 "$repo_root/scripts/verify-native-pages.py" "$abi" "$out"
   echo "  built $name ($abi): $(du -h "$out" | cut -f1)"
 }
 

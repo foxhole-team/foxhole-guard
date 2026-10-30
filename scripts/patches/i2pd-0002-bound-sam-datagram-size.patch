@@ -1,0 +1,48 @@
+Subject: [PATCH] Bound SAM datagram sizes before copying or waiting for payload
+
+SAM TCP commands and payloads share the fixed 8192-byte receive buffer. Reject
+frames that cannot fit it, malformed SIZE tokens and overflowed size arithmetic.
+The separate SAM UDP endpoint's 32 KiB datagram limit remains unchanged. Preserve
+fragmented and pipelined TCP datagrams that fit the existing frame capacity.
+
+--- a/libi2pd_client/SAM.cpp
++++ b/libi2pd_client/SAM.cpp
+@@ -789,10 +789,23 @@
+ 		auto params = ExtractParams (buf);
+ 		size_t size = 0;
+ 		std::string_view sizeStr = params[SAM_PARAM_SIZE];
++		if (sizeStr.empty ())
++		{
++			Terminate ("SAM: missing datagram size");
++			return len;
++		}
+ 		auto res = std::from_chars(sizeStr.data(), sizeStr.data() + sizeStr.size(), size);
+-		if (res.ec != std::errc()) size = 0;
+ 		size_t offset = data - buf;
+-		if (offset + size <= len)
++		// The command and payload share one fixed-size TCP receive buffer.
++		size_t frameOffset = data - m_Buffer;
++		if (res.ec != std::errc () || res.ptr != sizeStr.data () + sizeStr.size () ||
++			offset > len || frameOffset > SAM_SOCKET_BUFFER_SIZE ||
++			size > SAM_SOCKET_BUFFER_SIZE - frameOffset)
++		{
++			Terminate ("SAM: invalid datagram size");
++			return len;
++		}
++		if (size <= len - offset)
+ 		{
+ 			auto session = m_Owner.FindSession(m_ID);
+ 			if (session)
+@@ -1039,6 +1052,12 @@
+ 
+ 	void SAMSocket::Receive ()
+ 	{
++		if (m_SocketType == SAMSocketType::eSAMSocketTypeTerminated) return;
++		if (m_SocketType != SAMSocketType::eSAMSocketTypeStream && m_BufferOffset >= SAM_SOCKET_BUFFER_SIZE)
++		{
++			Terminate ("SAM: frame exceeds receive buffer");
++			return;
++		}
+ 		if (m_SocketType == SAMSocketType::eSAMSocketTypeStream)
+ 		{
+ 			if (m_IsReceiving) return;

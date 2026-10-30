@@ -55,8 +55,11 @@ internal fun CliHintBar(
     onSelect: (CliScreen) -> Unit,
     modifier: Modifier = Modifier,
     screens: List<CliScreen> = CliScreen.entries,
+    onRouterShortcut: (() -> Unit)? = null,
+    optionalOrder: List<String> = emptyList(),
 ) {
-    CliDock(current = current, onSelect = onSelect, screens = screens, modifier = modifier)
+    CliDock(current = current, onSelect = onSelect, screens = screens, modifier = modifier,
+        onRouterShortcut = onRouterShortcut, optionalOrder = optionalOrder)
 }
 
 @Composable
@@ -65,8 +68,21 @@ private fun CliDock(
     onSelect: (CliScreen) -> Unit,
     screens: List<CliScreen>,
     modifier: Modifier = Modifier,
+    onRouterShortcut: (() -> Unit)? = null,
+    optionalOrder: List<String> = emptyList(),
 ) {
     val colors = LocalCliColors.current
+    val optionalKeys = buildList {
+        if (CliScreen.WEBAPPS in screens) add("WEBAPPS")
+        if (CliScreen.STATS in screens) add("STATS")
+        if (onRouterShortcut != null) add("ROUTER")
+    }
+    val orderedKeys = (optionalOrder + optionalKeys).distinct().filter(optionalKeys::contains)
+    val items: List<CliScreen?> = buildList {
+        addAll(screens.filter { it !in setOf(CliScreen.WEBAPPS, CliScreen.STATS, CliScreen.SETTINGS) })
+        orderedKeys.forEach { add(if (it == "ROUTER") null else CliScreen.valueOf(it)) }
+        if (CliScreen.SETTINGS in screens) add(CliScreen.SETTINGS)
+    }
     val shape = RoundedCornerShape(CLI_DOCK_CORNER)
     BoxWithConstraints(
         modifier = modifier
@@ -79,12 +95,12 @@ private fun CliDock(
             )
             .testTag(CLI_DOCK_TAG),
     ) {
-        val itemWidth = maxWidth / screens.size
+        val itemWidth = maxWidth / items.size
         val compact = itemWidth < CLI_DOCK_COMPACT_ITEM_WIDTH
         val dropWidth = if (compact) CLI_DOCK_DROP_WIDTH_COMPACT else CLI_DOCK_DROP_WIDTH
         val dropHeight = if (compact) CLI_DOCK_DROP_HEIGHT_COMPACT else CLI_DOCK_DROP_HEIGHT
         val dropTop = if (compact) CLI_DOCK_DROP_TOP_COMPACT else CLI_DOCK_DROP_TOP
-        val activeIndex = screens.indexOf(current).coerceAtLeast(0)
+        val activeIndex = items.indexOf(current).coerceAtLeast(0)
         val dropX by animateDpAsState(
             targetValue = itemWidth * activeIndex + (itemWidth - dropWidth) / 2,
             animationSpec = CliMotion.emphasis(),
@@ -107,8 +123,14 @@ private fun CliDock(
                     .background(colors.accent.copy(alpha = CLI_DOCK_DROP_ALPHA)),
             )
             Row(modifier = Modifier.fillMaxWidth()) {
-                screens.forEach { screen ->
-                    CliDockItem(
+                items.forEach { screen ->
+                    if (screen == null) {
+                        onRouterShortcut?.let { open ->
+                            CliDockAction(icon = R.drawable.lin_router, labelRes = R.string.guard_router_dock_title,
+                                tag = "cli_dock_router", active = false, onClick = open, compact = compact,
+                                modifier = Modifier.weight(1f))
+                        }
+                    } else CliDockItem(
                         screen = screen,
                         active = screen == current,
                         onSelect = onSelect,
@@ -129,8 +151,22 @@ private fun CliDockItem(
     compact: Boolean,
     modifier: Modifier = Modifier,
 ) {
+    CliDockAction(icon = dockIcon(screen), labelRes = dockLabel(screen), tag = cliDockItemTag(screen),
+        active = active, onClick = { onSelect(screen) }, compact = compact, modifier = modifier)
+}
+
+@Composable
+private fun CliDockAction(
+    icon: Int,
+    labelRes: Int,
+    tag: String,
+    active: Boolean,
+    onClick: () -> Unit,
+    compact: Boolean,
+    modifier: Modifier = Modifier,
+) {
     val colors = LocalCliColors.current
-    val semanticLabel = cliLabelText(stringResource(dockLabel(screen)))
+    val semanticLabel = cliLabelText(stringResource(labelRes))
     val label = semanticLabel.uppercase()
     val tint = if (active) colors.accent else colors.dim
     val interactionSource = remember { MutableInteractionSource() }
@@ -148,13 +184,13 @@ private fun CliDockItem(
     Column(
         modifier = modifier
             .height(if (compact) CLI_DOCK_MIN_HEIGHT_COMPACT else CLI_DOCK_MIN_HEIGHT)
-            .testTag(cliDockItemTag(screen))
+            .testTag(tag)
             .clip(RoundedCornerShape(CLI_DOCK_CORNER))
             .background(colors.accent.copy(alpha = glowAlpha))
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
-            ) { onSelect(screen) }
+            ) { onClick() }
             .graphicsLayer {
                 scaleX = pressScale
                 scaleY = pressScale
@@ -175,7 +211,7 @@ private fun CliDockItem(
         verticalArrangement = Arrangement.Top,
     ) {
         CliIcon(
-            id = dockIcon(screen),
+            id = icon,
             contentDescription = semanticLabel,
             tint = tint,
             size = if (compact) {

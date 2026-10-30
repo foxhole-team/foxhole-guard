@@ -132,7 +132,7 @@ internal fun dnsRuntimeStatsRuntimeEnabled(settings: Settings): Boolean =
     settings.statistics.enabled && settings.statistics.dnsFilteringEnabled
 
 internal fun networkActivityStatsRuntimeEnabled(settings: Settings): Boolean =
-    settings.expert.networkActivityLogging
+    settings.expert.networkActivityLogging || settings.anomaly.enabled
 
 internal fun laneTrafficStatsRuntimeEnabled(settings: Settings): Boolean =
     settings.privacyRoute.enabled || settings.i2pRuntimeActive()

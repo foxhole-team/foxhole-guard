@@ -15,7 +15,7 @@
     <!-- Сплэш бренда: чёрный фон лого + лис по грудь; после — обычная тема. -->
     <style name="Theme.Foxhole.Splash" parent="Theme.SplashScreen">
         <item name="windowSplashScreenBackground">#000000</item>
-        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_splash_logo</item>
         <item name="postSplashScreenTheme">@style/Theme.Foxhole</item>
     </style>
 </resources>

@@ -6,8 +6,12 @@ import com.foxhole.core.network.ensurePublicHttpsUrl
 import com.foxhole.core.network.requirePublicHttpsUrl
 import com.foxhole.core.runtime.network.PublicRemoteDns
 import com.foxhole.guard.BuildConfig
+import com.foxhole.guard.core.data.executeCancellableResponse
 import com.foxhole.guard.core.data.withBoundedRemoteFetchTimeouts
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -92,8 +96,18 @@ class ThreatIntelUpdateClient(
         onProgress: (RemoteDownloadProgress) -> Unit = {},
     ): ThreatIntelUpdateResult =
         withContext(Dispatchers.IO) {
+            val updateContext = currentCoroutineContext()
+            fun phase(value: RemoteUpdatePhase) {
+                updateContext.ensureActive()
+                onPhase(value)
+            }
+            val progress: (RemoteDownloadProgress) -> Unit = { value ->
+                updateContext.ensureActive()
+                onProgress(value)
+            }
             runCatching {
-                onPhase(RemoteUpdatePhase.CHECKING)
+                updateContext.ensureActive()
+                phase(RemoteUpdatePhase.CHECKING)
                 val manifestHttpUrl =
                     manifestUrl
                         .trim()
@@ -125,17 +139,18 @@ class ThreatIntelUpdateClient(
                     requireNotNull(manifestHttpUrl.resolve(manifest.artifact.file)) {
                         "invalid artifact url"
                     }
-                onPhase(RemoteUpdatePhase.DOWNLOADING)
+                phase(RemoteUpdatePhase.DOWNLOADING)
                 val artifactBytes =
                     guardedClient.getBytes(
                         artifactUrl,
                         MAX_DOCUMENT_BYTES,
                         "threat intel",
                         expectedBytes = manifest.artifact.size,
-                        onProgress = onProgress,
+                        onProgress = progress,
                     )
-                onPhase(RemoteUpdatePhase.VERIFYING)
+                phase(RemoteUpdatePhase.VERIFYING)
                 val document = artifactBytes.requireValidArtifact(manifest.artifact)
+                updateContext.ensureActive()
                 val installedPath = store.installVerifiedThreatIntel(artifactBytes, manifest)
                 ThreatIntelUpdateResult(
                     status = ThreatIntelUpdateStatus.UPDATED,
@@ -143,6 +158,7 @@ class ThreatIntelUpdateClient(
                     entryCount = document.packages.size + document.certs.size,
                 )
             }.getOrElse { error ->
+                if (error is CancellationException) throw error
                 val retryable =
                     when (error) {
                         is ThreatIntelUpdateException -> error.retryable
@@ -222,7 +238,7 @@ class ThreatIntelUpdateClient(
         return document
     }
 
-    private fun OkHttpClient.getBytes(
+    private suspend fun OkHttpClient.getBytes(
         url: HttpUrl,
         maxBytes: Long,
         label: String,
@@ -230,14 +246,15 @@ class ThreatIntelUpdateClient(
         onProgress: (RemoteDownloadProgress) -> Unit = {},
     ): ByteArray {
         url.requirePublicHttpsUrl(resolveHost = true, resolver = resolver)
-        newCall(Request.Builder().url(url).get().build()).execute().use { response ->
+        currentCoroutineContext().ensureActive()
+        return executeCancellableResponse(Request.Builder().url(url).get().build()) { response ->
             if (!response.isSuccessful) {
                 throw ThreatIntelUpdateException(
                     "$label request failed with HTTP ${response.code}",
                     retryable = response.isRetryableHttpFailure(),
                 )
             }
-            return requireNotNull(response.body) { "$label response body is empty" }
+            requireNotNull(response.body) { "$label response body is empty" }
                 .readBytesCapped(maxBytes, expectedBytes, onProgress)
         }
     }

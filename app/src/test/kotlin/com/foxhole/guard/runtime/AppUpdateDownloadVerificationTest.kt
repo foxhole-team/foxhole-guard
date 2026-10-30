@@ -25,6 +25,19 @@ class AppUpdateDownloadVerificationTest {
     private val apkDigest = apkBytes.hex()
 
     @Test
+    fun `package and native verification run away from the download caller thread`() = runBlocking {
+        val caller = Thread.currentThread()
+        var verifierThread: Thread? = null
+        val repository = repository(verifier = { _, _ ->
+            verifierThread = Thread.currentThread()
+            Result.success(Unit)
+        })
+        assertTrue(repository.download(available()).isSuccess)
+        assertTrue(verifierThread != null)
+        assertFalse(verifierThread === caller)
+    }
+
+    @Test
     fun `a matching digest and length produce an installable artifact`() =
         runBlocking {
             val repository = repository()

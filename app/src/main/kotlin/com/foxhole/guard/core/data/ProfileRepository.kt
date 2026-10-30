@@ -1,9 +1,7 @@
 package com.foxhole.guard.core.data
 
-import androidx.room.withTransaction
 import com.foxhole.core.importer.ProfileImportParser
 import com.foxhole.core.model.CachedActiveProfile
-import com.foxhole.core.model.ParsedImport
 import com.foxhole.core.model.ParsedSubscriptionImport
 import com.foxhole.core.model.Profile
 import com.foxhole.core.model.ProfileSourceType
@@ -11,14 +9,12 @@ import com.foxhole.core.model.Settings
 import com.foxhole.core.model.StoredProfileProtocolOption
 import com.foxhole.core.model.StoredProfileSecret
 import com.foxhole.core.network.RemoteHostResolver
-import com.foxhole.core.network.ensurePublicUrl
-import com.foxhole.core.network.requirePublicUrl
 import com.foxhole.core.runtime.I2pdManager
 import com.foxhole.core.runtime.RuntimeConfigAssembler
 import com.foxhole.core.runtime.TorRuntimeInstaller
 import com.foxhole.guard.core.diagnostics.DiagnosticsLogger
 import com.foxhole.guard.core.settings.SettingsRepository
-import com.foxhole.guard.core.settings.removeSmartProfilePreference
+import com.foxhole.guard.core.settings.ensureNewAppQuarantineBaseline
 import com.foxhole.guard.runtime.DnsFilterAssetInstaller
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
@@ -28,8 +24,6 @@ import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
@@ -57,8 +51,9 @@ class ProfileRepository(
     internal val database: ProfileDatabase by lazy(LazyThreadSafetyMode.SYNCHRONIZED, databaseProvider)
 
     internal val dao by lazy(LazyThreadSafetyMode.SYNCHRONIZED) { database.profileDao() }
-    internal val secretMutationMutex = Mutex()
-    internal val profileImportMutex = Mutex()
+    internal val secretMutationMutex get() = mutationCoordinator.secretMutex
+    internal val mutationCoordinator = settingsRepository.profileMutationCoordinator
+    internal val profileImportMutex get() = mutationCoordinator.mutex
     internal val subscriptionFetchUseCase =
         SubscriptionFetchUseCase(
             httpClient = httpClient,
@@ -74,7 +69,7 @@ class ProfileRepository(
             i2pdManager = i2pdManager,
             dnsFilterAssetInstaller = dnsFilterAssetInstaller,
             diagnosticsLogger = diagnosticsLogger,
-            profileProvider = ::requireProfile,
+            profileProvider = { id -> getProfile(id) ?: error("profile not found") },
             secretProvider = secretStore::read,
             resolvedConfigProvider = ::getResolvedConfig,
         )
@@ -83,148 +78,64 @@ class ProfileRepository(
     val profiles: Flow<List<Profile>> =
         flow {
             awaitDatabaseReady()
-            emitAll(dao.observeProfiles().map { list -> list.map { entity -> resolveDomainProfile(entity) } })
+            emitAll(
+                dao.observeProfiles().map {
+                    mutationCoordinator.readCommitted {
+                        dao.getAllProfiles().map { entity -> resolveDomainProfile(entity) }
+                    }
+                }
+            )
         }.flowOn(Dispatchers.IO)
     val activeProfile: Flow<Profile?> =
         flow {
             awaitDatabaseReady()
             emitAll(
-                combine(dao.observeProfiles(), dao.observeActiveProfile()) { profiles, active ->
-                    val resolvedProfiles = profiles.map { entity -> resolveDomainProfile(entity) }
-                    active?.id?.let { activeId -> resolvedProfiles.firstOrNull { it.id == activeId } }
-                        ?: resolvedProfiles.firstOrNull()
+                combine(dao.observeProfiles(), dao.observeActiveProfile()) { _, _ ->
+                    mutationCoordinator.readCommitted {
+                        val resolvedProfiles = dao.getAllProfiles().map { entity -> resolveDomainProfile(entity) }
+                        val active = dao.getActiveProfile()
+                        active?.id?.let { activeId -> resolvedProfiles.firstOrNull { it.id == activeId } }
+                            ?: resolvedProfiles.firstOrNull()
+                    }
                 },
             )
         }.flowOn(Dispatchers.IO)
+
+    internal suspend fun <T> withProfileMutation(block: suspend (ProfileMutationLease) -> T): T =
+        mutationCoordinator.write(
+            onEffectFailure = { error ->
+                diagnosticsLogger.recordFailure(
+                    "profile",
+                    "post-commit effect failed error=${error.javaClass.simpleName}",
+                )
+            },
+            block = block,
+        )
 
     suspend fun importProfile(
         rawInput: String,
         preferredName: String? = null,
         allowInsecureTlsForProfile: Boolean = false,
         excludeInsecureTlsOptions: Boolean = false,
-    ): Profile =
-        profileImportMutex.withLock {
-            importProfileLocked(
-                rawInput = rawInput,
-                preferredName = preferredName,
-                allowInsecureTlsForProfile = allowInsecureTlsForProfile,
-                excludeInsecureTlsOptions = excludeInsecureTlsOptions,
-            )
-        }
-
-    @Suppress("LongMethod", "CyclomaticComplexMethod", "ReturnCount")
-    private suspend fun importProfileLocked(
-        rawInput: String,
-        preferredName: String?,
-        allowInsecureTlsForProfile: Boolean,
-        excludeInsecureTlsOptions: Boolean,
     ): Profile {
-        val settings = settingsRepository.current()
-        val effectiveAllowInsecureTls = settings.expert.allowInsecureTls || allowInsecureTlsForProfile || excludeInsecureTlsOptions
-        val resolvedPreferredName = preferredName?.trim().takeUnless { it.isNullOrBlank() }
-        val rawInputSizeBytes = localProfileImportByteCount(rawInput)
-        if (rawInputSizeBytes > MAX_LOCAL_PROFILE_IMPORT_BYTES) {
-            throw ProfileImportPayloadTooLargeException()
-        }
-
-        findProfileMatchingRawImport(rawInput)?.let { existing ->
-            if (existing.sourceType == ProfileSourceType.SUBSCRIPTION_URL) {
-                diagnosticsLogger.record("profile", "duplicate subscription import resolved to refresh")
-                return refreshProfileWithReportLocked(
-                    profileId = existing.id,
-                    excludeInsecureTlsOptions = excludeInsecureTlsOptions,
-                    allowInsecureTlsForProfile = allowInsecureTlsForProfile,
-                ).profile
-            }
-            diagnosticsLogger.record("profile", "import resolved to existing profile, no duplicate stored")
-            setActiveProfile(existing.id)
-            return getProfile(existing.id) ?: existing
-        }
-        diagnosticsLogger.record(
-            "profile",
-            "import parse started bytes=$rawInputSizeBytes",
+        val prepared = prepareProfileImport(
+            rawInput,
+            preferredName,
+            allowInsecureTlsForProfile,
+            excludeInsecureTlsOptions
         )
-        val parsedRaw =
-            withContext(Dispatchers.IO) {
-                runCatching {
-                    parser.parseUserInput(
-                        input = rawInput,
-                        allowPrivateOutboundHosts = settings.expert.allowPrivateOutboundHosts,
-                        allowInsecureTls = effectiveAllowInsecureTls,
-                    )
-                }
-            }.onSuccess { result ->
-                diagnosticsLogger.record(
-                    "profile",
-                    "import parse finished sourceType=${result.sourceType.name.lowercase()} protocol=${result.protocolHint.name.lowercase()} options=${result.protocolOptions.size}",
-                )
-            }.onFailure { error ->
-                diagnosticsLogger.recordFailure(
-                    "profile",
-                    "import parse failed: ${error.javaClass.simpleName}: ${error.message.orEmpty()}",
-                )
-            }.getOrThrow()
-        val parsed =
-            if (excludeInsecureTlsOptions) {
-                parsedRaw.withoutInsecureTlsOptions(json)
-            } else {
-                parsedRaw
-            }
-        if (parsed.sourceType == ProfileSourceType.SUBSCRIPTION_URL) {
-            return importSubscriptionUrl(
-                parsed = parsed,
-                resolvedPreferredName = resolvedPreferredName,
-                allowInsecureTlsForProfile = allowInsecureTlsForProfile,
-                excludeInsecureTlsOptions = excludeInsecureTlsOptions,
-            )
-        }
-        val importPlan =
-            resolveImportProfilePlan(
-                parsed = parsed,
-                localParsedProfiles =
-                run {
-                    val parsedProfiles = withContext(Dispatchers.IO) {
-                        runCatching {
-                            parser.parseSubscriptionProfiles(
-                                rawContent = rawInput,
-                                fallbackName = resolvedPreferredName ?: parsed.displayName,
-                                allowPrivateOutboundHosts = settings.expert.allowPrivateOutboundHosts,
-                                allowInsecureTls = effectiveAllowInsecureTls,
-                            )
-                        }
-                    }.onSuccess { result ->
-                        diagnosticsLogger.record(
-                            "profile",
-                            "local config group parse finished profiles=${result.profiles.size} nodes=${result.nodesCount} protocols=${result.protocolSummary()}",
-                        )
-                    }.onFailure { error ->
-                        diagnosticsLogger.recordFailure(
-                            "profile",
-                            "local config group parse failed: ${error.javaClass.simpleName}: ${error.message.orEmpty()}",
-                        )
-                    }.getOrNull()
-                    if (excludeInsecureTlsOptions) {
-                        parsedProfiles?.withoutInsecureTlsOptions(json)
-                    } else {
-                        parsedProfiles
-                    }
-                },
-            )
-        if (importPlan is ImportProfilePlan.Multi) {
-            return importLocalProfileGroup(
-                rawInput = rawInput,
-                sourceType = parsed.sourceType,
-                parsed = importPlan.parsed,
-                forceRequiresInsecureTls = allowInsecureTlsForProfile || importPlan.parsed.requiresInsecureTls(json),
-                grantInsecureTlsConsent = allowInsecureTlsForProfile,
-            )
-        }
+        return withProfileMutation { owner -> applyPreparedImport(validateImportForCommit(prepared, owner)) }
+    }
+
+    internal suspend fun importPreparedSingleLocked(prepared: PreparedProfileImport, owner: ProfileMutationLease): Profile {
+        owner.requireOwner(mutationCoordinator)
+        val parsed = requireNotNull(prepared.parsed)
         val secretRef = UUID.randomUUID().toString()
         val now = System.currentTimeMillis()
         val count = dao.count()
         val entity =
             ProfileEntity(
-                name = resolvedPreferredName ?: parsed.displayName,
+                name = prepared.preferredName ?: parsed.displayName,
                 sourceType = parsed.sourceType.name,
                 secretRef = secretRef,
                 protocolHint = parsed.protocolHint.name,
@@ -237,7 +148,7 @@ class ProfileRepository(
                 secretRef = secretRef,
                 value =
                 StoredProfileSecret(
-                    rawInput = rawInput.trim(),
+                    rawInput = prepared.rawInput.trim(),
                     subscriptionUrl = parsed.sourceUrl,
                     resolvedConfigJson = parsed.normalizedConfigJson,
                     subscriptionExpiresAt = parsed.subscriptionExpiresAt,
@@ -245,17 +156,18 @@ class ProfileRepository(
                     selectedProtocolOptionId = parsed.selectedProtocolOptionId,
                 ).withInsecureTlsMarkers(
                     json = json,
-                    forceRequiresInsecureTls = allowInsecureTlsForProfile || parsed.requiresInsecureTls(json),
-                    grantInsecureTlsConsent = allowInsecureTlsForProfile && parsed.requiresInsecureTls(json),
+                    forceRequiresInsecureTls = prepared.grantInsecureTlsConsent || parsed.requiresInsecureTls(json),
+                    grantInsecureTlsConsent = prepared.grantInsecureTlsConsent && parsed.requiresInsecureTls(json),
                 ),
             )
         val id =
             executeSerializedSecretFirstMutation(
+                owner = owner,
                 secretStore = secretStore,
                 stagedWrites = listOf(stagedSecretWrite),
                 onCleanupFailure = ::recordSecretCleanupFailure,
             ) {
-                database.withTransaction {
+                owner.transaction(database) {
                     if (entity.isActive) {
                         dao.clearActive()
                     }
@@ -264,75 +176,20 @@ class ProfileRepository(
             }
         val saved = requireProfile(id)
         if (saved.isActive) {
-            persistCachedActiveProfile(saved)
+            persistCachedActiveProfile(saved, owner)
         }
         diagnosticsLogger.record("profile", "profile imported")
         return saved
     }
-
-    private suspend fun importSubscriptionUrl(
-        parsed: ParsedImport,
-        resolvedPreferredName: String?,
-        allowInsecureTlsForProfile: Boolean,
-        excludeInsecureTlsOptions: Boolean,
-    ): Profile {
-        val sourceUrl = parsed.sourceUrl ?: error("subscription url is missing")
-        val settings = settingsRepository.current()
-        diagnosticsLogger.record("profile", "subscription import started")
-        val safeUrl =
-            withContext(Dispatchers.IO) {
-                sourceUrl
-                    .ensurePublicUrl(allowHttp = false)
-                    .requirePublicUrl(
-                        allowHttp = false,
-                        resolveHost = true,
-                    )
-            }
-        val response =
-            runCatching {
-                subscriptionFetchUseCase.fetchSubscriptionResponse(
-                    sourceUrl = sourceUrl,
-                    safeUrl = safeUrl,
-                    lastEtag = null,
-                    allowHttp = false,
-                )
-            }.getOrElse { error ->
-                throw IllegalStateException(describeSubscriptionTransportFailure(sourceUrl, error), error)
-            }
-        diagnosticsLogger.record(
-            "profile",
-            "subscription transport finished notModified=${response.notModified} bodyBytes=${response.body.orEmpty().toByteArray(
-                Charsets.UTF_8
-            ).size} etagPresent=${!response.etag.isNullOrBlank()} metadataTitlePresent=${!response.metadataTitle.isNullOrBlank()} expirationPresent=${response.subscriptionExpiresAt != null}",
-        )
-        require(!response.notModified) { "subscription did not return a config payload" }
-        val parsedSubscription =
-            parseFetchedSubscriptionProfiles(
-                rawBody = response.body.orEmpty(),
-                fallbackName = resolvedPreferredName ?: parsed.displayName,
-                settings = settings,
-                allowInsecureTlsForProfile = allowInsecureTlsForProfile,
-                excludeInsecureTlsOptions = excludeInsecureTlsOptions,
-                subscriptionGroup = emptyList(),
-            )
-        return applyFetchedSubscriptionProfiles(
-            sourceUrl = sourceUrl,
-            parsed = parsedSubscription,
-            response = response,
-            targetProfileId = null,
-            activateFirstIfNoProfiles = dao.count() == 0,
-            subscriptionGroup = emptyList(),
-            grantInsecureTlsConsent = allowInsecureTlsForProfile,
-        )
-    }
-
-    private suspend fun importLocalProfileGroup(
+    internal suspend fun importLocalProfileGroupLocked(
         rawInput: String,
         sourceType: ProfileSourceType,
         parsed: ParsedSubscriptionImport,
         forceRequiresInsecureTls: Boolean,
         grantInsecureTlsConsent: Boolean,
+        owner: ProfileMutationLease,
     ): Profile {
+        owner.requireOwner(mutationCoordinator)
         val now = System.currentTimeMillis()
         val count = dao.count()
         val trimmedRawInput = rawInput.trim()
@@ -386,12 +243,13 @@ class ProfileRepository(
             }
         val appliedProfiles =
             executeSerializedSecretFirstMutation(
+                owner = owner,
                 secretStore = secretStore,
                 stagedWrites = preparedProfiles.map(PreparedLocalImportProfile::stagedSecretWrite),
                 onCleanupFailure = ::recordSecretCleanupFailure,
             ) {
                 val committedProfiles = mutableListOf<AppliedSubscriptionProfile>()
-                database.withTransaction {
+                owner.transaction(database) {
                     preparedProfiles.forEach { prepared ->
                         val insertedId = dao.insert(prepared.entity)
                         committedProfiles +=
@@ -409,88 +267,120 @@ class ProfileRepository(
             }
         val saved = requireProfile(appliedProfiles.first().id)
         if (saved.isActive) {
-            persistCachedActiveProfile(saved)
+            persistCachedActiveProfile(saved, owner)
         }
         diagnosticsLogger.record("profile", "profile imported: ${parsed.profiles.size} profiles")
         return saved
     }
 
-    suspend fun deleteProfile(profileId: Long) {
-        val entity = dao.getById(profileId) ?: return
-        var nextActiveId: Long? = null
-        database.withTransaction {
-            dao.delete(profileId)
-            if (entity.isActive) {
-                val replacementId = dao.getMostRecentProfileId()
-                if (replacementId != null) {
-                    dao.setActive(replacementId)
-                    nextActiveId = replacementId
+    suspend fun deleteProfile(profileId: Long) = withProfileMutation { owner ->
+        owner.secrets(secretMutationMutex) {
+            withContext(NonCancellable) {
+                val entity = dao.getById(profileId) ?: return@withContext
+                var nextActiveId: Long? = null
+                owner.transaction(database) {
+                    dao.delete(profileId)
+                    if (entity.isActive) {
+                        val replacementId = dao.getMostRecentProfileId()
+                        if (replacementId != null) {
+                            dao.setActive(replacementId)
+                            nextActiveId = replacementId
+                        }
+                    }
                 }
+                owner.markLocalCommit()
+                owner.recordingSecrets(secretStore).delete(entity.secretRef)
+                owner.updateSettings(settingsRepository) { current ->
+                    current.copy(
+                        smartProfilePreferences = current.smartProfilePreferences.filterNot { it.profileId == profileId }
+                    )
+                }
+                persistCachedActiveProfile(nextActiveId?.let { replacementId -> requireProfile(replacementId) }, owner)
+                diagnosticsLogger.record("profile", "profile deleted")
             }
         }
-        cleanupProfileSecret(entity.secretRef)
-        settingsRepository.removeSmartProfilePreference(profileId)
-        persistCachedActiveProfile(nextActiveId?.let { replacementId -> requireProfile(replacementId) })
-        diagnosticsLogger.record("profile", "profile deleted")
     }
 
     internal suspend fun <T> executeSerializedSecretFirstMutation(
+        owner: ProfileMutationLease,
         secretStore: ProfileSecretStore,
         stagedWrites: List<StagedProfileSecretWrite>,
         cleanupSecretRefsAfterSuccess: List<String> = emptyList(),
         onCleanupFailure: (secretRef: String, error: Throwable) -> Unit = { _, _ -> },
         mutation: suspend () -> T,
-    ): T =
-        secretMutationMutex.withLock {
-            executeSecretFirstMutation(
-                secretStore = secretStore,
-                stagedWrites = stagedWrites,
-                cleanupSecretRefsAfterSuccess = cleanupSecretRefsAfterSuccess,
-                onCleanupFailure = onCleanupFailure,
-                mutation = mutation,
-            )
+    ): T = owner.secrets(secretMutationMutex) {
+        executeSecretFirstMutation(
+            secretStore = owner.recordingSecrets(secretStore),
+            stagedWrites = stagedWrites,
+            cleanupSecretRefsAfterSuccess = cleanupSecretRefsAfterSuccess,
+            onCleanupFailure = { ref, error -> owner.afterCommit { onCleanupFailure(ref, error) } },
+        ) {
+            mutation().also { owner.markLocalCommit() }
         }
+    }
 
-    suspend fun setActiveProfile(profileId: Long) {
-        database.withTransaction {
-            dao.setActiveProfileIfPresent(profileId)
+    suspend fun setActiveProfile(profileId: Long) = withProfileMutation { owner ->
+        setActiveProfileLocked(profileId, owner)
+    }
+
+    internal suspend fun setActiveProfileLocked(profileId: Long, owner: ProfileMutationLease) {
+        owner.requireOwner(mutationCoordinator)
+        withContext(NonCancellable) {
+            owner.transaction(database) { dao.setActiveProfileIfPresent(profileId) }
+            owner.markLocalCommit()
+            persistCachedActiveProfile(requireProfile(profileId), owner)
+            diagnosticsLogger.record("profile", "active profile changed")
         }
-        persistCachedActiveProfile(requireProfile(profileId))
-        diagnosticsLogger.record("profile", "active profile changed")
     }
 
     suspend fun renameProfile(
         profileId: Long,
         name: String,
-    ): Profile = secretMutationMutex.withLock {
-        withContext(NonCancellable) {
-            val trimmed = name.trim()
-            require(trimmed.isNotBlank()) { "profile name is blank" }
-            dao.updateName(profileId, trimmed)
-            val updated = requireProfile(profileId)
-            if (updated.isActive) {
-                persistCachedActiveProfile(updated)
+    ): Profile = withProfileMutation { owner ->
+        owner.secrets(secretMutationMutex) {
+            withContext(NonCancellable) {
+                val trimmed = name.trim()
+                require(trimmed.isNotBlank()) { "profile name is blank" }
+                dao.updateName(profileId, trimmed)
+                owner.markLocalCommit()
+                val updated = requireProfile(profileId)
+                if (updated.isActive) {
+                    persistCachedActiveProfile(updated, owner)
+                }
+                diagnosticsLogger.record("profile", "profile renamed")
+                updated
             }
-            diagnosticsLogger.record("profile", "profile renamed")
-            updated
         }
     }
 
     suspend fun selectProfileProtocolOption(
         profileId: Long,
         optionId: String,
-    ): Profile = secretMutationMutex.withLock {
+    ): Profile = withProfileMutation { owner ->
+        selectProfileProtocolOptionLocked(profileId, optionId, owner)
+    }
+
+    internal suspend fun selectProfileProtocolOptionLocked(
+        profileId: Long,
+        optionId: String,
+        owner: ProfileMutationLease,
+    ): Profile = owner.secrets(secretMutationMutex) {
         withContext(NonCancellable) {
             val entity = dao.getById(profileId) ?: error("profile not found")
             val secret = secretStore.read(entity.secretRef) ?: error("profile secret is missing")
             val selected = secret.selectableProtocolOptionOrNull(optionId) ?: error("protocol option not found")
             requireSelectableInsecureTls(secret = secret, option = selected)
-            persistProtocolSelection(entity.secretRef, secret, secret.copy(selectedProtocolOptionId = selected.id)) {
+            persistProtocolSelection(
+                owner,
+                entity.secretRef,
+                secret,
+                secret.copy(selectedProtocolOptionId = selected.id)
+            ) {
                 dao.updateProtocolHint(profileId, selected.protocolHint.name)
             }
             val updated = requireProfile(profileId)
             if (updated.isActive) {
-                persistCachedActiveProfile(updated)
+                persistCachedActiveProfile(updated, owner)
             }
             diagnosticsLogger.record("profile", "profile protocol option changed")
             updated
@@ -501,18 +391,27 @@ class ProfileRepository(
         profileId: Long,
         optionId: String,
         enabled: Boolean,
-    ): Profile = secretMutationMutex.withLock {
+    ): Profile = withProfileMutation { owner ->
+        setProfileProtocolOptionEnabledLocked(profileId, optionId, enabled, owner)
+    }
+
+    internal suspend fun setProfileProtocolOptionEnabledLocked(
+        profileId: Long,
+        optionId: String,
+        enabled: Boolean,
+        owner: ProfileMutationLease,
+    ): Profile = owner.secrets(secretMutationMutex) {
         withContext(NonCancellable) {
             val entity = dao.getById(profileId) ?: error("profile not found")
             val secret = secretStore.read(entity.secretRef) ?: error("profile secret is missing")
             val allowInsecureTls = allowsInsecureTlsForProfileRuntime(secret)
             val update = secret.protocolOptionEnabledUpdate(optionId, enabled, json, allowInsecureTls)
-            persistProtocolSelection(entity.secretRef, secret, update.secret) {
+            persistProtocolSelection(owner, entity.secretRef, secret, update.secret) {
                 dao.updateProtocolHint(profileId, update.reselectedOption?.protocolHint?.name ?: entity.protocolHint)
             }
             val updated = requireProfile(profileId)
             if (updated.isActive) {
-                persistCachedActiveProfile(updated)
+                persistCachedActiveProfile(updated, owner)
             }
             diagnosticsLogger.record("profile", "profile protocol option enabled toggled")
             updated
@@ -520,24 +419,26 @@ class ProfileRepository(
     }
 
     private suspend fun persistProtocolSelection(
+        owner: ProfileMutationLease,
         secretRef: String,
         original: StoredProfileSecret,
         updated: StoredProfileSecret,
         metadata: suspend () -> Unit,
     ) {
         try {
-            secretStore.write(secretRef, updated)
+            owner.recordingSecrets(secretStore).write(secretRef, updated)
             metadata()
+            owner.markLocalCommit()
         } catch (error: Throwable) {
-            runCatching { secretStore.write(secretRef, original) }.onFailure {
+            runCatching { owner.recordingSecrets(secretStore).write(secretRef, original) }.onFailure {
                 diagnosticsLogger.recordFailure("profile", "protocol selection rollback failed")
             }
             throw error
         }
     }
 
-    suspend fun getActiveProfile(): Profile? {
-        ensureActiveProfileInvariant()
+    suspend fun getActiveProfile(): Profile? = withProfileMutation { owner ->
+        ensureActiveProfileInvariantLocked(owner)
         val activeEntity = dao.getActiveProfile()
         val active =
             if (activeEntity != null) {
@@ -545,36 +446,47 @@ class ProfileRepository(
             } else {
                 dao.getMostRecentProfileId()?.let { profileId -> requireProfile(profileId) }
             }
-        persistCachedActiveProfile(active)
-        return active
+        persistCachedActiveProfile(active, owner)
+        active
     }
 
-    suspend fun ensureActiveProfileInvariant() {
+    suspend fun ensureActiveProfileInvariant() = withProfileMutation { owner ->
+        ensureActiveProfileInvariantLocked(
+            owner
+        )
+    }
+
+    private suspend fun ensureActiveProfileInvariantLocked(owner: ProfileMutationLease) {
         var recovered = false
-        database.withTransaction {
+        owner.transaction(database) {
             if (dao.getActiveProfile() != null) {
-                return@withTransaction
+                return@transaction
             }
-            val replacementId = dao.getMostRecentProfileId() ?: return@withTransaction
+            val replacementId = dao.getMostRecentProfileId() ?: return@transaction
             dao.clearActive()
             dao.setActive(replacementId)
             recovered = true
+            owner.markLocalCommit()
         }
         if (recovered) {
-            persistCachedActiveProfile(dao.getActiveProfile()?.let { entity -> resolveDomainProfile(entity) })
+            persistCachedActiveProfile(dao.getActiveProfile()?.let { entity -> resolveDomainProfile(entity) }, owner)
             diagnosticsLogger.record("profile", "active profile recovered")
         }
     }
 
-    suspend fun getProfile(profileId: Long): Profile? = dao.getById(
-        profileId
-    )?.let { entity -> resolveDomainProfile(entity) }
+    suspend fun getProfile(profileId: Long): Profile? = mutationCoordinator.readCommitted {
+        dao.getById(profileId)?.let { entity -> resolveDomainProfile(entity) }
+    }
 
     suspend fun getResolvedConfig(
         profileId: Long,
         protocolOptionIdOverride: String? = null,
     ): String {
-        val loaded = loadResolvedConfig(profileId, protocolOptionIdOverride)
+        val loaded = mutationCoordinator.readCommitted { loadResolvedConfig(profileId, protocolOptionIdOverride) }
+        return resolveLoadedConfig(loaded)
+    }
+
+    private suspend fun resolveLoadedConfig(loaded: LoadedResolvedConfig): String {
         val repaired = repairResolvedConfigIfNeeded(parser = parser, loaded = loaded)
         val effectiveAllowInsecureTls =
             allowsInsecureTlsForStoredProfileRuntime(
@@ -622,6 +534,33 @@ class ProfileRepository(
         )
     }
 
+    internal suspend fun prepareSessionSnapshot(
+        profileId: Long,
+        optionId: String?,
+    ): PreparedProfileSessionSnapshot {
+        settingsRepository.ensureNewAppQuarantineBaseline()
+        val captured = mutationCoordinator.readCommitted {
+            val entity = dao.getById(profileId) ?: error("profile not found")
+            val secret = secretStore.read(entity.secretRef) ?: error("profile secret is missing")
+            val settings = settingsRepository.current()
+            val selected = secret.selectedStoredProtocolOptionForRuntime(optionId)
+            val loaded = LoadedResolvedConfig(
+                secret,
+                settings,
+                selected,
+                selected?.normalizedConfigJson ?: secret.resolvedConfigJson ?: missingResolvedConfig(entity.toDomain()),
+            )
+            entity.toResolvedDomainProfile(secret, json) to loaded
+        }
+        return PreparedProfileSessionSnapshot(
+            captured.first,
+            captured.second.secret,
+            captured.second.settings,
+            optionId,
+            resolveLoadedConfig(captured.second),
+        )
+    }
+
     suspend fun updateResolvedConfig(
         profileId: Long,
         editedJson: String,
@@ -631,24 +570,12 @@ class ProfileRepository(
     }
 
     @Suppress("CyclomaticComplexMethod")
-    internal suspend fun persistCachedActiveProfile(profile: Profile?) {
-        settingsRepository.updateLastActiveProfile(
-            profile?.let {
-                CachedActiveProfile(
-                    id = it.id,
-                    name = it.name,
-                    sourceType = it.sourceType,
-                    protocolHint = it.protocolHint,
-                )
-            },
-        )
+    internal suspend fun persistCachedActiveProfile(profile: Profile?, owner: ProfileMutationLease) {
+        val cached = profile?.let {
+            CachedActiveProfile(it.id, it.name, it.sourceType, it.protocolHint)
+        }
+        owner.updateSettings(settingsRepository) { current -> current.copy(lastActiveProfile = cached) }
     }
-
-    internal suspend fun resolveDomainProfile(entity: ProfileEntity): Profile =
-        entity.toResolvedDomainProfile(secret = secretStore.read(entity.secretRef), json = json)
-
-    internal suspend fun requireProfile(profileId: Long): Profile =
-        dao.getById(profileId)?.let { entity -> resolveDomainProfile(entity) } ?: error("profile not found")
 }
 
 private suspend fun ProfileRepository.allowsInsecureTlsForProfileRuntime(secret: StoredProfileSecret): Boolean =

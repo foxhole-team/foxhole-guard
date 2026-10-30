@@ -25,6 +25,7 @@ import com.foxhole.guard.core.webapps.WebAppsDataCleaner
 import com.foxhole.guard.core.webapps.WebAppsNotifier
 import com.foxhole.guard.core.webapps.WebAppsWatchdog
 import com.foxhole.guard.runtime.AppUpdateRepository
+import com.foxhole.guard.runtime.CategorizedDnsNativeActivation
 import com.foxhole.guard.runtime.DnsFilterAssetInstaller
 import com.foxhole.guard.runtime.DnsFilterUpdateRepository
 import com.foxhole.guard.runtime.FoxholeConnectionController
@@ -173,13 +174,41 @@ class FoxholeAppGraph(
             appContext = appContext,
             core = coreModule,
             security = { securityComponents },
+            resetStaticScanWork = { sentinelScanGateway.clearAutomaticQueue() },
             liveDnsRuleSetInstaller = { name, manifest, signature, artifact ->
                 runtimeModule.runtimeInstanceStore
                     .current()
                     ?.installDnsRuleSet(name, manifest, signature, artifact)
                     ?: RuntimeDnsRuleSetInstallOutcome.Deferred
             },
+            liveCategorizedDnsInstaller = { _, bundle ->
+                val captured = runtimeModule.runtimeInstanceStore.current()
+                val lease = captured?.captureDnsRuleSetInstallLease {
+                    runtimeModule.runtimeInstanceStore.current() === captured
+                }
+                if (lease == null) {
+                    CategorizedDnsNativeActivation(RuntimeDnsRuleSetInstallOutcome.Deferred, { false })
+                } else {
+                    CategorizedDnsNativeActivation(
+                        lease.install(
+                            bundle.manifest.name,
+                            bundle.manifestBytes,
+                            bundle.signatureBytes,
+                            bundle.artifactBytes
+                        ),
+                        lease::isCurrent,
+                    )
+                }
+            },
         )
+    internal val sentinelScanGateway by lazy {
+        com.foxhole.guard.core.sentinel.scanner.SentinelScanGateway(
+            appContext,
+            settingsRepository,
+            anomalyRepository,
+            { securityComponents },
+        )
+    }
     private val runtimeModule: FoxholeRuntimeGraphModule =
         FoxholeRuntimeGraphModule(appContext, coreModule, dataModule)
 

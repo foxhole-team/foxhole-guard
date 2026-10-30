@@ -1,0 +1,24 @@
+0.1.1 public beta — security and reliability fixes
+
+- Authenticates notification/widget WebApp launches and waits for unlock before opening a saved WebApp.
+- Preserves cleared Sentinel journals against late scans, reports real notification access, and avoids redundant quarantine reloads and unsupported-platform retries.
+- Simplifies User home controls, shares the saved-profile selector, and keeps optional Mode/I2P actions above Start. The map opens from Home.
+- Includes the pinned Sentinel dependency graph and native binary in the delivery inventory.
+- Requires the bundled Sentinel engine in both APK and Android App Bundle release checks.
+- Exposes settings switch states to screen readers.
+- Rechecks scanner power and storage limits during queues and before saving results; keeps interrupted automatic work retryable.
+- Adds User and Expert interfaces: a larger simple map and connection controls, optional advanced settings, and visible errors without the console. Existing settings are preserved when switching.
+- Adds a white accent, optional monochrome themes and launcher icon, and a shorter update notice.
+- Updates FoxCore to 0.0.5 with fixes for live-connection revocation, concurrent policy updates, private DNS validation, and domain routing.
+- Requires explicit consent for anonymous local proxies and authenticates notification commands before switching profiles.
+- Keeps runtime state consistent during network handoffs and policy reloads.
+- Isolates WebApp views, proxy sessions, and pending browsing-data deletion; refuses page loads when storage isolation fails.
+- Rejects stale profile-editor updates and preserves concurrent protocol changes.
+- Rebuilds I2P and Tor transports with updated OpenSSL, Go, and transport dependencies.
+- Expands delivery inventory, vulnerability checks, release-signature verification, and Android regression coverage.
+- Corrects directory syncing, WebApp route availability, and the F-Droid source-build recipe.
+Build: fix license packaging for emulator ABIs.
+CI: require device suites on API 26 and 34; defer API 37 after repeated emulator installation failures.
+
+Next release: Fix GitHub release metadata and APK redirects with per-hop HTTPS validation, scoped credentials and bounded downloads.
+Next release: Build a separate F-Droid APK without in-app updates or package-install permission; verify both release channels and their delivery inventories in CI.

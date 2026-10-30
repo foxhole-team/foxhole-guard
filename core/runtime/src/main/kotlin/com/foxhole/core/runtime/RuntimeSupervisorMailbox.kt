@@ -51,6 +51,9 @@ internal class RuntimeSupervisorMailbox(
     @Volatile
     private var currentJob: Job? = null
 
+    // Cleanup belongs to the mailbox until the next priority command claims it.
+    private var pendingNormalPreemption: Job? = null
+
     private val worker =
         scope.launch(Dispatchers.IO) {
             runActorLoop()
@@ -205,6 +208,7 @@ internal class RuntimeSupervisorMailbox(
                 } else if (next.owner?.isClosed == true) {
                     recordCommandEvent("runtime command skipped for closed owner", next)
                 } else {
+                    val preemptedNormalJob = claimNormalPreemption(next)
                     val preemptedJobsForSwitch =
                         if (next.priority == RuntimeCommandPriority.SWITCH.value) {
                             drainingPreemptedJobs.filterNot(Job::isCompleted)
@@ -214,7 +218,11 @@ internal class RuntimeSupervisorMailbox(
                     if (next.priority < RuntimeCommandPriority.STOP.value) {
                         cleanupBarrier.drain(drainingPreemptedJobs)
                     }
-                    running = startCommand(next, preemptedJobsForSwitch)
+                    running = startCommand(
+                        command = next,
+                        preemptedNormalJob = preemptedNormalJob,
+                        preemptedJobsForSwitch = preemptedJobsForSwitch,
+                    )
                 }
             } else {
                 when (awaitRunningCommand(active)) {
@@ -229,6 +237,7 @@ internal class RuntimeSupervisorMailbox(
         }
         running?.job?.cancel()
         pending.clear()
+        pendingNormalPreemption = null
         drainingPreemptedJobs.clear()
     }
 
@@ -408,10 +417,14 @@ internal class RuntimeSupervisorMailbox(
 
     private fun startCommand(
         command: QueuedRuntimeCommand,
+        preemptedNormalJob: Job? = null,
         preemptedJobsForSwitch: List<Job> = emptyList(),
     ): RunningRuntimeCommand {
         val job =
             scope.launch(Dispatchers.Default + CoroutineName("RuntimeCommand:${command.priorityName}")) {
+                preemptedNormalJob?.let { previous ->
+                    settleNormalPreemption(previous, command)
+                }
                 if (preemptedJobsForSwitch.isNotEmpty() &&
                     !cleanupBarrier.awaitBeforeSwitch(preemptedJobsForSwitch)
                 ) {
@@ -432,6 +445,48 @@ internal class RuntimeSupervisorMailbox(
             ),
         )
         return RunningRuntimeCommand(job = job, command = command)
+    }
+
+    private suspend fun claimNormalPreemption(command: QueuedRuntimeCommand): Job? {
+        val previous = pendingNormalPreemption
+        pendingNormalPreemption = null
+        return when {
+            previous == null || previous.isCompleted -> null
+            command.canAwaitNormalCleanup() -> previous
+            else -> {
+                forceKillPreemptedCommand(command)
+                null
+            }
+        }
+    }
+
+    private fun QueuedRuntimeCommand.canAwaitNormalCleanup(): Boolean =
+        priority == RuntimeCommandPriority.USER_STOP.value
+
+    private suspend fun settleNormalPreemption(previous: Job, command: QueuedRuntimeCommand) {
+        recordCommandEvent("runtime normal preemption waiting for cleanup", command)
+        val completed = withTimeoutOrNull(NORMAL_PREEMPTION_GRACE_MS) {
+            previous.join()
+            true
+        } == true
+        if (completed) {
+            recordCommandEvent("runtime normal preemption cleanup settled", command)
+        } else {
+            recordCommandEvent("runtime normal preemption cleanup timed out", command)
+            forceKillPreemptedCommand(command)
+        }
+    }
+
+    private suspend fun forceKillPreemptedCommand(command: QueuedRuntimeCommand) {
+        val kill = emergencyKill("priority_command_preempt:${command.reason}")
+        recordCommandEvent(
+            headline = "runtime command force-killed",
+            command = command,
+            extra = listOf(
+                "kill_reason=${kill.reason}",
+                "close_detached=${kill.closeDetached}",
+            ).joinToString(" • "),
+        )
     }
 
     private suspend fun preemptRunningCommand(
@@ -455,26 +510,26 @@ internal class RuntimeSupervisorMailbox(
             command = command,
             extra = extra,
         )
+        val cooperativePreemptedJob = running.job.takeIf {
+            !it.isCompleted && running.command.priority == RuntimeCommandPriority.NORMAL.value &&
+                command.canAwaitNormalCleanup()
+        }
+        pendingNormalPreemption = cooperativePreemptedJob
+        if (cooperativePreemptedJob != null && cooperativePreemptedJob !in drainingPreemptedJobs) {
+            drainingPreemptedJobs += cooperativePreemptedJob
+        }
         if (running.job.isActive) {
             running.job.cancel()
             if (currentJob == running.job) {
                 currentJob = null
             }
             runningSnapshot.set(null)
-            drainingPreemptedJobs += running.job
+            if (running.job !in drainingPreemptedJobs) drainingPreemptedJobs += running.job
             recordCommandEvent(
                 headline = "runtime command preempted",
                 command = command,
             )
-            val kill = emergencyKill("priority_command_preempt:${command.reason}")
-            recordCommandEvent(
-                headline = "runtime command force-killed",
-                command = command,
-                extra = listOf(
-                    "kill_reason=${kill.reason}",
-                    "close_detached=${kill.closeDetached}",
-                ).joinToString(" • "),
-            )
+            if (cooperativePreemptedJob == null) forceKillPreemptedCommand(command)
         }
         pending.offer(command)
         pendingDepth.set(pending.size)
@@ -594,6 +649,7 @@ internal class RuntimeSupervisorMailbox(
     }
 
     private companion object {
+        const val NORMAL_PREEMPTION_GRACE_MS = 500L
         const val COMMAND_BUFFER_CAPACITY = 64
         const val PRIORITY_COMMAND_BUFFER_CAPACITY = 8
         const val MAX_PENDING_NORMAL_COMMANDS = 16

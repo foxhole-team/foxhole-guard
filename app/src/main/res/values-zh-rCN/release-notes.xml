@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="cli_release_notes_title">更新内容</string>
+    <string name="cli_release_notes_runtime">修复配置、VPN 连接和 DNS 问题</string>
+    <string name="cli_release_notes_sentinel_network">更新主页、微件和外观</string>
+    <string name="cli_release_notes_sentinel_apps">Sentinel：应用检查和更清晰的安全日志</string>
+    <string name="cli_release_notes_backup">简化设置说明和许可证信息</string>
+    <string name="cli_release_notes_core">OpenWrt 设置和软件包更新：公开测试版</string>
+    <string name="cli_release_notes_details">详情</string>
+    <string name="cli_release_notes_details_body">导入现支持 v2rayTun 链接、兼容的 Clash/Mihomo YAML 和规范的配置 JSON。\nOpenWrt 路由器管理现作为公开测试版提供。\nVPN 运行时改进了启动、停止和已取消任务的所有权管理。\nDNS 将广告、跟踪器、OEM 遥测和恶意域名分为独立类别，并提供 Normal/Pro 跟踪列表和 Medium/Full 威胁列表。已验证的内置数据可离线准备。新的签名更新会复用相同且已验证的文件；准备好的下载数据与 Core 已应用的数据保持分离。不支持所请求过滤方式的配置会明确报告此限制。OEM 遥测覆盖仅限于所列厂商的列表。\nSentinel 缓存未变更的安装和签名元数据，并以有上限的批次处理突发的应用更改。无法查看某个软件包不代表它已移除，也不代表检查未发现问题。安全和网络日志会解释已知 Core 事件，并保留未知结果的状态。网络观测携带采集时的配置和会话信息；共享或缺失的归属会明确标注。观测字节数不能证明连接成功。通知条件和冷却时间可防止重复提醒。\n未设置密码时，备份默认使用明文。启用备份加密可使用现有的 AES/密码格式。导入只读取一次，自动检测格式，仅在需要时要求密码。恢复前请先核对；本地密钥、系统授权和设备凭据始终留在本地。\n自动模式会选择1–4个 Core 工作线程。输入输出缓冲区大小和握手超时均可配置。FoxHole Guard 使用 Stable 发布通道。\n静态 APK 检查为可选功能，在单独的隔离进程中运行。可选择一个已安装应用，或检查 Android 当前允许查看的应用。在本页打开静态检查专家设置，可配置 DEX 引用、YARA 规则、发现项通知、新安装或更新应用的自动检查、充电和电量限制，以及16或64 MiB 的文件资源预算。高负载检查和自动检查默认关闭。电池状态危急或未知，以及存储空间不足时，会暂停扫描。取消操作、策略更改和应用替换会阻止发布过时结果。不完整的检查会保持部分完成状态，不会按完整结果缓存。内置规则报告的是静态 API 引用；MITRE 候选映射不能证明相关技术已执行。日志锁定时会延迟记录结果，直到解锁；可选的发现项通知使用共享冷却时间。</string>
+    <string name="cli_release_notes_ack_failed">无法保存提示选项。请重试。</string>
+</resources>

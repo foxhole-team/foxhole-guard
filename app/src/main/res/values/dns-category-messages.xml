@@ -1,0 +1,9 @@
+<resources>
+    <string name="dns_category_prepared_pending">Selected DNS filters are prepared. Activation requires native verification when the connection starts or reloads.</string>
+    <string name="dns_category_prepared_short">Activation pending</string>
+    <string name="dns_category_catalog_missing">Selected DNS filters are unavailable: the bundled category catalog is missing.</string>
+    <string name="dns_category_catalog_invalid">Selected DNS filters are unavailable: bundled category data could not be verified.</string>
+    <string name="dns_category_required_missing">The requested DNS categories or list variant are unavailable. Check the selected lists and refresh their data.</string>
+    <string name="dns_category_signed_invalid">Selected DNS filters are unavailable: downloaded category data could not be verified.</string>
+    <string name="dns_category_profile_policy_unavailable">This profile cannot apply the selected DNS filters in this build. Disable filtering or choose a profile that supports it.</string>
+</resources>

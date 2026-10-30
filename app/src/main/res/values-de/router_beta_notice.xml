@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="router_beta_notice_title" formatted="false">Betafunktion</string>
+    <string name="router_beta_notice_body" formatted="false">Die automatische Installation wird derzeit nur auf Routern mit unveränderter OpenWrt-Standardkonfiguration unterstützt. Die Kopplung ist auch nach der manuellen Installation der aktuellen Version von FoxHole OpenWrt Client möglich. Für Einrichtung und Kopplung müssen sich Smartphone und Router im selben lokalen Netzwerk befinden; der Router benötigt Internetzugang.</string>
+    <string name="router_beta_notice_dont_show_again" formatted="false">Nicht mehr anzeigen</string>
+</resources>

@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="sentinel_static_expert">静态检查专家设置</string>
+    <string name="sentinel_static_title">APK 检查</string>
+    <string name="sentinel_static_reference_summary">%1$s：%2$s 类静态 API 引用和 %3$s 项规则匹配。这些观测不能证明代码已执行或存在恶意软件。</string>
+    <string name="sentinel_static_notification_title">FoxHole Sentinel：静态观测</string>
+    <string name="sentinel_static_select_app">应用</string>
+    <string name="sentinel_static_run">检查所选应用</string>
+    <string name="sentinel_static_baseline">检查已安装应用</string>
+    <string name="sentinel_static_cancel">取消检查</string>
+    <string name="sentinel_static_dex">DEX 检查</string>
+    <string name="sentinel_static_yara">YARA 检查</string>
+    <string name="sentinel_static_notify">通知发现项</string>
+    <string name="sentinel_static_automatic">检查新安装和更新的应用</string>
+    <string name="sentinel_static_charging">充电时自动检查</string>
+    <string name="sentinel_static_battery">电量不低时自动检查</string>
+    <string name="sentinel_static_cost">扫描资源预算</string>
+    <string name="sentinel_static_economy">节省 · 16 MiB</string>
+    <string name="sentinel_static_balanced">均衡 · 64 MiB</string>
+    <string name="sentinel_static_coverage_note">仅检查 Android 允许查看的已安装应用。只进行有资源限制的静态 APK/DEX 检查。缺少检查或仅部分覆盖不代表应用安全。不评估原生代码和下载的代码。</string>
+    <string name="sentinel_static_journal_deferred">日志已锁定：此结果暂存于内存，解锁后可记录。</string>
+    <string name="sentinel_static_status_disabled">已停用</string>
+    <string name="sentinel_static_status_idle">就绪</string>
+    <string name="sentinel_static_status_waiting">等待充电或电量条件满足</string>
+    <string name="sentinel_static_status_running">正在检查</string>
+    <string name="sentinel_static_status_complete">静态检查已完成</string>
+    <string name="sentinel_static_status_partial">部分覆盖</string>
+    <string name="sentinel_static_status_stale">安装内容或设置已更改</string>
+    <string name="sentinel_static_status_cancelled">已取消</string>
+    <string name="sentinel_static_status_unavailable">检查不可用</string>
+    <string name="sentinel_static_status_unsupported">不支持此 APK 格式</string>
+    <string name="sentinel_static_engine_unavailable">此设备无法使用内置扫描引擎。</string>
+    <string name="sentinel_static_type_label">静态引用</string>
+</resources>

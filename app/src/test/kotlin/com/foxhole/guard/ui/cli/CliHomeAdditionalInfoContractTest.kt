@@ -19,7 +19,11 @@ class CliHomeAdditionalInfoContractTest {
         assertTrue(rows.contains("HomeAdditionalInfoCategory.entries.map"))
         assertTrue(rows.contains("HomeAdditionalInfoCategory.MAP -> R.drawable.lin_map"))
         assertTrue(rows.contains("HomeAdditionalInfoCategory.ROUTE -> R.drawable.lin_link"))
-        assertTrue(rows.contains("enabled = settings.ui.showHomeAdditionalInfo"))
+        assertTrue(
+            rows.contains(
+                "enabled = settings.ui.interfaceMode == InterfaceMode.USER || settings.ui.showHomeAdditionalInfo",
+            ),
+        )
         assertTrue(rows.contains("showSelectedOptionIcon = true"))
     }
 

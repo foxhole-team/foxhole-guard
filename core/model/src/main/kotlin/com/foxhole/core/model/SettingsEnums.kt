@@ -95,10 +95,15 @@ enum class AppLocale(val tag: String) {
     SYSTEM(""),
     RU("ru"),
     EN("en"),
+    JA("ja"),
+    DE("de"),
+    FR("fr"),
+    ES("es"),
+    ZH("zh"),
 
     ;
 
-    fun appLanguageTags(): String = tag
+    fun appLanguageTags(): String = if (this == ZH) "zh-CN" else tag
 }
 
 @Serializable

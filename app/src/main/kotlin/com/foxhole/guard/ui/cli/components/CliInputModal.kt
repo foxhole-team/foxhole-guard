@@ -26,6 +26,7 @@ import androidx.compose.ui.window.DialogProperties
 import com.foxhole.guard.R
 import com.foxhole.guard.ui.cli.CliRadius
 import com.foxhole.guard.ui.cli.CliSpacing
+import com.foxhole.guard.ui.cli.CliTopNoticeHost
 import com.foxhole.guard.ui.cli.LocalCliColors
 import com.foxhole.guard.ui.cli.LocalCliPanelAppearance
 import com.foxhole.guard.ui.cli.LocalCliPixelArtEnabled
@@ -53,6 +54,7 @@ internal fun CliInputModal(
         onDismissRequest = onDismiss,
         properties = DialogProperties(decorFitsSystemWindows = true),
     ) {
+        CliTopNoticeHost()
         val shape = RoundedCornerShape(CliRadius.modal)
         Column(
             modifier = Modifier

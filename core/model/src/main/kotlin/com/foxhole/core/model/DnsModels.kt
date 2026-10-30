@@ -20,6 +20,8 @@ enum class SecureDnsMode(
     DOH("https", 443),
     DOT("tls", 853),
     PLAIN("udp", 53),
+    DOQ("quic", 853),
+    DOH3("h3", 443),
 }
 
 @Serializable

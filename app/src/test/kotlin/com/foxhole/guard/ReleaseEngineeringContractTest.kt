@@ -93,20 +93,29 @@ class ReleaseEngineeringContractTest {
     }
 
     @Test
-    fun `fdroid metadata delegates store copy and keeps only the current build`() {
+    fun `fdroid metadata delegates store copy and preserves the committed historical recipe`() {
         val metadata = projectFile("../metadata/com.foxhole.guard.yml").readText()
         val builds = fdroidBuildBlocks(metadata)
 
-        assertEquals(listOf(BuildConfig.VERSION_NAME.removeSuffix("-Debug")), builds.map(FdroidBuildBlock::versionName))
+        assertEquals(listOf("0.1.1"), builds.map(FdroidBuildBlock::versionName))
+        val historicalBlock = metadata.substringAfter("Builds:\n").substringBefore("\nAllowedAPKSigningKeys:")
+        val historicalDigest =
+            MessageDigest.getInstance("SHA-256").digest(historicalBlock.toByteArray())
+                .joinToString("") { byte -> "%02x".format(byte.toInt() and 0xff) }
+        assertEquals("01f5d9e3143662437844bd2765c07a2a5ea633992393d330f1aaa3994b66b22c", historicalDigest)
+        assertTrue(
+            builds.single().body.contains("    commit: v0.1.1\n"),
+        )
         assertFalse(metadata.contains("\nSummary:"))
         assertFalse(metadata.contains("\nDescription:"))
         assertFalse(metadata.contains("\nMaintainerNotes:"))
 
-        val current = builds.single { it.versionName == BuildConfig.VERSION_NAME.removeSuffix("-Debug") }.body
+        val current = builds.single { it.versionName == "0.1.1" }.body
         val sudo = current.substringAfter("    sudo:").substringBefore("    output:")
         val prebuild = current.substringAfter("    prebuild:").substringBefore("    build:")
 
-        assertTrue(current.contains("versionCode: ${BuildConfig.VERSION_CODE}"))
+        assertTrue(current.contains("versionCode: 122"))
+        assertTrue("Historical recipe cannot be ahead of this candidate", 122 < BuildConfig.VERSION_CODE)
         assertTrue(current.contains("config/foxcore-revision.txt"))
         assertTrue(metadata.contains("AutoUpdateMode: Version"))
         assertTrue(current.contains("srclibs:"))
@@ -178,6 +187,10 @@ class ReleaseEngineeringContractTest {
         val allowedNativeLibraries =
             nativeLibraryNames(source.between("val allowedNativeLibraries =", "val requiredRuntimeLibraries"))
         assertTrue("requiredRuntimeLibraries must not be empty", requiredRuntimeLibraries.isNotEmpty())
+        assertTrue(
+            "Sentinel must be present in every release",
+            "libfoxhole_sentinel_yara.so" in requiredRuntimeLibraries,
+        )
         assertTrue(
             "every required runtime library must also be in the AAB allowlist; missing: " +
                 "${requiredRuntimeLibraries - allowedNativeLibraries}",
@@ -380,13 +393,16 @@ class ReleaseEngineeringContractTest {
         val appBuild = projectFile("build.gradle.kts").readText()
         val generator = projectFile("../scripts/generate-license-assets.py").readText()
         val candidate = projectFile("../scripts/package-release-candidate.sh").readText()
-        val workflow = projectFile("../.github/workflows/release.yml").readText()
+        sourceOnlyGithubWorkflow()
+        val workflow = retainedLabRecipe("release.yml")
         val about = projectFile("src/main/kotlin/com/foxhole/guard/ui/cli/settings/CliAboutSubScreen.kt").readText()
         val notices = projectFile("../THIRD_PARTY_NOTICES.md").readText()
 
         assertTrue(appBuild.contains("val prepareBundledLicenseAssets = tasks.register"))
         assertTrue(appBuild.contains("from(generatedLicenseAssetsDir)"))
         assertTrue(appBuild.contains("verifyReleaseContainsLicenseAssets"))
+        assertTrue(generator.contains("module.primary_target(core_delivery_profile(args))"))
+        assertTrue(generator.contains("else \"aarch64-linux-android\""))
         listOf(
             "android/JNA-LICENSE.txt",
             "android/SQLCipher-BSD-3-Clause.txt",
@@ -408,6 +424,8 @@ class ReleaseEngineeringContractTest {
                 when {
                     required.startsWith("android/") ->
                         "third_party/licenses/${required.removePrefix("android/")}"
+                    required == "foxcore/foxcore-aarch64-linux-android.cdx.json" ->
+                        "\"foxcore/foxcore-\" + primary + \".cdx.json\""
                     required == "i2pd/Boost-1.84.0-BSL-1.0.txt" ->
                         "f\"i2pd/Boost-{boost_version}-BSL-1.0.txt\""
                     required == "i2pd/OpenSSL-3.5.8-Apache-2.0.txt" ->
@@ -424,7 +442,7 @@ class ReleaseEngineeringContractTest {
         assertTrue(generator.contains("require_lyrebird_composite_license"))
         assertTrue(generator.contains("not any(part.startswith(\".\") for part in relative.parts)"))
         assertTrue(generator.contains("GO-MODULES.json"))
-        assertTrue(workflow.contains("[[ ${'$'}{#assets[@]} -eq 9 ]]"))
+        assertCandidateAssetInventory(workflow, candidate)
         assertFalse(about.contains("CliLicenseNoticesSheet"))
         assertFalse(about.contains("THIRD_PARTY_NOTICES.md"))
         assertTrue(notices.contains("GPL-3.0-or-later AND BSD-3-Clause"))
@@ -465,14 +483,9 @@ class ReleaseEngineeringContractTest {
     }
 
     @Test
-    fun `GitHub actions use Node 24 runtimes without the legacy override`() {
-        val workflowPaths =
-            listOf(
-                "../.github/workflows/android.yml",
-                "../.github/workflows/release.yml",
-                "../.github/actions/setup-foxcore/action.yml",
-            )
-        val workflows = workflowPaths.joinToString("\n") { path -> projectFile(path).readText() }
+    fun `active source checkout and retained lab recipes keep reviewed Node runtime pins`() {
+        val active = sourceOnlyGithubWorkflow()
+        val workflows = (listOf(active) + listOf(retainedLabRecipe("android.yml"), retainedLabRecipe("release.yml"), projectFile("../.github/actions/setup-foxcore/action.yml").readText())).joinToString("\n")
 
         assertFalse(workflows.contains("FORCE_JAVASCRIPT_ACTIONS_TO_NODE24"))
         assertFalse(workflows.contains("11d5960a326750d5838078e36cf38b85af677262"))
@@ -490,24 +503,25 @@ class ReleaseEngineeringContractTest {
     }
 
     @Test
-    fun `signed dev candidate approves source before main rebuilds the release`() {
-        val androidWorkflow = projectFile("../.github/workflows/android.yml").readText()
-        val releaseWorkflow = projectFile("../.github/workflows/release.yml").readText()
+    fun `retained lab recipe checks signed source authority while GitHub publication stays disabled`() {
+        sourceOnlyGithubWorkflow()
+        val androidWorkflow = retainedLabRecipe("android.yml")
+        val releaseWorkflow = retainedLabRecipe("release.yml")
         val untrustedVerifyJob = androidWorkflow.substringBefore("  release-candidate:")
         val candidateJob = androidWorkflow.substringAfter("  release-candidate:")
-        val variantBuilder = projectFile("../scripts/build-release-variants.sh").readText()
+        val candidateBuild = releaseBuildCommands(candidateJob, "${'$'}{{ steps.published.outputs.version_code }}")
+        val releaseBuild = releaseBuildCommands(releaseWorkflow, "${'$'}{{ steps.policy.outputs.published_code }}")
 
         assertFalse(untrustedVerifyJob.contains("assembleRelease"))
         assertFalse(untrustedVerifyJob.contains("validateReleaseSigningInputs"))
         assertTrue(candidateJob.contains("github.event_name == 'push'"))
         assertTrue(candidateJob.contains("github.ref == 'refs/heads/dev'"))
-        assertTrue(candidateJob.contains("scripts/build-release-variants.sh"))
-        assertTrue(variantBuilder.contains(":app:validateReleaseSigningInputs"))
-        assertTrue(variantBuilder.contains(":app:assembleRelease"))
+        assertTrue(candidateBuild.contains(":app:validateReleaseSigningInputs"))
+        assertTrue(candidateBuild.contains(":app:assembleRelease"))
         assertTrue(candidateJob.contains("package-release-candidate.sh"))
         assertTrue(candidateJob.contains("foxhole-app-${'$'}{{ github.sha }}"))
 
-        assertTrue(releaseWorkflow.contains("scripts/build-release-variants.sh"))
+        assertTrue(releaseBuild.contains("./gradlew"))
         assertTrue(releaseWorkflow.contains("FOXHOLE_RELEASE_STORE_FILE_B64"))
         assertTrue(releaseWorkflow.contains("verify-release-signature.py"))
         assertTrue(releaseWorkflow.contains("dev_tree"))
@@ -539,16 +553,12 @@ class ReleaseEngineeringContractTest {
     }
 
     @Test
-    fun `android pull request paths include all build critical source trees`() {
-        val workflow = projectFile("../.github/workflows/android.yml").readText()
-        val pullRequestPaths =
-            workflow
-                .substringAfter("pull_request:")
-                .substringBefore("workflow_dispatch:")
-
-        listOf("app/**", "config/**", "core/**", "third_party/**").forEach { path ->
-            assertTrue("Missing CI path filter for $path", pullRequestPaths.contains("\"$path\""))
-        }
+    fun `GitHub source checks include every dev and main pull request without path filters`() {
+        val workflow = sourceOnlyGithubWorkflow()
+        val pullRequests = workflow.substringAfter("pull_request:").substringBefore("workflow_dispatch:")
+        assertTrue(pullRequests.contains("branches: [dev, main]"))
+        assertFalse(pullRequests.contains("paths:"))
+        assertFalse(pullRequests.contains("paths-ignore:"))
     }
 
     @Test
@@ -605,21 +615,20 @@ class ReleaseEngineeringContractTest {
     }
 
     @Test
-    fun `dev candidate and main release both run public preflight`() {
-        val androidWorkflow = projectFile("../.github/workflows/android.yml").readText()
-        val releaseWorkflow = projectFile("../.github/workflows/release.yml").readText()
+    fun `retained dev and main lab recipes keep public preflight gates`() {
+        sourceOnlyGithubWorkflow()
+        val androidWorkflow = retainedLabRecipe("android.yml")
+        val releaseWorkflow = retainedLabRecipe("release.yml")
         val candidateJob = androidWorkflow.substringAfter("  release-candidate:")
-        val variantBuilder = projectFile("../scripts/build-release-variants.sh").readText()
+        val candidateBuild = releaseBuildCommands(candidateJob, "${'$'}{{ steps.published.outputs.version_code }}")
+        val releaseBuild = releaseBuildCommands(releaseWorkflow, "${'$'}{{ steps.policy.outputs.published_code }}")
 
         assertTrue(candidateJob.contains("published-code"))
-        assertTrue(candidateJob.contains("scripts/build-release-variants.sh"))
-        assertTrue(variantBuilder.contains("for channel in github fdroid; do"))
-        assertTrue(variantBuilder.contains("-Pfoxhole.updateChannel=${'$'}channel"))
-        assertTrue(variantBuilder.contains("-Pfoxhole.sbom=true"))
-        assertTrue(variantBuilder.contains("-Pfoxhole.lastUploadedVersionCode="))
-        assertTrue(variantBuilder.contains(":app:validateReleaseSigningInputs"))
-        assertTrue(variantBuilder.contains(":app:assembleRelease"))
-        assertTrue(variantBuilder.contains(":app:publicReleasePreflight"))
+        assertTrue(candidateBuild.contains("-Pfoxhole.sbom=true"))
+        assertTrue(candidateBuild.contains("-Pfoxhole.lastUploadedVersionCode="))
+        assertTrue(candidateBuild.contains(":app:validateReleaseSigningInputs"))
+        assertTrue(candidateBuild.contains(":app:assembleRelease"))
+        assertTrue(candidateBuild.contains(":app:publicReleasePreflight"))
         assertTrue(candidateJob.contains("if-no-files-found: error"))
         assertTrue(candidateJob.contains("outputs/mapping/publicRelease/mapping.txt"))
         assertTrue(
@@ -632,7 +641,80 @@ class ReleaseEngineeringContractTest {
         assertTrue(releaseWorkflow.contains("actions/attest-build-provenance@"))
         assertTrue(releaseWorkflow.contains("published-code"))
         assertTrue(releaseWorkflow.contains("version_code > published_code"))
-        assertTrue(releaseWorkflow.contains("scripts/build-release-variants.sh"))
+        assertTrue(releaseBuild.contains("-Pfoxhole.sbom=true"))
+        assertTrue(releaseBuild.contains("-Pfoxhole.lastUploadedVersionCode="))
+        assertTrue(releaseBuild.contains(":app:validateReleaseSigningInputs"))
+        assertTrue(releaseBuild.contains(":app:assembleRelease"))
+        assertTrue(releaseBuild.contains(":app:publicReleasePreflight"))
+    }
+
+    private fun releaseBuildCommands(workflow: String, publishedCode: String): String {
+        val invocation = Regex(
+            """(?m)^\s*run:\s+scripts/build-release-variants\.sh\s+"${Regex.escape(publishedCode)}"\s*$""",
+        )
+        if (!invocation.containsMatchIn(workflow)) return workflow
+        val script = projectFile("../scripts/build-release-variants.sh").readText()
+        assertTrue(script.contains("set -euo pipefail"))
+        assertTrue(script.contains("[[ ${'$'}# -eq 1 && \"${'$'}1\" =~ ^[0-9]+${'$'} ]]"))
+        assertTrue(script.contains("for channel in github fdroid; do"))
+        assertTrue(script.contains("\"-Pfoxhole.updateChannel=${'$'}channel\""))
+        assertTrue(script.contains("\"-Pfoxhole.lastUploadedVersionCode=${'$'}1\""))
+        assertTrue(script.contains("-Pfoxhole.updateChannel=github"))
+        assertTrue(script.contains(":app:validateReleaseSigningInputs"))
+        assertTrue(script.contains(":app:assembleRelease"))
+        assertTrue(script.contains(":app:publicReleasePreflight"))
+        return "$workflow\n$script"
+    }
+
+    private fun assertCandidateAssetInventory(workflow: String, candidate: String) {
+        val fileList = candidate.substringAfter("  expected_files=\"${'$'}(")
+            .substringBefore("  actual_files=\"${'$'}(")
+        val dualVariants = fileList.contains("\"${'$'}canonical_fdroid_name\"")
+        val expected = mutableListOf("CANDIDATE.json", "SHA256SUMS", "\"${'$'}canonical_arm64_name\"")
+        if (dualVariants) expected.add("\"${'$'}canonical_fdroid_name\"")
+        expected.add("\"${'$'}canonical_license_name\"")
+        expected.add("\"${'$'}canonical_sbom_name\"")
+        if (dualVariants) expected.add("\"${'$'}canonical_fdroid_sbom_name\"")
+        expected.addAll(listOf("release-certs.txt", "update-manifest.json"))
+        val declared = fileList.substringAfter("printf '%s\\n'").substringBefore("LC_ALL=C sort")
+            .lineSequence().map { it.trim().removeSuffix("\\").removeSuffix("|").trim() }
+            .filter(String::isNotEmpty).toList()
+        assertEquals(expected, declared)
+        assertTrue(candidate.contains("[[ \"${'$'}actual_files\" == \"${'$'}expected_files\" ]] || die"))
+        assertTrue(workflow.contains("[[ ${'$'}{#assets[@]} -eq ${expected.size} ]]"))
+    }
+
+    private fun sourceOnlyGithubWorkflow(): String {
+        val directory = projectFile("../.github/workflows")
+        val active = directory.listFiles().orEmpty()
+            .filter { it.isFile && it.extension in setOf("yml", "yaml") }.sortedBy { it.name }
+        assertEquals("Only the source-check workflow may be active on GitHub", listOf("android.yml"), active.map { it.name })
+        val workflow = active.single().readText()
+        assertTrue(workflow.contains("contents: read"))
+        assertFalse(Regex("""(?m)^\s*(?:contents|actions|attestations|id-token):\s*write\s*$""").containsMatchIn(workflow))
+        val actions = Regex("""(?m)^\s*uses:\s+([^\s#]+)""").findAll(workflow).map { it.groupValues[1] }.toList()
+        assertEquals(listOf("actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09"), actions)
+        assertTrue(workflow.contains("persist-credentials: false"))
+        assertTrue(workflow.contains("timeout-minutes: 10"))
+        listOf("./gradlew", "setup-foxcore", "upload-artifact@", "download-artifact@", "attest-build-provenance@",
+            "emulator-runner@", "gh release", "secrets.", "release-candidate:", "FOXHOLE_RELEASE_").forEach { forbidden ->
+            assertFalse("GitHub source checks must not build, sign, publish, or consume lab artifacts: $forbidden", workflow.contains(forbidden))
+        }
+        listOf("ast.parse", "tomllib.loads", "ET.parse", "assert checked", "Strict dependency verification is required",
+            "Missing reviewed verification metadata", "Missing or invalid SHA-256", "Pinned Gradle distribution SHA-256 is required").forEach { gate ->
+            assertTrue("Missing fast source/strict-verification gate: $gate", workflow.contains(gate))
+        }
+        assertTrue(workflow.contains("Full tests and builds run in Git LAN / the lab."))
+        assertTrue(workflow.contains("This result does not qualify a release."))
+        return workflow
+    }
+
+    private fun retainedLabRecipe(name: String): String {
+        val recipe = projectFile("../.github/lab-workflows/$name").readText()
+        assertTrue(recipe.contains("Reference recipe only."))
+        assertTrue(recipe.contains("Authoritative execution belongs to"))
+        assertTrue(recipe.contains("outside GitHub Actions workflow discovery"))
+        return recipe
     }
 
     private fun projectFile(path: String): File =

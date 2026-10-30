@@ -1,6 +1,6 @@
 plugins {
     id("org.jetbrains.kotlin.jvm")
-    id("org.jetbrains.kotlin.plugin.serialization") version "2.4.20"
+    id("org.jetbrains.kotlin.plugin.serialization") version "2.4.21"
 }
 
 kotlin {
@@ -16,6 +16,7 @@ java {
 
 dependencies {
     implementation(project(":core:model"))
+    implementation(project(":core:importer"))
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.runtime)
     implementation(libs.kotlinx.serialization.json)

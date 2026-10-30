@@ -1,4 +1,11 @@
-FoxHole 0.1.2
+1.0.0 Stable (release candidate)
 
-Update FoxCore to 0.0.6 with the rustls TLS 1.3 security fix (RUSTSEC-2026-0285).
-Provide a separate F-Droid APK with in-app updates disabled.
+- Correct release metadata while preserving the original F-Droid build history.
+- User Home respects the saved map/route view.
+- The large map remains visible by default; terminal visibility controls remain in Expert mode.
+- Transparent monochrome fox logo in the connection widget.
+- Clearer Sentinel capability descriptions.
+- Direct SIP008 JSON paste with selectable servers and strict format checks.
+
+Canceling an app update stops its request and body reader. Downloads use separate temporary files and replace the previous APK only after size and digest checks.
+Canceled updates restore their previous state; late callbacks cannot replace a newer result. Invalid APK filenames are rejected before cache access.

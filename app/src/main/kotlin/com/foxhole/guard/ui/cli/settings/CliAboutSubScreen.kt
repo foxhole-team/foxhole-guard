@@ -15,10 +15,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -28,9 +28,14 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import com.foxhole.guard.BuildConfig
 import com.foxhole.guard.R
+import com.foxhole.guard.core.diagnostics.ordinaryDiagnosticsExportAttempt
+import com.foxhole.guard.core.diagnostics.prepareDiagnosticsAboutExport
 import com.foxhole.guard.ui.HomeViewModel
 import com.foxhole.guard.ui.cli.CliSpacing
 import com.foxhole.guard.ui.cli.LocalCliBottomChromeClearance
@@ -90,6 +95,7 @@ internal fun CliAboutSubScreen(
                     Spacer(modifier = Modifier.size(CliSpacing.sm))
                     CliAboutVersionTable(
                         appVersion = state.appVersion,
+                        onReadReleaseNotes = viewModel::reopenUpdateNotice,
                         modifier = Modifier.weight(1f),
                     )
                 }
@@ -130,14 +136,15 @@ internal fun CliAboutSubScreen(
                         if (!preparingAppJournal) {
                             preparingAppJournal = true
                             scope.launch {
-                                val result = runCatching {
+                                val result = prepareDiagnosticsAboutExport(
+                                    onSettled = { preparingAppJournal = false },
+                                ) {
                                     withContext(Dispatchers.IO) {
                                         viewModel.exportSanitizedDiagnosticsFromAbout()
                                     }
                                 }
-                                preparingAppJournal = false
                                 result.onSuccess { shareIntent ->
-                                    runCatching {
+                                    ordinaryDiagnosticsExportAttempt {
                                         context.startActivity(
                                             Intent.createChooser(
                                                 shareIntent,
@@ -165,13 +172,7 @@ internal fun CliAboutSubScreen(
 
 @Composable
 private fun CliAboutAnimatedFox() {
-    var frameIndex by remember { mutableIntStateOf(0) }
-    LaunchedEffect(Unit) {
-        while (true) {
-            delay(FOX_STATUS_FRAME_DURATION_MS)
-            frameIndex = (frameIndex + 1) % FOX_STATUS_ANIMATION_FRAMES.size
-        }
-    }
+    val frameIndex by rememberCliAboutFoxFrame()
     Image(
         painter = painterResource(FOX_STATUS_ANIMATION_FRAMES[frameIndex]),
         contentDescription = null,
@@ -180,8 +181,22 @@ private fun CliAboutAnimatedFox() {
 }
 
 @Composable
+internal fun rememberCliAboutFoxFrame(): State<Int> {
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    return produceState(initialValue = 0, lifecycle) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            while (true) {
+                delay(FOX_STATUS_FRAME_DURATION_MS)
+                value = (value + 1) % FOX_STATUS_ANIMATION_FRAMES.size
+            }
+        }
+    }
+}
+
+@Composable
 private fun CliAboutVersionTable(
     appVersion: String,
+    onReadReleaseNotes: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier) {
@@ -190,6 +205,12 @@ private fun CliAboutVersionTable(
         CliKeyValue(key = "FoxHole Core", value = BuildConfig.FOXCORE_SOURCE_VERSION)
         CliRowDivider()
         CliKeyValue(key = "Arti", value = BuildConfig.ARTI_VERSION)
+        CliRowDivider()
+        CliActionRow(
+            label = stringResource(R.string.cli_release_notes_title),
+            icon = R.drawable.lin_update,
+            onTap = onReadReleaseNotes,
+        )
     }
 }
 

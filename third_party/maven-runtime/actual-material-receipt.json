@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "kind": "actual-G6-fresh-runtime-capture-and-original-notices",
+  "runtimeCaptureSha256": "f95d54be9840fe2e5eec4df4fe82d5dc1555f4cb426080b5536278bd098da413",
+  "runtimeCaptureTerminalReceiptSha256": "90fe30248852e6fc88ae995468e5d8b2809b0b52fe5fa9204f8900c7ce3f4af0",
+  "collectorReportSha256": "6ba294c123d6e9724908945c5d0eed03b26a6c773ca370de2ef85cebacf746e2",
+  "sourceManifestSha256": "67c3b32f0b813f0b05afe50874ea4fd1d2ec5170093ea3bbd66bab1c4b9e5693",
+  "coreCommit": "148b9aea8bac77f288b42969f33c2c72a1f0a335",
+  "versionCode": 174,
+  "counts": {
+    "components": 174,
+    "artifacts": 122,
+    "poms": 169
+  },
+  "nativeAPKRuntimeQualified": null
+}

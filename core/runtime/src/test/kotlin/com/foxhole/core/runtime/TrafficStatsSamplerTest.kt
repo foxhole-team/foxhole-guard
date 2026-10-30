@@ -10,7 +10,7 @@ class TrafficStatsSamplerTest {
     fun `calculates rates and totals from sampled bytes`() {
         val source = FakeTrafficByteSource(rxValues = listOf(1_000L, 3_000L), txValues = listOf(2_000L, 5_000L))
         var now = 10_000L
-        val sampler = TrafficStatsSampler(uid = 42, byteSource = source) { now }
+        val sampler = TrafficStatsSampler(uid = 42, byteSource = source, elapsedNowProvider = { now }) { now }
 
         sampler.start()
         now += 1_000L
@@ -26,7 +26,7 @@ class TrafficStatsSamplerTest {
     @Test
     fun `returns unavailable snapshot when traffic stats are unsupported`() {
         val source = FakeTrafficByteSource(rxValues = listOf(-1L), txValues = listOf(-1L))
-        val sampler = TrafficStatsSampler(uid = 42, byteSource = source) { 10_000L }
+        val sampler = TrafficStatsSampler(uid = 42, byteSource = source, elapsedNowProvider = { 10_000L }) { 10_000L }
 
         sampler.start()
         val snapshot = sampler.sample()
@@ -43,7 +43,7 @@ class TrafficStatsSamplerTest {
             txValues = listOf(2_000L, 2_400L, 3_200L)
         )
         var now = 10_000L
-        val sampler = TrafficStatsSampler(uid = 42, byteSource = source) { now }
+        val sampler = TrafficStatsSampler(uid = 42, byteSource = source, elapsedNowProvider = { now }) { now }
 
         sampler.start()
         now += 5_000L

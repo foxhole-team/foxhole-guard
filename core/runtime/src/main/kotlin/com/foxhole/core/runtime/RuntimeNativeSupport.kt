@@ -3,6 +3,7 @@ package com.foxhole.core.runtime
 import android.content.Context
 import android.net.Network
 import android.net.VpnService
+import com.foxhole.core.model.FoxCoreDnsRuleSetBootstrap
 import com.foxhole.core.model.TransportProtocol
 import com.foxhole.core.model.VpnSession
 import kotlinx.coroutines.CompletableDeferred
@@ -29,6 +30,16 @@ interface RuntimeServiceHost {
         AndroidApplicationIdentityResolver(runtimeContext).signingCertificateSha256(packageName)
 
     fun currentUnderlyingNetwork(): Network? = null
+
+    fun isDnsRuntimeOwnerCurrent(): Boolean = true
+
+    suspend fun captureDnsBootstrapReadLease(bootstrap: FoxCoreDnsRuleSetBootstrap): RuntimeDnsBootstrapReadLease? = null
+
+    suspend fun onDnsBootstrapVerified(bootstrap: FoxCoreDnsRuleSetBootstrap, isOwnerCurrent: () -> Boolean) = Unit
+}
+
+interface RuntimeDnsBootstrapReadLease {
+    suspend fun release()
 }
 
 internal interface RuntimeNativeStartFenceOwner {
@@ -162,6 +173,22 @@ class RuntimeInstanceStore(
     private val retiredInstances = ArrayDeque<FoxholeRuntime>()
 
     fun current(): FoxholeRuntime? = instance
+
+    fun isCurrentServiceOwner(owner: RuntimeServiceOwnerLease): Boolean =
+        synchronized(lock) { serviceOwnerCurrentLocked(owner) }
+
+    fun currentForServiceOwner(owner: RuntimeServiceOwnerLease): FoxholeRuntime? =
+        synchronized(lock) {
+            val teardownPending = serviceDestroyDrain?.isCompleted == false || serviceDestroyCleanupPending
+            if (!serviceOwnerCurrentLocked(owner) || owner.predecessorDrain?.isCompleted == false || teardownPending) {
+                null
+            } else {
+                instance
+            }
+        }
+
+    private fun serviceOwnerCurrentLocked(owner: RuntimeServiceOwnerLease): Boolean =
+        serviceOwner === owner && !owner.destroyStarted && !owner.destroySealed
 
     fun nativeSnapshot(): NativeRuntimeSnapshot {
         val live = current()?.nativeSnapshot()

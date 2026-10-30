@@ -304,7 +304,6 @@ class CliConfirmationModalContractTest {
     @Test
     fun `every remaining inline confirmation moved to the modal`() {
         listOf(
-            "profiles/CliProfileListItem.kt" to "R.string.cli_prof_delete_confirm",
             "profiles/CliProfileEditorProtocolForm.kt" to "R.string.cli_data_destructive_confirm",
             "settings/CliWebAppsSubScreen.kt" to "R.string.cli_webapps_firewall_consent",
             "settings/CliDataSubScreen.kt" to "R.string.cli_data_restore_confirm",
@@ -313,6 +312,13 @@ class CliConfirmationModalContractTest {
             assertTrue("$relative lost the question $question", source.contains(question))
             assertTrue("$relative asks without a modal", source.contains("CliConfirmSheet("))
         }
+        val profileConfirmation = cli("profiles/CliProfileConfirmations.kt")
+        assertTrue(profileConfirmation.contains("R.string.cli_prof_delete_confirm"))
+        assertTrue(profileConfirmation.contains("CliBottomSheet("))
+        assertTrue(profileConfirmation.contains("CliSheetActionsRow("))
+        val profileActions = cli("profiles/CliProfileListItem.kt")
+        assertTrue(profileActions.contains("CliProfileDeleteConfirmation("))
+        assertTrue(profileActions.contains("onContinue = onDeleteConfirm"))
     }
 
     @Test
@@ -339,7 +345,9 @@ class CliConfirmationModalContractTest {
     @Test
     fun `the log tabs deliberately keep reading order`() {
         val source = cli("logs/CliLogsScreen.kt")
-        val tabs = source.substringAfter("CliLogTab.entries.forEach")
+        val selector = "CliLogTab.entries.chunked(2)"
+        assertTrue(source.contains(selector))
+        val tabs = source.substringAfter(selector)
 
         assertFalse(tabs.take(TAB_ROW_WINDOW).contains("Alignment.End"))
     }

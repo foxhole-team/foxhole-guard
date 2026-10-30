@@ -1,7 +1,6 @@
 package com.foxhole.guard.widget
 
 import android.content.Context
-import android.content.Intent
 import android.graphics.Bitmap
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
@@ -40,13 +39,13 @@ import com.foxhole.core.model.WidgetKindAppearance
 import com.foxhole.guard.FoxholeApplication
 import com.foxhole.guard.R
 import com.foxhole.guard.core.data.WebAppEntity
+import com.foxhole.guard.core.webapps.WebAppOpenIntents
 import com.foxhole.guard.core.webapps.circularCrop
 import com.foxhole.guard.core.webapps.decodeWebAppIcon
 import com.foxhole.guard.core.webapps.webAppBadgeBitmap
 import com.foxhole.guard.core.webapps.webAppLetterIconBitmap
 import com.foxhole.guard.ui.cli.CliColors
 import com.foxhole.guard.ui.cli.CliLightColors
-import com.foxhole.guard.ui.cli.CliMainActivity
 import kotlinx.coroutines.withTimeoutOrNull
 
 internal fun webAppSlots(size: DpSize): Int =
@@ -140,6 +139,7 @@ private fun WebAppsWidgetBody(
         WidgetBrandHeader(
             context = context,
             background = background,
+            connectionLogo = true,
         )
         Spacer(modifier = GlanceModifier.height(4.dp))
         if (apps.isEmpty()) {
@@ -179,10 +179,7 @@ private fun WebAppWidgetCell(
     textColor: Color,
     modifier: GlanceModifier,
 ) {
-    val openIntent =
-        Intent(context, CliMainActivity::class.java)
-            .putExtra(CliMainActivity.EXTRA_OPEN_WEB_APP_ID, app.id)
-            .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+    val openIntent = WebAppOpenIntents.launchIntent(context, app.id)
     Column(
         modifier = modifier
             .cornerRadius(WIDGET_SURFACE_CORNER_RADIUS)

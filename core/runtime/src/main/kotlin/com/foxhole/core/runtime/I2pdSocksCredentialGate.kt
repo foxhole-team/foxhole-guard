@@ -8,6 +8,7 @@ import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.ServerSocket
 import java.net.Socket
+import java.util.concurrent.Semaphore
 import java.util.concurrent.atomic.AtomicBoolean
 
 internal class I2pdSocksCredentialGate(
@@ -17,17 +18,26 @@ internal class I2pdSocksCredentialGate(
     private val password: String,
     listenerFactory: () -> ServerSocket = { ServerSocket(0, ACCEPT_BACKLOG, loopback()) },
     private val upstreamFactory: (Int) -> Socket = { port ->
-        Socket().apply {
-            connect(InetSocketAddress(loopback(), port), UPSTREAM_CONNECT_TIMEOUT_MS)
+        val socket = Socket()
+        try {
+            socket.connect(InetSocketAddress(loopback(), port), UPSTREAM_CONNECT_TIMEOUT_MS)
+            socket
+        } catch (error: IOException) {
+            socket.close()
+            throw error
         }
     },
-    private val clock: () -> Long = System::currentTimeMillis,
+    private val clock: () -> Long = { System.nanoTime() / 1_000_000L },
     private val sleeper: (Long) -> Unit = { millis -> Thread.sleep(millis) },
     private val retryBudgetMs: Long = B32_RETRY_BUDGET_MS,
     private val retryDelayMs: Long = B32_RETRY_DELAY_MS,
 ) : I2pdSocksGate {
-    private val listener: ServerSocket = listenerFactory()
     private val closed = AtomicBoolean(false)
+    private val started = AtomicBoolean(false)
+    private val lifecycleLock = Any()
+    private val sockets = mutableSetOf<Socket>()
+    private val workers = mutableSetOf<Thread>()
+    private val capacity = Semaphore(MAX_CONNECTIONS)
 
     override val port: Int get() = listener.localPort
 
@@ -40,7 +50,10 @@ internal class I2pdSocksCredentialGate(
         }
     }
 
+    private val listener: ServerSocket = listenerFactory()
+
     fun start() {
+        if (closed.get() || !started.compareAndSet(false, true)) return
         Thread({ acceptLoop() }, "FoxHoleI2pdSocksGate").apply {
             isDaemon = true
             start()
@@ -53,17 +66,38 @@ internal class I2pdSocksCredentialGate(
                 runCatching { listener.accept() }.getOrElse {
                     return
                 }
-            Thread({ serve(client) }, "FoxHoleI2pdSocksGateConn").apply {
+            if (!claimClient(client)) continue
+            val worker = Thread({ serveClient(client) }, "FoxHoleI2pdSocksGateConn").apply {
                 isDaemon = true
-                start()
+            }
+            var launched = false
+            try {
+                synchronized(lifecycleLock) {
+                    if (!closed.get()) {
+                        workers.add(worker)
+                        worker.start()
+                        launched = true
+                    }
+                }
+            } finally {
+                if (!launched) {
+                    synchronized(lifecycleLock) { workers.remove(worker) }
+                    releaseClient(client)
+                }
             }
         }
     }
 
     @Suppress("ReturnCount")
     internal fun serve(client: Socket) {
+        if (claimClient(client)) serveClient(client)
+    }
+
+    @Suppress("ReturnCount")
+    private fun serveClient(client: Socket) {
         var router: Socket? = null
         try {
+            if (closed.get()) return
             client.soTimeout = HANDSHAKE_TIMEOUT_MS
             val input = client.getInputStream()
             val output = client.getOutputStream()
@@ -74,7 +108,7 @@ internal class I2pdSocksCredentialGate(
                 return
             }
             val first =
-                runCatching { upstreamFactory(routerSocksPort) }.getOrElse {
+                runCatching { openUpstream(routerSocksPort) }.getOrElse {
                     return
                 }
             router = first
@@ -95,12 +129,48 @@ internal class I2pdSocksCredentialGate(
             router = established
             client.soTimeout = 0
             established.soTimeout = 0
-            pump(client, established)
+            relayI2pSockets(client, established, "FoxHoleI2pdSocksGateUp")
         } catch (_: IOException) {
         } finally {
-            runCatching { router?.close() }
-            runCatching { client.close() }
+            router?.let(::closeSocket)
+            releaseClient(client)
+            synchronized(lifecycleLock) { workers.remove(Thread.currentThread()) }
         }
+    }
+
+    private fun claimClient(client: Socket): Boolean {
+        val accepted = synchronized(lifecycleLock) {
+            if (closed.get() || !capacity.tryAcquire()) {
+                false
+            } else {
+                sockets.add(client)
+                true
+            }
+        }
+        if (!accepted) runCatching { client.close() }
+        return accepted
+    }
+
+    private fun releaseClient(client: Socket) {
+        closeSocket(client)
+        capacity.release()
+    }
+
+    private fun openUpstream(port: Int): Socket {
+        val socket = upstreamFactory(port)
+        synchronized(lifecycleLock) {
+            if (!closed.get()) {
+                sockets.add(socket)
+                return socket
+            }
+        }
+        socket.close()
+        throw IOException("I2P SOCKS gate closed")
+    }
+
+    private fun closeSocket(socket: Socket) {
+        synchronized(lifecycleLock) { sockets.remove(socket) }
+        runCatching { socket.close() }
     }
 
     private fun connectHttpProxy(
@@ -108,14 +178,14 @@ internal class I2pdSocksCredentialGate(
         socksUpstream: Socket,
         clientOut: OutputStream,
     ): Socket? {
-        runCatching { socksUpstream.close() }
-        val proxy = runCatching { upstreamFactory(routerHttpProxyPort) }.getOrElse { return null }
+        closeSocket(socksUpstream)
+        val proxy = runCatching { openUpstream(routerHttpProxyPort) }.getOrElse { return null }
         return runCatching {
             clientOut.write(request.successReply())
             clientOut.flush()
             proxy
         }.getOrElse {
-            runCatching { proxy.close() }
+            closeSocket(proxy)
             null
         }
     }
@@ -127,27 +197,58 @@ internal class I2pdSocksCredentialGate(
     ): Socket? {
         var router = initial
         val deadline = clock() + retryBudgetMs
-        while (true) {
-            router.soTimeout = REQUEST_TIMEOUT_MS
-            val reply = exchangeRequest(router, request)
+        var result: Socket? = null
+        var retrying = true
+        try {
+            while (!closed.get() && retrying) {
+                router.soTimeout = REQUEST_TIMEOUT_MS
+                val reply = exchangeRequest(router, request)
 
-            val retryable = reply?.succeeded == false && request.retryable && clock() < deadline
-            if (!retryable) {
-                reply ?: return null
-                clientOut.write(reply.raw)
-                clientOut.flush()
-                return if (reply.succeeded) router else null
+                val retryable = reply?.succeeded == false && request.retryable && clock() < deadline
+                if (retryable) {
+                    val replacement = retryUpstream(router)
+                    retrying = replacement != null
+                    router = replacement ?: router
+                } else {
+                    result = forwardReply(reply, router, clientOut)
+                    retrying = false
+                }
             }
-            runCatching { router.close() }
-            sleeper(retryDelayMs)
-            val next = runCatching { upstreamFactory(routerSocksPort) }.getOrElse { return null }
-            next.soTimeout = HANDSHAKE_TIMEOUT_MS
-            if (!negotiateUpstream(next)) {
-                runCatching { next.close() }
-                return null
-            }
-            router = next
+            return result
+        } finally {
+            if (result == null) closeSocket(router)
         }
+    }
+
+    private fun forwardReply(reply: SocksReply?, router: Socket, clientOut: OutputStream): Socket? {
+        if (reply == null) return null
+        clientOut.write(reply.raw)
+        clientOut.flush()
+        return router.takeIf { reply.succeeded }
+    }
+
+    private fun retryUpstream(previous: Socket): Socket? {
+        closeSocket(previous)
+        if (!waitToRetry()) return null
+        val replacement = runCatching { openUpstream(routerSocksPort) }.getOrNull() ?: return null
+        var negotiated = false
+        try {
+            replacement.soTimeout = HANDSHAKE_TIMEOUT_MS
+            negotiated = negotiateUpstream(replacement)
+            return replacement.takeIf { negotiated }
+        } finally {
+            if (!negotiated) closeSocket(replacement)
+        }
+    }
+
+    private fun waitToRetry(): Boolean {
+        try {
+            sleeper(retryDelayMs)
+        } catch (_: InterruptedException) {
+            Thread.currentThread().interrupt()
+            return false
+        }
+        return !closed.get()
     }
 
     private fun exchangeRequest(
@@ -216,26 +317,17 @@ internal class I2pdSocksCredentialGate(
         return input.read() == SOCKS_VERSION && input.read() == METHOD_NO_AUTHENTICATION.toInt()
     }
 
-    private fun pump(
-        client: Socket,
-        router: Socket,
-    ) {
-        val upward =
-            Thread({
-                runCatching { client.getInputStream().copyTo(router.getOutputStream()) }
-                runCatching { router.shutdownOutput() }
-            }, "FoxHoleI2pdSocksGateUp")
-        upward.isDaemon = true
-        upward.start()
-        runCatching { router.getInputStream().copyTo(client.getOutputStream()) }
-        runCatching { client.shutdownOutput() }
-        runCatching { upward.join(PUMP_JOIN_MS) }
-    }
-
     override fun close() {
-        if (closed.compareAndSet(false, true)) {
-            runCatching { listener.close() }
+        val captured = synchronized(lifecycleLock) {
+            if (!closed.compareAndSet(false, true)) return
+            (sockets.toList() to workers.toList()).also {
+                sockets.clear()
+                workers.clear()
+            }
         }
+        runCatching { listener.close() }
+        captured.first.forEach { socket -> runCatching { socket.close() } }
+        captured.second.forEach(Thread::interrupt)
     }
 
     private companion object {
@@ -248,9 +340,9 @@ internal class I2pdSocksCredentialGate(
         const val STATUS_FAILURE: Byte = 0x01
         const val MAX_FIELD = 255
         const val ACCEPT_BACKLOG = 16
+        const val MAX_CONNECTIONS = 128
         const val HANDSHAKE_TIMEOUT_MS = 5_000
         const val UPSTREAM_CONNECT_TIMEOUT_MS = 2_000
-        const val PUMP_JOIN_MS = 1_000L
 
         const val REQUEST_TIMEOUT_MS = 20_000
 
@@ -260,6 +352,36 @@ internal class I2pdSocksCredentialGate(
 
 internal const val B32_RETRY_BUDGET_MS = 25_000L
 internal const val B32_RETRY_DELAY_MS = 2_000L
+
+internal fun relayI2pSockets(client: Socket, upstream: Socket, threadName: String) {
+    fun closeBoth() {
+        runCatching { client.close() }
+        runCatching { upstream.close() }
+    }
+    val upload = Thread({
+        try {
+            client.getInputStream().copyTo(upstream.getOutputStream())
+        } catch (_: IOException) {
+            closeBoth()
+        } finally {
+            runCatching { upstream.shutdownOutput() }
+        }
+    }, threadName).apply { isDaemon = true }
+    upload.start()
+    try {
+        upstream.getInputStream().copyTo(client.getOutputStream())
+        runCatching { client.shutdownOutput() }
+        upload.join()
+    } catch (error: InterruptedException) {
+        Thread.currentThread().interrupt()
+        throw IOException("I2P relay interrupted", error)
+    } finally {
+        if (upload.isAlive) {
+            closeBoth()
+            upload.interrupt()
+        }
+    }
+}
 
 internal data class SocksRequest(
     val raw: ByteArray,

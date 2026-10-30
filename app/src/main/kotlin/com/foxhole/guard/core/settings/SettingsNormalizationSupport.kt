@@ -34,7 +34,7 @@ import com.foxhole.core.model.packages
 import com.foxhole.guard.BuildConfig
 import kotlin.math.abs
 
-internal const val SETTINGS_MIN_MTU = 576
+internal const val SETTINGS_MIN_MTU = 1280
 internal const val SETTINGS_MAX_MTU = 9_000
 internal const val INSTALLED_APP_CHANGE_HISTORY_LIMIT = 60
 
@@ -51,7 +51,7 @@ internal fun Settings.normalized(): Settings {
     return copy(
         schemaVersion = SETTINGS_SCHEMA_VERSION,
         ui =
-        ui.copy(
+        ui.normalizedUpdateNoticeAcknowledgement().copy(
             themeMode = ui.themeMode,
             panelAppearance = PanelAppearance.AUTO,
             onboardingCompleted = ui.onboardingCompleted,
@@ -136,6 +136,7 @@ private fun ExpertSettings.normalized(
     val normalizedKnownApplications = normalizedKnownApplications(quarantineArmed)
     val normalized =
         copy(
+            core = core.normalized(),
             appAssignments = normalizedAssignments,
             quarantineKnownApplications = normalizedKnownApplications,
             pendingQuarantinePackages = normalizedPendingQuarantinePackages,

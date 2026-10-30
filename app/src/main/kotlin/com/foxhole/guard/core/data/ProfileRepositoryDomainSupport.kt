@@ -165,3 +165,9 @@ internal fun ParsedSubscriptionImport.hasUnconsentedInsecureTlsProfiles(
                 ?.hasInsecureTlsConsent() != true
     }
 }
+
+internal suspend fun ProfileRepository.resolveDomainProfile(entity: ProfileEntity): Profile =
+    entity.toResolvedDomainProfile(secret = secretStore.read(entity.secretRef), json = json)
+
+internal suspend fun ProfileRepository.requireProfile(profileId: Long): Profile =
+    resolveDomainProfile(dao.getById(profileId) ?: error("profile not found"))

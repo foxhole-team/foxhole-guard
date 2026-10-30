@@ -2,7 +2,11 @@ package com.foxhole.guard.core.settings
 
 import com.foxhole.core.model.AccentColor
 import com.foxhole.core.model.HomeAdditionalInfoCategory
+import com.foxhole.core.model.InterfaceMode
 import com.foxhole.core.model.UiSettings
+
+internal suspend fun SettingsRepository.updateInterfaceMode(value: InterfaceMode) =
+    update { it.copy(ui = it.ui.copy(interfaceMode = value)) }
 
 suspend fun SettingsRepository.updateAccentColor(value: AccentColor) =
     update { it.copy(ui = it.ui.copy(accentColor = value)) }
@@ -19,12 +23,25 @@ suspend fun SettingsRepository.updateHomeAdditionalInfoCategory(value: HomeAddit
 suspend fun SettingsRepository.updateMonochromeEnabled(value: Boolean) =
     update { it.copy(ui = it.ui.copy(monochromeEnabled = value)) }
 
-internal fun UiSettings.withUpdateNoticeChoices(monochromeEnabled: Boolean, shownVersionCode: Int): UiSettings =
-    copy(monochromeEnabled = monochromeEnabled, alphaNoticeShownVersionCode = shownVersionCode)
-
-suspend fun SettingsRepository.applyUpdateNoticeChoice(monochromeEnabled: Boolean, shownVersionCode: Int) = update {
-    it.copy(ui = it.ui.withUpdateNoticeChoices(monochromeEnabled, shownVersionCode))
+internal fun UiSettings.withUpdateNoticeChoices(
+    monochromeEnabled: Boolean,
+    contentId: String,
+    revision: Long,
+): UiSettings {
+    val acknowledged = normalizedUpdateNoticeAcknowledgement()
+    return acknowledged.copy(
+        monochromeEnabled = monochromeEnabled,
+        updateNoticeAcknowledgedContentId =
+        if (acknowledged.updateNoticeAcknowledgedRevision > revision) acknowledged.updateNoticeAcknowledgedContentId else contentId,
+        updateNoticeAcknowledgedRevision = maxOf(acknowledged.updateNoticeAcknowledgedRevision, revision),
+    )
 }
+
+internal suspend fun SettingsRepository.applyUpdateNoticeChoice(
+    monochromeEnabled: Boolean,
+    contentId: String,
+    revision: Long,
+) = update { it.copy(ui = it.ui.withUpdateNoticeChoices(monochromeEnabled, contentId, revision)) }
 
 suspend fun SettingsRepository.updateSuppressProfileSwipeReconnectConfirm(value: Boolean) =
     update { it.copy(ui = it.ui.copy(suppressProfileSwipeReconnectConfirm = value)) }

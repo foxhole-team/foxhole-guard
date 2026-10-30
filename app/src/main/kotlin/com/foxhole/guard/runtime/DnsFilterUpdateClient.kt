@@ -8,7 +8,10 @@ import com.foxhole.core.runtime.RuntimeDnsRuleSetInstallOutcome
 import com.foxhole.core.runtime.network.PublicRemoteDns
 import com.foxhole.guard.BuildConfig
 import com.foxhole.guard.core.data.withBoundedRemoteFetchTimeouts
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -122,7 +125,18 @@ data class DnsFilterUpdateResult(
     val sourceCommit: String? = null,
     val reason: String? = null,
     val liveActivation: RuntimeDnsRuleSetInstallOutcome? = null,
+    val bundleState: DnsFilterBundleState? = null,
+    val requestedVariant: String? = null,
+    val appliedVariant: String? = null,
 )
+
+enum class DnsFilterBundleState {
+    STAGED,
+    ACTIVE,
+    PROMOTION_PENDING,
+    SUPERSEDED,
+    REJECTED,
+}
 
 enum class DnsFilterUpdateAvailability {
     UP_TO_DATE,
@@ -242,6 +256,82 @@ class DnsFilterUpdateClient(
                 )
             }
         }
+
+    internal suspend fun downloadCategorized(
+        manifestUrl: String,
+        selection: CategorizedDnsSelection,
+        active: CategorizedDnsStage?,
+        onPhase: (RemoteUpdatePhase) -> Unit = {},
+        onProgress: (RemoteDownloadProgress) -> Unit = {},
+        pending: CategorizedDnsStage? = null,
+        reusableArtifact: suspend (CategorizedDnsManifest, ByteArray) -> ByteArray? = { _, _ -> null },
+    ): VerifiedCategorizedDnsRuleSet = withContext(Dispatchers.IO) {
+        require(selection.categories.isNotEmpty()) { "filtering disabled" }
+        val url = manifestUrl.trim().ensurePublicHttpsUrl(resolveHost = true, resolver = resolver)
+        val client = buildGuardedClient()
+        onPhase(RemoteUpdatePhase.CHECKING)
+        val bytes = client.getBytes(url, MAX_MANIFEST_BYTES, "categorized manifest")
+        val signature = client.getBytes(url.signatureUrl(), MAX_SIGNATURE_BYTES, "manifest signature")
+        val manifest = verifyCategorizedManifest(bytes, signature)
+        selection.requireAvailable(manifest)
+        active?.requireAccepts(manifest, bytes)
+        pending?.requireAccepts(manifest, bytes)
+        currentCoroutineContext().ensureActive()
+        val reusable = reusableArtifact(manifest, bytes)
+        val artifact = reusable ?: run {
+            onPhase(RemoteUpdatePhase.DOWNLOADING)
+            client.getBytes(
+                requireNotNull(url.resolve(manifest.artifact.file)),
+                MAX_RULE_SET_BYTES,
+                "categorized rule set",
+                expectedBytes = manifest.artifact.size.toLong(),
+                onProgress = onProgress,
+            )
+        }
+        onPhase(RemoteUpdatePhase.VERIFYING)
+        requireCategorizedArtifactHeader(artifact, manifest)
+        currentCoroutineContext().ensureActive()
+        VerifiedCategorizedDnsRuleSet(manifest, bytes, signature, artifact)
+    }
+
+    internal suspend fun checkCategorized(
+        manifestUrl: String,
+        selection: CategorizedDnsSelection,
+        active: CategorizedDnsStage?,
+        pending: CategorizedDnsStage? = null,
+    ): DnsFilterUpdateCheck = withContext(Dispatchers.IO) {
+        try {
+            val url = manifestUrl.trim().ensurePublicHttpsUrl(resolveHost = true, resolver = resolver)
+            val client = buildGuardedClient()
+            val bytes = client.getBytes(url, MAX_MANIFEST_BYTES, "categorized manifest")
+            val signature = client.getBytes(url.signatureUrl(), MAX_SIGNATURE_BYTES, "manifest signature")
+            val manifest = verifyCategorizedManifest(bytes, signature)
+            selection.requireAvailable(manifest)
+            active?.requireAccepts(manifest, bytes)
+            pending?.requireAccepts(manifest, bytes)
+            DnsFilterUpdateCheck(
+                availability = if (active?.manifestSha256 == CategorizedDnsContract.sha256(bytes)) {
+                    DnsFilterUpdateAvailability.UP_TO_DATE
+                } else {
+                    DnsFilterUpdateAvailability.UPDATE_AVAILABLE
+                },
+                remoteCommit = manifest.sources.joinToString(",") { it.commit },
+            )
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (failure: Exception) {
+            DnsFilterUpdateCheck(DnsFilterUpdateAvailability.UNKNOWN, reason = failure.message)
+        }
+    }
+
+    internal fun verifyCategorizedManifest(bytes: ByteArray, signature: ByteArray): CategorizedDnsManifest {
+        require(bytes.size in 1..MAX_MANIFEST_BYTES.toInt())
+        require(signature.size in 1..MAX_SIGNATURE_BYTES)
+        val key = requireVerifiedManifestSignature(bytes, signature)
+        val now = nowUnixSeconds()
+        require(now >= 0L)
+        return CategorizedDnsContract.parseVerifiedManifest(bytes, now.toULong(), key.sha256Hex())
+    }
 
     private fun failureResult(error: Throwable): DnsFilterUpdateResult =
         DnsFilterUpdateResult(

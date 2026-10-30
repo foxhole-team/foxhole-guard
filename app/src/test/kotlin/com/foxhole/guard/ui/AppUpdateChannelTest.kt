@@ -43,7 +43,7 @@ class AppUpdateChannelTest {
     }
 
     @Test
-    fun `every Binaries recipe matches the dedicated F-Droid release channel`() {
+    fun `every Binaries recipe matches the channel of its published APK`() {
         val metadata =
             listOf(
                 File("metadata/com.foxhole.guard.yml"),
@@ -52,25 +52,36 @@ class AppUpdateChannelTest {
         val builds = fdroidBuildBlocks(metadata)
 
         assertTrue(metadata.contains("Binaries:"))
-        assertTrue(metadata.contains("FoxHole-v%v-arm64-v8a-fdroid.apk"))
         assertTrue(metadata.contains("AutoUpdateMode: Version"))
-        assertEquals(listOf(BuildConfig.VERSION_NAME.removeSuffix("-Debug")), builds.map(FdroidBuildBlock::versionName))
+        assertEquals(listOf("0.1.1"), builds.map(FdroidBuildBlock::versionName))
+        assertTrue(builds.single().body.contains("    versionCode: 122\n"))
+        assertTrue(
+            builds.single().body.contains("    commit: v0.1.1\n"),
+        )
         assertFalse(metadata.contains("\nSummary:"))
         assertFalse(metadata.contains("\nDescription:"))
         assertFalse(metadata.contains("\nMaintainerNotes:"))
+        val binaryUrl = metadata.substringAfter("Binaries:\n").substringBefore("\nBuilds:").trim()
+        val channel = if (binaryUrl.endsWith("-fdroid.apk")) "fdroid" else "github"
+        val suffix = if (channel == "fdroid") "fdroid" else "release"
+        assertEquals(
+            "https://github.com/foxhole-team/foxhole-guard/releases/download/v%v/FoxHole-v%v-arm64-v8a-$suffix.apk",
+            binaryUrl,
+        )
         builds.forEach { build ->
             val commands = build.body.substringAfter("    build:").substringBefore("    ndk:")
             assertFalse(build.body.contains("    gradleprops:"))
-            assertTrue(
-                "${build.versionName}: Binaries build must use the F-Droid channel",
-                commands.contains("-Pfoxhole.updateChannel=fdroid"),
+            assertEquals(
+                "${build.versionName}: Binaries build must use only the published APK channel",
+                listOf(channel),
+                Regex("-Pfoxhole.updateChannel=([a-z]+)").findAll(commands)
+                    .map { it.groupValues[1] }.toList(),
             )
-            assertFalse(
-                "${build.versionName}: Binaries build must not use the GitHub channel",
-                commands.contains("-Pfoxhole.updateChannel=github"),
-            )
+            assertTrue(commands.contains(":app:assembleRelease"))
         }
-        assertTrue(builds.single().body.contains("versionCode: ${BuildConfig.VERSION_CODE}"))
+        val recipeCode = Regex("""(?m)^\s+versionCode: ([0-9]+)$""")
+            .findAll(builds.single().body).single().groupValues[1].toInt()
+        assertTrue("Historical recipe cannot be ahead of this candidate", recipeCode < BuildConfig.VERSION_CODE)
     }
 
     @Test

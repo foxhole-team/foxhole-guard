@@ -47,7 +47,7 @@ sed -nE \
 
 find "$ROOT/core/runtime/src/main/kotlin" "$ROOT/app/src/main/kotlin" \
   -type f -name '*.kt' -exec \
-  grep -hEo 'FoxholeNativeEngine(\.|::)native[A-Za-z0-9_]+' {} + | \
+  sh -c 'grep -hEo "FoxholeNativeEngine(\.|::)native[A-Za-z0-9_]+" "$@"; status=$?; [ "$status" -le 1 ]' sh {} + | \
   sed -E 's/.*(\.|::)(native[A-Za-z0-9_]+)/\2/' | sort -u > "$TMP_ROOT/kotlin"
 
 printf '%s\n' \

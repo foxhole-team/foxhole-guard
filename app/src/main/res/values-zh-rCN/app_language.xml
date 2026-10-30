@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_language_save_failed">无法保存应用语言设置。请重试。</string>
+</resources>

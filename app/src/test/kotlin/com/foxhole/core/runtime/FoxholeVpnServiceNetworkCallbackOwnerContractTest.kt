@@ -17,6 +17,13 @@ class FoxholeVpnServiceNetworkCallbackOwnerContractTest {
             projectFile(
                 "app/src/main/kotlin/com/foxhole/guard/runtime/FoxholeVpnServiceNetworkCallbacksSupport.kt",
             ).readText()
+        val upstreamRegistration =
+            projectFile(
+                "app/src/main/kotlin/com/foxhole/guard/runtime/UpstreamNetworkCallbackRegistration.kt",
+            ).readText()
+        val upstreamRequest =
+            service.substringAfter("internal val trackedNetworkRequest by lazy")
+                .substringBefore("internal val trackedVpnNetworkRequest by lazy")
 
         assertTrue(service.contains("private val networkCallbacks = FoxholeVpnServiceNetworkCallbackOwner(this)"))
         assertTrue(service.contains("networkCallbacks.upstream"))
@@ -29,8 +36,29 @@ class FoxholeVpnServiceNetworkCallbackOwnerContractTest {
         assertTrue(owner.contains("val default: ConnectivityManager.NetworkCallback"))
         assertTrue(owner.contains("service.scope.launch(Dispatchers.Main.immediate)"))
 
-        assertTrue(registration.contains("registerBestMatchingNetworkCallback("))
-        assertTrue(registration.contains("trackedNetworkRequest,\n                        networkCallback,"))
+        assertTrue(upstreamRequest.contains(".addCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN)"))
+        assertFalse(upstreamRequest.contains("TRANSPORT_VPN"))
+        assertTrue(
+            registration.contains(
+                "registerUpstreamNetworkCallback(connectivityManager, trackedNetworkRequest, networkCallback, mainHandler)",
+            ),
+        )
+        assertTrue(
+            upstreamRegistration.contains(
+                "manager.registerBestMatchingNetworkCallback(request, callback, handler)",
+            ),
+        )
+        assertTrue(upstreamRegistration.contains("sdkVersion >= Build.VERSION_CODES.O"))
+        assertTrue(upstreamRegistration.contains("manager.registerNetworkCallback(request, callback, handler)"))
+        assertTrue(upstreamRegistration.contains("else -> manager.registerNetworkCallback(request, callback)"))
+        assertFalse(upstreamRegistration.contains("registerDefaultNetworkCallback"))
+        val fallback = registration.substringAfter("}.recoverCatching {").substringBefore("}")
+        assertTrue(
+            fallback.contains(
+                "connectivityManager.registerNetworkCallback(trackedNetworkRequest, networkCallback)",
+            ),
+        )
+        assertFalse(fallback.contains("registerDefaultNetworkCallback"))
         assertTrue(registration.contains("trackedVpnNetworkRequest, vpnNetworkCallback"))
         assertTrue(service.contains("unregisterNetworkCallback(networkCallback)"))
         assertTrue(service.contains("unregisterNetworkCallback(vpnNetworkCallback)"))

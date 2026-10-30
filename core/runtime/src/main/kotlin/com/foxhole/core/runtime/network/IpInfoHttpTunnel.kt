@@ -14,7 +14,6 @@ import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.io.InputStream
 import java.io.InterruptedIOException
-import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
 internal data class HttpProxyTunnelTarget(
@@ -189,14 +188,19 @@ private fun readChunkedHttpBody(input: InputStream): ByteArray {
     val output = ByteArrayOutputStream()
     while (true) {
         val sizeLine = input.readAsciiLine(HTTP_TUNNEL_MAX_LINE_BYTES)
-        val chunkSize = sizeLine.substringBefore(';').trim().toIntOrNull(16) ?: error("invalid chunk size")
+        val sizeToken = sizeLine.substringBefore(';').trim()
+        val chunkSize =
+            sizeToken
+                .takeIf { token -> token.isNotEmpty() && token.all { it in '0'..'9' || it in 'a'..'f' || it in 'A'..'F' } }
+                ?.toIntOrNull(16)
+                ?: error("invalid chunk size")
         if (chunkSize == 0) {
             while (input.readAsciiLine(HTTP_TUNNEL_MAX_LINE_BYTES).isNotEmpty()) {
                 // Consume trailers.
             }
             return output.toByteArray()
         }
-        require(output.size() + chunkSize <= HTTP_TUNNEL_MAX_BODY_BYTES) { "http response body too large" }
+        require(chunkSize <= HTTP_TUNNEL_MAX_BODY_BYTES - output.size()) { "http response body too large" }
         output.write(input.readExactBytesBounded(chunkSize))
         input.expectCrlf()
     }
@@ -280,7 +284,7 @@ internal suspend fun Call.awaitResponse(): Response =
                         response.close()
                         return
                     }
-                    continuation.resume(response)
+                    continuation.resume(response) { _, responseToClose, _ -> responseToClose.close() }
                 }
             },
         )

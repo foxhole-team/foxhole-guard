@@ -4,7 +4,7 @@ The application combines its own FoxHole Core networking engine, VPN, access to 
 
 FoxHole Guard contains no advertising, usage analytics, or telemetry. Application lists, statistics, logs, routing rules, and local analysis results remain on the device unless the user explicitly exports them.
 
-The project is currently in an early beta stage. Some features are still under development.
+FoxHole Guard uses the Stable release channel. Documented feature and protocol limitations still apply.
 
 Main features:
 
@@ -23,7 +23,9 @@ Main features:
 • background services for web-application notifications and security-event monitoring;
 • backup of profiles and settings.
 
-Supported protocols: VLESS, VMess, Hysteria2, WireGuard, AmneziaWG, Trojan, Shadowsocks, Outline, Naive, TUIC, AnyTLS, SOCKS5, and HTTP CONNECT. Reality and Vision are supported.
+Supported protocols: VLESS, VMess, Hysteria2, WireGuard, AmneziaWG (experimental), Trojan, Shadowsocks, Outline, Naive, TUIC, AnyTLS, SOCKS5, and HTTP CONNECT. Reality and Vision are supported.
+
+Imports: share links, v2rayTun subscriptions, SIP008/Outline JSON and compatible Clash/mihomo YAML. XHTTP supports stream-one over HTTP/2. Unsupported nodes/settings are reported; external YAML providers are not fetched.
 
 DNS filters are built from the open AdGuard DNS filter. Downloaded data sets contain filtering data rather than executable code. Before use, the application verifies the signature, size, compatibility, and SHA-256 digest.
 
@@ -33,7 +35,9 @@ The FoxHole DB repository is used for updatable application data. The applicatio
 
 Android permissions are used only for the stated features. QUERY_ALL_PACKAGES is required for routing, the firewall, quarantine, DNS exclusions, and local auditing. PACKAGE_USAGE_STATS is used only for local statistics and analysis features enabled by the user.
 
-Network requests are made only for features enabled or initiated by the user: VPN, access to the Tor and I2P networks, updating v2raytun-type subscriptions, updating data sets, and web-application data.
+TLS fingerprint-table checks are enabled by default and scheduled daily while enabled. The first check can run soon after launch. These checks contact the FoxHole DB repository on GitHub Pages. You can turn them off in Settings → Updates. Other data-set updates follow their feature settings.
+
+Connection checks contact external public-IP and IP-location services, including Cloudflare, ipapi.co, ipwho.is, ipinfo.io and fallback services. Connectivity probes contact Google and Cloudflare endpoints. These services receive the IP address used for each request. VPN, Tor, I2P, subscription refreshes and web applications also make the network requests needed for their enabled features.
 
 License: GNU General Public License v3.0 or later (GPL-3.0-or-later).
 

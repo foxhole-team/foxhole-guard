@@ -128,7 +128,7 @@ class CliUnifiedStyleTest {
             .orEmpty()
 
         assertTrue(pixelAssets.toString(), pixelAssets.isEmpty())
-        assertEquals(43, outlineAssets.size)
+        assertEquals(44, outlineAssets.size)
     }
 
     @Test

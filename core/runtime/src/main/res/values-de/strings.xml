@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="error_route_excludes_android_version">Routenausnahmen benötigen Android 13 oder neuer. Dieses Profil kann auf diesem Gerät nicht sicher starten</string>
+    <string name="error_route_excludes_too_many">Zu viele Routenausnahmen in diesem Profil (%1$d; Android-Limit %2$d). Routing-Regeln reduzieren und erneut versuchen</string>
+    <string name="error_runtime_missing">Die native FoxCore-Bibliothek fehlt in diesem Build</string>
+    <string name="error_vpn_package_split_unavailable">Einige ausgewählte Apps sind nicht mehr installiert. App-Routingliste aktualisieren und neu verbinden</string>
+</resources>

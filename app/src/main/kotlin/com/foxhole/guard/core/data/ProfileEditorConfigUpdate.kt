@@ -23,48 +23,62 @@ internal suspend fun ProfileRepository.updateProfileEditor(
 ): Profile {
     val trimmedName = profileName?.trim()
     require(trimmedName == null || trimmedName.isNotBlank()) { "profile name is blank" }
-    val updated = secretMutationMutex.withLock {
+    val snapshot = mutationCoordinator.readCommitted {
         val entity = dao.getById(profileId) ?: error("profile not found")
-        val targetName = trimmedName ?: entity.name
-        val originalSecret = secretStore.read(entity.secretRef) ?: error("profile secret is missing")
-        requireProfileEditorRevision(originalSecret, entity.name, expectedRevision)
-        val settings = settingsRepository.current()
-        val effectiveAllowInsecureTls =
-            allowsInsecureTlsForStoredProfileRuntime(
-                allowInsecureTlsGlobally = settings.expert.allowInsecureTls,
-                secret = originalSecret,
-            )
-        val savedSecret = persistValidatedProfileEditorChanges(
-            originalSecret = originalSecret,
-            edits = edits,
-            json = json,
-            sanitizer = { raw ->
-                withContext(Dispatchers.IO) {
-                    parser.sanitizeResolvedConfig(
-                        raw = raw,
-                        allowPrivateOutboundHosts = settings.expert.allowPrivateOutboundHosts,
-                        allowInsecureTls = effectiveAllowInsecureTls,
-                    )
-                }
-            },
-            writeSecret = { secret -> secretStore.write(entity.secretRef, secret) },
-            updateMetadata = {
-                if (targetName != entity.name) dao.updateName(profileId, targetName)
-            },
-            onRollbackFailure = { rollbackError ->
-                diagnosticsLogger.recordFailure(
-                    "profile",
-                    "profile editor secret rollback failed: " +
-                        (rollbackError.message ?: rollbackError.javaClass.simpleName),
-                )
-            },
-        )
-        onSavedRevision(profileEditorRevision(savedSecret, targetName))
-        requireProfile(profileId)
+        val secret = secretStore.read(entity.secretRef) ?: error("profile secret is missing")
+        requireProfileEditorRevision(secret, entity.name, expectedRevision)
+        Triple(entity, secret, settingsRepository.current())
     }
-    if (updated.isActive) persistCachedActiveProfile(updated)
-    diagnosticsLogger.record("profile", "profile editor changes validated and saved")
-    return updated
+    val stagedRevision = profileEditorRevision(snapshot.second, snapshot.first.name)
+    val effectiveAllowInsecureTls = allowsInsecureTlsForStoredProfileRuntime(
+        snapshot.third.expert.allowInsecureTls,
+        snapshot.second,
+    )
+    val sanitizedEdits = withContext(Dispatchers.IO) {
+        edits.map { edit ->
+            edit.copy(
+                editedJson = parser.sanitizeResolvedConfig(
+                    raw = edit.editedJson,
+                    allowPrivateOutboundHosts = snapshot.third.expert.allowPrivateOutboundHosts,
+                    allowInsecureTls = effectiveAllowInsecureTls,
+                )
+            )
+        }
+    }
+    return withProfileMutation { owner ->
+        owner.secrets(secretMutationMutex) {
+            val entity = dao.getById(profileId) ?: error("profile not found")
+            val originalSecret = secretStore.read(entity.secretRef) ?: error("profile secret is missing")
+            requireProfileEditorRevision(originalSecret, entity.name, stagedRevision)
+            if (owner.currentSettings(settingsRepository).importPolicy() != snapshot.third.importPolicy()) {
+                throw PreparedProfileImportChangedException()
+            }
+            val targetName = trimmedName ?: entity.name
+            val savedSecret = persistValidatedProfileEditorChanges(
+                originalSecret = originalSecret,
+                edits = sanitizedEdits,
+                json = json,
+                sanitizer = { it },
+                writeSecret = { value -> owner.recordingSecrets(secretStore).write(entity.secretRef, value) },
+                updateMetadata = { if (targetName != entity.name) dao.updateName(profileId, targetName) },
+                onRollbackFailure = { error ->
+                    owner.afterCommit {
+                        diagnosticsLogger.recordFailure(
+                            "profile",
+                            "profile editor rollback failed error=${error.javaClass.simpleName}"
+                        )
+                    }
+                },
+            )
+            owner.markLocalCommit()
+            val savedRevision = profileEditorRevision(savedSecret, targetName)
+            owner.afterCommit { onSavedRevision(savedRevision) }
+            val updated = requireProfile(profileId)
+            if (updated.isActive) persistCachedActiveProfile(updated, owner)
+            diagnosticsLogger.record("profile", "profile editor changes validated and saved")
+            updated
+        }
+    }
 }
 
 internal suspend fun persistValidatedProfileEditorChanges(
@@ -117,8 +131,10 @@ internal fun requireProfileEditorRevision(secret: StoredProfileSecret, name: Str
     }
 }
 
-internal suspend fun ProfileRepository.editorRevision(profileId: Long): String = secretMutationMutex.withLock {
-    val entity = dao.getById(profileId) ?: error("profile not found")
-    val secret = secretStore.read(entity.secretRef) ?: error("profile secret is missing")
-    profileEditorRevision(secret, entity.name)
+internal suspend fun ProfileRepository.editorRevision(profileId: Long): String = mutationCoordinator.readCommitted {
+    secretMutationMutex.withLock {
+        val entity = dao.getById(profileId) ?: error("profile not found")
+        val secret = secretStore.read(entity.secretRef) ?: error("profile secret is missing")
+        profileEditorRevision(secret, entity.name)
+    }
 }

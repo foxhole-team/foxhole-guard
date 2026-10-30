@@ -5,7 +5,7 @@ import com.foxhole.core.model.LanProxyUnavailableReason
 import com.foxhole.core.model.LocalProxyStatusSnapshot
 import com.foxhole.core.model.VpnSession
 
-interface FoxholeRuntime {
+interface FoxholeRuntime : RuntimeNetworkChangeSource, RuntimeDnsRuleSetInstallSource {
     suspend fun start(session: VpnSession, host: RuntimeServiceHost): Result<Unit>
 
     suspend fun reload(session: VpnSession, host: RuntimeServiceHost): Result<Unit>
@@ -33,6 +33,8 @@ interface FoxholeRuntime {
     fun drainRuntimeTrafficEventsJson(max: Int): String? = null
 
     fun drainRuntimeAuditEventsJson(max: Int): String? = null
+
+    fun drainRuntimeAuditEventsJson(max: Int, expectedNativeGeneration: Long): String? = null
 
     suspend fun installDnsRuleSet(
         name: String,
@@ -73,6 +75,19 @@ interface FoxholeRuntime {
     }
 }
 
+interface RuntimeNetworkChangeSource {
+    fun captureNetworkChangeLease(
+        networkHandle: Long?,
+        isServiceOwnerCurrent: () -> Boolean = { true },
+    ): RuntimeNetworkChangeLease? = null
+}
+
+fun interface RuntimeNetworkChangeLease {
+    suspend fun submit(): RuntimeNetworkChangeOutcome
+
+    fun abandon() = Unit
+}
+
 sealed interface RuntimeDnsRuleSetInstallOutcome {
     data class Installed(val revision: Long) : RuntimeDnsRuleSetInstallOutcome
 
@@ -81,4 +96,23 @@ sealed interface RuntimeDnsRuleSetInstallOutcome {
     data object Superseded : RuntimeDnsRuleSetInstallOutcome
 
     data object Rejected : RuntimeDnsRuleSetInstallOutcome
+}
+
+interface RuntimeDnsRuleSetInstallLease {
+    fun isCurrent(): Boolean
+
+    suspend fun install(
+        name: String,
+        manifest: ByteArray,
+        signature: ByteArray,
+        artifact: ByteArray,
+    ): RuntimeDnsRuleSetInstallOutcome
+}
+
+enum class RuntimeNetworkChangeOutcome { SUBMITTED, UNCHANGED, SUPERSEDED, UNAVAILABLE, FAILED }
+
+interface RuntimeDnsRuleSetInstallSource {
+    suspend fun captureDnsRuleSetInstallLease(
+        isOwnerCurrent: () -> Boolean = { true },
+    ): RuntimeDnsRuleSetInstallLease? = null
 }

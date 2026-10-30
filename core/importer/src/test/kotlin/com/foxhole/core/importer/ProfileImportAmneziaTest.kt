@@ -1,15 +1,98 @@
 package com.foxhole.core.importer
 
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 internal class ProfileImportAmneziaTest : ProfileImportParserTestSupport() {
+    @Test
+    fun `random trailers from conf and uri stay a typed boolean`() {
+        val conf = FULL_OBFUSCATION_CONF.replace("[Peer]", "RandomTrailers = true\n[Peer]")
+        assertEquals("true", checkNotNull(amneziaBlock(conf)).getValue("random_trailers").jsonPrimitive.content)
+        val uri = "awg://amnezia-private-key%3D@awg.example.com:51820" +
+            "?publickey=amnezia-public-key%3D&address=10.81.0.2%2F32&allowed_ips=0.0.0.0%2F0&randomtrailers=on"
+        val fromUri = checkNotNull(amneziaBlock(uri)).getValue("random_trailers").jsonPrimitive
+        assertEquals("true", fromUri.content)
+        assertTrue(!fromUri.isString)
+    }
+
+    @Test
+    fun `invalid random trailers and peer content padding cannot be silently dropped`() {
+        expectIllegalArgument {
+            amneziaBlock(
+                FULL_OBFUSCATION_CONF.replace("[Peer]", "RandomTrailers = perhaps\n[Peer]")
+            )
+        }
+        expectIllegalArgument { amneziaBlock(FULL_OBFUSCATION_CONF + "\nContentPaddingAddition = 32") }
+    }
+
+    @Test
+    fun `content padding from conf and URI preserves the uint32 range without truncation`() {
+        listOf(
+            "0" to JsonPrimitive(0L),
+            "0-0" to JsonPrimitive(0L),
+            "32" to JsonPrimitive(32L),
+            "65536" to JsonPrimitive(65_536L),
+            "4294967295" to JsonPrimitive(4_294_967_295L),
+            "0-4294967295" to JsonPrimitive("0-4294967295"),
+            "65536-65536" to JsonPrimitive(65_536L),
+        ).forEach { (raw, expected) ->
+            val fromConf = checkNotNull(amneziaBlock(contentPaddingConf(raw)))
+            val fromUri = checkNotNull(amneziaBlock(contentPaddingUri(raw)))
+            assertEquals(raw, expected, fromConf["content_padding_addition"])
+            assertEquals(raw, expected, fromUri["content_padding_addition"])
+        }
+    }
+
+    @Test
+    fun `CPA alone creates a complete amnezia block and retains WireGuard credentials`() {
+        val endpoint = wireGuardEndpoint(parser.parseUserInput(contentPaddingConf("32")).normalizedConfigJson)
+        val amnezia = endpoint.getValue("amnezia").jsonObject
+        assertEquals(JsonPrimitive(32L), amnezia["content_padding_addition"])
+        assertEquals(JsonPrimitive(0), amnezia["junk_packet_count"])
+        assertEquals(JsonPrimitive(1L), amnezia["header_initiation"])
+        assertEquals("amnezia-private-key=", endpoint.getValue("private_key").jsonPrimitive.content)
+        val peer = endpoint.getValue("peers").jsonArray.single().jsonObject
+        assertEquals("amnezia-public-key=", peer.getValue("public_key").jsonPrimitive.content)
+        assertEquals("amnezia-psk=", peer.getValue("pre_shared_key").jsonPrimitive.content)
+    }
+
+    @Test
+    fun `content padding malformed and oversized values are refused in conf and URI`() {
+        listOf(
+            "", " ", "-1", "+1", "1.0", "1e2", "4294967296", "18446744073709551615",
+            "2-1", "0-4294967296", "1-", "1-2-3",
+        ).forEach { raw ->
+            expectIllegalArgument { amneziaBlock(contentPaddingConf(raw)) }
+            expectIllegalArgument { amneziaBlock(contentPaddingUri(raw)) }
+        }
+    }
+
+    @Test
+    fun `content padding retains old fields and rejects malformed header protection`() {
+        val conf = FULL_OBFUSCATION_CONF.replace("[Peer]", "RandomTrailers = true\n[Peer]")
+        val old = checkNotNull(amneziaBlock(conf))
+        assertNull(old["content_padding_addition"])
+        val withCpa = checkNotNull(amneziaBlock(conf.replace("[Peer]", "ContentPaddingAddition = 32-64\n[Peer]")))
+        assertEquals(old, JsonObject(withCpa.filterKeys { it != "content_padding_addition" }))
+        expectIllegalArgument {
+            amneziaBlock(
+                contentPaddingConf("32").replace(
+                    "[Peer]",
+                    "HeaderProtectionKey = not-a-key\n[Peer]",
+                )
+            )
+        }
+        expectIllegalArgument { amneziaBlock(contentPaddingUri("32") + "&headerprotectionkey=00") }
+    }
+
     @Test
     fun `a full obfuscation block reaches the endpoint from a conf file`() {
         val amnezia = checkNotNull(amneziaBlock(FULL_OBFUSCATION_CONF))
@@ -204,7 +287,7 @@ internal class ProfileImportAmneziaTest : ProfileImportParserTestSupport() {
     }
 
     @Test
-    fun `3_0 header encryption is refused rather than dropped`() {
+    fun `peer header encryption declaration is refused rather than dropped`() {
         expectIllegalArgument {
             amneziaBlock(FULL_OBFUSCATION_CONF + "\nHeaderProtectionKey = 00000000000000000000000000000000")
         }
@@ -259,8 +342,135 @@ internal class ProfileImportAmneziaTest : ProfileImportParserTestSupport() {
         )
     }
 
+    @Test
+    fun `minimal HPK configs default absent junk and headers`() {
+        val key = "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA="
+        val conf = contentPaddingConf("13").replace(
+            "[Peer]",
+            "S1 = 12\nS2 = 12\nS3 = 12\nS4 = 12\nHeaderProtectionKey = $key\n[Peer]",
+        )
+        val block = checkNotNull(amneziaBlock(conf))
+        assertEquals(JsonPrimitive(key), block["header_protection_key"])
+        assertEquals(JsonPrimitive(13L), block["content_padding_addition"])
+        assertEquals(JsonPrimitive(0), block["junk_packet_count"])
+        assertEquals(JsonPrimitive(1L), block["header_initiation"])
+        listOf("S1", "S2", "S3", "S4").forEach { field ->
+            expectIllegalArgument { amneziaBlock(conf.replace("$field = 12\n", "")) }
+        }
+        expectIllegalArgument { amneziaBlock(conf.replace("[Peer]", "H1 = 2\n[Peer]")) }
+    }
+
+    @Test
+    fun `header keys from URI preserve escaped plus slash equals and refuse empty input`() {
+        val key = java.util.Base64.getEncoder().encodeToString(ByteArray(32) { 0xfb.toByte() })
+        assertTrue(key.contains('+') && key.contains('/') && key.endsWith('='))
+        val base = contentPaddingUri("13") + "&s1=12&s2=12&s3=12&s4=12"
+        val encoded = java.net.URLEncoder.encode(key, "UTF-8")
+        assertEquals(
+            JsonPrimitive(key),
+            checkNotNull(amneziaBlock("$base&headerprotectionkey=$encoded"))["header_protection_key"],
+        )
+        expectIllegalArgument { amneziaBlock("$base&headerprotectionkey=") }
+        expectIllegalArgument { amneziaBlock("$base&headerprotectionkey=not-a-key") }
+    }
+
+    @Test
+    fun `zero header keys use legacy defaults and keys remain interface only`() {
+        val zero = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+        val conf = contentPaddingConf("0").replace("[Peer]", "HeaderProtectionKey = $zero\n[Peer]")
+        val block = checkNotNull(amneziaBlock(conf))
+        assertEquals(JsonPrimitive(zero), block["header_protection_key"])
+        assertEquals(JsonPrimitive(0), block["transport_junk_size"])
+        expectIllegalArgument { amneziaBlock(contentPaddingConf("0") + "\nHeaderProtectionKey = $zero") }
+    }
+
+    @Test
+    fun `blank Interface HPK in a plain conf cannot disappear`() {
+        expectIllegalArgument { amneziaBlock(blankHeaderProtectionConf("", peer = false)) }
+    }
+
+    @Test
+    fun `whitespace Interface HPK in a plain conf cannot disappear`() {
+        expectIllegalArgument { amneziaBlock(blankHeaderProtectionConf(" \t ", peer = false)) }
+    }
+
+    @Test
+    fun `blank Peer HPK in a plain conf cannot disappear`() {
+        expectIllegalArgument { amneziaBlock(blankHeaderProtectionConf("", peer = true)) }
+    }
+
+    @Test
+    fun `whitespace Peer HPK in a plain conf cannot disappear`() {
+        expectIllegalArgument { amneziaBlock(blankHeaderProtectionConf(" \t ", peer = true)) }
+    }
+
+    @Test
+    fun `typed interface preparation preserves the first validation failure`() {
+        val peerFailure = assertThrows(IllegalArgumentException::class.java) {
+            amneziaBlockFromInterface(
+                mapOf("HeaderProtectionKey" to listOf("bad-key")),
+                mapOf("HeaderProtectionKey" to listOf("")),
+                1420,
+            )
+        }
+        assertEquals("AmneziaWG HeaderProtectionKey must be declared in Interface", peerFailure.message)
+        val malformed = assertThrows(IllegalArgumentException::class.java) {
+            amneziaBlockFromInterface(
+                mapOf("HeaderProtectionKey" to listOf("bad-key"), "Jc" to listOf("1")),
+                emptyMap(),
+                1420,
+            )
+        }
+        assertEquals("AmneziaWG HeaderProtectionKey must be 32 canonical base64-encoded bytes", malformed.message)
+        val prefix = assertThrows(IllegalArgumentException::class.java) {
+            amneziaBlockFromInterface(
+                mapOf(
+                    "HeaderProtectionKey" to listOf("AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA="),
+                    "S1" to listOf("11"),
+                    "S2" to listOf("12"),
+                    "S3" to listOf("12"),
+                    "S4" to listOf("12"),
+                    "ContentPaddingAddition" to listOf("not-a-range"),
+                ),
+                emptyMap(),
+                1420,
+            )
+        }
+        assertEquals("AmneziaWG nonzero HeaderProtectionKey requires S1..S4 of at least 12 bytes", prefix.message)
+    }
+
+    private fun blankHeaderProtectionConf(raw: String, peer: Boolean): String {
+        val plain = contentPaddingConf("0").replace("ContentPaddingAddition = 0\n", "")
+        assertTrue(!plain.contains("ContentPaddingAddition"))
+        assertNull(amneziaBlock(plain))
+        return if (peer) {
+            plain + "\nHeaderProtectionKey = $raw"
+        } else {
+            plain.replace("[Peer]", "HeaderProtectionKey = $raw\n[Peer]")
+        }
+    }
+
     private fun amneziaBlock(raw: String): JsonObject? =
         wireGuardEndpoint(parser.parseUserInput(raw).normalizedConfigJson)["amnezia"]?.jsonObject
+
+    private fun contentPaddingConf(raw: String): String =
+        """
+        [Interface]
+        PrivateKey = amnezia-private-key=
+        Address = 10.81.0.2/32
+        ContentPaddingAddition = $raw
+
+        [Peer]
+        PublicKey = amnezia-public-key=
+        PresharedKey = amnezia-psk=
+        AllowedIPs = 0.0.0.0/0
+        Endpoint = awg.example.com:51820
+        """.trimIndent()
+
+    private fun contentPaddingUri(raw: String): String =
+        "awg://amnezia-private-key%3D@awg.example.com:51820" +
+            "?publickey=amnezia-public-key%3D&address=10.81.0.2%2F32&allowed_ips=0.0.0.0%2F0" +
+            "&contentpaddingaddition=${java.net.URLEncoder.encode(raw, "UTF-8")}"
 
     private fun wireGuardEndpoint(normalizedConfigJson: String?): JsonObject =
         json

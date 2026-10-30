@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="cli_sentinel_network_security">Sécurité du réseau</string>
+    <string name="cli_sentinel_statistics">Statistiques</string>
+</resources>

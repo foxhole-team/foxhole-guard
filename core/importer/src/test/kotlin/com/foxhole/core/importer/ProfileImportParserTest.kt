@@ -394,7 +394,7 @@ internal class ProfileImportParserTest : ProfileImportParserTestSupport() {
         assertEquals("edge.example.net", tls["server_name"]!!.jsonPrimitive.content)
         assertEquals(
             listOf("lSALTN+AXtFYwzMwQjfVllH0PhdMi9XG5i5gCnUywUk="),
-            tls["certificate_public_key_sha256"]!!.jsonArray.map { it.jsonPrimitive.content },
+            tls["certificate_sha256"]!!.jsonArray.map { it.jsonPrimitive.content },
         )
         assertEquals(false, tls.containsKey("insecure"))
         assertEquals("salamander", obfs["type"]!!.jsonPrimitive.content)
@@ -488,12 +488,24 @@ internal class ProfileImportParserTest : ProfileImportParserTestSupport() {
                 """.trimIndent(),
                 "remote",
             ).parsed
-        val root = json.parseToJsonElement(parsed.normalizedConfigJson!!).jsonObject
-        val outbounds = root["outbounds"]!!.jsonArray
 
         assertEquals(ProfileSourceType.SUBSCRIPTION_URL, parsed.sourceType)
         assertEquals(2, parsed.nodesCount)
-        assertEquals(5, outbounds.size)
+        assertEquals(listOf(ProtocolHint.TROJAN, ProtocolHint.VLESS), parsed.protocolOptions.map { it.protocolHint })
+        assertEquals(parsed.protocolOptions.first().id, parsed.selectedProtocolOptionId)
+        assertEquals(
+            json.parseToJsonElement(parsed.protocolOptions.first().normalizedConfigJson),
+            json.parseToJsonElement(parsed.normalizedConfigJson!!),
+        )
+        val protocolTypes = parsed.protocolOptions.map { option ->
+            val members = json.parseToJsonElement(
+                option.normalizedConfigJson
+            ).jsonObject.getValue("outbounds").jsonArray
+            members.map {
+                it.jsonObject.getValue("type").jsonPrimitive.content
+            }.filterNot { it in setOf("selector", "direct", "block") }
+        }
+        assertEquals(listOf(listOf("trojan"), listOf("vless")), protocolTypes)
     }
 
     @Test

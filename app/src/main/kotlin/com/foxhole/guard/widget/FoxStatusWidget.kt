@@ -14,15 +14,12 @@ import androidx.glance.Image
 import androidx.glance.ImageProvider
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
-import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
 import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.action.actionSendBroadcast
 import androidx.glance.appwidget.cornerRadius
 import androidx.glance.appwidget.provideContent
-import androidx.glance.appwidget.state.getAppWidgetState
 import androidx.glance.appwidget.updateAll
-import androidx.glance.currentState
 import androidx.glance.layout.Alignment
 import androidx.glance.layout.Box
 import androidx.glance.layout.fillMaxSize
@@ -30,11 +27,8 @@ import androidx.glance.layout.padding
 import androidx.glance.state.PreferencesGlanceStateDefinition
 import com.foxhole.guard.FoxholeApplication
 import com.foxhole.guard.R
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import java.util.concurrent.atomic.AtomicLong
 
 class FoxStatusWidget : GlanceAppWidget() {
     override val stateDefinition = PreferencesGlanceStateDefinition
@@ -51,14 +45,10 @@ class FoxStatusWidget : GlanceAppWidget() {
         val graph = (context.applicationContext as FoxholeApplication).appGraph
         val connection = graph.connectionController
         provideContent {
-            val preferences = currentState<Preferences>()
-            val settings by graph.settingsRepository.settings.collectAsState()
-            val animationEnabled =
-                preferences[FOX_STATUS_ANIMATION_KEY] ?: settings.widgets.foxAnimationEnabled
             val snapshot by connection.snapshot.collectAsState()
             val connected = widgetHasPrimaryConnection(snapshot)
             val animatedFrame by FoxStatusWidgetAnimation.frame.collectAsState()
-            val frame = foxStatusFrame(connected, animationEnabled, animatedFrame)
+            val frame = foxStatusFrame(connected, false, animatedFrame)
             Box(
                 modifier =
                 GlanceModifier
@@ -88,65 +78,21 @@ class FoxStatusWidgetReceiver : GlanceAppWidgetReceiver() {
 }
 
 internal object FoxStatusWidgetAnimation {
-    private val frameMutable = MutableStateFlow(FOX_STATUS_DISCONNECTED_FRAME)
-    private val generation = AtomicLong(0L)
+    private val frameMutable = MutableStateFlow(R.drawable.ic_launcher_openwrt)
     val frame = frameMutable.asStateFlow()
 
     suspend fun renderConnectionState(context: Context, connected: Boolean) {
-        val ownedGeneration = generation.incrementAndGet()
-        if (!connected) {
-            frameMutable.value = FOX_STATUS_DISCONNECTED_FRAME
-            FoxStatusWidget().updateAll(context)
-            return
-        }
-        while (generation.get() == ownedGeneration) {
-            val widgetIds = animatedWidgetIds(context)
-            if (widgetIds.isEmpty()) {
-                frameMutable.value = FOX_STATUS_CONNECTED_FRAME
-                FoxStatusWidget().updateAll(context)
-                return
-            }
-            FOX_STATUS_ANIMATION_FRAMES.forEach { frame ->
-                if (generation.get() != ownedGeneration) return
-                frameMutable.value = frame
-
-                widgetIds.forEach { id -> FoxStatusWidget().update(context, id) }
-                delay(FOX_STATUS_FRAME_DURATION_MS)
-            }
-        }
-    }
-
-    private suspend fun animatedWidgetIds(context: Context): List<GlanceId> =
-        GlanceAppWidgetManager(context)
-            .getGlanceIds(FoxStatusWidget::class.java)
-            .filter { id -> animationEnabled(context, id) }
-
-    private suspend fun animationEnabled(context: Context, id: GlanceId): Boolean {
-        val settingsDefault =
-            (context.applicationContext as FoxholeApplication)
-                .appGraph.settingsRepository.settings.value.widgets.foxAnimationEnabled
-        return try {
-            getAppWidgetState(context, PreferencesGlanceStateDefinition, id)[FOX_STATUS_ANIMATION_KEY]
-                ?: settingsDefault
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (_: Exception) {
-            settingsDefault
-        }
+        frameMutable.value = foxStatusFrame(connected, false, 0)
+        FoxStatusWidget().updateAll(context)
     }
 }
 
+@Suppress("UNUSED_PARAMETER")
 internal fun foxStatusFrame(
     connected: Boolean,
     animationEnabled: Boolean,
     animatedFrame: Int,
-): Int =
-    when {
-        !connected -> FOX_STATUS_DISCONNECTED_FRAME
-        !animationEnabled -> FOX_STATUS_CONNECTED_FRAME
-        animatedFrame in FOX_STATUS_ANIMATION_FRAMES -> animatedFrame
-        else -> FOX_STATUS_CONNECTED_FRAME
-    }
+): Int = R.drawable.ic_launcher_openwrt
 
 internal val FOX_STATUS_ANIMATION_KEY: Preferences.Key<Boolean> =
     booleanPreferencesKey("fox_status_animation")
@@ -162,6 +108,3 @@ internal val FOX_STATUS_ANIMATION_FRAMES =
     )
 private val FOX_STATUS_WIDGET_HEIGHT = 110.dp
 internal const val FOX_STATUS_FRAME_DURATION_MS = 320L
-
-private val FOX_STATUS_CONNECTED_FRAME = R.drawable.fhg_status_frame_1
-private val FOX_STATUS_DISCONNECTED_FRAME = R.drawable.fhg_status_frame_4

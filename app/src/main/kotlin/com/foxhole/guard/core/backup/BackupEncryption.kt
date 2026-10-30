@@ -2,6 +2,7 @@ package com.foxhole.guard.core.backup
 
 import com.foxhole.guard.core.security.GuardCrypto
 import com.foxhole.guard.core.security.GuardKdfParams
+import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.contentOrNull
@@ -103,7 +104,7 @@ internal fun decryptBackupDocument(
     if (envelope.formatVersion != ENCRYPTED_BACKUP_FORMAT_VERSION) {
         return BackupParseResult.Failure.UNSUPPORTED_FORMAT_VERSION
     }
-    if (envelope.kdf != BACKUP_KDF_NAME || envelope.kdfParams != backupKdfParams()) {
+    if (!isSupportedBackupKdf(envelope.kdf, envelope.kdfParams)) {
         return BackupParseResult.Failure.UNSUPPORTED_ENCRYPTION
     }
     val salt = envelope.salt.decode64OrNull()?.takeIf { it.size == GuardCrypto.SALT_BYTES }
@@ -123,6 +124,8 @@ internal fun decryptBackupDocument(
         cipher.updateAAD(backupAad())
         plainBytes = cipher.doFinal(ciphertext)
         decodeBackupDocument(plainBytes.toString(StandardCharsets.UTF_8))
+    } catch (cancelled: CancellationException) {
+        throw cancelled
     } catch (_: GeneralSecurityException) {
         BackupParseResult.Failure.WRONG_PASSWORD_OR_CORRUPT
     } catch (_: IllegalStateException) {
@@ -136,6 +139,9 @@ internal fun decryptBackupDocument(
         ciphertext.fill(0)
     }
 }
+
+internal fun isSupportedBackupKdf(kdf: String, params: GuardKdfParams): Boolean =
+    kdf == BACKUP_KDF_NAME && params == backupKdfParams()
 
 private fun backupKdfParams(): GuardKdfParams =
     GuardKdfParams(

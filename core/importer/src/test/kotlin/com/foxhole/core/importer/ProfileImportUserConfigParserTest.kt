@@ -325,7 +325,7 @@ internal class ProfileImportUserConfigParserTest : ProfileImportParserTestSuppor
         assertEquals("30s", outbound["hop_interval"]!!.jsonPrimitive.content)
         assertEquals(
             listOf("lSALTN+AXtFYwzMwQjfVllH0PhdMi9XG5i5gCnUywUk="),
-            tls["certificate_public_key_sha256"]!!.jsonArray.map { it.jsonPrimitive.content },
+            tls["certificate_sha256"]!!.jsonArray.map { it.jsonPrimitive.content },
         )
     }
 

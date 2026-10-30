@@ -38,6 +38,7 @@ import com.foxhole.core.model.AnomalySensitivity
 import com.foxhole.core.model.AnomalyType
 import com.foxhole.core.model.AppTrafficWindow
 import com.foxhole.core.model.InstalledAppOption
+import com.foxhole.core.model.InterfaceMode
 import com.foxhole.core.model.NetworkActivityEvent
 import com.foxhole.guard.R
 import com.foxhole.guard.core.sentinel.anomaly.userFacingMessage
@@ -79,17 +80,6 @@ internal fun CliAnomalySubScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val settings = state.settings
     LaunchedEffect(Unit) { viewModel.loadInstalledApps() }
-    val observedPackages = remember(
-        state.appTrafficWindows,
-        state.networkActivityEvents,
-        state.anomalyEvents,
-    ) {
-        observedSentinelPackages(
-            appTrafficWindows = state.appTrafficWindows,
-            networkActivityEvents = state.networkActivityEvents,
-            anomalyEvents = state.anomalyEvents,
-        )
-    }
 
     Column(
         modifier = modifier
@@ -117,82 +107,84 @@ internal fun CliAnomalySubScreen(
                     checked = settings.statistics.enabled && settings.statistics.appChangesEnabled,
                     onToggle = viewModel::onInstalledAppMonitoringChanged,
                 )
-                CliRowDivider()
-                SentinelObservedAppsTable(
-                    packageNames = observedPackages,
-                    installedApps = state.installedApps,
-                )
+                CliElbowLine(text = stringResource(R.string.cli_sentinel_module_history_note))
             }
             Spacer(modifier = Modifier.height(CliSpacing.sm))
-            SentinelDetectionsTable(
-                events = state.anomalyEvents.sortedByDescending(AnomalyEvent::createdAtMs),
-                installedApps = state.installedApps,
-            )
-            Spacer(modifier = Modifier.height(CliSpacing.sm))
-            CliPanel(
-                icon = R.drawable.lin_shield,
-                title = stringResource(R.string.cli_anomaly_title),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                CliToggleRow(
-                    label = stringResource(R.string.cli_anomaly_notify),
-                    icon = R.drawable.lin_info,
-                    checked = settings.anomaly.notifyUnusualTraffic,
-                    onToggle = viewModel::onNotifyUnusualTrafficChanged,
-                )
-                CliDropdownRow(
-                    label = stringResource(R.string.cli_anomaly_sensitivity),
-                    icon = R.drawable.lin_up,
-                    value = settings.anomaly.sensitivity.name.lowercase(),
-                    options = AnomalySensitivity.entries.map { sensitivity ->
-                        CliDropdownOption(id = sensitivity.name, label = sensitivity.name.lowercase())
-                    },
-                    selectedId = settings.anomaly.sensitivity.name,
-                    onSelect = { id ->
-                        viewModel.onAnomalySensitivitySelected(AnomalySensitivity.valueOf(id))
-                    },
-                )
-                CliToggleRow(
-                    label = stringResource(R.string.cli_anomaly_background),
-                    icon = R.drawable.lin_apps,
-                    checked = settings.anomaly.analyzeBackgroundTraffic,
-                    onToggle = viewModel::onAnalyzeBackgroundTrafficChanged,
-                )
-                CliToggleRow(
-                    label = stringResource(R.string.cli_anomaly_countries),
-                    icon = R.drawable.lin_map,
-                    checked = settings.anomaly.analyzeDestinationCountries,
-                    onToggle = viewModel::onAnalyzeDestinationCountriesChanged,
-                )
-                CliDropdownRow(
-                    label = stringResource(R.string.cli_anomaly_retention),
-                    icon = R.drawable.lin_clock,
-                    value = retentionLabel(settings.anomaly.historyRetention),
-                    options = AnomalyHistoryRetention.entries.map { retention ->
-                        CliDropdownOption(id = retention.name, label = retentionLabel(retention))
-                    },
-                    selectedId = settings.anomaly.historyRetention.name,
-                    onSelect = { id ->
-                        viewModel.onAnomalyHistoryRetentionSelected(AnomalyHistoryRetention.valueOf(id))
-                    },
-                )
+            if (settings.ui.interfaceMode == InterfaceMode.EXPERT) {
+                CliPanel(
+                    icon = R.drawable.lin_shield,
+                    title = stringResource(R.string.cli_sentinel_network_security),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    CliToggleRow(
+                        label = stringResource(R.string.cli_anomaly_notify),
+                        icon = R.drawable.lin_info,
+                        checked = settings.anomaly.notifyUnusualTraffic,
+                        onToggle = viewModel::onNotifyUnusualTrafficChanged,
+                    )
+                    CliDropdownRow(
+                        label = stringResource(R.string.cli_anomaly_sensitivity),
+                        icon = R.drawable.lin_up,
+                        value = settings.anomaly.sensitivity.name.lowercase(),
+                        options = AnomalySensitivity.entries.map { sensitivity ->
+                            CliDropdownOption(id = sensitivity.name, label = sensitivity.name.lowercase())
+                        },
+                        selectedId = settings.anomaly.sensitivity.name,
+                        onSelect = { id ->
+                            viewModel.onAnomalySensitivitySelected(AnomalySensitivity.valueOf(id))
+                        },
+                    )
+                    CliToggleRow(
+                        label = stringResource(R.string.cli_anomaly_background),
+                        icon = R.drawable.lin_apps,
+                        checked = settings.anomaly.analyzeBackgroundTraffic,
+                        onToggle = viewModel::onAnalyzeBackgroundTrafficChanged,
+                    )
+                    CliToggleRow(
+                        label = stringResource(R.string.cli_anomaly_countries),
+                        icon = R.drawable.lin_map,
+                        checked = settings.anomaly.analyzeDestinationCountries,
+                        onToggle = viewModel::onAnalyzeDestinationCountriesChanged,
+                    )
+                }
+                Spacer(modifier = Modifier.height(CliSpacing.sm))
+                CliPanel(
+                    icon = R.drawable.lin_stats,
+                    title = stringResource(R.string.cli_sentinel_statistics),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    CliDropdownRow(
+                        label = stringResource(R.string.cli_anomaly_retention),
+                        icon = R.drawable.lin_clock,
+                        value = retentionLabel(settings.anomaly.historyRetention),
+                        options = AnomalyHistoryRetention.entries.map { retention ->
+                            CliDropdownOption(id = retention.name, label = retentionLabel(retention))
+                        },
+                        selectedId = settings.anomaly.historyRetention.name,
+                        onSelect = { id ->
+                            viewModel.onAnomalyHistoryRetentionSelected(AnomalyHistoryRetention.valueOf(id))
+                        },
+                    )
+                }
+                Spacer(modifier = Modifier.height(CliSpacing.sm))
             }
+            CliSentinelScanSettings(viewModel)
             Spacer(modifier = Modifier.height(CliSpacing.sm))
         }
     }
 }
 
 @Composable
-private fun SentinelObservedAppsTable(
+internal fun SentinelObservedAppsTable(
     packageNames: List<String>,
     installedApps: List<InstalledAppOption>,
 ) {
     val colors = LocalCliColors.current
     val installed = remember(installedApps) { installedApps.associateBy(InstalledAppOption::packageName) }
     val userInstalled = remember(packageNames, installed) {
-        packageNames.filter { name -> installed[name]?.isSystemApp == false }
+        packageNames.filter { name -> installed[name]?.isSystemApp != true }
     }
-    val systemCount = packageNames.size - userInstalled.size
+    val systemCount = packageNames.count { installed[it]?.isSystemApp == true }
     var detail by remember { mutableStateOf<InstalledAppOption?>(null) }
     detail?.let { app ->
         SentinelAppDetailSheet(app = app, onDismiss = { detail = null })
@@ -250,7 +242,7 @@ private fun SentinelObservedAppsHeader() {
 }
 
 @Composable
-private fun SentinelObservedAppRow(
+internal fun SentinelObservedAppRow(
     packageName: String,
     app: InstalledAppOption?,
     onSelect: () -> Unit,
@@ -299,7 +291,7 @@ private fun SentinelObservedAppRow(
 }
 
 @Composable
-private fun SentinelAppDetailSheet(
+internal fun SentinelAppDetailSheet(
     app: InstalledAppOption,
     onDismiss: () -> Unit,
 ) {
@@ -335,6 +327,14 @@ private fun SentinelAppDetailSheet(
             icon = R.drawable.lin_clock,
         )
         CliRowDivider()
+        if (app.lastUpdateTime != null && app.lastUpdateTime != app.firstInstallTime) {
+            CliKeyValue(
+                key = stringResource(R.string.cli_sentinel_apps_updated),
+                value = sentinelLongDate(app.lastUpdateTime),
+                icon = R.drawable.lin_clock,
+            )
+            CliRowDivider()
+        }
         CliKeyValue(
             key = stringResource(R.string.cli_sentinel_apps_source),
             value = app.installerPackageName
@@ -355,7 +355,7 @@ private fun sentinelLongDate(timestamp: Long?): String =
         ?: "\u2014"
 
 @Composable
-private fun SentinelDetectionsTable(
+internal fun SentinelDetectionsTable(
     events: List<AnomalyEvent>,
     installedApps: List<InstalledAppOption>,
 ) {
@@ -529,6 +529,7 @@ private fun AnomalyType.sentinelLabelRes(): Int = when (this) {
     AnomalyType.TOR_OR_I2P_ROUTE_MISMATCH -> R.string.cli_sentinel_type_legacy_route
     AnomalyType.DORMANT_APP_NETWORK_ACTIVITY -> R.string.cli_sentinel_type_dormant
     AnomalyType.KNOWN_THREAT_DESTINATION -> R.string.cli_sentinel_type_threat
+    AnomalyType.APP_STATIC_REFERENCE -> R.string.sentinel_static_type_label
 }
 
 private fun retentionLabel(retention: AnomalyHistoryRetention): String = when (retention) {

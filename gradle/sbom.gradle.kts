@@ -14,7 +14,7 @@ buildscript {
             val coordinate = "${requested.group}:${requested.name}"
             when {
                 requested.group == "com.squareup.wire" && requested.name.startsWith("wire-runtime") ->
-                    useVersion("6.3.0")
+                    useVersion("6.4.5")
                 requested.group == "io.netty" && requested.name.startsWith("netty-") ->
                     useVersion("4.1.137.Final")
                 coordinate == "org.apache.commons:commons-lang3" ->

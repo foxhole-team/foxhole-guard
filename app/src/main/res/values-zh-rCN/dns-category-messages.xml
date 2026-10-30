@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="dns_category_prepared_pending">所选 DNS 过滤器已准备就绪。启用前需要在连接启动或重新加载时通过原生验证。</string>
+    <string name="dns_category_prepared_short">等待启用</string>
+    <string name="dns_category_catalog_missing">所选 DNS 过滤器不可用：缺少内置分类目录。</string>
+    <string name="dns_category_catalog_invalid">所选 DNS 过滤器不可用：无法验证内置分类数据。</string>
+    <string name="dns_category_required_missing">请求的 DNS 分类或列表版本不可用。请检查所选列表并刷新数据。</string>
+    <string name="dns_category_signed_invalid">所选 DNS 过滤器不可用：无法验证下载的分类数据。</string>
+    <string name="dns_category_profile_policy_unavailable">此构建中的该配置无法应用所选 DNS 过滤器。请关闭过滤或选择支持过滤的配置。</string>
+</resources>

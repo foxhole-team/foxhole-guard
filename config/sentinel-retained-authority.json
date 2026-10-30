@@ -1,0 +1,71 @@
+{
+  "schema": 1,
+  "kind": "pinned-retained-original-sentinel-authority",
+  "status": "BOUND_ACTUAL_ROOT_ROLE",
+  "roleSha256": "e51f1cdc892f3464f714db00ba709368ec29e0412fc32ff5be20e2072617612a",
+  "originalCoreCommit": "ea4f180fc2bf5a5dd108bd304bb86e97fa14a625",
+  "consumerCoreCommit": "be0ff0ed269341b4c4ee6b1f6d9976344ecbd3f1",
+  "androidDeliveryProfile": "android64",
+  "abis": [
+    "arm64-v8a",
+    "x86_64"
+  ],
+  "targets": [
+    "aarch64-linux-android",
+    "x86_64-linux-android"
+  ],
+  "originalProofs": {
+    "sentinel_producer": "5cf69fc2c5e0e94978fa628085ae592c205c21d8b12f96db3b27d7691daa4508",
+    "sentinel_stage": "46a9ef32787eb8615ae69d47d02a78abd715a9d0389cd530f1d522229f244c28",
+    "sentinel_source_manifest": "ee4cb1407ccf3a45a2413a645d2c01a1eb4bc40c3c5bb9528c68a84f397fadcb",
+    "sentinel_capture": "2c9441e70b3fcae8420bb952247639bf90f5f06f7395bab014788ecdab760672",
+    "sentinel_legal_report": "8463331b044d32c39895fd4e646ab879cdeee3c5c7593cf4373d013b6fa38a84",
+    "sentinel_catalog": "7521464ef9aaab4cf525da7ad4d4df7d35aae7e6af0e2b7116ec389f7e93d3b1",
+    "sentinel_selected_receipt": "cf584c98217031d656e57d92d15f23cf093d16d6f726be7c1ef98882c0247835",
+    "sentinel_selected_sbom": "67a18b71167013e1c613e0617b35743eecd2f994b13ad1d704c18f40f44abc06"
+  },
+  "currentProducerReceiptSha256": "85fe813b694c1b91e2f866d1867fb41f7d86c2390ec5f67e7fe6b1ca4adf7804",
+  "currentSourceManifestSha256": "219e30b994db568640ec33ca0d79f0722c4fbc6dc8cc87de136216e78088eb6e",
+  "currentStageReceiptSha256": "46a9ef32787eb8615ae69d47d02a78abd715a9d0389cd530f1d522229f244c28",
+  "currentSourceArchiveSha256": "e88d935283fa58b641c74afde87aa7117b2333809b3189ad20da19d0d8e7c6ff",
+  "currentSourceFiles": 2136,
+  "unchangedInputFileCount": 1441,
+  "unchangedInputFilesSha256": "e2b9d4e9924f76108239b7ac5625089f29e874e7efd3d7af224ca635cb31bf92",
+  "originalLibraries": [
+    {
+      "path": "arm64-v8a/libfoxhole_sentinel_yara.so",
+      "bytes": 15491784,
+      "sha256": "3bde51a5baf138f001e77cbbc6fb03a96cbd0336de9955e0e9bb51f6d0fa837f"
+    },
+    {
+      "path": "armeabi-v7a/libfoxhole_sentinel_yara.so",
+      "bytes": 10501948,
+      "sha256": "49112fd37b7c74de131146b33bc09028211472d777a08dcb4c9e160724a79ba3"
+    },
+    {
+      "path": "x86/libfoxhole_sentinel_yara.so",
+      "bytes": 19098376,
+      "sha256": "b91d6c14bacd5f218524f03d48a1f9cc1554227b5cf8bb0e86fe4bec7755449f"
+    },
+    {
+      "path": "x86_64/libfoxhole_sentinel_yara.so",
+      "bytes": 18708928,
+      "sha256": "eefea3513d3e81ceb0d70cf9552b6b8ac9d47607adcfdbb94f1ccf5d53e71e25"
+    }
+  ],
+  "currentLibraries": [
+    {
+      "path": "arm64-v8a/libfoxhole_native.so",
+      "bytes": 24884464,
+      "sha256": "7829c210cf34a4bc401e9e4949cc187ade1704f300bbaeee61bf736aed321e0f"
+    },
+    {
+      "path": "x86_64/libfoxhole_native.so",
+      "bytes": 28360360,
+      "sha256": "95e67c16dd3caece527717969f52684d20af01f2ad98d700aaaf7248d806cde6"
+    }
+  ],
+  "originalCoverageSha256": "637afc8d12d1c1112a9c5f73e34b899e4c5dff44acffba9a8a30e7fb6e383308",
+  "originalNoticeUnionSha256": "cff881436e8bac2c86b4e638ee7db1d067a7e4213ade5f5abb3fc765c161665e",
+  "originalAssemblyReceiptSha256": "d7562bf0d88a05325b017ff089b72dd17cf7b1edcadd3936518b014f2b2aef08"
+}

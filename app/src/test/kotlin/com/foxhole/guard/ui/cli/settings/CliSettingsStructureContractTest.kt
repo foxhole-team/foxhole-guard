@@ -62,7 +62,7 @@ class CliSettingsStructureContractTest {
     }
 
     @Test
-    fun `application language is first inside the application section and is not duplicated`() {
+    fun `application language and interface selection live only inside the application section`() {
         val source = cli("settings/CliSettingsScreen.kt")
         val root = source
             .substringAfter("private fun CliSettingsRootColumn")
@@ -72,6 +72,10 @@ class CliSettingsStructureContractTest {
             .substringBefore("private fun CliLanguageRow")
 
         assertFalse(root.contains("CliLanguageRow("))
+        assertFalse(root.contains("CliInterfaceModeRow("))
+        assertEquals(1, Regex("CliInterfaceModeRow\\(").findAll(application).count())
+        assertTrue(application.indexOf("CliLanguageRow(") < application.indexOf("CliInterfaceModeRow("))
+        assertTrue(application.indexOf("CliInterfaceModeRow(") < application.indexOf("val systemAppearanceLabel"))
         assertTrue(application.indexOf("CliLanguageRow(") < application.indexOf("val systemAppearanceLabel"))
         assertEquals(1, Regex("CliLanguageRow\\(").findAll(application).count())
         assertTrue(source.substringAfter("private fun CliLanguageRow").contains("R.string.cli_cfg_language"))
@@ -82,6 +86,9 @@ class CliSettingsStructureContractTest {
     @Test
     fun `missing app rejection remains visible for six seconds`() {
         assertEquals(6_000L, MISSING_APPS_WARNING_VISIBLE_MS)
+        val screen = cli("settings/CliRoutingScreen.kt")
+        assertTrue(screen.contains("durationMillis = MISSING_APPS_WARNING_VISIBLE_MS"))
+        assertTrue(screen.contains("tone = FoxholeBannerTone.INFO"))
     }
 
     @Test
@@ -104,7 +111,12 @@ class CliSettingsStructureContractTest {
         assertTrue(screen.contains("viewModel.onWidgetBlackBackgroundChanged(kind"))
         assertTrue(screen.contains("viewModel.onWidgetAlphaPercentChanged(kind"))
         assertTrue(screen.contains("viewModel.onWidgetOutlineChanged(kind"))
-        assertTrue(screen.contains("onFoxWidgetAnimationChanged"))
+        assertFalse(screen.contains("onFoxWidgetAnimationChanged"))
+        assertFalse(screen.contains("fox_status_widget_animate"))
+        val foxPreview = screen
+            .substringAfter("private fun CliFoxWidgetPanel(")
+            .substringBefore("private fun CliStatusWidgetPreview(")
+        assertTrue(foxPreview.contains("painterResource(R.drawable.ic_launcher_openwrt)"))
         assertTrue(screen.contains("HomeWidgetKind.CONNECTION"))
         assertTrue(screen.contains("HomeWidgetKind.WEB_APPS"))
         assertTrue(screen.contains("HomeWidgetKind.STATUS"))
@@ -173,15 +185,7 @@ class CliSettingsStructureContractTest {
         val apps = cli("settings/CliRoutingAppLanesSection.kt")
         val sites = cli("settings/CliRoutingSiteRulesSection.kt")
 
-        assertTrue(
-            apps.contains("missingAppsTarget == CliMissingAppsTarget.VPN -> R.drawable.lin_shield"),
-        )
-        assertTrue(
-            apps.contains(
-                "missingAppsTarget == CliMissingAppsTarget.TOR || torAppsMissing -> R.drawable.lin_tor",
-            ),
-        )
-        assertTrue(apps.contains("else -> R.drawable.lin_info"))
+        assertTrue(apps.contains("if (torAppsMissing) R.drawable.lin_tor else R.drawable.lin_info"))
         assertTrue(apps.contains("icon = emptyNoteIcon"))
         assertTrue(sites.contains("icon = R.drawable.lin_info"))
     }

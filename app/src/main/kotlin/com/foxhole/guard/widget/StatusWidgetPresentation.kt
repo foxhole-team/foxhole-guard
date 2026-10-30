@@ -253,7 +253,9 @@ internal fun statusWidgetPresentation(
         torLatencyMs = null,
         dnsServer = settings.dns.server.trim().takeIf { it.isNotBlank() }
             ?.let { server -> "${cliSecureDnsLabel(settings.dns.secureMode)} · $server" }
-            ?: "${cliSecureDnsLabel(settings.dns.secureMode)} · ${defaultDnsServerFor(settings.dns.secureMode)}",
+            ?: defaultDnsServerFor(settings.dns.secureMode)?.let { server ->
+                "${cliSecureDnsLabel(settings.dns.secureMode)} · $server"
+            } ?: cliSecureDnsLabel(settings.dns.secureMode),
     )
 }
 

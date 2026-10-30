@@ -8,10 +8,10 @@ webkit = "1.16.0"
 glance = "1.1.1"
 datastore = "1.2.1"
 security-crypto = "1.1.0"
-sqlcipher = "4.17.0"
+sqlcipher = "4.19.1"
 biometric = "1.1.0"
-# 5.2.0 is the first release whose bundled libsodium.so is built with 16 KB-aligned LOAD
-# segments; 5.1.0 shipped 4 KB alignment and failed Android's 16 KB page-size check.
+# Original Java remains Maven5.2.0; native sodium uses the separately verified
+# source rebuild and security backport in config/native/page-aligned-native.json.
 lazysodium = "5.2.0"
 jna = "5.19.1"
 serialization = "1.11.0"

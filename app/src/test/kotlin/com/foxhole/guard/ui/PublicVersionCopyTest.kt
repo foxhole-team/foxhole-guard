@@ -2,7 +2,6 @@ package com.foxhole.guard.ui
 
 import com.foxhole.guard.BuildConfig
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
@@ -32,11 +31,20 @@ class PublicVersionCopyTest {
         publicSurfaceFiles.forEach { path ->
             val content = projectFile(path).readText()
 
-            assertTrue(
-                "$path names no version; it must name $releaseVersionName",
-                content.contains(releaseVersionName, ignoreCase = true),
-            )
-            assertFalse("$path should not announce a stable release", content.contains("stable 1.0", ignoreCase = true))
+            if (path.endsWith(".yml")) {
+                val configuredVersion =
+                    Regex("""(?m)^CurrentVersion: (.+)$""").find(content)!!.groupValues[1]
+                assertEquals(
+                    "$path must name the configured candidate version",
+                    releaseVersionName,
+                    configuredVersion,
+                )
+            } else {
+                assertTrue(
+                    "$path must start with the actual Stable candidate version",
+                    content.lineSequence().first().startsWith("$releaseVersionName Stable"),
+                )
+            }
         }
     }
 

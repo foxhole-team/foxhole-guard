@@ -1,0 +1,7 @@
+<resources>
+    <string name="cli_protocol_switch_confirmation_title">Требуется подтверждение</string>
+    <string name="cli_protocol_switch_confirmation_body">Это действие заменит текущий протокол VPN.\nПродолжить?</string>
+    <string name="cli_profile_delete_confirmation_title">Подтвердите удаление профиля</string>
+    <string name="cli_profile_confirmation_cancel">Отмена</string>
+    <string name="cli_profile_confirmation_continue">Продолжить</string>
+</resources>

@@ -336,16 +336,30 @@ class SubscriptionProviderImportTest {
 
     @Test
     fun `names the payload shape when it cannot be imported`() {
+        val document = """{"unrelated_metadata":{"description":"not a profile"}}"""
+
+        val error = runCatching { parser.parseSubscriptionProfiles(document, "provider") }.exceptionOrNull()
+
+        assertTrue(error is IllegalArgumentException)
+        assertEquals("unsupported subscription payload: json document", error?.message)
+    }
+
+    @Test
+    fun `rejects malformed Clash profiles without exposing node credentials`() {
         val clash =
             """
             proxies:
-              - name: node
+              - name: private-node-name
                 type: vmess
+                uuid: private-node-credential
             """.trimIndent()
 
         val error = runCatching { parser.parseSubscriptionProfiles(clash, "provider") }.exceptionOrNull()
 
-        assertTrue(error!!.message.orEmpty().contains("clash yaml"))
+        assertTrue(error is IllegalArgumentException)
+        assertEquals("invalid or unsupported clash profile", error?.message)
+        assertFalse(error?.message.orEmpty().contains("private-node-name"))
+        assertFalse(error?.message.orEmpty().contains("private-node-credential"))
     }
 
     @Test

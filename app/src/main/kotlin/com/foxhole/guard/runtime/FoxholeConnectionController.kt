@@ -97,7 +97,7 @@ class FoxholeConnectionController internal constructor(
             runtimeQueueSnapshot = runtimeSupervisor::queueSnapshot,
             nativeRuntimeSnapshot = runtimeInstanceStore::nativeSnapshot,
         )
-    private val quarantineEnforcementCoordinator =
+    internal val quarantineEnforcementCoordinator =
         QuarantineEnforcementCoordinator(
             snapshot = {
                 quarantineRuntimeEnforcementSnapshot(runtimeSupervisor, runtimeInstanceStore)
@@ -398,6 +398,11 @@ class FoxholeConnectionController internal constructor(
             protocolOptionId = protocolOptionId,
             timeoutMs = timeoutMs,
         )
+
+    internal fun routerProbeGeneration(): Long? {
+        val native = runtimeInstanceStore.nativeSnapshot()
+        return native.nativeGeneration.takeIf { it > 0 && native.hasEngineHandle && native.hasTunFileDescriptor && !native.cleanupDraining }
+    }
 
     fun hasActiveVpnNetwork(): Boolean = currentVpnNetwork() != null
 

@@ -58,10 +58,12 @@ internal fun CliDnsSection(
     expanded: Boolean,
     onToggleExpanded: () -> Unit,
     onOpenAppBypass: () -> Unit,
+    showAdvanced: Boolean = true,
 ) {
     val colors = LocalCliColors.current
     CliPanel(
         title = stringResource(R.string.cli_cfg_section_dns),
+        titleColor = colors.fg,
         icon = R.drawable.lin_dns,
         iconColor = colors.accent,
         modifier = Modifier.fillMaxWidth(),
@@ -75,7 +77,9 @@ internal fun CliDnsSection(
             refreshInProgress = refreshInProgress,
             refreshPhase = refreshPhase,
             refreshProgress = refreshProgress,
+            showAdvanced = showAdvanced,
         )
+        if (!showAdvanced) return@CliPanel
         CliRowDivider()
         CliDropdownRow(
             label = stringResource(R.string.cli_cfg_dns_secure),
@@ -141,6 +145,7 @@ private fun CliDnsFilteringGroup(
     refreshInProgress: Boolean,
     refreshPhase: FoxholeUpdatePhase,
     refreshProgress: RemoteDownloadProgress?,
+    showAdvanced: Boolean,
 ) {
     val colors = LocalCliColors.current
     var enableConfirmationOpen by rememberSaveable { mutableStateOf(false) }
@@ -190,7 +195,7 @@ private fun CliDnsFilteringGroup(
             checked = dns.blockTrackers,
             onToggle = { viewModel.onDnsSettingsChanged(dns.copy(blockTrackers = it)) },
         )
-        CliSettingsAnimatedRows(visible = dnsTrackerLevelVisible(dns)) {
+        CliSettingsAnimatedRows(visible = showAdvanced && dnsTrackerLevelVisible(dns)) {
             CliRowDivider()
             CliDropdownRow(
                 label = stringResource(R.string.cli_cfg_dns_tracker_level),
@@ -220,7 +225,7 @@ private fun CliDnsFilteringGroup(
             checked = dns.blockMaliciousDomains,
             onToggle = { viewModel.onDnsSettingsChanged(dns.copy(blockMaliciousDomains = it)) },
         )
-        CliSettingsAnimatedRows(visible = dnsThreatLevelVisible(dns)) {
+        CliSettingsAnimatedRows(visible = showAdvanced && dnsThreatLevelVisible(dns)) {
             CliRowDivider()
             CliDropdownRow(
                 label = stringResource(R.string.cli_cfg_dns_threat_level),
@@ -387,13 +392,14 @@ private fun CliDnsServerRows(
 ) {
     var customOpen by rememberSaveable { mutableStateOf(false) }
     var customServer by rememberSaveable { mutableStateOf("") }
-    val preset = dnsResolverPresetFor(dns.server)
+    val customOnly = dns.secureMode in setOf(SecureDnsMode.DOQ, SecureDnsMode.DOH3)
+    val preset = if (customOnly) null else dnsResolverPresetFor(dns.server)
     CliDropdownRow(
         label = stringResource(R.string.cli_cfg_dns_server),
         icon = R.drawable.lin_dns,
         value = preset?.label?.lowercase() ?: dns.server,
         options = DnsResolverPreset.entries
-            .filter { it != DnsResolverPreset.CUSTOM }
+            .filter { it != DnsResolverPreset.CUSTOM && !customOnly }
             .map { candidate ->
                 CliDropdownOption(
                     id = candidate.name,
@@ -407,7 +413,7 @@ private fun CliDnsServerRows(
                 customOpen = true
             } else {
                 customOpen = false
-                DnsResolverPreset.entries.firstOrNull { it.name == id }?.let { candidate ->
+                DnsResolverPreset.entries.firstOrNull { it.name == id && !customOnly }?.let { candidate ->
                     viewModel.onDnsSettingsChanged(dns.copy(server = candidate.hostFor(dns.secureMode)))
                 }
             }
@@ -505,4 +511,6 @@ private fun secureModeDetail(mode: SecureDnsMode): String = when (mode) {
     SecureDnsMode.DOH -> "dns-over-https"
     SecureDnsMode.DOT -> "dns-over-tls"
     SecureDnsMode.PLAIN -> "udp/53"
+    SecureDnsMode.DOQ -> "dns-over-quic"
+    SecureDnsMode.DOH3 -> "dns-over-http3"
 }

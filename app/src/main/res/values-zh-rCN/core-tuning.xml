@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="cli_core_expert_title">专家设置</string>
+    <string name="cli_core_expert_note">更改会应用于当前隧道。更改内核资源设置会重启隧道。增大缓冲区和连接流上限可能增加内存占用。</string>
+    <string name="cli_core_workers">内核线程数</string>
+    <string name="cli_core_connect_timeout">连接超时</string>
+    <string name="cli_core_handshake_timeout">握手超时</string>
+    <string name="cli_core_relay_buffer">输入输出缓冲区</string>
+    <string name="cli_core_tcp_flows">TCP 连接流上限</string>
+    <string name="cli_core_udp_flows">UDP 连接流上限</string>
+    <string name="cli_core_dns_timeout">DNS 超时</string>
+    <string name="cli_core_dns_cache">DNS 缓存条目数</string>
+    <string name="cli_core_reset">恢复内核默认值</string>
+    <string name="cli_core_default">默认</string>
+    <string name="cli_core_range">允许范围：%1$d–%2$d</string>
+</resources>

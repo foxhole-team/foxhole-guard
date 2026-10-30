@@ -4,6 +4,8 @@ import androidx.lifecycle.viewModelScope
 import com.foxhole.core.model.TrafficMode
 import com.foxhole.core.model.isUdpTransport
 import com.foxhole.guard.R
+import com.foxhole.guard.core.data.requireProfile
+import com.foxhole.guard.runtime.runCatchingUnlessCancelled
 import com.foxhole.guard.userFacingErrorMessage
 import kotlinx.coroutines.launch
 
@@ -51,59 +53,67 @@ internal fun HomeViewModel.onSelectProfileProtocolOptionRequested(
     optionId: String,
 ) {
     val state = controlUiState.value
-    val liveActive =
-        state.connection.isPrimaryConnectionRuntime() && state.connection.profileId == profileId
-    val runningOptionId =
-        state.connection.protocolOptionId
-            ?: runningOptionIdFromProtocolHint(state.activeProfile, state.connection)
-    if (liveActive && runningOptionId != null && runningOptionId != optionId) {
-        val profile = state.profiles.firstOrNull { it.id == profileId } ?: state.activeProfile
-        val option = profile?.protocolOptionOrDefault(optionId)
-        if (option != null && option.protocolHint.isUdpTransport() && state.connection.torActive) {
-            torTransitionPromptMutable.value =
+    val connection = container.connectionController.snapshot.value
+    val profile = state.profiles.firstOrNull { it.id == profileId }
+        ?: state.activeProfile?.takeIf { it.id == profileId }
+    when (protocolOptionSelectionAction(connection, profile, optionId)) {
+        ProtocolOptionSelectionAction.IGNORE -> Unit
+        ProtocolOptionSelectionAction.SELECT -> selectProtocolOptionAndMaybeReconnect(profileId, optionId)
+        ProtocolOptionSelectionAction.CONFIRM -> {
+            val selectedProfile = profile ?: return
+            val option = selectedProfile.protocolOptions.first { it.id == optionId }
+            torTransitionPromptMutable.value = if (option.protocolHint.isUdpTransport() && connection.torActive) {
                 TorTransitionPrompt.DisableTorForUdpProtocol(
                     profileId = profileId,
                     protocolOptionId = optionId,
                     protocolName = option.displayName,
                 )
-            return
+            } else {
+                protocolSwitchPrompt(selectedProfile, optionId, connection)
+            }
         }
-        torTransitionPromptMutable.value =
-            TorTransitionPrompt.SwitchProtocolWhileConnected(
-                profileId = profileId,
-                protocolOptionId = optionId,
-                protocolName = option?.displayName.orEmpty(),
-            )
-        return
     }
-    selectProtocolOptionAndMaybeReconnect(profileId, optionId)
 }
 
 internal fun HomeViewModel.confirmSwitchProtocolWhileConnected(
     prompt: TorTransitionPrompt.SwitchProtocolWhileConnected,
 ) {
-    torTransitionPromptMutable.value = null
-    clearProtocolSwitchRevert()
-    clearRuntimeReconnectRequired()
+    if (!torTransitionPromptMutable.consumeProtocolSwitchConfirmation(prompt)) return
     viewModelScope.launch {
-        val selected =
-            runCatching {
-                container.profileRepository.selectProfileProtocolOption(
-                    prompt.profileId,
-                    prompt.protocolOptionId,
-                )
-            }.onFailure { error ->
-                emitError(
-                    getApplication<Application>().userFacingErrorMessage(
-                        error,
-                        R.string.profile_update_failed,
-                    ),
-                )
+        runCatchingUnlessCancelled {
+            val repository = container.profileRepository
+            repository.withProfileMutation { owner ->
+                owner.secrets(repository.secretMutationMutex) {
+                    applyConfirmedProtocolSwitch(
+                        prompt = prompt,
+                        currentConnection = { container.connectionController.snapshot.value },
+                        readProfile = { repository.requireProfile(prompt.profileId) },
+                        select = {
+                            repository.selectProfileProtocolOptionLocked(
+                                prompt.profileId,
+                                prompt.protocolOptionId,
+                                owner,
+                            )
+                        },
+                        onCommitted = { updated ->
+                            clearProtocolSwitchRevert()
+                            clearRuntimeReconnectRequired()
+                            startupActiveProfileMutable.value = updated
+                            requestReconnect(prompt.profileId)
+                        },
+                    )
+                }
             }
-        val updated = selected.getOrNull() ?: return@launch
-        if (updated.isActive) {
-            startupActiveProfileMutable.value = updated
+        }.onFailure { error ->
+            emitError(
+                getApplication<Application>().userFacingErrorMessage(error, R.string.profile_update_failed),
+            )
         }
-        requestReconnect(prompt.profileId)
     }
+}
+
+internal fun HomeViewModel.dismissProtocolSwitchConfirmation(
+    prompt: TorTransitionPrompt.SwitchProtocolWhileConnected,
+) {
+    torTransitionPromptMutable.consumeProtocolSwitchConfirmation(prompt)
 }

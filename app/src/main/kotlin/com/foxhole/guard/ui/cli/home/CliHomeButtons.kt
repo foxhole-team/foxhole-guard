@@ -58,13 +58,14 @@ internal fun CliPrimaryButtonsRow(
     val colors = LocalCliColors.current
     val haptics = LocalHapticFeedback.current
     val displayedMode = configuredConnectMode(home.settings)
-    val modePromptPending =
-        atomicModePromptPending ||
-            home.torTransitionPrompt is TorTransitionPrompt.LiveModeSwitch ||
-            home.torTransitionPrompt is TorTransitionPrompt.VpnTorModeChoice
-    LaunchedEffect(modePromptPending, displayedMode) {
-        resetPendingModeCycle(modePromptPending, onPendingModeCycleChanged)
-    }
+    val onCycleMode = rememberCliModeCycleAction(
+        viewModel = viewModel,
+        terminal = terminal,
+        home = home,
+        atomicModePromptPending = atomicModePromptPending,
+        pendingModeCycle = pendingModeCycle,
+        onPendingModeCycleChanged = onPendingModeCycleChanged,
+    )
     val shownMode = displayedMode
     val activeProfile = home.activeProfile
     val mainAction =
@@ -146,16 +147,7 @@ internal fun CliPrimaryButtonsRow(
                     enabled = interactive,
                     onClick = {
                         onInteraction()
-                        onPendingModeCycleChanged(
-                            cycleConnectMode(
-                                viewModel = viewModel,
-                                terminal = terminal,
-                                home = home,
-                                running = displayedMode,
-                                pending = pendingModeCycle,
-                                modePromptPending = modePromptPending,
-                            ),
-                        )
+                        onCycleMode()
                     },
                 )
             else -> Unit
@@ -163,7 +155,30 @@ internal fun CliPrimaryButtonsRow(
     }
 }
 
-private fun performPrimaryAction(
+@Composable
+internal fun rememberCliModeCycleAction(
+    viewModel: HomeViewModel,
+    terminal: CliTerminalState,
+    home: com.foxhole.guard.ui.HomeRouteUiState,
+    atomicModePromptPending: Boolean,
+    pendingModeCycle: CliConnectMode?,
+    onPendingModeCycleChanged: (CliConnectMode?) -> Unit,
+): () -> Unit {
+    val displayedMode = configuredConnectMode(home.settings)
+    val modePromptPending = atomicModePromptPending ||
+        home.torTransitionPrompt is TorTransitionPrompt.LiveModeSwitch ||
+        home.torTransitionPrompt is TorTransitionPrompt.VpnTorModeChoice
+    LaunchedEffect(modePromptPending, displayedMode) {
+        resetPendingModeCycle(modePromptPending, onPendingModeCycleChanged)
+    }
+    return {
+        onPendingModeCycleChanged(
+            cycleConnectMode(viewModel, terminal, home, displayedMode, pendingModeCycle, modePromptPending),
+        )
+    }
+}
+
+internal fun performPrimaryAction(
     viewModel: HomeViewModel,
     terminal: CliTerminalState,
     home: com.foxhole.guard.ui.HomeRouteUiState,
@@ -262,6 +277,7 @@ internal const val CLI_HOME_IP_TAG = "cli_home_ip"
 internal const val CLI_HOME_TRAFFIC_TAG = "cli_home_traffic"
 internal const val CLI_HOME_PRIMARY_ACTION_TAG = "cli_home_primary_action"
 internal const val CLI_HOME_MODE_ACTION_TAG = "cli_home_mode_action"
+internal const val CLI_HOME_I2P_ACTION_TAG = "cli_home_i2p_action"
 internal const val CLI_HOME_TERMINAL_TAG = "cli_home_terminal"
 
 private fun startCommandFor(mode: CliConnectMode, profile: com.foxhole.core.model.Profile?): String {
@@ -294,7 +310,7 @@ private fun nextConnectMode(current: CliConnectMode): CliConnectMode =
         CliConnectMode.TOR -> CliConnectMode.VPN
     }
 
-private fun configuredConnectMode(settings: com.foxhole.core.model.Settings): CliConnectMode =
+internal fun configuredConnectMode(settings: com.foxhole.core.model.Settings): CliConnectMode =
     when {
         settings.privacyRoute.enabled && settings.privacyRoute.bypassVpnTunnel -> CliConnectMode.TOR
         settings.privacyRoute.enabled -> CliConnectMode.VPN_TOR
@@ -390,13 +406,8 @@ internal fun CliSecondaryButtonsRow(
             icon = R.drawable.lin_globe,
             color = if (i2pEngaged) colors.i2p else colors.dim,
             enabled = interactive,
-            onClick = {
-                val enable = !i2pEngaged
-                if (viewModel.onI2pEngagedChanged(enable)) {
-                    terminal.command(CliCommands.i2p(enable))
-                }
-            },
-            modifier = buttonModifier,
+            onClick = { performCliI2pToggle(viewModel, terminal, home.settings) },
+            modifier = buttonModifier.testTag(CLI_HOME_I2P_ACTION_TAG),
         )
     }
     val row = cliHomeButtonLayout(
@@ -426,6 +437,17 @@ internal fun CliSecondaryButtonsRow(
             CliHomeButton.I2P -> i2pButton(buttonModifier, interactive)
             else -> Unit
         }
+    }
+}
+
+internal fun performCliI2pToggle(
+    viewModel: HomeViewModel,
+    terminal: CliTerminalState,
+    settings: com.foxhole.core.model.Settings,
+) {
+    val enable = !(settings.i2p.enabled && settings.i2p.engaged)
+    if (viewModel.onI2pEngagedChanged(enable)) {
+        terminal.command(CliCommands.i2p(enable))
     }
 }
 

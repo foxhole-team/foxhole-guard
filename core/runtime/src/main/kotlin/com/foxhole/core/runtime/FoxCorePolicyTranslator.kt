@@ -1,6 +1,7 @@
 
 package com.foxhole.core.runtime
 
+import com.foxhole.core.model.DnsFilterCategory
 import com.foxhole.core.model.FoxCoreDnsRuleSetBootstrap
 import com.foxhole.core.model.KnownApplicationIdentity
 import kotlinx.serialization.json.JsonArray
@@ -412,6 +413,22 @@ internal object FoxCorePolicyTranslator {
                 }
                 ?: rejectFoxCoreConfig(FoxCoreConfigRejection.INVALID_SHAPE, "$.dns.servers")
         if (primaryIsPacketTunnel) {
+            val finalTag = source.optionalString("final", "$.dns")
+            if (finalTag != null) {
+                servers.forEachIndexed { index, server ->
+                    val path = "$.dns.servers[$index]"
+                    if (server.optionalString("tag", path) == finalTag &&
+                        server.optionalString("type", path)?.lowercase() in setOf("quic", "h3")
+                    ) {
+                        rejectFoxCoreConfig(
+                            FoxCoreConfigRejection.POLICY_UNREPRESENTABLE,
+                            "$path.type",
+                            "encrypted QUIC DNS requires the DNS interceptor, which is unavailable on a packet tunnel; " +
+                                "select the profile's own DNS resolver instead",
+                        )
+                    }
+                }
+            }
             val packetTunnel = packetTunnelDns(servers)
             requireI2pFakeIpDns(overlays, packetTunnel.config.optionalString("mode", "$.dns"))
             return packetTunnel
@@ -463,10 +480,10 @@ internal object FoxCorePolicyTranslator {
                         buildJsonArray {
                             add(
                                 buildJsonObject {
-                                    put("name", bootstrap.name)
-                                    put("public_key", bootstrap.publicKeyBase64)
-                                    put("minimum_sequence", bootstrap.minimumSequence)
-                                    put("required", true)
+                                    translatedDnsRuleSet(
+                                        bootstrap,
+                                        filter.enabledCategories
+                                    ).forEach { (key, value) -> put(key, value) }
                                 },
                             )
                         },
@@ -502,6 +519,41 @@ internal object FoxCorePolicyTranslator {
             }
         return DnsTranslation(config = config, packetTunnelAdvertise = null)
     }
+
+    private fun translatedDnsRuleSet(bootstrap: FoxCoreDnsRuleSetBootstrap, requested: Set<DnsFilterCategory>): JsonObject =
+        buildJsonObject {
+            put("name", bootstrap.name)
+            put("public_key", bootstrap.publicKeyBase64)
+            put(
+                "minimum_sequence",
+                bootstrap.categoryMinimumSequence?.let(::JsonPrimitive)
+                    ?: JsonPrimitive(bootstrap.minimumSequence)
+            )
+            if (bootstrap.categoryVariant != null) {
+                val available = bootstrap.availableCategories
+                    ?: rejectFoxCoreConfig(FoxCoreConfigRejection.POLICY_UNREPRESENTABLE, "$.dns.rules")
+                if (requested.isEmpty() || !available.containsAll(requested)) {
+                    rejectFoxCoreConfig(
+                        FoxCoreConfigRejection.POLICY_UNREPRESENTABLE,
+                        "$.dns.rules"
+                    )
+                }
+                put(
+                    "enabled_categories",
+                    buildJsonArray {
+                        DnsFilterCategory.entries.filter { it in requested }.forEach {
+                            add(JsonPrimitive(it.name.lowercase()))
+                        }
+                    }
+                )
+            } else if (requested.isNotEmpty()) {
+                rejectFoxCoreConfig(
+                    FoxCoreConfigRejection.POLICY_UNREPRESENTABLE,
+                    "$.dns.rules"
+                )
+            }
+            put("required", true)
+        }
 
     private fun requireI2pFakeIpDns(
         overlays: Set<FoxCoreOverlay>,
@@ -558,14 +610,30 @@ internal object FoxCorePolicyTranslator {
         }
         val host = source.requiredString("server", path)
         val port = source.optionalInt("server_port", path) ?: defaultDnsPort(type, "$path.type")
-        if (port !in 1..65_535) {
+        if (port !in 1..65_535 || (type == "quic" && port == 53)) {
             rejectFoxCoreConfig(FoxCoreConfigRejection.INVALID_SHAPE, "$path.server_port")
         }
+        if (type == "quic" && source.containsKey("path")) {
+            rejectFoxCoreConfig(FoxCoreConfigRejection.INVALID_SHAPE, "$path.path")
+        }
         val serverIp =
-            host.takeIf(String::isFoxCoreIpLiteral)
-                ?: source.optionalString("server_ip", path)?.takeIf(String::isFoxCoreIpLiteral)
-                ?: bootstrapServerIp(source, path, allServers)
-                ?: rejectFoxCoreConfig(FoxCoreConfigRejection.POLICY_UNREPRESENTABLE, path)
+            if (type in setOf("quic", "h3")) {
+                if (source.containsKey("domain_resolver")) {
+                    rejectFoxCoreConfig(FoxCoreConfigRejection.POLICY_UNREPRESENTABLE, "$path.domain_resolver")
+                }
+                val explicitIp = source.optionalString("server_ip", path)
+                if (explicitIp != null && !explicitIp.isFoxCoreIpLiteral()) {
+                    rejectFoxCoreConfig(FoxCoreConfigRejection.INVALID_SHAPE, "$path.server_ip")
+                }
+                // Core resolves this endpoint under the configured outbound's
+                // existing scoped policy; a resolver's address is never its target.
+                host.takeIf(String::isFoxCoreIpLiteral) ?: explicitIp
+            } else {
+                host.takeIf(String::isFoxCoreIpLiteral)
+                    ?: source.optionalString("server_ip", path)?.takeIf(String::isFoxCoreIpLiteral)
+                    ?: bootstrapServerIp(source, path, allServers)
+                    ?: rejectFoxCoreConfig(FoxCoreConfigRejection.POLICY_UNREPRESENTABLE, path)
+            }
         val route =
             when (source.optionalString("detour", path)) {
                 null -> "direct"
@@ -585,24 +653,24 @@ internal object FoxCorePolicyTranslator {
                         put("type", type)
                         put("address", socketAddress(host, port))
                     }
-                "tls" ->
+                "tls", "quic" ->
                     buildJsonObject {
-                        put("type", "dot")
+                        put("type", if (type == "quic") "doq" else "dot")
                         put("host", host)
                         put("port", port)
-                        if (host != serverIp) {
+                        if (serverIp != null && host != serverIp) {
                             put("server_ip", serverIp)
                         }
                     }
-                "https" ->
+                "https", "h3" ->
                     buildJsonObject {
-                        put("type", "doh")
+                        put("type", if (type == "h3") "doh3" else "doh")
                         put(
                             "url",
                             "https://${urlHost(host)}:$port" +
                                 (source.optionalString("path", path)?.takeIf(String::isNotBlank) ?: "/dns-query"),
                         )
-                        if (host != serverIp) {
+                        if (serverIp != null && host != serverIp) {
                             put("server_ip", serverIp)
                         }
                     }
@@ -610,7 +678,8 @@ internal object FoxCorePolicyTranslator {
             }
         return DnsUpstreamTranslation(
             config = config,
-            advertise = serverIp,
+            // This virtual TUN address is advertisement only, never a dial target.
+            advertise = serverIp ?: LOCAL_GUARD_DNS_SERVER_ADDRESS,
             route = route,
         )
     }
@@ -646,7 +715,7 @@ internal object FoxCorePolicyTranslator {
                         )
                     }
                 }
-                "udp", "tcp", "tls", "https" -> {
+                "udp", "tcp", "tls", "https", "quic", "h3" -> {
                     server.requireOnlyKeys(DNS_SERVER_KEYS, path)
                     translateDnsUpstream(server, path, servers, overlays)
                 }
@@ -699,6 +768,7 @@ internal object FoxCorePolicyTranslator {
         var filterEnabled = false
         val allowSuffixes = linkedSetOf<String>()
         val bypassPackages = linkedSetOf<String>()
+        val enabledCategories = linkedSetOf<DnsFilterCategory>()
         source["rules"]?.asFoxCoreArray("$.dns.rules")?.forEachIndexed { index, element ->
             val rule = element.asFoxCoreObject("$.dns.rules[$index]")
             val path = "$.dns.rules[$index]"
@@ -722,6 +792,14 @@ internal object FoxCorePolicyTranslator {
                     rule.optionalString("action", path) == "predefined" &&
                     rule.optionalString("rcode", path) == "NXDOMAIN"
             if (ruleSetBlock) {
+                rule.stringOrArrayValues("rule_set", path).forEach { tag ->
+                    val category = DnsFilterCategory.entries.singleOrNull { "foxhole-dns-${it.name.lowercase()}" == tag }
+                    if (category != null) {
+                        enabledCategories += category
+                    } else if (tag != DNS_ADGUARD_RULE_SET_TAG) {
+                        rejectFoxCoreConfig(FoxCoreConfigRejection.POLICY_UNREPRESENTABLE, path)
+                    }
+                }
                 filterEnabled = true
                 return@forEachIndexed
             }
@@ -749,6 +827,7 @@ internal object FoxCorePolicyTranslator {
             enabled = filterEnabled,
             allowSuffixes = allowSuffixes.toList(),
             bypassPackages = bypassPackages.toList(),
+            enabledCategories = enabledCategories,
         )
     }
 

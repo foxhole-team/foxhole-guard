@@ -1,0 +1,6 @@
+0.1.1 Stable
+
+- Sentinel settings focus on configuration and management.
+- Journals show all currently installed apps, retained detected changes and the full pending-decision queue.
+- Stats keeps six recent user apps and opens the full user-app list.
+- Journals are available in User mode; Night uses a monochrome launcher icon.

@@ -16,34 +16,13 @@ internal class FoxholeVpnServiceNetworkCallbackOwner(
     val upstream: ConnectivityManager.NetworkCallback =
         object : ConnectivityManager.NetworkCallback() {
             override fun onAvailable(network: Network) {
-                if (!service.isUpstreamNetwork(network)) {
-                    return
-                }
-                val capabilities = service.connectivityManager.getNetworkCapabilities(network)
-                service.recordNetworkEvent(
-                    message = "upstream available",
-                    capabilities = capabilities,
-                )
-                service.handleI2pRelayNetworkClass(capabilities)
-                service.upstreamNetworkHandles += network.networkHandle
-                service.updateActiveVpnUnderlyingNetwork(network)
-                service.publishUpstreamNetworkChange(network, reason = "available")
-                service.runtime.onDefaultNetworkAvailable()
-                val snapshot = FoxholeVpnRuntimeBridge.snapshot.value
-                if (snapshot.state == ConnectionState.RECONNECTING) {
-                    val session = service.activeSession
-                    if (session != null) {
-                        service.scheduleValidation(
-                            session = session,
-                            failOnFailure = false,
-                            onSuccess = { vpnNetwork -> service.onTunnelValidated(session, vpnNetwork) },
-                        )
-                    }
-                }
-                service.updateNotification()
+                if (!service.isCurrentNetworkCallbackOwner()) return
+                val capabilities = service.connectivityManager.getNetworkCapabilities(network) ?: return
+                handleUpstreamAvailable(network, capabilities)
             }
 
             override fun onLost(network: Network) {
+                if (!service.isCurrentNetworkCallbackOwner()) return
                 val wasAcceptedUpstream = service.upstreamNetworkHandles.remove(network.networkHandle)
                 if (!wasAcceptedUpstream && !service.isUpstreamNetwork(network)) {
                     return
@@ -60,7 +39,7 @@ internal class FoxholeVpnServiceNetworkCallbackOwner(
                     service.handleI2pRelayNetworkClass(capabilities)
                     service.updateActiveVpnUnderlyingNetwork(fallbackUpstream)
                     service.publishUpstreamNetworkChange(fallbackUpstream, reason = "switched")
-                    service.runtime.onDefaultNetworkAvailable()
+                    service.dispatchUpstreamNetworkChange(fallbackUpstream)
                     val snapshot = FoxholeVpnRuntimeBridge.snapshot.value
                     if (snapshot.state == ConnectionState.RECONNECTING) {
                         val session = service.activeSession
@@ -81,7 +60,7 @@ internal class FoxholeVpnServiceNetworkCallbackOwner(
                 )
                 service.updateActiveVpnUnderlyingNetwork(null)
                 service.publishUpstreamNetworkChange(null, reason = "lost")
-                service.runtime.onDefaultNetworkLost()
+                service.dispatchUpstreamNetworkChange(null)
                 service.invalidateValidationEpoch("upstream_lost")
                 val snapshot = FoxholeVpnRuntimeBridge.snapshot.value
                 if (snapshot.state == ConnectionState.CONNECTED) {
@@ -100,16 +79,48 @@ internal class FoxholeVpnServiceNetworkCallbackOwner(
                 network: Network,
                 networkCapabilities: NetworkCapabilities,
             ) {
-                if (!service.isUpstreamNetwork(network)) {
-                    return
-                }
-                service.handleI2pRelayNetworkClass(networkCapabilities)
+                handleUpstreamAvailable(network, networkCapabilities)
             }
         }
+
+    private fun handleUpstreamAvailable(network: Network, capabilities: NetworkCapabilities) {
+        if (!service.isCurrentNetworkCallbackOwner() || !capabilities.isObservedUpstream()) return
+        service.upstreamNetworkHandles += network.networkHandle
+        val preferred = service.currentUpstreamNetworkOrNull() ?: network
+        val selectedCapabilities = if (preferred.networkHandle == network.networkHandle) {
+            capabilities
+        } else {
+            service.connectivityManager.getNetworkCapabilities(preferred) ?: return
+        }
+        if (!selectedCapabilities.isObservedUpstream()) return
+        service.handleI2pRelayNetworkClass(selectedCapabilities)
+        service.updateActiveVpnUnderlyingNetwork(preferred)
+        if (!service.dispatchUpstreamNetworkChange(preferred)) return
+        service.recordNetworkEvent("upstream available", selectedCapabilities)
+        service.publishUpstreamNetworkChange(preferred, reason = "available")
+        val snapshot = FoxholeVpnRuntimeBridge.snapshot.value
+        if (snapshot.state == ConnectionState.RECONNECTING) {
+            val session = service.activeSession
+            if (session != null) {
+                service.scheduleValidation(
+                    session = session,
+                    failOnFailure = false,
+                    onSuccess = { vpnNetwork -> service.onTunnelValidated(session, vpnNetwork) },
+                )
+            }
+        }
+        service.updateNotification()
+    }
+
+    private fun NetworkCapabilities.isObservedUpstream(): Boolean =
+        hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+            hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_RESTRICTED) &&
+            !hasTransport(NetworkCapabilities.TRANSPORT_VPN)
 
     val vpn: ConnectivityManager.NetworkCallback =
         object : ConnectivityManager.NetworkCallback() {
             override fun onAvailable(network: Network) {
+                if (!service.isCurrentNetworkCallbackOwner()) return
                 val capabilities = service.connectivityManager.getNetworkCapabilities(network)
                 if (capabilities?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) != true) {
                     return
@@ -124,6 +135,7 @@ internal class FoxholeVpnServiceNetworkCallbackOwner(
             }
 
             override fun onLost(network: Network) {
+                if (!service.isCurrentNetworkCallbackOwner()) return
                 val lostHandle = network.networkHandle
                 val trackedHandle = service.activeVpnNetworkHandle
                 service.recordNetworkEvent(
@@ -154,6 +166,7 @@ internal class FoxholeVpnServiceNetworkCallbackOwner(
     val default: ConnectivityManager.NetworkCallback =
         object : ConnectivityManager.NetworkCallback() {
             override fun onAvailable(network: Network) {
+                if (!service.isCurrentNetworkCallbackOwner()) return
                 service.onDefaultNetworkCapabilitiesChanged(
                     capabilities = service.connectivityManager.getNetworkCapabilities(network),
                     reason = "default network available",
@@ -161,6 +174,7 @@ internal class FoxholeVpnServiceNetworkCallbackOwner(
             }
 
             override fun onLost(network: Network) {
+                if (!service.isCurrentNetworkCallbackOwner()) return
                 service.defaultNetworkAvailable = false
                 service.lastDefaultNetworkSummary = null
                 service.container.diagnosticsLogger.record("network", "default network lost")
@@ -176,6 +190,7 @@ internal class FoxholeVpnServiceNetworkCallbackOwner(
                 network: Network,
                 networkCapabilities: NetworkCapabilities,
             ) {
+                if (!service.isCurrentNetworkCallbackOwner()) return
                 service.onDefaultNetworkCapabilitiesChanged(
                     capabilities = networkCapabilities,
                     reason = "default network changed",

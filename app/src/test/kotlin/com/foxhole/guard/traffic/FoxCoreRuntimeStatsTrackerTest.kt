@@ -187,11 +187,9 @@ class FoxCoreRuntimeStatsTrackerTest {
                 """
                 {
                   "events": [
-                    {"type":"opened","id":7,"transport":"tcp","host":"ignored.example","port":443,
-                     "route":{"lane":"vpn","outbound":"vless"},"bytes_up":0,"bytes_down":0},
-                    {"type":"closed","id":7,"transport":"tcp","host":"short.example","port":443,
-                     "route":{"lane":"vpn","outbound":"vless"},
-                     "packages":["com.example.app"],"uid":10123,"bytes_up":17,"bytes_down":29}
+                    {"type":"opened","id":7,"transport":"tcp","host":"short.example","port":443,
+                     "route":{"lane":"vpn","outbound":"vless"},"packages":["com.example.app"],"uid":10123},
+                    {"type":"closed","id":7,"bytes_up":17,"bytes_down":29}
                   ],
                   "dropped": 0
                 }
@@ -199,8 +197,11 @@ class FoxCoreRuntimeStatsTrackerTest {
             )
 
         assertEquals(1, drain.closedConnections.size)
-        assertEquals("short.example:443", drain.closedConnections.single().destination)
-        assertEquals(listOf("com.example.app"), drain.closedConnections.single().packageNames)
+        assertNull(drain.closedConnections.single().destination)
+        assertTrue(drain.closedConnections.single().packageNames.isEmpty())
+        val restored = RuntimeConnectionEventReducer().reduce(RuntimeConnectionSnapshot(generation = 7L), drain)
+        assertEquals("short.example:443", restored.connections.single().destination)
+        assertEquals(listOf("com.example.app"), restored.connections.single().packageNames)
         assertEquals(17L, drain.closedConnections.single().bytesTx)
         assertEquals(29L, drain.closedConnections.single().bytesRx)
     }

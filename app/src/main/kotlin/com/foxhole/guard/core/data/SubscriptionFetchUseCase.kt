@@ -2,6 +2,7 @@ package com.foxhole.guard.core.data
 
 import com.foxhole.core.importer.SubscriptionHeaderMetadata
 import com.foxhole.core.importer.SubscriptionMetadataParser
+import com.foxhole.core.network.SubscriptionSessionCookieJar
 import com.foxhole.core.network.RemoteHostResolver
 import com.foxhole.guard.BuildConfig
 import kotlinx.coroutines.Dispatchers
@@ -9,6 +10,7 @@ import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import java.net.URI
 import javax.net.SocketFactory
 
 internal data class SubscriptionResponse(
@@ -60,6 +62,7 @@ internal class SubscriptionFetchUseCase(
                 )
             }
         return timeoutClient.withUnderlyingSocketFactory(underlyingSocketFactory())
+            .newBuilder().cookieJar(SubscriptionSessionCookieJar()).build()
     }
 
     private fun buildSubscriptionRequest(
@@ -88,6 +91,7 @@ internal class SubscriptionFetchUseCase(
                 allowHttp = allowHttp,
                 maxBytes = MAX_SUBSCRIPTION_BYTES,
                 resolver = resolver,
+                transportFailureMapper = ::subscriptionFetchConnectivityFailure,
             ) { url ->
                 buildSubscriptionRequest(safeUrl = url, lastEtag = lastEtag)
             }
@@ -107,7 +111,13 @@ internal class SubscriptionFetchUseCase(
         return SubscriptionResponse(
             body = response.body.orEmpty(),
             etag = metadata.etag,
-            metadataTitle = metadata.title,
+            metadataTitle = metadata.title ?: if (sourceUrl.startsWith("ssconf://", ignoreCase = true)) {
+                runCatching {
+                    URI(sourceUrl).fragment
+                }.getOrNull()?.filterNot(Char::isISOControl)?.take(160)?.takeIf(String::isNotBlank)
+            } else {
+                null
+            },
             subscriptionExpiresAt =
             metadata.userInfo?.expiresAt
                 ?: SubscriptionMetadataParser.expirationFromSubscriptionUrl(sourceUrl),

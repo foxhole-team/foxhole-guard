@@ -3,18 +3,27 @@ package com.foxhole.guard.runtime
 import com.foxhole.core.network.RemoteHostResolver
 import com.foxhole.core.network.ensurePublicHttpsUrl
 import com.foxhole.core.network.requirePublicHttpsUrl
+import com.foxhole.core.runtime.network.PublicRemoteDns
 import com.foxhole.guard.core.data.withBoundedRemoteFetchTimeouts
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
+import okhttp3.Call
 import okhttp3.HttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import java.io.File
 import java.io.IOException
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 import java.security.MessageDigest
 
 @Serializable
@@ -61,7 +70,7 @@ sealed interface AppUpdateCheck {
         val severity: AppUpdateSeverity get() = AppUpdateSeverity.forVersionsBehind(versionsBehind)
 
         val installable: Boolean
-            get() = downloadUrl.isNotBlank() && manifest.apkName.isNotBlank() && manifest.apkSha256.isSha256Hex()
+            get() = downloadUrl.isNotBlank() && manifest.apkName.isSafeApkBasename() && manifest.apkSha256.isSha256Hex()
     }
 
     data class Failed(
@@ -115,17 +124,32 @@ class AppUpdateClient(
     private val releasesApiUrl: () -> String = { DEFAULT_RELEASES_API_URL },
 
     private val releasesToken: () -> String = { "" },
+    private val operationTimeoutMs: Long = CALL_TIMEOUT_MS,
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+    private val callFactory: Call.Factory? = null,
+    private val manifestAssetName: String = MANIFEST_ASSET_NAME,
 ) {
     private val json = Json { ignoreUnknownKeys = true }
+
+    init {
+        require(manifestAssetName in setOf(MANIFEST_ASSET_NAME, ARMV7_MANIFEST_ASSET_NAME))
+    }
 
     suspend fun check(
         currentVersionCode: Long,
         currentVersionName: String = "",
     ): AppUpdateCheck =
-        withContext(Dispatchers.IO) {
-            runCatching { latestRelease(currentVersionCode, currentVersionName) }
-                .getOrElse { error -> AppUpdateCheck.Failed(error.asAppUpdateFailure(), error.appUpdateReason()) }
-        }
+        withTimeoutOrNull(operationTimeoutMs) {
+            withContext(ioDispatcher) {
+                try {
+                    latestRelease(currentVersionCode, currentVersionName)
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (error: Exception) {
+                    AppUpdateCheck.Failed(error.asAppUpdateFailure(), error.appUpdateReason())
+                }
+            }
+        } ?: AppUpdateCheck.Failed(AppUpdateFailure.NETWORK, "update check timed out")
 
     private fun isNewerRelease(
         manifest: AppUpdateManifest?,
@@ -140,7 +164,7 @@ class AppUpdateClient(
         }
 
     @Suppress("ReturnCount")
-    private fun latestRelease(
+    private suspend fun latestRelease(
         currentVersionCode: Long,
         currentVersionName: String,
     ): AppUpdateCheck {
@@ -204,8 +228,8 @@ class AppUpdateClient(
         )
     }
 
-    private fun GithubRelease.manifestOrNull(client: OkHttpClient): AppUpdateManifest? {
-        val asset = assets.firstOrNull { candidate -> candidate.name == MANIFEST_ASSET_NAME } ?: return null
+    private suspend fun GithubRelease.manifestOrNull(client: OkHttpClient): AppUpdateManifest? {
+        val asset = assets.firstOrNull { candidate -> candidate.name == manifestAssetName } ?: return null
         val manifestJson =
             client.getText(
                 asset.readableUrl().asPublicHttpsUrl(),
@@ -220,72 +244,105 @@ class AppUpdateClient(
         update: AppUpdateCheck.Available,
         into: File,
         onProgress: (downloadedBytes: Long, totalBytes: Long) -> Unit = { _, _ -> },
-    ): Result<File> =
-        withContext(Dispatchers.IO) {
-            runCatching {
-                val url = update.downloadUrl.asPublicHttpsUrl()
-                url.requirePublicHttpsUrl(resolveHost = true, resolver = resolver)
-                into.parentFile?.mkdirs()
-                if (into.exists()) {
-                    into.delete()
+    ): Result<File> {
+        var staging: File? = null
+        return try {
+            val result = withTimeoutOrNull(operationTimeoutMs) {
+                withContext(ioDispatcher) {
+                    val parent = requireNotNull(into.absoluteFile.parentFile)
+                    if (!parent.isDirectory && !parent.mkdirs()) throw IOException("update directory unavailable")
+                    val candidate = File.createTempFile(".foxhole-update-", ".part", parent)
+                    staging = candidate
+                    downloadFile(update, candidate, onProgress)
+                    currentCoroutineContext().ensureActive()
+                    Files.move(
+                        candidate.toPath(),
+                        into.toPath(),
+                        StandardCopyOption.ATOMIC_MOVE,
+                        StandardCopyOption.REPLACE_EXISTING
+                    )
+                    into
                 }
-                val digest = MessageDigest.getInstance("SHA-256")
-                val request =
-                    Request.Builder()
-                        .url(url)
-                        .get()
-                        .header("Accept", ASSET_ACCEPT)
-                        .authorized(url)
-                        .build()
-                guardedClient().newCall(request).execute().use { response ->
-                    if (!response.isSuccessful) {
-                        throw IOException("apk request failed with HTTP ${response.code}")
-                    }
-                    val body = requireNotNull(response.body) { "apk response body is empty" }
-                    val total = body.contentLength().takeIf { length -> length > 0 } ?: update.sizeBytes
-                    var downloaded = 0L
-                    body.byteStream().use { source ->
-                        into.outputStream().use { sink ->
-                            val buffer = ByteArray(DOWNLOAD_BUFFER_BYTES)
-                            while (true) {
-                                val read = source.read(buffer)
-                                if (read < 0) break
-                                if (downloaded + read > MAX_APK_BYTES) {
-                                    throw IOException("apk exceeds the ${MAX_APK_BYTES / (1024 * 1024)} MiB cap")
-                                }
-                                sink.write(buffer, 0, read)
-                                digest.update(buffer, 0, read)
-                                downloaded += read
-                                onProgress(downloaded, total)
+            }
+            if (result == null) Result.failure(IOException("update download timed out")) else Result.success(result)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Exception) {
+            Result.failure(error)
+        } finally {
+            staging?.delete()
+        }
+    }
+
+    private suspend fun downloadFile(
+        update: AppUpdateCheck.Available,
+        into: File,
+        onProgress: (Long, Long) -> Unit,
+    ): File {
+        val url = update.downloadUrl.asPublicHttpsUrl()
+        url.requirePublicHttpsUrl(resolveHost = true, resolver = resolver)
+        val digest = MessageDigest.getInstance("SHA-256")
+        guardedClient().executeGet(url, ASSET_ACCEPT) { response, active ->
+            try {
+                if (!response.isSuccessful) throw IOException("apk request failed with HTTP ${response.code}")
+                requireDownloadActive(active)
+                val body = requireNotNull(response.body) { "apk response body is empty" }
+                val total = body.contentLength().takeIf { length -> length > 0 } ?: update.sizeBytes
+                var downloaded = 0L
+                body.byteStream().use { source ->
+                    into.outputStream().use { sink ->
+                        val buffer = ByteArray(DOWNLOAD_BUFFER_BYTES)
+                        while (true) {
+                            requireDownloadActive(active)
+                            val read = source.read(buffer)
+                            requireDownloadActive(active)
+                            if (read < 0) break
+                            if (downloaded + read > MAX_APK_BYTES) {
+                                throw IOException("apk exceeds the ${MAX_APK_BYTES / (1024 * 1024)} MiB cap")
                             }
+                            sink.write(buffer, 0, read)
+                            digest.update(buffer, 0, read)
+                            downloaded += read
+                            onProgress(downloaded, total)
                         }
                     }
                 }
-                if (update.sizeBytes > 0L && into.length() != update.sizeBytes) {
-                    into.delete()
-                    throw IOException("apk size ${into.length()} does not match the announced ${update.sizeBytes}")
-                }
-                val actual = digest.digest().joinToString("") { byte -> "%02x".format(byte) }
-                if (!actual.equals(update.manifest.apkSha256, ignoreCase = true)) {
-                    into.delete()
-                    throw IOException("apk digest mismatch")
-                }
-                into
-            }.onFailure { into.delete() }
+                requireDownloadActive(active)
+                verifyDownloadedFile(update, into, digest)
+            } finally {
+                // Cancellation may finish the caller before this callback opens its output file.
+                if (!active()) into.delete()
+            }
         }
+        return into
+    }
+
+    private fun requireDownloadActive(active: () -> Boolean) {
+        if (!active()) throw CancellationException()
+    }
+
+    private fun verifyDownloadedFile(update: AppUpdateCheck.Available, into: File, digest: MessageDigest) {
+        if (update.sizeBytes > 0L && into.length() != update.sizeBytes) {
+            throw IOException("apk size ${into.length()} does not match the announced ${update.sizeBytes}")
+        }
+        val actual = digest.digest().joinToString("") { byte -> "%02x".format(byte) }
+        if (!actual.equals(update.manifest.apkSha256, ignoreCase = true)) throw IOException("apk digest mismatch")
+    }
 
     private fun guardedClient(): OkHttpClient =
         httpClient.withBoundedRemoteFetchTimeouts(
             connectTimeoutMs = CONNECT_TIMEOUT_MS,
             readTimeoutMs = READ_TIMEOUT_MS,
             callTimeoutMs = CALL_TIMEOUT_MS,
-        )
+        ).newBuilder()
+            .dns(PublicRemoteDns(httpClient.dns::lookup))
+            .build()
 
     private fun String.asPublicHttpsUrl(): HttpUrl =
         runCatching { ensurePublicHttpsUrl(resolveHost = true, resolver = resolver) }
             .getOrElse { error -> throw AppUpdateBlockedUrlException(error.appUpdateReason()) }
 
-    private fun OkHttpClient.getText(
+    private suspend fun OkHttpClient.getText(
         url: HttpUrl,
         maxBytes: Long,
         label: String,
@@ -293,9 +350,7 @@ class AppUpdateClient(
     ): String {
         runCatching { url.requirePublicHttpsUrl(resolveHost = true, resolver = resolver) }
             .getOrElse { error -> throw AppUpdateBlockedUrlException(error.appUpdateReason()) }
-        newCall(
-            Request.Builder().url(url).get().header("Accept", accept).authorized(url).build()
-        ).execute().use { response ->
+        return executeGet(url, accept) { response, _ ->
             if (!response.isSuccessful) {
                 throw AppUpdateHttpException(
                     code = response.code,
@@ -303,10 +358,44 @@ class AppUpdateClient(
                     message = "$label request failed with HTTP ${response.code}",
                 )
             }
-            return requireNotNull(response.body) { "$label response body is empty" }
+            requireNotNull(response.body) { "$label response body is empty" }
                 .readBytesCapped(maxBytes)
                 .toString(Charsets.UTF_8)
         }
+    }
+
+    private suspend fun <T> OkHttpClient.executeGet(
+        initialUrl: HttpUrl,
+        accept: String,
+        consume: (Response, () -> Boolean) -> T,
+    ): T {
+        var url = initialUrl
+        repeat(MAX_REDIRECTS + 1) {
+            url = url.toString().asPublicHttpsUrl()
+            val request = Request.Builder().url(url).get().header("Accept", accept).authorized(url).build()
+            val call = callFactory?.newCall(request) ?: newCall(request)
+            when (
+                val fetched = consumeAppUpdateResponse(call) { response, active ->
+                    if (response.isRedirect) {
+                        AppUpdateResponse.Redirect(
+                            response.header("Location")?.let(url::resolve)
+                                ?: throw IOException("missing or invalid redirect Location")
+                        )
+                    } else {
+                        AppUpdateResponse.Value(consume(response, active))
+                    }
+                }
+            ) {
+                is AppUpdateResponse.Value -> return fetched.value
+                is AppUpdateResponse.Redirect -> url = fetched.url
+            }
+        }
+        throw IOException("too many update redirects")
+    }
+
+    private sealed interface AppUpdateResponse<out T> {
+        data class Value<T>(val value: T) : AppUpdateResponse<T>
+        data class Redirect(val url: HttpUrl) : AppUpdateResponse<Nothing>
     }
 
     private fun Response.looksRateLimited(): Boolean {
@@ -344,19 +433,25 @@ class AppUpdateClient(
     private fun GithubAsset.readableUrl(): String =
         if (releasesToken().isNotBlank() && url.isNotBlank()) url else browserDownloadUrl
 
-    // A release token belongs only to the configured API host, never the public default or a redirect CDN.
+    // Rebuild authorization at each hop: a release token never belongs to a redirect CDN.
     private fun Request.Builder.authorized(url: HttpUrl): Request.Builder {
         val token = releasesToken()
         if (token.isBlank()) {
             return this
         }
         val configured = releasesApiUrl().trim().takeIf(String::isNotEmpty) ?: return this
-        val host = runCatching { configured.asPublicHttpsUrl().host }.getOrNull() ?: return this
-        return if (url.host.equals(host, ignoreCase = true)) header("Authorization", "Bearer $token") else this
+        val origin = runCatching { configured.asPublicHttpsUrl() }.getOrNull() ?: return this
+        return if (url.host == origin.host && url.port == origin.port) {
+            header("Authorization", "Bearer $token")
+        } else {
+            this
+        }
     }
 
     companion object {
         const val MANIFEST_ASSET_NAME = "update-manifest.json"
+        const val ARMV7_MANIFEST_ASSET_NAME = "update-manifest-armeabi-v7a.json"
+        private const val MAX_REDIRECTS = 5
         private const val ASSET_ACCEPT = "application/octet-stream"
         const val DEFAULT_RELEASES_API_URL = "https://api.github.com/repos/foxhole-team/foxhole-guard/releases/latest"
         private const val MAX_METADATA_BYTES = 512L * 1024L

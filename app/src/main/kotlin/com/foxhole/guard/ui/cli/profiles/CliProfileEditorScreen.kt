@@ -38,6 +38,7 @@ import com.foxhole.guard.R
 import com.foxhole.guard.ui.HomeViewModel
 import com.foxhole.guard.ui.addProfileProtocolOption
 import com.foxhole.guard.ui.cli.CliSpacing
+import com.foxhole.guard.ui.cli.CliTopNoticeHost
 import com.foxhole.guard.ui.cli.CliType
 import com.foxhole.guard.ui.cli.LocalCliColors
 import com.foxhole.guard.ui.cli.LocalCliPanelAppearance
@@ -85,6 +86,7 @@ internal fun CliProfileEditorScreen(
             decorFitsSystemWindows = true,
         ),
     ) {
+        CliTopNoticeHost()
         Box(modifier = Modifier.fillMaxSize()) {
             val manualRef = controller.rawEditor
             if (manualRef != null) {

@@ -40,6 +40,7 @@ import androidx.core.content.ContextCompat
 import com.foxhole.guard.R
 import com.foxhole.guard.ui.cli.CliCommands
 import com.foxhole.guard.ui.cli.CliSpacing
+import com.foxhole.guard.ui.cli.CliTopNoticeHost
 import com.foxhole.guard.ui.cli.CliType
 import com.foxhole.guard.ui.cli.LocalCliColors
 import com.foxhole.guard.ui.cli.LocalCliPanelAppearance
@@ -86,6 +87,7 @@ internal fun CliQrScannerOverlay(
             decorFitsSystemWindows = true,
         ),
     ) {
+        CliTopNoticeHost()
         Column(
             modifier = Modifier
                 .fillMaxSize()

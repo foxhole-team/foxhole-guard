@@ -17,7 +17,7 @@ class CliOnboardingInfoAndPromptContractTest {
         assertFalse(wizard.contains("tween("))
         assertFalse(wizard.contains("delay("))
         assertTrue(wizard.contains("viewModel.settingsRouteState.collectAsStateWithLifecycle()"))
-        assertTrue(wizard.contains("AppLocale.entries.map"))
+        assertTrue(wizard.contains("GUARD_APP_LANGUAGE_CHOICES.map"))
         assertTrue(wizard.contains("viewModel.onLocaleSelected(AppLocale.valueOf(id))"))
         assertTrue(wizard.contains("ThemeMode.entries.map"))
         assertTrue(wizard.contains("viewModel.onThemeSelected(ThemeMode.valueOf(id))"))
@@ -120,7 +120,11 @@ class CliOnboardingInfoAndPromptContractTest {
         assertFalse(skipData.contains("startOnboardingDownloads"))
         assertFalse(skipData.contains("step = DOWNLOAD_STEP"))
         assertTrue(onboarding.contains("question = stringResource(R.string.cli_wizard_skip_note)"))
-        assertTrue(onboarding.contains("viewModel.onOnboardingSkipped()"))
+        assertTrue(onboarding.contains("viewModel.onOnboardingSkipped(licenseAccepted = choices.licenseAccepted)"))
+        val skipSetup = onboarding.substringAfter("onConfirm = {").substringBefore("onDismiss =")
+        assertTrue(skipSetup.contains("if (choices.licenseAccepted)"))
+        assertTrue(skipSetup.contains("step = LICENSE_STEP"))
+        assertTrue(skipSetup.contains("licenseValidationError = true"))
     }
 
     @Test
@@ -128,7 +132,7 @@ class CliOnboardingInfoAndPromptContractTest {
         val terminal = cli("home/CliHomeTerminal.kt")
         val prompt = terminal
             .substringAfter("private fun CliPromptRow(")
-            .substringBefore("private fun CliTerminalHeader(")
+            .substringBefore("fun CliTerminalHeader(")
         val english = resource("values/strings.xml")
         val russian = resource("values-ru/strings.xml")
 

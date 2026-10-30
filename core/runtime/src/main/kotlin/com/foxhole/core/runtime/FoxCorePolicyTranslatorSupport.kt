@@ -1,5 +1,6 @@
 package com.foxhole.core.runtime
 
+import com.foxhole.core.model.DnsFilterCategory
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
@@ -106,6 +107,7 @@ internal data class DnsFilterTranslation(
     val enabled: Boolean,
     val allowSuffixes: List<String>,
     val bypassPackages: List<String>,
+    val enabledCategories: Set<DnsFilterCategory> = emptySet(),
 )
 
 internal fun JsonObject.stringOrArrayValues(
@@ -172,8 +174,8 @@ internal fun defaultDnsPort(
 ): Int =
     when (type) {
         "udp", "tcp" -> 53
-        "tls" -> 853
-        "https" -> 443
+        "tls", "quic" -> 853
+        "https", "h3" -> 443
         else -> rejectFoxCoreConfig(FoxCoreConfigRejection.POLICY_UNREPRESENTABLE, path)
     }
 

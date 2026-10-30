@@ -14,7 +14,6 @@ import com.foxhole.core.model.TrafficMode
 import com.foxhole.core.model.TunStack
 import com.foxhole.core.model.dnsRuleSetFilteringEnabled
 import com.foxhole.guard.R
-import com.foxhole.guard.applyAppLocale
 import com.foxhole.guard.applyDnsFilterUpdateSchedule
 import com.foxhole.guard.applyGeoIpUpdateSchedule
 import com.foxhole.guard.applySubscriptionRefreshSchedule
@@ -29,9 +28,11 @@ import com.foxhole.guard.core.settings.updateTrafficMode
 import com.foxhole.guard.core.settings.updateTrafficMtu
 import com.foxhole.guard.core.settings.updateTunStack
 import com.foxhole.guard.refreshLocalizedNotificationChannels
-import com.foxhole.guard.runtime.DnsFilterUpdateAvailability
-import com.foxhole.guard.runtime.DnsFilterUpdateStatus
+import com.foxhole.guard.runtime.DnsFilterUpdateResult
 import com.foxhole.guard.runtime.FoxholeVpnService
+import com.foxhole.guard.runtime.categorizedDnsPreparationReady
+import com.foxhole.guard.runtime.categorizedDnsSelection
+import com.foxhole.guard.runtime.dnsCategoryAttempt
 import com.foxhole.guard.userFacingErrorMessage
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
@@ -53,7 +54,7 @@ internal fun HomeViewModel.refreshProfile(profileId: Long) {
 
 internal fun HomeViewModel.deleteProfile(profileId: Long) {
     viewModelScope.launch {
-        runCatching { container.profileRepository.deleteProfile(profileId) }
+        dnsCategoryAttempt { container.profileRepository.deleteProfile(profileId) }
             .onSuccess {
                 startupActiveProfileMutable.value = container.profileRepository.getActiveProfile()
                 emitSuccess(getApplication<Application>().getString(R.string.profile_deleted))
@@ -75,7 +76,7 @@ internal fun HomeViewModel.setSmartProfileProtocolEnabled(
     enabled: Boolean,
 ) {
     viewModelScope.launch {
-        runCatching {
+        dnsCategoryAttempt {
             container.profileRepository.setProfileProtocolOptionEnabled(profileId, optionId, enabled)
         }.onSuccess { updated ->
             if (updated.isActive) {
@@ -101,7 +102,7 @@ internal fun HomeViewModel.renameProfile(
         return
     }
     viewModelScope.launch {
-        runCatching { container.profileRepository.renameProfile(profileId, trimmed) }
+        dnsCategoryAttempt { container.profileRepository.renameProfile(profileId, trimmed) }
             .onSuccess { renamed ->
                 if (renamed.isActive) {
                     startupActiveProfileMutable.value = renamed
@@ -127,9 +128,12 @@ internal fun HomeViewModel.onThemeSelected(value: ThemeMode) {
 
 internal fun HomeViewModel.onLocaleSelected(value: AppLocale) {
     viewModelScope.launch {
-        container.settingsRepository.updateLocale(value)
-        applyAppLocale(value)
-        getApplication<Application>().refreshLocalizedNotificationChannels()
+        try {
+            if (com.foxhole.guard.selectGuardAppLanguage(getApplication<Application>(), container.settingsRepository, value)) {
+                getApplication<Application>().refreshLocalizedNotificationChannels()
+            } else emitError(getApplication<Application>().getString(R.string.app_language_save_failed))
+        } catch (cancelled: CancellationException) { throw cancelled }
+        catch (_: Exception) { emitError(getApplication<Application>().getString(R.string.app_language_save_failed)) }
     }
 }
 
@@ -260,30 +264,16 @@ private fun HomeViewModel.preflightAndApplyDnsRuleSetSettings(value: DnsSettings
         componentUpdates.dnsFilterDownloadProgressMutable.value = null
         try {
             emitInfo(getApplication<Application>().getString(R.string.dns_filter_refresh_started))
-            var terminalPhase =
-                withTimeoutOrNull(DNS_FILTER_PREFLIGHT_TIMEOUT_MS) {
-                    refreshVerifiedDnsRuleSet(value)
-                } ?: FoxholeUpdatePhase.FAILED
-            when (terminalPhase) {
-                FoxholeUpdatePhase.DONE -> {
-                    if (applyVerifiedDnsSettings(value)) {
-                        dnsFilterUpdateAvailableMutable.value = false
-                        emitSuccess(getApplication<Application>().getString(R.string.dns_filter_refresh_complete))
-                    } else {
-                        terminalPhase = FoxholeUpdatePhase.FAILED
-                        emitError(getApplication<Application>().getString(R.string.dns_filter_refresh_failed))
-                    }
-                }
-                FoxholeUpdatePhase.NO_UPDATE -> {
-                    if (applyVerifiedDnsSettings(value)) {
-                        dnsFilterUpdateAvailableMutable.value = false
-                        emitInfo(getApplication<Application>().getString(R.string.dns_filter_refresh_current))
-                    } else {
-                        terminalPhase = FoxholeUpdatePhase.FAILED
-                        emitError(getApplication<Application>().getString(R.string.dns_filter_refresh_failed))
-                    }
-                }
-                else -> emitError(getApplication<Application>().getString(R.string.dns_filter_refresh_failed))
+            val readiness = withTimeoutOrNull(DNS_FILTER_PREFLIGHT_TIMEOUT_MS) {
+                refreshVerifiedDnsRuleSet(value)
+            } ?: DnsCategoryReadiness(false, DnsCategoryRefreshDisposition.FAILED)
+            val terminalPhase = if (readiness.prepared && applyVerifiedDnsSettings(value)) {
+                dnsFilterUpdateAvailableMutable.value = false
+                emitDnsCategoryRefreshOutcome(readiness.disposition)
+                readiness.disposition.phase
+            } else {
+                emitError(getApplication<Application>().getString(R.string.dns_filter_refresh_failed))
+                FoxholeUpdatePhase.FAILED
             }
             settleUpdatePhase({ phase -> dnsFilterUpdatePhaseMutable.value = phase }, terminalPhase)
         } finally {
@@ -297,6 +287,13 @@ private suspend fun HomeViewModel.applyVerifiedDnsSettings(
     value: DnsSettings,
 ): Boolean =
     try {
+        if (!categorizedDnsPreparationReady(
+                value,
+                container.dnsFilterAssetInstaller.prepareCategorized(value)
+            )
+        ) {
+            return false
+        }
         container.settingsRepository.updateDnsSettings(value)
         val settings = container.settingsRepository.current()
         getApplication<Application>().applyDnsFilterUpdateSchedule(
@@ -309,7 +306,7 @@ private suspend fun HomeViewModel.applyVerifiedDnsSettings(
         true
     } catch (error: CancellationException) {
         throw error
-    } catch (error: Throwable) {
+    } catch (error: Exception) {
         container.diagnosticsLogger.recordFailure(
             "dns",
             "verified filter apply failed error=${error.javaClass.simpleName}",
@@ -319,21 +316,7 @@ private suspend fun HomeViewModel.applyVerifiedDnsSettings(
 
 internal fun HomeViewModel.onDnsFilterReEnabled(value: DnsSettings) {
     dnsFilterUpdateAvailableMutable.value = false
-    updateDnsSettingsAndMaybeReconnect(value)
-    viewModelScope.launch {
-        val check =
-            runCatching { container.dnsFilterUpdateRepository.checkForUpdate(dnsSettingsOverride = value) }
-                .getOrNull()
-                ?: return@launch
-        if (check.availability != DnsFilterUpdateAvailability.UPDATE_AVAILABLE) {
-            return@launch
-        }
-        if (value.autoUpdateFilters) {
-            refreshDnsFilterInBackground()
-        } else {
-            dnsFilterUpdateAvailableMutable.value = true
-        }
-    }
+    preflightAndApplyDnsRuleSetSettings(value)
 }
 
 internal fun HomeViewModel.onDnsFilterUpdateNow() {
@@ -342,34 +325,6 @@ internal fun HomeViewModel.onDnsFilterUpdateNow() {
 
 internal fun HomeViewModel.onDnsFilterUpdateDismissed() {
     dnsFilterUpdateAvailableMutable.value = false
-}
-
-private fun HomeViewModel.refreshDnsFilterInBackground() {
-    if (dnsFilterRefreshInProgressMutable.value) {
-        return
-    }
-    viewModelScope.launch {
-        dnsFilterRefreshInProgressMutable.value = true
-        componentUpdates.dnsFilterDownloadProgressMutable.value = null
-        try {
-            runCatching {
-                container.dnsFilterUpdateRepository.refreshNow(
-                    requireAutoEnabled = false,
-                    onProgress = { progress ->
-                        componentUpdates.dnsFilterDownloadProgressMutable.value = progress
-                    },
-                )
-            }
-                .onFailure { error ->
-                    container.diagnosticsLogger.recordFailure(
-                        "dns",
-                        "background filter update failed error=${error.javaClass.simpleName}",
-                    )
-                }
-        } finally {
-            dnsFilterRefreshInProgressMutable.value = false
-        }
-    }
 }
 
 internal fun HomeViewModel.onDnsFilterEnablePreflightCancelled() {
@@ -381,39 +336,49 @@ internal fun HomeViewModel.onDnsFilterEnablePreflightCancelled() {
 
 private const val DNS_FILTER_PREFLIGHT_TIMEOUT_MS = 50_000L
 
-private suspend fun HomeViewModel.refreshVerifiedDnsRuleSet(value: DnsSettings): FoxholeUpdatePhase {
-    val updateResult =
-        runCatching {
-            container.dnsFilterUpdateRepository.refreshNow(
-                requireAutoEnabled = false,
-                dnsSettingsOverride = value,
-                onPhase = { phase -> dnsFilterUpdatePhaseMutable.value = phase.toFoxholeUpdatePhase() },
-                onProgress = { progress ->
-                    componentUpdates.dnsFilterDownloadProgressMutable.value = progress
-                },
-            )
-        }.getOrElse { error ->
-            container.diagnosticsLogger.recordFailure(
-                "dns",
-                "filter preflight failed error=${error.javaClass.simpleName}",
-            )
-            return FoxholeUpdatePhase.FAILED
-        }
-    return verifiedDnsRefreshPhase(updateResult.status)
-}
+private suspend fun HomeViewModel.refreshVerifiedDnsRuleSet(value: DnsSettings): DnsCategoryReadiness =
+    dnsCategoryAttempt {
+        prepareDnsCategoryReadiness(
+            settings = value,
+            prepare = { container.dnsFilterAssetInstaller.prepareCategorized(value) },
+            refresh = {
+                container.dnsFilterUpdateRepository.refreshNow(
+                    requireAutoEnabled = false,
+                    dnsSettingsOverride = value,
+                    onPhase = { phase -> dnsFilterUpdatePhaseMutable.value = phase.toFoxholeUpdatePhase() },
+                    onProgress = { progress -> componentUpdates.dnsFilterDownloadProgressMutable.value = progress },
+                )
+            },
+        )
+    }.getOrElse { error ->
+        container.diagnosticsLogger.recordFailure("dns", "filter preflight failed error=${error.javaClass.simpleName}")
+        DnsCategoryReadiness(false, DnsCategoryRefreshDisposition.FAILED)
+    }
 
-private suspend fun HomeViewModel.verifiedDnsRefreshPhase(status: DnsFilterUpdateStatus): FoxholeUpdatePhase {
-    val updatePhase = dnsFilterTerminalPhase(status)
-    if (!updatePhase.isSuccessfulDnsRefresh()) return updatePhase
-    val verifiedRuleSetReady =
-        runCatching { container.dnsFilterAssetInstaller.prepareVerifiedOrNull() != null }
-            .getOrDefault(false)
-    val terminalPhase = dnsFilterVerifiedTerminalPhase(status, verifiedRuleSetReady)
-    if (!terminalPhase.isSuccessfulDnsRefresh()) return terminalPhase
-    if (status == DnsFilterUpdateStatus.UP_TO_DATE) {
+private suspend fun HomeViewModel.verifiedDnsRefreshReadiness(value: DnsSettings, result: DnsFilterUpdateResult): DnsCategoryReadiness {
+    val preparation = container.dnsFilterAssetInstaller.prepareCategorized(value)
+    val readiness = dnsCategoryReadiness(value, preparation, result)
+    if (readiness.disposition == DnsCategoryRefreshDisposition.ACTIVE_CURRENT || readiness.disposition == DnsCategoryRefreshDisposition.LEGACY_CURRENT) {
         container.settingsRepository.markDnsFiltersUpdated()
     }
-    return terminalPhase
+    return readiness
+}
+
+private suspend fun HomeViewModel.emitDnsCategoryRefreshOutcome(disposition: DnsCategoryRefreshDisposition) {
+    when (disposition) {
+        DnsCategoryRefreshDisposition.PREPARED_PENDING -> emitInfo(
+            getApplication<Application>().getString(R.string.dns_category_prepared_pending)
+        )
+        DnsCategoryRefreshDisposition.ACTIVE_UPDATED, DnsCategoryRefreshDisposition.LEGACY_UPDATED -> emitSuccess(
+            getApplication<Application>().getString(R.string.dns_filter_refresh_complete)
+        )
+        DnsCategoryRefreshDisposition.ACTIVE_CURRENT, DnsCategoryRefreshDisposition.LEGACY_CURRENT -> emitInfo(
+            getApplication<Application>().getString(R.string.dns_filter_refresh_current)
+        )
+        DnsCategoryRefreshDisposition.FAILED -> emitError(
+            getApplication<Application>().getString(R.string.dns_filter_refresh_failed)
+        )
+    }
 }
 
 internal fun HomeViewModel.onDnsBypassPackagesChanged(value: List<String>) {
@@ -449,47 +414,36 @@ internal fun HomeViewModel.onDnsFilterManualRefresh() {
         }
 }
 
-private suspend fun HomeViewModel.runDnsFilterManualRefreshRequest(): FoxholeUpdatePhase =
-    runCatching {
+private suspend fun HomeViewModel.runDnsFilterManualRefreshRequest(): FoxholeUpdatePhase {
+    val selected = container.settingsRepository.current().dns
+    return dnsCategoryAttempt {
         container.dnsFilterUpdateRepository.refreshNow(
             requireAutoEnabled = false,
+            dnsSettingsOverride = selected,
             onPhase = { phase -> dnsFilterUpdatePhaseMutable.value = phase.toFoxholeUpdatePhase() },
-            onProgress = { progress ->
-                componentUpdates.dnsFilterDownloadProgressMutable.value = progress
-            },
+            onProgress = { progress -> componentUpdates.dnsFilterDownloadProgressMutable.value = progress },
         )
     }.fold(
         onSuccess = { result ->
-            when (val terminalPhase = verifiedDnsRefreshPhase(result.status)) {
-                FoxholeUpdatePhase.DONE -> {
-                    dnsFilterUpdateAvailableMutable.value = false
-                    emitSuccess(getApplication<Application>().getString(R.string.dns_filter_refresh_complete))
-                    terminalPhase
-                }
-                FoxholeUpdatePhase.NO_UPDATE -> {
-                    dnsFilterUpdateAvailableMutable.value = false
-                    emitInfo(getApplication<Application>().getString(R.string.dns_filter_refresh_current))
-                    terminalPhase
-                }
-                else -> {
-                    container.diagnosticsLogger.record(
-                        "dns",
-                        "verified filter refresh unavailable status=${result.status.name.lowercase()}",
-                    )
-                    emitError(getApplication<Application>().getString(R.string.dns_filter_refresh_failed))
-                    terminalPhase
-                }
+            val readiness = if (container.settingsRepository.current().dns.categorizedDnsSelection() == selected.categorizedDnsSelection()) {
+                verifiedDnsRefreshReadiness(selected, result)
+            } else {
+                DnsCategoryReadiness(false, DnsCategoryRefreshDisposition.FAILED)
             }
+            if (readiness.prepared) dnsFilterUpdateAvailableMutable.value = false
+            emitDnsCategoryRefreshOutcome(readiness.disposition)
+            readiness.disposition.phase
         },
         onFailure = { error ->
             container.diagnosticsLogger.recordFailure(
                 "dns",
-                "verified filter refresh failed error=${error.javaClass.simpleName}",
+                "verified filter refresh failed error=${error.javaClass.simpleName}"
             )
             emitError(getApplication<Application>().getString(R.string.dns_filter_refresh_failed))
             FoxholeUpdatePhase.FAILED
         },
     )
+}
 
 internal fun HomeViewModel.onDnsFilterManualRefreshCancel() {
     dnsFilterManualRefreshJob?.cancel()
@@ -498,9 +452,6 @@ internal fun HomeViewModel.onDnsFilterManualRefreshCancel() {
     dnsFilterUpdatePhaseMutable.value = FoxholeUpdatePhase.IDLE
     componentUpdates.dnsFilterDownloadProgressMutable.value = null
 }
-
-private fun FoxholeUpdatePhase.isSuccessfulDnsRefresh(): Boolean =
-    this == FoxholeUpdatePhase.DONE || this == FoxholeUpdatePhase.NO_UPDATE
 
 private suspend fun HomeViewModel.reloadRuntimeAfterDnsRuleSetEnableIfNeeded() {
     if (!shouldReloadRuntimeAfterDnsRuleSetEnable(container.settingsRepository.current().dns)) {

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="cli_core_expert_title">Expert settings</string>
+    <string name="cli_core_expert_note">Changes apply to the active tunnel. Core resource changes restart it. Larger buffers and flow limits can increase memory use.</string>
+    <string name="cli_core_workers">Core threads</string>
+    <string name="cli_core_connect_timeout">Connection timeout</string>
+    <string name="cli_core_handshake_timeout">Handshake timeout</string>
+    <string name="cli_core_relay_buffer">I/O buffer</string>
+    <string name="cli_core_tcp_flows">TCP flow limit</string>
+    <string name="cli_core_udp_flows">UDP flow limit</string>
+    <string name="cli_core_dns_timeout">DNS timeout</string>
+    <string name="cli_core_dns_cache">DNS cache entries</string>
+    <string name="cli_core_reset">Restore core defaults</string>
+    <string name="cli_core_default">Default</string>
+    <string name="cli_core_range">Allowed range: %1$d–%2$d</string>
+</resources>

@@ -81,6 +81,25 @@ public final class FoxholeNativeEngine {
             byte[] artifact,
             Object host);
 
+    public static final long DNS_CONTINUITY_START_QUARANTINED = -1L;
+    public static final long DNS_CONTINUITY_START_FAILED = -2L;
+
+    public static native long nativeRetainDnsContinuation(long handle);
+
+    public static native void nativeReleaseDnsContinuation(long token);
+
+    public static native long nativeStartOnNetworkWithDnsContinuity(
+            int tunFd,
+            String configJson,
+            long networkHandle,
+            long token,
+            String name,
+            byte[] manifest,
+            byte[] signature,
+            byte[] artifact,
+            boolean trusted,
+            Object host);
+
     public static native long nativeInstallDnsRuleSet(
             long handle,
             String name,

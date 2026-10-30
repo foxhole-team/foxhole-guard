@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="router_beta_notice_title" formatted="false">Beta feature</string>
+    <string name="router_beta_notice_body" formatted="false">Automatic installation currently supports only routers with a completely default OpenWrt configuration. You can also pair a router after manually installing the latest FoxHole OpenWrt Client. For setup and pairing, the phone and router must be on the same LAN, and the router needs internet access.</string>
+    <string name="router_beta_notice_dont_show_again" formatted="false">Don\'t show again</string>
+</resources>

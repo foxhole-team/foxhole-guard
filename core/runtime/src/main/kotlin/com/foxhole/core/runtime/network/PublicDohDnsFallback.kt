@@ -8,11 +8,15 @@ import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import java.io.ByteArrayOutputStream
 import java.io.IOException
+import java.io.InputStream
 import java.net.InetAddress
+import java.net.SocketTimeoutException
 import java.net.URL
 import java.net.URLEncoder
 import java.net.UnknownHostException
+import java.util.concurrent.TimeUnit
 import javax.net.ssl.HttpsURLConnection
 
 fun interface PublicDnsFallback {
@@ -104,7 +108,7 @@ internal object PublicDohDnsFallback : PublicDnsFallback {
             if (code !in 200..299) {
                 throw IOException("DoH resolver returned HTTP $code")
             }
-            parseDohAddresses(connection.inputStream.bufferedReader().use { it.readText() }, type)
+            parseDohAddresses(connection.inputStream.use { it.readDohBodyCapped() }, type)
         } finally {
             connection.disconnect()
         }
@@ -128,7 +132,7 @@ internal object PublicDohDnsFallback : PublicDnsFallback {
             if (code !in 200..299) {
                 throw IOException("DoH resolver returned HTTP $code")
             }
-            parseDohTxtRecords(connection.inputStream.bufferedReader().use { it.readText() })
+            parseDohTxtRecords(connection.inputStream.use { it.readDohBodyCapped() })
         } finally {
             connection.disconnect()
         }
@@ -194,3 +198,30 @@ internal object PublicDohDnsFallback : PublicDnsFallback {
             "https://dns.google/resolve",
         )
 }
+
+internal fun InputStream.readDohBodyCapped(
+    nowNanos: () -> Long = System::nanoTime,
+): String {
+    val started = nowNanos()
+    val output = ByteArrayOutputStream()
+    val chunk = ByteArray(8_192)
+    while (true) {
+        requireDohBodyTime(started, nowNanos())
+        val remaining = DOH_MAX_BODY_BYTES + 1 - output.size()
+        if (remaining <= 0) throw IOException("DoH response body too large")
+        val count = read(chunk, 0, minOf(chunk.size, remaining))
+        requireDohBodyTime(started, nowNanos())
+        if (count < 0) return output.toString(Charsets.UTF_8.name())
+        output.write(chunk, 0, count)
+        if (output.size() > DOH_MAX_BODY_BYTES) throw IOException("DoH response body too large")
+    }
+}
+
+private fun requireDohBodyTime(started: Long, now: Long) {
+    if (now - started >= TimeUnit.MILLISECONDS.toNanos(DOH_BODY_BUDGET_MS)) {
+        throw SocketTimeoutException("DoH response body timed out")
+    }
+}
+
+private const val DOH_MAX_BODY_BYTES = 64 * 1024
+private const val DOH_BODY_BUDGET_MS = 1_500L

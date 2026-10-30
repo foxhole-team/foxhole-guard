@@ -7,17 +7,21 @@
     >
 </p>
 
-<p align="center">
-  <a href="README.md">
-    <img src="https://img.shields.io/badge/🇬🇧-English-ff7a00?style=flat-square">
-  </a><a href="docs/README.ru.md">
-    <img src="https://img.shields.io/badge/🇷🇺-Русский-ff7a00?style=flat-square">
-  </a>
-</p>
+<div align="center">
+
+[![English](https://img.shields.io/badge/%F0%9F%87%AC%F0%9F%87%A7-English-ff7a00?style=flat-square)](README.md)
+[![Русский](https://img.shields.io/badge/%F0%9F%87%B7%F0%9F%87%BA-%D0%A0%D1%83%D1%81%D1%81%D0%BA%D0%B8%D0%B9-ff7a00?style=flat-square)](docs/README.ru.md)
+[![Deutsch](https://img.shields.io/badge/%F0%9F%87%A9%F0%9F%87%AA-Deutsch-ff7a00?style=flat-square)](docs/README.de.md)
+[![Français](https://img.shields.io/badge/%F0%9F%87%AB%F0%9F%87%B7-Fran%C3%A7ais-ff7a00?style=flat-square)](docs/README.fr.md)
+[![Español](https://img.shields.io/badge/%F0%9F%87%AA%F0%9F%87%B8-Espa%C3%B1ol-ff7a00?style=flat-square)](docs/README.es.md)
+[![日本語](https://img.shields.io/badge/%F0%9F%87%AF%F0%9F%87%B5-%E6%97%A5%E6%9C%AC%E8%AA%9E-ff7a00?style=flat-square)](docs/README.ja.md)
+[![简体中文](https://img.shields.io/badge/%F0%9F%87%A8%F0%9F%87%B3-%E7%AE%80%E4%BD%93%E4%B8%AD%E6%96%87-ff7a00?style=flat-square)](docs/README.zh.md)
+
+</div>
 
 <p align="center">
   <a href="https://github.com/foxhole-team/foxhole-guard/releases">
-    <img src="https://img.shields.io/github/v/release/foxhole-team/foxhole-guard?label=GitHub%20version&style=flat-square" alt="GitHub Version">
+    <img src="https://img.shields.io/github/v/release/foxhole-team/foxhole-guard?label=version&style=flat-square" alt="Version">
   </a>
   <a href="https://f-droid.org/packages/com.foxhole.guard/">
     <img src="https://img.shields.io/f-droid/v/com.foxhole.guard?label=F-Droid&logo=f-droid&style=flat-square" alt="F-Droid Version">
@@ -37,14 +41,13 @@
 
 **FoxHole Guard** is a network protection, privacy, and local network activity control suite for Android.
 
+Published versions and APK assets are listed in [GitHub Releases](https://github.com/foxhole-team/foxhole-guard/releases).
+
 The application combines its own native **FoxHole Core written in Rust**, VPN, Tor, I2P, a local firewall, DNS filtering, network activity monitoring, web apps, and a proxy server.
 
 The core idea of the project is a single application for everyday network protection, access to VPN and the Tor and I2P anonymity networks, application traffic routing, local detection of unusual network activity, and unauthorized application installations. FoxHole Guard maintains logs containing system events, application installations and removals, and network traffic anomalies.
 
 **FoxHole Guard** contains no advertising, usage analytics, or telemetry. Application lists, statistics, logs, routing rules, and local analysis results remain on the device unless the user explicitly exports them.
-
-> [!IMPORTANT]
-> The project is actively developed and undergoing release checks. Some code and documentation are created with AI solely to accelerate development and testing.
 
 <p align="center">
   <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/00_main_en.png" width="24%" alt="Main">
@@ -58,7 +61,7 @@ The core idea of the project is a single application for everyday network protec
 ## ✨ Key features
 
 - **FoxHole Core** - a custom network core written in Rust.
-- **VPN protocol support** - VLESS, VMess, Hysteria2, WireGuard, AmneziaWG, Trojan, Shadowsocks, Naive, TUIC, and AnyTLS.
+- **VPN protocol support** - VLESS, VMess, Hysteria2, WireGuard, AmneziaWG (experimental), Trojan, Shadowsocks, Naive, TUIC, and AnyTLS.
 - **Tor access** - connection to Tor inside a TCP VPN tunnel, routing for selected applications, bridge support, and automatic scheduled Tor circuit rotation.
 - **I2P access** - access to `.i2p` resources through a separate `i2pd` process and a local SOCKS5 contract with FoxHole Core.
 - **Firewall** - application blocking, kill switch, and quarantine for newly installed applications.
@@ -67,6 +70,7 @@ The core idea of the project is a single application for everyday network protec
 - **FoxHole Sentinel** - optional local IOC and network-anomaly analysis, disabled by default.
 - **Web apps** - support for HTML5 applications and notification delivery.
 - **Proxy server** - a local-network proxy server with SOCKS5 and HTTP CONNECT support and authentication.
+- **Router management public beta (OpenWrt)** - setup, pairing, VPN profiles, device routing and protocol packages from Settings. The first installation requires an explicit, initially unchecked package-license choice; paired routers keep their settings. Router management is a public beta; device compatibility and installation/update workflows remain under validation.
 - **Background services** - `foxhole watchdog web` and `foxhole watchdog guard` for web-app notification delivery and background security-event monitoring.
 - **Security** - mechanisms for detecting signs of compromise and interference: application installation/removal logging, network anomaly analysis, and checks of newly installed applications against threat indicators and requested permissions. Custom encryption of application data is supported.
 
@@ -89,6 +93,14 @@ modules  ·  extensions  ·  background services
 - **Rules** determine how applications and websites use routes through VPN and Tor.
 - **Modules and extensions** operate alongside any active application mode.
 - **Background services**, when enabled, run continuously within Android platform restrictions.
+
+### 👤 User and Expert interface
+
+**User** presents the compact dashboard, connection controls and profile selector.
+**Expert** exposes additional diagnostics and tuning. This choice changes presentation;
+routing rules, security consent and advanced settings remain separate.
+
+Choose User or Expert in Settings or the first-run appearance setup. The content-sized mode picker opens upward with light haptic feedback. The OpenWrt shortcut on the app home screen defaults ON; its dock shortcut defaults OFF. These independent settings only show or hide icons: OpenWrt settings remain accessible and router/routing/pairing policy is unchanged.
 
 ### 🎛️ Operating modes
 
@@ -213,6 +225,9 @@ At the current stage, FoxHole Sentinel includes:
 
 - **Echap Stalkerware Indicators** - local checking against known stalkerware indicators;
 - **network IOC matcher** - application network activity from the live FoxHole Core event stream is matched against known domains and IP addresses; enabled with the FoxHole Sentinel analysis toggle;
+- bounded APK/DEX inspection and optional YARA-X rules over verified classic DEX bytes in an isolated scanner process; incomplete coverage is reported;
+- static DEX structure/API-reference indicators, without executing application code;
+- statistical traffic alerts for upload/background/total-traffic spikes, new destination countries, DNS-block ratios, reconnect storms, latency shifts and dormant-app network activity;
 - local correlation of detected IOCs with the application that owns the network flow;
 - integration with the FoxHole Guard firewall and quarantine;
 - core-event auditing through a bounded FoxHole Core event stream.
@@ -225,15 +240,13 @@ FoxHole Core does not maintain a persistent user Guard log. The core exposes a b
 
 The FoxHole Sentinel architecture is designed for further expansion of local analysis. The following capabilities are **not yet implemented and are not part of the current version**:
 
-- YARA-X for local analysis of APK, DEX, and native libraries;
-- detection of packer, obfuscation, and anti-analysis indicators;
+- native-library machine-code analysis and broader packer/anti-analysis detection;
 - behavioral analysis of DEX and Android API sequences;
 - correlation with MITRE ATT&CK Mobile;
 - advanced analysis of application network behavior;
 - detection of beacon-like activity;
-- analysis of unusual TX/RX patterns;
 - DGA-like DNS indicators;
-- per-app baselines that account for Wi-Fi/mobile and foreground/background state;
+- richer behavioral baselines beyond the current bounded traffic-window statistics;
 - a correlation engine combining static, IOC, Android, and network evidence into a single finding.
 
 These capabilities are planned as local detectors without cloud scanning and without sending APKs, the installed-application list, or network activity history.
@@ -256,12 +269,12 @@ A hash chain is used for integrity verification.
 
 | Protocol / mode | Support |
 | --- | --- |
-| **VLESS** | raw, WebSocket, HTTP Upgrade, gRPC/HTTP-2, TLS, Reality, Vision, UDP-over-stream, XUDP, packetaddr |
-| **VMess** | modern AEAD (`alterId=0`), raw, WebSocket, TLS, TCP/UDP |
+| **VLESS** | raw, WebSocket, HTTP Upgrade, gRPC/HTTP-2, XHTTP stream-one over HTTP/2, TLS, Reality, Vision, UDP-over-stream, XUDP, packetaddr |
+| **VMess** | modern AEAD (`alterId=0`), raw, WebSocket, HTTP Upgrade, gRPC/HTTP-2, XHTTP stream-one over HTTP/2, TLS, TCP/UDP |
 | **Hysteria2** | QUIC/H3, auth, Brutal, TCP/UDP, Salamander obfs, destination-port hopping on one protected local UDP socket, reconnect |
 | **WireGuard** | custom Noise_IKpsk2 handshake, L3 data path, `reserved`, import of `wg://` and `.conf` |
-| **AmneziaWG** | `Jc/Jmin/Jmax/S1..S4/H1..H4`, 2.0 templates `I1..I5` |
-| **Trojan** | TLS, TCP and UDP framing |
+| **AmneziaWG** (experimental) | `Jc/Jmin/Jmax/S1..S4/H1..H4`, checked header ranges, 2.0 templates `I1..I5`, `RandomTrailers`, content padding and `HeaderProtectionKey` |
+| **Trojan** | TLS, WebSocket, HTTP Upgrade, gRPC/HTTP-2, XHTTP stream-one over HTTP/2, TCP and UDP framing |
 | **Shadowsocks** | AEAD and AEAD-2022, TCP/UDP |
 | **Outline** | Shadowsocks variant, not a separate protocol |
 | **Naive** | native HTTP/2 CONNECT with protocol padding |
@@ -272,9 +285,16 @@ A hash chain is used for integrity verification.
 | **Tor** | Arti, TCP, `.onion`, bridges |
 | **I2P** | TCP-only loopback SOCKS5 adapter to a separate `i2pd` process |
 
+Reality is a security layer below supported stream carriers, including XHTTP stream-one.
+Vision requires raw TCP. Other XHTTP modes and unsupported settings are refused.
+
 ### ↔️ Shadowsocks and Outline
 
 Outline is treated as a Shadowsocks variant.
+
+Profiles accept share links, v2rayTun subscriptions, SIP008 JSON and compatible Clash/mihomo YAML.
+Dynamic Outline keys (`ssconf://`) retain their source for refresh and sharing.
+Unsupported entries and client settings are reported; external YAML providers are not fetched.
 
 Supported:
 
@@ -283,8 +303,6 @@ Supported:
 - Outline `prefix=` for compatible AEAD configurations;
 - SIP003 `v2ray-plugin` in WebSocket mode;
 - `simple-obfs` in `http` and `tls` modes.
-
-`v2ray-plugin` and `simple-obfs`
 
 ### 🚫 Not supported
 
@@ -406,6 +424,31 @@ Web-app notifications are delivered by a separate background service.
 
 **After polling.** The override is removed and removal is verified. Service-worker networking is blocked until the route changes so a background page worker cannot access the network outside the new override. A foreground frame takes exclusive ownership of the override: while it owns the override, background passes do not start, and if ownership cannot be obtained, the frame does not open. The frame never operates outside its assigned route.
 
+## 🛜 Router management public beta
+
+Open OpenWrt in Settings to pair a router and manage its VPN profiles, device routing, protocol packages and FoxHole updates. Device compatibility and installation/update workflows remain under validation. The management switch applies to the selected saved pairing; turning it off does not stop the router VPN.
+
+> [!IMPORTANT]
+> Automatic installation currently supports only routers with a completely default OpenWrt configuration.
+> You can also pair a router after manually installing the latest [FoxHole OpenWrt Client](https://github.com/foxhole-team/foxhole-openwrt-client).
+> For setup and pairing, the phone and router must be on the same LAN, and the router needs internet access.
+
+The Wi-Fi icon reports only a physical Wi-Fi connection, without an SSID or location access. Search and new setup/pairing require Wi-Fi. Manual entry is prefilled once with the current private IPv4 Wi-Fi gateway when available and stays editable.
+
+Manage through home VPN is a separate opt-in, OFF by default for each existing pairing. It also requires your Public IP address confirmation (the router has a public IP and incoming VPN service) and a usable active VPN route. That confirmation does not assign an address or configure the firewall. The app can attempt foreground control through that VPN network at the saved private endpoint using the existing pinned TLS identity and paired authentication; it opens no WAN management port and does not enable discovery or new pairing over mobile data. Automatic phone VPN switching/handoff remains disabled; this opt-in concerns router management only.
+
+Only incoming-VPN profiles delivered directly to the app by an authenticated paired router receive separate app-link metadata. Their connection URI, configuration and QR formats are unchanged. Generic web/QR/provider exports remain unmarked, and imported hints cannot establish trust.
+
+Automatic recognition additionally requires the matching saved local profile, current configuration and selected pairing, with that profile actually connected through the app-owned VPN. It makes one bounded check per actual connection, with no timer, automatic retry or provider-profile polling. Retry pairing is an explicit Wi-Fi/permission/PIN flow: the old record remains until authentication succeeds, and a changed certificate identity is never accepted silently.
+
+Setup requires OpenWrt 25.12.5 with APK, administrator access and an authenticated catalog matching the exact target and architecture. The current package/update policy admits `mediatek/filogic` and `x86/64`; this does not establish compatibility with every router model. Dependencies, kernel ABI, flash and RAM must also pass admission.
+
+The first installation requires explicit agreement with the FoxHole OpenWRT Client license; this choice starts unchecked. The separate automatic-update checkbox starts enabled for a new installation: clear it to opt out or change it later in router Settings. Pairing an existing router preserves its policy. Direct CLI/backend defaults remain off.
+
+Manual updates from the app and LuCI use the same authenticated transaction. When automatic updates are enabled, the router checks daily and installs verified FoxHole packages independently of the app update channel. Profiles, pairing and selected protocol modules are preserved; OpenWrt firmware and unrelated system packages are not upgraded. Unpairing the phone does not disable the router's update policy.
+
+---
+
 ## ⚙️ Background services
 
 FoxHole Guard uses two independent background services.
@@ -439,6 +482,7 @@ FoxHole DB contains five independent signed datasets downloaded by the applicati
 
 - `INTERNET` - VPN, proxy, Tor, I2P, DNS, web apps, subscriptions, and updatable network data.
 - `ACCESS_NETWORK_STATE` / `ACCESS_WIFI_STATE` - network state, network rules, and proxy server.
+- `ACCESS_LOCAL_NETWORK` - router discovery, setup and management. On Android 17 (API 37) or later, when the app targets API 37 or later, the app requests the system permission before LAN actions. Denial blocks those actions.
 - `FOREGROUND_SERVICE` and corresponding foreground-service permissions - long-running user-controlled network modes with a visible notification.
 - `QUERY_ALL_PACKAGES` - application list for split routing, firewall, quarantine, DNS exclusions, and local auditing.
 - `PACKAGE_USAGE_STATS` - only for user-enabled local statistics and analysis features that require the corresponding Android system access.
@@ -481,26 +525,22 @@ FoxHole Guard performs network requests only for enabled or user-initiated featu
 
 ## 🤖 Android / Native ABI
 
-FoxHole Core connects to Android through a versioned C/JNI ABI.
+Android 8 (API 26) or later is required. FoxHole Core connects through a versioned C/JNI ABI; the Capabilities API reports the protocols and features compiled into the build.
 
-The Capabilities API reports the protocols and core capabilities actually compiled into the build.
+The `android4` delivery profile targets `arm64-v8a`, `armeabi-v7a`, `x86` and `x86_64`. Each ABI needs matching native libraries and license data. Available APK architectures and asset names are determined by the actual published release; a build option alone is not device/runtime acceptance.
 
-The public beta APK ships one device-verified ABI: `arm64-v8a`.
-
-`armeabi-v7a` and `x86_64` remain buildable development targets, but they are not
-distributed until their live device/runtime matrices pass.
-
-Native libraries are built using pinned Rust/NDK toolchains and pass ELF gates.
+Native builds use pinned Rust/NDK toolchains and require ELF checks.
 
 ---
 
 ## 🔏 Release verification
 
-Release automation builds two ARM64 APKs with the same signing certificate:
-`FoxHole-<tag>-arm64-v8a-release.apk` supports in-app updates from GitHub;
-`FoxHole-<tag>-arm64-v8a-fdroid.apk` disables in-app APK updates and omits the
-package-install permission. The F-Droid recipe reproduces the latter; updates
-are managed by the F-Droid client. Each APK has its own delivery SBOM.
+Owner-signed release APKs use the certificate below. GitHub builds support verified
+in-app updates. The dedicated F-Droid variant disables in-app APK updates and omits
+the package-install permission; its updates are managed by the F-Droid client.
+Source-recipe and reproduction checks precede publication, and F-Droid inclusion
+remains subject to F-Droid review. Each APK has its own delivery SBOM; published
+checksums identify the exact release assets.
 
 For APKs from an official release, verifying the checksum and signing certificate is recommended.
 
@@ -509,7 +549,7 @@ sha256sum -c SHA256SUMS
 ```
 
 ```bash
-apksigner verify --print-certs FoxHole-<tag>-<abi>-release.apk
+apksigner verify --print-certs downloaded-apk.apk
 ```
 
 Expected certificate SHA-256 fingerprint:
@@ -528,11 +568,17 @@ Expected SHA-1 fingerprint:
 
 ## 🔗 Related projects
 
-[![FoxHole Core](https://img.shields.io/badge/GitHub-FoxHole_Core-181717?logo=github)](https://github.com/foxhole-team/foxhole-core)
-[![Version](https://img.shields.io/github/v/release/foxhole-team/foxhole-core?label=version)](https://github.com/foxhole-team/foxhole-core/releases)
+[![FoxHole Core](https://img.shields.io/badge/GitHub-FoxHole_Core-181717?logo=github&style=flat-square)](https://github.com/foxhole-team/foxhole-core)
+[![Version](https://img.shields.io/github/v/release/foxhole-team/foxhole-core?label=version&style=flat-square)](https://github.com/foxhole-team/foxhole-core/releases)
 
-[![FoxHole DB](https://img.shields.io/badge/GitHub-FoxHole_DB-181717?logo=github)](https://github.com/foxhole-team/foxhole-db)
-[![Version](https://img.shields.io/github/v/release/foxhole-team/foxhole-db?label=version)](https://github.com/foxhole-team/foxhole-db/releases)
+[![FoxHole DB](https://img.shields.io/badge/GitHub-FoxHole_DB-181717?logo=github&style=flat-square)](https://github.com/foxhole-team/foxhole-db)
+[![Version](https://img.shields.io/github/v/release/foxhole-team/foxhole-db?label=version&style=flat-square)](https://github.com/foxhole-team/foxhole-db/releases)
+
+[![FoxHole VPN](https://img.shields.io/badge/GitHub-FoxHole_VPN-181717?logo=github&style=flat-square)](https://github.com/foxhole-team/foxhole-vpn)
+[![Version](https://img.shields.io/github/v/release/foxhole-team/foxhole-vpn?label=version&style=flat-square)](https://github.com/foxhole-team/foxhole-vpn/releases)
+
+[![FoxHole OpenWrt](https://img.shields.io/badge/GitHub-FoxHole_OpenWrt-181717?logo=github&style=flat-square)](https://github.com/foxhole-team/foxhole-openwrt-client)
+[![Version](https://img.shields.io/github/v/release/foxhole-team/foxhole-openwrt-client?label=version&style=flat-square)](https://github.com/foxhole-team/foxhole-openwrt-client/releases)
 
 ---
 
@@ -553,7 +599,15 @@ The dependency and license graph is validated in CI.
 
 ---
 
-## ❤️ Support
+## 💖 Support development
+
+We develop and maintain FoxHole Guard entirely with our own time and resources, with help from AI tools. Your support helps us dedicate more time to the project and speed up development.
+
+[Support the project - cryptocurrency wallets](#cryptocurrency-wallets)
+
+<a id="cryptocurrency-wallets"></a>
+
+### 🪙 Cryptocurrency wallets
 
 **XMR (Monero):**
 
@@ -576,8 +630,6 @@ bc1qatnyy7jcpqrp0d3dk9rta9vqfejgh4mysd6m2f
 ---
 
 ## ⚠️ Disclaimer
-
-> Android application development is not our primary area of work. Our main areas of specialization are backend engineering, security, machine learning, and cryptography.
 
 - Tor is a trademark of The Tor Project. FoxHole Guard is not a product of The Tor Project and is not endorsed, sponsored, or affiliated with The Tor Project.
 - FoxHole Guard is not a product of AdGuard and is not affiliated with AdGuard Software Ltd.

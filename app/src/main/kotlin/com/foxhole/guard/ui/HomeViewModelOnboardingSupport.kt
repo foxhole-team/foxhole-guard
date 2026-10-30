@@ -1,9 +1,10 @@
 package com.foxhole.guard.ui
 
+import android.app.Application
 import androidx.compose.runtime.Immutable
 import androidx.lifecycle.viewModelScope
+import com.foxhole.guard.R
 import com.foxhole.guard.core.settings.completeOnboarding
-import com.foxhole.guard.core.settings.markDnsFiltersUpdated
 import com.foxhole.guard.core.settings.updateAnomalyEnabled
 import com.foxhole.guard.core.settings.updateComponentAutoUpdate
 import com.foxhole.guard.core.settings.updateDnsSettings
@@ -13,12 +14,15 @@ import com.foxhole.guard.core.settings.updatePrivacyRouteBridgesEnabled
 import com.foxhole.guard.core.settings.updatePrivacyRouteBridgesUseFoxholeSource
 import com.foxhole.guard.core.settings.updatePrivacyRoutePermitted
 import com.foxhole.guard.core.settings.updateTrafficMapEnabled
-import com.foxhole.guard.runtime.DnsFilterUpdateStatus
 import com.foxhole.guard.runtime.GeoIpUpdateStatus
 import com.foxhole.guard.runtime.RemoteDownloadProgress
 import com.foxhole.guard.runtime.RemoteUpdatePhase
 import com.foxhole.guard.runtime.ThreatIntelUpdateStatus
 import com.foxhole.guard.runtime.TorBridgeUpdateStatus
+import com.foxhole.guard.runtime.dnsCategoryAttempt
+import com.foxhole.guard.runtime.requiredCategorizedDnsRuntimePaths
+import com.foxhole.guard.userFacingErrorMessage
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
@@ -39,6 +43,7 @@ data class OnboardingDownloadState(
     val totalBytes: Long = 0L,
     val done: Boolean = false,
     val failed: Boolean = false,
+    val dnsPreparedForRuntimeVerification: Boolean = false,
 ) {
     val downloadFraction: Float
         get() =
@@ -62,7 +67,7 @@ data class OnboardingProgress(
             } else {
                 items.sumOf { state ->
                     when {
-                        state.done || state.failed -> 1.0
+                        state.done || state.failed || state.dnsPreparedForRuntimeVerification -> 1.0
                         state.phase == RemoteUpdatePhase.VERIFYING -> 1.0
                         state.phase == RemoteUpdatePhase.DOWNLOADING -> state.downloadFraction.toDouble()
                         else -> 0.0
@@ -75,6 +80,7 @@ internal val HomeViewModel.onboardingProgress: StateFlow<OnboardingProgress>
     get() = onboardingProgressMutable.asStateFlow()
 
 internal fun HomeViewModel.onOnboardingFinished(
+    licenseAccepted: Boolean,
     torEnabled: Boolean,
     torBridges: Boolean,
     bridgesFoxholeMirror: Boolean,
@@ -84,6 +90,7 @@ internal fun HomeViewModel.onOnboardingFinished(
     dnsFilterEnabled: Boolean,
     autoUpdate: Boolean,
 ) {
+    if (!requireOnboardingLicense(licenseAccepted)) return
     viewModelScope.launch {
         val repository = container.settingsRepository
         if (torEnabled) {
@@ -103,8 +110,24 @@ internal fun HomeViewModel.onOnboardingFinished(
             repository.updateI2pEnabled(true)
             repository.updateI2pRelayTransitTraffic(i2pRelay)
         }
-        if (onboardingDnsFilterCanEnable(dnsFilterEnabled, onboardingProgressMutable.value)) {
-            repository.updateDnsSettings(repository.current().dns.copy(filteringEnabled = true))
+        if (dnsFilterEnabled) {
+            val selected = repository.current().dns.copy(filteringEnabled = true)
+            val prepared = dnsCategoryAttempt {
+                requiredCategorizedDnsRuntimePaths(
+                    selected,
+                    container.dnsFilterAssetInstaller.prepareCategorized(selected)
+                )
+            }
+            if (!onboardingDnsFilterCanEnable(true, onboardingProgressMutable.value) || prepared.isFailure) {
+                emitError(
+                    getApplication<Application>().userFacingErrorMessage(
+                        prepared.exceptionOrNull(),
+                        R.string.dns_filter_refresh_failed
+                    )
+                )
+                return@launch
+            }
+            repository.updateDnsSettings(selected)
         } else {
             repository.updateDnsSettings(repository.current().dns.copy(filteringEnabled = false))
         }
@@ -116,13 +139,31 @@ internal fun HomeViewModel.onOnboardingFinished(
             ),
         )
         repository.updateComponentAutoUpdate(autoUpdate)
-        repository.completeOnboarding()
+        completeOnboardingWithFeedback(licenseAccepted)
     }
 }
 
-internal fun HomeViewModel.onOnboardingSkipped() {
+internal fun HomeViewModel.onOnboardingSkipped(licenseAccepted: Boolean) {
+    if (!requireOnboardingLicense(licenseAccepted)) return
     viewModelScope.launch {
-        container.settingsRepository.completeOnboarding()
+        completeOnboardingWithFeedback(licenseAccepted)
+    }
+}
+
+private fun HomeViewModel.requireOnboardingLicense(licenseAccepted: Boolean): Boolean {
+    if (!licenseAccepted) viewModelScope.launch {
+        emitError(getApplication<Application>().getString(R.string.cli_wizard_license_required))
+    }
+    return licenseAccepted
+}
+
+private suspend fun HomeViewModel.completeOnboardingWithFeedback(licenseAccepted: Boolean) {
+    try {
+        container.settingsRepository.completeOnboarding(licenseAccepted)
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (_: Exception) {
+        emitError(getApplication<Application>().getString(R.string.cli_wizard_license_save_failed))
     }
 }
 
@@ -148,24 +189,30 @@ internal fun HomeViewModel.onOnboardingDownload(
         )
     viewModelScope.launch {
         planned.forEach { item ->
-            val failed = runCatching {
+            var dnsPreparedForRuntimeVerification = false
+            val failed = dnsCategoryAttempt {
                 when (item) {
                     OnboardingDownload.DNS_FILTER -> {
-                        val status = container.dnsFilterUpdateRepository.refreshNow(
-                            requireAutoEnabled = false,
-                            dnsSettingsOverride = container.settingsRepository.current().dns.copy(
-                                filteringEnabled = true,
-                            ),
-                            onPhase = { phase -> onboardingPhase(item, phase) },
-                            onProgress = { progress -> onboardingDownloadProgress(item, progress) },
-                        ).status
-                        val verified =
-                            dnsFilterDownloadCanEnable(status) &&
-                                container.dnsFilterAssetInstaller.prepareVerifiedOrNull() != null
-                        if (verified && status == DnsFilterUpdateStatus.UP_TO_DATE) {
-                            container.settingsRepository.markDnsFiltersUpdated()
+                        val selected = container.settingsRepository.current().dns.copy(filteringEnabled = true)
+                        val readiness = prepareDnsCategoryReadiness(
+                            settings = selected,
+                            prepare = { container.dnsFilterAssetInstaller.prepareCategorized(selected) },
+                            refresh = {
+                                container.dnsFilterUpdateRepository.refreshNow(
+                                    requireAutoEnabled = false,
+                                    dnsSettingsOverride = selected,
+                                    onPhase = { phase -> onboardingPhase(item, phase) },
+                                    onProgress = { progress -> onboardingDownloadProgress(item, progress) },
+                                )
+                            },
+                        )
+                        dnsPreparedForRuntimeVerification = readiness.prepared && !readiness.active
+                        if (dnsPreparedForRuntimeVerification) {
+                            emitInfo(
+                                getApplication<Application>().getString(R.string.dns_category_prepared_pending)
+                            )
                         }
-                        !verified
+                        !readiness.prepared
                     }
 
                     OnboardingDownload.TOR_BRIDGES ->
@@ -204,6 +251,7 @@ internal fun HomeViewModel.onOnboardingDownload(
             onboardingProgressMutable.value = onboardingProgressMutable.value.mark(
                 item = item,
                 failed = failed,
+                dnsPreparedForRuntimeVerification = dnsPreparedForRuntimeVerification,
             )
         }
         onboardingProgressMutable.value =
@@ -229,7 +277,7 @@ internal fun onboardingDnsFilterCanEnable(
 ): Boolean {
     if (!requested) return false
     val dnsDownload = progress.items.firstOrNull { state -> state.item == OnboardingDownload.DNS_FILTER }
-    return dnsDownload?.let { state -> state.done && !state.failed } == true
+    return dnsDownload?.let { state -> (state.done || state.dnsPreparedForRuntimeVerification) && !state.failed } == true
 }
 
 internal fun onboardingTorBridgesCanEnable(
@@ -313,13 +361,14 @@ private fun HomeViewModel.onboardingDownloadProgress(
     )
 }
 
-private fun OnboardingProgress.mark(item: OnboardingDownload, failed: Boolean): OnboardingProgress =
+private fun OnboardingProgress.mark(item: OnboardingDownload, failed: Boolean, dnsPreparedForRuntimeVerification: Boolean = false): OnboardingProgress =
     copy(
         items = items.map { state ->
             if (state.item == item) {
                 state.copy(
-                    done = !failed,
+                    done = !failed && !dnsPreparedForRuntimeVerification,
                     failed = failed,
+                    dnsPreparedForRuntimeVerification = !failed && dnsPreparedForRuntimeVerification,
                     phase = null,
                     downloadedBytes = 0L,
                     totalBytes = 0L,

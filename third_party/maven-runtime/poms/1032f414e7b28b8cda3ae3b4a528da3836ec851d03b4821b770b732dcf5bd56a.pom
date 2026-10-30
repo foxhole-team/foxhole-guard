@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd" xmlns="http://maven.apache.org/POM/4.0.0"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <!-- This module was also published with a richer model, Gradle metadata,  -->
+  <!-- which should be used instead. Do not delete the following line which  -->
+  <!-- is to indicate to Gradle or any Gradle module metadata file consumer  -->
+  <!-- that they should prefer consuming it instead. -->
+  <!-- do_not_remove: published-with-gradle-metadata -->
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>net.zetetic</groupId>
+  <artifactId>sqlcipher-android</artifactId>
+  <version>4.19.1</version>
+  <packaging>aar</packaging>
+  <name>sqlcipher-android</name>
+  <description>SQLCipher for Android a library that provides full database encryption.</description>
+  <url>https://www.zetetic.net/sqlcipher</url>
+  <licenses>
+    <license>
+      <url>https://www.zetetic.net/sqlcipher/license/</url>
+    </license>
+  </licenses>
+  <developers>
+    <developer>
+      <name>Zetetic Support</name>
+      <email>support@zetetic.net</email>
+      <organization>Zetetic LLC</organization>
+      <organizationUrl>https://www.zetetic.net</organizationUrl>
+    </developer>
+  </developers>
+  <scm>
+    <connection>scm:git:https://github.com/sqlcipher/sqlcipher-android.git</connection>
+    <developerConnection>scm:git:https://github.com/sqlcipher/sqlcipher-android.git</developerConnection>
+    <url>https://github.com/sqlcipher/sqlcipher-android.git</url>
+  </scm>
+  <dependencies>
+    <dependency>
+      <groupId>org.jetbrains.kotlin</groupId>
+      <artifactId>kotlin-stdlib</artifactId>
+      <version>2.2.10</version>
+      <scope>compile</scope>
+    </dependency>
+    <dependency>
+      <groupId>androidx.sqlite</groupId>
+      <artifactId>sqlite</artifactId>
+      <version>2.7.0</version>
+      <scope>runtime</scope>
+    </dependency>
+  </dependencies>
+</project>

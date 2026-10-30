@@ -1,11 +1,15 @@
 package com.foxhole.guard.runtime
 
 import android.content.Context
+import com.foxhole.core.model.DnsSettings
 import com.foxhole.core.model.FoxCoreDnsRuleSetBootstrap
 import com.foxhole.core.model.FoxCoreSignedDnsRuleSetUpdate
 import com.foxhole.core.runtime.DnsFilterRuntimePaths
 import com.foxhole.guard.core.data.deleteLocalDataTarget
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
@@ -24,6 +28,175 @@ class DnsFilterAssetInstaller(
     private val appContext: Context,
     private val json: Json,
 ) : DnsFilterRuleSetStore {
+    internal val categorizedStore = CategorizedDnsStagedStore(File(appContext.filesDir, "dns-categories"))
+    private val packagedCategorizedStore =
+        PackagedCategorizedDnsSeedStore(File(appContext.filesDir, "dns-categories-apk"))
+
+    internal suspend fun prepareCategorized(settings: DnsSettings): CategorizedDnsPreparation =
+        withContext(Dispatchers.IO) {
+            val selection = settings.categorizedDnsSelection()
+            if (selection.categories.isEmpty()) return@withContext CategorizedDnsPreparation.Disabled
+            val signedPresent = try {
+                categorizedStore.pendingOrNull(selection.variant) != null || categorizedStore.activeOrNull(selection.variant) != null
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                return@withContext CategorizedDnsPreparation.Unavailable(CategorizedDnsUnavailable.SIGNED_DATA_INVALID)
+            }
+            if (signedPresent) {
+                val paths = prepareCategorizedOrNull(settings)
+                return@withContext paths?.let(CategorizedDnsPreparation::Ready)
+                    ?: CategorizedDnsPreparation.Unavailable(CategorizedDnsUnavailable.SIGNED_DATA_INVALID)
+            }
+            preparePackagedCategorized(selection)
+        }
+
+    private suspend fun preparePackagedCategorized(selection: CategorizedDnsSelection): CategorizedDnsPreparation {
+        val catalogBytes = try {
+            readPackagedDnsAsset("dns-categories/catalog.json", 16384)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: java.io.FileNotFoundException) {
+            return CategorizedDnsPreparation.Unavailable(CategorizedDnsUnavailable.CATALOG_MISSING)
+        } catch (_: Exception) {
+            return CategorizedDnsPreparation.Unavailable(CategorizedDnsUnavailable.CATALOG_INVALID)
+        }
+        return try {
+            val catalog = CategorizedDnsApkContract.parse(catalogBytes)
+            val entry = catalog.variants.getValue(selection.variant)
+            if (!entry.availableCategories().containsAll(selection.categories)) {
+                return CategorizedDnsPreparation.Unavailable(CategorizedDnsUnavailable.REQUIRED_CATEGORY_MISSING)
+            }
+            readPackagedDnsAsset(entry.sourceInfoAsset, 65536)
+            val artifact = packagedCategorizedStore.prepare(entry) {
+                readPackagedDnsAsset(entry.path, entry.size.toInt())
+            }
+            currentCoroutineContext().ensureActive()
+            CategorizedDnsPreparation.Ready(
+                DnsFilterRuntimePaths(
+                    adGuardDnsFilterPath = artifact.absolutePath,
+                    foxCoreBootstrap = FoxCoreDnsRuleSetBootstrap(
+                        name = entry.name,
+                        artifactPath = artifact.absolutePath,
+                        artifactSha256 = entry.sha256,
+                        publicKeyBase64 = FOXCORE_DNS_UPDATE_PUBLIC_KEY_BASE64,
+                        categoryMinimumSequence = 0uL,
+                        availableCategories = entry.availableCategories(),
+                        categoryVariant = selection.variant,
+                    ),
+                )
+            )
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            CategorizedDnsPreparation.Unavailable(CategorizedDnsUnavailable.CATALOG_INVALID)
+        }
+    }
+
+    private suspend fun readPackagedDnsAsset(path: String, limit: Int): ByteArray {
+        require(limit in 1..67108864)
+        return appContext.assets.open(path).use { input ->
+            val output = java.io.ByteArrayOutputStream(minOf(limit, 16384))
+            val buffer = ByteArray(16384)
+            while (true) {
+                currentCoroutineContext().ensureActive()
+                val size = input.read(buffer)
+                if (size < 0) break
+                require(output.size() <= limit - size) { "packaged DNS asset too large" }
+                output.write(buffer, 0, size)
+            }
+            require(output.size() > 0)
+            output.toByteArray()
+        }
+    }
+
+    internal suspend fun prepareCategorizedOrNull(settings: DnsSettings): DnsFilterRuntimePaths? =
+        withContext(Dispatchers.IO) {
+            val selection = settings.categorizedDnsSelection()
+            if (selection.categories.isEmpty()) return@withContext null
+            try {
+                val stage = categorizedStore.pendingOrNull(selection.variant)
+                    ?: categorizedStore.activeOrNull(selection.variant)
+                    ?: return@withContext null
+                val capture = categorizedStore.readBundle(stage)
+                val manifestBytes = capture.manifest
+                val signatureFile = File(stage.directory, "manifest.json.sig")
+                requireFoxholeDbManifestSignature(manifestBytes, capture.signature)
+                val manifest = CategorizedDnsContract.parseVerifiedManifest(
+                    manifestBytes,
+                    (System.currentTimeMillis() / 1_000L).toULong(),
+                    FOXHOLE_DB_MANIFEST_PUBLIC_KEY_SHA256,
+                )
+                selection.requireAvailable(manifest)
+                stage.requireAccepts(manifest, manifestBytes)
+                val artifact = File(stage.directory, CategorizedDnsContract.ARTIFACT_NAME)
+                requireCategorizedArtifactHeader(capture.artifact, manifest)
+                currentCoroutineContext().ensureActive()
+                DnsFilterRuntimePaths(
+                    adGuardDnsFilterPath = artifact.absolutePath,
+                    foxCoreBootstrap = FoxCoreDnsRuleSetBootstrap(
+                        name = manifest.name,
+                        artifactPath = artifact.absolutePath,
+                        artifactSha256 = manifest.artifact.sha256,
+                        publicKeyBase64 = FOXCORE_DNS_UPDATE_PUBLIC_KEY_BASE64,
+                        signedUpdate = FoxCoreSignedDnsRuleSetUpdate(
+                            manifestPath = File(stage.directory, "manifest.json").absolutePath,
+                            signaturePath = signatureFile.absolutePath,
+                            artifactPath = artifact.absolutePath,
+                        ),
+                        categoryMinimumSequence = manifest.sequence,
+                        availableCategories = CategorizedDnsContract.categories(manifest),
+                        categoryVariant = selection.variant,
+                        stagedBundleToken = stage.token,
+                        manifestSha256 = stage.manifestSha256,
+                    ),
+                )
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                null
+            }
+        }
+
+    internal suspend fun captureCategorizedBootstrapReadLease(
+        bootstrap: FoxCoreDnsRuleSetBootstrap,
+    ): CategorizedDnsReadLease? {
+        val variant = bootstrap.categoryVariant ?: return null
+        val stage = categorizedStore.pendingOrNull(variant) ?: categorizedStore.activeOrNull(variant) ?: return null
+        if (!bootstrap.matches(stage)) return null
+        return categorizedStore.acquireReadLease(stage)
+    }
+
+    private fun FoxCoreDnsRuleSetBootstrap.matches(stage: CategorizedDnsStage): Boolean {
+        val expected = listOf(
+            stage.token,
+            stage.name,
+            stage.manifestSha256,
+            stage.artifactSha256,
+            stage.sequence.toString(),
+            File(stage.directory, CategorizedDnsContract.ARTIFACT_NAME).absolutePath
+        )
+        val captured = listOf(
+            stagedBundleToken,
+            name,
+            manifestSha256,
+            artifactSha256,
+            categoryMinimumSequence?.toString(),
+            artifactPath
+        )
+        return captured == expected
+    }
+
+    internal suspend fun promoteCategorizedBootstrap(
+        bootstrap: FoxCoreDnsRuleSetBootstrap,
+        isOwnerCurrent: () -> Boolean,
+    ): CategorizedDnsPromotion {
+        val variant = bootstrap.categoryVariant ?: return CategorizedDnsPromotion.SUPERSEDED
+        val stage = categorizedStore.pendingOrNull(variant) ?: return CategorizedDnsPromotion.SUPERSEDED
+        if (!bootstrap.matches(stage)) return CategorizedDnsPromotion.SUPERSEDED
+        return categorizedStore.promote(stage, isOwnerCurrent)
+    }
+
     suspend fun prepareVerifiedOrNull(): DnsFilterRuntimePaths? =
         withContext(Dispatchers.IO) {
             val targetDir = File(appContext.filesDir, TARGET_DIR_NAME)
@@ -98,7 +271,9 @@ class DnsFilterAssetInstaller(
 
     suspend fun clearLocalCache(): Int =
         withContext(Dispatchers.IO) {
-            deleteDnsFilterCache(File(appContext.filesDir, TARGET_DIR_NAME))
+            deleteDnsFilterCache(File(appContext.filesDir, TARGET_DIR_NAME)) +
+                deleteDnsFilterCache(File(appContext.filesDir, "dns-categories")) +
+                deleteDnsFilterCache(File(appContext.filesDir, "dns-categories-apk"))
         }
 
     private fun loadSignedBundleOrNull(targetDir: File): SignedDnsRuleSetBundle? =

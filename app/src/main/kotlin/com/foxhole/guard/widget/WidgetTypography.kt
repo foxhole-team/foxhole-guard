@@ -11,6 +11,7 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.core.content.res.ResourcesCompat
 import androidx.glance.GlanceModifier
@@ -19,6 +20,8 @@ import androidx.glance.ImageProvider
 import androidx.glance.layout.height
 import androidx.glance.layout.width
 import com.foxhole.guard.R
+import com.foxhole.guard.flags.capitalLetterHeightPx
+import com.foxhole.guard.flags.countryFlagSizePx
 import kotlin.math.ceil
 import kotlin.math.max
 import kotlin.math.min
@@ -37,7 +40,10 @@ internal fun StyledWidgetText(
 ) {
     val pixelArtEnabled = LocalWidgetPixelArtEnabled.current
     val displayText = if (uppercase) text.uppercase() else text
-    val rendered = remember(context, displayText, color, fontSize, pixelArtEnabled, maxWidth) {
+    val rendered = remember(
+        context, displayText, color, fontSize, pixelArtEnabled, maxWidth,
+        context.resources.configuration.fontScale, context.resources.displayMetrics.densityDpi,
+    ) {
         renderStyledWidgetText(
             context = context,
             text = displayText,
@@ -52,6 +58,32 @@ internal fun StyledWidgetText(
         contentDescription = text,
         modifier = modifier.width(rendered.width).height(rendered.height),
     )
+}
+
+internal fun styledWidgetFlagSize(
+    context: Context,
+    bitmap: Bitmap,
+    fontSizeSp: Int,
+    pixelArtEnabled: Boolean,
+): DpSize {
+    val font = if (pixelArtEnabled) R.font.tiny5_regular else R.font.jetbrains_mono_bold
+    val paint = widgetTextPaint(context, font, Color.Transparent, fontSizeSp, pixelArtEnabled)
+    val size = countryFlagSizePx(capitalLetterHeightPx(paint), bitmap.width, bitmap.height) ?: return DpSize.Zero
+    val density = context.resources.displayMetrics.density
+    return DpSize((size.width / density).dp, (size.height / density).dp)
+}
+
+internal fun measureStyledWidgetTextWidth(
+    context: Context,
+    text: String,
+    fontSize: Int,
+): Dp {
+    val metrics = context.resources.displayMetrics
+    val pixelPaint = widgetTextPaint(context, R.font.tiny5_regular, Color.Transparent, fontSize, pixelArt = true)
+    val monoPaint = widgetTextPaint(context, R.font.jetbrains_mono_bold, Color.Transparent, fontSize, pixelArt = false)
+    val horizontalPadding = ceil(metrics.density).toInt().coerceAtLeast(1)
+    val widthPx = ceil(widgetTextWidth(text, pixelPaint, monoPaint)).toInt() + horizontalPadding * 2
+    return (widthPx / metrics.density).dp
 }
 
 private data class RenderedWidgetText(

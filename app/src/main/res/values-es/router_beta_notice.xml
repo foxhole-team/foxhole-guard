@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="router_beta_notice_title" formatted="false">Función beta</string>
+    <string name="router_beta_notice_body" formatted="false">La instalación automática actualmente solo admite routers con la configuración predeterminada de OpenWrt, sin modificaciones. También puede vincular un router después de instalar manualmente la última versión de FoxHole OpenWrt Client. Para la instalación y la vinculación, el teléfono y el router deben estar en la misma red local, y el router debe tener acceso a Internet.</string>
+    <string name="router_beta_notice_dont_show_again" formatted="false">No volver a mostrar</string>
+</resources>
