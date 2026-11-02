@@ -468,12 +468,16 @@ private fun CliAppUpdatePanelBody(
     )
     CliRowDivider()
     Spacer(modifier = Modifier.height(CliSpacing.xs))
+    if (state is AppUpdateState.Downloaded) {
+        CliDashedInfoNote(text = stringResource(R.string.cli_updates_app_install_vpn_notice))
+        Spacer(modifier = Modifier.height(CliSpacing.xs))
+    }
     val doneHold = rememberUpdateDoneHold(busy) && state !is AppUpdateState.Failed
     CliButton(
         label = if (doneHold) stringResource(R.string.cli_updates_phase_done) else appUpdateButtonLabel(state),
         color = if (busy) colors.dim else statusColor,
         enabled = !busy && !doneHold,
-        animatedLabel = busy,
+        animatedLabel = state is AppUpdateState.Busy,
         onClick = when (state) {
             is AppUpdateState.Available -> onDownload
             is AppUpdateState.Downloaded -> onInstall

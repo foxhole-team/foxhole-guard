@@ -46,6 +46,9 @@ class RouterRemoteClientControlTest {
         override suspend fun save(preferences: RouterControlPreferences) { current = preferences }
     }
     private inner class Router {
+        var publicIpv4: Boolean? = null
+        var networkReported = false
+        var inboundAvailable = false
         var removalAvailable = false
         var revision = 1L
         var present = true
@@ -64,6 +67,9 @@ class RouterRemoteClientControlTest {
         val actions = mutableListOf<String>()
         fun state() = buildJsonObject {
             put("packageRemovalAvailable", removalAvailable)
+            if (networkReported) put("network", buildJsonObject {
+                put("schema", 1); put("source", "default-uplink"); put("publicIpv4Available", publicIpv4?.let(::JsonPrimitive) ?: JsonNull)
+            })
             put("schema", 1); put("revision", revision); put("settings", buildJsonObject { put("localRules", true); put("localScope", "all") })
             for (field in listOf("countries", "devices", "sites", "servers")) put(field, JsonArray(emptyList()))
             put("clients", JsonArray(if (present) listOf(buildJsonObject { put("id", clientId); put("name", "Phone"); put("provisioned", recordProvisioned) }) else emptyList()))
@@ -77,7 +83,9 @@ class RouterRemoteClientControlTest {
                 override fun enqueue(callback: Callback) {
                     val reply = {
                         val body = when (action) {
-                            "phone.capabilities" -> UpdateDocuments.capabilities()
+                            "phone.capabilities" -> if (!inboundAvailable) UpdateDocuments.capabilities() else JsonObject(UpdateDocuments.capabilities() + mapOf(
+                                "inboundProtocols" to JsonArray(listOf(JsonPrimitive("hysteria2"))),
+                                "legacyProtocols" to JsonArray(listOf(JsonPrimitive("hysteria2"))), "phoneRemoteProvisioning" to JsonPrimitive(true)))
                             "pair.unlock" -> buildJsonObject { put("token", "p1." + "c".repeat(64)) }
                             "state" -> { if (reappearOnReadback && actions.contains("client.delete")) present = true; state() }
                             "telemetry" -> buildJsonObject {
@@ -89,6 +97,18 @@ class RouterRemoteClientControlTest {
                                 put("id", exportId); put("uri", exportUri); put("config", exportConfig ?: exportUri)
                                 put("provisioned", exportProvisioned); put("inactive", inactive)
                             }) }
+                            "client.save" -> {
+                                val payload = envelope["payload"]!!.jsonObject
+                                assertEquals(revision.toString(), payload["revision"]!!.jsonPrimitive.content)
+                                assertEquals("Phone", payload["name"]!!.jsonPrimitive.content)
+                                assertEquals("smartphone", payload["deviceType"]!!.jsonPrimitive.content)
+                                present = true; revision++
+                                buildJsonObject {
+                                    put("state", state()); put("client", buildJsonObject {
+                                        put("id", clientId); put("name", "Phone"); put("deviceType", "smartphone"); put("provisioned", recordProvisioned)
+                                    })
+                                }
+                            }
                             "client.delete" -> {
                                 assertEquals(revision.toString(), envelope["payload"]!!.jsonObject["revision"]!!.jsonPrimitive.content)
                                 revision++; present = false
@@ -276,4 +296,26 @@ class RouterRemoteClientControlTest {
         assertTrue(control.state.value.error != null)
         control.close()
     }
+    @Test fun authenticatedDirectIpAllowsExplicitCreateForExistingPairWhileFalseAndUnknownStayBlocked() = runTest {
+        for (available in listOf(true, false, null)) {
+            val router = Router().also { it.present = false; it.networkReported = true; it.publicIpv4 = available; it.inboundAvailable = true }
+            val original = RouterControlPreferences(pair.id, enabled = true)
+            val preferences = Preferences(original)
+            val control = coordinator(router, Store(pair), preferences)
+            open(control)
+            control.createRemoteClient("Phone")
+            if (available == true) {
+                assertTrue(router.actions.contains("client.save"))
+                assertNull(control.state.value.error)
+                assertEquals(1, control.state.value.snapshot?.clients?.size)
+            } else {
+                assertFalse(router.actions.contains("client.save"))
+                assertEquals(RouterWizardError.UNSUPPORTED, control.state.value.error)
+            }
+            assertEquals(original, preferences.current)
+            assertFalse(router.actions.any { it in setOf("server.start", "server.stop", "phone.provision") })
+            control.close()
+        }
+    }
+
 }

@@ -13,8 +13,8 @@ import org.junit.Assert.fail
 import org.junit.Test
 
 class RouterSavedVaultTest {
-    private fun pair(number: Int) = RouterPairing(RouterTlsIdentity(RouterEndpoint("192.168.1.1"), number.toString().repeat(64)),
-        "pair-" + number.toString().repeat(32), ByteArray(32) { number.toByte() }, "Phone", true)
+    private fun pair(number: Int) = RouterPairing(RouterTlsIdentity(RouterEndpoint("192.168.1.1"), number.toString(16).padStart(64, '0')),
+        "pair-" + number.toString(16).padStart(32, '0'), ByteArray(32) { number.toByte() }, "Phone", true)
 
     @Test fun legacySingleRecordMigratesWithoutChangingIdentityCredentialsOrRemotePhoneName() {
         val old = pair(1)
@@ -53,13 +53,13 @@ class RouterSavedVaultTest {
         } finally { store.close(); pairs.forEach(RouterPairing::clear) }
     }
 
-    @Test fun fourthRouterAndChangedKnownCertificateCannotOverwriteTheExistingVault() = runTest {
+    @Test fun eleventhRouterAndChangedKnownCertificateCannotOverwriteTheExistingVault() = runTest {
         val store = MemoryRouterPairingStore()
-        val pairs = (1..4).map(::pair)
+        val pairs = (1..11).map(::pair)
         try {
-            pairs.take(3).forEach { store.save(it) }
+            pairs.take(10).forEach { store.save(it) }
             val before = store.listSaved()
-            val failure = try { store.save(pairs[3]); null } catch (caught: RouterApiFailure) { caught }
+            val failure = try { store.save(pairs[10]); null } catch (caught: RouterApiFailure) { caught }
             assertEquals(RouterApiError.LIMIT, failure?.kind)
             val changed = RouterPairing(pairs[0].identity.copy(certificateSha256 = "a".repeat(64)), pairs[0].id,
                 ByteArray(32) { 9 }, "Other phone")
@@ -83,4 +83,33 @@ class RouterSavedVaultTest {
             }
         } finally { first.clear() }
     }
+    @Test fun legacyElevenRecordsRemainReadableUpdatableAndRemovableWithoutRenumberingOrCredentialLoss() {
+        val pairs = (1..12).map(::pair)
+        val original = RouterSavedVault(selectedId = pairs[10].id,
+            routers = pairs.take(11).mapIndexed { index, pair -> RouterSavedEntry(pair.copy(), index + 1, "Saved" + (index + 1)) })
+        var decoded: RouterSavedVault? = null
+        var updated: RouterSavedVault? = null
+        var reduced: RouterSavedVault? = null
+        try {
+            decoded = RouterSavedVaultCodec.decode(RouterSavedVaultCodec.encode(original))
+            val retained = requireNotNull(decoded)
+            assertEquals(11, retained.inventory().routers.size)
+            assertEquals(pairs[10].id, retained.selectedId)
+            val known = pairs[10].copy(name = "Retained phone")
+            try { updated = retained.withPairing(known) } finally { known.clear() }
+            val current = requireNotNull(updated)
+            assertEquals(11, current.routers.single { it.pairing.id == pairs[10].id }.number)
+            assertThrows(RouterApiFailure::class.java) { retained.withPairing(pairs[11]) }
+            reduced = current.without(pairs[0].id)
+            val remaining = requireNotNull(reduced)
+            assertEquals(10, remaining.routers.size)
+            assertEquals(pairs[10].id, remaining.selectedId)
+            for (row in remaining.routers) {
+                val expected = pairs.single { it.id == row.pairing.id }
+                assertArrayEquals(expected.credential, row.pairing.credential)
+            }
+            assertEquals(11, original.routers.size)
+        } finally { decoded?.cleared(); updated?.cleared(); reduced?.cleared(); original.cleared(); pairs.forEach(RouterPairing::clear) }
+    }
+
 }

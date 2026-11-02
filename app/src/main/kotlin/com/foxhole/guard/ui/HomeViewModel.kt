@@ -31,6 +31,7 @@ import com.foxhole.guard.core.data.WebAppEntity
 import com.foxhole.guard.core.settings.AppTrafficStatsRecorder
 import com.foxhole.guard.core.settings.acknowledgeBetaNotice
 import com.foxhole.guard.core.settings.applyUpdateNoticeChoice
+import com.foxhole.guard.core.settings.normalizedUpdateNoticeAcknowledgement
 import com.foxhole.guard.core.settings.requiresOnboarding
 import com.foxhole.guard.core.settings.rotatePrivacyRouteIdentity
 import com.foxhole.guard.core.settings.updatePrivacyRouteAutoRotateExit
@@ -397,6 +398,7 @@ class HomeViewModel(
             hydrated &&
                 settings.ui.onboardingCompleted &&
                 settings.ui.quickStartShown &&
+                BuildConfig.VERSION_NAME.substringBefore('+').contains('-') &&
                 !settings.ui.betaNoticeAcknowledged
         }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
@@ -597,23 +599,34 @@ class HomeViewModel(
             }
     }
 
-    internal val updateNoticeState = UpdateNoticeState()
+    internal val updateNoticeState = UpdateNoticeState { installedUpdateNotice(application) }
 
     val alphaNoticeVisible: StateFlow<Boolean> =
-        container.settingsRepository.settings
-            .map { shouldShowUpdateNotice(it.ui, CURRENT_UPDATE_NOTICE) }
+        combine(
+            container.settingsRepository.hydrated,
+            container.settingsRepository.settings,
+            updateNoticeState.content,
+            updateNoticeState.loaded,
+            updateNoticeState.keepVisible,
+        ) { hydrated, settings, content, loaded, keepVisible ->
+            hydrated && loaded && (keepVisible || content == null || shouldShowUpdateNotice(settings.ui, content))
+        }
             .distinctUntilChanged()
             .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    init { viewModelScope.launch { updateNoticeState.load() } }
 
     fun dismissAlphaNotice(monochromeEnabled: Boolean) {
         viewModelScope.launch {
             when (
-                updateNoticeState.acknowledge {
+                updateNoticeState.acknowledge { content ->
+                    val acknowledged = container.settingsRepository.settings.value.ui.normalizedUpdateNoticeAcknowledgement()
                     container.settingsRepository.applyUpdateNoticeChoice(
                         monochromeEnabled = monochromeEnabled,
-                        contentId = CURRENT_UPDATE_NOTICE.contentId,
-                        revision = CURRENT_UPDATE_NOTICE.revision,
+                        contentId = content.contentId,
+                        revision = maxOf(content.revision, acknowledged.updateNoticeAcknowledgedRevision),
                     )
+                    check(!shouldShowUpdateNotice(container.settingsRepository.settings.value.ui, content)) { "notice_ack_unconfirmed" }
                 }
             ) {
                 is UpdateNoticeAckResult.Failed -> snackbars.tryEmit(errorBanner(R.string.cli_release_notes_ack_failed))

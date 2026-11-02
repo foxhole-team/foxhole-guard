@@ -124,7 +124,10 @@ class ProfileRepository(
             allowInsecureTlsForProfile,
             excludeInsecureTlsOptions
         )
-        return withProfileMutation { owner -> applyPreparedImport(validateImportForCommit(prepared, owner)) }
+        return withProfileMutation { owner ->
+            val validated = validateImportForCommit(prepared, owner)
+            applyPreparedImport(validated)
+        }
     }
 
     internal suspend fun importPreparedSingleLocked(prepared: PreparedProfileImport, owner: ProfileMutationLease): Profile {

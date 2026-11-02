@@ -99,7 +99,7 @@ internal suspend fun ProfileRepository.refreshProfileWithReport(
             excludeInsecureTlsOptions = excludeInsecureTlsOptions,
             subscriptionGroup = subscriptionGroup,
         )
-    return withProfileMutation { owner ->
+    val result = withProfileMutation { owner ->
         requirePreparedImportCurrent(
             owner.currentSettings(settingsRepository).importPolicy() == settings.importPolicy() &&
                 loadSubscriptionGroup(sourceUrl) == subscriptionGroup
@@ -133,6 +133,7 @@ internal suspend fun ProfileRepository.refreshProfileWithReport(
         )
         ProfileRefreshResult(profile = refreshedProfile, protocolChanges = changes)
     }
+    return result
 }
 
 internal data class PreparedProfileConnection(

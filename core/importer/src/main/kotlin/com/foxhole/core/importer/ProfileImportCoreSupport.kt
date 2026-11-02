@@ -481,6 +481,18 @@ internal open class ProfileImportCoreSupport(
             ?.requirePublicRemoteHost(resolveHost = true, resolver = remoteHostResolver)
     }
 
+    private fun certificatePinnedHysteriaIdentity(outbound: JsonObject, tls: JsonObject?): Boolean {
+        if (outbound.string("type") != "hysteria2" || tls == null || tls["enabled"] != JsonPrimitive(true)) return false
+        if (tls["certificate_public_key_sha256"] != null) return false
+        val pins = tls["certificate_sha256"] as? JsonArray ?: return false
+        val pin = pins.singleOrNull() as? JsonPrimitive ?: return false
+        if (!pin.isString || runCatching { Base64.getDecoder().decode(pin.content).size }.getOrNull() != 32) return false
+        val identity = tls["server_name"] as? JsonPrimitive ?: return false
+        if (!identity.isString || identity.content.length !in 1..253) return false
+        val label = Regex("[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?")
+        return identity.content.split('.').all { it.matches(label) }
+    }
+
     private fun extractNormalizedRemoteHosts(config: JsonObject): NormalizedConfigHosts {
         val dialled = mutableListOf<String>()
         val presented = mutableListOf<String>()
@@ -499,7 +511,11 @@ internal open class ProfileImportCoreSupport(
                     ?.let(::normalizeRemoteHostValue)
                     ?.let(dialled::add)
             }
-            presented += outbound["tls"]?.jsonObject?.get("server_name")?.collectHostValues().orEmpty()
+            val tls = outbound["tls"]?.jsonObject
+            // A certificate-pinned Hysteria name is a TLS identity, never a dialled destination.
+            if (!certificatePinnedHysteriaIdentity(outbound, tls)) {
+                presented += tls?.get("server_name")?.collectHostValues().orEmpty()
+            }
             outbound["transport"]?.jsonObject?.let { transport ->
                 presented += transport["host"]?.collectHostValues().orEmpty()
                 presented += transport["headers"]?.jsonObject?.get("Host")?.collectHostValues().orEmpty()
@@ -577,6 +593,7 @@ internal open class ProfileImportCoreSupport(
         val endpoint: JsonObject? = null,
         val subscriptionExpiresAt: Long? = null,
         val dnsServers: List<String> = emptyList(),
+        val compatibilityWarning: Boolean = false,
     ) {
         val tag: String
             get() =
@@ -637,6 +654,7 @@ internal open class ProfileImportCoreSupport(
         val protocolHint: ProtocolHint,
         val normalizedConfigJson: String,
         val subscriptionExpiresAt: Long? = null,
+        val entryReports: List<SubscriptionEntryReport> = emptyList(),
     )
 
     internal data class XrayOutboundsConversion(

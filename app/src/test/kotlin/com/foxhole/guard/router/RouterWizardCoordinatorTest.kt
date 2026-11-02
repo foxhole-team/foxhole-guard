@@ -76,6 +76,10 @@ class RouterWizardCoordinatorTest {
         override val supportsHomeAutodetection = false
         override suspend fun routerCountry(api: RouterPanelApi, session: RouterPanelSession) = country
         override suspend fun availableInboundProtocols(api: RouterPanelApi, session: RouterPanelSession) = supportedInboundProtocols
+        override suspend fun updateStatus(api: RouterPanelApi, session: RouterPanelSession) =
+            parseRouterUpdateStatus(UpdateDocuments.status())
+        override suspend fun setUpdateAuto(api: RouterPanelApi, session: RouterPanelSession, status: RouterUpdateStatus,
+            enabled: Boolean) = status.copy(autoUpdate = status.autoUpdate.copy(enabled = enabled))
         override suspend fun finish(api: RouterPanelApi, session: RouterPanelSession, pairing: RouterPairing,
             options: RouterWizardOptions, selectedProfile: RouterProfileSelection?) = finish(pairing)
     }
@@ -84,18 +88,28 @@ class RouterWizardCoordinatorTest {
         coordinator.begin(RouterWizardPath.PAIR, "NL")
         coordinator.inspectAddress("192.168.1.1")
         coordinator.acceptIdentity()
-        coordinator.login("1234".toCharArray())
+        coordinator.login("123456".toCharArray())
+        assertEquals(RouterWizardStage.COMPLETE, coordinator.state.value.stage)
+    }
+
+    private suspend fun installedOptions(coordinator: RouterWizardCoordinator) {
+        coordinator.begin(RouterWizardPath.SETUP, "NL")
+        coordinator.inspectAddress("192.168.1.1"); coordinator.acceptIdentity()
+        coordinator.confirmInstallProtocols(); coordinator.login("fixture".toCharArray())
+        coordinator.options(coordinator.state.value.options.copy(licenseAccepted = true))
+        coordinator.install()
         assertEquals(RouterWizardStage.OPTIONS, coordinator.state.value.stage)
     }
 
     @Test fun unknownRouterCountryCanCompletePairingWithoutUsingThePhoneDefault() = runTest {
-        val coordinator = RouterWizardCoordinator(transport(), Store(), "Phone", null,
+        val coordinator = RouterWizardCoordinator(transport(initialPin = true), Store(), "Phone",
+            installingSetup { RouterInstallResult(identity, "947215".toCharArray()) },
             provisioner(country = null) { RouterWizardResult(it.id) }, { null }, { true })
-        paired(coordinator)
+        installedOptions(coordinator)
         assertEquals("", coordinator.state.value.options.countryCode)
         assertTrue(coordinator.state.value.options.countryAuto)
         assertTrue(coordinator.state.value.options.valid)
-        coordinator.finish()
+        coordinator.finish(if (coordinator.state.value.initialPinRequired) "582641".toCharArray() else null)
         assertEquals(RouterWizardStage.COMPLETE, coordinator.state.value.stage)
     }
 
@@ -109,27 +123,29 @@ class RouterWizardCoordinatorTest {
                 return RouterWizardResult(pairing.id)
             }
         }
-        val coordinator = RouterWizardCoordinator(transport(), Store(), "Phone", null, recorder, { null }, { true })
-        paired(coordinator)
+        val coordinator = RouterWizardCoordinator(transport(initialPin = true), Store(), "Phone",
+            installingSetup { RouterInstallResult(identity, "947215".toCharArray()) }, recorder, { null }, { true })
+        installedOptions(coordinator)
         coordinator.options(coordinator.state.value.options.copy(countryCode = "DE", countryAuto = false))
         assertEquals("DE", coordinator.state.value.options.countryCode)
         coordinator.options(coordinator.state.value.options.copy(countryAuto = true))
-        assertEquals("NL", coordinator.state.value.options.countryCode)
-        coordinator.finish()
+        assertEquals("", coordinator.state.value.options.countryCode)
+        coordinator.finish(if (coordinator.state.value.initialPinRequired) "582641".toCharArray() else null)
         assertEquals("NL", applied?.countryCode)
         assertEquals(true, applied?.countryAuto)
         coordinator.close()
     }
 
     @Test fun automaticSelectionClearsManualCountryWhenWanIsUnknown() = runTest {
-        val coordinator = RouterWizardCoordinator(transport(), Store(), "Phone", null,
+        val coordinator = RouterWizardCoordinator(transport(initialPin = true), Store(), "Phone",
+            installingSetup { RouterInstallResult(identity, "947215".toCharArray()) },
             provisioner(country = null) { RouterWizardResult(it.id) }, { null }, { true })
-        paired(coordinator)
+        installedOptions(coordinator)
         coordinator.options(coordinator.state.value.options.copy(countryCode = "DE", countryAuto = false))
         coordinator.options(coordinator.state.value.options.copy(countryAuto = true))
         assertEquals("", coordinator.state.value.options.countryCode)
         assertTrue(coordinator.state.value.options.valid)
-        coordinator.finish()
+        coordinator.finish(if (coordinator.state.value.initialPinRequired) "582641".toCharArray() else null)
         assertEquals(RouterWizardStage.COMPLETE, coordinator.state.value.stage)
         coordinator.close()
     }
@@ -137,14 +153,15 @@ class RouterWizardCoordinatorTest {
     @Test fun closingBeforeALateFinishCannotImportTheRemoteProfile() = runTest {
         val reply = CompletableDeferred<Unit>()
         var imports = 0
-        val coordinator = RouterWizardCoordinator(transport(), Store(), "Phone", null, provisioner {
+        val coordinator = RouterWizardCoordinator(transport(initialPin = true), Store(), "Phone",
+            installingSetup { RouterInstallResult(identity, "947215".toCharArray()) }, provisioner {
             val id = it.id
             withContext(NonCancellable) { reply.await() }
             RouterWizardResult(id, "hysteria2://synthetic")
         }, { null }, { imports++; true })
-        paired(coordinator)
+        installedOptions(coordinator)
         coordinator.options(coordinator.state.value.options.copy(publicIp = true, createRemoteProfile = true))
-        val job = launch { coordinator.finish() }
+        val job = launch { coordinator.finish(if (coordinator.state.value.initialPinRequired) "582641".toCharArray() else null) }
         runCurrent()
         coordinator.close()
         reply.complete(Unit)
@@ -167,12 +184,12 @@ class RouterWizardCoordinatorTest {
             }
             override suspend fun install(proposal: RouterInstallProposal): RouterInstallResult = error("install after close")
         }
-        val coordinator = RouterWizardCoordinator(transport(), Store(), "Phone", setup, provisioner { RouterWizardResult(it.id) }, { null }, { true })
+        val network = transport()
+        val coordinator = RouterWizardCoordinator(network, Store(), "Phone", setup, provisioner { RouterWizardResult(it.id) }, { null }, { true })
         coordinator.begin(RouterWizardPath.SETUP, "NL")
-        assertEquals("192.168.1.1", coordinator.state.value.address)
+        assertEquals(network.gatewayHint(), coordinator.state.value.address)
         coordinator.inspectAddress("192.168.1.1")
         coordinator.acceptIdentity()
-        coordinator.options(coordinator.state.value.options.copy(licenseAccepted = true))
         coordinator.confirmInstallProtocols()
         val secret = "root-fixture".toCharArray()
         val job = launch { coordinator.login(secret) }
@@ -195,12 +212,12 @@ class RouterWizardCoordinatorTest {
         coordinator.begin(RouterWizardPath.PAIR, "NL")
         coordinator.inspectAddress("192.168.1.1")
         coordinator.acceptIdentity()
-        coordinator.login("1234".toCharArray())
+        coordinator.login("123456".toCharArray())
         assertEquals(RouterWizardStage.LOGIN, coordinator.state.value.stage)
         assertFalse(requireNotNull(store.saved).active)
         val credential = requireNotNull(store.saved).credential.copyOf()
-        coordinator.login("1234".toCharArray())
-        assertEquals(RouterWizardStage.OPTIONS, coordinator.state.value.stage)
+        coordinator.login("123456".toCharArray())
+        assertEquals(RouterWizardStage.COMPLETE, coordinator.state.value.stage)
         assertEquals(1, ids.distinct().size)
         assertArrayEquals(credential, requireNotNull(store.saved).credential)
         assertTrue(requireNotNull(store.saved).active)
@@ -229,7 +246,6 @@ class RouterWizardCoordinatorTest {
         coordinator.installProtocols(hy2 + RouterInstallProtocol.VLESS)
         assertEquals(hy2, coordinator.state.value.installSelection?.protocols)
         coordinator.installProtocols(combined)
-        coordinator.options(coordinator.state.value.options.copy(licenseAccepted = true))
         coordinator.confirmInstallProtocols()
         val secret = "fixture".toCharArray()
         coordinator.login(secret)
@@ -256,7 +272,6 @@ class RouterWizardCoordinatorTest {
         coordinator.begin(RouterWizardPath.SETUP, "NL")
         coordinator.inspectAddress("192.168.1.1")
         coordinator.acceptIdentity()
-        coordinator.options(coordinator.state.value.options.copy(licenseAccepted = true))
         coordinator.confirmInstallProtocols()
         coordinator.login("fixture".toCharArray())
         assertEquals(RouterWizardError.UNSUPPORTED, coordinator.state.value.error)
@@ -299,20 +314,20 @@ class RouterWizardCoordinatorTest {
     }
 
     @Test fun freshInstallInternallyUnlocksAndRequiresANewPinBeforePairing() = runTest {
-        val secret = "9472".toCharArray()
+        val secret = "947215".toCharArray()
         val result = RouterInstallResult(identity, secret)
         assertArrayEquals(CharArray(secret.size), secret)
-        assertFalse(result.toString().contains("9472"))
+        assertFalse(result.toString().contains("947215"))
         val coordinator = RouterWizardCoordinator(transport(initialPin = true), Store(), "Phone", installingSetup { result },
             provisioner { RouterWizardResult(it.id) }, { null }, { true })
         preparedSetup(coordinator)
         coordinator.install()
-        assertEquals(RouterWizardStage.NEW_PIN, coordinator.state.value.stage)
-        assertEquals(null, result.takeBootstrapCredential())
-        val chosen = "5826".toCharArray()
-        coordinator.changePin(chosen)
-        assertArrayEquals(CharArray(chosen.size), chosen)
         assertEquals(RouterWizardStage.OPTIONS, coordinator.state.value.stage)
+        assertEquals(null, result.takeBootstrapCredential())
+        val chosen = "582641".toCharArray()
+        coordinator.finish(chosen)
+        assertArrayEquals(CharArray(chosen.size), chosen)
+        assertEquals(RouterWizardStage.COMPLETE, coordinator.state.value.stage)
     }
 
     @Test fun anExistingInstalledPinIsNotReplacedOrAutomaticallyUnlocked() = runTest {
@@ -326,7 +341,7 @@ class RouterWizardCoordinatorTest {
 
     @Test fun aLateInstallEnrollmentResultIsWipedWithoutUnlockOrPairing() = runTest {
         val ready = CompletableDeferred<Unit>()
-        val result = RouterInstallResult(identity, "9472".toCharArray())
+        val result = RouterInstallResult(identity, "947215".toCharArray())
         val coordinator = RouterWizardCoordinator(transport(), Store(), "Phone", installingSetup {
             withContext(NonCancellable) { ready.await() }; result
         }, provisioner { RouterWizardResult(it.id) }, { null }, { true })
@@ -344,7 +359,7 @@ class RouterWizardCoordinatorTest {
     @Test fun anUnexpectedConfiguredSessionCannotPairUsingTheBootstrapCredential() = runTest {
         val ids = mutableListOf<String>()
         val coordinator = RouterWizardCoordinator(transport(ids, initialPin = false), Store(), "Phone",
-            installingSetup { RouterInstallResult(identity, "9472".toCharArray()) }, provisioner { RouterWizardResult(it.id) }, { null }, { true })
+            installingSetup { RouterInstallResult(identity, "947215".toCharArray()) }, provisioner { RouterWizardResult(it.id) }, { null }, { true })
         preparedSetup(coordinator)
         coordinator.install()
         assertEquals(RouterWizardError.IDENTITY, coordinator.state.value.error)
@@ -466,16 +481,17 @@ class RouterWizardCoordinatorTest {
 
     private suspend fun installedForAutoUpdate(updates: SetupUpdates, enabled: Boolean = true): RouterWizardCoordinator {
         val coordinator = RouterWizardCoordinator(transport(initialPin = true), Store(), "Phone",
-            installingSetup { RouterInstallResult(identity, "9472".toCharArray()) }, updates, { null }, { true })
+            installingSetup { RouterInstallResult(identity, "947215".toCharArray()) }, updates, { null }, { true })
         coordinator.begin(RouterWizardPath.SETUP, "NL")
         coordinator.inspectAddress("192.168.1.1"); coordinator.acceptIdentity()
         assertTrue(coordinator.state.value.options.autoUpdateEnabled)
         coordinator.options(coordinator.state.value.options.copy(autoUpdateEnabled = enabled))
+        coordinator.confirmInstallProtocols(); coordinator.login("fixture".toCharArray())
         coordinator.options(coordinator.state.value.options.copy(licenseAccepted = true))
-        coordinator.confirmInstallProtocols(); coordinator.login("fixture".toCharArray()); coordinator.install()
+        coordinator.install()
         assertTrue(coordinator.state.value.installedInThisWizard)
         assertEquals(0, updates.reads); assertTrue(updates.writes.isEmpty())
-        coordinator.changePin("5826".toCharArray())
+        assertTrue(coordinator.state.value.initialPinRequired)
         assertEquals(RouterWizardStage.OPTIONS, coordinator.state.value.stage)
         return coordinator
     }
@@ -483,7 +499,7 @@ class RouterWizardCoordinatorTest {
     @Test fun newSetupDefaultsOnButWritesOnlyAfterInstalledAndPaired() = runTest {
         val updates = SetupUpdates(); val coordinator = installedForAutoUpdate(updates)
         assertEquals(0, updates.reads)
-        coordinator.finish()
+        coordinator.finish(if (coordinator.state.value.initialPinRequired) "582641".toCharArray() else null)
         assertEquals(listOf(9L to true), updates.writes)
         assertEquals(1, updates.finishes)
         assertEquals(RouterWizardStage.COMPLETE, coordinator.state.value.stage)
@@ -493,7 +509,7 @@ class RouterWizardCoordinatorTest {
     @Test fun explicitSetupOptOutSurvivesInstallAndUsesObservedUpdaterRevision() = runTest {
         val updates = SetupUpdates(); val coordinator = installedForAutoUpdate(updates, enabled = false)
         assertFalse(coordinator.state.value.options.autoUpdateEnabled)
-        coordinator.finish()
+        coordinator.finish(if (coordinator.state.value.initialPinRequired) "582641".toCharArray() else null)
         assertEquals(listOf(9L to false), updates.writes)
         assertFalse(updates.enabled)
         assertEquals(RouterWizardStage.COMPLETE, coordinator.state.value.stage)
@@ -503,9 +519,10 @@ class RouterWizardCoordinatorTest {
     @Test fun existingPairFlowNeverReadsOrWritesTheRouterUpdatePolicy() = runTest {
         val updates = SetupUpdates()
         val coordinator = RouterWizardCoordinator(transport(), Store(), "Phone", null, updates, { null }, { true })
-        paired(coordinator); coordinator.finish()
+        paired(coordinator)
         assertFalse(coordinator.state.value.installedInThisWizard)
         assertEquals(0, updates.reads); assertTrue(updates.writes.isEmpty())
+        assertEquals(0, updates.finishes)
         assertEquals(RouterWizardStage.COMPLETE, coordinator.state.value.stage)
         coordinator.close()
     }
@@ -513,7 +530,7 @@ class RouterWizardCoordinatorTest {
     @Test fun changingOnlyAutoAfterInitialStatusFailureDoesNotRepeatCompletedSetup() = runTest {
         val updates = SetupUpdates().apply { statusFailures = 1 }
         val coordinator = installedForAutoUpdate(updates)
-        coordinator.finish()
+        coordinator.finish(if (coordinator.state.value.initialPinRequired) "582641".toCharArray() else null)
         assertEquals(RouterWizardStage.OPTIONS, coordinator.state.value.stage)
         assertFalse(coordinator.state.value.autoUpdateUnconfirmed)
         assertEquals(1, updates.finishes)
@@ -521,7 +538,7 @@ class RouterWizardCoordinatorTest {
         assertTrue(updates.writes.isEmpty())
         coordinator.options(coordinator.state.value.options.copy(autoUpdateEnabled = false))
         assertFalse(coordinator.state.value.options.autoUpdateEnabled)
-        coordinator.finish()
+        coordinator.finish(if (coordinator.state.value.initialPinRequired) "582641".toCharArray() else null)
         assertEquals(1, updates.finishes)
         assertEquals(2, updates.reads)
         assertEquals(listOf(9L to false), updates.writes)
@@ -533,11 +550,11 @@ class RouterWizardCoordinatorTest {
     @Test fun lostSettingsAckNeedsStatusReadbackAndNeverReplaysTheWrite() = runTest {
         val updates = SetupUpdates().apply { loseAck = true }
         val coordinator = installedForAutoUpdate(updates)
-        coordinator.finish()
+        coordinator.finish(if (coordinator.state.value.initialPinRequired) "582641".toCharArray() else null)
         assertEquals(RouterWizardStage.OPTIONS, coordinator.state.value.stage)
         assertTrue(coordinator.state.value.autoUpdateUnconfirmed)
         assertEquals(1, updates.finishes)
-        coordinator.finish()
+        coordinator.finish(if (coordinator.state.value.initialPinRequired) "582641".toCharArray() else null)
         assertEquals(2, updates.reads); assertEquals(listOf(9L to true), updates.writes)
         assertEquals(1, updates.finishes)
         assertFalse(coordinator.state.value.autoUpdateUnconfirmed)
@@ -548,7 +565,7 @@ class RouterWizardCoordinatorTest {
     @Test fun anUnobservedSettingRemainsUncertainWithoutASecondWriteOrRepeatedSetup() = runTest {
         val updates = SetupUpdates().apply { loseAck = true; applyWrite = false }
         val coordinator = installedForAutoUpdate(updates)
-        coordinator.finish(); coordinator.finish()
+        coordinator.finish(if (coordinator.state.value.initialPinRequired) "582641".toCharArray() else null); coordinator.finish(if (coordinator.state.value.initialPinRequired) "582641".toCharArray() else null)
         assertEquals(listOf(9L to true), updates.writes)
         assertEquals(1, updates.finishes)
         assertEquals(RouterWizardStage.OPTIONS, coordinator.state.value.stage)
@@ -561,11 +578,11 @@ class RouterWizardCoordinatorTest {
     @Test fun explicitUpdaterErrorsRemainVisibleWithoutCompletingWizardOrReplaying() = runTest {
         val updates = SetupUpdates().apply { writeFailure = RouterUpdateFailureReason.STALE_SESSION }
         val coordinator = installedForAutoUpdate(updates)
-        coordinator.finish()
+        coordinator.finish(if (coordinator.state.value.initialPinRequired) "582641".toCharArray() else null)
         assertEquals(RouterUpdateFailureReason.STALE_SESSION, coordinator.state.value.autoUpdateFailure)
         assertEquals(RouterWizardStage.OPTIONS, coordinator.state.value.stage)
         assertEquals(1, updates.finishes)
-        coordinator.finish()
+        coordinator.finish(if (coordinator.state.value.initialPinRequired) "582641".toCharArray() else null)
         assertEquals(1, updates.writes.size)
         coordinator.close()
     }
@@ -575,7 +592,7 @@ class RouterWizardCoordinatorTest {
         val release = CompletableDeferred<Unit>()
         val updates = SetupUpdates().apply { beforeReply = { entered.complete(Unit); withContext(NonCancellable) { release.await() } } }
         val coordinator = installedForAutoUpdate(updates)
-        val request = launch { coordinator.finish() }
+        val request = launch { coordinator.finish(if (coordinator.state.value.initialPinRequired) "582641".toCharArray() else null) }
         entered.await()
         coordinator.begin(RouterWizardPath.PAIR, "NL")
         release.complete(Unit); runCurrent()
@@ -591,7 +608,7 @@ class RouterWizardCoordinatorTest {
     @Test fun unsupportedNewPackageRetainsPairingButDoesNotPretendThePolicyWasSaved() = runTest {
         val updates = SetupUpdates().apply { unsupported = true }
         val coordinator = installedForAutoUpdate(updates)
-        coordinator.finish()
+        coordinator.finish(if (coordinator.state.value.initialPinRequired) "582641".toCharArray() else null)
         assertEquals(RouterWizardError.UNSUPPORTED, coordinator.state.value.error)
         assertEquals(RouterWizardStage.OPTIONS, coordinator.state.value.stage)
         assertTrue(updates.writes.isEmpty()); assertEquals(1, updates.finishes)
@@ -611,10 +628,10 @@ class RouterWizardCoordinatorTest {
         coordinator.begin(RouterWizardPath.SETUP, "NL")
         coordinator.inspectAddress("192.168.1.1")
         coordinator.acceptIdentity()
-        coordinator.options(coordinator.state.value.options.copy(licenseAccepted = true))
         coordinator.confirmInstallProtocols()
         coordinator.login("fixture".toCharArray())
         assertEquals(RouterWizardStage.INSTALL, coordinator.state.value.stage)
+        coordinator.options(coordinator.state.value.options.copy(licenseAccepted = true))
     }
 
     private fun proposal(catalog: RouterInstallCatalog, selection: RouterInstallProtocolSelection,
@@ -625,4 +642,26 @@ class RouterWizardCoordinatorTest {
             variant.modes.getValue(RouterStorageMode.FLASH).sha256, "x86/64")
         return RouterInstallProposal("25.12.5", variant.architecture, RouterStorageMode.FLASH, catalog.manifestSha256, transaction, binding)
     }
+    @Test fun successfulRepairEnablesOnlySelectedManagementAndDefersHomeDefaultUntilWanEvidence() = runTest {
+        val storage = Store()
+        val selected = RouterPairing(identity, "pair-" + "a".repeat(32), ByteArray(32) { 7 }, "Phone", true)
+        storage.save(selected)
+        val old = RouterControlPreferences(selected.id, countryCode = "DE", countryAuto = false, homeAutodetection = true)
+        val other = RouterControlPreferences("pair-" + "d".repeat(32), countryCode = "NL")
+        val records = mutableMapOf(selected.id to old, other.pairingId to other)
+        val preferences = object : RouterControlPreferenceStore {
+            override suspend fun read(pairingId: String) = requireNotNull(records[pairingId])
+            override suspend fun save(preferences: RouterControlPreferences) { records[preferences.pairingId] = preferences }
+        }
+        val coordinator = RouterWizardCoordinator(transport(), storage, "Phone", null,
+            provisioner { RouterWizardResult(it.id) }, { null }, { true }, preferenceStore = preferences)
+        paired(coordinator)
+        val actual = requireNotNull(records[selected.id])
+        assertTrue(actual.enabled); assertFalse(actual.homeVpnDefaultPending)
+        assertFalse(actual.homeVpnManagementEnabled); assertFalse(actual.publicIpConfirmed)
+        assertEquals("DE", actual.countryCode); assertFalse(actual.countryAuto); assertTrue(actual.homeAutodetection)
+        assertEquals(other, records[other.pairingId])
+        selected.clear(); coordinator.close()
+    }
+
 }

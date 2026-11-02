@@ -42,8 +42,14 @@ internal class AppUpdateArchitectureManifestTest {
     }
 
     @Test
-    fun `split 64 bit installs accept complete universal 64 bit updates`() {
+    fun `split installs accept complete four ABI universal updates`() {
         fun complete(vararg abis: String) = abis.associateWith { appUpdateRequiredNativeLibraries }
+        val universal = complete("arm64-v8a", "armeabi-v7a", "x86", "x86_64")
+        for (abi in universal.keys) {
+            assertTrue(appUpdateNativeProfileCompatible(abi, universal, false))
+            assertFalse(appUpdateNativeProfileCompatible(abi, universal - abi, false))
+            assertFalse(appUpdateNativeProfileCompatible(abi, universal + ("mips" to appUpdateRequiredNativeLibraries), false))
+        }
         val arm64 = appUpdateRunningAbi(setOf("arm64-v8a"), listOf("arm64-v8a", "x86_64"))
         val x64 = appUpdateRunningAbi(setOf("x86_64"), listOf("x86_64", "arm64-v8a"))
         assertTrue(appUpdateNativeProfileCompatible(arm64, complete("arm64-v8a", "x86_64"), false))

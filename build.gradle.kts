@@ -40,7 +40,7 @@ if (enableSbom.get()) {
 
 allprojects {
     group = "com.foxhole"
-    version = "1.0.1"
+    version = "1.0.2"
 }
 
 val hardenedToolDependencyVersions =

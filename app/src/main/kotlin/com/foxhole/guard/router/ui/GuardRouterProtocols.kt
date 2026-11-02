@@ -21,7 +21,6 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -30,6 +29,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import com.foxhole.guard.ui.cli.components.CliButton
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -56,9 +57,13 @@ internal fun GuardRouterProtocolsList(state: RouterEngineControlState, selected:
         if (status == null) item { Text(stringResource(R.string.guard_router_router_engines_unavailable)) }
         if (state.running) item { Text(stringResource(R.string.guard_router_router_engines_busy)) }
         if (state.job != null) item {
-            OutlinedButton(onShowJob, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
-                Text(stringResource(if (state.job.running) R.string.guard_router_router_engines_show_progress else R.string.guard_router_router_engines_show_result))
-            }
+            CliButton(
+                label = stringResource(if (state.job.running) R.string.guard_router_router_engines_show_progress else R.string.guard_router_router_engines_show_result),
+                onClick = onShowJob,
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                enabled = true,
+                filled = false,
+            )
         }
         val installed = status?.entries.orEmpty().filter { it.installed }
         if (installed.isNotEmpty()) item {
@@ -74,9 +79,13 @@ internal fun GuardRouterProtocolsList(state: RouterEngineControlState, selected:
                     Text(listOfNotNull(entry.version, stringResource(if (entry.active) R.string.guard_router_router_engines_in_use else R.string.guard_router_router_engines_installed))
                         .joinToString(" · "), style = MaterialTheme.typography.bodySmall, color = LocalGuardRouterColors.current.muted)
                 }
-                if (entry.canUpdate) OutlinedButton(onClick = { onUpdate(entry.protocol) }, enabled = enabled && !state.running) {
-                    Text(stringResource(R.string.guard_router_router_engines_update))
-                }
+                if (entry.canUpdate) CliButton(
+                    label = stringResource(R.string.guard_router_router_engines_update),
+                    onClick = { onUpdate(entry.protocol) },
+                    modifier = Modifier,
+                    enabled = enabled && !state.running,
+                    filled = false,
+                )
                 IconButton(onClick = { onRemove(entry.protocol) }, enabled = enabled && !state.running && !entry.active) {
                     Icon(painterResource(R.drawable.lin_trash), stringResource(R.string.guard_router_router_engines_remove_protocol, entry.protocol.label),
                         Modifier.size(22.dp), tint = guardRouterDeleteColor())
@@ -95,13 +104,15 @@ internal fun GuardRouterProtocolsList(state: RouterEngineControlState, selected:
                 val choose = stringResource(R.string.guard_router_vpn_router_choose_protocols)
                 BoxWithConstraints(Modifier.fillMaxWidth()) {
                     val menuWidth = maxWidth
-                    OutlinedButton(onClick = { expanded = !expanded }, enabled = enabled && !state.running,
-                        modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
-                        Icon(painterResource(R.drawable.lin_power), null, Modifier.size(20.dp))
-                        Text(available.filter { it.protocol in selected }.joinToString(" · ") { it.protocol.label }
-                            .ifBlank { choose }, Modifier.weight(1f))
-                        Icon(painterResource(R.drawable.lin_arrow_down), null, Modifier.size(20.dp))
-                    }
+                    CliButton(
+                        label = available.filter { it.protocol in selected }.joinToString(" · ") { it.protocol.label }
+                            .ifBlank { choose },
+                        onClick = { expanded = !expanded },
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                        enabled = enabled && !state.running,
+                        icon = R.drawable.lin_power,
+                        filled = false,
+                    )
                     DropdownMenu(expanded && enabled && !state.running, onDismissRequest = { expanded = false },
                         modifier = Modifier.width(menuWidth).heightIn(max = 320.dp)) {
                         available.forEach { entry ->

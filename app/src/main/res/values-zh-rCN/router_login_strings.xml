@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="guard_router_router_login_enter_pin">请输入 PIN</string>
+    <string name="guard_router_router_login_version">版本 %1$s</string>
+    <string name="guard_router_router_login_version_unknown">软件包版本未知</string>
+</resources>

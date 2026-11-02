@@ -55,6 +55,7 @@ import com.foxhole.guard.ui.cli.LocalCliPixelArtEnabled
 import com.foxhole.guard.ui.cli.LocalCliType
 import com.foxhole.guard.ui.cli.cliAccentSwatch
 import com.foxhole.guard.ui.cli.cliFontSizeForMode
+import com.foxhole.guard.ui.cli.cliFontPreviewStyle
 import com.foxhole.guard.ui.cli.cliPixelFontSizeForMonoSp
 import com.foxhole.guard.ui.cli.cliResolvedThemeMode
 import com.foxhole.guard.ui.cli.cliScreenTag
@@ -590,10 +591,17 @@ private fun CliApplicationSection(
             showSelectedOptionIcon = true,
         )
         CliRowDivider()
-        CliToggleRow(
+        val tiny5 = stringResource(R.string.cli_font_tiny5)
+        val jetBrainsMono = stringResource(R.string.cli_font_jetbrains_mono)
+        CliDropdownRow(
             label = stringResource(R.string.cli_cfg_pixel_art),
-            checked = settings.ui.pixelArtEnabled,
-            onToggle = viewModel::onPixelArtEnabledChanged,
+            value = if (settings.ui.pixelArtEnabled) tiny5 else jetBrainsMono,
+            options = listOf(
+                CliDropdownOption("true", tiny5, textStyle = cliFontPreviewStyle(true)),
+                CliDropdownOption("false", jetBrainsMono, textStyle = cliFontPreviewStyle(false)),
+            ),
+            selectedId = settings.ui.pixelArtEnabled.toString(),
+            onSelect = { viewModel.onPixelArtEnabledChanged(it.toBooleanStrict()) },
             icon = R.drawable.lin_terminal,
         )
         CliRowDivider()

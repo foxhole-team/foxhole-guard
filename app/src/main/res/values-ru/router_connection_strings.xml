@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="guard_router_router_ssh_key_file">ВЫБРАТЬ ФАЙЛ SSH-КЛЮЧА</string>
+    <string name="guard_router_router_ssh_key_paste">ВСТАВИТЬ SSH-КЛЮЧ</string>
+    <string name="guard_router_router_ssh_key_loaded">Закрытый SSH-ключ загружен только для этого подключения.</string>
+    <string name="guard_router_router_ssh_use_password">ИСПОЛЬЗОВАТЬ ПАРОЛЬ</string>
+    <string name="guard_router_router_ssh_key_error">Не удалось прочитать закрытый SSH-ключ. Выберите ключ PEM или OpenSSH размером до 64 КиБ.</string>
+    <string name="guard_router_router_ssh_key_passphrase">Пароль SSH-ключа (если задан)</string>
+    <string name="guard_router_router_ssh_checking_openwrt">Проверяем версию OpenWrt, архитектуру и условия установки…</string>
+    <string name="guard_router_router_discovery_api_absent">HTTPS API FoxHole не ответил по этому адресу. Проверьте адрес роутера или повторите поиск.</string>
+    <string name="guard_router_router_discovery_ssh_only">SSH доступен, но HTTPS API FoxHole недоступен. Перед установкой можно проверить OpenWrt.</string>
+    <string name="guard_router_router_discovery_timeout">Время проверки роутера истекло. Повторите поиск или укажите текущий адрес в локальной сети.</string>
+    <string name="guard_router_router_discovery_tls">Не удалось проверить HTTPS-соединение роутера. Проверьте его время и сертификат и повторите поиск.</string>
+    <string name="guard_router_router_discovery_network">Не удалось связаться с роутером через эту сеть Wi-Fi. Повторите поиск или укажите адрес.</string>
+    <string name="guard_router_router_discovery_package_check">HTTPS-сервис ответил, но подтвердить FoxHole не удалось. Проверьте веб-настройку роутера или повторите поиск.</string>
+    <string name="guard_router_router_ssh_manual_setup">ПРОВЕРИТЬ OPENWRT / НАСТРОЙКА SSH</string>
+    <string name="guard_router_router_updates_device_download">Загрузка пакета FoxHole через ваше устройство</string>
+</resources>

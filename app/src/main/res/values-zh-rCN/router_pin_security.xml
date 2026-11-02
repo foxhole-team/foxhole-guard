@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="guard_router_router_setup_pin">PIN 码</string>
+    <string name="guard_router_router_setup_pin_repeat">再次输入 PIN 码</string>
+    <string name="guard_router_router_pin_cooldown">请在 %1$d 秒后重试。</string>
+    <string name="guard_router_router_setup_all_lan_vpn">所有家庭设备使用 VPN</string>
+    <string name="guard_router_router_setup_all_lan_vpn_help">连接后，所有家庭设备使用 VPN，同时保留您的路由例外。您可以关闭此选项。此设置不会启动 VPN。</string>
+</resources>

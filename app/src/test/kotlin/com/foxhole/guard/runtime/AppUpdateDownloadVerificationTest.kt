@@ -52,6 +52,24 @@ class AppUpdateDownloadVerificationTest {
         }
 
     @Test
+    fun `install request reverifies the retained package away from the caller thread`() = runBlocking {
+        val caller = Thread.currentThread()
+        var calls = 0
+        var verifierThread: Thread? = null
+        val repository = repository(verifier = { _, _ ->
+            calls++
+            verifierThread = Thread.currentThread()
+            if (calls == 1) Result.success(Unit)
+            else Result.failure(AppUpdateVerificationException("retained package changed"))
+        })
+        assertTrue(repository.download(available()).isSuccess)
+        assertTrue(repository.verifyForInstall().isFailure)
+        assertEquals(2, calls)
+        assertTrue(verifierThread !== caller)
+        assertTrue(repository.state.value is AppUpdateState.Failed)
+    }
+
+    @Test
     fun `a tampered payload is refused and leaves nothing behind`() =
         runBlocking {
             val repository = repository(served = apkBytes.copyOf().also { it[0] = (it[0] + 1).toByte() })

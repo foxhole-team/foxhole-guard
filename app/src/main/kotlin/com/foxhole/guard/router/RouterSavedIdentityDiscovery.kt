@@ -9,13 +9,25 @@ internal data class RouterSavedIdentityMatch(val pairingId: String?, val identit
 
 internal suspend fun discoverSavedRouterIdentity(transport: RouterWizardTransport, saved: List<RouterPairing>,
     checkOwner: suspend () -> Unit = {}): RouterSavedIdentityMatch {
-    require(saved.size <= MAX_SAVED_ROUTERS)
+    require(saved.size <= MAX_RETAINED_ROUTERS)
     if (saved.isEmpty()) return RouterSavedIdentityMatch(null, null, emptyMap(), false)
     val gateway = transport.gateway()?.let { address -> runCatching { RouterEndpoint(address) }.getOrNull() }
     val endpoints = (listOfNotNull(gateway) + saved.map { it.identity.endpoint }).distinct().take(MAX_SAVED_ROUTERS + 1)
     val statuses = saved.associate { it.id to RouterSavedStatus.UNKNOWN }.toMutableMap()
     var unknown = false
-    for (endpoint in endpoints) {
+    val visited = mutableSetOf<RouterEndpoint>()
+    for (phase in 0..1) {
+        val candidates = if (phase == 0) endpoints else {
+            checkOwner()
+            val advertised = try { withTimeoutOrNull(2000) { transport.advertisedCandidates() }.orEmpty() }
+            catch (cancelled: CancellationException) { throw cancelled }
+            catch (failure: RouterLocalNetworkPermissionRequired) { throw failure }
+            catch (_: IOException) { emptyList() }
+            checkOwner()
+            advertised.take(4)
+        }
+        for (endpoint in candidates) {
+        if (!visited.add(endpoint)) continue
         checkOwner()
         val observed = try { withTimeoutOrNull(2000) { transport.inspectIdentity(endpoint) } }
         catch (cancelled: CancellationException) { throw cancelled }
@@ -30,6 +42,7 @@ internal suspend fun discoverSavedRouterIdentity(transport: RouterWizardTranspor
         val actual = matching.single()
         statuses[actual.id] = RouterSavedStatus.AVAILABLE
         return RouterSavedIdentityMatch(actual.id, observed, statuses, unknown)
+        }
     }
     return RouterSavedIdentityMatch(null, null, statuses, unknown)
 }

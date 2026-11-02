@@ -1,0 +1,5 @@
+1.0.2 Stable
+• Fixed router discovery, pairing and OpenWrt inspection over SSH, and added SSH key support.
+• Fixed errors when updating the app from GitHub.
+• Added a 15-second notification dismissal timer and upward swipe dismissal.
+• Updated help and hints.

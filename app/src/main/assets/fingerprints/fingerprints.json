@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "generated_at": "2026-08-17T02:33:33Z",
+  "generated_at": "2026-11-01T08:56:57.765150+00:00",
   "profiles": [
     {
       "schema": 1,
@@ -1143,6 +1143,431 @@
           "http/1.1"
         ],
         "signature_algorithms": [
+          [
+            "0x0904",
+            "mldsa44"
+          ],
+          [
+            "0x0905",
+            "mldsa65"
+          ],
+          [
+            "0x0906",
+            "mldsa87"
+          ],
+          [
+            "0x0403",
+            "ecdsa_secp256r1_sha256"
+          ],
+          [
+            "0x0804",
+            "rsa_pss_rsae_sha256"
+          ],
+          [
+            "0x0401",
+            "rsa_pkcs1_sha256"
+          ],
+          [
+            "0x0503",
+            "ecdsa_secp384r1_sha384"
+          ],
+          [
+            "0x0805",
+            "rsa_pss_rsae_sha384"
+          ],
+          [
+            "0x0501",
+            "rsa_pkcs1_sha384"
+          ],
+          [
+            "0x0806",
+            "rsa_pss_rsae_sha512"
+          ],
+          [
+            "0x0601",
+            "rsa_pkcs1_sha512"
+          ]
+        ],
+        "grease": {
+          "shape": "(seed & 0xf0) | 0x0a, repeated into both bytes",
+          "per_index_not_per_hello": true,
+          "extension_1_and_2_must_differ": true
+        },
+        "padding_rule": {
+          "spec": "RFC 7685 in BoringSSL's shape",
+          "applies_when_hello_len_between": [
+            "0x100",
+            "0x1ff"
+          ],
+          "pads_to": 512,
+          "fires_in_practice": false,
+          "why": "the ML-KEM key share puts the hello well past 0x1ff"
+        },
+        "ech_grease": {
+          "spec": "draft-ietf-tls-esni-22 section 6.2",
+          "kdf": "HKDF-SHA256",
+          "aead": "AES-128-GCM",
+          "aead_note": "One suite, fixed. BoringSSL setup_ech_grease() picks aes_128_gcm when EVP_has_aes_hardware() and chacha20_poly1305 otherwise, so a given install always sends the same id; uTLS BoringGREASEECH() offers only {HKDF_SHA256, AES_128_GCM}. Choosing per connection would itself be a fingerprint.",
+          "payload_lengths": [
+            128,
+            160,
+            192,
+            224
+          ],
+          "payload_is": "L + 16 random bytes",
+          "enc_is": "a real HPKE encapsulated key"
+        }
+      }
+    },
+    {
+      "schema": 1,
+      "name": "chrome_156",
+      "describes": "Chromium156 source-derived TCP ClientHello with no supplied Trust Anchor IDs; not a live/default-platform capture",
+      "provenance": {
+        "method": "derived from pinned first-party Chromium156 source",
+        "browser": "Chromium156.0.8078.47 TCP configuration without supplied Trust Anchor IDs",
+        "verified_against_live_browser": false,
+        "verified_against_live_reality_server": false,
+        "trust_anchor_ids": "not supplied; no intermediate-elision or Trust Anchor retry support",
+        "boringssl_revision": "2ea3200c3a3ec176613ab7a0b9a4ffc6db846120"
+      },
+      "application_settings_code_point": {
+        "value": "0x44cd",
+        "note": "Chrome 132 and later moved application_settings to 0x44cd; Chromium 151 still sends it there. chrome_131 is the same table at the older 0x4469."
+      },
+      "citations": [
+        {
+          "what": "signature GREASE enabled by default",
+          "url": "https://raw.githubusercontent.com/chromium/chromium/156.0.8078.47/net/base/features.cc"
+        },
+        {
+          "what": "signature preferences, extension permutation and optional Trust Anchor IDs",
+          "url": "https://raw.githubusercontent.com/chromium/chromium/156.0.8078.47/net/socket/ssl_client_socket_impl.cc"
+        },
+        {
+          "what": "exact BoringSSL dependency",
+          "url": "https://raw.githubusercontent.com/chromium/chromium/156.0.8078.47/DEPS"
+        },
+        {
+          "what": "GREASE value derivation",
+          "source": "BoringSSL",
+          "symbols": [
+            "ssl_get_grease_value"
+          ],
+          "url": "https://boringssl.googlesource.com/boringssl/"
+        },
+        {
+          "what": "ClientHello padding rule",
+          "source": "BoringSSL",
+          "symbols": [
+            "ext_padding_add_clienthello"
+          ],
+          "url": "https://boringssl.googlesource.com/boringssl/"
+        },
+        {
+          "what": "ML-DSA signature scheme code points",
+          "source": "draft-ietf-tls-mldsa",
+          "url": "https://datatracker.ietf.org/doc/draft-ietf-tls-mldsa/"
+        },
+        {
+          "what": "ECH GREASE construction",
+          "source": "draft-ietf-tls-esni",
+          "section": "§6.2",
+          "url": "https://datatracker.ietf.org/doc/draft-ietf-tls-esni/"
+        },
+        {
+          "what": "X25519MLKEM768 share layout and shared-secret order",
+          "source": "draft-ietf-tls-ecdhe-mlkem-01",
+          "section": "§3.1, §3.2, §5",
+          "url": "https://datatracker.ietf.org/doc/draft-ietf-tls-ecdhe-mlkem/"
+        }
+      ],
+      "fingerprint_sha256": "da2075bca0d4016125ae7bcad021cd89de3aa6c90016acc99872a6e9cb097eb7",
+      "fingerprint_sha256_covers": "SHA-256 over the 'fingerprint' object serialised as JSON with sorted keys, no whitespace, and ASCII-only content, so the digest is reproducible from any language without agreeing on a non-ASCII escaping rule. Provenance and citations are excluded on purpose, so editing prose does not invalidate the vector.",
+      "fingerprint": {
+        "legacy_version": "0x0303",
+        "record_layer_version": {
+          "initial_client_hello": "0x0301",
+          "subsequent_records": "0x0303",
+          "why": "BoringSSL tls_record_version() returns TLS1_VERSION while ssl->s3->version == 0; Go crypto/tls writeRecordLocked, which uTLS inherits and Xray and sing-box run, sets vers = VersionTLS10 on the first record. RFC 8446 5.1 permits either value, so this is a parroting requirement and not a correctness one."
+        },
+        "legacy_session_id_bytes": 32,
+        "compression_methods": [
+          "0x00"
+        ],
+        "cipher_suites": [
+          {
+            "value": "GREASE",
+            "role": "grease"
+          },
+          {
+            "value": "0x1301",
+            "name": "TLS_AES_128_GCM_SHA256",
+            "role": "negotiable"
+          },
+          {
+            "value": "0x1302",
+            "name": "TLS_AES_256_GCM_SHA384",
+            "role": "negotiable"
+          },
+          {
+            "value": "0x1303",
+            "name": "TLS_CHACHA20_POLY1305_SHA256",
+            "role": "negotiable"
+          },
+          {
+            "value": "0xc02b",
+            "name": "ECDHE_ECDSA_AES_128_GCM_SHA256",
+            "role": "decorative"
+          },
+          {
+            "value": "0xc02f",
+            "name": "ECDHE_RSA_AES_128_GCM_SHA256",
+            "role": "decorative"
+          },
+          {
+            "value": "0xc02c",
+            "name": "ECDHE_ECDSA_AES_256_GCM_SHA384",
+            "role": "decorative"
+          },
+          {
+            "value": "0xc030",
+            "name": "ECDHE_RSA_AES_256_GCM_SHA384",
+            "role": "decorative"
+          },
+          {
+            "value": "0xcca9",
+            "name": "ECDHE_ECDSA_CHACHA20_POLY1305",
+            "role": "decorative"
+          },
+          {
+            "value": "0xcca8",
+            "name": "ECDHE_RSA_CHACHA20_POLY1305",
+            "role": "decorative"
+          },
+          {
+            "value": "0xc013",
+            "name": "ECDHE_RSA_AES_128_CBC_SHA",
+            "role": "decorative"
+          },
+          {
+            "value": "0xc014",
+            "name": "ECDHE_RSA_AES_256_CBC_SHA",
+            "role": "decorative"
+          },
+          {
+            "value": "0x009c",
+            "name": "RSA_AES_128_GCM_SHA256",
+            "role": "decorative"
+          },
+          {
+            "value": "0x009d",
+            "name": "RSA_AES_256_GCM_SHA384",
+            "role": "decorative"
+          },
+          {
+            "value": "0x002f",
+            "name": "RSA_AES_128_CBC_SHA",
+            "role": "decorative"
+          },
+          {
+            "value": "0x0035",
+            "name": "RSA_AES_256_CBC_SHA",
+            "role": "decorative"
+          }
+        ],
+        "extension_order": [
+          {
+            "order": 1,
+            "type": "GREASE",
+            "slot": "extension_1",
+            "body": ""
+          },
+          {
+            "order": 2,
+            "type": "0x0000",
+            "name": "server_name",
+            "body": "per_connection"
+          },
+          {
+            "order": 3,
+            "type": "0x0017",
+            "name": "extended_master_secret",
+            "body": ""
+          },
+          {
+            "order": 4,
+            "type": "0xff01",
+            "name": "renegotiation_info",
+            "body": "00"
+          },
+          {
+            "order": 5,
+            "type": "0x000a",
+            "name": "supported_groups",
+            "body": "table"
+          },
+          {
+            "order": 6,
+            "type": "0x000b",
+            "name": "ec_point_formats",
+            "body": "0100"
+          },
+          {
+            "order": 7,
+            "type": "0x0023",
+            "name": "session_ticket",
+            "body": ""
+          },
+          {
+            "order": 8,
+            "type": "0x0010",
+            "name": "application_layer_protocol_negotiation",
+            "body": "table"
+          },
+          {
+            "order": 9,
+            "type": "0x0005",
+            "name": "status_request",
+            "body": "0100000000"
+          },
+          {
+            "order": 10,
+            "type": "0x000d",
+            "name": "signature_algorithms",
+            "body": "table"
+          },
+          {
+            "order": 11,
+            "type": "0x0012",
+            "name": "signed_certificate_timestamp",
+            "body": ""
+          },
+          {
+            "order": 12,
+            "type": "0x0033",
+            "name": "key_share",
+            "body": "per_connection"
+          },
+          {
+            "order": 13,
+            "type": "0x002d",
+            "name": "psk_key_exchange_modes",
+            "body": "0101"
+          },
+          {
+            "order": 14,
+            "type": "0x002b",
+            "name": "supported_versions",
+            "body": "table"
+          },
+          {
+            "order": 15,
+            "type": "0x001b",
+            "name": "compress_certificate",
+            "body": "020002"
+          },
+          {
+            "order": 16,
+            "type": "0x44cd",
+            "name": "application_settings",
+            "body": "000302 6832"
+          },
+          {
+            "order": 17,
+            "type": "0xfe0d",
+            "name": "encrypted_client_hello",
+            "body": "per_connection_grease"
+          },
+          {
+            "order": 18,
+            "type": "GREASE",
+            "slot": "extension_2",
+            "body": "00"
+          },
+          {
+            "order": 19,
+            "type": "0x0015",
+            "name": "padding",
+            "body": "conditional"
+          }
+        ],
+        "permute_extensions": true,
+        "permutation_exempt": [
+          "grease_extension_1",
+          "grease_extension_2",
+          "padding",
+          "pre_shared_key"
+        ],
+        "supported_groups": [
+          {
+            "value": "GREASE",
+            "role": "grease"
+          },
+          {
+            "value": "0x11ec",
+            "name": "X25519MLKEM768",
+            "role": "offered_and_executed"
+          },
+          {
+            "value": "0x001d",
+            "name": "x25519",
+            "role": "offered_and_executed"
+          },
+          {
+            "value": "0x0017",
+            "name": "secp256r1",
+            "role": "named_only"
+          },
+          {
+            "value": "0x0018",
+            "name": "secp384r1",
+            "role": "named_only"
+          }
+        ],
+        "key_shares": [
+          {
+            "value": "GREASE",
+            "role": "grease"
+          },
+          {
+            "value": "0x11ec",
+            "name": "X25519MLKEM768",
+            "bytes": 1216,
+            "layout": "ml_kem_encapsulation_key || x25519_public"
+          },
+          {
+            "value": "0x001d",
+            "name": "x25519",
+            "bytes": 32,
+            "layout": "x25519_public"
+          }
+        ],
+        "supported_versions": [
+          {
+            "value": "GREASE",
+            "role": "grease"
+          },
+          {
+            "value": "0x0304",
+            "name": "TLS 1.3",
+            "role": "offered_and_accepted"
+          },
+          {
+            "value": "0x0303",
+            "name": "TLS 1.2",
+            "role": "offered_but_refused_if_selected"
+          }
+        ],
+        "alpn": [
+          "h2",
+          "http/1.1"
+        ],
+        "signature_algorithms": [
+          [
+            "GREASE",
+            "per_connection_signature_algorithm"
+          ],
           [
             "0x0904",
             "mldsa44"

@@ -1,6 +1,7 @@
 package com.foxhole.guard.runtime
 
 object AppUpdatePolicy {
+    const val RELEASE_CERT_SHA256 = "e59de2486084c38f3c77e9df0eb5eff9a4559f3c68024f1208e0e9c04b0df665"
     const val GITHUB_CHANNEL = "github"
     const val FDROID_CHANNEL = "fdroid"
 

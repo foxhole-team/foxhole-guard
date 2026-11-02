@@ -149,7 +149,9 @@ class AppUpdatePolicyTest {
 
     @Test
     fun `signer comparison is fail-closed`() {
-        assertTrue(appUpdateSignersMatch(setOf("aa"), setOf("aa")))
+        val canonical = setOf(AppUpdatePolicy.RELEASE_CERT_SHA256)
+        assertTrue(appUpdateSignersMatch(canonical, canonical))
+        assertFalse(appUpdateSignersMatch(setOf("aa"), setOf("aa")))
         assertFalse("an unknown installed signer must never match", appUpdateSignersMatch(emptySet(), emptySet()))
         assertFalse(appUpdateSignersMatch(setOf("aa"), emptySet()))
         assertFalse(appUpdateSignersMatch(setOf("aa"), setOf("bb")))

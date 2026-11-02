@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Icon
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -22,6 +21,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import com.foxhole.guard.ui.cli.components.CliButton
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.graphics.Color
@@ -59,25 +60,24 @@ internal fun GuardRouterReviewTable(rows: List<Pair<String, String>>, icons: Lis
 internal fun routerConnectColor(): Color = com.foxhole.guard.ui.cli.LocalCliColors.current.vpn
 
 @Composable
+@Suppress("UNUSED_PARAMETER")
 internal fun GuardRouterNavigationFooter(backEnabled: Boolean, onBack: (() -> Unit)?, onClose: (() -> Unit)?) {
-    if (onClose != null) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (onBack != null) OutlinedButton(onClick = onBack, enabled = backEnabled,
-                modifier = Modifier.weight(1f).heightIn(min = 56.dp)) {
-                Text(stringResource(R.string.guard_router_router_review_back))
-            }
-            OutlinedButton(onClick = onClose, modifier = Modifier.weight(1f).heightIn(min = 56.dp)) {
-                Text(stringResource(R.string.guard_router_vpn_close))
-            }
-        }
-    } else if (onBack != null) OutlinedButton(onClick = onBack, enabled = backEnabled,
-        modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
-        Text(stringResource(R.string.guard_router_router_review_back))
-    }
+    if (onClose != null) CliButton(
+        label = stringResource(R.string.guard_router_vpn_close),
+        onClick = onClose,
+        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+        enabled = true,
+        filled = false,
+    )
 }
 
 @Composable
-internal fun GuardRouterIllustration(modifier: Modifier = Modifier) {
+internal fun GuardRouterIllustration(modifier: Modifier = Modifier, animateEntrance: Boolean = true) {
+    if (!animateEntrance) {
+        Icon(painterResource(R.drawable.router_review_illustration), null, modifier,
+            tint = LocalGuardRouterColors.current.foreground)
+        return
+    }
     var opened by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { opened = true }
     val opacity by animateFloatAsState(if (opened) 1f else 0f, GuardRouterSheetMotion.fastEffectsSpec(), label = "router-image-opacity")

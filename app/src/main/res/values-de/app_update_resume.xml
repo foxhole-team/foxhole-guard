@@ -1,0 +1,3 @@
+<resources>
+    <string name="cli_updates_app_install_vpn_notice">Die Installation unterbricht das VPN kurz. Die App versucht, eine aktive Verbindung wiederherzustellen. Öffne die App und verbinde dich bei Bedarf erneut.</string>
+</resources>

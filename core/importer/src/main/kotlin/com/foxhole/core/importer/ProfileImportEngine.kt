@@ -5,6 +5,8 @@ import com.foxhole.core.model.ParsedSubscriptionImport
 import com.foxhole.core.model.ParsedSubscriptionProfile
 import com.foxhole.core.model.ProfileSourceType
 import com.foxhole.core.model.ProtocolHint
+import com.foxhole.core.model.SubscriptionEntryReport
+import com.foxhole.core.model.SubscriptionEntryStatus
 import com.foxhole.core.model.StoredProfileProtocolOption
 import com.foxhole.core.network.RemoteHostResolver
 import com.foxhole.core.network.ensurePublicSubscriptionUrl
@@ -162,6 +164,7 @@ internal class ProfileImportEngine(
                 displayName = converted.displayName,
                 normalizedConfigJson = converted.normalizedConfigJson,
                 subscriptionExpiresAt = converted.subscriptionExpiresAt,
+                entryReports = converted.entryReports,
             )
         }
     }
@@ -213,6 +216,12 @@ internal class ProfileImportEngine(
                 ),
                 nodesCount = 1,
                 subscriptionExpiresAt = node.subscriptionExpiresAt,
+                entryReports = if (node.compatibilityWarning) listOf(
+                    SubscriptionEntryReport(
+                        protocolDisplayLabel(node.protocolHint), node.protocolHint, SubscriptionEntryStatus.ACCEPTED, 1,
+                        compatibilityWarning = true,
+                    ),
+                ) else emptyList(),
             )
         }
     }
@@ -420,6 +429,7 @@ internal class ProfileImportEngine(
                         ),
                     ),
                     subscriptionExpiresAt = parsed.subscriptionExpiresAt,
+                    entryReports = parsed.entryReports,
                 )
             }
         }

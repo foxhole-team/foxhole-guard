@@ -1,0 +1,24 @@
+# Offline source/fixture metadata only; no tests, native code or app build.
+name: android-router-contract
+on:
+  push:
+    branches: [dev, main]
+  pull_request:
+    branches: [dev, main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: android-router-contract-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  source-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - name: Checkout exact application source
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - name: Check fixed offline source and fixture contract
+        run: python3 scripts/check-android-router-contract.py --root .

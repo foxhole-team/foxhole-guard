@@ -50,12 +50,17 @@ class RouterControlCoordinatorTest {
         var revoked = false
         var proofConnected = true
         var wanCountry: String? = null
+        var network: JsonObject? = null
+        var installedProtocols: JsonObject? = null
+        var clients = JsonArray(emptyList())
         var countries = JsonArray(emptyList())
         val actions = mutableListOf<String>()
         fun state() = buildJsonObject {
             put("schema", 1); put("revision", revision)
             put("settings", buildJsonObject { put("localRules", true); put("localScope", "all") })
-            put("countries", countries); put("devices", JsonArray(emptyList())); put("sites", JsonArray(emptyList())); put("clients", JsonArray(emptyList()))
+            put("countries", countries); put("devices", JsonArray(emptyList())); put("sites", JsonArray(emptyList())); put("clients", clients)
+            network?.let { put("network", it) }
+            installedProtocols?.let { put("installedProtocols", it) }
             put("servers", JsonArray(listOf(buildJsonObject { put("id", "server-000000000001"); put("name", "Home"); put("protocol", "hysteria2"); put("endpoint", "vpn.example.com:443") })))
             put("runtime", buildJsonObject { put("desiredServerId", selected?.let(::JsonPrimitive) ?: JsonNull); put("connected", selected != null && proofConnected) })
         }
@@ -94,6 +99,21 @@ class RouterControlCoordinatorTest {
         override fun gateway() = "192.168.1.1"
         override suspend fun inspectIdentity(endpoint: RouterEndpoint): RouterTlsIdentity = identity
         override fun api(identity: RouterTlsIdentity) = fixture.api(identity)
+    }
+
+    @Test fun pairedOpenReadsCurrentSnapshotWithoutEnablingManagementOrWritingSettings() = runTest {
+        val fixture = Fixture().also { it.selected = "server-000000000001" }
+        val original = RouterControlPreferences(pair.id, enabled = false, countryCode = "DE", countryAuto = false)
+        val preferences = Preferences(original)
+        val coordinator = RouterControlCoordinator(transport(fixture), PairStore(pair), preferences,
+            RouterHttpProvisioner(localAddress = { "192.168.1.101" }, io = StandardTestDispatcher(testScheduler)), copyProfile = {})
+        coordinator.loadPairingState(); coordinator.preparePairedOpen(); coordinator.open()
+        assertEquals(RouterControlStage.DISABLED, coordinator.state.value.stage)
+        assertEquals("server-000000000001", coordinator.state.value.snapshot?.desiredServerId)
+        assertEquals(original, preferences.value)
+        assertEquals(1, fixture.revision)
+        assertFalse(fixture.actions.any { it in setOf("settings", "phone.provision", "server.start", "server.stop") })
+        coordinator.close()
     }
 
     @Test fun closingTheRuntimeDoesNotPoisonTheNextOpenOrErasePairing() = runTest {
@@ -356,6 +376,67 @@ class RouterControlCoordinatorTest {
         assertEquals(0, admissions)
         assertFalse(coordinator.state.value.homeAutomationEffective)
         assertTrue(preferences.value.homeAutodetection)
+        coordinator.close()
+    }
+
+    @Test fun authenticatedPairOpenPreservesPublicOptOutAndLoadsExistingClientsWithoutRouterMutations() = runTest {
+        val fixture = Fixture().also {
+            it.network = buildJsonObject { put("schema", 1); put("source", "default-uplink"); put("publicIpv4Available", true) }
+            it.clients = JsonArray(listOf(buildJsonObject { put("id", "client-000000000001"); put("name", "Existing"); put("provisioned", true) }))
+        }
+        val original = RouterControlPreferences(pair.id, countryCode = "DE", countryAuto = false).afterSuccessfulPairing()
+        val preferences = Preferences(original)
+        val coordinator = RouterControlCoordinator(transport(fixture), PairStore(pair), preferences,
+            RouterHttpProvisioner(localAddress = { "192.168.1.101" }, io = StandardTestDispatcher(testScheduler)), copyProfile = {})
+        coordinator.preparePairedOpen(); coordinator.open()
+        assertEquals(RouterControlStage.CONNECTED, coordinator.state.value.stage)
+        assertEquals(true, coordinator.state.value.snapshot?.publicIpv4Available)
+        assertEquals(1, coordinator.state.value.snapshot?.clients?.size)
+        assertTrue(coordinator.state.value.remoteClientHubAvailable)
+        assertTrue(preferences.value.enabled); assertFalse(preferences.value.homeVpnManagementEnabled)
+        assertFalse(preferences.value.publicIpConfirmed); assertFalse(preferences.value.homeVpnDefaultPending)
+        assertEquals("DE", preferences.value.countryCode); assertFalse(preferences.value.countryAuto)
+        assertFalse(fixture.actions.any { it in setOf("settings", "phone.provision", "client.save", "server.start", "server.stop") })
+        coordinator.close()
+    }
+
+    @Test fun explicitRemoteOptOutClearsPendingDefaultsWithoutAnyNetworkCall() = runTest {
+        val fixture = Fixture()
+        val preferences = Preferences(RouterControlPreferences(pair.id).afterSuccessfulPairing())
+        val coordinator = RouterControlCoordinator(transport(fixture), PairStore(pair), preferences,
+            RouterHttpProvisioner(localAddress = { "192.168.1.101" }, io = StandardTestDispatcher(testScheduler)), copyProfile = {})
+        coordinator.loadPairingState(); coordinator.setPublicIpConfirmed(false)
+        assertFalse(preferences.value.homeVpnDefaultPending)
+        preferences.value = preferences.value.afterSuccessfulPairing()
+        coordinator.loadPairingState(); coordinator.setHomeVpnManagement(false)
+        assertFalse(preferences.value.homeVpnDefaultPending)
+        assertFalse(preferences.value.homeVpnManagementEnabled); assertTrue(fixture.actions.isEmpty())
+        coordinator.close()
+    }
+
+    @Test fun hideOfflineDevicesDefaultsOnAndExplicitChoiceIsLocalOnly() = runTest {
+        val fixture = Fixture()
+        val preferences = Preferences(RouterControlPreferences(pair.id))
+        val coordinator = RouterControlCoordinator(transport(fixture), PairStore(pair), preferences,
+            RouterHttpProvisioner(localAddress = { "192.168.1.101" }, io = StandardTestDispatcher(testScheduler)), copyProfile = {})
+        coordinator.loadPairingState(); assertTrue(preferences.value.hideOfflineDevices)
+        coordinator.setHideOfflineDevices(false); assertFalse(preferences.value.hideOfflineDevices)
+        coordinator.setHideOfflineDevices(true); assertTrue(preferences.value.hideOfflineDevices)
+        assertTrue(fixture.actions.isEmpty()); coordinator.close()
+    }
+
+    @Test fun installedProtocolFactsComeFromTheAuthenticatedSnapshotWithoutNewRpcOrVpnStart() = runTest {
+        val fixture = Fixture().also {
+            it.installedProtocols = buildJsonObject { put("schema", 1); put("protocols", JsonArray(listOf(JsonPrimitive("hysteria2")))) }
+        }
+        val preferences = Preferences(RouterControlPreferences(pair.id, enabled = true, countryAuto = false))
+        val coordinator = RouterControlCoordinator(transport(fixture), PairStore(pair), preferences,
+            RouterHttpProvisioner(localAddress = { "192.168.1.101" }, io = StandardTestDispatcher(testScheduler)), copyProfile = {})
+        coordinator.preparePairedOpen(); coordinator.open()
+        assertEquals(setOf(RouterInstallProtocol.HYSTERIA2), coordinator.state.value.snapshot?.installedProtocols)
+        assertEquals(listOf(RouterInstallProtocol.HYSTERIA2),
+            routerInstalledProtocols(coordinator.state.value.snapshot?.installedProtocols, null))
+        assertFalse(fixture.actions.any { it in setOf("settings", "phone.provision", "client.save", "server.start", "server.stop", "engines.status") })
         coordinator.close()
     }
 

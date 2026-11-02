@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="guard_router_router_login_enter_pin">Введите ПИН</string>
+    <string name="guard_router_router_login_version">Версия %1$s</string>
+    <string name="guard_router_router_login_version_unknown">Версия пакета неизвестна</string>
+</resources>

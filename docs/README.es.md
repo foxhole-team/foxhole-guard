@@ -1,3 +1,11 @@
+<h1 align="center">FoxHole Guard</h1>
+
+<div align="center">
+
+**FoxHole Guard** reúne protección de red, privacidad y control local de la actividad de red en Android.
+
+</div>
+
 <p align="center">
     <img
       src="../media/fhg.gif"
@@ -23,23 +31,20 @@
   <a href="https://github.com/foxhole-team/foxhole-guard/releases">
     <img src="https://img.shields.io/github/v/release/foxhole-team/foxhole-guard?label=GitHub%20version&style=flat-square" alt="GitHub Version">
   </a>
+  <img src="https://img.shields.io/badge/status-stable-success?style=flat-square" alt="Status: stable">
   <a href="https://f-droid.org/packages/com.foxhole.guard/">
     <img src="https://img.shields.io/f-droid/v/com.foxhole.guard?label=F-Droid&logo=f-droid&style=flat-square" alt="F-Droid Version">
   </a>
-  <a href="https://apps.obtainium.imranr.dev/redirect?r=obtainium://app/%7B%22id%22%3A%22com.foxhole.guard%22%2C%22url%22%3A%22https%3A%2F%2Fgithub.com%2Ffoxhole-team%2Ffoxhole-guard%22%2C%22author%22%3A%22FoxHole%20Team%22%2C%22name%22%3A%22FoxHole%20Guard%22%2C%22preferredApkIndex%22%3A0%2C%22additionalSettings%22%3A%22%7B%5C%22apkFilterRegEx%5C%22%3A%5C%22arm64-v8a-release%5C%5C%5C%5C.apk%24%5C%22%2C%5C%22invertAPKFilter%5C%22%3Afalse%2C%5C%22verifyLatestTag%5C%22%3Atrue%7D%22%2C%22overrideSource%22%3A%22GitHub%22%7D">
-    <img src="https://img.shields.io/badge/Obtainium-add%20app-1A73E8?style=flat-square" alt="Get it on Obtainium">
+  <a href="https://apps.obtainium.imranr.dev/redirect?r=obtainium://app/%7B%22id%22%3A%22com.foxhole.guard%22%2C%22url%22%3A%22https%3A%2F%2Fgithub.com%2Ffoxhole-team%2Ffoxhole-guard%22%2C%22author%22%3A%22FoxHole%20Team%22%2C%22name%22%3A%22FoxHole%20Guard%22%2C%22preferredApkIndex%22%3A0%2C%22additionalSettings%22%3A%22%7B%5C%22apkFilterRegEx%5C%22%3A%5C%22arm64-v8a%5B.%5Dapk%24%5C%22%2C%5C%22invertAPKFilter%5C%22%3Afalse%2C%5C%22verifyLatestTag%5C%22%3Atrue%7D%22%2C%22overrideSource%22%3A%22GitHub%22%7D" title="Obtainium · ARM64">
+    <img src="https://img.shields.io/badge/Obtainium-add%20app-1A73E8?style=flat-square" alt="Get it on Obtainium · ARM64">
   </a>
 </p>
 
-# FoxHole Guard
 ![Platform](https://img.shields.io/badge/platform-Android-3DDC84?style=flat-square&logo=android&logoColor=white)
-![Status](https://img.shields.io/badge/status-STABLE-success?style=flat-square)
 ![Core](https://img.shields.io/badge/core-Rust-000000?style=flat-square&logo=rust&logoColor=white)
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-007ec6?style=flat-square)](https://www.gnu.org/licenses/gpl-3.0.html)
 ![Telemetry](https://img.shields.io/badge/telemetry-none-success?style=flat-square)
 ![❤️ We support I2P](https://img.shields.io/badge/❤️_We_support-I2P-7B1FA2?style=flat-square)
-
-**FoxHole Guard** reúne protección de red, privacidad y control local de la actividad de red en Android.
 
 Las versiones publicadas y los APK están en [GitHub Releases](https://github.com/foxhole-team/foxhole-guard/releases).
 
@@ -55,6 +60,59 @@ El objetivo es ofrecer en una sola aplicación protección cotidiana, acceso a V
 
 ---
 
+<p align="center"><a href="#quickstart">Empezar</a> · <a href="#features">Funciones</a> · <a href="#details">Detalles</a> · <a href="#whats-new">Novedades</a></p>
+
+<a id="whats-new"></a>
+
+> **🆕 Novedades - 1.0.2 Stable**
+>
+> - Se han corregido la búsqueda del router, la vinculación y la comprobación de OpenWrt por SSH, y se ha añadido compatibilidad con claves SSH.
+> - Se han corregido errores al actualizar la aplicación desde GitHub.
+> - Añadidos un temporizador para cerrar las notificaciones y el cierre deslizando hacia arriba.
+> - Se han actualizado la ayuda y las indicaciones.
+> - Simplificadas la configuración de OpenWrt y la gestión de dispositivos domésticos y clientes VPN.
+> - Añadidos un PIN de seis dígitos con confirmación durante la instalación y soporte para hasta 10 routers.
+
+<a id="quickstart"></a>
+
+## ⬇️ Inicio y descarga
+
+Se necesita Android 8 (API 26) o posterior. Las arquitecturas APK disponibles se indican en cada versión publicada.
+
+1. Instale un APK de [GitHub Releases](https://github.com/foxhole-team/foxhole-guard/releases).
+2. Añada su perfil VPN o active el módulo Tor.
+3. Elija un escenario y confirme la solicitud VPN de Android al iniciar el túnel del sistema.
+
+Obtainium · ARM64. Para otras arquitecturas, elija el APK en [GitHub Releases](https://github.com/foxhole-team/foxhole-guard/releases).
+
+## 🔏 Verificación de publicaciones
+
+Se recomienda comprobar la suma y el certificado de los APK de una publicación oficial.
+
+```bash
+sha256sum -c SHA256SUMS
+```
+
+```bash
+apksigner verify --print-certs downloaded-apk.apk
+```
+
+Huella SHA-256 esperada del certificado:
+
+```text
+e59de2486084c38f3c77e9df0eb5eff9a4559f3c68024f1208e0e9c04b0df665
+```
+
+Huella SHA-1 esperada:
+
+```text
+9e00dc6b54461a4647cb11133b394cdfc986646d
+```
+
+---
+
+<a id="features"></a>
+
 ## ✨ Funciones principales
 
 - **FoxHole Core**: núcleo de red propio en Rust.
@@ -62,7 +120,7 @@ El objetivo es ofrecer en una sola aplicación protección cotidiana, acceso a V
 - **Acceso Tor**: Tor dentro de un túnel VPN TCP, aplicaciones seleccionadas, puentes y rotación programada de circuitos.
 - **Acceso I2P**: recursos `.i2p` mediante un proceso `i2pd` independiente y un contrato SOCKS5 local con FoxHole Core.
 - **Cortafuegos**: bloqueo de aplicaciones, interruptor de corte y cuarentena de nuevas instalaciones.
-- **Gestión DNS**: interceptor local, UDP/TCP/DoT/DoH, caché y caché caducada.
+- **Gestión DNS**: interceptor local, UDP/TCP/DoT/DoH/DoQ/DoH3, caché y caché caducada.
 - **Mapa de tráfico**: conexiones actuales del dispositivo en un mapa mundial.
 - **FoxHole Sentinel**: análisis local opcional de IOC y anomalías, desactivado por defecto.
 - **Aplicaciones web**: aplicaciones HTML5 y entrega de notificaciones.
@@ -72,6 +130,8 @@ El objetivo es ofrecer en una sola aplicación protección cotidiana, acceso a V
 - **Seguridad**: indicios de compromiso e interferencias mediante registros de instalación/desinstalación, anomalías de red y comprobaciones de indicadores y permisos de nuevas aplicaciones. Se admite cifrado personalizado de los datos.
 
 ---
+
+<a id="details"></a>
 
 ## 🧭 Arquitectura y funcionamiento
 
@@ -138,10 +198,61 @@ Las reglas se aplican dentro del modo y escenario activos:
 | aplicación → excluir | aplicada | aplicada |
 | aplicación → bloquear | aplicada | aplicada |
 | reglas de direcciones web | aplicadas | aplicadas |
-
-**Dispositivo completo** ignora las reglas ordinarias excepto bloqueos y exclusiones. Sin túnel del sistema o cortafuegos en ejecución, la regla de bloqueo no se aplica.
+En el escenario **Todo el dispositivo** no se aplican las asignaciones individuales de aplicaciones a VPN o Tor. Las reglas de bloqueo y exclusión de aplicaciones y las de direcciones web siguen actuando dentro de la ruta activa. El bloqueo de aplicaciones requiere el túnel del sistema y el cortafuegos en ejecución.
 
 Las reglas se aplican atómicamente. Los cambios de escenario también son atómicos por defecto; puede desactivarse en Ajustes.
+
+---
+
+## 🔒 Permisos y privacidad
+
+- `INTERNET`: VPN, proxy, Tor, I2P, DNS, aplicaciones web, suscripciones y datos actualizables.
+- `ACCESS_NETWORK_STATE` / `ACCESS_WIFI_STATE`: estado y reglas de red, servidor proxy.
+- `ACCESS_LOCAL_NETWORK` - buscar, configurar y gestionar routers. En Android 17 (API 37) o posterior, si la aplicación tiene como objetivo API 37 o posterior, solicita el permiso del sistema antes de las acciones LAN. Denegarlo bloquea esas acciones.
+- `FOREGROUND_SERVICE` y permisos correspondientes: modos de red prolongados controlados por el usuario, con notificación visible.
+- `QUERY_ALL_PACKAGES`: lista para rutas selectivas, cortafuegos, cuarentena, exclusiones DNS y auditoría local.
+- `PACKAGE_USAGE_STATS`: solo estadísticas y análisis locales habilitados que requieren ese acceso Android.
+- `CAMERA`: importar QR.
+- `POST_NOTIFICATIONS`: servicios de red, Sentinel y notificaciones web.
+- `RECEIVE_BOOT_COMPLETED`: restaurar el modo elegido tras reiniciar.
+- `WAKE_LOCK`: mantener sesiones cuando resulte necesario.
+
+Permanecen en el dispositivo:
+
+- lista de aplicaciones instaladas;
+- estadísticas locales;
+- conexiones y registros;
+- resultados Sentinel;
+- historial de conexión automática;
+- exclusiones DNS;
+- política del cortafuegos;
+- política de rutas;
+- datos locales de aplicaciones web;
+- ajustes de módulos y extensiones;
+- metadatos de Vault.
+
+FoxHole Guard no envía estos datos al desarrollador.
+
+### 🌍 Solicitudes de red
+
+Las actualizaciones de las tablas TLS de FoxHole DB están habilitadas por defecto. Puede ejecutarse una comprobación tras iniciar y programarse después a diario si hay red. Se desactivan en Ajustes. Los demás conjuntos firmados y suscripciones guardadas tienen controles propios.
+
+Las pruebas de conectividad y consultas de IP contactan con Google, Cloudflare, ipwho.is y otros servicios alternativos. Reciben la solicitud y la IP pública utilizada. También hay actividad relacionada con:
+
+- VPN;
+- Tor;
+- I2P;
+- actualizaciones HTTPS de suscripciones;
+- pruebas de conectividad;
+- DNS configurado por el usuario;
+- actualizaciones GeoIP/DNS/puentes Tor;
+- aplicaciones web;
+- entrega de eventos para aplicaciones web habilitadas.
+
+
+Las comprobaciones de conexión contactan con Google y Cloudflare. Servicios IP externos con direcciones de respaldo proporcionan la IP de salida y ubicación aproximada. Reciben la solicitud y la IP saliente; esto no envía registros ni resultados de Sentinel al desarrollador.
+
+Las solicitudes de servicio incluyen además comprobaciones de actualización de la edición GitHub, datos seleccionados de FoxHole DB-DNS, puentes Tor, GeoIP, IOC y tablas TLS-y fuentes de suscripción guardadas. Las comprobaciones en segundo plano dependen de las funciones y ajustes activados. F-Droid gestiona las actualizaciones de su APK.
 
 ---
 
@@ -158,7 +269,7 @@ Los módulos se configuran aparte del modo y pueden funcionar independientemente
 | **Tor** | Arti: TCP, `.onion`, puentes y rotación programada. |
 | **I2P** | `.i2p` mediante `i2pd` independiente y SOCKS5 de bucle local. |
 | **FoxHole Sentinel** | Auditoría, coincidencias IOC y registro íntegro mediante cadena de hashes. |
-| **DNS** | DoT/DoH y filtrado local. |
+| **DNS** | DoT/DoH/DoQ/DoH3 y filtrado local. |
 
 ### 🧅 Acceso Tor
 
@@ -176,7 +287,7 @@ El módulo Tor está incluido en la compilación Android estándar de FoxHole Co
 
 #### 🌐 Servicio onion
 
-FoxHole Core admite servicios onion.
+FoxHole Core dispone de una API experimental para publicar servicios onion. Su presencia en el núcleo no implica un flujo de publicación listo en la interfaz de Guard. El acceso a sitios `.onion` existentes es una función independiente del módulo Tor.
 
 ### 🕸️ Acceso I2P
 
@@ -186,10 +297,12 @@ Se utiliza un contrato SOCKS5 de bucle local exclusivamente TCP con un proceso `
 
 Las condiciones I2P se verifican con cierre seguro ante fallos:
 
-- interceptar enlaces `.i2p` desde cualquier aplicación;
+- acceso a `.i2p` para aplicaciones cuyo tráfico pasa por una ruta activa de FoxHole Guard;
 - retransmitir tráfico a I2P;
 - restricciones del uso de redes móviles;
 - gestión del ancho de banda.
+
+Esta ruta requiere `i2pd` en ejecución y DNS procesado por FoxHole Guard. El modo DNS privado estricto de Android es incompatible con la ruta `.i2p`; su inicio se rechaza con un error.
 
 ### 🧱 Cortafuegos
 
@@ -314,6 +427,7 @@ Se admiten:
 - DNS TCP;
 - DoT;
 - DoH;
+- DoQ y DoH3 con una dirección DNS personalizada; su disponibilidad depende de la ruta elegida y del soporte UDP;
 - sockets DNS protegidos;
 - arranque DNS mediante un `Network` Android concreto;
 - caché;
@@ -330,19 +444,19 @@ FoxHole Guard aplica reglas locales contra:
 - telemetría;
 - dominios potencialmente maliciosos.
 
-Las reglas parten del filtro DNS abierto de AdGuard. El origen se fija por nombre y se rechazan fuentes diferentes.
+El filtrado DNS está desactivado por defecto. Anuncios, rastreadores, telemetría y dominios potencialmente maliciosos se activan por separado. Los rastreadores ofrecen Normal/Pro y las amenazas Medium/Full.
 
-Manifiesto:
+FoxHole DB genera los conjuntos desde fuentes públicas fijadas. La composición, revisiones y licencias exactas figuran en el manifiesto y la procedencia de cada conjunto.
 
-```text
-https://foxhole-team.github.io/foxhole-db/manifest.json
-```
+El APK incluye conjuntos iniciales para las cuatro combinaciones. La aplicación comprueba tamaño, SHA-256 y categorías disponibles; el primer uso no requiere necesariamente una descarga. En las actualizaciones firmadas se verifican firma, compatibilidad, caducidad, secuencia de versión y SHA-256.
 
-Las reglas descargadas son **datos de filtrado, no código ejecutable**.
+Dirección de actualización de la variante elegida:
 
-Antes de usarlas, se comprueban los parámetros del formato: firma, tamaño, compatibilidad y SHA-256.
+`https://foxhole-team.github.io/foxhole-db/dns-categories/<variant>/manifest.json`
 
-Ante un fallo se conserva el conjunto instalado y verificado. En una instalación nueva, el filtrado no está disponible hasta verificar reglas válidas.
+`<variant>`: `normal-medium`, `normal-full`, `pro-medium` o `pro-full`.
+
+Los datos guardados o preparados todavía no son necesariamente activos: la instancia actual de FoxHole Core debe verificarlos y aplicarlos. Los datos firmados active/pending inválidos se marcan como no disponibles, sin sustituirlos silenciosamente por el conjunto inicial del APK. Los conjuntos contienen datos de filtrado, no código ejecutable.
 
 ---
 
@@ -379,7 +493,7 @@ Las extensiones amplían la aplicación principal.
 | Extensión | Descripción |
 | --- | --- |
 | **Servidor proxy** | Acceso de otros dispositivos del Wi-Fi actual mediante SOCKS5 y HTTP CONNECT, autenticación obligatoria y vinculación a una red confirmada. |
-| **Aplicaciones web** | Sitios HTML5 a pantalla completa, cada uno en un perfil WebView aislado con notificaciones. |
+| **Aplicaciones web** | Sitios HTML5 en WebView de pantalla completa con comprobación periódica de notificaciones. Se usan perfiles de almacenamiento separados si el WebView instalado los admite. |
 
 ### 🔗 Servidor proxy
 
@@ -401,7 +515,7 @@ Cada aplicación web recibe un identificador ASCII independiente que FoxHole Cor
 - notificaciones ligadas a la identidad de origen canónica;
 - revocación de concesiones.
 
-Cookies, almacenamiento y caché pueden borrarse para cada aplicación por separado. Eliminarla completamente también elimina sus datos.
+La limpieza depende del WebView instalado: perfil individual, datos del sitio o limpieza compartida con confirmación independiente. Sin soporte para varios perfiles, las aplicaciones web comparten un perfil con aislamiento habitual por origen. La limpieza pendiente se registra y se repite antes de cargar.
 
 #### 🔔 Servicio web en segundo plano: `foxhole watchdog web`
 
@@ -418,9 +532,13 @@ Un servicio independiente entrega las notificaciones.
 
 ## 🛜 Gestión del router en beta pública
 
+> [!NOTE]
+> La gestión del router mientras hay una conexión VPN activa aún no es compatible.
+
 Abra OpenWrt en Ajustes para vincular un router y gestionar sus perfiles VPN, rutas de dispositivos, paquetes de protocolos y actualizaciones de FoxHole. La compatibilidad y los procesos de instalación y actualización siguen en validación. El interruptor de gestión se aplica al vínculo guardado seleccionado; apagarlo no detiene la VPN del router.
 
 > [!IMPORTANT]
+> Las restricciones siguientes corresponden a la versión publicada actual.
 > La instalación automática actualmente solo admite routers con la configuración predeterminada de OpenWrt, sin modificaciones.
 > También puede vincular un router después de instalar manualmente la última versión de [FoxHole OpenWrt Client](https://github.com/foxhole-team/foxhole-openwrt-client).
 > Para la instalación y la vinculación, el teléfono y el router deben estar en la misma red local, y el router debe tener acceso a Internet.
@@ -462,58 +580,11 @@ FoxHole DB contiene cinco conjuntos firmados independientes que se descargan cua
 
 | Conjunto | Artefacto | Formato | Fuente | Licencia | Versión |
 | --- | --- | --- | --- | --- | --- |
-| **DNS: listas de filtrado** | `adguard-dns-filter.fhds` | `foxhole-dns-fst-v1` | [AdGuard DNS filter](https://github.com/AdguardTeam/AdGuardSDNSFilter) | GPL-3.0 | Commit de origen fijado por compilación. |
+| **DNS - categorías de filtrado** | `dns-categories/<variant>/dns-categories.fhds` | `foxhole-dns-fst-v1`, manifiesto `schema: 3` | Fuentes fijadas de AdGuard, EasyPrivacy y HaGeZi; composición exacta en el manifiesto | Según los conjuntos fuente; véase procedencia | Cuatro variantes: Normal/Pro × Medium/Full; conjuntos iniciales APK y actualizaciones verificadas |
 | **Tor: copia de puentes integrados** | `bridges.json` | `tor-bridges-json` | [Tor Project built-in bridges (Moat)](https://bridges.torproject.org/moat/circumvention/builtin) | datos públicos para eludir la censura | Marcador `generated_at`; claves normalizadas, orden original de los arrays conservado. |
 | **FoxHole Sentinel: inteligencia de amenazas** | `threat-intel.json` | `sentinel-threat-intel-json`, documento `schema: 3` | [AssoEchap/stalkerware-indicators](https://github.com/AssoEchap/stalkerware-indicators) | CC-BY-4.0 | Commit fijado por compilación y registrado en `threat-intel-source-info.json`. |
 | **Geolocalización: IP → país** | `dbip-country-ipv4.csv`, `dbip-country-ipv6.csv` | `dbip-country-csv` | [DB-IP Lite via sapics/ip-location-db](https://github.com/sapics/ip-location-db) (`dbip-country`) | CC-BY-4.0 | `version` de origen en `package.json` copiada al manifiesto. |
 | **Tablas de huellas TLS: perfiles ClientHello** | `fingerprints.json` | `tls-fingerprint-tables-json` | [FoxHole Core `fingerprints/`](https://github.com/foxhole-team/foxhole-core) | GPL-3.0-or-later | Revisión fijada por compilación; cada perfil recalcula `fingerprint_sha256` antes de aplicarse. |
-
----
-
-## 🔒 Permisos y privacidad
-
-- `INTERNET`: VPN, proxy, Tor, I2P, DNS, aplicaciones web, suscripciones y datos actualizables.
-- `ACCESS_NETWORK_STATE` / `ACCESS_WIFI_STATE`: estado y reglas de red, servidor proxy.
-- `ACCESS_LOCAL_NETWORK` - buscar, configurar y gestionar routers. En Android 17 (API 37) o posterior, si la aplicación tiene como objetivo API 37 o posterior, solicita el permiso del sistema antes de las acciones LAN. Denegarlo bloquea esas acciones.
-- `FOREGROUND_SERVICE` y permisos correspondientes: modos de red prolongados controlados por el usuario, con notificación visible.
-- `QUERY_ALL_PACKAGES`: lista para rutas selectivas, cortafuegos, cuarentena, exclusiones DNS y auditoría local.
-- `PACKAGE_USAGE_STATS`: solo estadísticas y análisis locales habilitados que requieren ese acceso Android.
-- `CAMERA`: importar QR.
-- `POST_NOTIFICATIONS`: servicios de red, Sentinel y notificaciones web.
-- `RECEIVE_BOOT_COMPLETED`: restaurar el modo elegido tras reiniciar.
-- `WAKE_LOCK`: mantener sesiones cuando resulte necesario.
-
-Permanecen en el dispositivo:
-
-- lista de aplicaciones instaladas;
-- estadísticas locales;
-- conexiones y registros;
-- resultados Sentinel;
-- historial de conexión automática;
-- exclusiones DNS;
-- política del cortafuegos;
-- política de rutas;
-- datos locales de aplicaciones web;
-- ajustes de módulos y extensiones;
-- metadatos de Vault.
-
-FoxHole Guard no envía estos datos al desarrollador.
-
-### 🌍 Solicitudes de red
-
-Las actualizaciones de las tablas TLS de FoxHole DB están habilitadas por defecto. Puede ejecutarse una comprobación tras iniciar y programarse después a diario si hay red. Se desactivan en Ajustes. Los demás conjuntos firmados y suscripciones guardadas tienen controles propios.
-
-Las pruebas de conectividad y consultas de IP contactan con Google, Cloudflare, ipwho.is y otros servicios alternativos. Reciben la solicitud y la IP pública utilizada. También hay actividad relacionada con:
-
-- VPN;
-- Tor;
-- I2P;
-- actualizaciones HTTPS de suscripciones;
-- pruebas de conectividad;
-- DNS configurado por el usuario;
-- actualizaciones GeoIP/DNS/puentes Tor;
-- aplicaciones web;
-- entrega de eventos para aplicaciones web habilitadas.
 
 ---
 
@@ -527,75 +598,25 @@ Las compilaciones nativas usan herramientas Rust/NDK fijadas y requieren comprob
 
 ---
 
-## 🔏 Verificación de publicaciones
+<a id="ecosystem"></a>
 
-Los APK de versión firmados por el propietario utilizan el certificado que figura a continuación.
+## 🔗 Ecosistema FoxHole
 
-GitHub y F-Droid son canales separados. La compilación GitHub admite buscar actualizaciones APK dentro de la aplicación. La de F-Droid deshabilita esas actualizaciones y omite el permiso para instalar paquetes; las gestiona el cliente F-Droid. Cada APK tiene su SBOM de entrega. Arquitectura, disponibilidad y versión deben verificarse en los artefactos reales. Una receta no demuestra compilación F-Droid exitosa, reproducibilidad ni aceptación en el repositorio.
+| Proyecto | Función |
+| --- | --- |
+| [**FoxHole Guard**](https://github.com/foxhole-team/foxhole-guard) | Android: VPN, Tor/I2P, reglas de tráfico y supervisión local |
+| [FoxHole VPN](https://github.com/foxhole-team/foxhole-vpn) | Android: cliente VPN sencillo y gestión de OpenWrt emparejado |
+| [FoxHole Core](https://github.com/foxhole-team/foxhole-core) | Núcleo de red común en Rust; funciones según compilación |
+| [FoxHole OpenWrt](https://github.com/foxhole-team/foxhole-openwrt-client) | VPN del router y gestión de la red local |
+| [FoxHole DB](https://github.com/foxhole-team/foxhole-db) | Reglas firmadas y datos de referencia |
 
-Se recomienda comprobar la suma y el certificado de los APK de una publicación oficial.
+## 🤝 Contribuir
 
-```bash
-sha256sum -c SHA256SUMS
-```
-
-```bash
-apksigner verify --print-certs downloaded-apk.apk
-```
-
-Huella SHA-256 esperada del certificado:
-
-```text
-e59de2486084c38f3c77e9df0eb5eff9a4559f3c68024f1208e0e9c04b0df665
-```
-
-Huella SHA-1 esperada:
-
-```text
-9e00dc6b54461a4647cb11133b394cdfc986646d
-```
-
----
-
-## 🔗 Proyectos relacionados
-
-[![FoxHole Core](https://img.shields.io/badge/GitHub-FoxHole_Core-181717?logo=github)](https://github.com/foxhole-team/foxhole-core)
-[![Version](https://img.shields.io/github/v/release/foxhole-team/foxhole-core?label=version)](https://github.com/foxhole-team/foxhole-core/releases)
-
-[![FoxHole DB](https://img.shields.io/badge/GitHub-FoxHole_DB-181717?logo=github)](https://github.com/foxhole-team/foxhole-db)
-[![Version](https://img.shields.io/github/v/release/foxhole-team/foxhole-db?label=version)](https://github.com/foxhole-team/foxhole-db/releases)
-
-
-[![FoxHole VPN](https://img.shields.io/badge/GitHub-FoxHole_VPN-181717?logo=github&style=flat-square)](https://github.com/foxhole-team/foxhole-vpn)
-[![Version](https://img.shields.io/github/v/release/foxhole-team/foxhole-vpn?label=version&style=flat-square)](https://github.com/foxhole-team/foxhole-vpn/releases)
-
-[![FoxHole OpenWrt](https://img.shields.io/badge/GitHub-FoxHole_OpenWrt-181717?logo=github&style=flat-square)](https://github.com/foxhole-team/foxhole-openwrt-client)
-[![Version](https://img.shields.io/github/v/release/foxhole-team/foxhole-openwrt-client?label=version&style=flat-square)](https://github.com/foxhole-team/foxhole-openwrt-client/releases)
-
----
-
-## 📄 Licencias
-
-FoxHole Guard y FoxHole Core se distribuyen bajo:
-
-**GNU General Public License v3.0 o posterior (`GPL-3.0-or-later`)**
-
-Copyright (C) 2026 FOXHOLE TEAM.
-
-Las licencias de terceros figuran en:
-
-- `THIRD_PARTY_NOTICES.md`;
-- la SBOM del proyecto (`*.cdx.json`).
-
-El grafo de dependencias y licencias se valida en CI.
-
----
+Informe de errores y proponga cambios mediante [Issues](https://github.com/foxhole-team/foxhole-guard/issues).
 
 ## 💖 Apoyar el desarrollo
 
-Desarrollamos y mantenemos FoxHole Guard íntegramente con nuestro propio tiempo y recursos, con ayuda de herramientas de IA. Su apoyo nos ayuda a dedicar más tiempo al proyecto y acelerar el desarrollo.
-
-[Apoyar el proyecto - monederos de criptomonedas](#cryptocurrency-wallets)
+Desarrollamos y mantenemos FoxHole Guard íntegramente con nuestro propio tiempo y recursos, utilizando herramientas de IA en el desarrollo. Su apoyo nos ayuda a dedicar más tiempo al proyecto y acelerar el desarrollo.
 
 <a id="cryptocurrency-wallets"></a>
 
@@ -626,3 +647,20 @@ bc1qatnyy7jcpqrp0d3dk9rta9vqfejgh4mysd6m2f
 - Tor es una marca de The Tor Project. FoxHole Guard no es su producto, no está respaldado ni patrocinado por él y no tiene afiliación con él.
 - FoxHole Guard no es un producto de AdGuard ni está afiliado a AdGuard Software Ltd.
 - FoxHole Guard no es un producto oficial de I2P o PurpleI2P.
+
+## 📄 Licencias
+
+FoxHole Guard y FoxHole Core se distribuyen bajo:
+
+**GNU General Public License v3.0 o posterior (`GPL-3.0-or-later`)**
+
+Copyright (C) 2026 FOXHOLE TEAM.
+
+Las licencias de terceros figuran en:
+
+- `THIRD_PARTY_NOTICES.md`;
+- la SBOM del proyecto (`*.cdx.json`).
+
+El grafo de dependencias y licencias se valida en CI.
+
+---

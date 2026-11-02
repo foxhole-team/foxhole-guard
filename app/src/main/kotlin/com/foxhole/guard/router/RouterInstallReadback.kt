@@ -45,7 +45,7 @@ internal fun routerBootstrapCredential(bytes: ByteArray): CharArray? = try {
         "fresh" -> {
             require(value.installNumber("expiresInSeconds") in 1..300)
             val pin = value.installText("bootstrapPin")
-            require(pin.length == 4 && pin.all { it in '0'..'9' })
+            require(pin.length == ROUTER_PIN_DIGITS && pin.all { it in '0'..'9' })
             pin.toCharArray()
         }
         "already_configured" -> {

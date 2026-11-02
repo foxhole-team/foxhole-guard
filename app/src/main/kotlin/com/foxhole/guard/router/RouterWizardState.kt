@@ -1,7 +1,7 @@
 package com.foxhole.guard.router
 
 internal enum class RouterWizardPath { SETUP, PAIR }
-internal enum class RouterWizardStage { ENTRY, ADDRESS, IDENTITY, PROTOCOLS, LOGIN, CHECKING, INSTALL, NEW_PIN, OPTIONS, FINISHING, COMPLETE, PIN_SETUP_REQUIRED }
+internal enum class RouterWizardStage { ENTRY, ADDRESS, IDENTITY, PROTOCOLS, LOGIN, CHECKING, INSTALL, NEW_PIN, OPTIONS, FINISHING, COMPLETE, PIN_SETUP_REQUIRED, INSPECTED }
 internal enum class RouterWizardError { WIFI, VPN_ACTIVE, HOME_VPN, LOCAL_NETWORK_PERMISSION, SSH_UNAVAILABLE, ADDRESS, IDENTITY, PASSWORD, PIN, LOCKED, UNSUPPORTED, STORAGE, INSTALL, NETWORK, SAVE, PROFILE, PROFILE_EXPORT, UNAVAILABLE, LICENSE, LIMIT }
 internal class RouterSetupFailure(val kind: RouterWizardError) : java.io.IOException("router_setup_failed")
 
@@ -17,6 +17,7 @@ internal data class RouterWizardOptions(
     val autoUpdateEnabled: Boolean = true,
     val licenseAccepted: Boolean = false,
     val licenseGeneration: Long = 0,
+    val localRules: Boolean? = null,
 ) {
     val valid: Boolean get() = (countryAuto && countryCode.isEmpty() || countryCode.matches(Regex("[A-Z]{2}"))) &&
         (!createRemoteProfile || publicIp)
@@ -47,6 +48,8 @@ internal data class RouterWizardState(
     val autoUpdateFailure: RouterUpdateFailureReason? = null,
     val licenseRequired: Boolean = false,
     val licenseVersion: Int = 0,
+    val initialPinRequired: Boolean = false,
+    val pinCooldownUntilMs: Long? = null,
 )
 
 internal class RouterInstallProposal(
@@ -69,8 +72,16 @@ internal class RouterInstallProposal(
 internal interface RouterSetupService {
     val installCatalog: RouterInstallCatalog?
     suspend fun inspectSshIdentity(address: String): ByteArray
+    suspend fun inspectDiscoverySshIdentity(address: String): ByteArray = inspectSshIdentity(address)
+    suspend fun prepareInstallation() = Unit
     suspend fun inspect(address: String, hostKey: ByteArray, password: CharArray,
         selection: RouterInstallProtocolSelection): RouterInstallProposal
+    suspend fun inspectWithKey(address: String, hostKey: ByteArray, privateKey: ByteArray, passphrase: CharArray,
+        selection: RouterInstallProtocolSelection, licenseAccepted: Boolean,
+        onProgress: (RouterInstallProgress) -> Unit): RouterInstallProposal {
+        privateKey.fill(0); passphrase.fill('\u0000')
+        throw RouterSetupFailure(RouterWizardError.SSH_UNAVAILABLE)
+    }
     suspend fun install(proposal: RouterInstallProposal): RouterInstallResult
     suspend fun inspect(address: String, hostKey: ByteArray, password: CharArray, selection: RouterInstallProtocolSelection,
         onProgress: (RouterInstallProgress) -> Unit): RouterInstallProposal = inspect(address, hostKey, password, selection)
@@ -79,7 +90,6 @@ internal interface RouterSetupService {
         licenseAccepted: Boolean): RouterInstallProposal = inspect(address, hostKey, password, selection, licenseAccepted) {}
     suspend fun inspect(address: String, hostKey: ByteArray, password: CharArray, selection: RouterInstallProtocolSelection,
         licenseAccepted: Boolean, onProgress: (RouterInstallProgress) -> Unit): RouterInstallProposal {
-        try { requireRouterSetupLicense(licenseAccepted) } catch (failure: Exception) { password.fill('\u0000'); throw failure }
         return inspect(address, hostKey, password, selection, onProgress)
     }
     suspend fun install(proposal: RouterInstallProposal, licenseAccepted: Boolean): RouterInstallResult =
@@ -93,7 +103,7 @@ internal interface RouterSetupService {
 
 internal class RouterInstallResult(val identity: RouterTlsIdentity, bootstrapCredential: CharArray? = null) : AutoCloseable {
     private var bootstrap: CharArray? = try {
-        bootstrapCredential?.also { require(it.size == 4 && it.all { digit -> digit in '0'..'9' }) }?.copyOf()
+        bootstrapCredential?.also { require(validRouterPin(it)) }?.copyOf()
     } finally { bootstrapCredential?.fill('\u0000') }
     fun takeBootstrapCredential(): CharArray? = bootstrap.also { bootstrap = null }
     override fun close() { bootstrap?.fill('\u0000'); bootstrap = null }
@@ -114,4 +124,12 @@ internal interface RouterWizardProvisioner {
         enabled: Boolean): RouterUpdateStatus = throw RouterApiFailure(RouterApiError.UNSUPPORTED)
     suspend fun finish(api: RouterPanelApi, session: RouterPanelSession, pairing: RouterPairing,
         options: RouterWizardOptions, selectedProfile: RouterProfileSelection?): RouterWizardResult
+}
+
+internal data class RouterReadonlyInspection(val openWrtVersion: String, val architecture: String)
+
+internal interface RouterReadonlySshInspector {
+    suspend fun inspectSshIdentity(address: String): ByteArray
+    suspend fun inspect(address: String, hostKey: ByteArray, password: CharArray): RouterReadonlyInspection
+    suspend fun inspectWithKey(address: String, hostKey: ByteArray, privateKey: ByteArray, passphrase: CharArray): RouterReadonlyInspection
 }

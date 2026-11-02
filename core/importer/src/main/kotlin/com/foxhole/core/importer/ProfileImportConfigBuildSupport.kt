@@ -510,7 +510,7 @@ internal open class ProfileImportConfigBuildSupport(
             if (utlsFingerprint != null || security == "reality") {
                 putJsonObject("utls") {
                     put("enabled", true)
-                    put("fingerprint", utlsFingerprint ?: SUBSTITUTE_UTLS_FINGERPRINT)
+                    put("fingerprint", utlsFingerprint ?: DEFAULT_UTLS_FINGERPRINT)
                 }
             }
             if (security == "reality") {
@@ -566,6 +566,9 @@ internal open class ProfileImportConfigBuildSupport(
     internal fun Map<String, String>.booleanValue(vararg keys: String): Boolean? =
         firstValue(*keys)?.toFlexibleBoolean()
 
+    internal fun needsRealityCompatibility(value: String?, reality: Boolean): Boolean =
+        reality && value?.trim()?.equals("qq", ignoreCase = true) == true
+
     internal fun normalizeUtlsFingerprint(
         value: String?,
         reality: Boolean,
@@ -573,6 +576,7 @@ internal open class ProfileImportConfigBuildSupport(
         val fingerprint = value?.trim()?.lowercase()
         return when {
             fingerprint.isNullOrEmpty() || fingerprint in UTLS_FINGERPRINT_OFF_VALUES -> null
+            reality && fingerprint == "qq" -> "chrome_156"
             fingerprint in SUPPORTED_UTLS_FINGERPRINTS -> fingerprint
 
             reality && fingerprint in REALITY_IMPOSSIBLE_UTLS_FINGERPRINTS ->
@@ -588,6 +592,7 @@ internal open class ProfileImportConfigBuildSupport(
 val SUPPORTED_UTLS_FINGERPRINTS: Set<String> =
     setOf(
         "chrome",
+        "chrome_156",
         "chrome_151",
         "chrome_133",
         "chrome_131",
@@ -606,7 +611,9 @@ val SUPPORTED_UTLS_FINGERPRINTS: Set<String> =
         "randomized",
     )
 
-const val SUBSTITUTE_UTLS_FINGERPRINT: String = "chrome"
+internal const val DEFAULT_UTLS_FINGERPRINT: String = "chrome"
+
+const val SUBSTITUTE_UTLS_FINGERPRINT: String = "chrome_151"
 
 private val REALITY_IMPOSSIBLE_UTLS_FINGERPRINTS = setOf("360", "android")
 

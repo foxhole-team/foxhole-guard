@@ -453,3 +453,4 @@ private fun ClipData.firstTextItem(application: Application): String? =
     } else {
         null
     }
+

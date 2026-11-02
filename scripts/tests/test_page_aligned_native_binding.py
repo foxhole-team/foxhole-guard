@@ -63,6 +63,7 @@ class NativeBindingTest(unittest.TestCase):
         header += struct.pack('<IIQQQQQQ', 0x6474E552, 4, 0, 0, 0, 176, 16384, 1)
         self.bytes = header
         for abi in ['arm64-v8a', 'armeabi-v7a', 'x86', 'x86_64']:
+            header = self.native_header(abi)
             path = self.native / abi / 'libandroidx.graphics.path.so'
             path.parent.mkdir()
             path.write_bytes(header)
@@ -71,9 +72,10 @@ class NativeBindingTest(unittest.TestCase):
                                              'bytes': len(header),
                                              'originalExportSymbols': ['JNI_OnLoad@@LIBANDROIDX.GRAPHICS.PATH'],
                                              'derivedExportSymbols': ['JNI_OnLoad@@LIBANDROIDX.GRAPHICS.PATH']})
-        selected = self.merged / 'lib/arm64-v8a/libandroidx.graphics.path.so'
-        selected.parent.mkdir(parents=True)
-        selected.write_bytes(header)
+        for abi in ['arm64-v8a', 'armeabi-v7a', 'x86', 'x86_64']:
+            selected = self.merged / 'lib' / abi / 'libandroidx.graphics.path.so'
+            selected.parent.mkdir(parents=True)
+            selected.write_bytes(self.native_header(abi))
         self.write_receipt()
 
     def tearDown(self):
@@ -83,7 +85,7 @@ class NativeBindingTest(unittest.TestCase):
         (self.provenance / 'producer-receipt.json').write_text(json.dumps(self.receipt))
 
     def verify(self):
-        BINDING.verify(self.repo, self.native, self.merged, ['arm64-v8a'])
+        BINDING.verify(self.repo, self.native, self.merged, ['arm64-v8a', 'armeabi-v7a', 'x86', 'x86_64'])
 
     def test_exact_derived_bytes_are_admitted(self):
         self.verify()
@@ -160,6 +162,95 @@ class NativeBindingTest(unittest.TestCase):
             archive.writestr('duplicate', b'two')
         with self.assertRaisesRegex(ValueError, 'duplicate'):
             BINDING.verify(self.repo, self.native, None, ['arm64-v8a'], directory)
+
+
+    @staticmethod
+    def native_header(abi):
+        bits, machine = {'arm64-v8a': (2, 183), 'armeabi-v7a': (1, 40), 'x86': (1, 3), 'x86_64': (2, 62)}[abi]
+        header = b'\x7fELF' + bytes([bits, 1, 1]) + b'\0' * 9
+        if bits == 2:
+            header += struct.pack('<HHIQQQIHHHHHH', 3, machine, 1, 0, 64, 0, 0, 64, 56, 2, 0, 0, 0)
+            header += struct.pack('<IIQQQQQQ', 1, 5, 0, 0, 0, 176, 16384, 16384)
+            return header + struct.pack('<IIQQQQQQ', 0x6474E552, 4, 0, 0, 0, 176, 16384, 1)
+        header += struct.pack('<HHIIIIIHHHHHH', 3, machine, 1, 0, 52, 0, 0, 52, 32, 2, 0, 0, 0)
+        header += struct.pack('<IIIIIIII', 1, 0, 0, 0, 116, 16384, 5, 16384)
+        return header + struct.pack('<IIIIIIII', 0x6474E552, 0, 0, 0, 116, 16384, 4, 1)
+
+    def apk(self, abis, extra=None, omitted=()):
+        directory = self.root / 'apk'
+        directory.mkdir(exist_ok=True)
+        with zipfile.ZipFile(directory / 'synthetic.apk', 'w') as archive:
+            for abi in abis:
+                for path in (self.merged / 'lib' / abi).glob('*.so'):
+                    name = 'lib/' + abi + '/' + path.name
+                    if name not in omitted:
+                        archive.writestr(name, path.read_bytes())
+            for name, data in (extra or {}).items():
+                archive.writestr(name, data)
+        return directory
+
+    def project(self, directory=None, delivery=('arm64-v8a',)):
+        BINDING.verify(self.repo, self.native, self.merged,
+                       ['arm64-v8a', 'armeabi-v7a', 'x86', 'x86_64'], directory, delivery_abis=delivery)
+
+    def test_arm64_delivery_retains_the_four_abi_native_corpus(self):
+        self.project(self.apk(['arm64-v8a']))
+
+    def test_non_delivered_native_tamper_is_still_rejected(self):
+        path = self.native / 'x86/libandroidx.graphics.path.so'
+        path.write_bytes(path.read_bytes() + b'tamper')
+        with self.assertRaisesRegex(ValueError, 'producer'):
+            self.project(self.apk(['arm64-v8a']))
+
+    def test_delivery_must_be_nonempty_unique_known_native_subset(self):
+        for delivery in ([], ['mips'], ['arm64-v8a', 'arm64-v8a']):
+            with self.subTest(delivery=delivery), self.assertRaisesRegex(ValueError, 'delivery'):
+                self.project(delivery=delivery)
+        with self.assertRaisesRegex(ValueError, 'delivery'):
+            BINDING.verify(self.repo, self.native, self.merged, ['arm64-v8a'], delivery_abis=['x86_64'])
+
+    def test_extra_or_missing_apk_abi_is_rejected(self):
+        directory = self.apk(['arm64-v8a'], {'lib/x86_64/libandroidx.graphics.path.so': self.native_header('x86_64')})
+        with self.assertRaisesRegex(ValueError, 'ABI|delivery'):
+            self.project(directory)
+        directory = self.apk([])
+        with self.assertRaisesRegex(ValueError, 'ABI|delivery'):
+            self.project(directory)
+
+    def test_extra_or_missing_apk_library_is_rejected(self):
+        directory = self.apk(['arm64-v8a'], {'lib/arm64-v8a/libunexpected.so': self.bytes})
+        with self.assertRaisesRegex(ValueError, 'library inventory'):
+            self.project(directory)
+        core = self.merged / 'lib/arm64-v8a/libfoxhole_native.so'
+        core.write_bytes(self.bytes)
+        directory = self.apk(['arm64-v8a'], omitted=['lib/arm64-v8a/libfoxhole_native.so'])
+        with self.assertRaisesRegex(ValueError, 'library inventory'):
+            self.project(directory)
+
+    def test_non_delivered_merged_tamper_is_rejected(self):
+        extra = self.merged / 'lib/x86_64/libandroidx.graphics.path.so'
+        extra.write_bytes(self.native_header('x86_64') + b'tamper')
+        with self.assertRaisesRegex(ValueError, 'foreign'):
+            self.project()
+
+    def test_apk_native_header_cannot_claim_another_abi(self):
+        core = self.merged / 'lib/arm64-v8a/libfoxhole_native.so'
+        core.write_bytes(self.bytes)
+        directory = self.apk(['arm64-v8a'], omitted=['lib/arm64-v8a/libfoxhole_native.so'],
+                             extra={'lib/arm64-v8a/libfoxhole_native.so': self.native_header('x86_64')})
+        with self.assertRaisesRegex(ValueError, 'ELF|ABI'):
+            self.project(directory)
+
+    def test_default_full_profile_still_requires_and_accepts_all_four_abis(self):
+        abis = ['arm64-v8a', 'armeabi-v7a', 'x86', 'x86_64']
+        for abi in abis[1:]:
+            destination = self.merged / 'lib' / abi
+            destination.mkdir(exist_ok=True)
+            shutil.copyfile(self.native / abi / 'libandroidx.graphics.path.so', destination / 'libandroidx.graphics.path.so')
+        directory = self.apk(abis)
+        BINDING.verify(self.repo, self.native, self.merged, abis, directory)
+        with self.assertRaisesRegex(ValueError, 'ABI|delivery'):
+            BINDING.verify(self.repo, self.native, self.merged, abis, self.apk(['arm64-v8a']))
 
 
 if __name__ == '__main__':

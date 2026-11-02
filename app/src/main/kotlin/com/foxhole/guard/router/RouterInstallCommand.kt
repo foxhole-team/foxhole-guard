@@ -27,7 +27,12 @@ internal sealed class RouterInstallCommandSource {
         private val url = routerReleaseBaseUrl(baseUrl).toString().trimEnd('/')
         override fun arguments(): List<String> = listOf("--base-url", url)
     }
+    private class Bundle(path: String) : RouterInstallCommandSource() {
+        private val directory = path.also { require(it.matches(Regex("/tmp/foxhole-device-install-[a-f0-9]{32}"))) }
+        override fun arguments(): List<String> = listOf("--bundle", directory)
+    }
     companion object {
+        fun bundle(path: String): RouterInstallCommandSource = Bundle(path)
         fun github(baseUrl: String): RouterInstallCommandSource = Github(baseUrl)
     }
 }

@@ -241,6 +241,7 @@ internal open class ProfileImportSmartConfigSupport(
                     protocolHint = parsedNode.protocolHint,
                     status = SubscriptionEntryStatus.ACCEPTED,
                     sourceLine = headingLine,
+                    compatibilityWarning = parsedNode.compatibilityWarning,
                 )
         }
         return ParsedSmartConfigDocument(entries = entries, reports = reports)

@@ -27,10 +27,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import com.foxhole.guard.R
+import com.foxhole.guard.ui.cli.CliSpacing
 
 @Composable
 internal fun GuardRouterSheetContent(title: Int, icon: Int, modifier: Modifier = Modifier, busy: Boolean = false, actions: @Composable RowScope.() -> Unit = {}, content: @Composable ColumnScope.() -> Unit) {
-    Column(modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 28.dp)) {
+    Column(modifier.fillMaxWidth().padding(horizontal = CliSpacing.md).padding(bottom = 28.dp)) {
         Row(
             Modifier.fillMaxWidth().padding(bottom = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -64,9 +65,10 @@ internal fun GuardRouterSheetContent(
     actions: @Composable RowScope.() -> Unit = {},
     footer: (@Composable ColumnScope.() -> Unit)? = null,
     scrollable: Boolean = true,
+    showAddonSettings: Boolean = true,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    Column(modifier.fillMaxSize().padding(horizontal = 20.dp).padding(bottom = 8.dp)) {
+    Column(modifier.fillMaxSize().padding(horizontal = CliSpacing.md).padding(bottom = CliSpacing.xs)) {
         Row(Modifier.fillMaxWidth().padding(bottom = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -79,7 +81,7 @@ internal fun GuardRouterSheetContent(
                 CircularProgressIndicator(Modifier.size(20.dp).semantics { contentDescription = working }, strokeWidth = 2.dp)
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
-                GuardRouterAddonSettingsButton()
+                if (showAddonSettings) GuardRouterAddonSettingsButton()
                 actions()
             }
         }

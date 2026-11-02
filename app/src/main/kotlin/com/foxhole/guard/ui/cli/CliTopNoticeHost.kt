@@ -3,8 +3,7 @@ package com.foxhole.guard.ui.cli
 import android.graphics.Rect
 import android.view.View
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
@@ -14,11 +13,11 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
@@ -58,6 +57,9 @@ internal fun CliTopNoticeHost() {
     if (!state.visible.value || !state.windows.isForemost(owner)) return
 
     val view = LocalView.current
+    val root = view.rootView
+    val frame = Rect().also(root::getWindowVisibleDisplayFrame)
+    val width = with(LocalDensity.current) { (frame.width().takeIf { it > 0 } ?: root.width.coerceAtLeast(1)).toDp() }
     val position = remember(view) { CliTopNoticePositionProvider(view, margin = 0) }
     Popup(
         popupPositionProvider = position,
@@ -69,7 +71,7 @@ internal fun CliTopNoticeHost() {
             excludeFromSystemGesture = false,
         ),
     ) {
-        Column(Modifier.widthIn(max = 560.dp).fillMaxWidth()) {
+        Column(Modifier.width(width)) {
             state.content.value()
         }
     }

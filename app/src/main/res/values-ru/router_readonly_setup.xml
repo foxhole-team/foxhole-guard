@@ -1,0 +1,3 @@
+<resources>
+    <string name="guard_router_setup_readonly_complete">OpenWrt найден и проверен. Проверенный пакет установки в этой версии приложения пока недоступен. Настройки роутера не изменялись.</string>
+</resources>

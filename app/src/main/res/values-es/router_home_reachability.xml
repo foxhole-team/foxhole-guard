@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="guard_router_router_personal_vpn_at_home">No puede iniciar la VPN personal de este router desde su red Wi-Fi doméstica.</string>
+</resources>

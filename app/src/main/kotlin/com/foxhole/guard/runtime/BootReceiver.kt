@@ -233,6 +233,7 @@ internal suspend fun recoverAfterPackageReplace(
     context: Context,
     dependencies: FoxholeRuntimeDependencies,
 ) {
+    val userStopRevision = RuntimeResumeStateStore.userStopRevision(context)
     dependencies.diagnosticsLogger.record("connection", "app_update_replaced")
     dependencies.connectionController.clearAppliedRuntime()
     FoxholeVpnRuntimeBridge.clearTransientState()
@@ -256,19 +257,24 @@ internal suspend fun recoverAfterPackageReplace(
             settingsTrafficMode = settings.traffic.mode,
             localGuardMode = settings.localGuardModeOrNull(),
             torOnlyRestoreAllowed = settings.privacyRoute.permitted && settings.privacyRoute.enabled,
+            userStopped = RuntimeResumeStateStore.hasUserStopIntent(context),
         )
+    if (RuntimeResumeStateStore.userStopRevision(context) != userStopRevision) return
     if (plan.killStaleRuntime) {
         dependencies.diagnosticsLogger.record(
             "connection",
             "package replace stale runtime kill requested mode=${plan.killTrafficMode.name.lowercase()}",
         )
         val killStartedAtMs = System.currentTimeMillis()
-        FoxholeConnectionServiceContract.startForegroundService(
-            context = context,
-            mode = plan.killTrafficMode,
-            action = FoxholeConnectionServiceContract.ACTION_KILL,
-            suppressLocalGuard = true,
-        )
+        val killDispatched = RuntimeResumeStateStore.runIfUserStopRevisionCurrent(context, userStopRevision) {
+            FoxholeConnectionServiceContract.startForegroundService(
+                context = context,
+                mode = plan.killTrafficMode,
+                action = FoxholeConnectionServiceContract.ACTION_KILL,
+                suppressLocalGuard = true,
+            )
+        }
+        if (!killDispatched) return
         val runtimeSettled =
             waitForPackageReplaceRuntimeIdle(
                 dependencies = dependencies,
@@ -292,53 +298,56 @@ internal suspend fun recoverAfterPackageReplace(
             return
         }
     }
-    when {
-        plan.localGuardMode != null -> {
-            dependencies.diagnosticsLogger.record(
-                "connection",
-                "package replace local guard restore requested mode=${plan.localGuardMode.name.lowercase()}",
-            )
-            FoxholeConnectionServiceContract.startForegroundService(
-                context = context,
-                mode = TrafficMode.TUNNEL,
-                action = FoxholeConnectionServiceContract.ACTION_START_LOCAL_GUARD,
-                localGuardMode = plan.localGuardMode,
-            )
-        }
+    val restored = RuntimeResumeStateStore.runIfUserStopRevisionCurrent(context, userStopRevision) {
+        when {
+            plan.localGuardMode != null -> {
+                dependencies.diagnosticsLogger.record(
+                    "connection",
+                    "package replace local guard restore requested mode=${plan.localGuardMode.name.lowercase()}",
+                )
+                FoxholeConnectionServiceContract.startForegroundService(
+                    context = context,
+                    mode = TrafficMode.TUNNEL,
+                    action = FoxholeConnectionServiceContract.ACTION_START_LOCAL_GUARD,
+                    localGuardMode = plan.localGuardMode,
+                )
+            }
 
-        plan.profileId != null && plan.profileTrafficMode != null -> {
-            val resumeTrafficModeName = plan.profileTrafficMode.name.lowercase()
-            dependencies.diagnosticsLogger.record(
-                "connection",
-                "package replace profile restore requested mode=$resumeTrafficModeName profile=${plan.profileId}",
-            )
-            FoxholeConnectionServiceContract.startForegroundService(
-                context = context,
-                mode = plan.profileTrafficMode,
-                action = FoxholeConnectionServiceContract.ACTION_CONNECT,
-                profileId = plan.profileId,
-                protocolOptionId = plan.protocolOptionId,
-            )
-        }
+            plan.profileId != null && plan.profileTrafficMode != null -> {
+                val resumeTrafficModeName = plan.profileTrafficMode.name.lowercase()
+                dependencies.diagnosticsLogger.record(
+                    "connection",
+                    "package replace profile restore requested mode=$resumeTrafficModeName profile=${plan.profileId}",
+                )
+                FoxholeConnectionServiceContract.startForegroundService(
+                    context = context,
+                    mode = plan.profileTrafficMode,
+                    action = FoxholeConnectionServiceContract.ACTION_CONNECT,
+                    profileId = plan.profileId,
+                    protocolOptionId = plan.protocolOptionId,
+                )
+            }
 
-        plan.reconnectRequired -> {
-            dependencies.diagnosticsLogger.record("connection", "package replace reconnect required")
-            FoxholeVpnRuntimeBridge.update(
-                ConnectionSnapshot(
-                    state = ConnectionState.ERROR,
-                    trafficMode = settings.traffic.mode,
-                    message = context.getString(R.string.reconnect_required),
-                ),
-            )
-        }
+            plan.reconnectRequired -> {
+                dependencies.diagnosticsLogger.record("connection", "package replace reconnect required")
+                FoxholeVpnRuntimeBridge.update(
+                    ConnectionSnapshot(
+                        state = ConnectionState.ERROR,
+                        trafficMode = settings.traffic.mode,
+                        message = context.getString(R.string.reconnect_required),
+                    ),
+                )
+            }
 
-        else -> {
-            dependencies.diagnosticsLogger.record(
-                "connection",
-                "package replace restore skipped: no active runtime",
-            )
+            else -> {
+                dependencies.diagnosticsLogger.record(
+                    "connection",
+                    "package replace restore skipped: no active runtime",
+                )
+            }
         }
     }
+    if (!restored) dependencies.diagnosticsLogger.record("connection", "package replace restore canceled by user stop")
     dependencies.diagnosticsLogger.record("ip", "post-update ip refresh requested reason=post-update")
 }
 
@@ -416,12 +425,14 @@ internal fun packageReplaceRecoveryPlan(
     settingsTrafficMode: TrafficMode,
     localGuardMode: LocalGuardMode?,
     torOnlyRestoreAllowed: Boolean = true,
+    userStopped: Boolean = false,
 ): PackageReplaceRecoveryPlan {
     val resumeLocalGuardMode = resumeState?.localGuardMode
     val resumeProfile = resumeState.resolvePackageReplaceResumeProfile(torOnlyRestoreAllowed)
     val resumeTrafficMode = resumeState?.trafficMode
     val killTrafficMode = resumeTrafficMode ?: settingsTrafficMode
     return when {
+        userStopped -> PackageReplaceRecoveryPlan(killStaleRuntime = false, killTrafficMode = killTrafficMode)
         resumeLocalGuardMode != null ->
             PackageReplaceRecoveryPlan(
                 killStaleRuntime = true,

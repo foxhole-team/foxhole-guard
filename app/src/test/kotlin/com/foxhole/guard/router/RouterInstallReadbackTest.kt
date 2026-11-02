@@ -52,9 +52,9 @@ class RouterInstallReadbackTest {
     }
 
     @Test fun bootstrapIsTransferredOnlyFromAFreshBoundedEnrollmentAndInputIsWiped() {
-        val bytes = """{"schema":1,"status":"fresh","bootstrapPin":"1943","expiresInSeconds":300}""".toByteArray()
+        val bytes = """{"schema":1,"status":"fresh","bootstrapPin":"194321","expiresInSeconds":300}""".toByteArray()
         val credential = routerBootstrapCredential(bytes)
-        assertArrayEquals("1943".toCharArray(), credential)
+        assertArrayEquals("194321".toCharArray(), credential)
         assertArrayEquals(ByteArray(bytes.size), bytes)
         credential?.fill('\u0000')
     }
@@ -66,10 +66,10 @@ class RouterInstallReadbackTest {
     }
 
     @Test fun malformedOrExpiredBootstrapNeverBecomesACredentialAndIsWiped() {
-        for (value in listOf("""{"schema":1,"status":"fresh","bootstrapPin":"1943","expiresInSeconds":0}""",
-            """{"schema":1,"status":"fresh","bootstrapPin":"1943","expiresInSeconds":301}""",
-            """{"schema":1,"status":"fresh","bootstrapPin":"19ab","expiresInSeconds":300}""",
-            """{"schema":1,"status":"already_configured","bootstrapPin":"1943","expiresInSeconds":0}""")) {
+        for (value in listOf("""{"schema":1,"status":"fresh","bootstrapPin":"194321","expiresInSeconds":0}""",
+            """{"schema":1,"status":"fresh","bootstrapPin":"194321","expiresInSeconds":301}""",
+            """{"schema":1,"status":"fresh","bootstrapPin":"19ab21","expiresInSeconds":300}""",
+            """{"schema":1,"status":"already_configured","bootstrapPin":"194321","expiresInSeconds":0}""")) {
             val bytes = value.toByteArray()
             assertThrows(Exception::class.java) { routerBootstrapCredential(bytes) }
             assertEquals(0, bytes.sumOf { it.toInt() })

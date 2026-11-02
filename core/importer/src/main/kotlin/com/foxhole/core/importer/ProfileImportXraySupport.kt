@@ -1,5 +1,7 @@
 package com.foxhole.core.importer
 
+import com.foxhole.core.model.SubscriptionEntryReport
+import com.foxhole.core.model.SubscriptionEntryStatus
 import com.foxhole.core.model.ProtocolHint
 import com.foxhole.core.network.RemoteHostResolver
 import kotlinx.serialization.json.Json
@@ -55,6 +57,17 @@ internal open class ProfileImportXraySupport(
             subscriptionExpiresAt =
             convertedOutbounds.nodes.mapNotNull(ProxyNode::subscriptionExpiresAt).minOrNull()
                 ?: subscriptionExpirationFromJson(normalizedObject),
+            entryReports = if (convertedOutbounds.nodes.any { it.compatibilityWarning }) {
+                convertedOutbounds.nodes.mapIndexed { index, node ->
+                    SubscriptionEntryReport(
+                        protocolLabel = node.protocolHint.name,
+                        protocolHint = node.protocolHint,
+                        status = SubscriptionEntryStatus.ACCEPTED,
+                        sourceLine = index + 1,
+                        compatibilityWarning = node.compatibilityWarning,
+                    )
+                }
+            } else emptyList(),
         )
     }
 
@@ -169,7 +182,16 @@ internal open class ProfileImportXraySupport(
                 buildXrayTls(streamSettings, host, allowInsecureTls = allowInsecureTls)?.let { put("tls", it) }
                 buildXrayTransport(streamSettings)?.let { put("transport", it) }
             }
-        return ProxyNode(displayName, ProtocolHint.VLESS, normalizedOutbound)
+        val realitySettings = streamSettings?.get("realitySettings")?.jsonObject
+        val tlsSettings = streamSettings?.get("tlsSettings")?.jsonObject
+        return ProxyNode(
+            displayName, ProtocolHint.VLESS, normalizedOutbound,
+            compatibilityWarning = needsRealityCompatibility(
+                firstXrayTlsValue(realitySettings, tlsSettings, "fingerprint", "fp", "utlsFingerprint", "utls_fingerprint"),
+                reality = streamSettings?.get("security")?.jsonPrimitive?.contentOrNull?.equals("reality", ignoreCase = true) == true ||
+                    realitySettings != null,
+            ),
+        )
     }
 
     internal fun convertXrayTrojanOutbound(
@@ -368,7 +390,7 @@ internal open class ProfileImportXraySupport(
             if (utlsFingerprint != null || security == "reality" || realitySettings != null) {
                 putJsonObject("utls") {
                     put("enabled", true)
-                    put("fingerprint", utlsFingerprint ?: SUBSTITUTE_UTLS_FINGERPRINT)
+                    put("fingerprint", utlsFingerprint ?: DEFAULT_UTLS_FINGERPRINT)
                 }
             }
             if (security == "reality" || realitySettings != null) {

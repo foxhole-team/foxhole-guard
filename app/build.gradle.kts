@@ -276,7 +276,7 @@ val releaseSigningStoreFile =
                 }
             candidates.firstOrNull(File::isFile)
         }
-val baseAppVersionCode = 175
+val baseAppVersionCode = 176
 val localBuildNumber = providers.gradleProperty("foxhole.localBuildNumber").orNull?.let { raw ->
     requireNotNull(raw.toIntOrNull()?.takeIf { it in (baseAppVersionCode + 1)..2_100_000_000 }) {
         "foxhole.localBuildNumber must exceed $baseAppVersionCode and be at most 2100000000"
@@ -405,6 +405,13 @@ require(shippedAndroidAbis.all { it in setOf("arm64-v8a", "armeabi-v7a", "x86", 
 }
 require(shippedAndroidAbis.toSet() != setOf("arm64-v8a", "armeabi-v7a", "x86_64") || appUpdateChannel == "fdroid") {
     "The android3 ABI profile is reserved for the F-Droid channel"
+}
+
+val apkDeliveryAbis = providers.gradleProperty("foxhole.deliveryAbis").orNull
+    ?.split(' ', ',')?.map(String::trim)?.filter(String::isNotEmpty) ?: shippedAndroidAbis
+require(apkDeliveryAbis.isNotEmpty() && apkDeliveryAbis.distinct().size == apkDeliveryAbis.size &&
+    apkDeliveryAbis.all { it in shippedAndroidAbis }) {
+    "foxhole.deliveryAbis must be a nonempty unique subset of foxhole.abis"
 }
 
 val artiVersion =
@@ -1473,7 +1480,7 @@ android {
             buildConfigField("boolean", "ENABLE_STRICT_MODE", enableStrictMode.toString())
             if (!enableAbiSplitApks) {
                 ndk {
-                    abiFilters += shippedAndroidAbis
+                    abiFilters += apkDeliveryAbis
                 }
             }
         }
@@ -1488,7 +1495,7 @@ android {
             }
             if (!enableAbiSplitApks) {
                 ndk {
-                    abiFilters += shippedAndroidAbis
+                    abiFilters += apkDeliveryAbis
                     debugSymbolLevel = "SYMBOL_TABLE"
                 }
             }
@@ -1579,8 +1586,8 @@ android {
             abi {
                 isEnable = true
                 reset()
-                include(*shippedAndroidAbis.toTypedArray())
-                isUniversalApk = true
+                include(*apkDeliveryAbis.toTypedArray())
+                isUniversalApk = apkDeliveryAbis.toSet() == shippedAndroidAbis.toSet()
             }
         }
     }
@@ -1653,14 +1660,16 @@ androidComponents {
                         "--native", preparePageAlignedNative.get().nativeDirectory.get().asFile.absolutePath,
                         "--merged", merged.get().asFile.absolutePath,
                         "--abis",
-                    ) + shippedAndroidAbis,
+                    ) + shippedAndroidAbis + listOf("--delivery-abis") + apkDeliveryAbis,
                 )
             }
         }
         val verifyApk = tasks.register<Exec>("verify${variantName}PageAlignedNativeApk") {
             dependsOn(preparePageAlignedNative)
             val apks = variant.artifacts.get(SingleArtifact.APK)
+            val merged = variant.artifacts.get(SingleArtifact.MERGED_NATIVE_LIBS)
             inputs.dir(apks)
+            inputs.dir(merged)
             inputs.dir(preparePageAlignedNative.flatMap { it.nativeDirectory })
             doFirst {
                 commandLine(
@@ -1669,8 +1678,9 @@ androidComponents {
                         "--repo", rootProject.projectDir.absolutePath,
                         "--native", preparePageAlignedNative.get().nativeDirectory.get().asFile.absolutePath,
                         "--apk-directory", apks.get().asFile.absolutePath,
+                        "--merged", merged.get().asFile.absolutePath,
                         "--abis",
-                    ) + shippedAndroidAbis,
+                    ) + shippedAndroidAbis + listOf("--delivery-abis") + apkDeliveryAbis,
                 )
             }
         }

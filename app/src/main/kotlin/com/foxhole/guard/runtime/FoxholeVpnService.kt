@@ -20,6 +20,7 @@ import com.foxhole.core.model.RuntimeTeardownPhase
 import com.foxhole.core.model.TrafficMode
 import com.foxhole.core.model.TrafficSnapshot
 import com.foxhole.core.model.VpnSession
+import com.foxhole.core.runtime.RuntimeResumeStateStore
 import com.foxhole.core.runtime.AndroidApplicationIdentityResolver
 import com.foxhole.core.runtime.FoxholeRuntime
 import com.foxhole.core.runtime.FoxholeVpnRuntimeBridge
@@ -522,6 +523,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
     }
 
     override fun onRevoke() {
+        RuntimeResumeStateStore.markUserStop(this)
         GuardRouterSocketOwners.invalidate(runtimeServiceOwner)
         beginRuntimeTransition("permission_revoked")
         launchPriorityCommand(RuntimeCommandPriority.KILL, "permission_revoked") {

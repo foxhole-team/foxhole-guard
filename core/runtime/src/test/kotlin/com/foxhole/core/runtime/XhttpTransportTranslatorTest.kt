@@ -15,7 +15,7 @@ internal class XhttpTransportTranslatorTest {
         assertEquals(JsonPrimitive("stream-one"), native.getValue("transport").jsonObject["mode"])
         assertEquals(JsonPrimitive("xhttp"), native.getValue("transport").jsonObject["type"])
         assertEquals(JsonPrimitive("reality.example"), native.getValue("reality").jsonObject["server_name"])
-        assertEquals(JsonPrimitive("qq_11_1"), native.getValue("reality").jsonObject["fingerprint"])
+        assertEquals(JsonPrimitive("chrome_156"), native.getValue("reality").jsonObject["fingerprint"])
         assertEquals(JsonPrimitive(false), native.getValue("tls").jsonObject["enabled"])
     }
 

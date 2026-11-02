@@ -5,28 +5,31 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.ui.Alignment
 import com.foxhole.guard.router.RouterInstallCatalog
 import com.foxhole.guard.router.RouterDiscoveryKind
+import com.foxhole.guard.router.RouterDiscoveryIssue
 import com.foxhole.guard.router.RouterDiscoveryResult
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
+import com.foxhole.guard.ui.cli.components.CliButton
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.foxhole.guard.R
 
@@ -55,29 +58,38 @@ internal fun GuardRouterEntrySheet(
         footer = {
             when (discovery?.kind) {
                 RouterDiscoveryKind.INSTALLED -> {
-                    OutlinedButton(onClick = { onConnect?.invoke(reset) ?: onPair() },
+                    CliButton(
+                        label = stringResource(R.string.guard_router_vpn_router_pair),
+                        onClick = { onConnect?.invoke(reset) ?: onPair() },
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
                         enabled = !finding && (!reset || resetAvailable),
-                        shape = MaterialTheme.shapes.extraSmall,
-                        border = BorderStroke(1.5.dp, routerConnectColor()),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = routerConnectColor()),
-                        modifier = Modifier.fillMaxWidth().heightIn(min = 60.dp)) {
-                        Text(stringResource(R.string.guard_router_vpn_router_pair))
-                    }
+                        color = routerConnectColor(),
+                        filled = false,
+                    )
                 }
-                RouterDiscoveryKind.SSH_AVAILABLE -> OutlinedButton(onClick = onSetup,
-                    enabled = !finding && setupEnabled, shape = MaterialTheme.shapes.extraSmall, modifier = Modifier.fillMaxWidth().heightIn(min = 60.dp)) {
-                    Text(stringResource(R.string.guard_router_vpn_router_install))
-                }
+                RouterDiscoveryKind.SSH_AVAILABLE -> CliButton(
+                    label = stringResource(R.string.guard_router_vpn_router_install),
+                    onClick = onSetup,
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                    enabled = !finding && setupEnabled,
+                    filled = false,
+                )
                 else -> {
-                    OutlinedButton(onClick = { onFind?.invoke() }, enabled = !finding && connected && onFind != null, shape = MaterialTheme.shapes.extraSmall,
-                        modifier = Modifier.fillMaxWidth().heightIn(min = 60.dp)) {
-                        Text(stringResource(if (notFound) R.string.guard_router_router_review_retry_search
-                            else R.string.guard_router_router_review_find_router))
-                    }
-                    if (notFound) TextButton(onClick = onPair, enabled = !finding, shape = MaterialTheme.shapes.extraSmall,
-                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-                        Text(stringResource(R.string.guard_router_router_review_enter_manually))
-                    }
+                    CliButton(
+                        label = stringResource(if (notFound) R.string.guard_router_router_review_retry_search
+                            else R.string.guard_router_router_review_find_router),
+                        onClick = { onFind?.invoke() },
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                        enabled = !finding && connected && onFind != null,
+                        filled = false,
+                    )
+                    CliButton(
+                        label = stringResource(R.string.guard_router_router_review_enter_manually),
+                        onClick = onPair,
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                        enabled = !finding,
+                        filled = false,
+                    )
                 }
             }
         },
@@ -90,19 +102,40 @@ internal fun GuardRouterEntrySheet(
         RouterWifiIndicator(connected)
         if (discovery == null) Text(stringResource(R.string.guard_router_vpn_router_intro), style = MaterialTheme.typography.bodyMedium)
         else {
-            if (discovery.kind != RouterDiscoveryKind.NOT_FOUND) {
+            if (discovery.kind == RouterDiscoveryKind.INSTALLED || discovery.kind == RouterDiscoveryKind.SSH_AVAILABLE) {
                 Text(stringResource(R.string.guard_router_router_review_router_found), style = MaterialTheme.typography.titleMedium)
                 Text(discovery.address, style = MaterialTheme.typography.bodySmall)
             }
-            Text(stringResource(when (discovery.kind) {
+            val discoveryMessage = stringResource(discovery.issue?.let { issue ->
+                when (issue) {
+                    RouterDiscoveryIssue.API_UNAVAILABLE -> if (discovery.kind == RouterDiscoveryKind.SSH_AVAILABLE)
+                        R.string.guard_router_router_discovery_ssh_only else R.string.guard_router_router_discovery_api_absent
+                    RouterDiscoveryIssue.TIMEOUT -> R.string.guard_router_router_discovery_timeout
+                    RouterDiscoveryIssue.TLS -> R.string.guard_router_router_discovery_tls
+                    RouterDiscoveryIssue.NETWORK -> R.string.guard_router_router_discovery_network
+                    RouterDiscoveryIssue.PACKAGE_STATUS -> R.string.guard_router_router_discovery_package_check
+                }
+            } ?: when (discovery.kind) {
                 RouterDiscoveryKind.INSTALLED -> R.string.guard_router_router_review_package_present
                 RouterDiscoveryKind.SSH_AVAILABLE -> R.string.guard_router_router_review_setup_available
                 RouterDiscoveryKind.UNKNOWN -> R.string.guard_router_router_review_package_unknown
                 RouterDiscoveryKind.NOT_FOUND -> R.string.guard_router_router_review_not_found
-            }), style = MaterialTheme.typography.bodyMedium)
-            if (discovery.kind == RouterDiscoveryKind.UNKNOWN) OutlinedButton(onClick = onPair,
-                enabled = !finding, shape = MaterialTheme.shapes.extraSmall, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
-                Text(stringResource(R.string.guard_router_router_review_manual_address))
+            })
+            if (!finding && discovery.kind == RouterDiscoveryKind.INSTALLED && discovery.issue == null) {
+                val foundColor = routerConnectColor()
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = MaterialTheme.shapes.medium,
+                    color = MaterialTheme.colorScheme.surfaceContainerLow,
+                    border = BorderStroke(1.dp, foundColor),
+                ) {
+                    Text(discoveryMessage, Modifier.fillMaxWidth().padding(16.dp),
+                        color = foundColor, textAlign = TextAlign.Center,
+                        style = MaterialTheme.typography.bodyMedium)
+                }
+            } else Text(discoveryMessage, style = MaterialTheme.typography.bodyMedium)
+            if (discovery.kind == RouterDiscoveryKind.UNKNOWN || discovery.kind == RouterDiscoveryKind.NOT_FOUND) {
+                Text(discovery.address, style = MaterialTheme.typography.bodySmall)
             }
             if (discovery.kind == RouterDiscoveryKind.INSTALLED) {
                 if (discovery.pinConfigured == false) Text(stringResource(R.string.guard_router_router_review_owner_setup_required),

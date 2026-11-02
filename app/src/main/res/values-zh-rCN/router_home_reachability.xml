@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="guard_router_router_personal_vpn_at_home">连接到此路由器的家庭 Wi-Fi 网络时，无法启动它的个人 VPN。</string>
+</resources>

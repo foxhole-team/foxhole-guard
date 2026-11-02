@@ -20,6 +20,7 @@ import java.security.MessageDigest
 internal fun interface RouterReleaseAssetSource {
     suspend fun read(name: String, maximumBytes: Int): ByteArray
     suspend fun read(name: String, maximumBytes: Int, onProgress: (Long, Long?) -> Unit): ByteArray = read(name, maximumBytes)
+    suspend fun readLargeMetadata(name: String, maximumBytes: Int, onProgress: (Long, Long?) -> Unit): ByteArray = read(name, maximumBytes, onProgress)
 }
 
 internal class GithubRouterSetupRelease(
@@ -118,12 +119,28 @@ internal class GithubRouterSetupRelease(
         RouterSetupPayload(variant, budgets.toMap(), script, baseUrl, packages.toMap())
         } }
 
+    override suspend fun bundlePlan(payload: RouterSetupPayload, proposal: RouterInstallProposal): RouterInstallBundlePlan = withContext(io) {
+        val actual = requireNotNull(catalog)
+        require(actual.manifestSha256 == proposal.manifestSha256 && actual.matches(proposal.binding, proposal.openWrtVersion, proposal.manifestSha256))
+        val document = payload.compact?.modes?.get(proposal.storageMode)?.document ?: run {
+            val asset = requireNotNull(requireNotNull(payload.variant).modes[proposal.storageMode])
+            routerInstallDocument(readVerified(asset.file, 1048576), 1048576)
+        }
+        val sums = assets.read("SHA256SUMS", 1048576)
+        require(verifyRouterReleaseManifest(sums, manifestSha256) == entries)
+        buildRouterInstallBundlePlan(actual, payload, proposal, document, entries) { name, maximum ->
+            if (name == "SHA256SUMS") sums else readVerified(name, maximum)
+        }
+    }
+
     private suspend fun readVerified(name: String, maximum: Int, onProgress: ((RouterInstallProgress) -> Unit)? = null): ByteArray {
         require(name.matches(ROUTER_RELEASE_FILE))
         val digest = requireNotNull(entries[name])
-        val bytes = if (onProgress == null) assets.read(name, maximum) else assets.read(name, maximum) { completed, total ->
-            onProgress(RouterInstallProgress(RouterInstallProgressStage.DOWNLOAD, completed, total))
+        val report: (Long, Long?) -> Unit = { completed, total ->
+            onProgress?.invoke(RouterInstallProgress(RouterInstallProgressStage.DOWNLOAD, completed, total))
         }
+        val bytes = if (maximum > 1048576) assets.readLargeMetadata(name, maximum, report)
+            else assets.read(name, maximum, report)
         require(bytes.size in 1..maximum && routerReleaseSha256(bytes) == digest)
         return bytes
     }

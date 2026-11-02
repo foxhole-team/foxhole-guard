@@ -1,6 +1,8 @@
 package com.foxhole.guard.router
 
 import java.io.Closeable
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -10,6 +12,7 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertThrows
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -26,22 +29,25 @@ class RouterRetainedIoTest {
 
     @Test fun failureClosesTheRegisteredTransport() = runTest {
         val closed = AtomicInteger()
+        val released = CountDownLatch(1)
         val failure = async {
             runCatching { retainedRouterIo<Closeable>(StandardTestDispatcher(testScheduler)) { register ->
-                register(ownedTransport(closed))
+                register(ownedTransport(closed, released))
                 throw IllegalArgumentException("fixture")
             } }
         }
         runCurrent()
+        assertTrue(released.await(5, TimeUnit.SECONDS))
         assertEquals(1, closed.get())
         assertThrows(IllegalArgumentException::class.java) { failure.getCompleted().getOrThrow() }
     }
 
     @Test fun cancellationBeforeDeliveryClosesAnUnclaimedTransaction() = runTest {
         val closed = AtomicInteger()
+        val released = CountDownLatch(1)
         val owner = async {
             retainedRouterIo(StandardTestDispatcher(testScheduler)) { register ->
-                val transport = ownedTransport(closed)
+                val transport = ownedTransport(closed, released)
                 register(transport)
                 coroutineContext[kotlinx.coroutines.Job]?.cancel()
                 transport
@@ -49,11 +55,12 @@ class RouterRetainedIoTest {
         }
         runCurrent()
         assertEquals(true, owner.isCancelled)
+        assertTrue(released.await(5, TimeUnit.SECONDS))
         assertEquals(1, closed.get())
     }
 
-    private fun ownedTransport(counter: AtomicInteger): Closeable {
+    private fun ownedTransport(counter: AtomicInteger, released: CountDownLatch? = null): Closeable {
         val closed = AtomicBoolean()
-        return Closeable { if (closed.compareAndSet(false, true)) counter.incrementAndGet() }
+        return Closeable { if (closed.compareAndSet(false, true)) { counter.incrementAndGet(); released?.countDown() } }
     }
 }

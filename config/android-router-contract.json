@@ -1,0 +1,16 @@
+{
+  "application": "guard",
+  "bundle": "config/android-router-contract/v1",
+  "canonicalOrigin": {
+    "commit": "136fb1399d31e081d77e296b5df3f8580697a372",
+    "path": "contracts/android-router/v1/manifest.7a5851596b3c882b4bf8da1fca83f6a5880c7ba30350de7c631e89f634303b50.json",
+    "repository": "foxhole-team/foxhole-core",
+    "status": "PINNED"
+  },
+  "manifest": {
+    "path": "manifest.7a5851596b3c882b4bf8da1fca83f6a5880c7ba30350de7c631e89f634303b50.json",
+    "sha256": "7a5851596b3c882b4bf8da1fca83f6a5880c7ba30350de7c631e89f634303b50"
+  },
+  "role": "Contract metadata only; existing Core native producer pins remain unchanged",
+  "schema": 1
+}

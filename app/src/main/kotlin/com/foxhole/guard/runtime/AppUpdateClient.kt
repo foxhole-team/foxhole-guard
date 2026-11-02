@@ -216,8 +216,18 @@ class AppUpdateClient(
         if (!manifest.apkSha256.isSha256Hex()) {
             return AppUpdateCheck.Failed(AppUpdateFailure.MALFORMED, "update manifest carries no usable sha256")
         }
+        val checksums = release.assets.filter { asset -> asset.name == CHECKSUMS_ASSET_NAME }
+        if (checksums.size > 1 || checksums.isEmpty() && endpoint.toString() == DEFAULT_RELEASES_API_URL) {
+            return AppUpdateCheck.Failed(AppUpdateFailure.NO_ARTIFACT, "release has no unique $CHECKSUMS_ASSET_NAME")
+        }
+        checksums.singleOrNull()?.let { asset ->
+            val text = client.getText(asset.readableUrl().asPublicHttpsUrl(), MAX_METADATA_BYTES, "release checksums", ASSET_ACCEPT)
+            if (!appUpdateChecksumMatches(text, manifest.apkName, manifest.apkSha256)) {
+                throw AppUpdateVerificationException("release checksums differ from the update manifest")
+            }
+        }
         val apkAsset =
-            release.assets.firstOrNull { asset -> asset.name == manifest.apkName }
+            release.assets.singleOrNull { asset -> asset.name == manifest.apkName }
                 ?: return AppUpdateCheck.Failed(AppUpdateFailure.NO_ARTIFACT, "release has no ${manifest.apkName}")
         return AppUpdateCheck.Available(
             manifest = manifest,
@@ -323,10 +333,10 @@ class AppUpdateClient(
 
     private fun verifyDownloadedFile(update: AppUpdateCheck.Available, into: File, digest: MessageDigest) {
         if (update.sizeBytes > 0L && into.length() != update.sizeBytes) {
-            throw IOException("apk size ${into.length()} does not match the announced ${update.sizeBytes}")
+            throw AppUpdateVerificationException("apk size ${into.length()} does not match the announced ${update.sizeBytes}")
         }
         val actual = digest.digest().joinToString("") { byte -> "%02x".format(byte) }
-        if (!actual.equals(update.manifest.apkSha256, ignoreCase = true)) throw IOException("apk digest mismatch")
+        if (!actual.equals(update.manifest.apkSha256, ignoreCase = true)) throw AppUpdateVerificationException("apk digest mismatch")
     }
 
     private fun guardedClient(): OkHttpClient =
@@ -449,6 +459,7 @@ class AppUpdateClient(
     }
 
     companion object {
+        const val CHECKSUMS_ASSET_NAME = "SHA256SUMS"
         const val MANIFEST_ASSET_NAME = "update-manifest.json"
         const val ARMV7_MANIFEST_ASSET_NAME = "update-manifest-armeabi-v7a.json"
         private const val MAX_REDIRECTS = 5

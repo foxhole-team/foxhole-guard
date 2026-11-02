@@ -1,0 +1,3 @@
+<resources>
+    <string name="guard_router_setup_readonly_complete">OpenWrt bestätigt. Ein geprüftes Installationspaket ist in dieser App noch nicht verfügbar. Der Router wurde nicht verändert.</string>
+</resources>

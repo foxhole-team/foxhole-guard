@@ -40,7 +40,6 @@ import com.foxhole.guard.ui.cli.CliFormat
 import com.foxhole.guard.ui.cli.CliType
 import com.foxhole.guard.ui.cli.LocalCliColors
 import com.foxhole.guard.ui.cli.components.CliFlagIcon
-import com.foxhole.guard.ui.cli.components.CliIcon
 import com.foxhole.guard.ui.cli.components.cliMotionPhase
 
 @Composable
@@ -57,7 +56,6 @@ internal fun CliUserNetworkSummary(
     val transition = home.homeRouteTransitionRunning() || home.connection.isRouteTransition() || home.torOperation.active
     val refreshAffectsIdentity = reason != null &&
         (reason != IpInfoRefreshReason.TOR_ROUTE || candidate == home.torIpInfo)
-    val refreshBaseline = remember(reason, epoch) { candidate?.fetchedAt ?: 0L }
     var previousReason by remember { mutableStateOf<IpInfoRefreshReason?>(null) }
     var lastInfoAt by remember { mutableLongStateOf(candidate?.fetchedAt ?: 0L) }
     var lastTrafficAt by remember { mutableLongStateOf(traffic.sampledAt) }
@@ -75,13 +73,23 @@ internal fun CliUserNetworkSummary(
         candidate?.let { lastInfoAt = maxOf(lastInfoAt, it.fetchedAt) }
         lastTrafficAt = maxOf(lastTrafficAt, traffic.sampledAt)
     }
-    val infoFresh = candidate != null && !transition &&
-        (epoch <= 0L || candidate.fetchedAt >= epoch) && candidate.fetchedAt > infoFloor &&
-        (!refreshAffectsIdentity || candidate.fetchedAt > refreshBaseline)
-    val info = candidate.takeIf { infoFresh }
-    val geoPending = transition || home.ipInfoLoading || refreshAffectsIdentity ||
-        (connected && !infoFresh && home.dashboardConnectionMetricsLoading) ||
-        !home.settingsHydrated || !home.profilesLoaded
+    val identity = cliUserNetworkIdentityPresentation(
+        candidateFetchedAt = candidate?.fetchedAt,
+        routeChangedAt = epoch,
+        networkInfoFloor = infoFloor,
+        routeTransition = transition,
+        refreshing = home.ipInfoLoading || refreshAffectsIdentity,
+        connected = connected,
+        connectionMetricsLoading = home.dashboardConnectionMetricsLoading,
+        settingsHydrated = home.settingsHydrated,
+        profilesLoaded = home.profilesLoaded,
+    )
+    val info = candidate.takeIf { identity.current }
+    val geoText = listOfNotNull(
+        info?.countryName?.trim()?.takeIf(String::isNotBlank),
+        info?.city?.trim()?.takeIf(String::isNotBlank),
+    ).joinToString(", ").takeIf(String::isNotBlank)
+    val geoPending = identity.pending
     val sampleFresh = traffic.available && traffic.sampledAt >= epoch && traffic.sampledAt > trafficFloor
     val ratesPending = transition || !home.settingsHydrated || !home.profilesLoaded || (connected && !sampleFresh &&
         (traffic.available || home.dashboardConnectionMetricsLoading))
@@ -89,7 +97,8 @@ internal fun CliUserNetworkSummary(
     val outgoing = CliFormat.rate(if (sampleFresh) traffic.txBytesPerSec.coerceAtLeast(0L) else 0L)
     val rates = "↓ $incoming  ↑ $outgoing"
     val latency = cliHomeLatencyMs(home, connected)
-    val latencyPending = transition || (connected && (home.dashboardConnectionMetricsLoading || home.protocolMetricsRefreshing))
+    val latencyPending = transition || (connected && latency == null &&
+        (home.dashboardConnectionMetricsLoading || home.protocolMetricsRefreshing))
     val ipStyle = CliType.body.copy(fontSize = 18.sp)
     Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp),
         horizontalAlignment = Alignment.CenterHorizontally) {
@@ -100,21 +109,11 @@ internal fun CliUserNetworkSummary(
             reserveSpace = connected,
             leadingContent = { CliFlagIcon(countryCode = info?.countryCode, style = ipStyle) },
         )
-        CliUserNetworkRow(
-            text = info?.city?.trim()?.takeIf(String::isNotBlank), sample = "XXXXXXXX",
-            pending = geoPending, style = CliType.small, textColor = colors.dim,
-            reserveSpace = connected,
-            leadingContent = { CliIcon(id = R.drawable.lin_city,
-                contentDescription = stringResource(R.string.user_home_city), tint = colors.dim, size = 20.dp) },
-        )
-        CliUserNetworkRow(
-            text = info?.countryName?.trim()?.takeIf(String::isNotBlank), sample = "XXXXXXXXXXXX",
-            pending = geoPending, style = CliType.small, textColor = colors.dim,
-            reserveSpace = connected,
-            leadingContent = { CliIcon(id = R.drawable.lin_globe,
-                contentDescription = null, tint = colors.dim, size = 20.dp) },
-        )
-        if (connected) {
+        if (geoText != null) {
+            Text(geoText, style = CliType.small, color = colors.dim,
+                maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        if (connected || transition) {
             CliUserNetworkRow(
                 text = if (!latencyPending)
                     stringResource(R.string.user_home_latency, CliFormat.latency(latency)) else null,
@@ -122,6 +121,8 @@ internal fun CliUserNetworkSummary(
                 pending = latencyPending, style = CliType.small, textColor = colors.dim,
                 reserveSpace = true,
             )
+        }
+        if (connected) {
             CliUserNetworkRow(text = rates.takeUnless { ratesPending }, sample = rates,
                 pending = ratesPending, style = CliType.body, textColor = colors.fg,
                 modifier = Modifier.fillMaxWidth().testTag(CLI_HOME_TRAFFIC_TAG))

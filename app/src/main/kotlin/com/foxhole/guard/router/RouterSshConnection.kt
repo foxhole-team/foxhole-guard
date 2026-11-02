@@ -1,6 +1,10 @@
 package com.foxhole.guard.router
 
 import com.jcraft.jsch.ChannelExec
+import com.jcraft.jsch.ChannelSftp
+import com.jcraft.jsch.SftpProgressMonitor
+import java.io.FileInputStream
+import java.util.UUID
 import com.jcraft.jsch.JSch
 import com.jcraft.jsch.Session
 import com.jcraft.jsch.SocketFactory
@@ -24,7 +28,15 @@ internal fun interface RouterSocketProvider { fun createSocket(): Socket }
 
 internal interface RouterSshClient : Closeable {
     fun connect(password: CharArray?)
+    fun connectForDiscovery() = connect(null)
+    fun connectWithKey(privateKey: ByteArray, passphrase: CharArray) {
+        privateKey.fill(0); passphrase.fill('\u0000')
+        throw RouterSshAuthenticationFailed()
+    }
     fun read(command: RouterReadCommand): ByteArray
+    fun internetAccess(): RouterInternetAccess = RouterInternetAccess.UNKNOWN
+    fun stageInstallBundle(bundle: RouterDeviceInstallBundle, facts: RouterBundleTransferFacts, requiredRam: Long,
+        onProgress: (RouterInstallProgress) -> Unit): RouterRemoteInstallBundle = throw RouterSshFailure()
     fun readCompactBackupBytes(): ByteArray = throw RouterInspectionFailure()
     fun install(script: RouterVerifiedInstallScript, command: RouterInstallCommand)
     fun install(script: RouterVerifiedInstallScript, command: RouterInstallCommand, onProgress: (RouterInstallProgress) -> Unit) {
@@ -35,6 +47,34 @@ internal interface RouterSshClient : Closeable {
 }
 
 internal enum class RouterReadCommand(val script: String, val maximumOutputBytes: Int = 262144) {
+    INTERNET_PROBE("""
+        v4=${'$'}(ip -4 route show default 2>/dev/null) || { printf 'UNKNOWN\n'; exit 0; }
+        v6=${'$'}(ip -6 route show default 2>/dev/null) || { printf 'UNKNOWN\n'; exit 0; }
+        if [ -z "${'$'}v4${'$'}v6" ]; then printf 'NO_INTERNET\n'; exit 0; fi
+        reply=${'$'}(uclient-fetch --no-proxy -T 4 -O /dev/null https://github.com 2>&1)
+        code=${'$'}?
+        [ "${'$'}{#reply}" -le 16384 ] || { printf 'UNKNOWN\n'; exit 0; }
+        if [ "${'$'}code" = 0 ]; then printf 'ONLINE\n'; exit 0; fi
+        case "${'$'}reply" in *SSL*|*ssl*|*certificate*|*Certificate*) printf 'UNKNOWN\n'; exit 0 ;; esac
+        if [ "${'$'}code" = 4 ]; then
+            case "${'$'}reply" in *'Connection error: Connection failed'*|*'Connection error: Connection timed out'*) printf 'NO_INTERNET\n'; exit 0 ;; esac
+        fi
+        printf 'UNKNOWN\n'
+    """.trimIndent(), 16384),
+    BUNDLE_TRANSFER_FACTS("""
+        [ "${'$'}(id -u)" = 0 ] && [ -d /tmp ] && [ ! -L /tmp ] || exit 1
+        awk '${'$'}2=="/tmp"&&${'$'}3=="tmpfs" {found=1} END {exit !found}' /proc/mounts || exit 1
+        cat /proc/sys/kernel/random/boot_id
+        awk '/^MemAvailable:/ {print ${'$'}2}' /proc/meminfo
+        df -Pk /tmp | awk 'NR==2 {print ${'$'}4}'
+    """.trimIndent(), 256),
+    BUNDLE_UPLOAD_CAPABILITY("""
+        if [ -x /usr/libexec/sftp-server ] || [ -x /usr/lib/openssh/sftp-server ] || [ -x /usr/lib/sftp-server ]; then printf 'SFTP\n'; exit 0; fi
+        for path in /usr/libexec/sftp-server /usr/lib/openssh/sftp-server /usr/lib/sftp-server; do
+            if [ -e "${'$'}path" ] || [ -L "${'$'}path" ]; then printf 'UNKNOWN\n'; exit 0; fi
+        done
+        printf 'EXEC\n'
+    """.trimIndent(), 256),
     BOARD("ubus call system board"),
     ARCHITECTURE("if [ -r /etc/apk/arch ]; then cat /etc/apk/arch; else opkg print-architecture; fi"),
     KERNEL_PACKAGE("apk info -v kernel"),
@@ -88,6 +128,7 @@ internal class RouterSshConnection(
     private val socket = AtomicReference<Socket?>()
     private val session = AtomicReference<Session?>()
     private val activeChannel = AtomicReference<ChannelExec?>()
+    private val activeSftp = AtomicReference<ChannelSftp?>()
 
     init {
         require(!endpoint.isUnresolved && endpoint.port in 1..65535)
@@ -98,16 +139,28 @@ internal class RouterSshConnection(
         finally { password?.fill('\u0000') }
     }
 
-    private fun connectInternal(password: CharArray?) {
+    override fun connectForDiscovery() = connectInternal(null, timeoutMillis = 2000)
+
+    override fun connectWithKey(privateKey: ByteArray, passphrase: CharArray) {
+        try {
+            require(privateKey.size in 1..65536 && passphrase.size <= 1024)
+            connectInternal(null, privateKey, passphrase)
+        } finally { privateKey.fill(0); passphrase.fill('\u0000') }
+    }
+
+    private fun connectInternal(password: CharArray?, privateKey: ByteArray? = null, passphrase: CharArray? = null,
+        timeoutMillis: Int = 15000) {
         check(session.get() == null && !closed.get())
-        require(trusted || password == null)
+        require(trusted || password == null && privateKey == null)
         val client = JSch().apply { hostKeyRepository = repository }
         val connection = client.getSession("root", endpoint.address.hostAddress, endpoint.port)
         session.set(connection)
         connection.setHostKeyAlias(alias)
         connection.setConfig("StrictHostKeyChecking", "yes")
-        connection.setConfig("PreferredAuthentications", if (trusted) "password" else "none")
+        connection.setConfig("PreferredAuthentications", when { privateKey != null -> "publickey"; trusted -> "password"; else -> "none" })
         connection.setConfig("MaxAuthTries", "1")
+        connection.setServerAliveInterval(15000)
+        connection.setServerAliveCountMax(3)
         connection.setConfig("compression.s2c", "none")
         connection.setConfig("compression.c2s", "none")
         connection.setSocketFactory(object : SocketFactory {
@@ -116,14 +169,25 @@ internal class RouterSshConnection(
                 val created = socketProvider.createSocket()
                 socket.set(created)
                 if (closed.get()) { created.close(); throw RouterSshFailure() }
-                created.connect(endpoint, 15000)
-                created.soTimeout = 15000
+                created.connect(endpoint, timeoutMillis)
+                created.soTimeout = timeoutMillis
                 return created
             }
             override fun getInputStream(socket: Socket): InputStream = socket.getInputStream()
             override fun getOutputStream(socket: Socket): OutputStream = socket.getOutputStream()
         })
         try {
+            if (privateKey != null) {
+                val encoded = Charsets.UTF_8.newEncoder().encode(CharBuffer.wrap(requireNotNull(passphrase)))
+                val bytes = ByteArray(encoded.remaining())
+                encoded.get(bytes)
+                try { client.addIdentity(alias, privateKey, null, bytes) }
+                catch (_: com.jcraft.jsch.JSchException) { throw RouterSshAuthenticationFailed() }
+                finally {
+                    bytes.fill(0)
+                    if (encoded.hasArray()) encoded.array().fill(0)
+                }
+            }
             if (password != null) {
                 val encoded = Charsets.UTF_8.newEncoder().encode(CharBuffer.wrap(password))
                 val bytes = ByteArray(encoded.remaining())
@@ -134,7 +198,7 @@ internal class RouterSshConnection(
                     if (encoded.hasArray()) encoded.array().fill(0)
                 }
             }
-            connection.connect(15000)
+            connection.connect(timeoutMillis)
             if (closed.get()) throw RouterSshFailure()
         } catch (failure: Exception) {
             val candidate = repository.observedKey()
@@ -143,15 +207,80 @@ internal class RouterSshConnection(
             if (candidate != null && expectedIdentity != null && !java.security.MessageDigest.isEqual(candidate, expectedIdentity)) {
                 throw RouterIdentityChanged()
             }
+            if (failure is RouterSshAuthenticationFailed) throw failure
             if (failure is com.jcraft.jsch.JSchException && failure.message.orEmpty().startsWith("Auth fail")) {
                 throw RouterSshAuthenticationFailed()
             }
             throw RouterSshFailure()
-        }
+        } finally { client.removeAllIdentity() }
     }
 
     override fun read(command: RouterReadCommand): ByteArray {
         return execute(command.script, null, 30_000_000_000L, command.maximumOutputBytes)
+    }
+
+    override fun internetAccess(): RouterInternetAccess {
+        require(trusted)
+        val value = execute(RouterReadCommand.INTERNET_PROBE.script, null, 8_000_000_000L, 16384)
+            .toString(Charsets.US_ASCII).trim()
+        return RouterInternetAccess.entries.singleOrNull { it.name == value } ?: RouterInternetAccess.UNKNOWN
+    }
+
+    override fun stageInstallBundle(bundle: RouterDeviceInstallBundle, facts: RouterBundleTransferFacts, requiredRam: Long,
+        onProgress: (RouterInstallProgress) -> Unit): RouterRemoteInstallBundle {
+        require(trusted && requiredRam > 0)
+        if (requiredRam > facts.availableRamBytes || requiredRam > facts.availableTmpBytes) throw RouterSetupFailure(RouterWizardError.STORAGE)
+        bundle.plan.assets.forEach { verifyRouterBundleAsset(bundle.file(it), it) }
+        val capability = read(RouterReadCommand.BUNDLE_UPLOAD_CAPABILITY).toString(Charsets.US_ASCII).trim()
+        if (capability !in setOf("SFTP", "EXEC")) throw RouterSshFailure()
+        val nonce = UUID.randomUUID().toString().replace("-", "")
+        val path = "/tmp/foxhole-device-install-$nonce"
+        val owner = routerBundleOwner(bundle, facts, nonce)
+        val ownerHash = routerReleaseSha256(owner)
+        var sftp: ChannelSftp? = null
+        val timeout = java.util.Timer("router-bundle-timeout", true)
+        timeout.schedule(object : java.util.TimerTask() { override fun run() { this@RouterSshConnection.close() } }, 600000L)
+        var created = false
+        val cleanup = routerBundleActionCommand(path, nonce, facts.bootId, ownerHash, "cleanup")
+        try {
+            if (capability == "SFTP") {
+                val opened = requireNotNull(session.get()).openChannel("sftp") as ChannelSftp
+                check(activeSftp.compareAndSet(null, opened))
+                sftp = opened
+                opened.connect(10000)
+            }
+            execute(routerBundleCreateCommand(path, nonce, facts.bootId, ownerHash, requiredRam), ByteArrayInputStream(owner), 15_000_000_000L, 1024)
+            created = true
+            var completed = 0L
+            val deadline = System.nanoTime() + 600_000_000_000L
+            for (asset in bundle.plan.assets) {
+                val start = completed
+                RouterBundleInputStream(FileInputStream(bundle.file(asset)), asset.bytes) { count ->
+                    if (closed.get() || System.nanoTime() >= deadline) throw RouterSshFailure()
+                    onProgress(RouterInstallProgress(RouterInstallProgressStage.UPLOAD, start + count, bundle.plan.bytes))
+                }.use { input ->
+                    val channel = sftp
+                    if (channel == null) execute(routerBundleUploadCommand(path, asset), input,
+                        (deadline - System.nanoTime()).coerceAtLeast(1), 1024)
+                    else {
+                        val info = channel.lstat("$path/${asset.name}")
+                        require(info.isReg() && info.getUId() == 0 && (info.getPermissions() and 4095) == 384 && info.getSize() == 0L)
+                        channel.put(input, "$path/${asset.name}", null as SftpProgressMonitor?, ChannelSftp.OVERWRITE)
+                    }
+                }
+                completed = Math.addExact(completed, asset.bytes)
+            }
+            execute(routerBundleActionCommand(path, nonce, facts.bootId, ownerHash, "verify"), null, 120_000_000_000L, 1024)
+            return RouterRemoteInstallBundle(path) { execute(cleanup, null, 30_000_000_000L, 1024) }
+        } catch (failure: Exception) {
+            if (created && !closed.get()) try { execute(cleanup, null, 30_000_000_000L, 1024) } catch (_: Exception) { }
+            throw RouterSshFailure()
+        } finally {
+            timeout.cancel()
+            owner.fill(0)
+            sftp?.disconnect()
+            if (sftp != null) activeSftp.compareAndSet(sftp, null)
+        }
     }
 
     override fun readCompactBackupBytes(): ByteArray = execute(ROUTER_COMPACT_BACKUP_BYTES, null, 30_000_000_000L)
@@ -198,6 +327,7 @@ internal class RouterSshConnection(
     override fun close() {
         if (closed.compareAndSet(false, true)) {
             activeChannel.getAndSet(null)?.disconnect()
+            activeSftp.getAndSet(null)?.disconnect()
             try { socket.getAndSet(null)?.close() } catch (_: IOException) {}
             session.getAndSet(null)?.disconnect()
         }

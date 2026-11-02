@@ -4,6 +4,8 @@ import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarVisuals
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
@@ -17,6 +19,7 @@ import com.foxhole.guard.ui.cli.LocalCliColors
 import com.foxhole.guard.ui.cli.LocalCliType
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
+import java.util.concurrent.atomic.AtomicLong
 
 internal data class GuardRouterColors(val foreground: Color, val muted: Color)
 internal object LocalGuardRouterColors {
@@ -24,9 +27,20 @@ internal object LocalGuardRouterColors {
 }
 internal val LocalGuardRouterSheetBodyGestures = staticCompositionLocalOf { Modifier }
 internal val LocalGuardRouterNotices = staticCompositionLocalOf<GuardRouterNotices?> { null }
+internal data class GuardRouterNoticeVisuals(
+    override val message: String,
+    val error: Boolean,
+    val id: Long,
+) : SnackbarVisuals {
+    override val actionLabel: String? = null
+    override val withDismissAction: Boolean = false
+    override val duration: SnackbarDuration = SnackbarDuration.Indefinite
+}
+
 internal class GuardRouterNotices(private val scope: CoroutineScope, private val snackbar: SnackbarHostState) {
+    private val ids = AtomicLong()
     fun show(message: String, error: Boolean = false) {
-        scope.launch { snackbar.showSnackbar(message, withDismissAction = error) }
+        scope.launch { snackbar.showSnackbar(GuardRouterNoticeVisuals(message, error, ids.incrementAndGet())) }
     }
 }
 

@@ -260,7 +260,8 @@ gradle.projectsEvaluated {
             doLast {
                 def selected = project.configurations.findAll { configuration ->
                     def name = configuration.name.toLowerCase()
-                    configuration.canBeResolved && (name.contains('release') || name.startsWith('kotlincompiler') ||
+                    configuration.canBeResolved && (name in ['compileclasspath', 'runtimeclasspath'] ||
+                        name.contains('release') || name.startsWith('kotlincompiler') ||
                         name == 'kotlinbuildtoolsapiclasspath' || name.contains('androidjdkimage'))
                 }
                 selected.addAll(project.buildscript.configurations.findAll { it.canBeResolved })

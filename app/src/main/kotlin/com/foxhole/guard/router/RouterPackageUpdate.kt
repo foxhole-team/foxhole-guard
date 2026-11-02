@@ -35,7 +35,8 @@ internal data class RouterUpdateStatus(val supported: Boolean, val routerId: Str
     val currentVersion: String?, val availableVersion: String?, val availability: RouterUpdateAvailability,
     val lastCheckedAtUnixMs: Long?, val failureReason: RouterUpdateFailureReason?, val busy: Boolean,
     val autoUpdate: RouterUpdateAuto, val installedModules: List<RouterUpdateModule>,
-    val activeOwnJob: RouterUpdateJobRef?, val lastOwnJob: RouterUpdateJobRef?, val activeAutomaticJob: RouterUpdateProgress?)
+    val activeOwnJob: RouterUpdateJobRef?, val lastOwnJob: RouterUpdateJobRef?, val activeAutomaticJob: RouterUpdateProgress?,
+    val deviceDownloadRequired: Boolean = false)
 internal data class RouterUpdateChange(val id: String, val fromVersion: String, val toVersion: String, val storage: RouterEngineStorage?)
 internal data class RouterUpdatePlan(val routerId: String, val revision: Long, val planId: String, val planSha256: String,
     val fromVersion: String, val toVersion: String, val protocols: Set<RouterInstallProtocol>, val changes: List<RouterUpdateChange>,
@@ -49,11 +50,12 @@ internal data class RouterUpdatePending(val operation: RouterUpdateOperation, va
 internal data class RouterUpdateControlState(val supported: Boolean? = null, val status: RouterUpdateStatus? = null,
     val plan: RouterUpdatePlan? = null, val job: RouterUpdateJob? = null, val failure: RouterUpdateFailureReason? = null,
     val pending: RouterUpdatePending? = null, val reconnecting: Boolean = false, val unreachable: Boolean = false,
-    val pollEpoch: Long = 0) {
+    val pollEpoch: Long = 0, val deviceDownloading: Boolean = false, val deviceProgressPercent: Int? = null,
+    val deviceCheckedCurrent: Boolean = false) {
     val requiresVpnStop: Boolean get() = failure == RouterUpdateFailureReason.LEGACY_CONNECTION_ACTIVE ||
         status?.failureReason == RouterUpdateFailureReason.LEGACY_CONNECTION_ACTIVE ||
         status?.autoUpdate?.suspendedReason == RouterUpdateFailureReason.LEGACY_CONNECTION_ACTIVE
-    val running: Boolean get() = pending != null || reconnecting || job?.running == true || status?.busy == true ||
+    val running: Boolean get() = deviceDownloading || pending != null || reconnecting || job?.running == true || status?.busy == true ||
         status?.activeAutomaticJob?.running == true
     val canCheck: Boolean get() = supported == true && status?.supported == true && !running
     val canApply: Boolean get() {
@@ -84,6 +86,9 @@ internal fun parseRouterUpdateStatus(value: JsonObject): RouterUpdateStatus {
     val current = value.engineNullableText("currentVersion", 96)
     val available = value.engineNullableText("availableVersion", 96)
     val failure = value.updateFailure("failureReason")
+    val deviceDownload = if ("deviceDownloadRequired" in value) value.engineBoolean("deviceDownloadRequired") else false
+    if (deviceDownload && (!supported || failure !in setOf(null, RouterUpdateFailureReason.DOWNLOAD_FAILED,
+            RouterUpdateFailureReason.RELEASE_UNAVAILABLE, RouterUpdateFailureReason.ROUTER_UNAVAILABLE))) invalidEngineResponse()
     if (supported && current == null || !supported && availability != RouterUpdateAvailability.UNSUPPORTED ||
         supported && availability == RouterUpdateAvailability.UNSUPPORTED ||
         availability in setOf(RouterUpdateAvailability.CURRENT, RouterUpdateAvailability.AVAILABLE) && available == null ||
@@ -108,7 +113,7 @@ internal fun parseRouterUpdateStatus(value: JsonObject): RouterUpdateStatus {
     return RouterUpdateStatus(supported, value.engineHash("routerId"), value.engineNumber("revision"), current, available,
         availability, value.engineNullableNumber("lastCheckedAtUnixMs"), failure, value.engineBoolean("busy"),
         RouterUpdateAuto(auto.engineBoolean("enabled"), 86400, auto.engineNullableNumber("lastAttemptAtUnixMs"),
-            auto.engineNullableNumber("nextCheckAtUnixMs"), suspended), modules, active, last, automatic)
+            auto.engineNullableNumber("nextCheckAtUnixMs"), suspended), modules, active, last, automatic, deviceDownload)
 }
 
 internal fun parseRouterUpdatePlan(value: JsonObject, status: RouterUpdateStatus): RouterUpdatePlan {

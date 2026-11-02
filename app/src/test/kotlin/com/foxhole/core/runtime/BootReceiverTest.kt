@@ -20,6 +20,21 @@ import org.junit.Test
 
 class BootReceiverTest {
     @Test
+    fun `user stop suppresses package replacement profile and local guard starts`() {
+        val plan = packageReplaceRecoveryPlan(
+            resumeState = RuntimeResumeState(TrafficMode.TUNNEL, 7L, "fixture", null),
+            hasActiveVpnNetwork = true,
+            activeProfileId = 7L,
+            settingsTrafficMode = TrafficMode.TUNNEL,
+            localGuardMode = LocalGuardMode.FIREWALL,
+            userStopped = true,
+        )
+        assertFalse(plan.killStaleRuntime)
+        assertNull(plan.profileId)
+        assertNull(plan.localGuardMode)
+    }
+
+    @Test
     fun `boot receiver dispatches package replace to worker recovery`() {
         assertEquals(BootReceiverDispatch.BOOT_RESTORE, bootReceiverDispatch(Intent.ACTION_BOOT_COMPLETED))
         assertEquals(

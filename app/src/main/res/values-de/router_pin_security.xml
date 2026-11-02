@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="guard_router_router_setup_pin">PIN-Code</string>
+    <string name="guard_router_router_setup_pin_repeat">PIN-Code wiederholen</string>
+    <string name="guard_router_router_pin_cooldown">In %1$d s erneut versuchen.</string>
+    <string name="guard_router_router_setup_all_lan_vpn">VPN für alle Heimgeräte</string>
+    <string name="guard_router_router_setup_all_lan_vpn_help">Nach dem Verbinden VPN für alle Heimgeräte unter Beachtung Ihrer Routing-Ausnahmen verwenden. Sie können dies deaktivieren. VPN wird dadurch nicht gestartet.</string>
+</resources>

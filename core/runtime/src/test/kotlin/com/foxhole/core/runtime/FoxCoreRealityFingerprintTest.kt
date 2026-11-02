@@ -18,7 +18,8 @@ internal class FoxCoreRealityFingerprintTest : FoxCoreConfigTranslatorTestSuppor
     fun `every implemented parrot reaches the core config under its own name`() {
         val expected =
             mapOf(
-                "chrome" to "chrome_151",
+                "chrome" to "chrome_156",
+                "chrome_156" to "chrome_156",
                 "chrome_151" to "chrome_151",
                 "chrome_133" to "chrome_133",
                 "chrome_131" to "chrome_131",
@@ -28,7 +29,7 @@ internal class FoxCoreRealityFingerprintTest : FoxCoreConfigTranslatorTestSuppor
                 "safari_26_3" to "safari_26_3",
                 "ios" to "ios_14",
                 "ios_14" to "ios_14",
-                "qq" to "qq_11_1",
+                "qq" to "chrome_156",
                 "qq_11_1" to "qq_11_1",
                 "firefox" to "firefox_153",
                 "firefox_153" to "firefox_153",
@@ -65,7 +66,7 @@ internal class FoxCoreRealityFingerprintTest : FoxCoreConfigTranslatorTestSuppor
         val first = realityFingerprintFor("random")
         assertTrue(
             first,
-            first in setOf("chrome_151", "firefox_153", "edge_85", "safari_26_3", "ios_14"),
+            first in setOf("chrome_156", "firefox_153", "edge_85", "safari_26_3", "ios_14"),
         )
         repeat(4) { assertEquals(first, realityFingerprintFor("random")) }
     }

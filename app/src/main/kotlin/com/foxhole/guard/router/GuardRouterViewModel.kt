@@ -70,10 +70,10 @@ internal class GuardRouterViewModel(application: Application) : AndroidViewModel
         if (generation == openGeneration) closeScreen()
     }
 
-    fun action(secret: CharArray? = null, operation: suspend () -> Unit) {
-        if (wizardJob?.isActive == true) { secret?.fill('\u0000'); return }
-        wizardJob = viewModelScope.launch { try { operation() } finally { secret?.fill('\u0000') } }
-            .also { job -> job.invokeOnCompletion { secret?.fill('\u0000') } }
+    fun action(secret: CharArray? = null, key: ByteArray? = null, operation: suspend () -> Unit) {
+        if (wizardJob?.isActive == true) { secret?.fill('\u0000'); key?.fill(0); return }
+        wizardJob = viewModelScope.launch { try { operation() } finally { secret?.fill('\u0000'); key?.fill(0) } }
+            .also { job -> job.invokeOnCompletion { secret?.fill('\u0000'); key?.fill(0) } }
     }
 
     fun find() { wizard.begin(RouterWizardPath.PAIR, null, addingNew = wizard.isAddingRouter, keepNotFoundPresentation = true); action { wizard.findRouter() } }
@@ -97,8 +97,8 @@ internal class GuardRouterViewModel(application: Application) : AndroidViewModel
             if (generation == openGeneration && state.error == null && state.stage != RouterWizardStage.ENTRY) currentPage.value = GuardRouterPage.WIZARD
         }
     }
-    suspend fun inspect(address: String) {
-        wizard.inspectAddress(address)
+    suspend fun inspect(address: String, setupAddress: Boolean = false) {
+        if (setupAddress) wizard.inspectSetupAddress(address) else wizard.inspectAddress(address)
         val state = wizard.state.value
         if (state.stage == RouterWizardStage.IDENTITY && state.error == null && !state.busy) {
             if (state.identityChanged) { messages.emit(R.string.guard_router_vpn_router_error_identity); entry() }
@@ -108,10 +108,13 @@ internal class GuardRouterViewModel(application: Application) : AndroidViewModel
     fun completed() {
         if (currentPage.value != GuardRouterPage.WIZARD) return
         val generation = openGeneration
+        val pairedExisting = !wizard.state.value.installedInThisWizard
         wizard.close()
         viewModelScope.launch {
             control.loadPairingState()
-            if (generation == openGeneration) currentPage.value = GuardRouterPage.CONTROL
+            if (generation != openGeneration) return@launch
+            if (pairedExisting) control.preparePairedOpen()
+            currentPage.value = GuardRouterPage.CONTROL
         }
     }
     fun closeScreen() { openGeneration++; wizardJob?.cancel(); wizardJob = null; runtime.close() }

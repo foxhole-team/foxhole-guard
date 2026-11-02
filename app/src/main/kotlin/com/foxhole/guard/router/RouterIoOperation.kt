@@ -16,11 +16,16 @@ internal class RouterIoOperation : Closeable {
     private val resource = AtomicReference<Closeable?>()
     fun register(value: Closeable) {
         check(resource.compareAndSet(null, value))
-        if (closed.get()) { value.close(); throw IOException("router_cancelled") }
+        if (closed.get()) {
+            resource.getAndSet(null)?.let { closeRouterTransport(it) }
+            throw IOException("router_cancelled")
+        }
     }
     override fun close() {
         closed.set(true)
-        try { resource.getAndSet(null)?.close() } catch (_: IOException) {}
+        resource.getAndSet(null)?.let { owned ->
+            RouterTransportCleanup(cleanup = { try { owned.close() } catch (_: IOException) { } }).close()
+        }
     }
 }
 

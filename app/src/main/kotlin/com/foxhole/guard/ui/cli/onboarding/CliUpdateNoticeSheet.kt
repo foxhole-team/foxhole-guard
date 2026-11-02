@@ -70,11 +70,14 @@ internal fun CliUpdateNoticeSheetContent(
     }
 }
 
+@Suppress("UNUSED_PARAMETER")
 internal fun releaseNoteKeys(apiLevel: Int): List<Int> = listOf(
-    R.string.cli_release_notes_runtime,
-    if (apiLevel >= 29) R.string.cli_release_notes_sentinel_network else R.string.cli_release_notes_sentinel_apps,
-    R.string.cli_release_notes_backup,
-    R.string.cli_release_notes_core,
+    R.string.cli_release_notes_router_setup,
+    R.string.cli_release_notes_app_updates,
+    R.string.cli_release_notes_notices,
+    R.string.cli_release_notes_help,
+    R.string.cli_release_notes_router_management,
+    R.string.cli_release_notes_pin6,
 )
 
 internal fun updateNoticeItems(body: String): List<CliQuickStartItem> =
@@ -90,7 +93,8 @@ internal fun updateNoticeItems(body: String): List<CliQuickStartItem> =
         .toList()
 
 private val UPDATE_NOTICE_ICONS = listOf(
-    R.drawable.lin_star,
-    R.drawable.lin_map,
-    R.drawable.lin_shield,
+    R.drawable.lin_router,
+    R.drawable.lin_update,
+    R.drawable.lin_info,
+    R.drawable.lin_help,
 )

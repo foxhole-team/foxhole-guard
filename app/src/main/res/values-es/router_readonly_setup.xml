@@ -1,0 +1,3 @@
+<resources>
+    <string name="guard_router_setup_readonly_complete">OpenWrt verificado. Esta aplicación aún no dispone de un paquete de instalación verificado. No se modificó el router.</string>
+</resources>

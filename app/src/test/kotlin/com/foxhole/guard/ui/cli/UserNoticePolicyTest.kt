@@ -62,17 +62,29 @@ class UserNoticePolicyTest {
     }
 
     @Test
-    fun `ordinary notices have a bounded display duration`() {
-        assertEquals(4_000L, userNoticeDurationMillis(FoxholeBannerEvent("Saved", FoxholeBannerTone.SUCCESS)))
+    fun `ordinary notices have fifteen seconds without altering action expiry`() {
+        assertEquals(15_000L, userNoticeDurationMillis(FoxholeBannerEvent("Saved", FoxholeBannerTone.SUCCESS)))
         assertEquals(
-            1_000L,
+            15_000L,
             userNoticeDurationMillis(FoxholeBannerEvent("Saved", FoxholeBannerTone.INFO, durationMillis = 1))
         )
         assertEquals(
-            10_000L,
+            15_000L,
             userNoticeDurationMillis(
                 FoxholeBannerEvent("Saved", FoxholeBannerTone.INFO, durationMillis = Long.MAX_VALUE)
             )
         )
+    }
+
+    @Test
+    fun `warning and action notices never get an ordinary notice timer`() {
+        assertNull(userNoticeDurationMillis(FoxholeBannerEvent("Warning", FoxholeBannerTone.WARNING)))
+        val action = FoxholeBannerEvent(
+            "Accept recommendation", FoxholeBannerTone.INFO,
+            action = FoxholeBannerAction.ACCEPT_PROTOCOL_RECOMMENDATION,
+            expiresAtElapsedMs = 90_000L,
+        )
+        assertNull(userNoticeDurationMillis(action))
+        assertEquals(90_000L, action.expiresAtElapsedMs)
     }
 }

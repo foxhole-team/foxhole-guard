@@ -20,6 +20,7 @@ import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 import java.io.IOException
 import java.util.Locale
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 
@@ -35,6 +36,7 @@ internal class RouterControlCoordinator(
     private val importProfile: suspend (String) -> Boolean = { false },
     private val beforeRouterSelection: (suspend () -> Unit)? = null,
     private val importAuthenticatedProfile: (suspend (RouterAuthenticatedProfileImport) -> Boolean)? = null,
+    private val deviceUpdateRelay: RouterDeviceUpdateRelay? = null,
 ) : AutoCloseable {
     private val mutableState = MutableStateFlow(RouterControlState())
     val state: StateFlow<RouterControlState> = mutableState.asStateFlow()
@@ -109,10 +111,18 @@ internal class RouterControlCoordinator(
     suspend fun setPublicIpConfirmed(confirmed: Boolean) = operation {
         val preferences = requireNotNull(mutableState.value.preferences)
         val updated = preferences.copy(publicIpConfirmed = confirmed,
-            homeVpnManagementEnabled = confirmed && preferences.homeVpnManagementEnabled)
+            homeVpnManagementEnabled = confirmed && preferences.homeVpnManagementEnabled, homeVpnDefaultPending = false)
         preferenceStore.save(updated)
         checkOwner()
         updateManagementPreference(updated)
+    }
+
+    suspend fun setHideOfflineDevices(hidden: Boolean) = operation {
+        val preferences = requireNotNull(mutableState.value.preferences)
+        val updated = preferences.copy(hideOfflineDevices = hidden)
+        preferenceStore.save(updated)
+        checkOwner()
+        publish(mutableState.value.copy(preferences = updated))
     }
 
     suspend fun setHomeVpnManagement(enabled: Boolean) = operation {
@@ -123,7 +133,7 @@ internal class RouterControlCoordinator(
             try { checkOwner(); if (!saved.active) throw RouterApiFailure(RouterApiError.PIN) }
             finally { saved.clear() }
         }
-        val updated = preferences.copy(homeVpnManagementEnabled = enabled)
+        val updated = preferences.copy(homeVpnManagementEnabled = enabled, homeVpnDefaultPending = false)
         preferenceStore.save(updated)
         checkOwner()
         updateManagementPreference(updated)
@@ -188,6 +198,7 @@ internal class RouterControlCoordinator(
         val current = mutableState.value.updates
         if (!current.canCheck) throw RouterUpdateFailure(RouterUpdateFailureReason.BUSY)
         val status = current.status ?: throw RouterUpdateFailure(RouterUpdateFailureReason.NOT_CHECKED)
+        if (status.deviceDownloadRequired) { readUpdateState(); return@updateOperation }
         val connection = requireConnection(allowUpdates = true)
         publish(mutableState.value.copy(updates = current.copy(plan = null, failure = null,
             pending = RouterUpdatePending(RouterUpdateOperation.CHECK, null, status.lastOwnJob?.jobId ?: current.job?.jobId),
@@ -266,10 +277,37 @@ internal class RouterControlCoordinator(
             it == RouterUpdateFailureReason.LEGACY_CONNECTION_ACTIVE && status.failureReason != it &&
                 status.autoUpdate.suspendedReason != it && mutableState.value.snapshot?.desiredServerId == null
         }
-        val refreshed = RouterUpdateControlState(status.supported, status, job = job, pending = pending,
+        var refreshed = RouterUpdateControlState(status.supported, status, job = job, pending = pending,
             failure = jobFailure ?: status.failureReason,
             pollEpoch = current.pollEpoch + if (discovered) 1 else 0)
         publish(mutableState.value.copy(updates = refreshed))
+        val relay = deviceUpdateRelay
+        if (preparePlan && refreshed.canCheck && !refreshed.requiresVpnStop && status.deviceDownloadRequired && relay != null) {
+            val relayOwner = owner
+            val relayJob = currentCoroutineContext()[Job]
+            publish(mutableState.value.copy(updates = refreshed.copy(deviceDownloading = true)))
+            val uploaded = try {
+                relay.prepare(connection.first, connection.second, status) { percent ->
+                    mutableState.update { state ->
+                        if (relayOwner == generation.get() && relayJob === active.get() && relayJob?.isActive == true)
+                            state.copy(updates = state.updates.copy(deviceDownloading = true, deviceProgressPercent = percent))
+                        else state
+                    }
+                }
+            } finally {
+                if (relayOwner == generation.get()) mutableState.update { state ->
+                    state.copy(updates = state.updates.copy(deviceDownloading = false, deviceProgressPercent = null))
+                }
+            }
+            checkOwner()
+            if (uploaded == null) {
+                publish(mutableState.value.copy(updates = refreshed.copy(failure = null, job = null, deviceCheckedCurrent = true)))
+                return
+            }
+            status = uploaded
+            refreshed = refreshed.copy(status = uploaded, failure = null, job = null)
+            publish(mutableState.value.copy(updates = refreshed))
+        }
         if (preparePlan && refreshed.canCheck && !refreshed.requiresVpnStop && status.availability == RouterUpdateAvailability.AVAILABLE) {
             val plan = provisioner.updatePlan(connection.first, connection.second, status)
             checkOwner()
@@ -397,9 +435,15 @@ internal class RouterControlCoordinator(
         publish(mutableState.value.copy(lanDevices = devices))
     }
 
-    suspend fun open() = operation { openSelected(identifyConnected = true) }
+    private val readCurrentSettingsOnNextOpen = AtomicBoolean(false)
 
-    private suspend fun openSelected(identifyConnected: Boolean) {
+    fun preparePairedOpen() { readCurrentSettingsOnNextOpen.set(true) }
+
+    suspend fun open() = operation {
+        openSelected(identifyConnected = true, currentSettingsOnly = readCurrentSettingsOnNextOpen.getAndSet(false))
+    }
+
+    private suspend fun openSelected(identifyConnected: Boolean, currentSettingsOnly: Boolean = false) {
         clearConnection()
         refreshInventory()
         if (!transport.hasPhysicalWifi()) {
@@ -440,8 +484,17 @@ internal class RouterControlCoordinator(
         checkOwner()
         publish(RouterControlState(stage = if (preferences.enabled) RouterControlStage.CONNECTING else RouterControlStage.DISABLED,
             preferences = preferences, address = requireNotNull(pairing).identity.endpoint.address, clientCreationNeedsSetup = needsSetup))
-        if (preferences.enabled && match.pairingId == saved.id) reopen(preferences)
-        else if (preferences.enabled) publish(mutableState.value.copy(stage = RouterControlStage.OFFLINE,
+        if ((preferences.enabled || currentSettingsOnly) && match.pairingId == saved.id) {
+            reopen(preferences, readOnly = currentSettingsOnly)
+            if (currentSettingsOnly) {
+                if (preferences.enabled) readUpdateState(preparePlan = false)
+                else {
+                    val current = mutableState.value
+                    clearConnection()
+                    publish(current.copy(stage = RouterControlStage.DISABLED))
+                }
+            }
+        } else if (preferences.enabled) publish(mutableState.value.copy(stage = RouterControlStage.OFFLINE,
             error = if (match.unknownIdentity) RouterWizardError.IDENTITY else RouterWizardError.UNAVAILABLE))
     }
 
@@ -656,7 +709,7 @@ internal class RouterControlCoordinator(
     }
 
     suspend fun createRemoteClient(name: String) = operation {
-        if (mutableState.value.preferences?.publicIpConfirmed != true) throw RouterApiFailure(RouterApiError.UNSUPPORTED)
+        if (!mutableState.value.hasConfirmedDirectIp) throw RouterApiFailure(RouterApiError.UNSUPPORTED)
         if (mutableState.value.clientCreationNeedsSetup) return@operation
         if (!validRouterClientName(name)) {
             publish(mutableState.value.copy(error = RouterWizardError.UNSUPPORTED))
@@ -739,12 +792,17 @@ internal class RouterControlCoordinator(
         try { checkOwner(); session = unlocked } catch (error: Exception) { unlocked.close(); throw error }
         val current = provisioner.snapshot(client, unlocked)
         checkOwner()
+        val observedPreferences = preferences.withPublicIpv4Evidence(current.publicIpv4Available)
+        if (observedPreferences != preferences) {
+            preferenceStore.save(observedPreferences)
+            checkOwner()
+        }
         if (!saved.active) {
             val activated = saved.activated()
             try { pairingStore.save(activated); checkOwner() } finally { activated.clear() }
         }
-        val automation = homeAutomationAvailable && applyHomeAutomation != null && preferences.homeAutodetection && homeAutomationActive()
-        publish(mutableState.value.copy(stage = RouterControlStage.CONNECTED, preferences = preferences, snapshot = current,
+        val automation = homeAutomationAvailable && applyHomeAutomation != null && observedPreferences.homeAutodetection && homeAutomationActive()
+        publish(mutableState.value.copy(stage = RouterControlStage.CONNECTED, preferences = observedPreferences, snapshot = current,
             selectedServerId = current.desiredServerId ?: mutableState.value.selectedServerId?.takeIf { id -> current.servers.any { it.text("id") == id } }
                 ?: current.servers.singleOrNull()?.text("id"), homeAutomationEffective = automation,
             clientCreationNeedsSetup = mutableState.value.clientCreationNeedsSetup && current.clients.none { it["provisioned"] == JsonPrimitive(true) },
@@ -756,8 +814,8 @@ internal class RouterControlCoordinator(
         val country = provisioner.routerCountry(client, unlocked)
         checkOwner()
         publish(mutableState.value.copy(routerCountryCode = country))
-        if (preferences.countryAuto && country != null) {
-            applyCountrySelection(preferences.copy(countryCode = country))
+        if (observedPreferences.countryAuto && country != null) {
+            applyCountrySelection(observedPreferences.copy(countryCode = country))
         }
     }
 

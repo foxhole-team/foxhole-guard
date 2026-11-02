@@ -8,6 +8,7 @@ internal data class RouterInstallProgress(
     val stage: RouterInstallProgressStage,
     val completedBytes: Long = 0,
     val totalBytes: Long? = null,
+    val viaDevice: Boolean = false,
 ) {
     init {
         require(completedBytes >= 0)

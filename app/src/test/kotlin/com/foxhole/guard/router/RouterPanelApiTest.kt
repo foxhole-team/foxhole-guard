@@ -50,20 +50,24 @@ class RouterPanelApiTest {
     private val identity = RouterTlsIdentity(RouterEndpoint("192.168.1.1"), "a".repeat(64))
     private val token = "b".repeat(64)
     private class FixtureCall(private val value: Request, private val response: String?) : Call by OkHttpClient().newCall(value) {
-        var cancelled = false
+        @Volatile var cancelled = false
+        private val cancellationFinished = CountDownLatch(1)
         override fun execute(): Response = error("blocking call forbidden")
         override fun enqueue(callback: Callback) {
             response?.let { callback.onResponse(this, Response.Builder().request(value).protocol(Protocol.HTTP_1_1)
                 .code(200).message("fixture").body(it.toResponseBody("application/json".toMediaType())).build()) }
         }
-        override fun cancel() { cancelled = true }
+        override fun cancel() { cancelled = true; cancellationFinished.countDown() }
+        fun awaitCancellation() { assertTrue(cancellationFinished.await(5, TimeUnit.SECONDS)) }
     }
     private class PendingCall(private val request: Request) : Call by OkHttpClient().newCall(request) {
         private lateinit var callback: Callback
         @Volatile var cancelled = false
+        private val cancellationFinished = CountDownLatch(1)
         @Volatile private var activeBody: TrackedBody? = null
         override fun enqueue(callback: Callback) { this.callback = callback }
-        override fun cancel() { cancelled = true; activeBody?.cancelTransportRead() }
+        override fun cancel() { cancelled = true; activeBody?.cancelTransportRead(); cancellationFinished.countDown() }
+        fun awaitCancellation() { assertTrue(cancellationFinished.await(5, TimeUnit.SECONDS)) }
         fun respond(body: ResponseBody) {
             activeBody = body as? TrackedBody
             if (cancelled) activeBody?.cancelTransportRead()
@@ -145,17 +149,17 @@ class RouterPanelApiTest {
     }
 
     @Test fun missingFirstPinIsReportedAsSetupRatherThanInvalidCredentialsOrNetwork() = runTest {
-        try { api("""{"_foxhole_error":"pin_setup_required"}""").unlock("1234".toCharArray()); error("missing setup accepted") }
+        try { api("""{"_foxhole_error":"pin_setup_required"}""").unlock("123456".toCharArray()); error("missing setup accepted") }
         catch (failure: RouterApiFailure) { assertEquals(RouterApiError.PIN_SETUP, failure.kind) }
     }
 
     @Test fun enteringPinCreatesOnlyAnEphemeralSessionAndClearsTheInput() = runTest {
-        val pin = "1234".toCharArray()
+        val pin = "123456".toCharArray()
         val requests = mutableListOf<String>()
         val session = api("""{"token":"$token","pinChangeRequired":true}""", requests).unlock(pin)
         assertTrue(session.changePinRequired)
-        assertArrayEquals(CharArray(4), pin)
-        assertTrue(requests.single().contains("\"pin\":\"1234\""))
+        assertArrayEquals(CharArray(6), pin)
+        assertTrue(requests.single().contains("\"pin\":\"123456\""))
         assertFalse(session.toString().contains(token))
         session.close()
     }
@@ -187,18 +191,18 @@ class RouterPanelApiTest {
     }
 
     @Test fun routerErrorsAreMappedWithoutLeakingTheirResponse() = runTest {
-        val pin = "1234".toCharArray()
+        val pin = "123456".toCharArray()
         try { api("""{"_foxhole_error":"locked"}""").unlock(pin); error("lock ignored") }
         catch (failure: RouterApiFailure) { assertEquals(RouterApiError.LOCKED, failure.kind) }
-        assertArrayEquals(CharArray(4), pin)
-        try { api("{" + "x".repeat(300001)).unlock("1234".toCharArray()); error("oversized response accepted") }
+        assertArrayEquals(CharArray(6), pin)
+        try { api("{" + "x".repeat(300001)).unlock("123456".toCharArray()); error("oversized response accepted") }
         catch (failure: RouterApiFailure) { assertEquals(RouterApiError.INVALID_RESPONSE, failure.kind) }
     }
 
     @Test fun cancellingPairingCancelsTheExactRequestAndClearsPin() = runTest {
         lateinit var call: FixtureCall
         val client = RouterPanelApi(identity, Call.Factory { FixtureCall(it, null).also { value -> call = value } })
-        val pin = "1234".toCharArray()
+        val pin = "123456".toCharArray()
         var ownerCancellationObserved = false
         val job = launch {
             try { client.unlock(pin) }
@@ -207,15 +211,16 @@ class RouterPanelApiTest {
         runCurrent()
         job.cancel()
         runCurrent()
+        call.awaitCancellation()
         assertTrue(call.cancelled)
         assertTrue(ownerCancellationObserved)
-        assertArrayEquals(CharArray(4), pin)
+        assertArrayEquals(CharArray(6), pin)
     }
 
     @Test fun aRequestDeadlineSettlesAsNetworkFailureWithoutCancellingItsOwner() = runTest {
         lateinit var call: PendingCall
         val client = RouterPanelApi(identity, Call.Factory { PendingCall(it).also { value -> call = value } })
-        val pin = "1234".toCharArray()
+        val pin = "123456".toCharArray()
         val result = async { runCatching { client.unlock(pin) } }
         try {
             runCurrent()
@@ -223,15 +228,16 @@ class RouterPanelApiTest {
             runCurrent()
             assertTrue(result.isCompleted)
             assertEquals(RouterApiError.NETWORK, (result.await().exceptionOrNull() as? RouterApiFailure)?.kind)
+            call.awaitCancellation()
             assertTrue(call.cancelled && isActive)
-            assertArrayEquals(CharArray(4), pin)
+            assertArrayEquals(CharArray(6), pin)
         } finally { result.cancel() }
     }
 
     @Test fun anEnclosingOwnerDeadlineRemainsCancellationInsteadOfNetworkFailure() = runTest {
         lateinit var call: PendingCall
         val client = RouterPanelApi(identity, Call.Factory { PendingCall(it).also { value -> call = value } })
-        val pin = "1234".toCharArray()
+        val pin = "123456".toCharArray()
         val result = async { runCatching { withTimeout(5000) { client.unlock(pin) } } }
         try {
             runCurrent()
@@ -239,15 +245,16 @@ class RouterPanelApiTest {
             runCurrent()
             assertTrue(result.isCompleted)
             assertTrue(result.await().exceptionOrNull() is TimeoutCancellationException)
+            call.awaitCancellation()
             assertTrue(call.cancelled && isActive)
-            assertArrayEquals(CharArray(4), pin)
+            assertArrayEquals(CharArray(6), pin)
         } finally { result.cancel() }
     }
 
     @Test fun cancellingAnAlreadyReceivedBodyClosesItWhileItsReadIsBlocked() = runTest {
         lateinit var call: PendingCall
         val client = RouterPanelApi(identity, Call.Factory { PendingCall(it).also { value -> call = value } })
-        val pin = "1234".toCharArray()
+        val pin = "123456".toCharArray()
         val job = launch { client.unlock(pin) }
         val body = TrackedBody()
         runCurrent()
@@ -256,11 +263,12 @@ class RouterPanelApiTest {
             assertTrue(body.entered.await(5, TimeUnit.SECONDS))
             job.cancel()
             runCurrent()
+            call.awaitCancellation()
             assertTrue(call.cancelled)
             worker.join(1000)
             assertFalse(worker.isAlive)
             assertTrue(body.closed.get())
-            assertArrayEquals(CharArray(4), pin)
+            assertArrayEquals(CharArray(6), pin)
         } finally { job.cancel(); body.close(); worker.join(1000) }
     }
 
@@ -269,7 +277,7 @@ class RouterPanelApiTest {
             val failures = ConcurrentLinkedQueue<Throwable>()
             val owner = SupervisorJob()
             val scope = CoroutineScope(owner + Dispatchers.Default + CoroutineExceptionHandler { _, failure -> failures += failure })
-            val pin = "1234".toCharArray()
+            val pin = "123456".toCharArray()
             val client = RouterPanelApi(identity, fixture)
             val job = scope.launch { client.unlock(pin).close(); error("delayed body unexpectedly completed") }
             try {
@@ -281,7 +289,7 @@ class RouterPanelApiTest {
                 assertTrue(fixture.callCancelled.get())
                 assertTrue("cancellation must not close a router response while its callback reader owns it", fixture.closeThreads.isEmpty())
                 assertTrue(failures.isEmpty())
-                assertArrayEquals(CharArray(4), pin)
+                assertArrayEquals(CharArray(6), pin)
             } finally {
                 job.cancel()
                 fixture.releaseBodyRead()
@@ -300,7 +308,7 @@ class RouterPanelApiTest {
     @Test fun aLateBodyAfterOwnerCancellationIsClosedWithoutReadingCredentials() = runTest {
         lateinit var call: PendingCall
         val client = RouterPanelApi(identity, Call.Factory { PendingCall(it).also { value -> call = value } })
-        val job = launch { client.unlock("1234".toCharArray()) }
+        val job = launch { client.unlock("123456".toCharArray()) }
         runCurrent()
         job.cancel()
         runCurrent()
@@ -313,7 +321,7 @@ class RouterPanelApiTest {
     @Test fun theOverallDeadlineIncludesBlockedBodyReadingAfterHeaders() = runTest {
         lateinit var call: PendingCall
         val client = RouterPanelApi(identity, Call.Factory { PendingCall(it).also { value -> call = value } })
-        val pin = "1234".toCharArray()
+        val pin = "123456".toCharArray()
         val result = async { runCatching { client.unlock(pin) } }
         val body = TrackedBody()
         runCurrent()
@@ -326,15 +334,16 @@ class RouterPanelApiTest {
             assertEquals(RouterApiError.NETWORK, (result.await().exceptionOrNull() as? RouterApiFailure)?.kind)
             worker.join(1000)
             assertFalse(worker.isAlive)
+            call.awaitCancellation()
             assertTrue(call.cancelled && body.closed.get() && isActive)
-            assertArrayEquals(CharArray(4), pin)
+            assertArrayEquals(CharArray(6), pin)
         } finally { result.cancel(); body.close(); worker.join(1000) }
     }
 
     @Test fun anUnknownLengthBodyCannotExceedTheResponseLimit() = runTest {
         lateinit var call: PendingCall
         val client = RouterPanelApi(identity, Call.Factory { PendingCall(it).also { value -> call = value } })
-        val result = async { runCatching { client.unlock("1234".toCharArray()) } }
+        val result = async { runCatching { client.unlock("123456".toCharArray()) } }
         runCurrent()
         val body = TrackedBody("x".repeat(1000000))
         call.respond(body)
@@ -347,24 +356,24 @@ class RouterPanelApiTest {
     @Test fun depthAndNodeBoundsRunBeforeParsingAnOtherwiseSuccessfulResponse() = runTest {
         val deep = "[".repeat(40) + "0" + "]".repeat(40)
         val response = """{"token":"$token","pinChangeRequired":false,"extra":$deep}"""
-        try { api(response).unlock("1234".toCharArray()); error("deep response accepted") }
+        try { api(response).unlock("123456".toCharArray()); error("deep response accepted") }
         catch (failure: RouterApiFailure) { assertEquals(RouterApiError.INVALID_RESPONSE, failure.kind) }
         val broad = "[" + List(17000) { "0" }.joinToString(",") + "]"
-        try { api("""{"token":"$token","pinChangeRequired":false,"extra":$broad}""").unlock("1234".toCharArray()); error("large response tree accepted") }
+        try { api("""{"token":"$token","pinChangeRequired":false,"extra":$broad}""").unlock("123456".toCharArray()); error("large response tree accepted") }
         catch (failure: RouterApiFailure) { assertEquals(RouterApiError.INVALID_RESPONSE, failure.kind) }
-        api("""{"token":"$token","pinChangeRequired":false,"extra":"[{{\\\""}""").unlock("1234".toCharArray()).close()
+        api("""{"token":"$token","pinChangeRequired":false,"extra":"[{{\\\""}""").unlock("123456".toCharArray()).close()
     }
 
     @Test fun closingTheOwnedTransportIsIdempotentAndPreventsFurtherCredentials() = runTest {
         var closed = 0
         var requests = 0
         val client = RouterPanelApi(identity, Call.Factory { requests++; FixtureCall(it, "{}") }, { closed++ })
-        client.close(); client.close()
-        val pin = "1234".toCharArray()
+        client.close(); client.close(); client.closeAndAwait()
+        val pin = "123456".toCharArray()
         try { client.unlock(pin); error("closed transport reused") } catch (_: IllegalStateException) {}
         assertEquals(1, closed)
         assertEquals(0, requests)
-        assertArrayEquals(CharArray(4), pin)
+        assertArrayEquals(CharArray(6), pin)
     }
 
     @Test fun providerResolutionAndFreshHandoffKeepThePairedTokenAndExactFieldWhitelist() = runTest {
@@ -413,5 +422,24 @@ class RouterPanelApiTest {
                 error("unpaired remote-client token allowed")
             } catch (_: IllegalArgumentException) { assertEquals(1, requests.size) }
         }
+    }
+
+    @Test fun serverPinCooldownIsTypedAndStrictlyBounded() = runTest {
+        for (seconds in listOf(1, 300)) try {
+            api("""{"_foxhole_error":"pin_cooldown","retryAfterSeconds":$seconds}""").unlock("123456".toCharArray())
+            error("cooldown accepted")
+        } catch (failure: RouterPinCooldown) { assertEquals(seconds, failure.retryAfterSeconds) }
+        for (value in listOf("0", "301", "-1", "true", "null", "\"60\"")) try {
+            api("""{"_foxhole_error":"pin_cooldown","retryAfterSeconds":$value}""").unlock("123456".toCharArray())
+            error("malformed cooldown accepted")
+        } catch (failure: RouterApiFailure) { assertEquals(RouterApiError.INVALID_RESPONSE, failure.kind) }
+    }
+    @Test fun configuredSessionCannotChangePinFromTheApp() = runTest {
+        val requests = mutableListOf<String>()
+        val session = RouterPanelSession(token, false)
+        val secret = "123456".toCharArray()
+        try { api("{}", requests).changePin(session, secret); error("normal PIN change accepted") }
+        catch (_: IllegalArgumentException) { assertTrue(requests.isEmpty()); assertTrue(secret.all { it == '\u0000' }) }
+        finally { session.close() }
     }
 }

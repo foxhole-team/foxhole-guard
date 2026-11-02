@@ -5,7 +5,8 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 
-internal const val MAX_SAVED_ROUTERS = 3
+internal const val MAX_SAVED_ROUTERS = 10
+internal const val MAX_RETAINED_ROUTERS = 64
 internal enum class RouterSavedStatus { UNKNOWN, AVAILABLE, UNAVAILABLE }
 internal data class RouterSavedSummary(val id: String, val number: Int, val label: String?, val address: String,
     val status: RouterSavedStatus = RouterSavedStatus.UNKNOWN)
@@ -19,14 +20,14 @@ internal data class RouterSavedEntry(val pairing: RouterPairing, val number: Int
 internal data class RouterSavedVault(val schema: Int = 2, val selectedId: String? = null,
     val routers: List<RouterSavedEntry> = emptyList()) {
     fun validate() {
-        require(schema == 2 && routers.size <= MAX_SAVED_ROUTERS)
+        require(schema == 2 && routers.size <= MAX_RETAINED_ROUTERS)
         require((routers.isEmpty() && selectedId == null) || routers.any { it.pairing.id == selectedId })
         require(routers.map { it.pairing.id }.distinct().size == routers.size)
         require(routers.map { it.number }.distinct().size == routers.size)
         require(routers.map { it.pairing.identity.certificateSha256 }.distinct().size == routers.size)
         routers.forEach { entry ->
             entry.pairing.validate()
-            require(entry.number in 1..MAX_SAVED_ROUTERS)
+            require(entry.number in 1..MAX_RETAINED_ROUTERS)
             require(entry.label == null || entry.label.isNotBlank() && entry.label.length <= 64 && entry.label.none(Char::isISOControl))
             entry.preferences?.let { require(it.pairingId == entry.pairing.id); it.validate() }
             require(entry.trustedProfiles.size <= 32 && entry.trustedProfiles.map { it.profileId }.distinct().size == entry.trustedProfiles.size)
@@ -39,7 +40,7 @@ internal data class RouterSavedVault(val schema: Int = 2, val selectedId: String
     fun withPairing(pairing: RouterPairing): RouterSavedVault {
         pairing.validate()
         val existing = routers.singleOrNull { it.pairing.id == pairing.id }
-        if (existing == null && routers.size == MAX_SAVED_ROUTERS) throw RouterApiFailure(RouterApiError.LIMIT)
+        if (existing == null && routers.size >= MAX_SAVED_ROUTERS) throw RouterApiFailure(RouterApiError.LIMIT)
         if (existing != null && existing.pairing.identity.certificateSha256 != pairing.identity.certificateSha256) throw RouterIdentityChanged()
         if (routers.any { it.pairing.id != pairing.id && it.pairing.identity.certificateSha256 == pairing.identity.certificateSha256 })
             throw RouterApiFailure(RouterApiError.CONFLICT)

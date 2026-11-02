@@ -731,7 +731,7 @@
     <string name="cli_cfg_appearance_dark">深色</string>
     <string name="cli_cfg_appearance_oled">夜间</string>
     <string name="cli_cfg_appearance_light">浅色</string>
-    <string name="cli_cfg_pixel_art">FoxHole Guard 风格</string>
+    <string name="cli_cfg_pixel_art">字体</string>
     <string name="cli_cfg_home_additional_info">流量小组件</string>
     <string name="cli_cfg_home_additional_info_category">小组件类型</string>
     <string name="cli_cfg_home_additional_info_map">流量地图</string>
@@ -1033,17 +1033,17 @@
     <string name="cli_help_start_title">快捷操作</string>
     <string name="cli_quick_start_title">快速入门</string>
     <string name="cli_help_start_body">区域|点按|长按\n状态|打开已保存 VPN 配置选择器|更新当前状态的 IP 和位置\n控制台|无操作|清除控制台历史\n启动|启动所选运行模式|刷新 v2raytun 配置但不连接\n状态|在控制台显示模块状态和活动规则|在控制台显示详细状态和最近日志</string>
-    <string name="cli_help_start_details">\n在配置页导入 v2raytun 链接、配置文件或二维码以添加 VPN 配置。\n控制逻辑：应用支持 VPN、Tor、VPN + Tor 三种主要模式。每种模式使用整机或代理路由场景。场景由应用和网址规则组成。\n整机场景将所有出站流量通过隧道；代理场景对所选应用应用路由规则，网址规则在活动场景内生效。\n附加模块：防火墙、Tor、I2P 和 DNS 过滤，可与任意模式并行或独立运行。\n“原子应用场景”：开启时，VPN 和 Tor 场景自动应用，无需额外确认；关闭时，每次场景更改都需要确认。Wi-Fi/移动网络的 VPN 规则始终原子应用。\n支持的协议：VLESS、VMess、Hysteria2、WireGuard、AmneziaWG、Trojan、Shadowsocks、Naive、TUIC 和 AnyTLS。\nFoxHole DB 仅下载已启用功能所需的数据集。\n所有设置和配置均在本地加密存储，密钥由 Android Keystore 保护。还可要求 FoxHole Guard PIN 或系统生物识别。\n应用监测模块记录安装和移除事件。在隧道或防火墙运行时，隔离功能阻止新应用联网，直到用户批准。</string>
+    <string name="cli_help_start_details">\n在配置页导入 v2raytun 链接、配置文件或二维码以添加 VPN 配置。\n控制逻辑：应用支持 VPN、Tor、VPN + Tor 三种主要模式。每种模式使用整机或代理路由场景。场景由应用和网址规则组成。\n“整个设备”场景将 VPN 设为主要路由。适用的应用例外和拦截以及网站规则仍然保留。VPN 的应用选择列表用于代理场景。\n附加模块：防火墙、Tor、I2P 和 DNS 过滤，可与任意模式并行或独立运行。\n“原子应用场景”：开启时，VPN 和 Tor 场景自动应用，无需额外确认；关闭时，每次场景更改都需要确认。Wi-Fi/移动网络的 VPN 规则始终原子应用。\n支持的协议：VLESS、VMess、Hysteria2、WireGuard、AmneziaWG、Trojan、Shadowsocks、Naive、TUIC 和 AnyTLS。\nFoxHole DB 仅下载已启用功能所需的数据集。\n所有设置和配置均在本地加密存储，密钥由 Android Keystore 保护。还可要求 FoxHole Guard PIN 或系统生物识别。\n应用监测模块记录安装和移除事件。在隧道或防火墙运行时，隔离功能阻止新应用联网，直到用户批准。</string>
     <string name="cli_home_network_geo_refreshing">正在更新网络地理数据</string>
     <string name="cli_home_network_geo_updated">网络地理数据已更新</string>
     <string name="cli_help_modes_title">VPN 场景</string>
-    <string name="cli_help_modes_body">“整个设备”场景将所有系统网络流量通过 VPN 隧道，此模式忽略单个应用的路由规则。代理场景支持“仅所选应用”和“除所选应用外全部”，路由规则生效。请在路由 → 应用规则中配置。VPN 和 Tor 场景分别设置，但存在兼容限制：支持“整机 VPN + 所选应用 Tor”，不支持反向配置。局域网代理设置位于附加功能。</string>
+    <string name="cli_help_modes_body">“整个设备”场景将 VPN 设为主要路由。适用的应用例外和拦截以及网站规则仍然保留。VPN 的应用选择列表用于代理场景。代理场景支持“仅所选应用”和“除所选应用外全部”，路由规则生效。请在路由 → 应用规则中配置。VPN 和 Tor 场景分别设置，但存在兼容限制：支持“整机 VPN + 所选应用 Tor”，不支持反向配置。局域网代理设置位于附加功能。</string>
     <string name="cli_help_tor_title">Tor 场景</string>
     <string name="cli_help_tor_body">FoxHole Guard 目前不支持在基于 UDP 的 VPN 隧道内路由 Tor。请使用 TCP 协议，或让 Tor 与活动 VPN 并行运行。Tor 仅支持 TCP，因此 VoIP 通话等 UDP 流量无法通过 Tor；HTTP/HTTPS 流媒体可用但可能较慢。Tor 通过 VPN 时，互联网提供商仅看到 VPN 连接，但 VPN 提供商可能看到 Tor 入口节点或网桥连接及其元数据。首页的模式按钮切换 VPN / VPN + Tor / Tor。直接 Tor 连接受阻时，请在 Tor 设置中启用网桥；列表从 FoxHole DB 经 FoxHole Team 镜像或直接从 Tor Project 下载。</string>
     <string name="cli_help_smart_title">智能 VPN 配置</string>
     <string name="cli_help_smart_body">智能 VPN 配置将同一服务器的多个协议合并为列表，便于快速切换和测试。\n图例|T 连接时间；P 服务器 ping；L 延迟\n延迟颜色|不超过 150 毫秒、151–300 毫秒、301–600 毫秒、超过 600 毫秒\n可测试订阅中所有可用协议；测试会阻止全部设备流量，切换至整机 VPN，测量三项参数后恢复上次活动连接。★ 标出测试中表现最佳的连接。</string>
     <string name="cli_help_routing_title">路由规则</string>
-    <string name="cli_help_routing_body">应用和网站资源的流量路由规则原子应用。\n“整个设备”场景忽略应用规则，但仍保存在配置中。规则仅在代理场景生效，VPN 和 Tor 分别配置，可让指定应用通过或绕过隧道。\n应用网络拦截在 VPN/Tor 隧道活动或防火墙开启时生效。\n注意：I2P 启动的透明防火墙不应用通用路由规则，拦截和 DNS 截获均禁用，仅路由 .i2p 域名流量。</string>
+    <string name="cli_help_routing_body">应用和网站资源的流量路由规则原子应用。\n“整个设备”场景将 VPN 设为主要路由。适用的应用例外和拦截以及网站规则仍然保留。VPN 的应用选择列表用于代理场景。\n应用网络拦截在 VPN/Tor 隧道活动或防火墙开启时生效。\n注意：I2P 启动的透明防火墙不应用通用路由规则，拦截和 DNS 截获均禁用，仅路由 .i2p 域名流量。</string>
     <string name="cli_help_logs_title">事件日志</string>
     <string name="cli_help_logs_body">主日志记录应用诊断、模块状态变化和系统事件。网络日志记录观察到的应用流量：时间戳、可用的 UID/软件包归属、TCP/UDP、目的地国家和字节数。观察记录不代表连接成功。共享或未知归属会明确标示；国家对应观察到的目的地。安全日志记录 FoxHole Sentinel 发现、观察到的安装/更新/移除、监测间断，以及结构化的内核拒绝或确认事件。原因说明已知的起因、结果和后续操作；陌生代码并不表示操作成功。\n日志保留在本地。导出按所选隐私策略清理标识和端点。清除网络历史会阻止旧排队写入；边界处的一批轮询可能不计入历史，但汇总流量计数继续。</string>
     <string name="cli_help_stats_title">统计</string>
@@ -1053,7 +1053,7 @@
     <string name="cli_help_tile_title">快捷设置入口</string>
     <string name="cli_help_tile_body">Android 快捷设置中的 FoxHole Guard 磁贴可无需打开应用即可开启或关闭连接。启动时使用首页最近选择的运行模式。</string>
     <string name="cli_help_killswitch_title">连接中断时阻止流量</string>
-    <string name="cli_help_killswitch_body">断网保护使用 Android 系统“阻止未使用 VPN 的连接”机制。VPN 中断时，操作系统阻止所有网络流量，防止数据泄漏到开放网络。请在设备系统 VPN 设置中配置。</string>
+    <string name="cli_help_killswitch_body">FoxHole Guard 提供软件断网保护：启用后，隧道断开或停止时会终止当前连接。它依赖应用和内核持续运行。此外，可在 Android 设置中启用“阻止未使用 VPN 的连接”。软件开关不会自动启用这项系统保护。可通过下方按钮打开相应设置。</string>
     <string name="cli_help_killswitch_link">打开系统 VPN 设置</string>
     <string name="cli_help_backup_title">备份</string>
     <string name="cli_help_backup_body">设置 → 应用 → 应用数据库。导出包含所选配置和可迁移设置。“加密备份”默认关闭，文件为明文且不要求密码。启用后创建带密码的 AES 加密文件。配置可能包含访问凭据；请保密明文文件，将加密文件与密码分开存储。遗忘的密码无法恢复。\n导入自动识别格式，仅对加密文件要求密码。恢复前请检查备份摘要并确认。以下设备本地值留在本设备：FoxHole Guard PIN、更新令牌、系统权限（使用情况访问）、自动生成的本地代理密码和本地 FoxHole Sentinel 数据库。\n此处还提供日志、统计和配置的选择性清理，以及完全且不可逆的恢复出厂设置。</string>
@@ -1068,7 +1068,7 @@
     <string name="cli_help_transfer_title">导入与导出配置</string>
     <string name="cli_help_transfer_body">支持从剪贴板导入 URI、配置文件和扫描二维码。添加 v2raytun 格式订阅后，连接前会自动刷新。长按启动可手动刷新但不连接。多选模式可将多个配置批量导出到文件。单个配置或协议可分享为 URI 或二维码。</string>
     <string name="cli_help_security_title">数据加密</string>
-    <string name="cli_help_security_body">安全页通过 FoxHole Guard PIN 或系统生物识别控制应用访问。\n所有配置和设置默认在本地加密，密钥由硬件支持的 Android Keystore 生成和保护。\n系统生物识别仅用于身份验证，不重新加密数据。使用 FoxHole Guard PIN 时，生物识别登录向 Keystore 请求独立密钥，每次操作均需验证，以解锁 PIN 保护的密钥箱。\n安全日志使用独立密钥加密，并由加密哈希链保护。生物识别不为日志增加加密层：成功登录后，应用解密日志并对照固定检查点验证哈希链。敏感数据从不发送至 FoxHole Team 基础设施服务器。</string>
+    <string name="cli_help_security_body">安全页通过 FoxHole Guard PIN 或系统生物识别控制应用访问。\n所有配置和设置默认在本地加密。加密密钥由 Android Keystore 保护。硬件保护是否可用取决于设备。\n系统生物识别仅用于身份验证，不重新加密数据。使用 FoxHole Guard PIN 时，生物识别登录向 Keystore 请求独立密钥，每次操作均需验证，以解锁 PIN 保护的密钥箱。\n安全日志使用独立密钥加密，并由加密哈希链保护。生物识别不为日志增加加密层：成功登录后，应用解密日志并对照固定检查点验证哈希链。敏感数据从不发送至 FoxHole Team 基础设施服务器。</string>
     <string name="cli_help_sentinel_title">FoxHole Sentinel 安全模块</string>
     <string name="cli_help_sentinel_body">FoxHole Sentinel 分析可用的系统和网络元数据，不检查流量内容。风险信号或陌生安装来源不证明存在恶意代码。应用检查使用安装身份、请求能力、可用签名证书和已启用指标列表。跟踪软件基线来自 AssoEchap/stalkerware-indicators，采用 CC-BY-4.0。\n安装元数据未变时复用缓存的签名事实。大量应用变更按有限批次处理；软件包可见性不完整不被视为已移除或安全结论。启用密码和事件监测后，封存的哈希链日志记录观察到的安装、更新、移除和监测间断。队列缺口明确报告。\n被动网络 IOC 匹配独立于可选完整网络历史。按应用确认网络归属需要 Android 10 或更新版本，且并非所有短连接或共享 UID 流量都可归属。后台流量和国家分析分别需主动启用。\n节能模式使用事件和系统计划修复，无持续前台宿主；增强模式增加前台服务及通知。两者都不绕过 Android Doze，也不保证精确修复间隔。强制停止、Root 访问和系统清除应用数据不在控制范围内。不暗示任何已测电量节省比例。\n静态 APK 检查为可选项，在独立隔离进程运行。可选择已安装应用或 Android 当前可见应用。在本页专家静态检查设置中管理 DEX 引用、YARA 规则、发现通知、新装/更新应用自动检查、充电和电池限制，以及 16 或 64 MiB 文件预算。重型和自动检查默认关闭。电池严重不足、状态未知或存储不足时暂停。取消、策略变更和应用替换会阻止过期结果发布。不完整检查保持部分状态，不作为完整结果缓存。内置规则报告静态 API 引用；MITRE 候选映射不证明技术已执行。日志锁定时结果推迟至解锁；可选发现通知共享冷却时间。</string>
     <string name="cli_help_updates_title">FoxHole DB 仓库</string>
@@ -1319,7 +1319,7 @@
     <string name="cli_wizard_component_dns">DNS 过滤</string>
     <string name="cli_wizard_component_dns_note">拦截广告、跟踪器和恶意域名</string>
     <string name="cli_wizard_i2p_banner_title">支持 I2P 网络</string>
-    <string name="cli_wizard_i2p_banner_body">I2P 网络依赖节点的去中心化参与。启用中转路由有助于提高网络整体吞吐量和韧性。\n\n所有中转流量均封装并端到端加密；您的设备仅作为中间路由器，不是数据发起方或最终接收方。用户流量的机密性完全保留，且可随时关闭中继模式。</string>
+    <string name="cli_wizard_i2p_banner_body">可以允许设备转发 I2P 中继流量，帮助网络运行。此模式会消耗额外流量和设备资源，不提供匿名性或保密性的绝对保证。参与功能可随时关闭，默认关闭。</string>
     <string name="cli_wizard_i2p_banner_toggle">允许设备作为中继</string>
     <string name="cli_wizard_component_tor_bridges">使用 Tor 网桥</string>
     <string name="cli_wizard_component_tor_bridges_note">直接 Tor 连接被拦截时使用</string>
@@ -1330,7 +1330,7 @@
     <string name="cli_wizard_geo_later_note">IP 地理数据库（约 20 MB）</string>
     <string name="cli_wizard_download_geoip">IP 地理数据库</string>
     <string name="cli_wizard_download_tls">TLS 指纹表</string>
-    <string name="cli_wizard_download_tls_note">最新的 TLS 指纹数据库可防止通过网络指纹识别客户端协议栈（约 70 KB）。</string>
+    <string name="cli_wizard_download_tls_note">更新内核所支持连接的 TLS 指纹表。下载指纹表并不保证 VPN 流量无法被识别。</string>
     <string name="cli_wizard_download_caption">下载 FoxHole DB</string>
     <string name="cli_wizard_download_intro">FoxHole Guard 正在下载所选数据集并验证每个签名：</string>
     <string name="cli_wizard_download_dns">DNS 数据集</string>
@@ -1389,7 +1389,7 @@
     <string name="cli_firewall_killswitch_toggle">FoxHole Guard 软件断网保护</string>
     <string name="cli_firewall_killswitch_software">FoxHole Guard 软件断网保护不能替代系统保护</string>
     <string name="cli_firewall_killswitch_system">在系统设置中启用“阻止未使用 VPN 的连接”</string>
-    <string name="cli_firewall_killswitch_info">断网保护（Kill Switch）机制的区别：\n\n1. 应用软件断网保护在 FoxHole Guard 运行时，若 VPN 隧道中断则阻止网络连接。操作系统将进程从内存移除后，保护终止。\n\n2. Android 系统断网保护（“阻止未使用 VPN 的连接”）在系统层面阻止所有接口，不依赖应用进程是否运行。\n\n建议同时使用两种机制以获得最大保护。</string>
+    <string name="cli_firewall_killswitch_info">断网保护（Kill Switch）机制的区别：\n\n1. 应用软件断网保护在 FoxHole Guard 运行时，若 VPN 隧道中断则阻止网络连接。操作系统将进程从内存移除后，保护终止。\n\n2. Android 系统断网保护（“阻止未使用 VPN 的连接”）通过 Android 阻止未使用 VPN 的连接，不依赖应用进程是否运行。\n\n建议同时使用两种机制以获得最大保护。</string>
     <string name="cli_home_status_info_kind">信息：%1$s</string>
     <string name="cli_home_status_info_event_provider_dns">提供商未提供 DNS</string>
     <string name="cli_home_status_info_value_provider_dns">正在使用 %1$s</string>
@@ -1409,4 +1409,6 @@
     <string name="cli_cfg_locale_fr">français</string>
     <string name="cli_cfg_locale_es">español</string>
     <string name="cli_cfg_locale_zh">简体中文</string>
+    <string name="cli_font_tiny5">Tiny5 Regular</string>
+    <string name="cli_font_jetbrains_mono">JetBrains Mono Bold</string>
 </resources>

@@ -9,6 +9,7 @@ import androidx.activity.compose.ReportDrawnWhen
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -29,6 +30,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -131,12 +133,18 @@ fun CliApp(viewModel: HomeViewModel) {
             (pending.action != null || pending.notice != null),
         noticeContent = {
             pending.action?.let { banner ->
-                CliActionBannerRow(viewModel, banner, onClear = { pending.action = null })
+                CliActionBannerRow(viewModel, banner, onClear = {
+                    if (pending.action == banner) pending.action = null
+                })
             }
             pending.notice?.let { notice ->
-                CliUserNoticeRow(notice = notice, onDismiss = {
-                    if (pending.notice == notice) pending.notice = null
-                })
+                val noticeId = pending.noticeId
+                CliUserNoticeRow(
+                    notice = notice,
+                    noticeId = noticeId,
+                    lifetime = pending.lifetime,
+                    onDismiss = { if (pending.noticeId == noticeId) pending.notice = null },
+                )
             }
         },
     ) {
@@ -247,7 +255,7 @@ fun CliApp(viewModel: HomeViewModel) {
                             CliActionBannerRow(
                                 viewModel = viewModel,
                                 banner = banner,
-                                onClear = { pending.action = null },
+                                onClear = { if (pending.action == banner) pending.action = null },
                             )
                         }
                     }
@@ -268,25 +276,33 @@ fun CliApp(viewModel: HomeViewModel) {
 private class CliPendingBanners(
     actionState: MutableState<FoxholeBannerEvent?>,
     noticeState: MutableState<FoxholeBannerEvent?>,
+    noticeIdState: MutableState<Long>,
+    noticeStartedAtState: MutableState<Long>,
 ) {
     var action by actionState
     var notice by noticeState
+    var noticeId by noticeIdState
+    var noticeStartedAtElapsedMs by noticeStartedAtState
+    val lifetime: NoticeLifetime? get() = notice?.let(::userNoticeDurationMillis)?.let {
+        NoticeLifetime(noticeStartedAtElapsedMs, it)
+    }
 }
 
 @Composable
 private fun CliNoticeHapticEffect(pending: CliPendingBanners, visible: Boolean) {
     val view = LocalView.current
     var shownAction by rememberSaveable(stateSaver = actionBannerSaver) { mutableStateOf<FoxholeBannerEvent?>(null) }
-    var shownNotice by rememberSaveable(stateSaver = actionBannerSaver) { mutableStateOf<FoxholeBannerEvent?>(null) }
+    var shownNoticeId by rememberSaveable { mutableLongStateOf(0L) }
     val action = pending.action
     val notice = pending.notice
-    LifecycleResumeEffect(visible, action, notice) {
+    val noticeId = pending.noticeId
+    LifecycleResumeEffect(visible, action, noticeId) {
         if (visible) {
-            if ((action != null && action != shownAction) || (notice != null && notice != shownNotice)) {
+            if ((action != null && action != shownAction) || (notice != null && noticeId != shownNoticeId)) {
                 view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
             }
             shownAction = action
-            shownNotice = notice
+            shownNoticeId = noticeId
         }
         onPauseOrDispose { }
     }
@@ -300,12 +316,14 @@ private fun rememberCliPendingBanners(viewModel: HomeViewModel, terminal: CliTer
     val noticeState = rememberSaveable(stateSaver = actionBannerSaver) {
         mutableStateOf<FoxholeBannerEvent?>(null)
     }
-    val pending = remember(actionState, noticeState) { CliPendingBanners(actionState, noticeState) }
-    LaunchedEffect(pending.notice) {
-        val notice = pending.notice ?: return@LaunchedEffect
-        val duration = userNoticeDurationMillis(notice) ?: return@LaunchedEffect
-        delay(duration)
-        if (pending.notice == notice) pending.notice = null
+    val noticeIdState = rememberSaveable { mutableLongStateOf(0L) }
+    val noticeStartedAtState = rememberSaveable { mutableLongStateOf(0L) }
+    val pending = remember(actionState, noticeState, noticeIdState, noticeStartedAtState) {
+        CliPendingBanners(actionState, noticeState, noticeIdState, noticeStartedAtState)
+    }
+    val noticeId = pending.noticeId
+    NoticeExpiryEffect(noticeId.takeIf { pending.notice != null }, pending.lifetime) {
+        if (pending.noticeId == noticeId) pending.notice = null
     }
     LaunchedEffect(pending.action) {
         val banner = pending.action ?: return@LaunchedEffect
@@ -321,7 +339,13 @@ private fun rememberCliPendingBanners(viewModel: HomeViewModel, terminal: CliTer
         viewModel = viewModel,
         terminal = terminal,
         onPendingActionBannerChange = { pending.action = it },
-        onUserNotice = { incoming -> pending.notice = retainUserNotice(pending.notice, incoming) },
+        onUserNotice = { incoming ->
+            if (retainUserNotice(pending.notice, incoming) === incoming) {
+                pending.noticeId += 1L
+                pending.noticeStartedAtElapsedMs = SystemClock.elapsedRealtime()
+                pending.notice = incoming
+            }
+        },
     )
     return pending
 }
@@ -570,41 +594,46 @@ private fun CliActionBannerRow(
     val colors = LocalCliColors.current
     val noticeColor = if (CLI_EXPERIMENTAL_TOP_NOTICES_ENABLED) cliNoticeColor(banner.tone, colors) else colors.warn
     val noticeBorder = if (CLI_EXPERIMENTAL_TOP_NOTICES_ENABLED) noticeColor.copy(alpha = 0.65f) else colors.border
-    Row(
-        modifier = Modifier
-            .padding(horizontal = CliSpacing.sm, vertical = CliSpacing.xs)
-            .background(colors.panel, RoundedCornerShape(CliRadius.modal))
-            .border(1.dp, noticeBorder, RoundedCornerShape(CliRadius.modal))
-            .padding(horizontal = CliSpacing.sm, vertical = CliSpacing.xs),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = banner.message,
-            style = CliType.small,
-            color = noticeColor,
-            maxLines = 2,
-            modifier = Modifier.weight(1f),
-        )
-        Spacer(modifier = Modifier.width(CliSpacing.sm))
-        CliButton(
-            label = banner.actionLabel ?: stringResource(R.string.cli_common_btn_ok),
-            color = noticeColor,
-            onClick = {
-                when (banner.action) {
-                    FoxholeBannerAction.ACCEPT_PROTOCOL_RECOMMENDATION ->
-                        viewModel.onProtocolRecommendationAccepted()
-                    FoxholeBannerAction.ACCEPT_NETWORK_RULE_PROFILE ->
-                        viewModel.onNetworkRuleProfileSwitchAccepted()
-                    null -> Unit
-                }
-                onClear()
-            },
-        )
-        Spacer(modifier = Modifier.width(CliSpacing.sm))
-        CliNoticeCloseButton(color = noticeColor, onClose = {
+    val view = LocalView.current
+    NoticeDismissible(
+        noticeId = banner,
+        onDismiss = {
+            view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
             viewModel.dismissBannerAction(banner.action)
             onClear()
-        })
+        },
+        modifier = Modifier.fillMaxWidth().padding(horizontal = CliSpacing.sm, vertical = CliSpacing.xs),
+    ) { _ ->
+        Row(
+            modifier = Modifier
+                .background(colors.panel, RoundedCornerShape(CliRadius.modal))
+                .border(1.dp, noticeBorder, RoundedCornerShape(CliRadius.modal))
+                .padding(horizontal = CliSpacing.sm, vertical = CliSpacing.xs),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = banner.message,
+                style = CliType.small,
+                color = noticeColor,
+                maxLines = 2,
+                modifier = Modifier.weight(1f),
+            )
+            Spacer(modifier = Modifier.width(CliSpacing.sm))
+            CliButton(
+                label = banner.actionLabel ?: stringResource(R.string.cli_common_btn_ok),
+                color = noticeColor,
+                onClick = {
+                    when (banner.action) {
+                        FoxholeBannerAction.ACCEPT_PROTOCOL_RECOMMENDATION ->
+                            viewModel.onProtocolRecommendationAccepted()
+                        FoxholeBannerAction.ACCEPT_NETWORK_RULE_PROFILE ->
+                            viewModel.onNetworkRuleProfileSwitchAccepted()
+                        null -> Unit
+                    }
+                    onClear()
+                },
+            )
+        }
     }
 }
 

@@ -90,6 +90,10 @@ internal open class ProfileImportNodeSupport(
             protocolHint = ProtocolHint.VLESS,
             outbound = outbound,
             subscriptionExpiresAt = subscriptionExpirationFromQuery(uri.rawQuery),
+            compatibilityWarning = needsRealityCompatibility(
+                query.firstValue("fp", "fingerprint", "utlsFingerprint", "utls_fingerprint"),
+                reality = query["security"]?.trim()?.equals("reality", ignoreCase = true) == true,
+            ),
         )
     }
 
@@ -670,6 +674,7 @@ private fun parseNodeLinesWithCapabilities(
                         protocolHint = node.protocolHint,
                         status = SubscriptionEntryStatus.ACCEPTED,
                         sourceLine = index + 1,
+                        compatibilityWarning = node.compatibilityWarning,
                     )
             }.onFailure { error ->
                 val reason = error.message?.takeIf(String::isNotBlank) ?: error.javaClass.simpleName

@@ -112,6 +112,26 @@ class AppUpdateRepository(
         }
     }
 
+    suspend fun verifyForInstall(): Result<AppUpdateState.Downloaded> = operationMutex.withLock {
+        coroutineScope {
+            val downloaded = stateMutable.value as? AppUpdateState.Downloaded
+                ?: return@coroutineScope Result.failure(IllegalStateException("no verified update is ready"))
+            val operation = beginOperation(AppUpdateState.Busy(RemoteUpdatePhase.VERIFYING))
+            try {
+                withContext(verifierDispatcher) { apkVerifier(downloaded.apk, downloaded.update.manifest).getOrThrow() }
+                currentCoroutineContext().ensureActive()
+                if (!finishOwned(operation, downloaded)) throw IOException("update operation replaced")
+                Result.success(downloaded)
+            } catch (cancelled: CancellationException) {
+                finishOwned(operation, downloaded)
+                throw cancelled
+            } catch (error: Exception) {
+                finishOwned(operation, AppUpdateState.Failed(error.asAppUpdateFailure(), error.appUpdateReason()))
+                Result.failure(error)
+            }
+        }
+    }
+
     fun reset() {
         val job = synchronized(stateLock) {
             val active = activeOperationJob

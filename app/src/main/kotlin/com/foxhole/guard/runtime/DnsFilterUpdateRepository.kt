@@ -11,7 +11,7 @@ import kotlinx.coroutines.CancellationException
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import java.io.IOException
 
-class DnsFilterUpdateRepository(
+class DnsFilterUpdateRepository internal constructor(
     private val settingsRepository: RuntimeSettings,
     private val client: DnsFilterUpdateClient,
     private val store: DnsFilterRuleSetStore,
@@ -26,12 +26,27 @@ class DnsFilterUpdateRepository(
     ) -> RuntimeDnsRuleSetInstallOutcome = { _, _, _, _ ->
         RuntimeDnsRuleSetInstallOutcome.Deferred
     },
+    backend: DnsFilterUpdateBackend,
 ) {
-    internal var categorizedInstaller: suspend (
-        CategorizedDnsStage,
-        VerifiedCategorizedDnsRuleSet
-    ) -> CategorizedDnsNativeActivation =
-        { stage, bundle ->
+    constructor(
+        settingsRepository: RuntimeSettings,
+        client: DnsFilterUpdateClient,
+        store: DnsFilterRuleSetStore,
+        diagnosticsLogger: RuntimeDiagnosticsSink,
+        installedManifestProvider: suspend () -> DnsFilterManifest? = { null },
+        installedRuleSetsProvider: suspend () -> InstalledDnsRuleSets = { InstalledDnsRuleSets() },
+        liveRuleSetInstaller: suspend (String, ByteArray, ByteArray, ByteArray) -> RuntimeDnsRuleSetInstallOutcome =
+            { _, _, _, _ -> RuntimeDnsRuleSetInstallOutcome.Deferred },
+    ) : this(settingsRepository, client, store, diagnosticsLogger, installedManifestProvider,
+        installedRuleSetsProvider, liveRuleSetInstaller, DnsFilterUpdateBackend.Legacy)
+
+    private val categorized = when (backend) {
+        DnsFilterUpdateBackend.Legacy -> null
+        is DnsFilterUpdateBackend.Categorized -> backend
+    }
+
+    private val categorizedInstaller: suspend (CategorizedDnsStage, VerifiedCategorizedDnsRuleSet) -> CategorizedDnsNativeActivation =
+        categorized?.activate ?: { stage, bundle ->
             CategorizedDnsNativeActivation(
                 liveRuleSetInstaller(stage.name, bundle.manifestBytes, bundle.signatureBytes, bundle.artifactBytes),
                 isOwnerCurrent = { false },
@@ -40,10 +55,9 @@ class DnsFilterUpdateRepository(
 
     suspend fun checkForUpdate(dnsSettingsOverride: DnsSettings? = null): DnsFilterUpdateCheck {
         val dnsSettings = dnsSettingsOverride ?: settingsRepository.current().dns
-        val categorized = (store as? DnsFilterAssetInstaller)?.categorizedStore
         if (categorized != null) {
             val selection = dnsSettings.categorizedDnsSelection()
-            val state = categorized.state(selection.variant)
+            val state = categorized.store.state(selection.variant)
             val check = client.checkCategorized(
                 selectedManifestUrl(dnsSettings, selection),
                 selection,
@@ -114,10 +128,9 @@ class DnsFilterUpdateRepository(
         onProgress: (RemoteDownloadProgress) -> Unit = {},
     ): DnsFilterUpdateResult {
         val dnsSettings = dnsSettingsOverride ?: settingsRepository.current().dns
-        val categorized = (store as? DnsFilterAssetInstaller)?.categorizedStore
         val categoryRefreshEnabled = dnsSettings.dnsRuleSetFilteringEnabled() && (!requireAutoEnabled || dnsSettings.autoUpdateFilters)
         if (categorized != null && categoryRefreshEnabled) {
-            val result = refreshCategorized(dnsSettings, categorized, onPhase, onProgress)
+            val result = refreshCategorized(dnsSettings, categorized.store, onPhase, onProgress)
             recordRefreshResult(result, result.liveActivation)
             return result
         }

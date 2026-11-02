@@ -13,7 +13,8 @@ def sha(path):
         return hashlib.file_digest(stream, 'sha256').hexdigest()
 
 
-def verify_component(repo, native, merged, abis, apk_directory, component):
+def verify_component(repo, native, merged, abis, apk_directory, component, delivery_abis=None):
+    delivery_abis = abis if delivery_abis is None else delivery_abis
     config = json.loads((repo / 'config/native/page-aligned-native.json').read_text())[component]
     provenance = native / 'provenance' / component
     inputs = provenance / 'producer-inputs.json'
@@ -119,7 +120,7 @@ def verify_component(repo, native, merged, abis, apk_directory, component):
                 names = archive.namelist()
                 if len(names) != len(set(names)):
                     raise ValueError('Built APK contains duplicate entries')
-                for abi in abis:
+                for abi in delivery_abis:
                     name = 'lib/' + abi + '/' + library
                     if name not in archive.namelist():
                         continue
@@ -127,15 +128,92 @@ def verify_component(repo, native, merged, abis, apk_directory, component):
                     if hashlib.sha256(data).hexdigest() != rows[abi]['sha256'] or len(data) != rows[abi]['bytes']:
                         raise ValueError('APK contains original, foreign or unexpectedly transformed native bytes')
                     found.add(abi)
-        if found != set(abis):
+        if found != set(delivery_abis):
             raise ValueError('Built APK native ABI inventory is incomplete')
 
 
-def verify(repo, native, merged, abis, apk_directory=None):
+SUPPORTED_ABIS = {'arm64-v8a': (2, 183), 'armeabi-v7a': (1, 40), 'x86': (1, 3), 'x86_64': (2, 62)}
+
+
+def delivery_profile(abis, delivery_abis):
+    native = list(abis)
+    delivery = native if delivery_abis is None else list(delivery_abis)
+    if not native or len(native) != len(set(native)) or not set(native).issubset(SUPPORTED_ABIS):
+        raise ValueError('Native ABI profile is empty, duplicate or unknown')
+    if not delivery or len(delivery) != len(set(delivery)) or not set(delivery).issubset(native):
+        raise ValueError('Native delivery ABIs must be a nonempty unique subset of native ABIs')
+    return delivery
+
+
+def library_entry(name, header):
+    parts = name.split('/')
+    if len(name) > 512 or len(parts) != 3 or parts[0] != 'lib' or parts[1] not in SUPPORTED_ABIS or \
+            not parts[2].endswith('.so') or any(not part or part in {'.', '..'} for part in parts) or \
+            any(character in '\\:' or ord(character) < 32 or ord(character) == 127 for character in name):
+        raise ValueError('Invalid native library path')
+    bits, machine = SUPPORTED_ABIS[parts[1]]
+    if len(header) != 20 or header[:7] != b'\x7fELF' + bytes([bits, 1, 1]) or \
+            int.from_bytes(header[18:20], 'little') != machine:
+        raise ValueError('Native ELF does not match its advertised ABI')
+    return parts[1], parts[2]
+
+
+def merged_library_inventory(merged):
+    root = merged / 'lib'
+    if root.is_symlink() or not root.is_dir():
+        raise ValueError('Merged native library inventory is missing')
+    inventory = {}
+    for path in root.rglob('*'):
+        if path.is_symlink():
+            raise ValueError('Merged native library is a link')
+        if path.is_dir():
+            continue
+        with path.open('rb') as stream:
+            abi, library = library_entry('lib/' + path.relative_to(root).as_posix(), stream.read(20))
+        inventory.setdefault(abi, set()).add(library)
+    return inventory
+
+
+def verify_delivery_inventory(merged, native_abis, delivery_abis, apk_directory):
+    expected = merged_library_inventory(merged) if merged is not None else None
+    if expected is not None and set(expected) != set(native_abis):
+        raise ValueError('Merged native ABI inventory differs from native profile')
+    if apk_directory is None:
+        return
+    apks = sorted(apk_directory.glob('*.apk'))
+    if not apks:
+        raise ValueError('Built APK output is missing')
+    found = set()
+    for apk in apks:
+        with zipfile.ZipFile(apk) as archive:
+            names = archive.namelist()
+            if len(names) != len(set(names)):
+                raise ValueError('Built APK contains duplicate entries')
+            inventory = {}
+            for entry in archive.infolist():
+                if entry.is_dir() or not entry.filename.startswith('lib/'):
+                    continue
+                with archive.open(entry) as stream:
+                    abi, library = library_entry(entry.filename, stream.read(20))
+                inventory.setdefault(abi, set()).add(library)
+            if not set(inventory).issubset(delivery_abis):
+                raise ValueError('APK contains an ABI outside delivery ABIs')
+            if expected is not None and any(libraries != expected[abi] for abi, libraries in inventory.items()):
+                raise ValueError('APK native library inventory differs from merged delivery')
+            found.update(inventory)
+    if found != set(delivery_abis):
+        raise ValueError('Built APK native ABI inventory is incomplete for delivery ABIs')
+
+
+def verify(repo, native, merged, abis, apk_directory=None, delivery_abis=None):
+    delivery = delivery_profile(abis, delivery_abis)
+    if apk_directory is not None and merged is None and set(delivery) != set(abis):
+        raise ValueError('APK delivery projection requires the merged native library inventory')
     config = json.loads((repo / 'config/native/page-aligned-native.json').read_text())
     for component in ('graphics', 'sodium'):
         if component in config:
-            verify_component(repo, native, merged, abis, apk_directory, component)
+            verify_component(repo, native, merged, abis, apk_directory, component, delivery)
+    verify_delivery_inventory(merged, abis, delivery, apk_directory)
 
 
 def main():
@@ -146,8 +224,10 @@ def main():
     parser.add_argument('--apk-directory', type=Path)
     parser.add_argument('--abis', nargs='+', required=True,
                         choices=['arm64-v8a', 'armeabi-v7a', 'x86', 'x86_64'])
+    parser.add_argument('--delivery-abis', nargs='+', choices=sorted(SUPPORTED_ABIS),
+                        help='APK ABI subset; defaults to the complete native ABI profile')
     args = parser.parse_args()
-    verify(args.repo, args.native, args.merged, args.abis, args.apk_directory)
+    verify(args.repo, args.native, args.merged, args.abis, args.apk_directory, args.delivery_abis)
 
 
 if __name__ == '__main__':

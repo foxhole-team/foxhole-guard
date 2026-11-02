@@ -44,7 +44,10 @@ internal fun CliShimmerText(
     var shown by remember { mutableStateOf(text) }
     var visibleChars by remember { mutableIntStateOf(text.length) }
     LaunchedEffect(text) {
-        if (text == shown) return@LaunchedEffect
+        if (text == shown) {
+            visibleChars = shown.length
+            return@LaunchedEffect
+        }
         if (!cliSystemMotionEnabled()) {
             shown = text
             visibleChars = text.length

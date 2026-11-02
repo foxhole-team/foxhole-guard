@@ -1,6 +1,6 @@
 FoxHole Guard is a privacy-focused app for VPN, Tor and I2P networking, with firewall, DNS filtering, and FoxHole Sentinel network anomaly monitoring.
 
-The application combines its own FoxHole Core networking engine, VPN, access to the Tor and I2P networks, a local firewall, DNS filtering, a traffic map, FoxHole Sentinel, isolated web applications, and a proxy server on the local network.
+It also offers a traffic map, web applications, and a local-network proxy. Separate web-app cookies and data require MULTI_PROFILE support in Android WebView; otherwise a shared profile is used.
 
 FoxHole Guard contains no advertising, usage analytics, or telemetry. Application lists, statistics, logs, routing rules, and local analysis results remain on the device unless the user explicitly exports them.
 
@@ -27,7 +27,7 @@ Supported protocols: VLESS, VMess, Hysteria2, WireGuard, AmneziaWG (experimental
 
 Imports: share links, v2rayTun subscriptions, SIP008/Outline JSON and compatible Clash/mihomo YAML. XHTTP supports stream-one over HTTP/2. Unsupported nodes/settings are reported; external YAML providers are not fetched.
 
-DNS filters are built from the open AdGuard DNS filter. Downloaded data sets contain filtering data rather than executable code. Before use, the application verifies the signature, size, compatibility, and SHA-256 digest.
+DNS filters use several open sources, including AdGuard, EasyPrivacy, and HaGeZi. Downloads contain filtering data; signature, size, compatibility, and SHA-256 are verified before use. DNS filtering is unavailable in the current WireGuard/AmneziaWG packet-tunnel path.
 
 FoxHole Sentinel is a local security-monitoring module, not an antivirus. The current version uses Echap indicators, a network IOC matcher, correlation of IOCs with the owning application, and integration with the firewall and quarantine.
 
@@ -39,6 +39,6 @@ TLS fingerprint-table checks are enabled by default and scheduled daily while en
 
 Connection checks contact external public-IP and IP-location services, including Cloudflare, ipapi.co, ipwho.is, ipinfo.io and fallback services. Connectivity probes contact Google and Cloudflare endpoints. These services receive the IP address used for each request. VPN, Tor, I2P, subscription refreshes and web applications also make the network requests needed for their enabled features.
 
-License: GNU General Public License v3.0 or later (GPL-3.0-or-later).
+License: GPL-3.0-or-later.
 
 Tor is a trademark of The Tor Project. FoxHole Guard is not a product of The Tor Project, AdGuard, I2P, or PurpleI2P and is not affiliated with them.

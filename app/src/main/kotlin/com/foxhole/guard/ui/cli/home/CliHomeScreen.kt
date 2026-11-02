@@ -1134,6 +1134,8 @@ private fun CliUserHomeProfileArea(
     onOpenProfiles: () -> Unit,
 ) {
     val visibility = remember { MutableTransitionState(false) }
+    val sizeSpec = cliProfileSelectorSizeSpec()
+    val effectsSpec = tween<Float>(durationMillis = 100)
     var anchorWidthPx by remember { mutableIntStateOf(0) }
     val density = LocalDensity.current
     val view = LocalView.current
@@ -1175,12 +1177,12 @@ private fun CliUserHomeProfileArea(
                 Surface(shape = RoundedCornerShape(CliRadius.control), color = colors.bg,
                     border = BorderStroke(1.dp, colors.border),
                     modifier = Modifier.width(width)
-                        .animateContentSize(if (visibility.isIdle && profileSelector.open) tween(180) else snap(), alignment = Alignment.BottomStart)
+                        .animateContentSize(if (visibility.isIdle && profileSelector.open) sizeSpec else snap(), alignment = Alignment.BottomStart)
                         .heightIn(max = availableHeight)) {
                     Column {
                         AnimatedVisibility(visibleState = visibility, modifier = Modifier.weight(1f, fill = false),
-                            enter = expandVertically(tween(180), expandFrom = Alignment.Bottom) + fadeIn(tween(180)),
-                            exit = shrinkVertically(tween(180), shrinkTowards = Alignment.Bottom) + fadeOut(tween(180))) {
+                            enter = expandVertically(sizeSpec, expandFrom = Alignment.Bottom) + fadeIn(effectsSpec),
+                            exit = shrinkVertically(sizeSpec, shrinkTowards = Alignment.Bottom) + fadeOut(effectsSpec)) {
                             CliProfileQuickSelector(viewModel = viewModel,
                                 expandedSmartId = profileSelector.expandedSmartId,
                                 onExpandedSmartChange = { id ->

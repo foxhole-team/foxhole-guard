@@ -13,8 +13,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.only
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.ScaffoldDefaults
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
@@ -41,6 +44,8 @@ import com.foxhole.guard.router.GuardRouterPage
 import com.foxhole.guard.router.GuardRouterViewModel
 import com.foxhole.guard.router.ROUTER_LOCAL_NETWORK_PERMISSION
 import com.foxhole.guard.router.RouterBetaNoticePreferences
+import com.foxhole.guard.router.RouterWizardPath
+import com.foxhole.guard.router.RouterWizardError
 import com.foxhole.guard.router.RouterWizardStage
 import com.foxhole.guard.router.routerLocalNetworkAccessGranted
 import com.foxhole.guard.ui.cli.LocalCliBottomChromeClearance
@@ -87,11 +92,17 @@ internal fun GuardRouterManagementScreen(onBack: () -> Unit, modifier: Modifier 
     LaunchedEffect(model) { model.open() }
     DisposableEffect(model) { onDispose { permissionAction = null; model.closeScreen() } }
     LaunchedEffect(model, context) { model.notices.collect { notices.show(noticeResources.getString(it), error = true) } }
-    LaunchedEffect(state.error) { wizardError?.let { notices.show(it, error = true) } }
+    LaunchedEffect(state.error) {
+        val inlinePin = state.path == RouterWizardPath.PAIR && state.stage == RouterWizardStage.LOGIN &&
+            state.error in setOf(RouterWizardError.PIN, RouterWizardError.LOCKED)
+        if (!inlinePin) wizardError?.let { notices.show(it, error = true) }
+    }
     LaunchedEffect(state.stage) { if (state.stage == RouterWizardStage.COMPLETE) model.completed() }
     BackHandler(enabled = !betaNoticeVisible) { if (page == GuardRouterPage.WIZARD) model.entry() else close() }
     CompositionLocalProvider(LocalGuardRouterNotices provides notices) { GuardRouterTypography {
+        // The measured dock clearance already includes navigation-bar padding.
         Scaffold(modifier = modifier.fillMaxSize().padding(bottom = LocalCliBottomChromeClearance.current),
+            contentWindowInsets = ScaffoldDefaults.contentWindowInsets.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal),
             containerColor = LocalCliColors.current.bg) { insets ->
             Box(Modifier.fillMaxSize().padding(insets)) {
                 Column(Modifier.fillMaxSize()) {
@@ -126,26 +137,39 @@ internal fun GuardRouterManagementScreen(onBack: () -> Unit, modifier: Modifier 
                                 model.wizard.supportsHomeAutodetection, model.wizard.supportsRemoteProfile, model.wizard.installationCatalog,
                                 RouterWizardActions(
                                     inspect = { address -> requestAccess { model.action { model.inspect(address) } } },
+                                    setupAddress = { address -> requestAccess {
+                                        model.wizard.begin(com.foxhole.guard.router.RouterWizardPath.SETUP, null,
+                                            addingNew = model.wizard.isAddingRouter)
+                                        model.action { model.inspect(address, setupAddress = true) }
+                                    } },
                                     trust = { model.action { model.wizard.acceptIdentity() } },
                                     installProtocols = { model.wizard.installProtocols(it) },
                                     installCompactSelection = { protocols, server -> model.wizard.installProtocols(protocols, server) },
                                     confirmInstallProtocols = { model.action { model.wizard.confirmInstallProtocols() } },
                                     login = { credential -> val owned = credential.copyOf(); model.action(owned) { model.wizard.login(owned) } },
+                                    loginKey = { key, passphrase ->
+                                        val ownedKey = key.copyOf()
+                                        val ownedPassphrase = passphrase.copyOf()
+                                        model.action(ownedPassphrase, ownedKey) { model.wizard.loginWithKey(ownedKey, ownedPassphrase) }
+                                    },
                                     newPin = { credential -> model.action(credential) { model.wizard.changePin(credential) } },
                                     install = { model.action { model.wizard.install() } }, options = model.wizard::options,
-                                    finish = { model.action { model.wizard.finish() } },
+                                    finish = { pin -> model.action(pin) { model.wizard.finish(pin) } },
                                     failure = { notices.show(networkError, error = true) },
                                     openRouterSetup = {
-                                        if (state.address == "192.168.1.1") try {
-                                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("http://192.168.1.1/cgi-bin/luci/admin/services/foxhole/pin")))
-                                        } catch (_: Exception) { notices.show(unavailableError, error = true) }
+                                        com.foxhole.guard.router.routerLanAddress(state.address)?.let { address ->
+                                            try { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("http://$address/cgi-bin/luci/admin/services/foxhole/pin"))) }
+                                            catch (_: Exception) { notices.show(unavailableError, error = true) }
+                                        }
                                     },
                                 ), onBack = { model.entry() },
                             )
                         }
                     }
                 }
-                SnackbarHost(snackbar, modifier = Modifier.align(Alignment.TopCenter))
+                SnackbarHost(snackbar, modifier = Modifier.align(Alignment.TopCenter).fillMaxWidth()) { notice ->
+                    GuardRouterNoticeContent(notice)
+                }
             }
         }
     } }

@@ -66,6 +66,10 @@ internal class RouterWifiConnection private constructor(
             return candidates.singleOrNull() ?: throw RouterWifiRequired()
         }
 
+        fun physicalNetworks(manager: ConnectivityManager): List<Network> = manager.allNetworks.filter {
+            isRouterWifi(manager.getNetworkCapabilities(it))
+        }
+
         fun hasPhysicalWifi(manager: ConnectivityManager): Boolean = manager.allNetworks.any {
             isRouterWifi(manager.getNetworkCapabilities(it))
         }

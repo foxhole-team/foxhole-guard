@@ -67,7 +67,7 @@ private fun ProfileImportNodeSupport.parseClashDocument(
             validateOutboundHost(host, allowPrivateOutboundHosts)
             val converted = parseSingleNode(clashShareLink(node, type), allowPrivateOutboundHosts, allowInsecureTls)
             nodes += converted
-            reports += SubscriptionEntryReport(type.uppercase(), converted.protocolHint, SubscriptionEntryStatus.ACCEPTED, index + 1)
+            reports += SubscriptionEntryReport(type.uppercase(), converted.protocolHint, SubscriptionEntryStatus.ACCEPTED, index + 1, compatibilityWarning = converted.compatibilityWarning)
         }
     }
     require(nodes.isNotEmpty()) { "Clash contains no supported proxies" }

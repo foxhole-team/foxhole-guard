@@ -20,6 +20,7 @@ object RuntimeResumeStateStore {
     private const val KEY_LOCAL_GUARD_MODE = "local_guard_mode"
     private const val KEY_UPDATED_AT = "updated_at"
     private const val KEY_USER_STOPPED_AT = "user_stopped_at"
+    private const val KEY_USER_STOP_REVISION = "user_stop_revision"
     private const val USER_STOP_SUPPRESSION_WINDOW_MS = 45_000L
 
     fun markProfileRuntime(
@@ -56,8 +57,12 @@ object RuntimeResumeStateStore {
         }
     }
 
+    @Synchronized
     fun markUserStop(context: Context) {
-        context.preferences().edit {
+        val preferences = context.preferences()
+        val revision = preferences.getLong(KEY_USER_STOP_REVISION, 0L) + 1L
+        preferences.edit {
+            putLong(KEY_USER_STOP_REVISION, revision)
             putBoolean(KEY_ACTIVE, false)
             remove(KEY_PROFILE_ID)
             remove(KEY_PROTOCOL_OPTION_ID)
@@ -78,14 +83,29 @@ object RuntimeResumeStateStore {
             return false
         }
         val recent = System.currentTimeMillis() - stoppedAt <= USER_STOP_SUPPRESSION_WINDOW_MS
-        if (!recent) {
-            clearRecentUserStop(context)
-        }
         return recent
     }
 
+    fun hasUserStopIntent(context: Context): Boolean = context.preferences().getLong(KEY_USER_STOPPED_AT, 0L) > 0L
+
+    fun userStopRevision(context: Context): Long = context.preferences().getLong(KEY_USER_STOP_REVISION, 0L)
+
+    @Synchronized
+    fun runIfUserStopRevisionCurrent(context: Context, expected: Long, action: () -> Unit): Boolean {
+        if (userStopRevision(context) != expected) return false
+        action()
+        return true
+    }
+
     fun clear(context: Context) {
-        context.preferences().edit { clear() }
+        context.preferences().edit {
+            remove(KEY_ACTIVE)
+            remove(KEY_TRAFFIC_MODE)
+            remove(KEY_PROFILE_ID)
+            remove(KEY_PROTOCOL_OPTION_ID)
+            remove(KEY_LOCAL_GUARD_MODE)
+            remove(KEY_UPDATED_AT)
+        }
     }
 
     fun read(context: Context): RuntimeResumeState? {

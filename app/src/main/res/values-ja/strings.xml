@@ -731,7 +731,7 @@
     <string name="cli_cfg_appearance_dark">ダーク</string>
     <string name="cli_cfg_appearance_oled">夜</string>
     <string name="cli_cfg_appearance_light">ライト</string>
-    <string name="cli_cfg_pixel_art">FoxHole Guardスタイル</string>
+    <string name="cli_cfg_pixel_art">フォント</string>
     <string name="cli_cfg_home_additional_info">通信ウィジェット</string>
     <string name="cli_cfg_home_additional_info_category">ウィジェットの種類</string>
     <string name="cli_cfg_home_additional_info_map">通信マップ</string>
@@ -1033,17 +1033,17 @@
     <string name="cli_help_start_title">素早い行動</string>
     <string name="cli_quick_start_title">クイックスタート</string>
     <string name="cli_help_start_body">領域|タップ|長押し\n状態|保存済みVPNプロファイルの選択画面を開く|現在のIPアドレスと位置情報を更新\nコンソール|操作なし|コンソール履歴を消去\nSTART|選択中の動作モードを開始|接続せずにv2raytunプロファイルを更新\nSTATUS|モジュール状態と有効なルールをコンソールに表示|詳細な状態と最新のジャーナル項目をコンソールに表示</string>
-    <string name="cli_help_start_details">\n「プロファイル」でv2raytunリンク、設定ファイル、またはQRコードをインポートし、VPNプロファイルを追加します。\n制御方式 - 主な動作モードはVPN、Tor、VPN + Torの3つです。各モードは「端末全体」または「プロキシ」のルーティングシナリオで制御されます。シナリオはアプリとWebアドレスのルールで構成されます。\n 「端末全体」シナリオは、すべての送信通信をトンネルに通します。「プロキシ」シナリオは、選択したアプリにルーティングルールを適用します。Webアドレスのルールは有効なシナリオ内で動作します。\n追加モジュール: ファイアウォール、Tor、I2P、DNSフィルタリング。各モジュールは任意の動作モードと併用でき、単独でも動作します。\n「シナリオをアトミックに適用」: 有効時はVPNとTorのシナリオを確認なしで適用します。無効時はシナリオ変更のたびに確認します。Wi-Fi/モバイルネットワークのVPNルールは常にアトミックに適用されます。\n対応プロトコル: VLESS、VMess、Hysteria2、WireGuard、AmneziaWG、Trojan、Shadowsocks、Naive、TUIC、AnyTLS。\nFoxHole DBは、有効な機能に必要なデータセットだけをダウンロードします。\n設定とプロファイルはすべて端末内に暗号化して保存され、暗号鍵はAndroid Keystoreで保護されます。さらにFoxHole GuardのPINまたはシステム生体認証で保護できます。\nアプリ監視モジュールはインスTorと削除を記録します。検疫は、ユーザーが許可するまで新しいアプリのネットワーク接続をブロックします。トンネルまたはファイアウォールの動作中に有効です。</string>
+    <string name="cli_help_start_details">\n「プロファイル」でv2raytunリンク、設定ファイル、またはQRコードをインポートし、VPNプロファイルを追加します。\n制御方式 - 主な動作モードはVPN、Tor、VPN + Torの3つです。各モードは「端末全体」または「プロキシ」のルーティングシナリオで制御されます。シナリオはアプリとWebアドレスのルールで構成されます。\n 「端末全体」シナリオはVPNを主な経路に設定します。適用可能なアプリの除外・ブロックとサイトルールは維持されます。VPNを使うアプリの選択リストは「プロキシ」シナリオで使用します。\n追加モジュール: ファイアウォール、Tor、I2P、DNSフィルタリング。各モジュールは任意の動作モードと併用でき、単独でも動作します。\n「シナリオをアトミックに適用」: 有効時はVPNとTorのシナリオを確認なしで適用します。無効時はシナリオ変更のたびに確認します。Wi-Fi/モバイルネットワークのVPNルールは常にアトミックに適用されます。\n対応プロトコル: VLESS、VMess、Hysteria2、WireGuard、AmneziaWG、Trojan、Shadowsocks、Naive、TUIC、AnyTLS。\nFoxHole DBは、有効な機能に必要なデータセットだけをダウンロードします。\n設定とプロファイルはすべて端末内に暗号化して保存され、暗号鍵はAndroid Keystoreで保護されます。さらにFoxHole GuardのPINまたはシステム生体認証で保護できます。\nアプリ監視モジュールはインスTorと削除を記録します。検疫は、ユーザーが許可するまで新しいアプリのネットワーク接続をブロックします。トンネルまたはファイアウォールの動作中に有効です。</string>
     <string name="cli_home_network_geo_refreshing">ネットワーク地理データの更新</string>
     <string name="cli_home_network_geo_updated">ネットワーク地理データが更新されました</string>
     <string name="cli_help_modes_title">VPNシナリオ</string>
-    <string name="cli_help_modes_body">「端末全体」シナリオは、OSのすべてのネットワーク通信をVPNトンネルに通します。このモードではアプリごとのルーティングルールは無視されます。「プロキシ」シナリオには「選択したアプリのみ」と「選択したアプリ以外すべて」があり、ルーティングルールが適用されます。シナリオは「ルーティング → アプリルール」で設定します。VPNとTorのシナリオは個別に設定しますが、組み合わせには制限があります。「端末全体をVPN + 選択したアプリをTor」は利用できますが、逆の構成は利用できません。ローカルネットワークのプロキシ設定は「追加機能」にあります。</string>
+    <string name="cli_help_modes_body">「端末全体」シナリオはVPNを主な経路に設定します。適用可能なアプリの除外・ブロックとサイトルールは維持されます。VPNを使うアプリの選択リストは「プロキシ」シナリオで使用します。「プロキシ」シナリオには「選択したアプリのみ」と「選択したアプリ以外すべて」があり、ルーティングルールが適用されます。シナリオは「ルーティング → アプリルール」で設定します。VPNとTorのシナリオは個別に設定しますが、組み合わせには制限があります。「端末全体をVPN + 選択したアプリをTor」は利用できますが、逆の構成は利用できません。ローカルネットワークのプロキシ設定は「追加機能」にあります。</string>
     <string name="cli_help_tor_title">Torシナリオ</string>
     <string name="cli_help_tor_body">現在、UDPベースのVPNプロトコルでは、VPNトンネル内にTorを通せません。VPN内でTorを使うにはTCPベースのプロトコルを選ぶか、TorをVPNと並行して動作させてください。TorはTCP専用のため、VoIP通話などのUDP通信はTorを通りません。HTTP/HTTPSストリーミングは利用できますが、低速になる場合があります。TorをVPN経由で使うと、インターネット事業者にはVPN接続だけが見えますが、VPN事業者にはTor入口ノードまたはブリッジへの接続と関連メタデータが見える場合があります。ホーム画面のMODEボタンでVPN / VPN + Tor / Torを切り替えます。Torへの直接接続がブロックされる場合は、Tor設定でブリッジを有効にしてください。ブリッジ一覧はFoxHole TeamのミラーまたはTor ProjectのサーバーからFoxHole DB経由で取得します。</string>
     <string name="cli_help_smart_title">スマートVPNプロファイル</string>
     <string name="cli_help_smart_body">スマートVPNプロファイルは、1台のサーバーで使える複数のVPNプロトコルをまとめ、すばやい切り替えと接続テストを可能にします。\n凡例|T 接続時間 · P ping · L 遅延\n遅延の色|150 ms以下 · 151～300 ms · 301～600 ms · 600 ms超\nサブスクリプション内の全プロトコルをテストできます。テスト中は端末の全通信を停止し、「端末全体」VPNモードへ切り替えて3項目を測定します。完了後は直前の接続を復元し、最良の接続に★を表示します。</string>
     <string name="cli_help_routing_title">ルーティングルール</string>
-    <string name="cli_help_routing_body">アプリとWebリソースのルーティングルールはアトミックに適用されます。\n「端末全体」シナリオではアプリのルーティングルールは無視されますが、設定には保存されます。ルールは「プロキシ」シナリオでのみ適用され、VPNとTorを個別に設定して、指定したアプリの通信をトンネルに通すか除外できます。\nアプリのネットワーク接続ブロックは、VPN/Torトンネルまたはファイアウォールの動作中に有効です。\n重要: I2Pが透過モードで起動するファイアウォールは一般のルーティングルールを適用しません。ブロックとDNSインターセプトは無効で、.i2pドメインの通信だけをルーティングします。</string>
+    <string name="cli_help_routing_body">アプリとWebリソースのルーティングルールはアトミックに適用されます。\n「端末全体」シナリオはVPNを主な経路に設定します。適用可能なアプリの除外・ブロックとサイトルールは維持されます。VPNを使うアプリの選択リストは「プロキシ」シナリオで使用します。\nアプリのネットワーク接続ブロックは、VPN/Torトンネルまたはファイアウォールの動作中に有効です。\n重要: I2Pが透過モードで起動するファイアウォールは一般のルーティングルールを適用しません。ブロックとDNSインターセプトは無効で、.i2pドメインの通信だけをルーティングします。</string>
     <string name="cli_help_logs_title">イベントジャーナル</string>
     <string name="cli_help_logs_body">メインジャーナルはアプリの診断、モジュールの状態変更、システムイベントを記録します。ネットワークジャーナルは観測した通信の時刻、取得できた UID/パッケージの帰属、TCP/UDP、宛先国、バイト数を記録します。観測は接続成功の証明ではありません。所有者が共有または不明の場合は明示し、国は観測した宛先に対応します。セキュリティジャーナルは FoxHole Sentinel の検出、観測したインストール・更新・削除、監視の空白、Core の構造化された拒否や確認を記録します。理由は判明した原因、結果、次の操作を示します。未知のコードは成功を意味しません。\nジャーナルは端末内に保持されます。出力時は選択したプライバシーポリシーに従い識別子と接続先を除去します。ネットワーク履歴の消去は古い待機書き込みを遮断します。境界のポーリング一括分が履歴から省略される場合もありますが、集計カウンターは継続します。</string>
     <string name="cli_help_stats_title">統計</string>
@@ -1053,7 +1053,7 @@
     <string name="cli_help_tile_title">クイック設定のショートカット</string>
     <string name="cli_help_tile_body">Androidクイック設定のFoxHole Guardタイルを使用すると、アプリを開かずに接続をオンまたはオフにできます。タイルから開始すると、ホーム画面で最後に選択した動作モードが使用されます。</string>
     <string name="cli_help_killswitch_title">接続が切断されたときに通信をブロックする</string>
-    <string name="cli_help_killswitch_body">キルスイッチはAndroidの「VPN接続なしの通信をブロック」機能を使用します。VPN接続が切れると、OSがすべてのネットワーク通信をブロックし、保護されていないネットワークへのデータ漏えいを防ぎます。端末のシステムVPN設定で設定してください。</string>
+    <string name="cli_help_killswitch_body">FoxHole Guardにはソフトウェアのキルスイッチがあります。有効にすると、トンネルの切断や停止時に現在の接続を終了します。アプリとコアが動作していることが前提です。これとは別に、Androidの設定で「VPN接続なしの通信をブロック」を有効にできます。ソフトウェアのスイッチがこのシステム保護を自動的に有効にすることはありません。下のボタンから設定を開けます。</string>
     <string name="cli_help_killswitch_link">オープンシステムVPN設定</string>
     <string name="cli_help_backup_title">バックアップ</string>
     <string name="cli_help_backup_body">設定 → アプリケーション → アプリデータベース。選択したプロファイルと移行可能な設定を出力します。バックアップ暗号化は初期状態ではオフで、平文ファイルを作成し、パスワードは要求しません。有効にするとパスワード付き AES 暗号化ファイルを作成します。プロファイルには認証情報が含まれるため、平文は非公開にし、暗号化ファイルとパスワードは別々に保管してください。忘れたパスワードは復元できません。\n形式は自動判定し、暗号化ファイルのみパスワードを要求します。概要を確認して復元を承認してください。FoxHole Guard PIN、更新トークン、OS 権限（使用状況へのアクセス）、生成されたローカルプロキシのパスワード、FoxHole Sentinel のローカルデータベースは端末に残ります。\n同じ画面でジャーナル、統計、プロファイルを選択して消去したり、完全かつ取り消せない初期化を実行できます。</string>
@@ -1068,7 +1068,7 @@
     <string name="cli_help_transfer_title">プロファイルのインポートとエクスポート</string>
     <string name="cli_help_transfer_body">サポートされているインポート形式は、クリップボードにコピーされたURI、構成ファイル、およびスキャンされたQRコードです。 v2raytun形式のサブスクリプション プロファイルが追加されると、FoxHole Guardは接続前にそれを自動的に更新します。接続せずに手動でサブスクリプションを更新するには、STARTを長押しします。複数選択モードでは、複数のプロファイルを選択してファイルにバッチ エクスポートできます。単一のプロファイルまたはプロトコルは、URIまたはQRコードとして共有できます。</string>
     <string name="cli_help_security_title">データの暗号化</string>
-    <string name="cli_help_security_body">セキュリティ セクションでは、FoxHole Guard PINまたはシステムの生体認証を通じてアプリへのアクセスを制御します。\nすべてのプロファイルと設定は、デフォルトで暗号化された形式でローカルに保存されます。暗号化キーはハードウェア支援のAndroid Keystoreによって生成および保護されます。 \nシステムの生体認証は認証ゲートとして機能し、データを再暗号化することはありません。 FoxHole Guard PINが使用されている場合、生体認証サインインは、すべての操作で認証を必要とする別のキーをキーストアに要求し、PINで保護されたプライマリ キーボックスのロックを解除します。 \nセキュリティジャーナルは別のキーで暗号化され、暗号化ハッシュ チェーンによって保護されます。生体認証によってジャーナルに別の暗号化層が追加されることはありません。サインインが成功した後、アプリはジャーナルを復号化し、固定されたチェックポイントに対してチェーンを検証します。機密データがFoxHole Teamインフラストラクチャ サーバーに送信されることはありません。</string>
+    <string name="cli_help_security_body">セキュリティ セクションでは、FoxHole Guard PINまたはシステムの生体認証を通じてアプリへのアクセスを制御します。\nすべてのプロファイルと設定は、デフォルトで暗号化された形式でローカルに保存されます。暗号化キーはAndroid Keystoreによって保護されます。ハードウェア保護が利用できるかは端末によって異なります。 \nシステムの生体認証は認証ゲートとして機能し、データを再暗号化することはありません。 FoxHole Guard PINが使用されている場合、生体認証サインインは、すべての操作で認証を必要とする別のキーをキーストアに要求し、PINで保護されたプライマリ キーボックスのロックを解除します。 \nセキュリティジャーナルは別のキーで暗号化され、暗号化ハッシュ チェーンによって保護されます。生体認証によってジャーナルに別の暗号化層が追加されることはありません。サインインが成功した後、アプリはジャーナルを復号化し、固定されたチェックポイントに対してチェーンを検証します。機密データがFoxHole Teamインフラストラクチャ サーバーに送信されることはありません。</string>
     <string name="cli_help_sentinel_title">FoxHole Sentinelセキュリティ モジュール</string>
     <string name="cli_help_sentinel_body">FoxHole Sentinel は取得可能な OS・ネットワークのメタデータを分析し、通信内容を検査しません。リスク信号や未知のインストール元は悪意あるコードの証明ではありません。インストールの識別、要求機能、取得可能な署名証明書、有効な指標リストを使用します。ストーカーウェアの基準は CC-BY-4.0 の AssoEchap/stalkerware-indicators です。\nインストール情報が不変なら署名情報のキャッシュを再利用します。大量の変更は上限付きのバッチで処理し、不完全な可視性を削除や安全の結果とみなしません。パスワードとイベント監視が有効な場合、封印されたハッシュチェーンのジャーナルにインストール、更新、削除、監視の空白を記録します。キューの欠落は明示します。\n受動的なネットワーク IOC 照合は任意の完全な通信履歴とは別です。アプリ別の通信帰属には Android 10 以降が必要で、短い通信や共有 UID の全てには対応しません。バックグラウンド通信と国の分析は個別に同意が必要です。\n省電力は常駐前景ホストなしでイベントとシステム予約修復を使い、強化は前景サービスと通知を追加します。どちらも Doze を回避せず、正確な修復間隔を保証しません。強制停止、root、システムによるデータ消去は制御外です。測定済みの節電率を示すものではありません。\n静的 APK 検査は任意で、独立した隔離プロセスで動作します。インストール済みアプリまたは Android から見えるアプリを選択できます。この画面のエキスパート設定で DEX 参照、YARA、検出通知、新規・更新アプリの自動検査、充電・電池条件、16/64 MiB の予算を設定します。重い検査と自動検査は初期状態でオフです。電池が危険・不明または空き容量が少ないと一時停止します。キャンセル、ポリシー変更、アプリ交換で古い結果の公開を防ぎます。不完全な検査は部分的のままで完全として保存しません。同梱ルールは静的 API 参照を示し、MITRE 候補は手法の実行を証明しません。ジャーナルのロック中は結果を解除まで延期し、任意の通知は共通の待機時間を使います。</string>
     <string name="cli_help_updates_title">FoxHole DBリポジトリ</string>
@@ -1319,7 +1319,7 @@
     <string name="cli_wizard_component_dns">DNSフィルタリング</string>
     <string name="cli_wizard_component_dns_note">広告、トラッカー、悪意のあるドメインをブロック</string>
     <string name="cli_wizard_i2p_banner_title">I2Pネットワーク対応</string>
-    <string name="cli_wizard_i2p_banner_body">I2Pネットワークは、各ノードの分散参加によって構成されています。中継ルーティングを有効にすると、ネットワーク全体のスループットと耐障害性の向上に貢献できます。\n\n中継通信はすべてカプセル化され、エンドツーエンドで暗号化されます。この端末は中間ルーターとしてのみ動作し、データの送信元や最終受信先にはなりません。ユーザー通信の機密性は維持され、リレーモードはいつでも無効にできます。</string>
+    <string name="cli_wizard_i2p_banner_body">端末がI2Pの中継トラフィックを転送し、ネットワークの動作を支援することを許可できます。このモードでは追加の通信量と端末リソースを使用します。匿名性や機密性を絶対に保証するものではありません。参加はいつでも無効にでき、初期状態では無効です。</string>
     <string name="cli_wizard_i2p_banner_toggle">この端末をリレーにする</string>
     <string name="cli_wizard_component_tor_bridges">Torブリッジを使用</string>
     <string name="cli_wizard_component_tor_bridges_note">Torへ直接接続できない場合に使用</string>
@@ -1330,7 +1330,7 @@
     <string name="cli_wizard_geo_later_note">IP位置情報データベース（約20 MB）</string>
     <string name="cli_wizard_download_geoip">IP位置情報データベース</string>
     <string name="cli_wizard_download_tls">TLSフィンガープリント一覧</string>
-    <string name="cli_wizard_download_tls_note">最新のTLSフィンガープリントデータベースで、ネットワーク指紋によるクライアントスタックの識別を防止（約70 KB）</string>
+    <string name="cli_wizard_download_tls_note">コアが対応する接続用のTLSフィンガープリントテーブルを更新します。テーブルをダウンロードしても、VPNトラフィックが識別されないことは保証されません。</string>
     <string name="cli_wizard_download_caption">FoxHole DBダウンロード</string>
     <string name="cli_wizard_download_intro">選択したデータセットをダウンロードし、署名を検証中:</string>
     <string name="cli_wizard_download_dns">DNSデータセット</string>
@@ -1389,7 +1389,7 @@
     <string name="cli_firewall_killswitch_toggle">FoxHole Guardソフトウェアキルスイッチ</string>
     <string name="cli_firewall_killswitch_software">FoxHole Guardのソフトウェアキルスイッチはシステム保護の代替ではありません</string>
     <string name="cli_firewall_killswitch_system">システム設定で「VPN接続なしの通信をブロック」を有効化</string>
-    <string name="cli_firewall_killswitch_info">緊急ブロック機能（キルスイッチ）の違い:\n\n1. アプリのソフトウェアキルスイッチは、FoxHole Guardの動作中にVPNトンネルが切れるとネットワーク接続をブロックします。OSがプロセスをメモリから終了すると保護も終了します。\n\n2. Androidのシステムキルスイッチ（「VPN接続なしの通信をブロック」）は、アプリのプロセスが動作しているかに関係なく、OSレベルですべてのインターフェースをブロックします。\n\n最大限の保護には、両方の併用を推奨します。</string>
+    <string name="cli_firewall_killswitch_info">緊急ブロック機能（キルスイッチ）の違い:\n\n1. アプリのソフトウェアキルスイッチは、FoxHole Guardの動作中にVPNトンネルが切れるとネットワーク接続をブロックします。OSがプロセスをメモリから終了すると保護も終了します。\n\n2. Androidのシステムキルスイッチ（「VPN接続なしの通信をブロック」）は、アプリのプロセスが動作しているかに関係なく、Androidの機能でVPNなしの接続をブロックします。\n\n最大限の保護には、両方の併用を推奨します。</string>
     <string name="cli_home_status_info_kind">情報: %1$s</string>
     <string name="cli_home_status_info_event_provider_dns">プロバイダーDNSなし</string>
     <string name="cli_home_status_info_value_provider_dns">%1$sを使用中</string>
@@ -1409,4 +1409,6 @@
     <string name="cli_cfg_locale_fr">français</string>
     <string name="cli_cfg_locale_es">español</string>
     <string name="cli_cfg_locale_zh">简体中文</string>
+    <string name="cli_font_tiny5">Tiny5 Regular</string>
+    <string name="cli_font_jetbrains_mono">JetBrains Mono Bold</string>
 </resources>

@@ -1,0 +1,3 @@
+<resources>
+    <string name="cli_updates_app_install_vpn_notice">インストール中はVPNが一時的に切断されます。アプリは有効な接続の復元を試みます。必要に応じてアプリを開き、再接続してください。</string>
+</resources>

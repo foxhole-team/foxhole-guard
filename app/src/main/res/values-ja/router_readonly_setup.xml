@@ -1,0 +1,3 @@
+<resources>
+    <string name="guard_router_setup_readonly_complete">OpenWrtを確認しました。このアプリでは検証済みインストールパッケージをまだ利用できません。ルーターの設定は変更していません。</string>
+</resources>

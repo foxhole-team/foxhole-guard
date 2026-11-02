@@ -11,7 +11,7 @@
     "path": "config/source-forks/rustls-0.23.46.upstream-files.json",
     "sha256": "bc389f68b1eb14f6d79bb38870640fabd05e44ec22bf12d872e479d033b81c34"
   },
-  "vendorTreeSha256": "8a66f27df4d838ae63946d664677dfda79c55f5327bf6d35f3a465340b641e22",
+  "vendorTreeSha256": "5368637dd43f2e1147f1b80405a7415dc2608b686ce1069be9705951d8968854",
   "vendorFiles": [
     {
       "path": "vendor/rustls/.cargo_vcs_info.json",
@@ -105,20 +105,20 @@
     },
     {
       "path": "vendor/rustls/src/client/builder.rs",
-      "sha256": "9fa43f7d00507a4a6d191e7f2e12af1dca9c35a0a8758b39c6447a347e2bf46c",
-      "bytes": 7121,
+      "sha256": "10e347450f7dea610729a0950615566ba9e2e65d97eb0c14db6dfd5a3e84f7bb",
+      "bytes": 7124,
       "mode": 420
     },
     {
       "path": "vendor/rustls/src/client/chrome_hello.rs",
-      "sha256": "bf330c800c80bcda4db04c3d7173f2be7fcf88691f2035b276e236c62939671f",
-      "bytes": 10553,
+      "sha256": "3c5068f733b21cf4bf4d847351f38f7a29fe7e64a95a99e15efb5d1044ceed54",
+      "bytes": 11449,
       "mode": 420
     },
     {
       "path": "vendor/rustls/src/client/client_conn.rs",
-      "sha256": "d84634776f49d0833841a9fa88a60f55b4e2006dd9fec916a6d1f2a4d4a94848",
-      "bytes": 39221,
+      "sha256": "8deb6e26e9b92c243a0d515e3bc8e28a61fe9599d0c1b517695fc36255719e8e",
+      "bytes": 39833,
       "mode": 420
     },
     {
@@ -141,8 +141,8 @@
     },
     {
       "path": "vendor/rustls/src/client/hs.rs",
-      "sha256": "8d561a63874c1295c0b53cd0c53892582036b8a84645b46e2dadc95c8477e891",
-      "bytes": 43787,
+      "sha256": "0eb7b9a160b94b4b352db0a2038013815bf58c04675921733a26d5def9b3958b",
+      "bytes": 43801,
       "mode": 420
     },
     {
@@ -153,14 +153,14 @@
     },
     {
       "path": "vendor/rustls/src/client/tls12.rs",
-      "sha256": "5fff268740878eaee2f13d86eaad7b5d4a3b74a2ba1bafbd500f7084e4d1e1b4",
-      "bytes": 46367,
+      "sha256": "dfd4ad6948e62f75d7ec810024192651514bd57fc0a09865d7b5f0482da62fc1",
+      "bytes": 46381,
       "mode": 420
     },
     {
       "path": "vendor/rustls/src/client/tls13.rs",
-      "sha256": "ea5c952da871f33611191368806b39660723f4f6c62a6881e9b688fe1b3a79a4",
-      "bytes": 58753,
+      "sha256": "d1587ac36bbb85fa0c91c4f724d41ab13145988360ee0097b76ecb4966033095",
+      "bytes": 58781,
       "mode": 420
     },
     {
@@ -737,7 +737,7 @@
   "patches": [
     {
       "path": "patches/rustls-0.23.46-chrome151.patch",
-      "sha256": "5deee21f5349fdacb350bc48ac2388a4b3a0fff988aec6b516294b6ae8e5921a"
+      "sha256": "a63cadc3346277f82594b6dcd818f56796c39c44aa0ef1377c6da90328631638"
     }
   ],
   "licenses": [
@@ -759,6 +759,6 @@
   ],
   "modificationNotice": {
     "path": "config/source-forks/rustls-0.23.46.NOTICE.md",
-    "sha256": "58898732988c539065681264252fa603e737c637f11629a74d5b489f739b1d39"
+    "sha256": "e348815a3c8cf11f58344f109e9565419f5ef2324408d3543d3905309485fafb"
   }
 }

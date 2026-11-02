@@ -24,10 +24,10 @@
         },
         {
           "name": "cargo:source-revision",
-          "value": "7b15f5b614031181b5a2eab274acac6f15d961ff"
+          "value": "66286391a715fbc1c2bbabb2581c5295f76a1acd"
         }
       ],
-      "purl": "pkg:generic/foxhole/yara-x@1.21.0?core_commit=7b15f5b614031181b5a2eab274acac6f15d961ff",
+      "purl": "pkg:generic/foxhole/yara-x@1.21.0?core_commit=66286391a715fbc1c2bbabb2581c5295f76a1acd",
       "type": "library",
       "version": "1.21.0"
     },
@@ -54,10 +54,10 @@
         },
         {
           "name": "cargo:source-revision",
-          "value": "7b15f5b614031181b5a2eab274acac6f15d961ff"
+          "value": "66286391a715fbc1c2bbabb2581c5295f76a1acd"
         }
       ],
-      "purl": "pkg:generic/foxhole/yara-x-parser@1.21.0?core_commit=7b15f5b614031181b5a2eab274acac6f15d961ff",
+      "purl": "pkg:generic/foxhole/yara-x-parser@1.21.0?core_commit=66286391a715fbc1c2bbabb2581c5295f76a1acd",
       "type": "library",
       "version": "1.21.0"
     },
@@ -5730,10 +5730,10 @@
         },
         {
           "name": "cargo:source-revision",
-          "value": "7b15f5b614031181b5a2eab274acac6f15d961ff"
+          "value": "66286391a715fbc1c2bbabb2581c5295f76a1acd"
         }
       ],
-      "purl": "pkg:generic/foxhole/foxhole-sentinel-yara@0.1.0?core_commit=7b15f5b614031181b5a2eab274acac6f15d961ff",
+      "purl": "pkg:generic/foxhole/foxhole-sentinel-yara@0.1.0?core_commit=66286391a715fbc1c2bbabb2581c5295f76a1acd",
       "type": "library",
       "version": "0.1.0"
     },
@@ -5748,7 +5748,7 @@
       },
       {
         "name": "foxhole:native:core-revision",
-        "value": "7b15f5b614031181b5a2eab274acac6f15d961ff"
+        "value": "66286391a715fbc1c2bbabb2581c5295f76a1acd"
       },
       {
         "name": "foxhole:native:features",
@@ -5796,7 +5796,11 @@
       },
       {
         "name": "foxhole:native:retained-original-Core-context",
-        "value": "543efe47cb002af1aa768b9c482a2adc79b323f1"
+        "value": "7b15f5b614031181b5a2eab274acac6f15d961ff"
+      },
+      {
+        "name": "foxhole:native:source-context-parent",
+        "value": "50e615c9551c044ed1488d74fccd72c7e8f16c46"
       }
     ]
   },

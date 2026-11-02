@@ -1,0 +1,3 @@
+<resources>
+    <string name="guard_router_setup_readonly_complete">已确认OpenWrt。此应用尚未提供经过验证的安装包，未更改路由器设置。</string>
+</resources>

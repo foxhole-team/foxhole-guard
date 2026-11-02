@@ -9,4 +9,11 @@
     <string name="cli_release_notes_details">Подробнее</string>
     <string name="cli_release_notes_details_body">Также улучшены обновление подписок, DNS, резервные копии и проверки приложений FoxHole Sentinel.\nClash/Mihomo импортирует поддерживаемые серверы из YAML/JSON; правила клиента и внешние провайдеры не переносятся. Для Outline поддержаны стандартный JSON и динамические ключи ssconf://.\nПереключатель OpenWrt управляет доступом с телефона после настройки или сопряжения. Его выключение сохраняет работающий VPN роутера.</string>
     <string name="cli_release_notes_ack_failed">Не удалось сохранить выбор. Попробуйте ещё раз.</string>
+    <string name="cli_release_notes_router_setup">Исправлены поиск роутера, сопряжение и проверка OpenWrt по SSH, так же добавлена поддержка SSH ключей.</string>
+    <string name="cli_release_notes_app_updates">Исправлены ошибки обновления приложения с Github.</string>
+    <string name="cli_release_notes_notices">Добавлены таймер закрытия уведомлений и закрытие свайпом вверх.</string>
+    <string name="cli_release_notes_help">Обновлены справка и подсказки.</string>
+    <string name="cli_release_notes_vless_reality">Исправлена совместимость VLESS + REALITY.</string>
+    <string name="cli_release_notes_router_management">Упрощены настройка OpenWrt и управление домашними устройствами и VPN-клиентами.</string>
+    <string name="cli_release_notes_pin6">Добавлены шестизначный PIN с подтверждением при установке и поддержка до 10 роутеров.</string>
 </resources>

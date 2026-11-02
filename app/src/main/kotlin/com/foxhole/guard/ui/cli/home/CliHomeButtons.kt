@@ -400,6 +400,7 @@ internal fun CliSecondaryButtonsRow(
         )
     }
     val i2pEngaged = home.settings.i2p.enabled && home.settings.i2p.engaged
+    val i2pState = stringResource(if (i2pEngaged) R.string.cli_common_on else R.string.cli_common_off)
     val i2pButton: @Composable (Modifier, Boolean) -> Unit = { buttonModifier, interactive ->
         CliButton(
             label = if (home.settings.i2p.relayTransitTraffic) "I2P -R" else "I2P",
@@ -407,7 +408,8 @@ internal fun CliSecondaryButtonsRow(
             color = if (i2pEngaged) colors.i2p else colors.dim,
             enabled = interactive,
             onClick = { performCliI2pToggle(viewModel, terminal, home.settings) },
-            modifier = buttonModifier.testTag(CLI_HOME_I2P_ACTION_TAG),
+            modifier = buttonModifier.testTag(CLI_HOME_I2P_ACTION_TAG)
+                .semantics { stateDescription = i2pState },
         )
     }
     val row = cliHomeButtonLayout(

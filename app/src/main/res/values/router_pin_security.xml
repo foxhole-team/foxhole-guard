@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="guard_router_router_setup_pin">PIN code</string>
+    <string name="guard_router_router_setup_pin_repeat">Repeat PIN code</string>
+    <string name="guard_router_router_pin_cooldown">Try again in %1$d s.</string>
+    <string name="guard_router_router_setup_all_lan_vpn">VPN for all home devices</string>
+    <string name="guard_router_router_setup_all_lan_vpn_help">Use VPN for all home devices when connected, while keeping your routing exceptions. You can turn this off. This does not start VPN.</string>
+</resources>

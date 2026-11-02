@@ -8,18 +8,14 @@ import kotlinx.coroutines.ensureActive
 import okhttp3.Call
 import okhttp3.Callback
 import okhttp3.HttpUrl
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import java.io.ByteArrayOutputStream
 import java.io.IOException
-import java.util.concurrent.TimeUnit
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
-internal class GithubRouterReleaseAssets(baseUrl: String, private val calls: Call.Factory = OkHttpClient.Builder()
-    .followRedirects(false).followSslRedirects(false).retryOnConnectionFailure(false)
-    .connectTimeout(15, TimeUnit.SECONDS).readTimeout(20, TimeUnit.SECONDS).callTimeout(45, TimeUnit.SECONDS).build()
+internal class GithubRouterReleaseAssets(baseUrl: String, private val calls: Call.Factory = routerPublicReleaseClient()
 ) : RouterReleaseAssetSource {
     private val base = routerReleaseBaseUrl(baseUrl)
 
@@ -43,6 +39,12 @@ internal class GithubRouterReleaseAssets(baseUrl: String, private val calls: Cal
     } } catch (_: TimeoutCancellationException) {
         currentCoroutineContext().ensureActive()
         throw IOException("router_release_timeout")
+    }
+
+    override suspend fun readLargeMetadata(name: String, maximumBytes: Int, onProgress: (Long, Long?) -> Unit): ByteArray {
+        require(name.matches(Regex("[A-Za-z0-9][A-Za-z0-9._-]{0,159}")) && maximumBytes in 1048577..2097152)
+        val url = base.newBuilder().apply { if (base.encodedPath.endsWith('/')) removePathSegment(base.pathSize - 1) }.addPathSegment(name).build()
+        return RouterDeviceReleaseHttp(calls).read(url, maximumBytes).also { onProgress(it.size.toLong(), it.size.toLong()) }
     }
 
     private suspend fun fetch(url: HttpUrl, maximum: Int, onProgress: (Long, Long?) -> Unit): RouterAssetReply = suspendCancellableCoroutine { continuation ->

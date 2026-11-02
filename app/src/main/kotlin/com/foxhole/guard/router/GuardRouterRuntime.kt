@@ -24,18 +24,22 @@ internal class GuardRouterRuntime(context: Context, repository: ProfileRepositor
         override fun isCurrent(socket: java.net.Socket): Boolean = GuardRouterSocketOwners.isCurrent(socket)
     }
     private val access = { requireRouterLocalNetworkAccess(application) }
-    private val transport = WifiRouterWizardTransport(manager, socketProtection = protection, accessCheck = access)
+    private val transport = WifiRouterWizardTransport(manager, socketProtection = protection, accessCheck = access,
+        nsd = application.getSystemService(android.net.nsd.NsdManager::class.java))
     private val provisioner = RouterHttpProvisioner(localAddress = { identity ->
         requireNotNull(RouterWifiConnection.select(manager, identity.endpoint, protection, access).localAddress.hostAddress)
     }, pairingStore = pairing)
     private val profiles = GuardRouterProfiles(repository, pairing)
     private val setup = readGuardRouterReleaseAnchor(application)?.let {
-        WifiRouterSetupService.forWifi(manager, it, protection, access)
+        WifiRouterSetupService.forWifi(manager, it, protection, access,
+            deviceBundleProvider = RouterDeviceInstallBundleProvider(application.cacheDir))
     }
     val wizard = RouterWizardCoordinator(transport, pairing, Build.MODEL.take(128).ifBlank { "Android" }, setup, provisioner,
         exportProfile = profiles::selected, importRemoteProfile = profiles::importProfile, preferenceStore = preferences,
-        importAuthenticatedProfile = profiles::importAuthenticated)
+        importAuthenticatedProfile = profiles::importAuthenticated,
+        readonlyInspector = WifiRouterReadonlyInspector.forWifi(manager, protection, access))
     val control = RouterControlCoordinator(PairedRouterManagementTransport(transport, manager, access), pairing, preferences, provisioner,
+        deviceUpdateRelay = RouterDeviceUpdateRelay(RouterDeviceReleaseSource(application.cacheDir)),
         // This is also disabled in VPN until physical foreground-service acceptance.
         homeAutomationAvailable = false, copyProfile = { value ->
             withContext(Dispatchers.Main) {

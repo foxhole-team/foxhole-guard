@@ -1,5 +1,6 @@
 package com.foxhole.guard.ui
 
+import android.content.ClipData
 import android.content.Intent
 import android.provider.Settings
 import androidx.core.content.FileProvider
@@ -97,8 +98,18 @@ private fun Throwable.asDownloadFailure(): AppUpdateFailure =
     if (this is java.io.IOException) AppUpdateFailure.NETWORK else AppUpdateFailure.UNKNOWN
 
 internal fun HomeViewModel.onAppUpdateInstallRequested() {
-    if (!appUpdateChannelIsGithub) return
-    val downloaded = container.appUpdateRepository.state.value as? AppUpdateState.Downloaded ?: return
+    if (!appUpdateChannelIsGithub || componentUpdates.appUpdateJob?.isActive == true) return
+    if (container.appUpdateRepository.state.value !is AppUpdateState.Downloaded) return
+    componentUpdates.appUpdateJob = viewModelScope.launch {
+        val downloaded = container.appUpdateRepository.verifyForInstall().getOrElse {
+            snackbars.tryEmit(errorBanner(R.string.cli_updates_app_failed_verification))
+            return@launch
+        }
+        launchAppUpdateInstaller(downloaded)
+    }
+}
+
+private fun HomeViewModel.launchAppUpdateInstaller(downloaded: AppUpdateState.Downloaded) {
     val context: android.content.Context = getApplication()
     if (!context.packageManager.canRequestPackageInstalls()) {
         val permissionIntent =
@@ -120,6 +131,7 @@ internal fun HomeViewModel.onAppUpdateInstallRequested() {
     val intent =
         Intent(Intent.ACTION_VIEW).apply {
             setDataAndType(uri, "application/vnd.android.package-archive")
+            clipData = ClipData.newRawUri("FoxHole Guard update", uri)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
         }
     runCatching { context.startActivity(intent) }

@@ -12,7 +12,6 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -21,6 +20,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import com.foxhole.guard.ui.cli.components.CliButton
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -39,12 +40,14 @@ internal fun GuardRouterSavedSelector(routers: List<RouterSavedSummary>, selecte
         verticalArrangement = Arrangement.spacedBy(12.dp)) {
         BoxWithConstraints(Modifier.fillMaxWidth()) {
             val menuWidth = maxWidth
-            OutlinedButton(onClick = { expanded = !expanded }, enabled = enabled,
-                modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
-                Text(selected?.let { savedRouterName(it) } ?: stringResource(R.string.guard_router_router_review_choose_router),
-                    Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Icon(painterResource(R.drawable.lin_arrow_down), null, Modifier.size(20.dp))
-            }
+            CliButton(
+                label = selected?.let { savedRouterName(it) } ?: stringResource(R.string.guard_router_router_review_choose_router),
+                onClick = { expanded = !expanded },
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                enabled = enabled,
+                icon = R.drawable.lin_arrow_down,
+                filled = false,
+            )
             DropdownMenu(expanded = expanded && enabled, onDismissRequest = { expanded = false },
                 modifier = Modifier.width(menuWidth).heightIn(max = 280.dp)) {
                 routers.forEach { router ->

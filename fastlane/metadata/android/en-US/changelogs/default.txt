@@ -1,11 +1,5 @@
-1.0.0 Stable (release candidate)
-
-- Correct release metadata while preserving the original F-Droid build history.
-- User Home respects the saved map/route view.
-- The large map remains visible by default; terminal visibility controls remain in Expert mode.
-- Transparent monochrome fox logo in the connection widget.
-- Clearer Sentinel capability descriptions.
-- Direct SIP008 JSON paste with selectable servers and strict format checks.
-
-Canceling an app update stops its request and body reader. Downloads use separate temporary files and replace the previous APK only after size and digest checks.
-Canceled updates restore their previous state; late callbacks cannot replace a newer result. Invalid APK filenames are rejected before cache access.
+1.0.2 Stable
+• Fixed router discovery, pairing and OpenWrt inspection over SSH, and added SSH key support.
+• Fixed errors when updating the app from GitHub.
+• Added a 15-second notification dismissal timer and upward swipe dismissal.
+• Updated help and hints.

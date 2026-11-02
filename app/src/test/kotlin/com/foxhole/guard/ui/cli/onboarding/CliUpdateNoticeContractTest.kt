@@ -11,10 +11,10 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class CliUpdateNoticeContractTest {
-    @Test fun fourSummaryLinesRetainTheFullOwnerApprovedRouterText() {
+    @Test fun fiveSummaryLinesRetainTheFullOwnerApprovedRouterText() {
         listOf("values", "values-ru").forEach { qualifier ->
             val strings = releaseNoteCopy(qualifier)
-            val texts = listOf("runtime", "sentinel_network", "backup", "core").map { topic ->
+            val texts = listOf("router_setup", "app_updates", "notices", "help", "router_management", "pin6").map { topic ->
                 strings.getValue("cli_release_notes_$topic")
             }
             val items = updateNoticeItems(texts.joinToString("\n"))
@@ -22,10 +22,16 @@ class CliUpdateNoticeContractTest {
         }
     }
 
-    @Test fun capabilitySelectionKeepsNetworkOwnerClaimsOffOlderAndroid() {
-        assertTrue(releaseNoteKeys(28).contains(R.string.cli_release_notes_sentinel_apps))
-        assertFalse(releaseNoteKeys(28).contains(R.string.cli_release_notes_sentinel_network))
-        assertTrue(releaseNoteKeys(29).contains(R.string.cli_release_notes_sentinel_network))
+    @Test fun currentReleaseUsesTheSameSixAuthorItemsOnEveryAndroidVersion() {
+        val expected = listOf(
+            R.string.cli_release_notes_router_setup,
+            R.string.cli_release_notes_app_updates,
+            R.string.cli_release_notes_notices,
+            R.string.cli_release_notes_help,
+            R.string.cli_release_notes_router_management,
+            R.string.cli_release_notes_pin6,
+        )
+        listOf(28, 29).forEach { apiLevel -> assertEquals(expected, releaseNoteKeys(apiLevel)) }
     }
 
     @Test fun noticeOnlyChangesMonochromeAndAcknowledgement() {

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="router_public_ipv4_detected" formatted="false">ルーターのパブリック IPv4: 検出済み</string>
+    <string name="router_public_ipv4_not_detected" formatted="false">ルーターのパブリック IPv4: 未検出</string>
+    <string name="router_public_ipv4_unknown" formatted="false">ルーターのパブリック IPv4: 不明</string>
+</resources>

@@ -1,0 +1,13 @@
+{
+  "displayFingerprint": "062c 1b01 1d46 9286 f622 0817 b50e 17de 4265 da45 f3f8 bace ce60 1353 cb96 52d6",
+  "encodedHex": "73796e7468657469632d726f757465722d63657274696669636174652d61646d697373696f6e2d666978747572652d7631",
+  "invalidPins": [
+    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+    "000000000000000000000000000000000000000000000000000000000000000",
+    "gggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggg"
+  ],
+  "scope": "Synthetic X509Certificate stub; no DER or handshake claim",
+  "sha256": "062c1b011d469286f6220817b50e17de4265da45f3f8bacece601353cb9652d6",
+  "syntheticLanAddress": "10.77.0.1",
+  "wrongPin": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+}

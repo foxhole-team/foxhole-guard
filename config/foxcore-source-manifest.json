@@ -6,7 +6,7 @@
     "x86_64"
   ],
   "androidDeliveryProfile": "android4",
-  "commit": "7b15f5b614031181b5a2eab274acac6f15d961ff",
+  "commit": "66286391a715fbc1c2bbabb2581c5295f76a1acd",
   "files": [
     {
       "path": ".cargo/config.toml",
@@ -14,11 +14,11 @@
     },
     {
       "path": "Cargo.lock",
-      "sha256": "c0c0801a904fad36b34cfc8907614216c316bf13b7a5f0b2485029739e92a3c6"
+      "sha256": "c82e5f7351ad507789a41f589f2541eb65c08fe96c9421d7f8068262f9b45880"
     },
     {
       "path": "Cargo.toml",
-      "sha256": "829e34f89f2c66bd51a9f00d416242026e313c17d53e4fecd1a955263d9c6e9b"
+      "sha256": "006fdbc4357c022628ee0afed0aec0c960acc9ad56b97ab07350a4b79837d464"
     },
     {
       "path": "config/foxcore-android-delivery.json",
@@ -26,11 +26,11 @@
     },
     {
       "path": "config/source-forks/rustls-0.23.46.NOTICE.md",
-      "sha256": "58898732988c539065681264252fa603e737c637f11629a74d5b489f739b1d39"
+      "sha256": "e348815a3c8cf11f58344f109e9565419f5ef2324408d3543d3905309485fafb"
     },
     {
       "path": "config/source-forks/rustls-0.23.46.json",
-      "sha256": "ecdc360e6e6569d14a922b51be28fde677ff18c818debdc09cb90f4d0eb7c519"
+      "sha256": "88dd76f0174bc49acd931551910754fbe0d4a0ad09cb63ea652fdea6a6ed1df6"
     },
     {
       "path": "config/source-forks/rustls-0.23.46.upstream-files.json",
@@ -58,7 +58,7 @@
     },
     {
       "path": "crates/foxcore-android/src/capabilities.rs",
-      "sha256": "3229e539b7f67b0b4855fbcfd119979ac71514eac297a43a15f27d811f3caf94"
+      "sha256": "7a3c1d16298524bd91b616d4747ceaa10ea4faac97d3667fa4b8ea78fca7f301"
     },
     {
       "path": "crates/foxcore-android/src/dns_continuation.rs",
@@ -158,11 +158,11 @@
     },
     {
       "path": "crates/foxcore-api/src/config/tests/protocols.rs",
-      "sha256": "0f73a226a0147b822e69efce25f44123e22a2aad2caba62b1057361e40aafdcb"
+      "sha256": "1730a40fdd91f365b83d943fda5194cd4c906bb24cc1da275736e5aa91cb1cd8"
     },
     {
       "path": "crates/foxcore-api/src/config/tls.rs",
-      "sha256": "dc76f4c318a22a1b195844db49738a15e9fce0256b0ee3726b8172ecbe6095f0"
+      "sha256": "9f6369b51632039d90aac50120fd28ea3fda435e88d7438048febf7fbfb789cb"
     },
     {
       "path": "crates/foxcore-api/src/config/transport.rs",
@@ -174,7 +174,7 @@
     },
     {
       "path": "crates/foxcore-api/src/config/vless.rs",
-      "sha256": "55363ce3efaa438686351cfca829b827995e3dbe7859b0acd15c0db760f5c4fd"
+      "sha256": "ddf570fa99e1d43e080ea384e20f2a70fe7e62a9f9af8503be7709e3ab0d6349"
     },
     {
       "path": "crates/foxcore-api/src/config/vless_encryption.rs",
@@ -214,7 +214,7 @@
     },
     {
       "path": "crates/foxcore-api/tests/ordinary_tls_chrome.rs",
-      "sha256": "0aa2361ad6981cfaa83578a20261c8d3f076b00ab4e70ab37d4755bab5427885"
+      "sha256": "dd799ad78034f63dc1d08086cd3c554c0a4155a4076a84c2c065b9120695690f"
     },
     {
       "path": "crates/foxcore-cli/Cargo.toml",
@@ -318,7 +318,7 @@
     },
     {
       "path": "crates/foxcore-link/src/lib.rs",
-      "sha256": "bac3105c2d17881fe59bf605e544cb3d7ac6a6c48af7e91128d3761ad2bb1b99"
+      "sha256": "346d71340e34534e1562a59b6fef25d216803d8d77614991f3f45ffa3e7f508b"
     },
     {
       "path": "crates/foxcore-link/src/structured.rs",
@@ -690,7 +690,7 @@
     },
     {
       "path": "crates/foxcore-transport/src/tls.rs",
-      "sha256": "eff5b01bc2a2edf674f9905e2d954bd55c4eb85f8b04a2c9cd0c307b90bd5529"
+      "sha256": "a17fc26394e8337bb1743568a3a508d9ce97771e71e7bf89b45c50183ed2c5f6"
     },
     {
       "path": "crates/foxcore-transport/src/tls/chrome_tests.rs",
@@ -1134,7 +1134,11 @@
     },
     {
       "path": "crates/proto-reality/src/lib.rs",
-      "sha256": "fa5101343d12524e3dc2f83a8e88235dd1f16f1b32eea33464d1650d755685b1"
+      "sha256": "d4356637275b97f357ed60025cf2ea60b6082150d4fe5a8cfdcf4de6d59800ad"
+    },
+    {
+      "path": "crates/proto-reality/src/reality/auth_payload.rs",
+      "sha256": "cd698157b9887396d050099f25d4df3cfe410d38eb7dffd9cd7d71bb77b9b5b1"
     },
     {
       "path": "crates/proto-reality/src/reality/common.rs",
@@ -1142,7 +1146,7 @@
     },
     {
       "path": "crates/proto-reality/src/reality/fingerprint_vector.rs",
-      "sha256": "0bda93c60bc0f0107368f77aa14bec9bc9d7c8a0cec27bedebd9e0816e006185"
+      "sha256": "d21bd516b2e5f3b2ce6883574b70d5745b49c023db7d8490fd9f38e339ff2478"
     },
     {
       "path": "crates/proto-reality/src/reality/fuzz_records.rs",
@@ -1150,11 +1154,11 @@
     },
     {
       "path": "crates/proto-reality/src/reality/hello_profile.rs",
-      "sha256": "71a8e0c1b809eb6e1bad0c541bb45a8f659d5b7027786bf2d5d43d1a87f9578a"
+      "sha256": "c77b666b67c6cebe5c81ddd4b675c7b6a95f9c41538aa2439e132c24b97e04f8"
     },
     {
       "path": "crates/proto-reality/src/reality/mod.rs",
-      "sha256": "2db228b1004e3e6203e80a7a53243e564b00ac25a4f1b5179f04fc99146cba30"
+      "sha256": "fe312c34383f9d71f80a1c795d345fbb939adcba9056385db07aa5892ab39389"
     },
     {
       "path": "crates/proto-reality/src/reality/parrot_fingerprints.rs",
@@ -1186,7 +1190,7 @@
     },
     {
       "path": "crates/proto-reality/src/reality/reality_client_connection.rs",
-      "sha256": "ff8632dbe4929b9215612ced117879e70a44559796a702c05609a7590fd20c5e"
+      "sha256": "af93d09cf0f1efed26af7aae78112f8bbc867e3ca9452fa523fdfd3c546253e7"
     },
     {
       "path": "crates/proto-reality/src/reality/reality_client_verify.rs",
@@ -1218,7 +1222,11 @@
     },
     {
       "path": "crates/proto-reality/src/reality/runtime_tables.rs",
-      "sha256": "5a80de5363b06c8b64dd00e9080e04694ceaa75759a55425a69c7c612be5d22b"
+      "sha256": "2ce266e00b3577500c55f2a67502585f0d07d37f607fe53b1706a0825e832245"
+    },
+    {
+      "path": "crates/proto-reality/src/reality/signature_grease.rs",
+      "sha256": "21d96ce61a71c0b2f66ac40df4537f75b67b74620601c23342afcab8520edb18"
     },
     {
       "path": "crates/proto-reality/src/reality/testkit_internals.rs",
@@ -1402,7 +1410,7 @@
     },
     {
       "path": "crates/proto-vless/src/lib.rs",
-      "sha256": "d9096af1cf2abbcc54e6140f73ae3007501fe1dfbe460d6a3a04b7b6885b4a0f"
+      "sha256": "574310834cee088f90bef292db724e0933adf4394c409654ab160f4dd6475ad6"
     },
     {
       "path": "crates/proto-vless/src/packetaddr.rs",
@@ -1533,6 +1541,10 @@
       "sha256": "4bb975a5aa7335e3f7889c1a332b7c368e3752ca6fc17579c079af19f54ea1e7"
     },
     {
+      "path": "fingerprints/chrome_156.json",
+      "sha256": "f2be6caa7eb6685a8520e555a73912a4ed565e1d85f4dfb520178abb19b626f8"
+    },
+    {
       "path": "fingerprints/edge_85.json",
       "sha256": "8d71897b54260c99fb4fcc9618d308de89ab07d26f6a900f52c5bcb59261090c"
     },
@@ -1614,7 +1626,7 @@
     },
     {
       "path": "patches/rustls-0.23.46-chrome151.patch",
-      "sha256": "5deee21f5349fdacb350bc48ac2388a4b3a0fff988aec6b516294b6ae8e5921a"
+      "sha256": "a63cadc3346277f82594b6dcd818f56796c39c44aa0ef1377c6da90328631638"
     },
     {
       "path": "rust-toolchain.toml",
@@ -1694,15 +1706,15 @@
     },
     {
       "path": "vendor/rustls/src/client/builder.rs",
-      "sha256": "9fa43f7d00507a4a6d191e7f2e12af1dca9c35a0a8758b39c6447a347e2bf46c"
+      "sha256": "10e347450f7dea610729a0950615566ba9e2e65d97eb0c14db6dfd5a3e84f7bb"
     },
     {
       "path": "vendor/rustls/src/client/chrome_hello.rs",
-      "sha256": "bf330c800c80bcda4db04c3d7173f2be7fcf88691f2035b276e236c62939671f"
+      "sha256": "3c5068f733b21cf4bf4d847351f38f7a29fe7e64a95a99e15efb5d1044ceed54"
     },
     {
       "path": "vendor/rustls/src/client/client_conn.rs",
-      "sha256": "d84634776f49d0833841a9fa88a60f55b4e2006dd9fec916a6d1f2a4d4a94848"
+      "sha256": "8deb6e26e9b92c243a0d515e3bc8e28a61fe9599d0c1b517695fc36255719e8e"
     },
     {
       "path": "vendor/rustls/src/client/common.rs",
@@ -1718,7 +1730,7 @@
     },
     {
       "path": "vendor/rustls/src/client/hs.rs",
-      "sha256": "8d561a63874c1295c0b53cd0c53892582036b8a84645b46e2dadc95c8477e891"
+      "sha256": "0eb7b9a160b94b4b352db0a2038013815bf58c04675921733a26d5def9b3958b"
     },
     {
       "path": "vendor/rustls/src/client/test.rs",
@@ -1726,11 +1738,11 @@
     },
     {
       "path": "vendor/rustls/src/client/tls12.rs",
-      "sha256": "5fff268740878eaee2f13d86eaad7b5d4a3b74a2ba1bafbd500f7084e4d1e1b4"
+      "sha256": "dfd4ad6948e62f75d7ec810024192651514bd57fc0a09865d7b5f0482da62fc1"
     },
     {
       "path": "vendor/rustls/src/client/tls13.rs",
-      "sha256": "ea5c952da871f33611191368806b39660723f4f6c62a6881e9b688fe1b3a79a4"
+      "sha256": "d1587ac36bbb85fa0c91c4f724d41ab13145988360ee0097b76ecb4966033095"
     },
     {
       "path": "vendor/rustls/src/common_state.rs",

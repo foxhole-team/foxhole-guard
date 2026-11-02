@@ -13,7 +13,7 @@ internal fun retainUserNotice(current: FoxholeBannerEvent?, incoming: FoxholeBan
 }
 
 internal fun userNoticeDurationMillis(notice: FoxholeBannerEvent): Long? =
-    if (notice.tone.isCritical()) null else (notice.durationMillis ?: 4_000L).coerceIn(1_000L, 10_000L)
+    if (notice.tone.isCritical() || notice.action != null) null else NOTICE_DURATION_MILLIS
 
 private fun FoxholeBannerTone?.isCritical(): Boolean =
     this == FoxholeBannerTone.ERROR || this == FoxholeBannerTone.WARNING

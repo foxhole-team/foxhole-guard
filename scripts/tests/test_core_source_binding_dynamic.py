@@ -5,7 +5,7 @@ ROOT=Path(__file__).resolve().parents[2]
 spec=importlib.util.spec_from_file_location('dynamic_core_binding',ROOT/'scripts/core-source-binding.py');M=importlib.util.module_from_spec(spec);spec.loader.exec_module(M)
 class DynamicCoreBindingTest(unittest.TestCase):
  def setUp(self):
-  self.tmp=tempfile.TemporaryDirectory();self.root=Path(self.tmp.name).resolve();self.core=self.root/'core';self.app=self.root/'app';self.producer='b'*40;self.names=sorted(M.FIXED|{'fingerprints/'+str(i)+'.json'for i in range(9)}|{'crates/native/src/lib.rs','crates/native/src/lease.rs'})
+  self.tmp=tempfile.TemporaryDirectory();self.root=Path(self.tmp.name).resolve();self.core=self.root/'core';self.app=self.root/'app';self.producer='b'*40;self.names=sorted(M.FIXED|{'fingerprints/'+str(i)+'.json'for i in range(10)}|{'crates/native/src/lib.rs','crates/native/src/lease.rs'})
   for name in self.names:
    path=self.core/name;path.parent.mkdir(parents=True,exist_ok=True);path.write_text(name+'\n')
   (self.app/'config').mkdir(parents=True);self.save(self.names)

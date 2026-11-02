@@ -18,7 +18,16 @@ internal data class RouterControlPreferences(
     val publicIpConfirmed: Boolean = false,
     val countryAuto: Boolean = true,
     val homeVpnManagementEnabled: Boolean = false,
+    val homeVpnDefaultPending: Boolean = false,
+    val hideOfflineDevices: Boolean = true,
 ) {
+    fun afterSuccessfulPairing(): RouterControlPreferences = copy(enabled = true, homeVpnDefaultPending = false)
+
+    // An observed public address does not prove a static address or replace the user's confirmation.
+    @Suppress("UNUSED_PARAMETER")
+    fun withPublicIpv4Evidence(available: Boolean?): RouterControlPreferences =
+        if (homeVpnDefaultPending) copy(homeVpnDefaultPending = false) else this
+
     fun validate() { require(pairingId.matches(Regex("pair-[a-f0-9]{32}")) &&
         (countryCode.isEmpty() || countryCode in Locale.getISOCountries().toSet()) &&
         (!homeVpnManagementEnabled || publicIpConfirmed)) }

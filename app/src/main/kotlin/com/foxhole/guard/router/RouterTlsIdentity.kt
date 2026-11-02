@@ -20,7 +20,9 @@ internal data class RouterTlsIdentity(val endpoint: RouterEndpoint, val certific
 
 internal class RouterIdentityChanged : IOException("router_identity_changed")
 
-internal fun inspectRouterIdentity(connection: RouterWifiConnection, operation: RouterIoOperation): RouterTlsIdentity {
+internal fun inspectRouterIdentity(connection: RouterWifiConnection, operation: RouterIoOperation,
+    timeoutMillis: Int = 15000): RouterTlsIdentity {
+    require(timeoutMillis in 1..15000)
     connection.requireCurrent()
     val observed = AtomicReference<X509Certificate?>()
     val observer = object : X509TrustManager {
@@ -35,16 +37,17 @@ internal fun inspectRouterIdentity(connection: RouterWifiConnection, operation: 
         }
     }
     val context = SSLContext.getInstance("TLS").apply { init(null, arrayOf<TrustManager>(observer), null) }
+    var handshakeFailure: IOException? = null
     connection.createSocket().use { socket ->
         operation.register(socket)
-        socket.connect(connection.endpoint.socketAddress(), 15000)
-        socket.soTimeout = 15000
+        socket.connect(connection.endpoint.socketAddress(), timeoutMillis)
+        socket.soTimeout = timeoutMillis
         (context.socketFactory.createSocket(socket, connection.endpoint.address, connection.endpoint.port, true) as SSLSocket).use { secure ->
             secure.enabledProtocols = secure.supportedProtocols.filter { it == "TLSv1.3" || it == "TLSv1.2" }.toTypedArray()
-            try { secure.startHandshake() } catch (_: IOException) { /* Candidate is inspected below. */ }
+            try { secure.startHandshake() } catch (failure: IOException) { handshakeFailure = failure }
         }
     }
-    val candidate = observed.get() ?: throw RouterIdentityChanged()
+    val candidate = observed.get() ?: throw (handshakeFailure ?: RouterIdentityChanged())
     connection.requireCurrent()
     return RouterTlsIdentity(connection.endpoint, sha256RouterCertificate(candidate.encoded))
 }

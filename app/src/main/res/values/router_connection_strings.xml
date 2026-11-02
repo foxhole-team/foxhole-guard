@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="guard_router_router_ssh_key_file">CHOOSE SSH KEY FILE</string>
+    <string name="guard_router_router_ssh_key_paste">PASTE SSH KEY</string>
+    <string name="guard_router_router_ssh_key_loaded">SSH private key loaded for this connection only.</string>
+    <string name="guard_router_router_ssh_use_password">USE PASSWORD</string>
+    <string name="guard_router_router_ssh_key_error">Could not read an SSH private key. Choose a PEM or OpenSSH key up to 64 KiB.</string>
+    <string name="guard_router_router_ssh_key_passphrase">SSH key passphrase (if set)</string>
+    <string name="guard_router_router_ssh_checking_openwrt">Checking OpenWrt version, architecture and installation requirements…</string>
+    <string name="guard_router_router_discovery_api_absent">FoxHole HTTPS API did not respond at this address. Check the router address or try again.</string>
+    <string name="guard_router_router_discovery_ssh_only">SSH is available, but the FoxHole HTTPS API is unavailable. You can check OpenWrt before installing.</string>
+    <string name="guard_router_router_discovery_timeout">The router check timed out. Try again or enter its current LAN address.</string>
+    <string name="guard_router_router_discovery_tls">Could not verify the router HTTPS connection. Check its clock and certificate, then try again.</string>
+    <string name="guard_router_router_discovery_network">Could not reach the router over this Wi-Fi network. Try again or enter its address.</string>
+    <string name="guard_router_router_discovery_package_check">The HTTPS service replied, but FoxHole could not be verified. Check the router web setup or try again.</string>
+    <string name="guard_router_router_ssh_manual_setup">CHECK OPENWRT / SSH SETUP</string>
+    <string name="guard_router_router_updates_device_download">Downloading the FoxHole package through your device</string>
+</resources>

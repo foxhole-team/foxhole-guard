@@ -5,6 +5,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 
+internal enum class RouterManagementLanding { HUB, SETTINGS }
 internal enum class RouterControlStage { LOADING, UNPAIRED, DISABLED, CONNECTING, CONNECTED, OFFLINE, PAIRING_REQUIRED }
 internal data class RouterControlState(
     val stage: RouterControlStage = RouterControlStage.LOADING,
@@ -25,6 +26,13 @@ internal data class RouterControlState(
     val engines: RouterEngineControlState = RouterEngineControlState(),
     val updates: RouterUpdateControlState = RouterUpdateControlState(),
 ) {
+    val managementLanding: RouterManagementLanding? get() = when {
+        hasConfirmedDirectIp -> RouterManagementLanding.HUB
+        snapshot != null -> RouterManagementLanding.SETTINGS
+        else -> null
+    }
+    val hasConfirmedDirectIp: Boolean get() = preferences?.publicIpConfirmed == true || snapshot?.publicIpv4Available == true
+    val remoteClientHubAvailable: Boolean get() = hasConfirmedDirectIp || snapshot?.clients?.isNotEmpty() == true
     val managementConfigured: Boolean get() = preferences != null &&
         selectedRouterId == preferences.pairingId && savedRouters.any { it.id == selectedRouterId } &&
         stage in setOf(RouterControlStage.DISABLED, RouterControlStage.CONNECTING, RouterControlStage.OFFLINE, RouterControlStage.CONNECTED)

@@ -1,7 +1,10 @@
 package com.foxhole.guard.router
 
 import java.io.IOException
+import java.net.ConnectException
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -29,9 +32,10 @@ class RouterDiscoveryCoordinatorTest {
     private class Store : RouterPairingStore {
         var value: RouterPairing? = null
         var otherRouter: RouterPairing? = null
+        var saveCalls = 0
         override suspend fun read() = value?.copy()
         override suspend fun readAll() = listOfNotNull(value?.copy(), otherRouter?.copy())
-        override suspend fun save(pairing: RouterPairing) { value?.clear(); value = pairing.copy() }
+        override suspend fun save(pairing: RouterPairing) { saveCalls++; value?.clear(); value = pairing.copy() }
         override suspend fun remove(expectedId: String) { if (value?.id == expectedId) { value?.clear(); value = null } }
     }
     private class FixtureCall(private val request: Request, private val answer: String?) : Call by OkHttpClient().newCall(request) {
@@ -63,7 +67,7 @@ class RouterDiscoveryCoordinatorTest {
             override suspend fun inspectIdentity(endpoint: RouterEndpoint): RouterTlsIdentity {
                 tlsInspections++
                 tlsInspection()
-                if (!tlsAvailable) throw IOException("no synthetic TLS endpoint")
+                if (!tlsAvailable) throw ConnectException("no synthetic TLS endpoint")
                 return identity
             }
             override fun api(identity: RouterTlsIdentity) = RouterPanelApi(identity, Call.Factory { request ->
@@ -113,7 +117,11 @@ class RouterDiscoveryCoordinatorTest {
             override suspend fun finish(api: RouterPanelApi, session: RouterPanelSession, pairing: RouterPairing,
                 options: RouterWizardOptions, selectedProfile: RouterProfileSelection?) = RouterWizardResult(pairing.id)
         }, { null }, { true })
-        suspend fun find() { coordinator.begin(RouterWizardPath.PAIR, "NL"); coordinator.findRouter() }
+        suspend fun find() = coroutineScope {
+            coordinator.begin(RouterWizardPath.PAIR, "NL")
+            // Await the owned operation on a real clock: production cleanup uses real IO.
+            launch(Dispatchers.Default) { coordinator.findRouter() }.join()
+        }
         fun oldPair() = RouterPairing(identity, "pair-" + "1".repeat(32), ByteArray(32) { 3 }, "Phone", true,
             "server-" + "2".repeat(12), "3".repeat(64))
     }
@@ -237,19 +245,37 @@ class RouterDiscoveryCoordinatorTest {
         assertEquals(RouterWizardError.UNAVAILABLE, f.coordinator.state.value.error)
     }
 
-    @Test fun changedStoredIdentityBlocksDiscoveryBeforeApiOrPassword() = runTest {
+    @Test fun changedStoredIdentityIsRejectedAfterPublicStatusBeforeCredentialsWithoutChangingSavedTrust() = runTest {
         val f = Fixture()
-        f.store.value = RouterPairing.create(RouterTlsIdentity(identity.endpoint, "f".repeat(64)), "Phone")
+        val original = RouterPairing.create(RouterTlsIdentity(identity.endpoint, "f".repeat(64)), "Phone")
+        f.store.value = original.copy()
+        try {
+            f.find()
+            assertEquals(RouterWizardError.IDENTITY, f.coordinator.state.value.error)
+            assertEquals(listOf("package.status"), f.actions)
+            assertEquals(0, f.sshInspections)
+            assertEquals(0, f.store.saveCalls)
+            assertEquals(original.id, f.store.value?.id)
+            assertEquals(original.identity, f.store.value?.identity)
+            assertArrayEquals(original.credential, requireNotNull(f.store.value).credential)
+        } finally { f.coordinator.close(); original.clear(); f.store.value?.clear() }
+    }
+
+    @Test fun genericNetworkFailureDoesNotInventPackageAbsenceOrChooseSsh() = runTest {
+        val f = Fixture()
+        f.tlsInspection = { throw IOException("synthetic network reset") }
         f.find()
-        assertEquals(RouterWizardError.IDENTITY, f.coordinator.state.value.error)
-        assertTrue(f.actions.isEmpty())
+        assertEquals(RouterDiscoveryKind.UNKNOWN, f.coordinator.state.value.discovery?.kind)
+        assertEquals(RouterDiscoveryIssue.NETWORK, f.coordinator.state.value.discovery?.issue)
         assertEquals(0, f.sshInspections)
+        assertTrue(f.actions.isEmpty())
+        f.coordinator.close()
     }
 
     @Test fun connectWithoutResetPreservesExistingPairingAndPendingSync() = runTest {
         val f = Fixture(); f.store.value = f.oldPair()
         f.find(); f.coordinator.connectDiscovered(); f.coordinator.login("5678".toCharArray())
-        assertEquals(RouterWizardStage.OPTIONS, f.coordinator.state.value.stage)
+        assertEquals(RouterWizardStage.COMPLETE, f.coordinator.state.value.stage)
         assertFalse(f.actions.contains("setup.reset"))
         assertEquals("pair-" + "1".repeat(32), f.store.value?.id)
         assertEquals("server-" + "2".repeat(12), f.store.value?.pendingServerId)
@@ -264,7 +290,7 @@ class RouterDiscoveryCoordinatorTest {
         assertEquals(RouterWizardStage.NEW_PIN, f.coordinator.state.value.stage)
         assertEquals(null, f.store.value)
         f.coordinator.changePin("7890".toCharArray())
-        assertEquals(RouterWizardStage.OPTIONS, f.coordinator.state.value.stage)
+        assertEquals(RouterWizardStage.COMPLETE, f.coordinator.state.value.stage)
         assertNotEquals(oldId, f.store.value?.id)
         assertFalse(oldKey.contentEquals(requireNotNull(f.store.value).credential))
         assertEquals(null, f.store.value?.pendingServerId)
@@ -303,7 +329,7 @@ class RouterDiscoveryCoordinatorTest {
             assertEquals(null, f.coordinator.state.value.error)
             assertEquals(other.id, f.store.otherRouter?.id)
             f.coordinator.changePin("7890".toCharArray())
-            assertEquals(RouterWizardStage.OPTIONS, f.coordinator.state.value.stage)
+            assertEquals(RouterWizardStage.COMPLETE, f.coordinator.state.value.stage)
             val created = requireNotNull(f.store.value)
             assertNotEquals(other.id, created.id)
             assertEquals(listOf(created.id), f.enrolled)

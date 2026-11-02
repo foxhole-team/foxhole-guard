@@ -1,0 +1,48 @@
+{
+  "allProtocols": [
+    "hysteria2",
+    "vless",
+    "vmess",
+    "tuic",
+    "trojan",
+    "shadowsocks",
+    "wireguard",
+    "naive",
+    "anytls",
+    "shadowtls",
+    "socks",
+    "http"
+  ],
+  "defaultProtocols": [
+    "hysteria2"
+  ],
+  "development": false,
+  "schema": 1,
+  "variants": [
+    {
+      "architecture": "x86_64",
+      "capabilitiesFile": "synthetic-capabilities.json",
+      "capabilitiesSha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "coreBinarySha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "coreProducerFile": "synthetic-producer.json",
+      "coreProducerSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "coreSourceSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "id": "contract-x86",
+      "modes": {
+        "flash": {
+          "budgetFile": "synthetic-budget.json",
+          "budgetSha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+        }
+      },
+      "protocols": [
+        "hysteria2"
+      ],
+      "supportedOpenWrt": [
+        "25.12.5"
+      ],
+      "supportedTargets": [
+        "mediatek/filogic"
+      ]
+    }
+  ]
+}

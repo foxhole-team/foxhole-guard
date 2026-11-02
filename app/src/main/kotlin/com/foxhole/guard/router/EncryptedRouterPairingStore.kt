@@ -24,12 +24,13 @@ import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
 internal class EncryptedRouterPairingStore(context: Context, private val io: CoroutineDispatcher = Dispatchers.IO,
-    storageId: String = "router-pairing.v1") : RouterPairingStore {
+    storageId: String = "router-pairing.v1") : RouterPairingStore, RouterPersonalVpnOrigins {
     init { require(storageId == "router-pairing.v1" || storageId.matches(Regex("router-pairing-qa-[a-f0-9]{32}"))) }
     private val lock = locks.computeIfAbsent(File(context.noBackupFilesDir, "vpn-$storageId").absolutePath) { Mutex() }
     private val file = AtomicFile(File(context.noBackupFilesDir, "vpn-$storageId"))
     private val changesMutable = revisions.computeIfAbsent(file.baseFile.absolutePath) { MutableStateFlow(0L) }
     val changes: StateFlow<Long> = changesMutable
+    override val startRevision: Long get() = changesMutable.value
     private val alias = "${context.packageName}.$storageId"
     private val aad = "$alias:1".toByteArray(Charsets.UTF_8)
     private val json = Json { ignoreUnknownKeys = false; encodeDefaults = true }
@@ -50,6 +51,14 @@ internal class EncryptedRouterPairingStore(context: Context, private val io: Cor
                 it.certificateSha256 == entry.pairing.identity.certificateSha256 && it.marker.pairingId == entry.pairing.id }
         }
     }
+    // Start protection may concern any saved router, not only the selected control panel.
+    override suspend fun trustedProfileForStart(profileId: String, configSha256: String): RouterTrustedProfile? = readVault { vault ->
+        vault.routers.filter { it.pairing.active }.flatMap { entry ->
+            entry.trustedProfiles.filter { routerLocalProfileMatches(profileId, configSha256, it.profileId, it.configSha256) &&
+                it.certificateSha256 == entry.pairing.identity.certificateSha256 && it.marker.pairingId == entry.pairing.id }
+        }.singleOrNull()
+    }
+
     internal suspend fun trustProfile(identity: RouterTlsIdentity, profile: RouterTrustedProfile) = changeVault {
         it.withTrustedProfile(identity, profile)
     }

@@ -20,6 +20,21 @@ class AppUpdateApkVerifier(
         manifest: AppUpdateManifest,
     ): Result<Unit> =
         runCatching {
+            if (!apk.isFile || apk.length() !in 1..(256L * 1024 * 1024)) {
+                throw AppUpdateVerificationException("downloaded package size is invalid")
+            }
+            val digest = MessageDigest.getInstance("SHA-256")
+            apk.inputStream().use { input ->
+                val buffer = ByteArray(64 * 1024)
+                while (true) {
+                    val count = input.read(buffer)
+                    if (count < 0) break
+                    digest.update(buffer, 0, count)
+                }
+            }
+            if (!digest.digest().joinToString("") { "%02x".format(it) }.equals(manifest.apkSha256, ignoreCase = true)) {
+                throw AppUpdateVerificationException("downloaded package digest differs from the manifest")
+            }
             val packageManager = appContext.packageManager
             val archive =
                 packageManager.getPackageArchiveInfo(apk.absolutePath, SIGNING_FLAGS)
@@ -35,6 +50,13 @@ class AppUpdateApkVerifier(
                     "version $archiveVersionCode does not match the announced ${manifest.versionCode}",
                 )
             }
+            val installed = packageManager.getPackageInfo(appContext.packageName, SIGNING_FLAGS)
+            if (archiveVersionCode <= installed.longVersionCodeCompat() || archive.versionName != manifest.versionName ||
+                archive.applicationInfo?.minSdkVersion?.let { it > Build.VERSION.SDK_INT } != false ||
+                !archive.splitNames.isNullOrEmpty()
+            ) {
+                throw AppUpdateVerificationException("downloaded package is not a compatible newer base package")
+            }
             val installedPaths = listOf(appContext.applicationInfo.sourceDir) + appContext.applicationInfo.splitSourceDirs.orEmpty()
             val installedAbis = installedPaths.flatMap { appUpdateApkNativeLibraries(File(it)).keys }.toSet()
             val supportedAbis = if (Process.is64Bit()) Build.SUPPORTED_64_BIT_ABIS else Build.SUPPORTED_32_BIT_ABIS
@@ -47,7 +69,6 @@ class AppUpdateApkVerifier(
             ) {
                 throw AppUpdateVerificationException("native ABI profile differs from the installed build")
             }
-            val installed = packageManager.getPackageInfo(appContext.packageName, SIGNING_FLAGS)
             if (!appUpdateSignersMatch(installed.signerDigests(), archive.signerDigests())) {
                 throw AppUpdateVerificationException("signing certificate differs from the installed app")
             }
@@ -92,7 +113,7 @@ class AppUpdateVerificationException(
 internal fun appUpdateSignersMatch(
     installed: Set<String>,
     candidate: Set<String>,
-): Boolean = installed.isNotEmpty() && installed == candidate
+): Boolean = installed == setOf(AppUpdatePolicy.RELEASE_CERT_SHA256) && installed == candidate
 
 internal val appUpdateRequiredNativeLibraries = setOf(
     "libfoxhole_native.so", "libfoxhole_sentinel_yara.so", "libi2pd.so", "liblyrebird.so", "libconjure_client.so",
@@ -106,7 +127,7 @@ internal fun appUpdateNativeProfileCompatible(
     candidate: Map<String, Set<String>>,
     armv7: Boolean,
 ): Boolean {
-    val allowed = if (armv7) setOf("armeabi-v7a") else setOf("arm64-v8a", "x86_64")
+    val allowed = if (armv7) setOf("armeabi-v7a") else setOf("arm64-v8a", "armeabi-v7a", "x86", "x86_64")
     return runningAbi != null && runningAbi in allowed && runningAbi in candidate && candidate.keys.all(allowed::contains) &&
         candidate.values.all { it.containsAll(appUpdateRequiredNativeLibraries) }
 }

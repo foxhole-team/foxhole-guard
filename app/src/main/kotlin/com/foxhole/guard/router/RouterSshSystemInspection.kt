@@ -141,3 +141,22 @@ internal fun parseRouterCompactBackupBytes(bytes: ByteArray): Long {
     if (!text.matches(Regex("0|[1-9][0-9]{0,9}"))) throw RouterInspectionFailure()
     return text.toLongOrNull()?.takeIf { it in 0L..536870912L } ?: throw RouterInspectionFailure()
 }
+
+internal fun inspectReadonlyRouterSystem(client: RouterSshClient): RouterReadonlyInspection = try {
+    val board = client.read(RouterReadCommand.BOARD)
+    if (board.size !in 1..16384) throw RouterInspectionFailure()
+    val boardText = routerText(board)
+    requireBoardNesting(boardText)
+    val root = Json.parseToJsonElement(boardText) as? JsonObject ?: throw RouterInspectionFailure()
+    val release = root["release"] as? JsonObject ?: throw RouterInspectionFailure()
+    if (release.string("distribution") != "OpenWrt") throw RouterInspectionFailure()
+    val version = release.string("version")
+    if (version.length !in 1..32 || !version.matches(Regex("[0-9]+\\.[0-9]+\\.[0-9]+"))) throw RouterInspectionFailure()
+    val architecture = routerArchitectures(routerText(client.read(RouterReadCommand.ARCHITECTURE))).singleOrNull()
+        ?: throw RouterInspectionFailure()
+    RouterReadonlyInspection(version, architecture)
+} catch (failure: RouterInspectionFailure) {
+    throw failure
+} catch (_: IllegalArgumentException) {
+    throw RouterInspectionFailure()
+}

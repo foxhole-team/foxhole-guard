@@ -47,6 +47,8 @@ internal class RouterControlSnapshot(
     val desiredServerId: String?,
     val connected: Boolean,
     val packageRemovalAvailable: Boolean = false,
+    val publicIpv4Available: Boolean? = null,
+    val installedProtocols: Set<RouterInstallProtocol>? = null,
 ) {
     override fun toString(): String = "RouterControlSnapshot(revision=$revision, servers=${servers.size}, clients=${clients.size})"
 }
@@ -87,7 +89,7 @@ internal class RouterHttpProvisioner(
     override suspend fun routerCountry(api: RouterPanelApi, session: RouterPanelSession): String? = try {
         parseRouterWanCountry(api.telemetry(session))
     } catch (failure: RouterApiFailure) {
-        if (failure.kind in setOf(RouterApiError.UNAVAILABLE, RouterApiError.UNSUPPORTED, RouterApiError.INVALID_RESPONSE)) null else throw failure
+        if (failure.kind in setOf(RouterApiError.NETWORK, RouterApiError.UNAVAILABLE, RouterApiError.UNSUPPORTED, RouterApiError.INVALID_RESPONSE)) null else throw failure
     }
 
     override suspend fun updateStatus(api: RouterPanelApi, session: RouterPanelSession): RouterUpdateStatus =
@@ -211,12 +213,24 @@ internal class RouterHttpProvisioner(
         if (options.createRemoteProfile && "hysteria2" !in capability.inboundProtocols) unsupported()
         currentCoroutineContext().ensureActive()
         var snapshot = snapshot(api, session)
-        if (applyCountry) validateSettingsPayload(countryPayload(snapshot, country, options.countrySitesDirect), session)
+        if (applyCountry) validateSettingsPayload(countryPayload(snapshot, country, options.countrySitesDirect, options.localRules, allLan = options.localRules != null), session)
         if (configuration != null) {
             snapshot = savePhoneSelection(api, session, pairing, requireNotNull(selectedProfile), requireNotNull(selected),
                 subscription, snapshot).snapshot
         }
-        if (applyCountry) snapshot = updateCountry(api, session, snapshot, country, options.countrySitesDirect)
+        if (applyCountry) snapshot = updateCountry(api, session, snapshot, country, options.countrySitesDirect, options.localRules, allLan = options.localRules != null)
+        else options.localRules?.let { enabled ->
+            val settings = localRoutingSettings(snapshot, enabled, allLan = true)
+            if (settings != snapshot.settings) {
+                val payload = buildJsonObject {
+                    put("revision", snapshot.revision); put("settings", settings); put("countries", snapshot.countries)
+                    put("devices", snapshot.devices); put("sites", snapshot.sites)
+                }
+                validateSettingsPayload(payload, session)
+                snapshot = parseSnapshot(call(api, session, RouterMobileAction.SETTINGS, payload))
+                if (snapshot.settings["localRules"] != JsonPrimitive(enabled) || snapshot.settings["localScope"] != JsonPrimitive("all")) malformed()
+            }
+        }
         if (!options.registerPhone && !options.createRemoteProfile) return RouterWizardResult(pairing.id)
         val address = localAddress(api.identity).also { if (routerLanAddress(it) == null) malformed() }
         val provisioned = call(api, session, RouterMobileAction.PHONE_PROVISION, buildJsonObject {
@@ -549,18 +563,22 @@ internal class RouterHttpProvisioner(
     }
 
     private suspend fun updateCountry(api: RouterPanelApi, session: RouterPanelSession, current: RouterControlSnapshot,
-        code: String, direct: Boolean): RouterControlSnapshot {
-        val payload = countryPayload(current, code, direct)
+        code: String, direct: Boolean, localRules: Boolean? = true, allLan: Boolean = false): RouterControlSnapshot {
+        val payload = countryPayload(current, code, direct, localRules, allLan)
         if (payload["countries"] == current.countries && payload["settings"] == current.settings) return current
         return parseSnapshot(call(api, session, RouterMobileAction.SETTINGS, payload))
     }
 
-    private fun countryPayload(current: RouterControlSnapshot, code: String, direct: Boolean): JsonObject {
+    private fun localRoutingSettings(current: RouterControlSnapshot, enabled: Boolean?, allLan: Boolean): JsonObject =
+        if (enabled == null) current.settings else JsonObject(current.settings +
+            ("localRules" to JsonPrimitive(enabled)) + if (allLan) mapOf("localScope" to JsonPrimitive("all")) else emptyMap())
+
+    private fun countryPayload(current: RouterControlSnapshot, code: String, direct: Boolean, localRules: Boolean? = true, allLan: Boolean = false): JsonObject {
         val rule = buildJsonObject { put("code", code); put("route", if (direct) "direct" else "vpn") }
         val rest = current.countries.filter { value -> (value as? JsonObject)?.optionalString("code") != code &&
             (value as? JsonPrimitive)?.contentOrNull != code }
         val countries = JsonArray(rest + rule)
-        val settings = JsonObject(current.settings + ("localRules" to JsonPrimitive(true)))
+        val settings = localRoutingSettings(current, localRules, allLan)
         return buildJsonObject {
             put("revision", current.revision); put("settings", settings); put("countries", countries)
             put("devices", current.devices); put("sites", current.sites)
@@ -737,7 +755,8 @@ private fun parseSnapshot(value: JsonObject): RouterControlSnapshot {
     val runtime = value["runtime"] as? JsonObject ?: malformed()
     return RouterControlSnapshot(revision, settings, countries, devices, sites, servers, clients,
         runtime.optionalString("desiredServerId"), runtime.boolean("connected"),
-        value["packageRemovalAvailable"]?.let { (it as? JsonPrimitive)?.takeIf { field -> !field.isString }?.booleanOrNull ?: malformed() } ?: false)
+        value["packageRemovalAvailable"]?.let { (it as? JsonPrimitive)?.takeIf { field -> !field.isString }?.booleanOrNull ?: malformed() } ?: false,
+        parseRouterPublicIpv4Evidence(value["network"]), parseRouterInstalledProtocols(value["installedProtocols"]))
 }
 
 private fun JsonObject.string(field: String): String = (this[field] as? JsonPrimitive)?.takeIf { it.isString }?.contentOrNull ?: malformed()

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="router_public_ipv4_detected" formatted="false">IPv4 publique du routeur : détectée</string>
+    <string name="router_public_ipv4_not_detected" formatted="false">IPv4 publique du routeur : non détectée</string>
+    <string name="router_public_ipv4_unknown" formatted="false">IPv4 publique du routeur : inconnue</string>
+</resources>

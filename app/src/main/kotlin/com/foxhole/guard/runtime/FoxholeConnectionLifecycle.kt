@@ -52,6 +52,9 @@ internal class FoxholeConnectionLifecycle(
     private val runtimeQueueSnapshot: () -> RuntimeCommandQueueSnapshot,
     private val nativeRuntimeSnapshot: () -> NativeRuntimeSnapshot,
 ) {
+    private val routerStartGeneration = java.util.concurrent.atomic.AtomicLong()
+    private val routerPersonalVpnStart by lazy { com.foxhole.guard.router.GuardRouterPersonalVpnStart(context, profileRepository) }
+
     suspend fun connect(
         profileId: Long,
         protocolOptionId: String?,
@@ -62,6 +65,14 @@ internal class FoxholeConnectionLifecycle(
         protocolTestTrafficFreeze: Boolean = false,
         replaceActiveTunnel: Boolean = false,
     ) {
+        val routerStart = routerStartGeneration.incrementAndGet()
+        try {
+            routerPersonalVpnStart.requireAway(profileId, protocolOptionId) { routerStartGeneration.get() == routerStart }
+        } catch (_: com.foxhole.guard.router.RouterPersonalVpnAtHome) {
+            FoxholeVpnRuntimeBridge.update(snapshot.value.copy(message = context.getString(R.string.guard_router_router_personal_vpn_at_home)))
+            return
+        }
+        if (routerStartGeneration.get() != routerStart) return
         RuntimeResumeStateStore.clearRecentUserStop(context)
         val profile = profileRepository.getProfile(profileId) ?: error("profile not found")
         val settings = settingsRepository.current()
@@ -77,6 +88,7 @@ internal class FoxholeConnectionLifecycle(
         if (snapshot.value.state !in ACTIVE_CONNECTION_STATES) {
             if (!releaseStaleVpnBeforeConnect()) return
         }
+        if (routerStartGeneration.get() != routerStart) return
         diagnosticsLogger.record("connection", "connect requested")
         FoxholeVpnRuntimeBridge.markIpInfoRefreshPending(RuntimeIpRefreshReason.POST_CONNECT)
         FoxholeVpnRuntimeBridge.update(
@@ -105,6 +117,7 @@ internal class FoxholeConnectionLifecycle(
     }
 
     suspend fun connectTorOnly(statusMessage: String?) {
+        routerStartGeneration.incrementAndGet()
         RuntimeResumeStateStore.clearRecentUserStop(context)
         val settings = settingsRepository.current()
         require(settings.privacyRoute.permitted && settings.privacyRoute.enabled) { "TOR route is disabled" }
@@ -278,6 +291,7 @@ internal class FoxholeConnectionLifecycle(
         preserveSmartStartAnalysis: Boolean = false,
         userInitiated: Boolean = true,
     ) {
+        routerStartGeneration.incrementAndGet()
         clearAppliedRuntime()
         diagnosticsLogger.record("connection", "disconnect requested")
         val currentSnapshot = snapshot.value

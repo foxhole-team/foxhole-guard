@@ -14,6 +14,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
+import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.put
 import okhttp3.Call
 import okhttp3.Callback
@@ -36,6 +37,15 @@ import kotlin.coroutines.resumeWithException
 
 internal enum class RouterApiError { NETWORK, IDENTITY, PIN, CHANGE_PIN, LOCKED, CONFLICT, LIMIT, UNSUPPORTED, INSECURE_TLS, UNAVAILABLE, INVALID_RESPONSE, PIN_SETUP, LICENSE }
 internal open class RouterApiFailure(val kind: RouterApiError) : IOException("router_api_${kind.name.lowercase()}")
+internal class RouterApiTimeout : RouterApiFailure(RouterApiError.NETWORK)
+
+private fun routerApiIoFailure(error: IOException): RouterApiFailure = when (error) {
+    is RouterApiFailure -> error
+    is javax.net.ssl.SSLException -> RouterApiFailure(RouterApiError.IDENTITY)
+    is java.io.InterruptedIOException -> RouterApiTimeout()
+    else -> RouterApiFailure(RouterApiError.NETWORK)
+}
+
 
 internal class RouterPanelSession(token: String, val changePinRequired: Boolean,
     val licenseRequired: Boolean = false, val licenseVersion: Int = 0) : AutoCloseable {
@@ -47,12 +57,13 @@ internal class RouterPanelSession(token: String, val changePinRequired: Boolean,
 }
 
 internal class RouterPanelApi internal constructor(val identity: RouterTlsIdentity, private val calls: Call.Factory,
-    private val closeTransport: () -> Unit = {}) : AutoCloseable {
+    closeTransport: () -> Unit = {}, invalidateTransport: () -> Unit = {}) : AutoCloseable {
     var homeVpnBound: Boolean = false
         private set
     private var transportCheck: () -> Unit = {}
     fun requireTransportCurrent() { transportCheck() }
     private val closed = AtomicBoolean(false)
+    private val cleanup = RouterTransportCleanup(invalidate = invalidateTransport, cleanup = closeTransport)
     private val json = Json { ignoreUnknownKeys = false; isLenient = false }
     private val url = HttpUrl.Builder().scheme("https").host(identity.endpoint.address).port(identity.endpoint.port)
         .addPathSegments("cgi-bin/foxhole").build()
@@ -67,7 +78,66 @@ internal class RouterPanelApi internal constructor(val identity: RouterTlsIdenti
         if (schema != 1L || product != "foxhole" || installed != true || configured == null || reset == null) {
             throw RouterApiFailure(RouterApiError.INVALID_RESPONSE)
         }
-        return RouterPackageStatus(configured, reset)
+        val version = (value["version"] as? JsonPrimitive)?.takeIf { it.isString }?.contentOrNull
+        return RouterPackageStatus(configured, reset, routerDiscoveryPackageVersion(version))
+    }
+
+    suspend fun beginDeviceUpdate(session: RouterPanelSession, expectedRevision: Long, requestId: String,
+        release: RouterDeviceRelease): RouterDeviceUpload {
+        require(requestId.matches(Regex("[a-f0-9]{32}")) && expectedRevision >= 0)
+        val reply = pairedDeviceRequest("updates.deviceBegin", session, buildJsonObject {
+            put("expectedRevision", expectedRevision); put("requestId", requestId)
+            put("releaseTag", release.releaseTag); put("version", release.version)
+            put("fileSha256", release.sha256); put("fileBytes", release.bytes)
+        })
+        reply.engineSchema()
+        val upload = reply.engineText("uploadId").also(::requireRouterDeviceUploadId)
+        val offset = reply.engineNumber("nextOffset")
+        val chunk = reply.engineNumber("maxChunkBytes")
+        if (offset > release.bytes || chunk != 65536L) invalidEngineResponse()
+        return RouterDeviceUpload(upload, offset, chunk.toInt())
+    }
+
+    suspend fun sendDeviceUpdateChunk(session: RouterPanelSession, uploadId: String, offset: Long, bytes: ByteArray): Long {
+        requireRouterDeviceUploadId(uploadId)
+        require(offset >= 0 && bytes.size in 1..65536 && offset + bytes.size <= 8388608L)
+        val reply = pairedDeviceRequest("updates.deviceChunk", session, buildJsonObject {
+            put("uploadId", uploadId); put("offset", offset)
+            put("dataBase64", java.util.Base64.getEncoder().encodeToString(bytes)); put("chunkSha256", routerReleaseSha256(bytes))
+        })
+        reply.engineSchema()
+        return reply.engineNumber("nextOffset").also { if (it != offset + bytes.size) invalidEngineResponse() }
+    }
+
+    suspend fun deviceUpdateStatus(session: RouterPanelSession, uploadId: String): RouterDeviceUploadStatus {
+        requireRouterDeviceUploadId(uploadId)
+        val reply = pairedDeviceRequest("updates.deviceStatus", session, buildJsonObject {
+            put("uploadId", uploadId)
+        })
+        reply.engineSchema()
+        val offset = reply.engineNumber("nextOffset")
+        if (offset > 8388608L) invalidEngineResponse()
+        return RouterDeviceUploadStatus(offset, reply.engineBoolean("complete"))
+    }
+
+    suspend fun finishDeviceUpdate(session: RouterPanelSession, uploadId: String): RouterUpdateStatus {
+        requireRouterDeviceUploadId(uploadId)
+        return parseRouterUpdateStatus(pairedDeviceRequest("updates.deviceFinish", session, buildJsonObject {
+            put("uploadId", uploadId)
+        }))
+    }
+
+    private suspend fun pairedDeviceRequest(action: String, session: RouterPanelSession, payload: JsonObject): JsonObject {
+        currentCoroutineContext().ensureActive()
+        requireTransportCurrent()
+        val value = request(action, JsonObject(payload + ("token" to JsonPrimitive(pairedDeviceToken(session)))))
+        currentCoroutineContext().ensureActive()
+        requireTransportCurrent()
+        return value
+    }
+
+    private fun pairedDeviceToken(session: RouterPanelSession): String = session.token().also {
+        require(!session.changePinRequired && it.matches(Regex("p1\\.[a-f0-9]{64}")))
     }
 
     suspend fun resetFoxHole(session: RouterPanelSession): RouterPanelSession {
@@ -100,6 +170,7 @@ internal class RouterPanelApi internal constructor(val identity: RouterTlsIdenti
     suspend fun changePin(session: RouterPanelSession, newPin: CharArray, licenseAccepted: Boolean = false,
         licenseVersion: Int = 0): RouterPanelSession {
         try {
+            require(session.changePinRequired)
             requirePin(newPin)
             val license = routerPinLicenseFields(RouterLicenseRequirement(session.licenseRequired, session.licenseVersion),
                 licenseAccepted, licenseVersion)
@@ -115,7 +186,7 @@ internal class RouterPanelApi internal constructor(val identity: RouterTlsIdenti
         require(!session.changePinRequired && pairing.identity == identity)
         pairing.validate()
         val result = request("pair.create", buildJsonObject {
-            put("token", session.token()); put("id", pairing.id); put("credential", credential(pairing)); put("name", pairing.name)
+            put("token", session.token()); put("id", pairing.id); put("credential", credential(pairing)); put("name", pairing.name); put("client", "guard"); put("clientVersion", com.foxhole.guard.BuildConfig.VERSION_NAME)
         })
         if (result["id"]?.jsonPrimitive?.contentOrNull != pairing.id) throw RouterApiFailure(RouterApiError.INVALID_RESPONSE)
     }
@@ -123,7 +194,7 @@ internal class RouterPanelApi internal constructor(val identity: RouterTlsIdenti
     suspend fun unlockPairing(pairing: RouterPairing): RouterPanelSession {
         require(pairing.identity == identity)
         pairing.validate()
-        val result = request("pair.unlock", buildJsonObject { put("id", pairing.id); put("credential", credential(pairing)) })
+        val result = request("pair.unlock", buildJsonObject { put("id", pairing.id); put("credential", credential(pairing)); put("client", "guard"); put("clientVersion", com.foxhole.guard.BuildConfig.VERSION_NAME) })
         val token = result["token"]?.jsonPrimitive?.contentOrNull ?: throw RouterApiFailure(RouterApiError.INVALID_RESPONSE)
         if (!token.matches(Regex("p1\\.[a-f0-9]{64}"))) throw RouterApiFailure(RouterApiError.INVALID_RESPONSE)
         return RouterPanelSession(token, false)
@@ -244,22 +315,20 @@ internal class RouterPanelApi internal constructor(val identity: RouterTlsIdenti
                 withTimeout(30_000L) {
                     suspendCancellableCoroutine { continuation ->
                         val call = calls.newCall(request)
-                        continuation.invokeOnCancellation {
-                            call.cancel()
-                        }
+                        val cancellation = RouterTransportCleanup(cleanup = call::cancel)
+                        continuation.invokeOnCancellation { cancellation.close() }
                         call.enqueue(object : Callback {
                             override fun onFailure(call: Call, e: IOException) {
-                                if (continuation.isActive) continuation.resumeWithException(RouterApiFailure(
-                                    if (e is javax.net.ssl.SSLException) RouterApiError.IDENTITY else RouterApiError.NETWORK))
+                                if (continuation.isActive) continuation.resumeWithException(routerApiIoFailure(e))
                             }
                             override fun onResponse(call: Call, response: Response) {
                                 if (!continuation.isActive) { response.close(); return }
                                 try {
-                                    val result = response.use { readResponse(it) { continuation.isActive } }
+                                    val result = response.use { readResponse(it) { continuation.isActive && !closed.get() } }
                                     if (continuation.isActive) continuation.resume(result)
                                 } catch (error: IOException) {
                                     if (continuation.isActive) continuation.resumeWithException(
-                                        error as? RouterApiFailure ?: RouterApiFailure(RouterApiError.NETWORK))
+                                        routerApiIoFailure(error))
                                 } catch (_: SerializationException) {
                                     if (continuation.isActive) continuation.resumeWithException(
                                         RouterApiFailure(RouterApiError.INVALID_RESPONSE))
@@ -273,7 +342,7 @@ internal class RouterPanelApi internal constructor(val identity: RouterTlsIdenti
                 }
             } catch (_: TimeoutCancellationException) {
                 currentCoroutineContext().ensureActive()
-                throw RouterApiFailure(RouterApiError.NETWORK)
+                throw RouterApiTimeout()
             }
         } finally { bytes.fill(0) }
     }
@@ -306,12 +375,17 @@ internal class RouterPanelApi internal constructor(val identity: RouterTlsIdenti
         }
         finally { data.fill(0) } ?: throw RouterApiFailure(RouterApiError.INVALID_RESPONSE)
         val error = (result["_foxhole_error"] as? JsonPrimitive)?.contentOrNull
+        if (error == "pin_cooldown") {
+            val retry = (result["retryAfterSeconds"] as? JsonPrimitive)?.takeIf { !it.isString }?.intOrNull
+                ?.takeIf { it in 1..300 } ?: throw RouterApiFailure(RouterApiError.INVALID_RESPONSE)
+            throw RouterPinCooldown(retry)
+        }
         if (error?.startsWith("update_") == true) throw routerUpdateFailure(error)
         if (error?.startsWith("engine_") == true) throw routerEngineFailure(error)
         if (error != null) throw RouterApiFailure(when (error) {
             "unauthorized", "invalid_pin", "pin_mismatch", "pin_unchanged" -> RouterApiError.PIN
             "pin_required" -> RouterApiError.CHANGE_PIN
-            "pin_setup_required" -> RouterApiError.PIN_SETUP
+            "pin_setup_required", "luci_required" -> RouterApiError.PIN_SETUP
             "license_required" -> RouterApiError.LICENSE
             "locked" -> RouterApiError.LOCKED
             "pairing_conflict", "revision_conflict" -> RouterApiError.CONFLICT
@@ -328,36 +402,47 @@ internal class RouterPanelApi internal constructor(val identity: RouterTlsIdenti
             return forBoundConnection(identity, connection.socketFactory, connection::requireCurrent, homeVpnBound = false)
         }
 
+        fun forDiscoveryWifi(connection: RouterWifiConnection, identity: RouterTlsIdentity): RouterPanelApi {
+            require(connection.endpoint == identity.endpoint)
+            return forBoundConnection(identity, connection.socketFactory, connection::requireCurrent,
+                homeVpnBound = false, discovery = true)
+        }
+
         fun forHomeVpn(connection: RouterHomeVpnConnection, identity: RouterTlsIdentity): RouterPanelApi {
             require(connection.endpoint == identity.endpoint)
             return forBoundConnection(identity, connection.socketFactory, connection::requireCurrent, homeVpnBound = true)
         }
 
         private fun forBoundConnection(identity: RouterTlsIdentity, sockets: javax.net.SocketFactory,
-            requireCurrent: () -> Unit, homeVpnBound: Boolean): RouterPanelApi {
+            requireCurrent: () -> Unit, homeVpnBound: Boolean, discovery: Boolean = false): RouterPanelApi {
             requireCurrent()
             val trust = RouterPinnedTls(identity)
-            val client = OkHttpClient.Builder().socketFactory(sockets)
+            val ownedSockets = RouterOwnedSocketFactory(sockets)
+            val client = OkHttpClient.Builder().socketFactory(ownedSockets)
                 .sslSocketFactory(trust.socketFactory, trust)
                 .hostnameVerifier { hostname, _ -> hostname == identity.endpoint.address }
                 .dns(Dns { hostname ->
                     if (hostname != identity.endpoint.address) throw UnknownHostException()
                     listOf(identity.endpoint.socketAddress().address)
                 }).proxy(Proxy.NO_PROXY).followRedirects(false).followSslRedirects(false).retryOnConnectionFailure(false)
-                .connectionSpecs(listOf(ConnectionSpec.MODERN_TLS)).connectTimeout(15, TimeUnit.SECONDS)
-                .readTimeout(20, TimeUnit.SECONDS).writeTimeout(20, TimeUnit.SECONDS).callTimeout(30, TimeUnit.SECONDS)
+                .connectionSpecs(listOf(ConnectionSpec.MODERN_TLS)).connectTimeout(if (discovery) 2 else 15, TimeUnit.SECONDS)
+                .readTimeout(if (discovery) 3 else 20, TimeUnit.SECONDS)
+                .writeTimeout(if (discovery) 3 else 20, TimeUnit.SECONDS)
+                .callTimeout(if (discovery) 4 else 30, TimeUnit.SECONDS)
                 .addInterceptor { chain -> requireCurrent(); chain.proceed(chain.request()) }
                 .addNetworkInterceptor { chain -> requireCurrent(); chain.proceed(chain.request()) }.build()
             return RouterPanelApi(identity, client, closeTransport = {
+                ownedSockets.closeOwnedOnIo()
                 client.dispatcher.cancelAll()
                 client.connectionPool.evictAll()
                 client.dispatcher.executorService.shutdown()
-            }).also { it.homeVpnBound = homeVpnBound; it.transportCheck = requireCurrent }
+            }, invalidateTransport = ownedSockets::invalidate).also { it.homeVpnBound = homeVpnBound; it.transportCheck = requireCurrent }
         }
     }
 
-    override fun close() { if (closed.compareAndSet(false, true)) closeTransport() }
+    override fun close() { if (closed.compareAndSet(false, true)) cleanup.close() }
+    suspend fun closeAndAwait() { close(); cleanup.closeAndAwait() }
 }
 
-private fun requirePin(pin: CharArray) { require(pin.size == 4 && pin.all { it in '0'..'9' }) }
+private fun requirePin(pin: CharArray) { require(validRouterPin(pin)) }
 private fun credential(pairing: RouterPairing): String = pairing.credential.joinToString("") { "%02x".format(it.toInt() and 255) }

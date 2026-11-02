@@ -366,6 +366,12 @@ fun cliRowTextStyle(): TextStyle =
     LocalCliType.current.body
 
 @Composable
+internal fun cliFontPreviewStyle(pixelArtEnabled: Boolean): TextStyle = cliRowTextStyle().copy(
+    fontFamily = if (pixelArtEnabled) Tiny5Family else JetBrainsMonoBoldFamily,
+    fontWeight = if (pixelArtEnabled) FontWeight.Normal else FontWeight.Bold,
+)
+
+@Composable
 @ReadOnlyComposable
 fun cliCaptionTextStyle(): TextStyle =
     LocalCliType.current.body

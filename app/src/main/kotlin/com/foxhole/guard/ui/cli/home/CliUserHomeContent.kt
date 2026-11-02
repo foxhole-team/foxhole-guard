@@ -57,7 +57,6 @@ import com.foxhole.guard.ui.cli.LocalCliColors
 import com.foxhole.guard.ui.cli.components.CliButton
 import com.foxhole.guard.ui.cli.components.CliChromeTailSpacer
 import com.foxhole.guard.ui.cli.components.CliIcon
-import com.foxhole.guard.ui.cli.components.CliLoadingRow
 import com.foxhole.guard.ui.cli.components.CliProtocolBadge
 import com.foxhole.guard.ui.cli.map.CliMapOverviewPanel
 import com.foxhole.guard.ui.cli.map.rememberCliMapOverviewState
@@ -79,7 +78,6 @@ internal fun CliUserHomeContent(
     modifier: Modifier = Modifier,
     traffic: TrafficSnapshot = home.traffic,
 ) {
-    val ready = home.settingsHydrated && home.profilesLoaded
     val density = LocalDensity.current
     var contentTopPx by remember { mutableFloatStateOf(0f) }
     var profileTopPx by remember { mutableFloatStateOf(0f) }
@@ -103,9 +101,6 @@ internal fun CliUserHomeContent(
         ) {
             header()
             confirmation()
-            if (!ready) {
-                CliLoadingRow(text = stringResource(R.string.cli_common_loading_data))
-            }
             CliUserHomeOverview(home, map, onOpenMap)
             CliUserNetworkSummary(
                 home = home,

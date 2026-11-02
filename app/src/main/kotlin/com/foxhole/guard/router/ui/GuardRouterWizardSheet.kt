@@ -1,11 +1,23 @@
 package com.foxhole.guard.router.ui
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.fillMaxSize
@@ -18,9 +30,6 @@ import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.foundation.text.input.TextObfuscationMode
 import androidx.compose.foundation.text.input.maxLength
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -30,6 +39,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.Icon
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.produceState
+import kotlinx.coroutines.delay
+import com.foxhole.guard.router.routerPinCooldownRemaining
 import androidx.compose.runtime.key
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.DisposableEffect
@@ -38,6 +50,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import com.foxhole.guard.ui.cli.components.CliButton
+import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
@@ -46,6 +61,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.foxhole.guard.R
+import com.foxhole.guard.ui.cli.CliSpacing
+import com.foxhole.guard.ui.cli.components.CliBottomSheet
 import com.foxhole.guard.router.GuardRouterProfileSummary
 import com.foxhole.guard.router.RouterInstallCatalog
 import com.foxhole.guard.router.RouterInstallProgress
@@ -58,6 +75,7 @@ import com.foxhole.guard.router.RouterWizardOptions
 import com.foxhole.guard.router.RouterWizardPath
 import com.foxhole.guard.router.RouterWizardStage
 import com.foxhole.guard.router.RouterWizardState
+import com.foxhole.guard.router.ROUTER_PIN_DIGITS
 import java.util.Locale
 
 internal data class RouterWizardActions(
@@ -69,10 +87,12 @@ internal data class RouterWizardActions(
     val newPin: (CharArray) -> Unit,
     val install: () -> Unit,
     val options: (RouterWizardOptions) -> Unit,
-    val finish: () -> Unit,
+    val finish: (CharArray?) -> Unit,
     val failure: () -> Unit,
     val openRouterSetup: (() -> Unit)? = null,
     val installCompactSelection: ((Set<RouterInstallProtocol>, Boolean) -> Unit)? = null,
+    val loginKey: (suspend (ByteArray, CharArray) -> Unit)? = null,
+    val setupAddress: ((String) -> Unit)? = null,
 )
 
 @Composable
@@ -86,6 +106,17 @@ internal fun GuardRouterWizardSheet(
     onClose: (() -> Unit)? = null,
     onBack: (() -> Unit)? = null,
 ) {
+    val initialPin = remember(state.options.licenseGeneration, state.address) { TextFieldState() }
+    val repeatedPin = remember(state.options.licenseGeneration, state.address) { TextFieldState() }
+    DisposableEffect(initialPin, repeatedPin) {
+        onDispose { initialPin.edit { replace(0, length, "") }; repeatedPin.edit { replace(0, length, "") } }
+    }
+    val pinCooldownSeconds by produceState(routerPinCooldownRemaining(state.pinCooldownUntilMs), state.pinCooldownUntilMs) {
+        value = routerPinCooldownRemaining(state.pinCooldownUntilMs)
+        while (value > 0) { delay(1000); value = routerPinCooldownRemaining(state.pinCooldownUntilMs) }
+    }
+    val initialPinReady = initialPin.text.length == ROUTER_PIN_DIGITS && initialPin.text.all { it in '0'..'9' } &&
+        repeatedPin.text.length == ROUTER_PIN_DIGITS && initialPin.text.indices.all { initialPin.text[it] == repeatedPin.text[it] }
     var address by rememberSaveable(state.options.licenseGeneration, state.address) { mutableStateOf(state.address) }
     var protocols by remember(installationCatalog?.sha256, state.installSelection) {
         mutableStateOf(state.installSelection?.protocols ?: installationCatalog?.defaultSelection?.protocols.orEmpty())
@@ -93,6 +124,8 @@ internal fun GuardRouterWizardSheet(
     var includeServer by remember(installationCatalog?.sha256, state.installSelection) {
         mutableStateOf(state.installSelection?.includeServer ?: false)
     }
+    val discoveredPackageVersion = state.discovery?.takeIf { it.address == state.address &&
+                    it.kind == com.foxhole.guard.router.RouterDiscoveryKind.INSTALLED }?.packageVersion
     AnimatedContent(targetState = state.stage, modifier = Modifier.fillMaxSize(), transitionSpec = {
         GuardRouterSheetMotion.pageTransition(animateSize = false)
     }, label = "router-wizard") { stage ->
@@ -100,19 +133,31 @@ internal fun GuardRouterWizardSheet(
         when (stage) {
             RouterWizardStage.LOGIN -> GuardRouterLoginSheet(
                 installed = state.path == RouterWizardPath.PAIR,
+                packageVersion = discoveredPackageVersion,
+                active = stage == state.stage,
+                pinCooldownUntilMs = state.pinCooldownUntilMs,
+                pinError = state.error,
                 gateway = state.address,
                 busy = !enabled,
                 onSubmit = { _, credential -> actions.login(credential) },
                 onFailure = actions.failure,
+                onKeySubmit = actions.loginKey?.let { login -> { _, key, passphrase -> login(key, passphrase) } },
                 addressEditable = false,
                 onClose = onClose,
                 onBack = onBack,
+                layout = { working, headerActions, footer, content ->
+                    RouterWizardContent(
+                        R.string.guard_router_vpn_router, R.drawable.lin_router,
+                        state.address, discoveredPackageVersion, working,
+                        actions = headerActions, footer = footer, content = content,
+                    )
+                },
             )
-            RouterWizardStage.NEW_PIN -> GuardRouterNewPinSheet(!enabled, actions.newPin, onClose, onBack,
-                state.options, state.licenseRequired || state.installedInThisWizard, actions.options)
-            else -> GuardRouterSheetContent(
+            else -> RouterWizardContent(
                 R.string.guard_router_vpn_router,
                 R.drawable.lin_router,
+                address = if (stage == RouterWizardStage.ADDRESS) address else state.address,
+                packageVersion = discoveredPackageVersion,
                 busy = state.busy,
                 footer = {
                     when (stage) {
@@ -125,8 +170,7 @@ internal fun GuardRouterWizardSheet(
                         }
                         RouterWizardStage.PROTOCOLS -> RouterFullButton(
                             R.string.guard_router_vpn_continue,
-                            enabled && (state.path != RouterWizardPath.SETUP || state.options.licenseAccepted) &&
-                                installationCatalog?.accepts(protocols, includeServer) == true &&
+                            enabled && installationCatalog?.accepts(protocols, includeServer) == true &&
                                 (installationCatalog?.schema != 2 || actions.installCompactSelection != null),
                         ) {
                             if (installationCatalog?.schema == 2) actions.installCompactSelection?.invoke(protocols, includeServer)
@@ -135,14 +179,19 @@ internal fun GuardRouterWizardSheet(
                         }
                         RouterWizardStage.INSTALL -> RouterFullButton(R.string.guard_router_vpn_router_install,
                             enabled && (state.path != RouterWizardPath.SETUP || state.options.licenseAccepted), actions.install)
-                        RouterWizardStage.OPTIONS -> RouterFullButton(
+                        RouterWizardStage.OPTIONS, RouterWizardStage.NEW_PIN -> RouterFullButton(
                             if (state.autoUpdateUnconfirmed) R.string.guard_router_router_updates_status else R.string.guard_router_vpn_router_done,
-                            enabled && state.options.valid && (state.options.countryAuto || knownRouterHomeCountry(state.options.countryCode) != null),
-                            actions.finish,
-                        )
+                            enabled && state.options.valid && (state.options.countryAuto || knownRouterHomeCountry(state.options.countryCode) != null) &&
+                                (!state.initialPinRequired || initialPinReady && pinCooldownSeconds == 0 &&
+                                    (!(state.licenseRequired || state.installedInThisWizard) || state.options.licenseAccepted)),
+                        ) {
+                            val secret = if (state.initialPinRequired) CharArray(initialPin.text.length) { initialPin.text[it] } else null
+                            initialPin.edit { replace(0, length, "") }; repeatedPin.edit { replace(0, length, "") }
+                            actions.finish(secret)
+                        }
                         else -> Unit
                     }
-                    GuardRouterNavigationFooter(enabled, onBack, onClose)
+                    GuardRouterWizardNavigationFooter(enabled, onBack, onClose)
                 },
             ) {
                 when (stage) {
@@ -157,14 +206,20 @@ internal fun GuardRouterWizardSheet(
                             label = { Text(stringResource(R.string.guard_router_vpn_router_address)) },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         )
-                        if (state.path == RouterWizardPath.SETUP) RouterSetupLicenseChoice(state.options.licenseAccepted, enabled) {
-                            actions.options(state.options.copy(licenseAccepted = it))
+                        if (state.path == RouterWizardPath.PAIR) actions.setupAddress?.let { setup ->
+                            CliButton(
+                                label = stringResource(R.string.guard_router_router_ssh_manual_setup),
+                                onClick = { setup(address) },
+                                modifier = Modifier.align(Alignment.CenterHorizontally),
+                                enabled = enabled && address.isNotBlank(),
+                                filled = false,
+                            )
                         }
                     }
                     RouterWizardStage.IDENTITY -> Text(stringResource(R.string.guard_router_vpn_router_checking))
                     RouterWizardStage.PIN_SETUP_REQUIRED -> Text(stringResource(R.string.guard_router_router_review_owner_setup_required),
                         style = MaterialTheme.typography.bodyMedium)
-                    RouterWizardStage.CHECKING -> if (state.installProgress == null) Text(stringResource(R.string.guard_router_vpn_router_checking))
+                    RouterWizardStage.CHECKING -> if (state.installProgress == null) Text(stringResource(R.string.guard_router_router_ssh_checking_openwrt))
                     RouterWizardStage.PROTOCOLS -> {
                         Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(0.dp)) {
                             GuardRouterTableRow(Modifier.fillMaxWidth()) {
@@ -180,9 +235,6 @@ internal fun GuardRouterWizardSheet(
                             }
                         }
                         if (state.path == RouterWizardPath.SETUP) {
-                            RouterSetupLicenseChoice(state.options.licenseAccepted, enabled) {
-                                actions.options(state.options.copy(licenseAccepted = it))
-                            }
                             RouterAutoUpdateChoice(state.options, enabled) {
                                 actions.options(state.options.copy(autoUpdateEnabled = it))
                             }
@@ -190,6 +242,14 @@ internal fun GuardRouterWizardSheet(
                         if (protocols.isNotEmpty() && installationCatalog?.accepts(protocols, includeServer) != true) {
                             Text(stringResource(R.string.guard_router_vpn_router_protocol_combination_unavailable), style = MaterialTheme.typography.bodySmall)
                         }
+                    }
+                    RouterWizardStage.INSPECTED -> {
+                        GuardRouterReviewTable(listOf(
+                            stringResource(R.string.guard_router_router_review_address) to state.address,
+                            "OpenWrt" to state.openWrtVersion,
+                            stringResource(R.string.guard_router_router_review_architecture) to state.architecture,
+                        ), icons = listOf(R.drawable.lin_router, R.drawable.lin_settings, R.drawable.lin_settings))
+                        Text(stringResource(R.string.guard_router_setup_readonly_complete), style = MaterialTheme.typography.bodyMedium)
                     }
                     RouterWizardStage.INSTALL -> {
                         if (!state.busy || state.installProgress == null) {
@@ -212,17 +272,30 @@ internal fun GuardRouterWizardSheet(
                                 R.drawable.lin_update,
                                 *(if (state.path == RouterWizardPath.SETUP) arrayOf(R.drawable.lin_update) else emptyArray()),
                             ))
-                            if (state.path == RouterWizardPath.SETUP) RouterSetupLicenseChoice(state.options.licenseAccepted, enabled) {
+                            if (state.path == RouterWizardPath.SETUP) RouterSetupLicenseChoice(state.options.licenseAccepted, enabled, state.options.licenseGeneration) {
                                 actions.options(state.options.copy(licenseAccepted = it))
                             }
                             if (state.storageMode == RouterStorageMode.RAM) Text(stringResource(R.string.guard_router_vpn_router_ram_note),
                                 style = MaterialTheme.typography.bodySmall)
                         }
                     }
-                    RouterWizardStage.OPTIONS -> RouterOptionsContent(
-                        state.options, profiles, enabled && !state.autoUpdateUnconfirmed, supportsHomeAutodetection, supportsRemoteProfile,
-                        state.installedInThisWizard, state.autoUpdateUnconfirmed, state.autoUpdateFailure, actions.options,
-                    )
+                    RouterWizardStage.OPTIONS, RouterWizardStage.NEW_PIN -> {
+                        if (state.installedInThisWizard && state.options.localRules != null)
+                            RouterLocalRoutingChoice(state.options.localRules, enabled) { actions.options(state.options.copy(localRules = it)) }
+                        RouterOptionsContent(
+                            state.options, profiles, enabled && !state.autoUpdateUnconfirmed, supportsHomeAutodetection, supportsRemoteProfile,
+                            state.installedInThisWizard, state.autoUpdateUnconfirmed, state.autoUpdateFailure, actions.options,
+                        )
+                        if (state.initialPinRequired && state.installedInThisWizard) {
+                            RouterInitialPinFields(initialPin, repeatedPin, enabled && pinCooldownSeconds == 0)
+                            if (pinCooldownSeconds > 0) Text(stringResource(R.string.guard_router_router_pin_cooldown, pinCooldownSeconds),
+                                color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                            if (state.licenseRequired && !state.options.licenseAccepted)
+                                RouterSetupLicenseChoice(state.options.licenseAccepted, enabled, state.options.licenseGeneration) {
+                                    actions.options(state.options.copy(licenseAccepted = it))
+                                }
+                        }
+                    }
                     RouterWizardStage.FINISHING -> Text(stringResource(R.string.guard_router_vpn_router_finishing))
                     RouterWizardStage.COMPLETE -> {
                         Text(stringResource(R.string.guard_router_vpn_router_connected), style = MaterialTheme.typography.titleMedium)
@@ -240,49 +313,16 @@ internal fun GuardRouterWizardSheet(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun GuardRouterNewPinSheet(busy: Boolean, onSubmit: (CharArray) -> Unit,
-    onClose: (() -> Unit)?, onBack: (() -> Unit)?, options: RouterWizardOptions,
-    licenseRequired: Boolean, onOptions: (RouterWizardOptions) -> Unit) {
-    val pin = remember { TextFieldState() }
-    val repeat = remember { TextFieldState() }
-    DisposableEffect(pin, repeat) {
-        onDispose {
-            pin.edit { replace(0, length, "") }
-            repeat.edit { replace(0, length, "") }
-        }
-    }
-    val ready = pin.text.length == 4 && pin.text.all { it in '0'..'9' } && repeat.text.length == 4 &&
-        pin.text.indices.all { pin.text[it] == repeat.text[it] }
-    GuardRouterSheetContent(
-        R.string.guard_router_vpn_router_new_pin,
-        R.drawable.lin_router,
-        busy = busy,
-        actions = { GuardRouterHelpButton(R.string.guard_router_vpn_router_new_pin, R.string.guard_router_router_help_pin) },
-        footer = {
-            RouterFullButton(R.string.guard_router_vpn_router_save, !busy && ready && (!licenseRequired || options.licenseAccepted)) {
-                val secret = CharArray(pin.text.length) { pin.text[it] }
-                pin.edit { replace(0, length, "") }
-                repeat.edit { replace(0, length, "") }
-                onSubmit(secret)
-            }
-            GuardRouterNavigationFooter(!busy, onBack, onClose)
-        },
-    ) {
-        if (licenseRequired) RouterSetupLicenseChoice(options.licenseAccepted, !busy) {
-            onOptions(options.copy(licenseAccepted = it))
-        }
-        Text(stringResource(R.string.guard_router_vpn_router_change_pin_note), style = MaterialTheme.typography.bodySmall)
-        for ((field, label) in listOf(pin to R.string.guard_router_vpn_router_new_pin, repeat to R.string.guard_router_vpn_router_repeat_pin)) {
-            OutlinedSecureTextField(
-                state = field,
-                modifier = Modifier.fillMaxWidth(),
-                enabled = !busy,
-                inputTransformation = InputTransformation.maxLength(4),
-                textObfuscationMode = TextObfuscationMode.Hidden,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
-                label = { Text(stringResource(label)) },
-            )
-        }
+private fun RouterInitialPinFields(pin: TextFieldState, repeat: TextFieldState, enabled: Boolean) {
+    Text(stringResource(R.string.guard_router_vpn_router_change_pin_note), style = MaterialTheme.typography.bodySmall)
+    for ((field, label) in listOf(pin to R.string.guard_router_router_setup_pin, repeat to R.string.guard_router_router_setup_pin_repeat)) {
+        OutlinedSecureTextField(
+            state = field, modifier = Modifier.fillMaxWidth(), enabled = enabled,
+            inputTransformation = InputTransformation.maxLength(ROUTER_PIN_DIGITS),
+            textObfuscationMode = TextObfuscationMode.Hidden,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+            label = { Text(stringResource(label)) },
+        )
     }
 }
 
@@ -332,32 +372,52 @@ private fun RouterOptionsContent(
             if (options.publicIp) {
                 RouterHelpLabel(R.string.guard_router_router_review_remote_settings, R.string.guard_router_router_review_remote_help)
                 RouterCheckRow(R.string.guard_router_router_review_phone_profile, R.string.guard_router_router_review_remote_help,
-                    options.createRemoteProfile, enabled) { onChange(options.copy(createRemoteProfile = it)) }
+                    options.createRemoteProfile, enabled, showHelp = false) { onChange(options.copy(createRemoteProfile = it)) }
             }
         }
     }
 }
 
 @Composable
-private fun RouterSetupLicenseChoice(accepted: Boolean, enabled: Boolean, onChange: (Boolean) -> Unit) {
-    var expanded by remember { mutableStateOf(false) }
-    Box {
-        TextButton(onClick = { expanded = true }, enabled = enabled) {
-            Text(stringResource(R.string.guard_router_setup_license_title))
-        }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false },
-            modifier = Modifier.widthIn(max = 300.dp).heightIn(max = 360.dp)) {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(stringResource(R.string.guard_router_setup_license_title), style = MaterialTheme.typography.titleMedium)
-                Text(stringResource(R.string.guard_router_setup_license_body), style = MaterialTheme.typography.bodyMedium)
-            }
+private fun RouterSetupLicenseChoice(accepted: Boolean, enabled: Boolean, licenseGeneration: Long,
+    hideAcceptedChoice: Boolean = false, onChange: (Boolean) -> Unit) {
+    var expanded by remember(licenseGeneration) { mutableStateOf(false) }
+    if (!hideAcceptedChoice || !accepted) Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+        CliButton(
+            label = stringResource(R.string.guard_router_setup_license_title),
+            onClick = { expanded = true },
+            modifier = Modifier,
+            enabled = enabled,
+            filled = false,
+        )
+    }
+    if (expanded) {
+        CliBottomSheet(onDismiss = { expanded = false },
+            title = stringResource(R.string.guard_router_setup_license_title), icon = R.drawable.lin_info,
+            footerContent = { RouterLicenseAcceptedRow(accepted, enabled, onChange) }) {
+            Text(stringResource(R.string.guard_router_setup_license_body), style = MaterialTheme.typography.bodyMedium)
         }
     }
+}
+
+@Composable
+private fun RouterLicenseAcceptedRow(accepted: Boolean, enabled: Boolean, onChange: (Boolean) -> Unit) {
     GuardRouterTableRow(Modifier.fillMaxWidth().semantics(mergeDescendants = true) {}.toggleable(
         value = accepted, enabled = enabled, role = Role.Checkbox, onValueChange = onChange)) {
         Icon(painterResource(R.drawable.lin_info), null, Modifier.size(20.dp))
         Text(stringResource(R.string.guard_router_setup_license_accept), Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
         Checkbox(checked = accepted, onCheckedChange = null, enabled = enabled)
+    }
+}
+
+@Composable
+private fun RouterLocalRoutingChoice(checked: Boolean, enabled: Boolean, onChange: (Boolean) -> Unit) {
+    GuardRouterTableRow(Modifier.fillMaxWidth().semantics(mergeDescendants = true) {}.toggleable(
+        value = checked, enabled = enabled, role = Role.Checkbox, onValueChange = onChange)) {
+        Icon(painterResource(R.drawable.lin_power), null, Modifier.size(20.dp))
+        Text(stringResource(R.string.guard_router_router_setup_all_lan_vpn), Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+        GuardRouterHelpButton(R.string.guard_router_router_setup_all_lan_vpn, R.string.guard_router_router_setup_all_lan_vpn_help)
+        Checkbox(checked = checked, onCheckedChange = null, enabled = enabled)
     }
 }
 
@@ -385,7 +445,8 @@ private fun RouterHelpLabel(title: Int, help: Int) {
 }
 
 @Composable
-private fun RouterCheckRow(label: Int, help: Int, checked: Boolean, enabled: Boolean, onChange: (Boolean) -> Unit) {
+private fun RouterCheckRow(label: Int, help: Int, checked: Boolean, enabled: Boolean,
+    showHelp: Boolean = true, onChange: (Boolean) -> Unit) {
     GuardRouterTableRow(Modifier.fillMaxWidth()) {
         val icon = when (label) {
             R.string.guard_router_vpn_router_auto_home -> R.drawable.lin_router
@@ -395,14 +456,21 @@ private fun RouterCheckRow(label: Int, help: Int, checked: Boolean, enabled: Boo
         }
         Icon(painterResource(icon), null, Modifier.size(20.dp))
         Text(stringResource(label), Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
-        GuardRouterHelpButton(label, help)
+        if (showHelp) GuardRouterHelpButton(label, help)
         GuardRouterSwitch(checked, onCheckedChange = onChange, enabled = enabled)
     }
 }
 
 @Composable
 private fun RouterFullButton(label: Int, enabled: Boolean, onClick: () -> Unit) {
-    Button(onClick, modifier = Modifier.fillMaxWidth().heightIn(min = 60.dp), enabled = enabled) { Text(stringResource(label)) }
+    CliButton(
+        label = stringResource(label),
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+        enabled = enabled,
+        color = routerConnectColor(),
+        filled = false,
+    )
 }
 
 internal fun routerWizardErrorLabel(error: RouterWizardError): Int = when (error) {
@@ -438,7 +506,7 @@ private fun RouterInstallationProgress(progress: RouterInstallProgress) {
         Text(stringResource(R.string.guard_router_router_review_progress_percent, percent), style = MaterialTheme.typography.labelLarge)
     }
     Text(stringResource(when (progress.stage) {
-        RouterInstallProgressStage.DOWNLOAD -> R.string.guard_router_router_review_progress_download
+        RouterInstallProgressStage.DOWNLOAD -> if (progress.viaDevice) R.string.guard_router_router_updates_device_download else R.string.guard_router_router_review_progress_download
         RouterInstallProgressStage.UPLOAD -> R.string.guard_router_router_review_progress_upload
         RouterInstallProgressStage.INSTALL -> R.string.guard_router_router_review_progress_install
         RouterInstallProgressStage.CHECK -> R.string.guard_router_router_review_progress_check
@@ -462,4 +530,66 @@ private fun wizardAutoUpdateFailureLabel(reason: RouterUpdateFailureReason): Int
     RouterUpdateFailureReason.RECOVERY_REQUIRED -> R.string.guard_router_router_engines_recovery
     RouterUpdateFailureReason.LEGACY_CONNECTION_ACTIVE -> R.string.guard_router_router_updates_disconnect_before_update
     RouterUpdateFailureReason.INVALID_REQUEST -> R.string.guard_router_router_updates_invalid_response
+}
+
+
+@Composable
+private fun RouterWizardContent(
+    title: Int, icon: Int, address: String, packageVersion: String?, busy: Boolean,
+    actions: @Composable RowScope.() -> Unit = {},
+    footer: (@Composable ColumnScope.() -> Unit)? = null,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    BoxWithConstraints(Modifier.fillMaxSize().imePadding().padding(horizontal = CliSpacing.md, vertical = CliSpacing.xs)) {
+        val compact = maxHeight < 420.dp
+        Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.End) {
+                if (busy) {
+                    val working = stringResource(R.string.guard_router_vpn_working)
+                    CircularProgressIndicator(Modifier.size(20.dp).semantics { contentDescription = working }, strokeWidth = 2.dp)
+                }
+                GuardRouterAddonSettingsButton()
+                actions()
+            }
+            Column(Modifier.weight(1f).fillMaxWidth().then(LocalGuardRouterSheetBodyGestures.current)
+                .verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(if (compact) 8.dp else 14.dp)) {
+                Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Image(painterResource(R.drawable.ic_launcher_openwrt), null,
+                        Modifier.size(if (compact) 48.dp else 68.dp), contentScale = ContentScale.Fit)
+                    Text(stringResource(R.string.guard_router_router_login_brand), Modifier.fillMaxWidth(),
+                        style = if (compact) MaterialTheme.typography.titleMedium else MaterialTheme.typography.titleLarge,
+                        textAlign = TextAlign.Center, maxLines = 2)
+                    Text(if (packageVersion == null) stringResource(R.string.guard_router_router_login_version_unknown)
+                        else stringResource(R.string.guard_router_router_login_version, packageVersion), Modifier.fillMaxWidth(),
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center)
+                    Text(address, Modifier.fillMaxWidth(), style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
+                    Row(Modifier.fillMaxWidth().padding(top = 8.dp).semantics(mergeDescendants = true) { heading() },
+                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)) {
+                        Icon(painterResource(icon), null, Modifier.size(20.dp))
+                        Text(stringResource(title), style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center)
+                    }
+                }
+                content()
+            }
+            if (footer != null) Column(Modifier.fillMaxWidth().padding(top = 8.dp).then(LocalGuardRouterSheetBodyGestures.current),
+                verticalArrangement = Arrangement.spacedBy(8.dp), content = footer)
+        }
+    }
+}
+
+@Composable
+@Suppress("UNUSED_PARAMETER")
+internal fun GuardRouterWizardNavigationFooter(backEnabled: Boolean, onBack: (() -> Unit)?, onClose: (() -> Unit)?) {
+    if (onClose != null) CliButton(
+        label = stringResource(R.string.guard_router_vpn_cancel),
+        onClick = onClose,
+        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+        enabled = true,
+        color = com.foxhole.guard.ui.cli.LocalCliColors.current.err,
+        filled = false,
+    )
 }

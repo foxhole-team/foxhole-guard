@@ -62,6 +62,7 @@ import com.foxhole.guard.runtime.CategorizedDnsStage
 import com.foxhole.guard.runtime.DnsFilterAssetInstaller
 import com.foxhole.guard.runtime.DnsFilterUpdateClient
 import com.foxhole.guard.runtime.DnsFilterUpdateRepository
+import com.foxhole.guard.runtime.DnsFilterUpdateBackend
 import com.foxhole.guard.runtime.FileThreatIntelStore
 import com.foxhole.guard.runtime.FileTlsFingerprintStore
 import com.foxhole.guard.runtime.FoxholeConnectionController
@@ -279,7 +280,8 @@ internal class FoxholeDataGraphModule(
             installedManifestProvider = { dnsFilterAssetInstaller.installedManifestOrNull() },
             installedRuleSetsProvider = { dnsFilterAssetInstaller.installedRuleSetsOrEmpty() },
             liveRuleSetInstaller = liveDnsRuleSetInstaller,
-        ).also { repository -> repository.categorizedInstaller = liveCategorizedDnsInstaller }
+            backend = DnsFilterUpdateBackend.Categorized(dnsFilterAssetInstaller.categorizedStore, liveCategorizedDnsInstaller),
+        )
     }
     val appUpdateClient: AppUpdateClient by lazy {
         AppUpdateClient(

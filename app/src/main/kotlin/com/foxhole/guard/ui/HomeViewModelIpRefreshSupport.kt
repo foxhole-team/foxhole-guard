@@ -622,6 +622,7 @@ private fun HomeViewModel.scheduleConnectedDashboardLatencyRefresh(reason: IpInf
     profileLatencyRefreshJob = null
     profileLatencyRefreshGeneration = null
     val refreshGeneration = beginDashboardLatencyRefresh()
+    if (!acquireDashboardConnectionMetricsLoading(refreshGeneration)) return null
     val handoffJob =
         viewModelScope.launch(start = CoroutineStart.LAZY) {
             try {
@@ -637,6 +638,9 @@ private fun HomeViewModel.scheduleConnectedDashboardLatencyRefresh(reason: IpInf
                     )
                 }
             } finally {
+                if (profileLatencyRefreshGeneration != refreshGeneration) {
+                    releaseDashboardConnectionMetricsLoading(refreshGeneration)
+                }
                 if (postConnectLatencyRefreshJob === coroutineContext[Job]) {
                     postConnectLatencyRefreshJob = null
                     postConnectLatencyRefreshGeneration = null

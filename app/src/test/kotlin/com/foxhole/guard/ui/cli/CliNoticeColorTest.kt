@@ -26,7 +26,7 @@ class CliNoticeColorTest {
     }
 
     @Test
-    fun `monochrome notices keep green blue orange and red semantic colors`() {
+    fun `monochrome notices keep semantic colors and use the help palette for information`() {
         listOf(ThemeMode.LIGHT, ThemeMode.DARK).forEach { theme ->
             val colors = cliColorsFor(theme, monochromeEnabled = true)
             val success = cliNoticeColor(FoxholeBannerTone.SUCCESS, colors)
@@ -34,7 +34,7 @@ class CliNoticeColorTest {
             val warning = cliNoticeColor(FoxholeBannerTone.WARNING, colors)
             val error = cliNoticeColor(FoxholeBannerTone.ERROR, colors)
             assertTrue(success.green > success.red && success.green > success.blue)
-            assertTrue(info.blue > info.red && info.blue > info.green)
+            assertTrue(info == colors.info || info == colors.fg)
             assertTrue(warning.red > warning.green && warning.green > warning.blue)
             assertTrue(error.red > error.green && error.red > error.blue)
         }

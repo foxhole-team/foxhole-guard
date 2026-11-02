@@ -37,6 +37,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpOffset
@@ -55,6 +56,7 @@ internal data class CliDropdownOption(
     @DrawableRes val icon: Int? = null,
     val iconTint: Color? = null,
     val flagCountry: String? = null,
+    val textStyle: TextStyle? = null,
 )
 
 @Composable
@@ -129,7 +131,7 @@ internal fun CliDropdownRow(
                     )
                     Text(
                         text = cliLabelText(value),
-                        style = cliRowTextStyle(),
+                        style = options.firstOrNull { it.id == selectedId }?.textStyle ?: cliRowTextStyle(),
                         color = if (valueColor == Color.Unspecified) colors.fg else valueColor,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -265,7 +267,7 @@ private fun rememberCliDropdownMenuWidth(
                     append(option.label)
                     option.detail?.let { append(" · ").append(it) }
                 }
-                textMeasurer.measure(text = line, style = bodyStyle).size.width
+                textMeasurer.measure(text = line, style = option.textStyle ?: bodyStyle).size.width
             } ?: 0
             with(density) {
                 (
@@ -315,7 +317,7 @@ private fun CliDropdownOptionLine(
         }
         Text(
             text = cliLabelText(option.label),
-            style = cliRowTextStyle(),
+            style = option.textStyle ?: cliRowTextStyle(),
             color = if (selected) colors.accent else colors.fg,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,

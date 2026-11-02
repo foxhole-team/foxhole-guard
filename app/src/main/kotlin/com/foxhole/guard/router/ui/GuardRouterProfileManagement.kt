@@ -11,14 +11,14 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import com.foxhole.guard.ui.cli.components.CliButton
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -36,11 +36,14 @@ internal fun GuardRouterProfileManagementContent(name: String, protocol: String,
         if (profile != null) GuardRouterClientQr(profile, name)
         else Text(stringResource(if (loading) R.string.guard_router_router_control_profile_loading else R.string.guard_router_router_control_qr_unavailable),
             style = MaterialTheme.typography.bodySmall)
-        OutlinedButton(onClick = onImport, enabled = enabled && profile != null,
-            modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
-            Icon(painterResource(R.drawable.lin_update), null, Modifier.size(18.dp))
-            Text(stringResource(R.string.guard_router_router_control_import_phone), Modifier.padding(start = 8.dp))
-        }
+        CliButton(
+            label = stringResource(R.string.guard_router_router_control_import_phone),
+            onClick = onImport,
+            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+            enabled = enabled && profile != null,
+            icon = R.drawable.lin_update,
+            filled = false,
+        )
         if (!provisioned) Text(stringResource(R.string.guard_router_router_control_client_template),
             style = MaterialTheme.typography.bodySmall, color = LocalGuardRouterColors.current.muted)
     }
@@ -49,14 +52,22 @@ internal fun GuardRouterProfileManagementContent(name: String, protocol: String,
 @Composable
 internal fun GuardRouterProfileActionsFooter(enabled: Boolean, onShare: () -> Unit, onRemove: () -> Unit) {
     Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        OutlinedButton(onClick = onShare, modifier = Modifier.weight(1f).heightIn(min = 56.dp).fillMaxHeight(), enabled = enabled) {
-            Icon(painterResource(R.drawable.lin_export), null, Modifier.size(18.dp))
-            Text(stringResource(R.string.guard_router_router_review_share), Modifier.padding(start = 8.dp))
-        }
-        OutlinedButton(onClick = onRemove, modifier = Modifier.weight(1f).heightIn(min = 56.dp).fillMaxHeight(), enabled = enabled,
-            border = BorderStroke(1.dp, guardRouterDeleteColor()), colors = ButtonDefaults.outlinedButtonColors(contentColor = guardRouterDeleteColor())) {
-            Icon(painterResource(R.drawable.lin_trash), null, Modifier.size(18.dp), tint = guardRouterDeleteColor())
-            Text(stringResource(R.string.guard_router_vpn_remove), Modifier.padding(start = 8.dp))
-        }
+        CliButton(
+            label = stringResource(R.string.guard_router_router_review_share),
+            onClick = onShare,
+            modifier = Modifier.weight(1f).heightIn(min = 48.dp).fillMaxHeight(),
+            enabled = enabled,
+            icon = R.drawable.lin_export,
+            filled = false,
+        )
+        CliButton(
+            label = stringResource(R.string.guard_router_vpn_remove),
+            onClick = onRemove,
+            modifier = Modifier.weight(1f).heightIn(min = 48.dp).fillMaxHeight(),
+            enabled = enabled,
+            color = guardRouterDeleteColor(),
+            icon = R.drawable.lin_trash,
+            filled = false,
+        )
     }
 }

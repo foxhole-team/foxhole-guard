@@ -1,16 +1,24 @@
 package com.foxhole.guard.router
 
 import java.net.Socket
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class RouterVpnDiscoveryAccessTest {
+    private class ClosingSocket : Socket() {
+        private val closed = CountDownLatch(1)
+        override fun close() { try { super.close() } finally { closed.countDown() } }
+        fun awaitClosed(): Boolean = closed.await(1, TimeUnit.SECONDS) && isClosed
+    }
+
     @Test fun stoppedPreflightClosesBeforeProtectionOrBind() {
         val operation = RouterIoOperation()
         operation.close()
-        val socket = Socket()
+        val socket = ClosingSocket()
         var protected = 0
         var bound = 0
         val failure = runCatching {
@@ -18,17 +26,17 @@ class RouterVpnDiscoveryAccessTest {
                 { socket.also { operation.register(it) } })
         }.exceptionOrNull()
         assertTrue(failure is java.io.IOException)
-        assertTrue(socket.isClosed)
+        assertTrue(socket.awaitClosed())
         assertEquals(0, protected)
         assertEquals(0, bound)
     }
 
     @Test fun stopDuringPhysicalBindClosesTheRegisteredProbe() {
         val operation = RouterIoOperation()
-        val socket = Socket()
+        val socket = ClosingSocket()
         createRouterWifiSocket({ true }, RouterSocketProtection { true }, { operation.close() },
             { socket.also { operation.register(it) } }).use {
-            assertTrue(it.isClosed)
+            assertTrue(socket.awaitClosed())
         }
     }
 

@@ -1,3 +1,11 @@
+<h1 align="center">FoxHole Guard</h1>
+
+<div align="center">
+
+**FoxHole Guard** 是 Android 网络防护、隐私保护和本地网络活动管理工具。
+
+</div>
+
 <p align="center">
     <img
       src="../media/fhg.gif"
@@ -23,23 +31,20 @@
   <a href="https://github.com/foxhole-team/foxhole-guard/releases">
     <img src="https://img.shields.io/github/v/release/foxhole-team/foxhole-guard?label=GitHub%20version&style=flat-square" alt="GitHub Version">
   </a>
+  <img src="https://img.shields.io/badge/status-stable-success?style=flat-square" alt="Status: stable">
   <a href="https://f-droid.org/packages/com.foxhole.guard/">
     <img src="https://img.shields.io/f-droid/v/com.foxhole.guard?label=F-Droid&logo=f-droid&style=flat-square" alt="F-Droid Version">
   </a>
-  <a href="https://apps.obtainium.imranr.dev/redirect?r=obtainium://app/%7B%22id%22%3A%22com.foxhole.guard%22%2C%22url%22%3A%22https%3A%2F%2Fgithub.com%2Ffoxhole-team%2Ffoxhole-guard%22%2C%22author%22%3A%22FoxHole%20Team%22%2C%22name%22%3A%22FoxHole%20Guard%22%2C%22preferredApkIndex%22%3A0%2C%22additionalSettings%22%3A%22%7B%5C%22apkFilterRegEx%5C%22%3A%5C%22arm64-v8a-release%5C%5C%5C%5C.apk%24%5C%22%2C%5C%22invertAPKFilter%5C%22%3Afalse%2C%5C%22verifyLatestTag%5C%22%3Atrue%7D%22%2C%22overrideSource%22%3A%22GitHub%22%7D">
-    <img src="https://img.shields.io/badge/Obtainium-add%20app-1A73E8?style=flat-square" alt="Get it on Obtainium">
+  <a href="https://apps.obtainium.imranr.dev/redirect?r=obtainium://app/%7B%22id%22%3A%22com.foxhole.guard%22%2C%22url%22%3A%22https%3A%2F%2Fgithub.com%2Ffoxhole-team%2Ffoxhole-guard%22%2C%22author%22%3A%22FoxHole%20Team%22%2C%22name%22%3A%22FoxHole%20Guard%22%2C%22preferredApkIndex%22%3A0%2C%22additionalSettings%22%3A%22%7B%5C%22apkFilterRegEx%5C%22%3A%5C%22arm64-v8a%5B.%5Dapk%24%5C%22%2C%5C%22invertAPKFilter%5C%22%3Afalse%2C%5C%22verifyLatestTag%5C%22%3Atrue%7D%22%2C%22overrideSource%22%3A%22GitHub%22%7D" title="Obtainium · ARM64">
+    <img src="https://img.shields.io/badge/Obtainium-add%20app-1A73E8?style=flat-square" alt="Get it on Obtainium · ARM64">
   </a>
 </p>
 
-# FoxHole Guard
 ![Platform](https://img.shields.io/badge/platform-Android-3DDC84?style=flat-square&logo=android&logoColor=white)
-![Status](https://img.shields.io/badge/status-STABLE-success?style=flat-square)
 ![Core](https://img.shields.io/badge/core-Rust-000000?style=flat-square&logo=rust&logoColor=white)
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-007ec6?style=flat-square)](https://www.gnu.org/licenses/gpl-3.0.html)
 ![Telemetry](https://img.shields.io/badge/telemetry-none-success?style=flat-square)
 ![❤️ We support I2P](https://img.shields.io/badge/❤️_We_support-I2P-7B1FA2?style=flat-square)
-
-**FoxHole Guard** 是 Android 网络防护、隐私保护和本地网络活动管理工具。
 
 已发布版本和 APK 列在 [GitHub Releases](https://github.com/foxhole-team/foxhole-guard/releases) 中。
 
@@ -55,6 +60,59 @@
 
 ---
 
+<p align="center"><a href="#quickstart">开始使用</a> · <a href="#features">功能</a> · <a href="#details">详情</a> · <a href="#whats-new">更新内容</a></p>
+
+<a id="whats-new"></a>
+
+> **🆕 更新内容 - 1.0.2 Stable**
+>
+> - 修复了路由器发现、配对和通过 SSH 检查 OpenWrt 的问题，并添加了 SSH 密钥支持。
+> - 修复了从 GitHub 更新应用时的错误。
+> - 新增通知关闭计时器和向上滑动关闭功能。
+> - 更新了帮助和提示。
+> - 简化 OpenWrt 设置以及家庭设备和 VPN 客户端的管理。
+> - 新增安装时确认的六位 PIN，并支持最多 10 台路由器。
+
+<a id="quickstart"></a>
+
+## ⬇️ 开始使用与下载
+
+需要Android 8（API 26）或更新版本。可用APK架构见各已发布版本。
+
+1. 从[GitHub Releases](https://github.com/foxhole-team/foxhole-guard/releases)安装APK。
+2. 添加自己的VPN配置或启用Tor模块。
+3. 选择场景，启动系统隧道时确认Android的VPN请求。
+
+Obtainium · ARM64。其他架构请在[GitHub Releases](https://github.com/foxhole-team/foxhole-guard/releases)选择APK。
+
+## 🔏 发布验证
+
+建议对官方发布 APK 验证校验和及签名证书。
+
+```bash
+sha256sum -c SHA256SUMS
+```
+
+```bash
+apksigner verify --print-certs downloaded-apk.apk
+```
+
+预期证书 SHA-256 指纹：
+
+```text
+e59de2486084c38f3c77e9df0eb5eff9a4559f3c68024f1208e0e9c04b0df665
+```
+
+预期 SHA-1 指纹：
+
+```text
+9e00dc6b54461a4647cb11133b394cdfc986646d
+```
+
+---
+
+<a id="features"></a>
+
 ## ✨ 主要功能
 
 - **FoxHole Core**：自主开发的 Rust 网络核心。
@@ -62,7 +120,7 @@
 - **Tor 接入**：在 TCP VPN 隧道内连接 Tor，支持指定应用路由、网桥和定时更换 Tor 电路。
 - **I2P 接入**：通过独立 `i2pd` 进程与 FoxHole Core 的本地 SOCKS5 接口访问 `.i2p` 资源。
 - **防火墙**：应用封锁、断线保护和新安装应用隔离。
-- **DNS 管理**：本地拦截器、UDP/TCP/DoT/DoH、缓存和过期缓存。
+- **DNS 管理**：本地拦截器、UDP/TCP/DoT/DoH/DoQ/DoH3、缓存和过期缓存。
 - **流量地图**：在世界地图上显示设备当前连接。
 - **FoxHole Sentinel**：可选的本地 IOC 和网络异常分析，默认关闭。
 - **网页应用**：HTML5 应用及通知投递。
@@ -72,6 +130,8 @@
 - **安全检查**：通过安装/卸载日志、网络异常及新应用威胁指标和权限检查发现入侵或干预迹象；支持自定义应用数据加密。
 
 ---
+
+<a id="details"></a>
 
 ## 🧭 架构与运行方式
 
@@ -138,10 +198,61 @@ VPN 活动时，将全设备流量同时交给 Tor 存在限制。如果 Tor 在
 | 应用 → 排除 | 应用 | 应用 |
 | 应用 → 封锁 | 应用 | 应用 |
 | 网站地址规则 | 应用 | 应用 |
-
-**整个设备**场景忽略普通路由规则，但保留封锁与排除。系统隧道或防火墙未运行时，封锁规则不会生效。
+在**整个设备**场景中，不应用单独为应用分配VPN或Tor的规则。应用阻止、排除规则及Web地址规则仍在活动路由范围内生效。应用阻止需要系统隧道和防火墙运行。
 
 路由规则以原子方式应用。场景更改默认也以原子方式应用，可在设置中关闭此行为。
+
+---
+
+## 🔒 权限与隐私
+
+- `INTERNET`：VPN、代理、Tor、I2P、DNS、网页应用、订阅和可更新网络数据。
+- `ACCESS_NETWORK_STATE` / `ACCESS_WIFI_STATE`：网络状态、规则及代理。
+- `ACCESS_LOCAL_NETWORK` - 用于发现、设置和管理路由器。在 Android 17（API 37）及更高版本上，若应用的目标 API 也是 37 或更高版本，会在 LAN 操作前请求系统权限。拒绝后会阻止这些操作。
+- `FOREGROUND_SERVICE` 及相关前台服务权限：带可见通知的、由用户控制的长期网络模式。
+- `QUERY_ALL_PACKAGES`：分流、防火墙、隔离、DNS 排除和本地审计所需的应用列表。
+- `PACKAGE_USAGE_STATS`：仅用于用户启用且需要该 Android 系统访问权限的本地统计与分析。
+- `CAMERA`：导入二维码。
+- `POST_NOTIFICATIONS`：网络服务、Sentinel 和网页通知。
+- `RECEIVE_BOOT_COMPLETED`：重启后恢复所选模式。
+- `WAKE_LOCK`：需要时维持网络会话。
+
+以下数据保留在设备上：
+
+- 已安装应用列表；
+- 本地统计；
+- 连接与日志；
+- Sentinel 结果；
+- 自动连接历史；
+- DNS 排除；
+- 防火墙策略；
+- 路由策略；
+- 本地网页应用数据；
+- 模块与扩展设置；
+- Vault 元数据。
+
+FoxHole Guard 不将这些数据发送给开发者。
+
+### 🌍 网络请求
+
+FoxHole DB 的 TLS 指纹表更新默认启用。启动后可能检查一次，此后在有网络时安排每日检查，可在设置中关闭。其他签名数据集和已保存订阅有各自更新控制。
+
+连通性检测和 IP 查询会联系 Google、Cloudflare、ipwho.is 及其他备用服务。它们会收到请求和所用公网 IP。功能相关网络活动还包括：
+
+- VPN；
+- Tor；
+- I2P；
+- HTTPS 订阅更新；
+- 连通性检查；
+- 用户配置的 DNS；
+- GeoIP/DNS/Tor 网桥更新；
+- 网页应用；
+- 已启用网页应用的事件投递。
+
+
+连接检查会访问Google和Cloudflare。出口IP和大致位置由带备用地址的外部IP服务提供。这些服务会接收请求及出口IP，但不会因此将日志或Sentinel结果发送给开发者。
+
+服务请求还包括GitHub版应用更新检查、所选FoxHole DB数据（DNS、Tor网桥、GeoIP、IOC及TLS表）以及保存的订阅来源。后台检查取决于启用的功能和设置。F-Droid负责其APK的更新。
 
 ---
 
@@ -158,7 +269,7 @@ VPN 活动时，将全设备流量同时交给 Tor 存在限制。如果 Tor 在
 | **Tor** | Arti：TCP、`.onion`、网桥和定时更换电路。 |
 | **I2P** | 独立 `i2pd` 进程和回环 SOCKS5 提供 `.i2p`。 |
 | **FoxHole Sentinel** | 应用审计、IOC 匹配及带哈希链完整性验证的日志。 |
-| **DNS** | DoT/DoH 和本地过滤。 |
+| **DNS** | DoT/DoH/DoQ/DoH3 和本地过滤。 |
 
 ### 🧅 Tor 接入
 
@@ -176,7 +287,7 @@ Tor 模块包含在 FoxHole Core 的标准 Android 构建中。
 
 #### 🌐 Onion 服务
 
-FoxHole Core 支持 onion 服务。
+FoxHole Core提供实验性的onion service发布API。核心中存在该API不表示Guard界面已有可直接使用的发布流程。访问现有`.onion`站点是Tor模块的另一项功能。
 
 ### 🕸️ I2P 接入
 
@@ -186,10 +297,12 @@ I2P 并未在 FoxHole Core 内实现。
 
 I2P 路由条件采用失败即阻断的检查方式：
 
-- 从任何应用拦截 `.i2p` 链接；
+- 为流量通过FoxHole Guard活动路由的应用提供`.i2p`访问；
 - 向 I2P 网络转发流量；
 - 移动网络使用限制；
 - 带宽管理。
+
+此路由要求运行中的`i2pd`以及由FoxHole Guard处理DNS。Android严格私人DNS模式与`.i2p`路由不兼容，启动此路由会明确报错。
 
 ### 🧱 防火墙
 
@@ -314,6 +427,7 @@ FoxHole Core 包含自主 DNS 拦截器。
 - TCP DNS；
 - DoT；
 - DoH；
+- 使用自定义DNS服务器地址的DoQ和DoH3；可用性取决于所选路由及UDP支持；
 - 受保护 DNS 套接字；
 - 通过指定 Android `Network` 引导 DNS；
 - 缓存；
@@ -330,19 +444,19 @@ FoxHole Guard 可应用本地规则过滤：
 - 遥测；
 - 潜在恶意域名。
 
-规则来自开放的 AdGuard DNS 过滤器。上游按名称固定，其他来源的订阅将被拒绝。
+DNS过滤默认关闭。广告、跟踪器、遥测和潜在恶意域名四个类别可分别启用。跟踪器可选Normal/Pro，威胁可选Medium/Full。
 
-清单：
+FoxHole DB从固定的公开来源构建数据集。每个数据集的清单和来源记录列出准确的组成、来源修订和许可证。
 
-```text
-https://foxhole-team.github.io/foxhole-db/manifest.json
-```
+APK包含全部四种组合的初始数据集。使用前会检查大小、SHA-256及所选类别是否可用，因此首次使用不一定需要联网下载。签名更新会验证签名、兼容性、有效期、版本顺序及SHA-256。
 
-下载的 DNS 规则是**过滤数据，而非可执行代码**。
+所选变体的更新地址：
 
-使用前会验证格式参数，包括签名、大小、兼容性与 SHA-256。
+`https://foxhole-team.github.io/foxhole-db/dns-categories/<variant>/manifest.json`
 
-验证失败时保留已安装的可信规则。首次安装后，在规则通过验证前 DNS 过滤不可用。
+`<variant>`为`normal-medium`、`normal-full`、`pro-medium`或`pro-full`。
+
+已保存或已准备的数据不一定处于活动状态，必须由当前FoxHole Core验证并应用。签名active/pending数据无效时会报告不可用，不会静默替换为APK初始数据。这些数据集是过滤数据，不是可执行代码。
 
 ---
 
@@ -379,7 +493,7 @@ connect / send
 | 扩展 | 说明 |
 | --- | --- |
 | **代理服务器** | 通过 SOCKS5/HTTP CONNECT 向当前 Wi-Fi 的其他设备提供访问，强制认证并绑定已确认网络。 |
-| **网页应用** | 全屏 HTML5 网站，各自在隔离 WebView 配置中运行并支持通知。 |
+| **Web应用** | 全屏WebView中的HTML5站点，定期检查通知。仅在已安装WebView支持时使用独立存储配置。 |
 
 ### 🔗 代理服务器
 
@@ -401,7 +515,7 @@ connect / send
 - 绑定规范源身份的通知；
 - 撤销已授予租约。
 
-可单独清除各网页应用的 Cookie、存储和缓存。完全移除网页应用也会移除其数据。
+数据清理方式取决于已安装的WebView：独立应用配置、站点数据，或经单独确认的共享数据清理。不支持多配置时，Web应用共享一个配置并采用通常的同源隔离。未完成的清理会记录，并在加载前重试。
 
 #### 🔔 网页后台服务：`foxhole watchdog web`
 
@@ -418,9 +532,13 @@ connect / send
 
 ## 🛜 路由器管理公开测试版
 
+> [!NOTE]
+> 暂不支持在 VPN 连接处于活动状态时管理路由器。
+
 在设置中打开 OpenWrt，即可配对路由器并管理其 VPN 配置、设备路由、协议软件包和 FoxHole 更新。设备兼容性及安装和更新流程仍在验证中。管理开关仅适用于所选的已保存配对；关闭它不会停止路由器 VPN。
 
 > [!IMPORTANT]
+> 以下限制描述当前已发布版本。
 > 目前，自动安装仅支持使用完全默认 OpenWrt 配置的路由器。
 > 手动安装最新版 [FoxHole OpenWrt Client](https://github.com/foxhole-team/foxhole-openwrt-client) 后也可进行配对。
 > 设置和配对时，手机和路由器必须位于同一局域网，且路由器需要能够访问互联网。
@@ -462,58 +580,11 @@ FoxHole DB 提供五个独立签名的数据集，由对应功能按需下载。
 
 | 数据集 | 产物 | 格式 | 来源 | 许可证 | 版本 |
 | --- | --- | --- | --- | --- | --- |
-| **DNS：过滤列表** | `adguard-dns-filter.fhds` | `foxhole-dns-fst-v1` | [AdGuard DNS filter](https://github.com/AdguardTeam/AdGuardSDNSFilter) | GPL-3.0 | 每次构建固定上游提交。 |
+| **DNS - 过滤类别** | `dns-categories/<variant>/dns-categories.fhds` | `foxhole-dns-fst-v1`，清单`schema: 3` | 固定的AdGuard、EasyPrivacy和HaGeZi来源；准确组成见清单 | 按各来源数据集许可证，参见来源记录 | Normal/Pro × Medium/Full共四种；APK初始数据和已验证更新 |
 | **Tor：内置网桥镜像** | `bridges.json` | `tor-bridges-json` | [Tor Project built-in bridges (Moat)](https://bridges.torproject.org/moat/circumvention/builtin) | 公开的审查规避数据 | `generated_at` 标记；规范化对象键，保留上游数组顺序。 |
 | **FoxHole Sentinel：威胁情报** | `threat-intel.json` | `sentinel-threat-intel-json`，文档 `schema: 3` | [AssoEchap/stalkerware-indicators](https://github.com/AssoEchap/stalkerware-indicators) | CC-BY-4.0 | 每次构建固定上游提交，记录于 `threat-intel-source-info.json`。 |
 | **地理数据库：IP → 国家** | `dbip-country-ipv4.csv`, `dbip-country-ipv6.csv` | `dbip-country-csv` | [DB-IP Lite via sapics/ip-location-db](https://github.com/sapics/ip-location-db) (`dbip-country`) | CC-BY-4.0 | 将上游 `package.json` 中的 `version` 写入清单。 |
 | **TLS 指纹表：ClientHello 配置** | `fingerprints.json` | `tls-fingerprint-tables-json` | [FoxHole Core `fingerprints/`](https://github.com/foxhole-team/foxhole-core) | GPL-3.0-or-later | 每次固定上游版本，每个配置应用前重新计算 `fingerprint_sha256`。 |
-
----
-
-## 🔒 权限与隐私
-
-- `INTERNET`：VPN、代理、Tor、I2P、DNS、网页应用、订阅和可更新网络数据。
-- `ACCESS_NETWORK_STATE` / `ACCESS_WIFI_STATE`：网络状态、规则及代理。
-- `ACCESS_LOCAL_NETWORK` - 用于发现、设置和管理路由器。在 Android 17（API 37）及更高版本上，若应用的目标 API 也是 37 或更高版本，会在 LAN 操作前请求系统权限。拒绝后会阻止这些操作。
-- `FOREGROUND_SERVICE` 及相关前台服务权限：带可见通知的、由用户控制的长期网络模式。
-- `QUERY_ALL_PACKAGES`：分流、防火墙、隔离、DNS 排除和本地审计所需的应用列表。
-- `PACKAGE_USAGE_STATS`：仅用于用户启用且需要该 Android 系统访问权限的本地统计与分析。
-- `CAMERA`：导入二维码。
-- `POST_NOTIFICATIONS`：网络服务、Sentinel 和网页通知。
-- `RECEIVE_BOOT_COMPLETED`：重启后恢复所选模式。
-- `WAKE_LOCK`：需要时维持网络会话。
-
-以下数据保留在设备上：
-
-- 已安装应用列表；
-- 本地统计；
-- 连接与日志；
-- Sentinel 结果；
-- 自动连接历史；
-- DNS 排除；
-- 防火墙策略；
-- 路由策略；
-- 本地网页应用数据；
-- 模块与扩展设置；
-- Vault 元数据。
-
-FoxHole Guard 不将这些数据发送给开发者。
-
-### 🌍 网络请求
-
-FoxHole DB 的 TLS 指纹表更新默认启用。启动后可能检查一次，此后在有网络时安排每日检查，可在设置中关闭。其他签名数据集和已保存订阅有各自更新控制。
-
-连通性检测和 IP 查询会联系 Google、Cloudflare、ipwho.is 及其他备用服务。它们会收到请求和所用公网 IP。功能相关网络活动还包括：
-
-- VPN；
-- Tor；
-- I2P；
-- HTTPS 订阅更新；
-- 连通性检查；
-- 用户配置的 DNS；
-- GeoIP/DNS/Tor 网桥更新；
-- 网页应用；
-- 已启用网页应用的事件投递。
 
 ---
 
@@ -527,75 +598,25 @@ FoxHole DB 的 TLS 指纹表更新默认启用。启动后可能检查一次，�
 
 ---
 
-## 🔏 发布验证
+<a id="ecosystem"></a>
 
-由所有者签名的发行 APK 使用下方证书。
+## 🔗 FoxHole生态系统
 
-GitHub 与 F-Droid 是独立更新渠道。GitHub 版支持应用内 APK 更新检查；F-Droid 版关闭 APK 自更新并移除安装软件包权限，由 F-Droid 客户端更新。每个 APK 都有自己的交付 SBOM。架构、产物可用性和版本须依据真实发布资产确认。仅有配方并不证明 F-Droid 构建成功、可复现或已被仓库接纳。
+| 项目 | 用途 |
+| --- | --- |
+| [**FoxHole Guard**](https://github.com/foxhole-team/foxhole-guard) | Android：VPN、Tor/I2P、流量规则和本地监控 |
+| [FoxHole VPN](https://github.com/foxhole-team/foxhole-vpn) | Android：简洁VPN客户端及已配对OpenWrt管理 |
+| [FoxHole Core](https://github.com/foxhole-team/foxhole-core) | 共用Rust网络核心；功能取决于构建 |
+| [FoxHole OpenWrt](https://github.com/foxhole-team/foxhole-openwrt-client) | 路由器VPN及局域网管理 |
+| [FoxHole DB](https://github.com/foxhole-team/foxhole-db) | 签名规则和参考数据 |
 
-建议对官方发布 APK 验证校验和及签名证书。
+## 🤝 参与开发
 
-```bash
-sha256sum -c SHA256SUMS
-```
-
-```bash
-apksigner verify --print-certs downloaded-apk.apk
-```
-
-预期证书 SHA-256 指纹：
-
-```text
-e59de2486084c38f3c77e9df0eb5eff9a4559f3c68024f1208e0e9c04b0df665
-```
-
-预期 SHA-1 指纹：
-
-```text
-9e00dc6b54461a4647cb11133b394cdfc986646d
-```
-
----
-
-## 🔗 相关项目
-
-[![FoxHole Core](https://img.shields.io/badge/GitHub-FoxHole_Core-181717?logo=github)](https://github.com/foxhole-team/foxhole-core)
-[![Version](https://img.shields.io/github/v/release/foxhole-team/foxhole-core?label=version)](https://github.com/foxhole-team/foxhole-core/releases)
-
-[![FoxHole DB](https://img.shields.io/badge/GitHub-FoxHole_DB-181717?logo=github)](https://github.com/foxhole-team/foxhole-db)
-[![Version](https://img.shields.io/github/v/release/foxhole-team/foxhole-db?label=version)](https://github.com/foxhole-team/foxhole-db/releases)
-
-
-[![FoxHole VPN](https://img.shields.io/badge/GitHub-FoxHole_VPN-181717?logo=github&style=flat-square)](https://github.com/foxhole-team/foxhole-vpn)
-[![Version](https://img.shields.io/github/v/release/foxhole-team/foxhole-vpn?label=version&style=flat-square)](https://github.com/foxhole-team/foxhole-vpn/releases)
-
-[![FoxHole OpenWrt](https://img.shields.io/badge/GitHub-FoxHole_OpenWrt-181717?logo=github&style=flat-square)](https://github.com/foxhole-team/foxhole-openwrt-client)
-[![Version](https://img.shields.io/github/v/release/foxhole-team/foxhole-openwrt-client?label=version&style=flat-square)](https://github.com/foxhole-team/foxhole-openwrt-client/releases)
-
----
-
-## 📄 许可证
-
-FoxHole Guard 与 FoxHole Core 根据以下许可证分发：
-
-**GNU General Public License v3.0 或更高版本（`GPL-3.0-or-later`）**
-
-Copyright (C) 2026 FOXHOLE TEAM.
-
-第三方依赖许可证列于：
-
-- `THIRD_PARTY_NOTICES.md`；
-- 项目 SBOM（`*.cdx.json`）。
-
-依赖与许可证图在 CI 中验证。
-
----
+请通过[Issues](https://github.com/foxhole-team/foxhole-guard/issues)报告错误或提出修改建议。
 
 ## 💖 支持开发
 
-我们完全利用自己的时间和资源，并借助 AI 工具开发和维护 FoxHole Guard。您的支持能让我们为项目投入更多时间，加快开发进度。
-
-[支持项目 - 加密货币钱包](#cryptocurrency-wallets)
+我们完全利用自己的时间和资源开发和维护FoxHole Guard，并在开发中使用AI工具。您的支持能让我们为项目投入更多时间，加快开发进度。
 
 <a id="cryptocurrency-wallets"></a>
 
@@ -626,3 +647,20 @@ bc1qatnyy7jcpqrp0d3dk9rta9vqfejgh4mysd6m2f
 - Tor 是 The Tor Project 的商标。FoxHole Guard 不是其产品，未获其认可或赞助，与其无隶属关系。
 - FoxHole Guard 不是 AdGuard 的产品，与 AdGuard Software Ltd. 无隶属关系。
 - FoxHole Guard 不是 I2P 或 PurpleI2P 的官方产品。
+
+## 📄 许可证
+
+FoxHole Guard 与 FoxHole Core 根据以下许可证分发：
+
+**GNU General Public License v3.0 或更高版本（`GPL-3.0-or-later`）**
+
+Copyright (C) 2026 FOXHOLE TEAM.
+
+第三方依赖许可证列于：
+
+- `THIRD_PARTY_NOTICES.md`；
+- 项目 SBOM（`*.cdx.json`）。
+
+依赖与许可证图在 CI 中验证。
+
+---
