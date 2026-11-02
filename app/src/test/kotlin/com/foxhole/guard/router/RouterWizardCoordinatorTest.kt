@@ -67,6 +67,8 @@ class RouterWizardCoordinatorTest {
         return object : RouterWizardTransport {
             override fun gateway() = "10.1.1.1"
             override suspend fun inspectIdentity(endpoint: RouterEndpoint) = identity.also { assertEquals(identity.endpoint, endpoint) }
+            override suspend fun inspectDiscoveryIdentity(endpoint: RouterEndpoint): RouterTlsIdentity =
+                throw java.net.ConnectException("synthetic package API absent")
             override fun api(identity: RouterTlsIdentity) = api
         }
     }

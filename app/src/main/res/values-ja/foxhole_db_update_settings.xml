@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="cli_foxdb_settings_title">FoxHole DB の設定</string>
+    <string name="cli_foxdb_auto_enabled">自動更新は有効です</string>
+    <string name="cli_foxdb_auto_disabled">自動更新は無効です</string>
+</resources>

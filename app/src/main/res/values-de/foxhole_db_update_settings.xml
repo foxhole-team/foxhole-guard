@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="cli_foxdb_settings_title">FoxHole DB-Einstellungen</string>
+    <string name="cli_foxdb_auto_enabled">Automatische Updates aktiviert</string>
+    <string name="cli_foxdb_auto_disabled">Automatische Updates deaktiviert</string>
+</resources>

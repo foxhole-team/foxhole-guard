@@ -644,6 +644,7 @@ internal const val THREAT_INTEL_UPDATE_INTERVAL_HOURS = 72L
 internal fun threatIntelBackgroundUpdateEnabled(settings: Settings): Boolean =
     settings.anomaly.enabled &&
         settings.connection.componentUpdateCheckEnabled &&
+        settings.connection.componentAutoUpdateEnabled &&
         FOXHOLE_THREAT_INTEL_MANIFEST_URL.isNotBlank()
 
 internal fun Context.applyTlsFingerprintUpdateSchedule(

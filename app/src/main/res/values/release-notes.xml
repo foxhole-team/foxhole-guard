@@ -16,4 +16,6 @@
     <string name="cli_release_notes_vless_reality">Fixed VLESS + REALITY compatibility.</string>
     <string name="cli_release_notes_router_management">Simplified OpenWrt setup and management of home devices and VPN clients.</string>
     <string name="cli_release_notes_pin6">Added a six-digit PIN with confirmation during installation and support for up to 10 routers.</string>
+    <string name="cli_release_notes_db_auto">Added support for automatic FoxHole DB updates.</string>
+    <string name="cli_release_notes_router_pairing_version">Fixed the OpenWrt version check when pairing with a router.</string>
 </resources>

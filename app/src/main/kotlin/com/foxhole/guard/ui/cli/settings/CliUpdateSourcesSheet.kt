@@ -32,6 +32,7 @@ import com.foxhole.guard.ui.cli.components.CliRowDivider
 import com.foxhole.guard.ui.cli.components.CliRowInfoGlyph
 import com.foxhole.guard.ui.cli.components.CliSheetHeaderIconRole
 import com.foxhole.guard.ui.cli.components.CliTopBarSettingsButton
+import com.foxhole.guard.ui.cli.components.CliToggleRow
 import com.foxhole.guard.ui.cli.components.LocalCliBottomSheetDismissAfter
 import com.foxhole.guard.ui.cli.components.cliModalHeaderIconSizeFor
 
@@ -39,6 +40,10 @@ import com.foxhole.guard.ui.cli.components.cliModalHeaderIconSizeFor
 internal fun CliUpdateSourcesButton(
     sources: UpdateSourceSettings,
     appChannelEditable: Boolean,
+    updateChecksEnabled: Boolean,
+    autoUpdateEnabled: Boolean,
+    onUpdateChecksChange: (Boolean) -> Unit,
+    onAutoUpdateChange: (Boolean) -> Unit,
     onApply: (UpdateSourceSettings) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -54,9 +59,13 @@ internal fun CliUpdateSourcesButton(
         CliUpdateSourcesSheet(
             sources = sources,
             appChannelEditable = appChannelEditable,
+            updateChecksEnabled = updateChecksEnabled,
+            autoUpdateEnabled = autoUpdateEnabled,
             onDismiss = { open = false },
-            onApply = { next ->
+            onApply = { next, checkUpdates, autoUpdate ->
                 onApply(next)
+                if (checkUpdates != updateChecksEnabled) onUpdateChecksChange(checkUpdates)
+                if (autoUpdate != autoUpdateEnabled) onAutoUpdateChange(autoUpdate)
                 open = false
             },
         )
@@ -67,9 +76,13 @@ internal fun CliUpdateSourcesButton(
 private fun CliUpdateSourcesSheet(
     sources: UpdateSourceSettings,
     appChannelEditable: Boolean,
+    updateChecksEnabled: Boolean,
+    autoUpdateEnabled: Boolean,
     onDismiss: () -> Unit,
-    onApply: (UpdateSourceSettings) -> Unit,
+    onApply: (UpdateSourceSettings, Boolean, Boolean) -> Unit,
 ) {
+    var checkUpdates by rememberSaveable { mutableStateOf(updateChecksEnabled) }
+    var autoUpdate by rememberSaveable { mutableStateOf(autoUpdateEnabled) }
     var database by rememberSaveable { mutableStateOf(sources.databaseBaseUrl) }
     var releases by rememberSaveable { mutableStateOf(sources.appReleasesUrl) }
     var token by rememberSaveable { mutableStateOf(sources.appReleasesToken) }
@@ -102,7 +115,9 @@ private fun CliUpdateSourcesSheet(
                                 databaseBaseUrl = database,
                                 appReleasesUrl = releases,
                                 appReleasesToken = token,
-                            )
+                            ),
+                            checkUpdates,
+                            autoUpdate,
                         )
                     }
                 },
@@ -115,6 +130,21 @@ private fun CliUpdateSourcesSheet(
             )
         },
     ) {
+        CliToggleRow(
+            label = stringResource(R.string.cli_updates_check),
+            icon = R.drawable.lin_update,
+            checked = checkUpdates,
+            onToggle = { checkUpdates = it },
+        )
+        CliRowDivider()
+        CliToggleRow(
+            label = stringResource(R.string.cli_updates_auto),
+            icon = R.drawable.lin_restart,
+            checked = checkUpdates && autoUpdate,
+            enabled = checkUpdates,
+            onToggle = { autoUpdate = it },
+        )
+        CliRowDivider()
         CliUpdateChannelRow(
             label = stringResource(R.string.cli_foxdb_title),
             value = databaseRow.value,

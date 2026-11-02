@@ -33,6 +33,8 @@ class RouterCompactBootstrapWizardTest {
         object : RouterWizardTransport {
             override fun gateway() = "192.168.1.1"
             override suspend fun inspectIdentity(endpoint: RouterEndpoint): RouterTlsIdentity = error("unexpected TLS probe")
+            override suspend fun inspectDiscoveryIdentity(endpoint: RouterEndpoint): RouterTlsIdentity =
+                throw java.net.ConnectException("synthetic package API absent")
             override fun api(identity: RouterTlsIdentity): RouterPanelApi = error("unexpected PIN API")
         }, Store(), "Synthetic phone", setup,
         object : RouterWizardProvisioner {

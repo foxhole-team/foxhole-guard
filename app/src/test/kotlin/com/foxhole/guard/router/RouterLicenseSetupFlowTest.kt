@@ -44,6 +44,8 @@ class RouterLicenseSetupFlowTest {
     private fun wizard(setup: Setup?, readonly: RouterReadonlySshInspector? = null) = RouterWizardCoordinator(object : RouterWizardTransport {
         override fun gateway() = "192.168.1.1"
         override suspend fun inspectIdentity(endpoint: RouterEndpoint): RouterTlsIdentity = error("unexpected TLS probe")
+        override suspend fun inspectDiscoveryIdentity(endpoint: RouterEndpoint): RouterTlsIdentity =
+            throw java.net.ConnectException("synthetic package API absent")
         override fun api(identity: RouterTlsIdentity): RouterPanelApi = error("unexpected PIN request")
     }, MemoryRouterPairingStore(), "Synthetic phone", setup, object : RouterWizardProvisioner {
         override val supportedInboundProtocols = emptySet<String>()

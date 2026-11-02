@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -17,6 +18,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextAlign
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.foxhole.core.model.Settings
 import com.foxhole.core.model.dnsRuleSetFilteringEnabled
@@ -30,6 +32,7 @@ import com.foxhole.guard.runtime.RemoteUpdatePhase
 import com.foxhole.guard.runtime.appUpdateSeverity
 import com.foxhole.guard.ui.FoxholeDbGroupUi
 import com.foxhole.guard.ui.FoxholeUpdatePhase
+import com.foxhole.guard.ui.foxholeDbAutoUpdateEnabled
 import com.foxhole.guard.ui.GeoIpDatabaseUiState
 import com.foxhole.guard.ui.HomeViewModel
 import com.foxhole.guard.ui.appUpdateChannelIsGithub
@@ -38,6 +41,7 @@ import com.foxhole.guard.ui.appUpdateRequiredLabelRes
 import com.foxhole.guard.ui.cli.CliColors
 import com.foxhole.guard.ui.cli.CliFormat
 import com.foxhole.guard.ui.cli.CliSpacing
+import com.foxhole.guard.ui.cli.CliType
 import com.foxhole.guard.ui.cli.LocalCliBottomChromeClearance
 import com.foxhole.guard.ui.cli.LocalCliColors
 import com.foxhole.guard.ui.cli.components.CliButton
@@ -46,7 +50,6 @@ import com.foxhole.guard.ui.cli.components.CliKeyValue
 import com.foxhole.guard.ui.cli.components.CliPanel
 import com.foxhole.guard.ui.cli.components.CliRowDivider
 import com.foxhole.guard.ui.cli.components.CliScreenHeader
-import com.foxhole.guard.ui.cli.components.CliToggleRow
 import com.foxhole.guard.ui.isRunning
 import com.foxhole.guard.ui.onAppUpdateCheckRequested
 import com.foxhole.guard.ui.onAppUpdateDownloadRequested
@@ -108,6 +111,13 @@ internal fun CliUpdatesSubScreen(
                 CliUpdateSourcesButton(
                     sources = settings.updateSources,
                     appChannelEditable = appUpdateChannelIsGithub,
+                    updateChecksEnabled = settings.connection.componentUpdateCheckEnabled,
+                    autoUpdateEnabled = settings.connection.componentAutoUpdateEnabled &&
+                        settings.connection.geoIpAutoUpdate &&
+                        settings.connection.tlsFingerprintAutoUpdate &&
+                        settings.dns.autoUpdateFilters && settings.privacyRoute.bridgesAutoUpdate,
+                    onUpdateChecksChange = viewModel::onComponentUpdateCheckChanged,
+                    onAutoUpdateChange = viewModel::onComponentAutoUpdateChanged,
                     onApply = viewModel::onUpdateSourcesChanged,
                 )
             },
@@ -256,6 +266,7 @@ private fun CliFoxholeDbPanel(
     refreshPhase: FoxholeUpdatePhase,
 ) {
     val colors = LocalCliColors.current
+    val autoUpdateEnabled = foxholeDbAutoUpdateEnabled(settings)
     CliPanel(
         title = stringResource(R.string.cli_foxdb_title),
         icon = R.drawable.lin_update,
@@ -276,22 +287,6 @@ private fun CliFoxholeDbPanel(
             iconColor = statusColor,
         )
         Spacer(modifier = Modifier.height(CliSpacing.sm))
-        CliRowDivider()
-        CliToggleRow(
-            label = stringResource(R.string.cli_updates_check),
-            icon = R.drawable.lin_update,
-            checked = settings.connection.componentUpdateCheckEnabled,
-            onToggle = viewModel::onComponentUpdateCheckChanged,
-        )
-        CliRowDivider()
-        CliToggleRow(
-            label = stringResource(R.string.cli_updates_auto),
-            icon = R.drawable.lin_restart,
-            checked = settings.connection.componentUpdateCheckEnabled &&
-                settings.connection.componentAutoUpdateEnabled,
-            enabled = settings.connection.componentUpdateCheckEnabled,
-            onToggle = viewModel::onComponentAutoUpdateChanged,
-        )
         CliRowDivider()
         CliFoxholeDbGroupRow(
             label = stringResource(R.string.cli_foxdb_group_dns),
@@ -329,6 +324,16 @@ private fun CliFoxholeDbPanel(
         )
         CliRowDivider()
         Spacer(modifier = Modifier.height(CliSpacing.xs))
+        Text(
+            text = stringResource(
+                if (autoUpdateEnabled) R.string.cli_foxdb_auto_enabled else R.string.cli_foxdb_auto_disabled,
+            ),
+            style = CliType.body,
+            color = if (autoUpdateEnabled) colors.ok else colors.err,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Spacer(modifier = Modifier.height(CliSpacing.sm))
         val doneHold = rememberUpdateDoneHold(refreshRunning) &&
             refreshPhase != FoxholeUpdatePhase.FAILED
         CliButton(

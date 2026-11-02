@@ -16,4 +16,6 @@
     <string name="cli_release_notes_vless_reality">修复了 VLESS + REALITY 的兼容性。</string>
     <string name="cli_release_notes_router_management">简化 OpenWrt 设置以及家庭设备和 VPN 客户端的管理。</string>
     <string name="cli_release_notes_pin6">新增安装时确认的六位 PIN，并支持最多 10 台路由器。</string>
+    <string name="cli_release_notes_db_auto">新增 FoxHole DB 数据库自动更新支持。</string>
+    <string name="cli_release_notes_router_pairing_version">修复了与路由器配对时的 OpenWrt 版本检查问题。</string>
 </resources>

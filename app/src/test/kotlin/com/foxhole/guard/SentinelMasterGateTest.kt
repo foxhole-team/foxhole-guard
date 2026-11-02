@@ -10,15 +10,20 @@ import java.io.File
 
 class SentinelMasterGateTest {
     @Test
-    fun `threat intelligence background work follows both master switches`() {
+    fun `threat intelligence background work follows all master switches`() {
         val enabled =
             Settings(
                 anomaly = AnomalySettings(enabled = true),
-                connection = ConnectionSettings(componentUpdateCheckEnabled = true),
+                connection = ConnectionSettings(componentUpdateCheckEnabled = true, componentAutoUpdateEnabled = true),
             )
 
         assertTrue(threatIntelBackgroundUpdateEnabled(enabled))
         assertFalse(threatIntelBackgroundUpdateEnabled(enabled.copy(anomaly = AnomalySettings(enabled = false))))
+        assertFalse(
+            threatIntelBackgroundUpdateEnabled(
+                enabled.copy(connection = enabled.connection.copy(componentAutoUpdateEnabled = false)),
+            ),
+        )
         assertFalse(
             threatIntelBackgroundUpdateEnabled(
                 enabled.copy(connection = enabled.connection.copy(componentUpdateCheckEnabled = false)),

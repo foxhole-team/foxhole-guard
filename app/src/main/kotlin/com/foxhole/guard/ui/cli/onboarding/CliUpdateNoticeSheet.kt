@@ -72,6 +72,8 @@ internal fun CliUpdateNoticeSheetContent(
 
 @Suppress("UNUSED_PARAMETER")
 internal fun releaseNoteKeys(apiLevel: Int): List<Int> = listOf(
+    R.string.cli_release_notes_router_pairing_version,
+    R.string.cli_release_notes_db_auto,
     R.string.cli_release_notes_router_setup,
     R.string.cli_release_notes_app_updates,
     R.string.cli_release_notes_notices,

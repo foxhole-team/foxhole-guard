@@ -4,16 +4,33 @@ import com.foxhole.core.model.InterfaceMode
 import com.foxhole.core.model.Settings
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class InterfaceModeDefaultsTest {
     @Test
-    fun `a new installation uses the simpler interface without changing connection defaults`() {
+    fun `a new installation uses the simpler interface with automatic database updates`() {
         val actual = newInstallationSettings("https://example.com/ip")
 
         assertEquals(InterfaceMode.USER, actual.ui.interfaceMode)
-        assertEquals(Settings().connection.copy(ipInfoEndpoint = "https://example.com/ip"), actual.connection)
+        assertEquals(Settings().connection.copy(ipInfoEndpoint = "https://example.com/ip",
+            componentAutoUpdateEnabled = true, geoIpAutoUpdate = true), actual.connection)
+        assertTrue(actual.dns.autoUpdateFilters)
+        assertTrue(actual.privacyRoute.bridgesAutoUpdate)
         assertEquals(Settings().expert, actual.expert)
+    }
+
+    @Test
+    fun `existing database update opt out survives missing and explicit stored fields`() {
+        val json = Json { ignoreUnknownKeys = true }
+        listOf("{}", """{"connection":{"componentAutoUpdateEnabled":false},"dns":{"autoUpdateFilters":false},"privacyRoute":{"bridgesAutoUpdate":false}}""").forEach { payload ->
+            val stored = decodeStoredSettingsPayload(payload, json)
+            assertFalse(stored.connection.componentAutoUpdateEnabled)
+            assertFalse(stored.connection.geoIpAutoUpdate)
+            assertFalse(stored.dns.autoUpdateFilters)
+            assertFalse(stored.privacyRoute.bridgesAutoUpdate)
+        }
     }
 
     @Test

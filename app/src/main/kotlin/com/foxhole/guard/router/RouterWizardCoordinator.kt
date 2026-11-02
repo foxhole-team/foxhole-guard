@@ -263,7 +263,7 @@ internal class RouterWizardCoordinator(
         ensureOwner()
     }
 
-    suspend fun inspectAddress(address: String) = operation { inspectAddressInternal(address, checkInstalled = false) }
+    suspend fun inspectAddress(address: String) = operation { inspectAddressInternal(address, checkInstalled = true) }
 
     suspend fun inspectSetupAddress(address: String) = operation { inspectAddressInternal(address, checkInstalled = true) }
 

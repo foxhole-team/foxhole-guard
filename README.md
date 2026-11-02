@@ -60,8 +60,10 @@ The core idea of the project is a single application for everyday network protec
 
 <a id="whats-new"></a>
 
-> **🆕 What's new - 1.0.2 Stable**
+> **🆕 What's new - 1.0.3 Stable**
 >
+> - Fixed the OpenWrt version check when pairing with a router.
+> - Added support for automatic FoxHole DB updates.
 > - Fixed router discovery, pairing and OpenWrt inspection over SSH, and added SSH key support.
 > - Fixed errors when updating the app from GitHub.
 > - Added a notification dismiss timer and swipe-up dismissal.
@@ -670,3 +672,7 @@ Third-party dependency licenses are listed in:
 The dependency and license graph is validated in CI.
 
 ---
+
+## Roadmap
+
+See [Roadmap](ROADMAP.md) for project priorities and [TODO](TODO.md) for planned work.

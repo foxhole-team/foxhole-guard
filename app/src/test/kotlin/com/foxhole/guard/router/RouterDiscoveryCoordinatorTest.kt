@@ -6,6 +6,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
@@ -52,6 +53,8 @@ class RouterDiscoveryCoordinatorTest {
         var tlsAvailable: Boolean = true,
         var statusValid: Boolean = true,
     ) {
+        var packageVersion: String? = null
+        var openWrtVersion: String? = null
         val actions = mutableListOf<String>()
         var resetReplyLost = false
         var resetObservation: (() -> Unit)? = null
@@ -76,7 +79,7 @@ class RouterDiscoveryCoordinatorTest {
                 val payload = requireNotNull(body["payload"]).jsonObject
                 actions += action
                 val answer = when (action) {
-                    "package.status" -> if (statusValid) """{"schema":1,"product":"foxhole","installed":true,"pinConfigured":$configured,"resetSupported":true}""" else "{}"
+                    "package.status" -> if (statusValid) """{"schema":1,"product":"foxhole","installed":true,"pinConfigured":$configured,"resetSupported":true${packageVersion?.let { ",\"version\":\"$it\"" }.orEmpty()}${openWrtVersion?.let { ",\"openWrtVersion\":\"$it\"" }.orEmpty()}}""" else "{}"
                     "unlock" -> """{"token":"${"b".repeat(64)}","pinChangeRequired":false}"""
                     "state" -> """{"revision":7}"""
                     "setup.reset" -> {
@@ -206,6 +209,45 @@ class RouterDiscoveryCoordinatorTest {
         assertEquals(0, f.tlsInspections)
         assertEquals(0, f.sshInspections)
         assertTrue(f.actions.isEmpty())
+    }
+
+    @Test fun installedOtherFirmwareAndPackagePairBeforeSetupCatalogAdmission() = runTest {
+        val f = Fixture()
+        f.packageVersion = "9.7.1-r4"
+        f.openWrtVersion = "26.01.0"
+        f.coordinator.begin(RouterWizardPath.SETUP, null)
+        withContext(Dispatchers.Default) { f.coordinator.inspectAddress(identity.endpoint.address) }
+        assertEquals(RouterWizardPath.PAIR, f.coordinator.state.value.path)
+        assertEquals(RouterWizardStage.LOGIN, f.coordinator.state.value.stage)
+        assertEquals("9.7.1-r4", f.coordinator.state.value.discovery?.packageVersion)
+        assertEquals(0, f.sshInspections)
+        withContext(Dispatchers.Default) { f.coordinator.login("123456".toCharArray()) }
+        assertEquals(RouterWizardStage.COMPLETE, f.coordinator.state.value.stage)
+        assertFalse(f.coordinator.state.value.installedInThisWizard)
+        assertFalse(f.actions.contains("setup.reset"))
+        f.coordinator.close()
+    }
+
+    @Test fun absentPackageKeepsGenericSetupOnStrictInstallationPath() = runTest {
+        val f = Fixture(tlsAvailable = false)
+        f.coordinator.begin(RouterWizardPath.SETUP, null)
+        withContext(Dispatchers.Default) { f.coordinator.inspectAddress(identity.endpoint.address) }
+        assertEquals(RouterWizardPath.SETUP, f.coordinator.state.value.path)
+        assertEquals(RouterWizardStage.IDENTITY, f.coordinator.state.value.stage)
+        assertEquals(1, f.sshInspections)
+        assertTrue(f.actions.isEmpty())
+        f.coordinator.close()
+    }
+
+    @Test fun missingRequiredPackageApiDoesNotFallBackToInstallAdmission() = runTest {
+        val f = Fixture(statusValid = false)
+        f.coordinator.begin(RouterWizardPath.SETUP, null)
+        withContext(Dispatchers.Default) { f.coordinator.inspectAddress(identity.endpoint.address) }
+        assertEquals(RouterWizardError.UNAVAILABLE, f.coordinator.state.value.error)
+        assertEquals(0, f.sshInspections)
+        assertEquals(listOf("package.status"), f.actions)
+        assertFalse(f.coordinator.state.value.stage == RouterWizardStage.COMPLETE)
+        f.coordinator.close()
     }
 
     @Test fun installedDiscoveryIsTypedAndDoesNotSendAnyCredential() = runTest {
