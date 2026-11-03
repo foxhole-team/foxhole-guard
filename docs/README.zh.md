@@ -1,5 +1,14 @@
 <h1 align="center">FoxHole Guard</h1>
 
+<a id="whats-new"></a>
+
+> **🆕 更新内容 - 1.0.4 Stable**
+>
+> - 将 FoxHole Core 更新至 1.0.3，修复了 DNS 缓存问题。
+> - 修复了路由规则和场景的原子应用。
+> - 改进了文档和帮助板块，并更新了路由器管理提示。
+> - 新增应用新版本的系统通知（仅限 GitHub 版本）。
+
 <div align="center">
 
 **FoxHole Guard** 是 Android 网络防护、隐私保护和本地网络活动管理工具。
@@ -62,16 +71,6 @@
 
 <p align="center"><a href="#quickstart">开始使用</a> · <a href="#features">功能</a> · <a href="#details">详情</a> · <a href="#whats-new">更新内容</a></p>
 
-<a id="whats-new"></a>
-
-> **🆕 更新内容 - 1.0.2 Stable**
->
-> - 修复了路由器发现、配对和通过 SSH 检查 OpenWrt 的问题，并添加了 SSH 密钥支持。
-> - 修复了从 GitHub 更新应用时的错误。
-> - 新增通知关闭计时器和向上滑动关闭功能。
-> - 更新了帮助和提示。
-> - 简化 OpenWrt 设置以及家庭设备和 VPN 客户端的管理。
-> - 新增安装时确认的六位 PIN，并支持最多 10 台路由器。
 
 <a id="quickstart"></a>
 

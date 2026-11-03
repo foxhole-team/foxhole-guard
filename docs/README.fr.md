@@ -1,5 +1,14 @@
 <h1 align="center">FoxHole Guard</h1>
 
+<a id="whats-new"></a>
+
+> **🆕 Nouveautés - 1.0.4 Stable**
+>
+> - Mise à jour de FoxHole Core vers la version 1.0.3 avec des corrections du cache DNS.
+> - Correction de l’application atomique des règles et des scénarios de routage.
+> - Amélioration de la documentation et de la section d’aide ; mise à jour des conseils de gestion du routeur.
+> - Ajout de notifications système pour les nouvelles versions de l’application (version GitHub uniquement).
+
 <div align="center">
 
 **FoxHole Guard** réunit protection réseau, confidentialité et contrôle local de l’activité réseau sur Android.
@@ -62,16 +71,6 @@ Le projet propose une application unique pour la protection quotidienne, l’acc
 
 <p align="center"><a href="#quickstart">Démarrer</a> · <a href="#features">Fonctions</a> · <a href="#details">Détails</a> · <a href="#whats-new">Nouveautés</a></p>
 
-<a id="whats-new"></a>
-
-> **🆕 Nouveautés - 1.0.2 Stable**
->
-> - Correction de la découverte des routeurs, de l’association et de la vérification d’OpenWrt par SSH, et ajout de la prise en charge des clés SSH.
-> - Correction des erreurs de mise à jour de l’application depuis GitHub.
-> - Ajout d’un délai de fermeture des notifications et de la fermeture par balayage vers le haut.
-> - Mise à jour de l’aide et des conseils.
-> - Simplification de la configuration OpenWrt et de la gestion des appareils du foyer et des clients VPN.
-> - Ajout d’un PIN à six chiffres avec confirmation pendant l’installation et de la prise en charge de jusqu’à 10 routeurs.
 
 <a id="quickstart"></a>
 

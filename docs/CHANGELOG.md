@@ -1,26 +1,25 @@
 # Changelog
 
-## 1.0.4 Stable (unreleased)
+## 1.0.4 Stable
 
-- Добавлены системные уведомления о новых версиях приложения (только версия GitHub).
-
-- Обновлён FoxHole Core до 1.0.3 с исправлениями DNS-кеширования.
-- Исправлено атомарное применение правил и сценариев маршрутизации.
-- Доработаны документация и раздел помощи; обновлены подсказки по управлению роутером.
+- Updated FoxHole Core to 1.0.3 with DNS caching fixes.
+- Fixed atomic application of routing rules and scenarios.
+- Improved documentation and the help section; updated router management tips.
+- Added system notifications for new app versions (GitHub version only).
 
 ## 1.0.3 Stable
 
-- Исправлен баг проверки версии OpenWRT при сопряжении с роутером.
-- Добавлена поддержка автообновления базы данных FoxHole DB.
+- Fixed the OpenWrt version check when pairing with a router.
+- Added automatic FoxHole DB updates.
 
 ## 1.0.2 Stable
 
-- Исправлены поиск роутера, сопряжение и проверка OpenWrt по SSH, так же добавлена поддержка SSH ключей.
-- Исправлены ошибки обновления приложения с Github.
-- Добавлены таймер закрытия уведомлений и закрытие свайпом вверх.
-- Обновлены справка и подсказки.
-- Упрощены настройка OpenWrt и управление домашними устройствами и VPN-клиентами.
-- Добавлены шестизначный PIN с подтверждением при установке и поддержка до 10 роутеров.
+- Fixed router discovery, pairing and OpenWrt checks over SSH; added SSH key support.
+- Fixed application updates from GitHub.
+- Added a notification dismissal timer and swipe-up dismissal.
+- Updated the help section and tips.
+- Simplified OpenWrt setup and management of home devices and VPN clients.
+- Added a six-digit PIN with setup confirmation and support for up to 10 routers.
 
 ## 1.0.1 - 2026-10-30
 
