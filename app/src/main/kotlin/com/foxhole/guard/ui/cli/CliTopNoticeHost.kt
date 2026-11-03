@@ -2,16 +2,23 @@ package com.foxhole.guard.ui.cli
 
 import android.graphics.Rect
 import android.view.View
+import android.view.WindowManager
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.State
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import com.foxhole.guard.ui.FoxholeBannerEvent
+import kotlinx.coroutines.CoroutineScope
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
@@ -31,22 +38,32 @@ private class CliTopNoticeState(
     val windows = CliNoticeWindowRegistry()
 }
 
+internal val LocalCliNoticeSink = staticCompositionLocalOf<((FoxholeBannerEvent) -> Unit)?> { null }
+internal val LocalCliNoticeMotion = staticCompositionLocalOf<NoticeDismissState?> { null }
+internal val LocalCliNoticeScope = staticCompositionLocalOf<CoroutineScope?> { null }
+
 private val LocalCliTopNoticeState = staticCompositionLocalOf<CliTopNoticeState?> { null }
 
 @Composable
 internal fun CliTopNoticeProvider(
     visible: Boolean,
     noticeContent: @Composable () -> Unit,
+    noticeKey: Any? = null,
+    onNotice: ((FoxholeBannerEvent) -> Unit)? = null,
     content: @Composable () -> Unit,
 ) {
     val currentVisible = rememberUpdatedState(visible)
     val currentContent = rememberUpdatedState(noticeContent)
     val state = remember { CliTopNoticeState(currentVisible, currentContent) }
-    CompositionLocalProvider(LocalCliTopNoticeState provides state, content = content)
+    val scope = rememberCoroutineScope()
+    val motion = remember(noticeKey) { NoticeDismissState() }
+    DisposableEffect(motion) { onDispose { motion.stop() } }
+    CompositionLocalProvider(LocalCliTopNoticeState provides state, LocalCliNoticeSink provides onNotice,
+        LocalCliNoticeMotion provides motion, LocalCliNoticeScope provides scope, content = content)
 }
 
 @Composable
-internal fun CliTopNoticeHost() {
+internal fun CliTopNoticeHost(closing: Boolean = false) {
     if (!CLI_EXPERIMENTAL_TOP_NOTICES_ENABLED) return
     val state = LocalCliTopNoticeState.current ?: return
     val owner = remember { Any() }
@@ -54,7 +71,10 @@ internal fun CliTopNoticeHost() {
         state.windows.add(owner)
         onDispose { state.windows.remove(owner) }
     }
-    if (!state.visible.value || !state.windows.isForemost(owner)) return
+    SideEffect { state.windows.handoff(owner, closing) }
+    if (!state.visible.value) return
+    val active = state.windows.isForemost(owner)
+    val visible = state.windows.draws(owner)
 
     val view = LocalView.current
     val root = view.rootView
@@ -64,14 +84,15 @@ internal fun CliTopNoticeHost() {
     Popup(
         popupPositionProvider = position,
         properties = PopupProperties(
-            focusable = false,
-            dismissOnBackPress = false,
-            dismissOnClickOutside = false,
-            clippingEnabled = false,
-            excludeFromSystemGesture = false,
+            flags = WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
+                (if (active) 0 else WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE),
+            inheritSecurePolicy = true, dismissOnBackPress = false, dismissOnClickOutside = false,
+            excludeFromSystemGesture = false, usePlatformDefaultWidth = false,
         ),
     ) {
-        Column(Modifier.width(width)) {
+        Column(Modifier.width(width).graphicsLayer { alpha = if (visible) 1f else 0f }
+            .then(if (active) Modifier else Modifier.clearAndSetSemantics { })) {
             state.content.value()
         }
     }

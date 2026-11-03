@@ -15,7 +15,7 @@ import java.util.concurrent.atomic.AtomicLong
 
 internal data class UpdateNoticeContent(val contentId: String, val revision: Long)
 
-internal val CURRENT_UPDATE_NOTICE = UpdateNoticeContent("foxhole.release-notes.v1.20261003", 7L)
+internal val CURRENT_UPDATE_NOTICE = UpdateNoticeContent("foxhole.release-notes.v1.20261003", 8L)
 
 internal suspend fun installedUpdateNotice(context: Context): UpdateNoticeContent = withContext(Dispatchers.IO) {
     val info = if (Build.VERSION.SDK_INT >= 33) {

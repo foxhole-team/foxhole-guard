@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="router_loader_discovering">正在本地网络中检测路由器</string>
+    <string name="router_loader_data">正在加载数据</string>
+    <string name="router_loader_paired_version">上次已知版本：%1$s</string>
+    <string name="router_loader_version_unknown">尚未记录已配对路由器的版本。</string>
+</resources>

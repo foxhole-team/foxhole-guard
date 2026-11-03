@@ -9,6 +9,7 @@ internal enum class RouterManagementLanding { HUB, SETTINGS }
 internal enum class RouterControlStage { LOADING, UNPAIRED, DISABLED, CONNECTING, CONNECTED, OFFLINE, PAIRING_REQUIRED }
 internal data class RouterControlState(
     val stage: RouterControlStage = RouterControlStage.LOADING,
+    val entryAccess: RouterManagementAccess? = null,
     val preferences: RouterControlPreferences? = null,
     val address: String = "",
     val snapshot: RouterControlSnapshot? = null,
@@ -19,6 +20,10 @@ internal data class RouterControlState(
     val homeAutomationEffective: Boolean = false,
     val clientCreationNeedsSetup: Boolean = false,
     val lanDevices: List<RouterLanDevice> = emptyList(),
+    val lanDevicesLoading: Boolean = false,
+    val lanDevicesLoaded: Boolean = false,
+    val lanDevicesFailed: Boolean = false,
+    val lastAuthenticatedPackageVersion: String? = null,
     val routerCountryCode: String? = null,
     val remoteClients: List<RouterRemoteClientStatus> = emptyList(),
     val savedRouters: List<RouterSavedSummary> = emptyList(),

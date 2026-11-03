@@ -4,5 +4,5 @@
     <string name="guard_router_router_setup_pin_repeat">Повторите PIN-код</string>
     <string name="guard_router_router_pin_cooldown">Повторите через %1$d с.</string>
     <string name="guard_router_router_setup_all_lan_vpn">VPN для всех домашних устройств</string>
-    <string name="guard_router_router_setup_all_lan_vpn_help">После подключения использовать VPN для всех домашних устройств с учётом ваших исключений маршрутизации. Эту настройку можно отключить. Она не запускает VPN.</string>
+    <string name="guard_router_router_setup_all_lan_vpn_help">После подключения использовать VPN для всех домашних устройств с учётом ваших исключений маршрутизации. Эту настройку можно отключить.</string>
 </resources>

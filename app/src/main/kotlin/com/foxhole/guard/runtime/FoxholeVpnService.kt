@@ -545,6 +545,17 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
 
     override fun protectSocket(socket: Int): Boolean = protect(socket)
 
+    override fun onRoutingPolicyGateEstablished() {
+        if (runtimeInstanceStore.currentForServiceOwner(runtimeServiceOwner)?.atomicPolicyUpdateActive != true) return
+        invalidateValidationEpoch("atomic_routing")
+        bridgeWriter.update(FoxholeVpnRuntimeBridge.snapshot.value.copy(
+            state = ConnectionState.RECONNECTING,
+            inPlaceRuntimeReload = true,
+            message = getString(R.string.status_reconnecting),
+        ))
+        updateNotification()
+    }
+
     override fun hasVpnPermission(): Boolean = VpnService.prepare(this) == null
 
     override fun createTunBuilder(): Builder = Builder()
@@ -586,6 +597,15 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
 
     internal fun isCurrentNetworkCallbackOwner(): Boolean =
         runtimeInstanceStore.isCurrentServiceOwner(runtimeServiceOwner)
+
+    internal fun matchesCurrentTunNetwork(network: Network): Boolean {
+        if (!isCurrentNetworkCallbackOwner()) return false
+        val runtime = runtimeInstanceStore.currentForServiceOwner(runtimeServiceOwner)
+        val properties = connectivityManager.getLinkProperties(network)
+        val matches = runtime?.matchesCurrentTunNetwork(properties?.interfaceName, properties?.dnsServers.orEmpty()) != false
+        return matches && isCurrentNetworkCallbackOwner() &&
+            runtimeInstanceStore.currentForServiceOwner(runtimeServiceOwner) === runtime
+    }
 
     internal fun dispatchUpstreamNetworkChange(network: Network?): Boolean {
         if (scope.coroutineContext[Job]?.isActive != true) return false

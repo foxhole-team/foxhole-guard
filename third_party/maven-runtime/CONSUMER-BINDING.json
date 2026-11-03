@@ -1,0 +1,69 @@
+{
+  "schema": 1,
+  "kind": "actual-current-consumer-original-Maven-notices",
+  "originalProducerRelabelled": false,
+  "freshCaptureExecuted": true,
+  "originalProducerManifestSha256": "89476592db530b111b041d5b5795cbe186b3913ee9f363207d8ba4633682012f",
+  "actualConsumerCaptureSha256": "0e61b2740687ff91936e9c8d4267372d6333300b9288c1ef7a840550e7c995de",
+  "portableConsumerCaptureSha256": "b7cdcb543462a0cc9b77a34dc1bc955510844cfbe4d56e867ca7e909bed7c975",
+  "sourceInputs": {
+    "build.gradle.kts": "223baf710e9d8171260fb03764b8e0cffa26eacb486deefc0c56e29fdaf1209c",
+    "settings.gradle.kts": "1ed609b2ea8f4bc9aeb00aa84799d90a6d3abc08a072d5a8b5373515e645e363",
+    "gradle.properties": "6e4df59398dc356f917839ee3b605c021f7089e6627e3f484597916c334b0a81",
+    "app/build.gradle.kts": "31f63c8165564595903121cb20cb27332a0b7cf40195c0ec5fa2bc1bc7222c0f",
+    "core/model/build.gradle.kts": "fc3fe8dc73fdc65871eeb5120ba2c96d0ee97205b1f11f170cc18a959aeb0a69",
+    "core/network/build.gradle.kts": "37caa5cb68e71d03ef64fcb61fa87628f778393c7e186541714ff6a2ea1853a0",
+    "core/importer/build.gradle.kts": "c99dd464e1135c2bc7942911d4908d06424e5a5790d65009397026e29d077de8",
+    "core/profile/build.gradle.kts": "8c5544bf9f18b499b2f6a4976bc8fc21bfa72be94beb8d06288ffdfde0750f5c",
+    "core/sentinel/build.gradle.kts": "a74a2d6df5b3bc0d232a59dc4e7c78eda1a3b973e9d8b474f64bea8edff863b8",
+    "core/runtime/build.gradle.kts": "65c209da0ec588f8533a0930a8baff4b4bea2f982c747a7e7d55f290b5ab1d0a",
+    "gradle/libs.versions.toml": "912b02f7214e4fa6c6c7bcea6eb4fc65f1a187f857cfbf10e426297e7a001417",
+    "gradle/sbom.gradle.kts": "5e89c506e72f2df04693bd7b45d8f6c93bff2f867ce913fd3148893dc422cf5e",
+    "gradle/verification-metadata.xml": "310fc8ce8170028298059c9f0089489f82e093777afe68663b3eba598299f4fe"
+  },
+  "comparison": {
+    "externalComponents": 167,
+    "runtimeArchives": 122,
+    "poms": 169,
+    "edges": 988,
+    "projectVersionChanges": [
+      {
+        "component": "project::app",
+        "before": "1.0.0",
+        "after": "1.0.4"
+      },
+      {
+        "component": "project::core:importer",
+        "before": "1.0.0",
+        "after": "1.0.4"
+      },
+      {
+        "component": "project::core:model",
+        "before": "1.0.0",
+        "after": "1.0.4"
+      },
+      {
+        "component": "project::core:network",
+        "before": "1.0.0",
+        "after": "1.0.4"
+      },
+      {
+        "component": "project::core:profile",
+        "before": "1.0.0",
+        "after": "1.0.4"
+      },
+      {
+        "component": "project::core:runtime",
+        "before": "1.0.0",
+        "after": "1.0.4"
+      },
+      {
+        "component": "project::core:sentinel",
+        "before": "1.0.0",
+        "after": "1.0.4"
+      }
+    ],
+    "externalClosureSha256": "3946f89b855f804cc475b081891f137e9bd065021ad6efbf5f353a5ba08f8224"
+  },
+  "scope": "Actual current publicRelease runtime graph before R8. Exact original external component/archive/POM/license/edge material retained; project release version and project publication variant are consumer metadata. No native or notice producer rebuild."
+}

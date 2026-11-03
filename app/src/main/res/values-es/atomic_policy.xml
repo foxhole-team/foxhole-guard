@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="guard_atomic_update_unsupported">Este cambio no se puede proteger en la conexión actual. Detenga primero la VPN o desactive explícitamente la aplicación atómica y vuelva a intentarlo. Sus ajustes no se han modificado.</string>
+    <string name="guard_atomic_update_failed">No se pudo completar el cambio de enrutamiento de forma segura. Detenga la VPN antes de volver a intentarlo.</string>
+</resources>

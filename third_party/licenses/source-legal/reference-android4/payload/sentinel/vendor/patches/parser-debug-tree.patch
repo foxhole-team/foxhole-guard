@@ -1,0 +1,152 @@
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -43,9 +43,6 @@
+ [lib]
+ name = "yara_x_parser"
+ path = "src/lib.rs"
+-
+-[dependencies.ascii_tree]
+-version = "0.1.1"
+ 
+ [dependencies.bitflags]
+ version = "2.13.2"
+--- a/Cargo.toml.orig
++++ b/Cargo.toml.orig
+@@ -27,7 +27,6 @@
+ rustdoc-args = ["--cfg", "docsrs"]
+ 
+ [dependencies]
+-ascii_tree = { workspace = true }
+ bitflags = { workspace = true }
+ bstr = { workspace = true }
+ indexmap = { workspace = true }
+--- a/src/ast/ascii_tree.rs
++++ b/src/ast/ascii_tree.rs
+@@ -1,7 +1,7 @@
+ /*! Functions that returns an ASCII representation of YARA Abstract Syntax Trees (ASTs).*/
+ 
+-use ::ascii_tree::Tree;
+-use ::ascii_tree::Tree::{Leaf, Node};
++use super::tree::Tree;
++use super::tree::Tree::{Leaf, Node};
+ use itertools::Itertools;
+ 
+ use crate::ast::dfs::{DFSEvent, DFSIter};
+--- a/src/ast/mod.rs
++++ b/src/ast/mod.rs
+@@ -10,7 +10,7 @@
+ use std::fmt::{Debug, Display, Formatter};
+ use std::slice::Iter;
+ 
+-use ::ascii_tree::write_tree;
++use self::tree::write_tree;
+ use bitflags::bitflags;
+ use bstr::{BStr, BString, ByteSlice, Utf8Error};
+ 
+@@ -23,6 +23,7 @@
+ use crate::{Parser, Span};
+ 
+ mod ascii_tree;
++mod tree;
+ mod cst2ast;
+ mod errors;
+ #[cfg(test)]
+--- /dev/null
++++ b/src/ast/tree.rs
+@@ -0,0 +1,67 @@
++// SPDX-License-Identifier: BSD-3-Clause
++// Copyright (c) 2026 FoxHole contributors.
++
++use std::fmt::{self, Write};
++
++pub(super) enum Tree {
++    Node(String, Vec<Tree>),
++    Leaf(Vec<String>),
++}
++
++pub(super) fn write_tree(output: &mut impl Write, tree: &Tree) -> fmt::Result {
++    let mut pending = vec![(tree, String::from(" "), "", String::new())];
++    while let Some((tree, prefix, branch, continuation)) = pending.pop() {
++        match tree {
++            Tree::Node(label, children) => {
++                writeln!(output, "{prefix}{branch}{label}")?;
++                let child_prefix = format!("{prefix}{continuation}");
++                for (index, child) in children.iter().enumerate().rev() {
++                    let last = index + 1 == children.len();
++                    pending.push((
++                        child,
++                        child_prefix.clone(),
++                        if last { "└─ " } else { "├─ " },
++                        if last { "   " } else { "│  " }.to_owned(),
++                    ));
++                }
++            }
++            Tree::Leaf(lines) => {
++                for (index, line) in lines.iter().enumerate() {
++                    let edge = if index == 0 { branch } else { &continuation };
++                    writeln!(output, "{prefix}{edge}{line}")?;
++                }
++            }
++        }
++    }
++    Ok(())
++}
++
++#[cfg(test)]
++mod tests {
++    use super::{Tree::*, write_tree};
++
++    #[test]
++    fn nested_multiline_leaves_keep_sibling_guides() {
++        let tree = Node(
++            "rule".into(),
++            vec![
++                Node("vars".into(), vec![Leaf(vec!["key".into(), "value".into()])]),
++                Leaf(vec!["condition".into()]),
++            ],
++        );
++        let mut output = String::new();
++        write_tree(&mut output, &tree).unwrap();
++        assert_eq!(output, " rule\n ├─ vars\n │  └─ key\n │     value\n └─ condition\n");
++    }
++
++    #[test]
++    fn writer_errors_are_propagated() {
++        struct Failed;
++        impl std::fmt::Write for Failed {
++            fn write_str(&mut self, _: &str) -> std::fmt::Result {
++                Err(std::fmt::Error)
++            }
++        }
++        assert!(write_tree(&mut Failed, &Leaf(vec!["rule".into()])).is_err());
++    }
++}
+--- /dev/null
++++ b/LICENSE
+@@ -0,0 +1,26 @@
++Copyright (c) 2024. The YARA-X Authors. All Rights Reserved.
++
++Redistribution and use in source and binary forms, with or without modification,
++are permitted provided that the following conditions are met:
++
++1. Redistributions of source code must retain the above copyright notice, this
++   list of conditions and the following disclaimer.
++
++2. Redistributions in binary form must reproduce the above copyright notice,
++   this list of conditions and the following disclaimer in the documentation
++   and/or other materials provided with the distribution.
++
++3. Neither the name of the copyright holder nor the names of its contributors
++   may be used to endorse or promote products derived from this software without
++   specific prior written permission.
++
++THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS “AS IS” AND
++ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
++WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
++DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
++ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (
++INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS
++OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
++THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
++NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
++EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.

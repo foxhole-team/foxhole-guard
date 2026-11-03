@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_update_available_recommendation">应用有新版本可用。建议更新您的应用。</string>
+    <string name="app_update_available_action">更新</string>
+    <string name="app_update_available_release_note">新增应用新版本的系统通知（仅限 GitHub 版本）。</string>
+</resources>

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="guard_router_back_settings">Назад в настройки</string>
-    <string name="guard_router_router_control_auto_home">Переключение дома</string>
+    <string name="guard_router_router_control_auto_home">Автоподключение в домашней сети</string>
     <string name="guard_router_router_control_client_details">Управление профилем</string>
     <string name="guard_router_router_control_client_remove_body">Удалить VPN-доступ для %1$s?</string>
     <string name="guard_router_router_control_client_remove_record_body">Удалить профиль %1$s с роутера?</string>
@@ -62,16 +62,16 @@
     <string name="guard_router_router_engines_verification_failed">Роутер отклонил файлы установки.</string>
     <string name="guard_router_router_engines_verifying">Проверка файлов</string>
     <string name="guard_router_router_help_country_source">Если функция включена, местный трафик идёт в обход VPN. Например, если роутер находится в RU, сайты и сервисы RU открываются с IP-адреса роутера. Трафик к зарубежным сервисам идёт через активное VPN-соединение.</string>
-    <string name="guard_router_router_help_home">Дома использует роутер, а вне дома возвращает прежнее подключение телефона, если автоматическое переключение поддерживается.</string>
+    <string name="guard_router_router_help_home">Приложение автоматически отключает текущее VPN-соединение на вашем телефоне при подключении к вашей доверенной сети Wi-Fi и сопряжении с роутером. Как только вы отключитесь от этой сети, приложение возвращает прежнее подключение телефона с последним выбранным профилем VPN.</string>
     <string name="guard_router_router_help_install_server">Включите, если ваши устройства будут подключаться к этому роутеру через VPN по прямому IP-адресу. Будет установлен отдельный серверный пакет, которому нужна дополнительная память. Доступ можно настроить после установки.</string>
     <string name="guard_router_router_help_open">Помощь: %1$s</string>
-    <string name="guard_router_router_help_password">Введите пароль администратора OpenWrt. Обычно логин root; это не пароль Wi-Fi.</string>
+    <string name="guard_router_router_help_password">Введите пароль администратора OpenWrt. Обычно логин — root.</string>
     <string name="guard_router_router_help_pin">В конце первой настройки задайте шестизначный PIN-код. Используйте его для сопряжения с настроенным роутером. В дальнейшем изменить PIN можно только в LuCI под учётной записью владельца. Предустановленного PIN нет.\n\nСопряжение: до 10 мобильных устройств на роутер; до 10 роутеров в одном приложении.</string>
-    <string name="guard_router_router_help_profile">Выберите профиль с телефона для отправки на роутер. Можно добавить его позже.</string>
-    <string name="guard_router_router_help_protocols">Выберите выпущенные протоколы своих VPN-профилей. Hysteria2 выбран, если доступен. Другие протоколы можно добавить после сопряжения с роутером.</string>
+    <string name="guard_router_router_help_profile">Выберите профиль VPN с телефона для синхронизации с роутером. Можно добавить его позже.</string>
+    <string name="guard_router_router_help_protocols">Выберите, какие протоколы VPN будут поддерживаться на роутере. Hysteria2 выбран по умолчанию. Другие протоколы можно добавить после сопряжения с роутером.</string>
     <string name="guard_router_router_help_public_ip">Если ваш роутер поддерживает статический публичный IP-адрес, его можно использовать как VPN-шлюз для ваших устройств. Маршрут: устройство → роутер; местный трафик выходит напрямую, а зарубежный — через активное VPN-соединение.</string>
     <string name="guard_router_router_help_reset_foxhole">Удалит только настройки FoxHole, его PIN и записи клиентов. FoxHole нужно будет настроить заново. Настройки OpenWrt и других приложений сохранятся.</string>
-    <string name="guard_router_router_help_setup_pair">«Установить» добавляет FoxHole на поддерживаемый роутер OpenWrt. «Подключить» связывает телефон с уже установленным FoxHole. Прошивка OpenWrt не устанавливается и не обновляется.\n\nСопряжение: до 10 мобильных устройств к одному роутеру; до 10 роутеров в одном приложении.</string>
+    <string name="guard_router_router_help_setup_pair">«Установить» добавляет пакет FoxHole на поддерживаемый роутер OpenWrt. «Подключить» связывает телефон с уже установленным пакетом FoxHole. Прошивка OpenWrt не устанавливается и не обновляется.\n\nСопряжение: до 10 мобильных устройств к одному роутеру; до 10 роутеров в одном приложении.</string>
     <string name="guard_router_router_review_active_profile">Активный профиль: %1$s</string>
     <string name="guard_router_router_review_add_router">Добавить роутер</string>
     <string name="guard_router_router_review_address">Адрес роутера</string>
@@ -94,13 +94,13 @@
     <string name="guard_router_router_review_device_routing">Управление устройством</string>
     <string name="guard_router_router_review_device_vpn">VPN</string>
     <string name="guard_router_router_review_direct">Без VPN</string>
-    <string name="guard_router_router_review_direct_ip">Статический IPv4 адрес подтверждён</string>
+    <string name="guard_router_router_review_direct_ip">Статический IPv4 адрес</string>
     <string name="guard_router_router_review_disconnect">ОТКЛЮЧИТЬ</string>
     <string name="guard_router_router_review_expand_devices">Показать домашние устройства</string>
     <string name="guard_router_router_review_expand_profiles">Показать профили VPN</string>
     <string name="guard_router_router_review_find_router">НАЙТИ РОУТЕР</string>
     <string name="guard_router_router_review_install_summary">Параметры установки</string>
-    <string name="guard_router_router_review_local_traffic">Местный трафик напрямую</string>
+    <string name="guard_router_router_review_local_traffic">Местный трафик</string>
     <string name="guard_router_router_review_management">OpenWRT Клиент</string>
     <string name="guard_router_router_review_manual_address">УКАЗАТЬ АДРЕС</string>
     <string name="guard_router_router_review_no_clients">Удалённых VPN-клиентов пока нет</string>
@@ -133,7 +133,7 @@
     <string name="guard_router_router_review_saved_unavailable">Недоступен</string>
     <string name="guard_router_router_review_saved_unknown">Не проверен</string>
     <string name="guard_router_router_review_settings">Настройки</string>
-    <string name="guard_router_router_review_settings_help">Управление роутером и правила маршрутизации для этого телефона.\n\nСопряжение: до 10 мобильных устройств к одному роутеру; до 10 роутеров в одном приложении.</string>
+    <string name="guard_router_router_review_settings_help">Управление роутером и правила маршрутизации для этого устройства.\n\nСопряжение: до 10 мобильных устройств к одному роутеру; до 10 роутеров в одном приложении.</string>
     <string name="guard_router_router_review_setup_available">Роутер доступен для настройки</string>
     <string name="guard_router_router_review_share">ПОДЕЛИТЬСЯ</string>
     <string name="guard_router_router_review_start_selected">ВКЛЮЧИТЬ ВЫБРАННЫЙ ПРОФИЛЬ</string>
@@ -147,7 +147,7 @@
     <string name="guard_router_router_updates_apply">ОБНОВИТЬ</string>
     <string name="guard_router_router_updates_auth_failed">Авторизация на роутере больше не действует. Для продолжения выполните сопряжение заново.</string>
     <string name="guard_router_router_updates_auto">Автоматические обновления FoxHole</string>
-    <string name="guard_router_router_updates_auto_help">Если включено, роутер раз в сутки проверяет и устанавливает проверенные обновления пакетов FoxHole. Отключить можно при установке или позже в настройках роутера. После снятия сопряжения политика остаётся на роутере.</string>
+    <string name="guard_router_router_updates_auto_help">Если включено, роутер раз в 24 часа проверяет и устанавливает проверенные обновления пакетов FoxHole. Отключить можно при установке или позже в настройках роутера. После снятия сопряжения политика остаётся на роутере.</string>
     <string name="guard_router_router_updates_automatic_job">Автоматическое обновление на роутере</string>
     <string name="guard_router_router_updates_available">Доступно обновление</string>
     <string name="guard_router_router_updates_available_version">Доступная версия: %1$s</string>
@@ -200,7 +200,7 @@
     <string name="guard_router_vpn_remove">УДАЛИТЬ</string>
     <string name="guard_router_vpn_router">Роутер</string>
     <string name="guard_router_vpn_router_address">Адрес роутера</string>
-    <string name="guard_router_vpn_router_auto_home">Автопереключение дома</string>
+    <string name="guard_router_vpn_router_auto_home">Автоподключение в домашней сети</string>
     <string name="guard_router_vpn_router_change_pin_note">В конце первой настройки задайте шестизначный PIN-код. В дальнейшем изменить PIN можно только в LuCI под учётной записью владельца.</string>
     <string name="guard_router_vpn_router_check">ПРОВЕРИТЬ</string>
     <string name="guard_router_vpn_router_checking">Проверка роутера…</string>
@@ -269,7 +269,7 @@
     <string name="guard_router_wifi_status_label">Статус Wi-Fi</string>
     <string name="guard_router_router_review_supported_platforms">OpenWrt 25.12.5: mediatek/filogic · x86/64</string>
     <string name="guard_router_vpn_router_local_network_purpose">Приложение использует локальную сеть для поиска роутера OpenWrt и управления его VPN с этого телефона.</string>
-    <string name="guard_router_router_control_hide_offline">Скрывать офлайн устройства</string>
+    <string name="guard_router_router_control_hide_offline">Скрыть офлайн устройства</string>
     <string name="guard_router_router_control_hide_offline_help">Не показывать устройства, которые сейчас не подключены к вашей домашней сети.</string>
     <string name="guard_router_router_review_no_online_devices">Нет устройств в сети</string>
     <string name="guard_router_router_updates_check_entry">Проверить обновление</string>

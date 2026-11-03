@@ -122,7 +122,9 @@ internal class FoxholeVpnServiceNetworkCallbackOwner(
             override fun onAvailable(network: Network) {
                 if (!service.isCurrentNetworkCallbackOwner()) return
                 val capabilities = service.connectivityManager.getNetworkCapabilities(network)
-                if (capabilities?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) != true) {
+                if (capabilities?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) != true ||
+                    service.currentVpnNetworkOrNull()?.networkHandle != network.networkHandle
+                ) {
                     return
                 }
                 service.recordNetworkEvent(

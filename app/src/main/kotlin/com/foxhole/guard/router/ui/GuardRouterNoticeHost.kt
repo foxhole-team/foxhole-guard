@@ -14,7 +14,7 @@ import com.foxhole.guard.ui.cli.NoticeLifetime
 internal fun GuardRouterNoticeContent(data: SnackbarData) {
     val visuals = data.visuals as? GuardRouterNoticeVisuals ?: return
     val lifetime = remember(data) {
-        if (visuals.error) null else NoticeLifetime(SystemClock.elapsedRealtime())
+        visuals.lifetime
     }
     val event = remember(data) {
         FoxholeBannerEvent(visuals.message, if (visuals.error) FoxholeBannerTone.ERROR else FoxholeBannerTone.INFO)

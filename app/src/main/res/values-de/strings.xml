@@ -753,7 +753,7 @@
     <string name="cli_cfg_group_rules">Netzwerkregeln</string>
     <string name="cli_cfg_group_extras">Extras</string>
     <string name="cli_cfg_atomic_connection">atomarer Szenariowechsel</string>
-    <string name="cli_cfg_atomic_connection_note">wenn aus, benötigt jeder Wechsel von Betriebsmodus oder VPN/Tor-Szenario eine Bestätigung; Netzwerkregeln bleiben immer atomar</string>
+    <string name="cli_cfg_atomic_connection_note">wenn aktiviert, wird der Datenverkehr vor unterstützten Routingänderungen bis zur Anwendung der neuen Regeln gesperrt. Bei einem Fehler kann er gesperrt bleiben; stoppen Sie das VPN vor einem erneuten Versuch. Nicht unterstützte Änderungen werden vor dem Speichern abgelehnt. Wenn deaktiviert, ist für den Wechsel des Betriebsmodus oder des VPN-/Tor-Szenarios eine Bestätigung erforderlich</string>
     <string name="cli_cfg_auto_reconnect">neu verbinden</string>
     <string name="cli_cfg_auto_reconnect_note">stellt unterbrochene Verbindungen wieder her</string>
     <string name="cli_cfg_auto_start">nach Geräteneustart starten</string>

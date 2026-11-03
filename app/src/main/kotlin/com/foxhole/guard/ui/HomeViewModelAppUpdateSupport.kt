@@ -55,16 +55,13 @@ internal fun HomeViewModel.onAppUpdateCheckRequested() {
             when (val result = container.appUpdateRepository.check()) {
                 is AppUpdateCheck.Failed ->
                     snackbars.tryEmit(errorBanner(result.failure.appUpdateFailureLabelRes()))
-                is AppUpdateCheck.Available -> announceRequiredAppUpdate(result)
+                is AppUpdateCheck.Available -> announceAppUpdate(result)
                 AppUpdateCheck.UpToDate -> Unit
             }
         }
 }
 
-private suspend fun HomeViewModel.announceRequiredAppUpdate(update: AppUpdateCheck.Available) {
-    if (!update.severity.notifies) {
-        return
-    }
+private suspend fun HomeViewModel.announceAppUpdate(update: AppUpdateCheck.Available) {
     val context: android.content.Context = getApplication()
     withContext(Dispatchers.IO) {
         runCatching { AppUpdateNotifier(context).notifyAvailable(update) }

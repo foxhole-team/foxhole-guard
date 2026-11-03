@@ -749,7 +749,7 @@
     <string name="cli_cfg_group_rules">网络规则</string>
     <string name="cli_cfg_group_extras">附加功能</string>
     <string name="cli_cfg_atomic_connection">原子切换场景</string>
-    <string name="cli_cfg_atomic_connection_note">关闭时，每次切换运行模式或 VPN/Tor 场景都需要确认；网络规则始终原子应用</string>
+    <string name="cli_cfg_atomic_connection_note">开启后，支持的路由更改会先阻断流量，直到新规则应用完成。更改失败时流量可能仍被阻断；请先停止 VPN 再重试。不支持的更改会在保存前被拒绝。关闭后，切换运行模式或 VPN/Tor 场景需要确认</string>
     <string name="cli_cfg_auto_reconnect">重新连接</string>
     <string name="cli_cfg_auto_reconnect_note">连接中断时自动恢复</string>
     <string name="cli_cfg_auto_start">设备重启后启动</string>

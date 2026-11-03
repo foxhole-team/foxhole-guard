@@ -1,5 +1,14 @@
 package com.foxhole.guard.router.ui
 
+import com.foxhole.guard.ui.cli.components.CliBottomSheet
+import androidx.compose.ui.platform.testTag
+import androidx.compose.foundation.layout.fillMaxSize
+import com.foxhole.guard.ui.cli.LocalCliColors
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Surface
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.LazyColumn
 import android.graphics.BitmapFactory
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
@@ -118,39 +127,45 @@ internal fun GuardRouterCountryFlag(code: String, enabled: Boolean, onSelect: (S
     val countries = remember(locale) {
         Locale.getISOCountries().map { it to Locale("", it).getDisplayCountry(locale) }.sortedBy { it.second }
     }
-    val country = countries.firstOrNull { it.first == code }
+    val normalizedCode = code.trim().uppercase(Locale.ROOT)
+    val country = countries.firstOrNull { it.first == normalizedCode }
     val description = if (country == null) stringResource(R.string.guard_router_router_review_country_unknown_description)
         else stringResource(R.string.guard_router_router_review_country_description, country.second)
     var expanded by remember { mutableStateOf(false) }
     Box {
-        IconButton(onClick = { expanded = !expanded }, enabled = enabled,
+        IconButton(onClick = { expanded = true }, enabled = enabled,
             modifier = Modifier.size(48.dp).semantics { contentDescription = description }) {
-            RouterCountryAsset(code)
+            RouterCountryAsset(normalizedCode, compact = true)
         }
-        DropdownMenu(
-            expanded = expanded && enabled,
-            onDismissRequest = { expanded = false },
-            modifier = Modifier.widthIn(max = 300.dp).heightIn(max = 320.dp),
-        ) {
-            if (onAuto != null) DropdownMenuItem(
-                text = { Text(stringResource(R.string.guard_router_router_review_country_auto)) },
-                leadingIcon = { Icon(painterResource(R.drawable.lin_globe), null, Modifier.size(16.dp)) },
-                trailingIcon = { Checkbox(autoSelected, onCheckedChange = null) },
-                onClick = { expanded = false; onAuto() },
-            )
-            countries.forEach { (iso, name) ->
-                DropdownMenuItem(
-                    text = { Text(name, maxLines = 2, overflow = TextOverflow.Ellipsis) },
-                    leadingIcon = { RouterCountryAsset(iso) },
-                    onClick = { expanded = false; onSelect(iso) },
-                )
-            }
+        if (expanded && enabled) CliBottomSheet(onDismiss = { expanded = false },
+            title = stringResource(R.string.guard_router_country_picker_title),
+            icon = R.drawable.router_country_unknown, heightFraction = .5f,
+            contentScrollEnabled = false, closeLabel = stringResource(R.string.cli_common_close_action)) {
+            LazyColumn(Modifier.fillMaxSize().testTag("router-country-list")) {
+                    if (onAuto != null) item {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.guard_router_router_review_country_auto), maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                            leadingIcon = { RouterCountryAsset(normalizedCode) },
+                            trailingIcon = { Checkbox(autoSelected, onCheckedChange = null) },
+                            onClick = { expanded = false; onAuto() },
+                        )
+                        HorizontalDivider(color = LocalCliColors.current.border)
+                    }
+                    items(countries, key = { it.first }) { (iso, name) ->
+                        DropdownMenuItem(
+                            text = { Text(name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                            leadingIcon = { RouterCountryAsset(iso) },
+                            onClick = { expanded = false; onSelect(iso) },
+                        )
+                        HorizontalDivider(color = LocalCliColors.current.border)
+                    }
+                }
         }
     }
 }
 
 @Composable
-private fun RouterCountryAsset(country: String) {
+private fun RouterCountryAsset(country: String, compact: Boolean = false) {
     val code = country.trim().lowercase(Locale.ROOT).takeIf { it.matches(Regex("[a-z]{2}")) }
     val context = LocalContext.current
     val loaded by produceState<Pair<String?, ImageBitmap?>>(null to null, code, context) {
@@ -160,10 +175,10 @@ private fun RouterCountryAsset(country: String) {
             }.getOrNull() }
         }
     }
-    val capHeight = with(LocalDensity.current) { MaterialTheme.typography.bodyMedium.fontSize.toDp() * .75f }
+    val capHeight = if (compact) 16.dp else 22.dp
     Box(Modifier.size(width = capHeight * 1.5f, height = capHeight), contentAlignment = Alignment.Center) {
         loaded.second?.takeIf { loaded.first == code }?.let { Image(it, null, Modifier.fillMaxWidth()) }
-            ?: Icon(painterResource(R.drawable.lin_globe), null, Modifier.size(capHeight), tint = LocalGuardRouterColors.current.muted)
+            ?: Icon(painterResource(R.drawable.router_country_unknown), null, Modifier.size(capHeight), tint = LocalGuardRouterColors.current.muted)
     }
 }
 

@@ -22,18 +22,16 @@ class CliUpdateNoticeContractTest {
         }
     }
 
-    @Test fun currentReleaseUsesTheSameEightAuthorItemsOnEveryAndroidVersion() {
+    @Test fun currentReleaseScopesTheUpdateNotificationNoteToGitHubOnEveryAndroidVersion() {
         val expected = listOf(
-            R.string.cli_release_notes_router_pairing_version,
-            R.string.cli_release_notes_db_auto,
-            R.string.cli_release_notes_router_setup,
-            R.string.cli_release_notes_app_updates,
-            R.string.cli_release_notes_notices,
+            R.string.cli_release_notes_core_104,
+            R.string.cli_release_notes_atomic_104,
             R.string.cli_release_notes_help,
-            R.string.cli_release_notes_router_management,
-            R.string.cli_release_notes_pin6,
         )
-        listOf(28, 29).forEach { apiLevel -> assertEquals(expected, releaseNoteKeys(apiLevel)) }
+        listOf(28, 29).forEach { apiLevel ->
+            assertEquals(expected, releaseNoteKeys(apiLevel, "fdroid"))
+            assertEquals(expected + R.string.app_update_available_release_note, releaseNoteKeys(apiLevel, "github"))
+        }
     }
 
     @Test fun noticeOnlyChangesMonochromeAndAcknowledgement() {

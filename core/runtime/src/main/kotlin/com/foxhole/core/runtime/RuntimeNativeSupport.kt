@@ -17,6 +17,8 @@ interface RuntimeServiceHost {
 
     fun stopRuntimeService()
 
+    fun onRoutingPolicyGateEstablished() = Unit
+
     fun protectSocket(socket: Int): Boolean
 
     fun onNativeProcessPoisoned(outcome: NativeForceStopOutcome) = Unit

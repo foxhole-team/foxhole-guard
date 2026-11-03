@@ -20,6 +20,7 @@ internal data class RouterControlPreferences(
     val homeVpnManagementEnabled: Boolean = false,
     val homeVpnDefaultPending: Boolean = false,
     val hideOfflineDevices: Boolean = true,
+    val homeWifiHashes: Set<String> = emptySet(),
 ) {
     fun afterSuccessfulPairing(): RouterControlPreferences = copy(enabled = true, homeVpnDefaultPending = false)
 
@@ -30,17 +31,22 @@ internal data class RouterControlPreferences(
 
     fun validate() { require(pairingId.matches(Regex("pair-[a-f0-9]{32}")) &&
         (countryCode.isEmpty() || countryCode in Locale.getISOCountries().toSet()) &&
-        (!homeVpnManagementEnabled || publicIpConfirmed)) }
+        (!homeVpnManagementEnabled || publicIpConfirmed) && homeWifiHashes.size <= 8 &&
+        homeWifiHashes.all { it.matches(Regex("[a-f0-9]{64}")) }) }
 }
 
 internal interface RouterControlPreferenceStore {
     suspend fun read(pairingId: String): RouterControlPreferences
     suspend fun save(preferences: RouterControlPreferences)
+    suspend fun readAuthenticatedVersion(pairingId: String, certificateSha256: String): String? = null
+    suspend fun saveAuthenticatedVersion(pairingId: String, certificateSha256: String, version: String): Boolean = false
 }
 
 internal class LocalRouterControlPreferenceStore(context: Context, private val io: CoroutineDispatcher = Dispatchers.IO,
     private val pairings: EncryptedRouterPairingStore = EncryptedRouterPairingStore(context, io)) : RouterControlPreferenceStore {
     private val file = context.getSharedPreferences("vpn-router-controls", Context.MODE_PRIVATE)
+    private val appContext = context.applicationContext
+    private val versions by lazy { appContext.getSharedPreferences("router-paired-version-cache", Context.MODE_PRIVATE) }
     override suspend fun read(pairingId: String): RouterControlPreferences = withContext(io) {
         pairings.readPreferences(pairingId)?.let { return@withContext it }
         if (file.getString("pairing", null) != pairingId) return@withContext RouterControlPreferences(pairingId)
@@ -54,5 +60,16 @@ internal class LocalRouterControlPreferenceStore(context: Context, private val i
     }
     override suspend fun save(preferences: RouterControlPreferences) = withContext(io) {
         pairings.savePreferences(preferences)
+    }
+    override suspend fun readAuthenticatedVersion(pairingId: String, certificateSha256: String): String? = withContext(io) {
+        routerDiscoveryPackageVersion(versions.getString(versionKey(pairingId, certificateSha256), null))
+    }
+    override suspend fun saveAuthenticatedVersion(pairingId: String, certificateSha256: String, version: String): Boolean = withContext(io) {
+        require(routerDiscoveryPackageVersion(version) == version)
+        versions.edit().putString(versionKey(pairingId, certificateSha256), version).commit()
+    }
+    private fun versionKey(pairingId: String, certificateSha256: String): String {
+        require(pairingId.matches(Regex("pair-[a-f0-9]{32}")) && certificateSha256.matches(Regex("[a-f0-9]{64}")))
+        return "$pairingId-$certificateSha256"
     }
 }

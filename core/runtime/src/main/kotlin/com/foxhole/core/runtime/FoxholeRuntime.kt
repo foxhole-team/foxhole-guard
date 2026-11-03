@@ -4,11 +4,17 @@ import com.foxhole.core.model.LanProxyStatusSnapshot
 import com.foxhole.core.model.LanProxyUnavailableReason
 import com.foxhole.core.model.LocalProxyStatusSnapshot
 import com.foxhole.core.model.VpnSession
+import java.net.InetAddress
 
 interface FoxholeRuntime : RuntimeNetworkChangeSource, RuntimeDnsRuleSetInstallSource {
     suspend fun start(session: VpnSession, host: RuntimeServiceHost): Result<Unit>
 
     suspend fun reload(session: VpnSession, host: RuntimeServiceHost): Result<Unit>
+
+    val atomicPolicyUpdateActive: Boolean get() = false
+
+    suspend fun prepareAtomicPolicyUpdate(session: VpnSession): RuntimePolicyUpdate =
+        throw RuntimePolicyUpdateException(RuntimePolicyUpdateException.Reason.UNSUPPORTED)
 
     suspend fun quiesceForInterfaceHandover(): Boolean
 
@@ -25,6 +31,9 @@ interface FoxholeRuntime : RuntimeNetworkChangeSource, RuntimeDnsRuleSetInstallS
         NativeRuntimeSnapshot.NONE
 
     fun currentDnsServerAddress(): String? = null
+
+    /** Null permits idle discovery only; an owned TUN with unpublished metadata must return false. */
+    fun matchesCurrentTunNetwork(interfaceName: String?, dnsServers: List<InetAddress>): Boolean? = null
 
     fun runtimeStatsJson(): String? = null
 

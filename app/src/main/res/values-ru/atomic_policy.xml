@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="guard_atomic_update_unsupported">Это изменение нельзя защитить при текущем подключении. Сначала остановите VPN или явно отключите атомарное переключение, затем повторите попытку. Настройки не изменены.</string>
+    <string name="guard_atomic_update_failed">Не удалось безопасно завершить изменение маршрутизации. Остановите VPN перед следующей попыткой.</string>
+</resources>

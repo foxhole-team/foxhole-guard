@@ -20,7 +20,7 @@
             <ImageView
                 android:layout_width="36dp"
                 android:layout_height="36dp"
-                android:layout_gravity="center"
+                android:layout_gravity="start|center_vertical"
                 android:contentDescription="@string/widget_status_open_app"
                 android:src="@drawable/ic_launcher_openwrt" />
         </FrameLayout>
@@ -67,8 +67,11 @@
     </LinearLayout>
 
     <LinearLayout
-        android:layout_width="168dp"
+        android:layout_width="match_parent"
+        android:minWidth="48dp"
         android:layout_height="48dp"
+        android:layout_gravity="center_horizontal"
+        android:paddingHorizontal="12dp"
         android:layout_marginTop="6dp"
         android:background="@drawable/widget_simple_action_connect"
         android:gravity="center"

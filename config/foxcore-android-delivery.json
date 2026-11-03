@@ -1,12 +1,12 @@
 {
-  "schema": 1,
-  "androidDeliveryProfile": "android4",
   "abis": [
     "arm64-v8a",
     "armeabi-v7a",
     "x86",
     "x86_64"
   ],
+  "androidDeliveryProfile": "android4",
+  "schema": 1,
   "targets": [
     "aarch64-linux-android",
     "armv7-linux-androideabi",

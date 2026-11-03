@@ -540,12 +540,13 @@ class ProfileRepository(
     internal suspend fun prepareSessionSnapshot(
         profileId: Long,
         optionId: String?,
+        settingsOverride: Settings? = null,
     ): PreparedProfileSessionSnapshot {
-        settingsRepository.ensureNewAppQuarantineBaseline()
+        if (settingsOverride == null) settingsRepository.ensureNewAppQuarantineBaseline()
         val captured = mutationCoordinator.readCommitted {
             val entity = dao.getById(profileId) ?: error("profile not found")
             val secret = secretStore.read(entity.secretRef) ?: error("profile secret is missing")
-            val settings = settingsRepository.current()
+            val settings = settingsOverride ?: settingsRepository.current()
             val selected = secret.selectedStoredProtocolOptionForRuntime(optionId)
             val loaded = LoadedResolvedConfig(
                 secret,

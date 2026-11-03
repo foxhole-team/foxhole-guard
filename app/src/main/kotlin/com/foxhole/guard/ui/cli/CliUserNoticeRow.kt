@@ -43,6 +43,8 @@ internal fun CliUserNoticeRow(
     val progress = rememberNoticeProgress(noticeId, lifetime)
     NoticeDismissible(
         noticeId = noticeId,
+        motionState = LocalCliNoticeMotion.current,
+        motionScope = LocalCliNoticeScope.current,
         onDismiss = {
             view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
             onDismiss()

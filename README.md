@@ -60,16 +60,12 @@ The core idea of the project is a single application for everyday network protec
 
 <a id="whats-new"></a>
 
-> **🆕 What's new - 1.0.3 Stable**
+> **🆕 What's new - 1.0.4 Stable (unreleased)**
 >
-> - Fixed the OpenWrt version check when pairing with a router.
-> - Added support for automatic FoxHole DB updates.
-> - Fixed router discovery, pairing and OpenWrt inspection over SSH, and added SSH key support.
-> - Fixed errors when updating the app from GitHub.
-> - Added a notification dismiss timer and swipe-up dismissal.
-> - Updated help and hints.
-> - Simplified OpenWrt setup and management of home devices and VPN clients.
-> - Added a six-digit PIN with confirmation during installation and support for up to 10 routers.
+> - Added system notifications for new app versions (GitHub version only).
+> - Updated FoxHole Core to 1.0.3 with DNS caching fixes.
+> - Fixed atomic application of routing rules and scenarios.
+> - Improved documentation and the help section; updated router management tips.
 
 <a id="quickstart"></a>
 
@@ -672,6 +668,8 @@ Third-party dependency licenses are listed in:
 The dependency and license graph is validated in CI.
 
 ---
+
+Atomic connection blocks captured traffic before supported live routing changes and commits settings and policy together. Unsupported capture or engine changes are rejected before saving; stop the connection first. See [atomic routing updates](docs/atomic-routing-updates.md) for the transaction and platform limits.
 
 ## Roadmap
 

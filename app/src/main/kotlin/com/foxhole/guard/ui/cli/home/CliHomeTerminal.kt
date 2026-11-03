@@ -38,6 +38,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
@@ -65,6 +66,9 @@ import com.foxhole.core.model.ConnectionState
 import com.foxhole.core.model.networkUp
 import com.foxhole.guard.R
 import com.foxhole.guard.ui.cli.CliMotion
+import com.foxhole.guard.ui.cli.CliAutoGreen
+import com.foxhole.guard.ui.cli.CliDataBlue
+import com.foxhole.guard.ui.cli.CliLightColors
 import com.foxhole.guard.ui.cli.CliSpacing
 import com.foxhole.guard.ui.cli.CliType
 import com.foxhole.guard.ui.cli.LocalCliColors
@@ -809,6 +813,8 @@ private fun cliLineToneColor(tone: CliLineTone): Color {
         CliLineTone.WARN -> colors.warn
         CliLineTone.ERR -> colors.err
         CliLineTone.INFO -> colors.info
+        CliLineTone.SCENARIO_WHOLE -> if (colors.bg.luminance() > 0.5f) CliLightColors.ok else CliAutoGreen
+        CliLineTone.SCENARIO_SELECTED -> if (colors.bg.luminance() > 0.5f) CliLightColors.data else CliDataBlue
         CliLineTone.VPN -> colors.vpn
         CliLineTone.TOR -> colors.tor
         CliLineTone.I2P -> colors.i2p
@@ -827,6 +833,7 @@ internal fun cliLineToneIcon(tone: CliLineTone, prompt: Boolean): Int? {
         CliLineTone.WARN -> cliSemanticIcon(CliSemanticGlyph.WARNING)
         CliLineTone.ERR -> cliSemanticIcon(CliSemanticGlyph.ERROR)
         CliLineTone.INFO -> cliSemanticIcon(CliSemanticGlyph.INFORMATION)
+        CliLineTone.SCENARIO_WHOLE, CliLineTone.SCENARIO_SELECTED -> R.drawable.lin_link
         CliLineTone.VPN -> R.drawable.lin_shield
         CliLineTone.TOR -> R.drawable.lin_tor
         CliLineTone.I2P -> R.drawable.lin_incognito

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_update_available_recommendation">アプリの新しいバージョンが利用可能です。アプリの更新をおすすめします。</string>
+    <string name="app_update_available_action">更新</string>
+    <string name="app_update_available_release_note">アプリの新しいバージョンのシステム通知を追加しました（GitHub版のみ）。</string>
+</resources>

@@ -276,7 +276,7 @@ val releaseSigningStoreFile =
                 }
             candidates.firstOrNull(File::isFile)
         }
-val baseAppVersionCode = 177
+val baseAppVersionCode = 178
 val localBuildNumber = providers.gradleProperty("foxhole.localBuildNumber").orNull?.let { raw ->
     requireNotNull(raw.toIntOrNull()?.takeIf { it in (baseAppVersionCode + 1)..2_100_000_000 }) {
         "foxhole.localBuildNumber must exceed $baseAppVersionCode and be at most 2100000000"
@@ -856,6 +856,7 @@ val prepareBundledLicenseAssets = tasks.register("prepareBundledLicenseAssets") 
         retainedSentinelRole, retainedSentinelCurrentSource, retainedSentinelCurrentProducer, retainedSentinelCurrentStage,
     )
     val canonicalDeliveryProfile = when (shippedAndroidAbis.toSet()) {
+        setOf("arm64-v8a") -> "android-arm64"
         setOf("arm64-v8a", "x86_64") -> "android64"
         setOf("armeabi-v7a") -> "android-armv7"
         setOf("arm64-v8a", "armeabi-v7a", "x86_64") -> "android3"
@@ -981,7 +982,8 @@ val prepareBundledLicenseAssets = tasks.register("prepareBundledLicenseAssets") 
                 listOf(
                     "--core-delivery-profile",
                     when (shippedAndroidAbis.toSet()) {
-                        setOf("arm64-v8a", "x86_64") -> "android64"
+                        setOf("arm64-v8a") -> "android-arm64"
+        setOf("arm64-v8a", "x86_64") -> "android64"
                         setOf("armeabi-v7a") -> "android-armv7"
                         setOf("arm64-v8a", "armeabi-v7a", "x86_64") -> "android3"
                         setOf("arm64-v8a", "armeabi-v7a", "x86", "x86_64") -> "android4"

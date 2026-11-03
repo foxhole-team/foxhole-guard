@@ -16,6 +16,7 @@ import com.foxhole.core.runtime.describeVpnRuntimeFailure
 import com.foxhole.core.runtime.localGuardModeOrNull
 import com.foxhole.core.runtime.nativeForceStopOutcomeOrNull
 import com.foxhole.core.runtime.reloadFailClosed
+import com.foxhole.core.runtime.RuntimePolicyUpdateException
 import com.foxhole.guard.R
 import com.foxhole.guard.core.data.getSession
 import com.foxhole.guard.core.data.getTorOnlySession
@@ -564,6 +565,10 @@ private suspend fun FoxholeVpnService.handleRuntimeReloadFailure(
     snapshot: ConnectionSnapshot,
     transitionGeneration: Long,
 ) {
+    if (runtime.atomicPolicyUpdateActive || error is RuntimePolicyUpdateException) {
+        container.diagnosticsLogger.recordFailure("connection", "atomic routing gate retained after refused reload")
+        return
+    }
     if (error is CancellationException) {
         throw error
     }

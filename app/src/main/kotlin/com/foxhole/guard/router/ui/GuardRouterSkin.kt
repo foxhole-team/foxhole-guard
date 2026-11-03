@@ -1,6 +1,10 @@
 package com.foxhole.guard.router.ui
 
 import android.app.Activity
+import android.os.SystemClock
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.CoroutineStart
+import com.foxhole.guard.ui.cli.NoticeLifetime
 import android.content.Context
 import android.content.Intent
 import androidx.compose.material3.SnackbarHostState
@@ -31,16 +35,25 @@ internal data class GuardRouterNoticeVisuals(
     override val message: String,
     val error: Boolean,
     val id: Long,
+    val createdAtElapsedMs: Long = SystemClock.elapsedRealtime(),
 ) : SnackbarVisuals {
+    val lifetime: NoticeLifetime? get() = if (error) null else NoticeLifetime(createdAtElapsedMs)
     override val actionLabel: String? = null
     override val withDismissAction: Boolean = false
     override val duration: SnackbarDuration = SnackbarDuration.Indefinite
 }
 
-internal class GuardRouterNotices(private val scope: CoroutineScope, private val snackbar: SnackbarHostState) {
+internal class GuardRouterNotices(private val scope: CoroutineScope, private val snackbar: SnackbarHostState,
+    private val forward: ((String, Boolean) -> Unit)? = null,
+    private val clock: () -> Long = SystemClock::elapsedRealtime) {
     private val ids = AtomicLong()
+    private var active: Job? = null
     fun show(message: String, error: Boolean = false) {
-        scope.launch { snackbar.showSnackbar(GuardRouterNoticeVisuals(message, error, ids.incrementAndGet())) }
+        forward?.let { it(message, error); return }
+        active?.cancel()
+        snackbar.currentSnackbarData?.dismiss()
+        val visuals = GuardRouterNoticeVisuals(message, error, ids.incrementAndGet(), clock())
+        active = scope.launch(start = CoroutineStart.UNDISPATCHED) { snackbar.showSnackbar(visuals) }
     }
 }
 

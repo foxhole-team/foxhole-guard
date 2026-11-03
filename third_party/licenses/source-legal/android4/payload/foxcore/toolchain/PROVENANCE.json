@@ -1,6 +1,6 @@
 {
   "androidDeliveryProfile": "android4",
-  "coreCommit": "66286391a715fbc1c2bbabb2581c5295f76a1acd",
+  "coreCommit": "fc2134dc15b32087516672935e64ae7b8b0d5472",
   "installedRuntimeArchives": {
     "aarch64-linux-android": [
       {
@@ -560,23 +560,23 @@
     "core": {
       "aarch64-linux-android": {
         "abi": "arm64-v8a",
-        "bytes": 24991528,
-        "sha256": "342bc93099f284a3e8804764cdf8413ad201e1d1603b52b428f99fd1f827d194"
+        "bytes": 24994328,
+        "sha256": "dc8ce0eeb8e4f9adf100a289b397f92380feb1635791e4a28f28298296f84189"
       },
       "armv7-linux-androideabi": {
         "abi": "armeabi-v7a",
-        "bytes": 18020948,
-        "sha256": "19ecd5efe192a9cdf2736d7fdbf47b4e012d93c6dba53bae8a632c463c5772e8"
+        "bytes": 18022484,
+        "sha256": "6bcc03f40ec528e44900ddef557874a0828a098b15532ecf56fc4d216adf54bd"
       },
       "i686-linux-android": {
         "abi": "x86",
-        "bytes": 27414080,
-        "sha256": "e1079436378d45522130c7d16e5dd15988bab498b37089a928b38f09e013f6c1"
+        "bytes": 27401456,
+        "sha256": "42ee3c4d4c79d7aa94a4423a092fe5ecb8d1c62d9511bfc3e80af56c95171253"
       },
       "x86_64-linux-android": {
         "abi": "x86_64",
-        "bytes": 28445432,
-        "sha256": "81470580a6e102ef99d665e21aae269c01aeaf36534eddce35d2615282384e5c"
+        "bytes": 28449336,
+        "sha256": "6f03dcd59446b5b568f212045ff3907a5c80cc0737e2d2930d71cca3304abf36"
       }
     },
     "sentinel": {

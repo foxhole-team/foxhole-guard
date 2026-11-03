@@ -12,10 +12,12 @@
     <string name="cli_release_notes_router_setup">Routersuche, Kopplung und OpenWrt-Prüfung über SSH korrigiert und Unterstützung für SSH-Schlüssel hinzugefügt.</string>
     <string name="cli_release_notes_app_updates">Fehler beim Aktualisieren der App von GitHub behoben.</string>
     <string name="cli_release_notes_notices">Einen Timer zum Schließen von Benachrichtigungen und das Schließen durch Wischen nach oben hinzugefügt.</string>
-    <string name="cli_release_notes_help">Hilfe und Hinweise aktualisiert.</string>
+    <string name="cli_release_notes_help">Dokumentation und Hilfebereich wurden verbessert; die Hinweise zur Routerverwaltung wurden aktualisiert.</string>
     <string name="cli_release_notes_vless_reality">Die Kompatibilität von VLESS + REALITY wurde korrigiert.</string>
     <string name="cli_release_notes_router_management">Die OpenWrt-Einrichtung und die Verwaltung von Heimgeräten und VPN-Clients vereinfacht.</string>
     <string name="cli_release_notes_pin6">Eine sechsstellige PIN mit Bestätigung bei der Installation und Unterstützung für bis zu 10 Router hinzugefügt.</string>
     <string name="cli_release_notes_db_auto">Automatische Updates der FoxHole DB werden jetzt unterstützt.</string>
     <string name="cli_release_notes_router_pairing_version">Die Prüfung der OpenWrt-Version beim Koppeln mit einem Router wurde korrigiert.</string>
+    <string name="cli_release_notes_core_104">FoxHole Core wurde auf Version 1.0.3 mit Korrekturen am DNS-Cache aktualisiert.</string>
+    <string name="cli_release_notes_atomic_104">Die atomare Anwendung von Routing-Regeln und Szenarien wurde korrigiert.</string>
 </resources>

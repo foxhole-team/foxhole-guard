@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="guard_atomic_update_unsupported">Cette modification ne peut pas être sécurisée sur la connexion active. Arrêtez d’abord le VPN ou désactivez explicitement l’application atomique, puis réessayez. Vos paramètres n’ont pas été modifiés.</string>
+    <string name="guard_atomic_update_failed">La modification du routage n’a pas pu être terminée en toute sécurité. Arrêtez le VPN avant de réessayer.</string>
+</resources>

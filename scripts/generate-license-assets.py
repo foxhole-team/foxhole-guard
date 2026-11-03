@@ -182,6 +182,8 @@ def require_tor_config() -> None:
 
 
 def copy_rust_std_material(args, output: Path, source: Path, revision: str) -> None:
+    if core_delivery_profile(args) == "android-arm64":
+        raise ValueError("ARM64 preview requires its actual canonical source/legal snapshot")
     # Cargo inventories omit the toolchain's standard-library attribution.
     root = REPO_ROOT / "third_party/licenses/rust-std-1.97.1"
     material = {name: read_checked(root / name, digest) for name, digest in RUST_STD_HASHES.items()}
@@ -772,7 +774,7 @@ def generate(args: argparse.Namespace) -> None:
     }
     if (getattr(args, "foxcore_sbom", None) or canonical is not None) and core_delivery_profile(args) != "legacy4":
         profile = core_delivery_profile(args)
-        shapes = {"android4": (["arm64-v8a", "armeabi-v7a", "x86", "x86_64"], ["aarch64-linux-android", "armv7-linux-androideabi", "i686-linux-android", "x86_64-linux-android"]),
+        shapes = {"android-arm64": (["arm64-v8a"], ["aarch64-linux-android"]), "android4": (["arm64-v8a", "armeabi-v7a", "x86", "x86_64"], ["aarch64-linux-android", "armv7-linux-androideabi", "i686-linux-android", "x86_64-linux-android"]),
                   "android64": (["arm64-v8a", "x86_64"], ["aarch64-linux-android", "x86_64-linux-android"]),
                   "android-armv7": (["armeabi-v7a"], ["armv7-linux-androideabi"]),
                   "android3": (["arm64-v8a", "armeabi-v7a", "x86_64"], ["aarch64-linux-android", "armv7-linux-androideabi", "x86_64-linux-android"])}
@@ -796,7 +798,7 @@ def main() -> None:
     parser.add_argument("--fresh-sentinel-native-root")
     parser.add_argument("--foxcore-sbom")
     parser.add_argument("--foxcore-sbom-receipt")
-    parser.add_argument("--core-delivery-profile", choices=["legacy4", "android64", "android-armv7", "android3", "android4"])
+    parser.add_argument("--core-delivery-profile", choices=["legacy4", "android-arm64", "android64", "android-armv7", "android3", "android4"])
     parser.add_argument("--sentinel-sbom")
     parser.add_argument("--sentinel-sbom-receipt")
     parser.add_argument("--sentinel-retained-role")

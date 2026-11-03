@@ -10,6 +10,10 @@ import com.foxhole.core.model.RoutingRuleAction
 import com.foxhole.core.network.ensurePublicHttpsUrl
 import com.foxhole.core.network.requirePublicHttpsUrl
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
@@ -23,6 +27,12 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.security.MessageDigest
 import java.util.Locale
+import kotlin.coroutines.AbstractCoroutineContextElement
+import kotlin.coroutines.CoroutineContext
+
+private class RoutingMutationContext(val owner: RoutingRepository) : AbstractCoroutineContextElement(Key) {
+    companion object Key : CoroutineContext.Key<RoutingMutationContext>
+}
 
 class RoutingRepository(
     databaseProvider: () -> ProfileDatabase,
@@ -32,6 +42,25 @@ class RoutingRepository(
 
     private val awaitDatabaseReady: suspend () -> Unit = {},
 ) {
+    internal var prepareRuntimeCommit: (suspend (RoutingPreset?) -> RoutingRuntimeCommit?)? = null
+    private val mutationLock = Mutex()
+
+    private suspend fun <T> withRoutingMutation(action: suspend () -> T): T {
+        if (currentCoroutineContext()[RoutingMutationContext]?.owner === this) return action()
+        return mutationLock.withLock {
+            val commit = prepareRuntimeCommit?.invoke(currentPresetForRuntime())
+            val result = withContext(RoutingMutationContext(this@RoutingRepository)) {
+                database.withTransaction {
+                    val value = action()
+                    // DAO read observes this transaction's staged rows; never await a Flow emission.
+                    commit?.stage(currentPresetForRuntime())
+                    value
+                }
+            }
+            commit?.committed()
+            result
+        }
+    }
     private val database: ProfileDatabase by lazy(LazyThreadSafetyMode.SYNCHRONIZED, databaseProvider)
     private val presetDao by lazy(LazyThreadSafetyMode.SYNCHRONIZED) { database.routingPresetDao() }
     private val ruleDao by lazy(LazyThreadSafetyMode.SYNCHRONIZED) { database.routingRuleDao() }
@@ -90,9 +119,9 @@ class RoutingRepository(
         overrideMode: RoutingPresetOverrideMode = RoutingPresetOverrideMode.RESPECT_PROFILE,
         enabled: Boolean = true,
         activate: Boolean = false,
-    ): Long {
+    ): Long = withRoutingMutation {
         val now = System.currentTimeMillis()
-        return database.withTransaction {
+        database.withTransaction {
             val count = presetDao.count()
             if (activate || count == 0) {
                 presetDao.clearActive()
@@ -116,7 +145,7 @@ class RoutingRepository(
         name: String,
         overrideMode: RoutingPresetOverrideMode,
         enabled: Boolean,
-    ) {
+    ): Unit = withRoutingMutation {
         val current = presetDao.getById(presetId)?.preset ?: error("preset not found")
         presetDao.update(
             id = current.id,
@@ -129,7 +158,7 @@ class RoutingRepository(
         )
     }
 
-    suspend fun setActivePreset(presetId: Long?) {
+    suspend fun setActivePreset(presetId: Long?): Unit = withRoutingMutation {
         database.withTransaction {
             presetDao.clearActive()
             if (presetId != null) {
@@ -138,7 +167,7 @@ class RoutingRepository(
         }
     }
 
-    suspend fun deletePreset(presetId: Long) {
+    suspend fun deletePreset(presetId: Long): Unit = withRoutingMutation {
         val wasActive = presetDao.getById(presetId)?.preset?.isActive == true
         database.withTransaction {
             presetDao.delete(presetId)
@@ -163,7 +192,7 @@ class RoutingRepository(
         matchPorts: List<String>,
         matchProtocols: List<String>,
         matchNetworks: List<String>,
-    ): Long {
+    ): Long = withRoutingMutation {
         require(
             matchDomains.isNotEmpty() || matchIpCidrs.isNotEmpty() || matchPorts.isNotEmpty() || matchProtocols.isNotEmpty() || matchNetworks.isNotEmpty()
         ) {
@@ -184,7 +213,7 @@ class RoutingRepository(
                 matchProtocols = normalizeTokens(matchProtocols),
                 matchNetworks = normalizeTokens(matchNetworks),
             )
-        return if (ruleId == null) {
+        if (ruleId == null) {
             ruleDao.insert(ruleEntity)
         } else {
             ruleDao.update(
@@ -203,7 +232,7 @@ class RoutingRepository(
         }
     }
 
-    suspend fun deleteRule(ruleId: Long) {
+    suspend fun deleteRule(ruleId: Long): Unit = withRoutingMutation {
         ruleDao.delete(ruleId)
     }
 
@@ -212,7 +241,7 @@ class RoutingRepository(
         name: String,
         action: RoutingRuleAction,
         ruleIdsInOrder: List<Long>,
-    ) {
+    ): Unit = withRoutingMutation {
         database.withTransaction {
             val rule = ruleDao.getById(ruleId) ?: return@withTransaction
             ruleDao.update(
@@ -252,7 +281,7 @@ class RoutingRepository(
         )
     }
 
-    suspend fun deleteCatalog(catalogId: Long) {
+    suspend fun deleteCatalog(catalogId: Long): Unit = withRoutingMutation {
         catalogDao.delete(catalogId)
     }
 
@@ -331,9 +360,11 @@ class RoutingRepository(
     ): List<Long> {
         val trimmed = raw.trim()
         require(trimmed.isNotBlank()) { "preset payload is empty" }
-        return runCatching {
-            val manifest = parseCatalogManifest(trimmed)
-            manifest.presets.mapIndexed { index, payload ->
+        val payloads = runCatching { parseCatalogManifest(trimmed).presets }
+            .recoverCatching { listOf(parseSinglePreset(trimmed)) }
+            .getOrThrow()
+        return withRoutingMutation {
+            payloads.mapIndexed { index, payload ->
                 importPresetPayload(
                     payload = payload,
                     source = source,
@@ -341,16 +372,7 @@ class RoutingRepository(
                     activate = activateFirst && index == 0,
                 )
             }
-        }.recoverCatching {
-            listOf(
-                importPresetPayload(
-                    payload = parseSinglePreset(trimmed),
-                    source = source,
-                    catalogId = null,
-                    activate = activateFirst,
-                ),
-            )
-        }.getOrThrow()
+        }
     }
 
     suspend fun exportPresetDocument(presetId: Long): String {
@@ -383,7 +405,7 @@ class RoutingRepository(
         source: RoutingPresetSource,
         catalogId: Long?,
         activate: Boolean,
-    ): Long {
+    ): Long = withRoutingMutation {
         val presetId =
             createPreset(
                 name = payload.name,
@@ -408,7 +430,7 @@ class RoutingRepository(
                 matchNetworks = rule.matchNetworks,
             )
         }
-        return presetId
+        presetId
     }
 
     private fun parseSinglePreset(raw: String): RoutingPresetExchange =

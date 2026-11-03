@@ -438,15 +438,7 @@ class RuntimeConfigAssembler(
         privateDnsState: PrivateDnsState? = null,
         protocolTestTrafficFreeze: Boolean = false,
     ): Int {
-        val settingsFingerprint =
-            RuntimeFingerprintSettings(
-                traffic = settings.traffic,
-                dns = settings.dns,
-                privacyRoute = settings.privacyRoute.runtimeFingerprintSettings(),
-                i2p = settings.i2p,
-                expert = settings.expert.runtimeFingerprintSettings(),
-                webAppsEnabled = settings.webApps.enabled,
-            ).hashCode()
+        val settingsFingerprint = settings.runtimeFingerprintProjection().hashCode()
         val lanFingerprint =
             settings.expert.localSurfaces
                 .takeIf { it.allowLanAccess }
@@ -622,6 +614,19 @@ class RuntimeConfigAssembler(
         val normalized = host.trim().lowercase()
         require(normalized in LOCAL_HOSTS) { "$label host must stay on a local loopback address" }
     }
+
+    fun runtimeSettingsEquivalent(before: Settings, after: Settings): Boolean =
+        before.runtimeFingerprintProjection() == after.runtimeFingerprintProjection()
+
+    private fun Settings.runtimeFingerprintProjection(): RuntimeFingerprintSettings =
+        RuntimeFingerprintSettings(
+            traffic = traffic,
+            dns = dns,
+            privacyRoute = privacyRoute.runtimeFingerprintSettings(),
+            i2p = i2p,
+            expert = expert.runtimeFingerprintSettings(),
+            webAppsEnabled = webApps.enabled,
+        )
 
     private fun PrivacyRouteSettings.runtimeFingerprintSettings(): PrivacyRouteSettings =
         copy(

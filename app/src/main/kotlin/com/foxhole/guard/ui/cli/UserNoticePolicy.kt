@@ -8,7 +8,6 @@ internal const val CLI_EXPERIMENTAL_TOP_NOTICES_ENABLED = true
 internal fun retainUserNotice(current: FoxholeBannerEvent?, incoming: FoxholeBannerEvent): FoxholeBannerEvent? = when {
     incoming.action != null -> current
     !incoming.showInTopNotice && !incoming.tone.isCritical() -> current
-    current?.tone.isCritical() && !incoming.tone.isCritical() -> current
     else -> incoming
 }
 

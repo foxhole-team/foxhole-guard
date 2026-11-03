@@ -1,0 +1,4 @@
+<resources>
+    <string name="router_management_disconnect_vpn">ルーターを管理または設定するには、現在の VPN 接続を切断してください。</string>
+    <string name="router_management_unavailable_home">ルーターは一時的に利用できません。自宅の Wi-Fi ネットワークに接続してください。</string>
+</resources>

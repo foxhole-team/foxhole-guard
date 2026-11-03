@@ -17,6 +17,7 @@ import com.foxhole.core.model.TrafficSnapshot
 import com.foxhole.core.runtime.ConnectionTelemetryProbe
 import com.foxhole.core.runtime.ConnectivityNetworkRegistry
 import com.foxhole.core.runtime.FoxholeVpnRuntimeBridge
+import com.foxhole.core.runtime.FoxholeRuntime
 import com.foxhole.core.runtime.RuntimeConfigAssembler
 import com.foxhole.core.runtime.RuntimeDiagnosticsSink
 import com.foxhole.core.runtime.RuntimeInstanceStore
@@ -57,16 +58,20 @@ class FoxholeConnectionController internal constructor(
     internal val context: Context,
     internal val profileRepository: ProfileRepository,
     internal val settingsRepository: SettingsRepository,
-    private val routingRepository: RoutingRepository,
+    internal val routingRepository: RoutingRepository,
     internal val ipInfoRepository: IpInfoRepository,
     internal val diagnosticsLogger: RuntimeDiagnosticsSink,
-    private val runtimeConfigAssembler: RuntimeConfigAssembler,
-    private val runtimeInstanceStore: RuntimeInstanceStore,
+    internal val runtimeConfigAssembler: RuntimeConfigAssembler,
+    internal val runtimeInstanceStore: RuntimeInstanceStore,
     private val runtimeSupervisor: RuntimeSupervisor,
     private val quarantineEnforcementTracker: QuarantineRuntimeEnforcementTracker,
     /** The TUN descriptor this process holds on purpose; see [FoxholeConnectionLifecycle]. */
     private val ownMasterTunFd: () -> Int? = { null },
 ) {
+    init {
+        settingsRepository.prepareRuntimeCommit = this::prepareAtomicRoutingSettingsCommit
+        routingRepository.prepareRuntimeCommit = this::prepareAtomicRoutingPresetCommit
+    }
     internal val connectivityManager by lazy {
         context.requireSystemServiceSafe<ConnectivityManager>("connectivity")
     }
@@ -410,7 +415,8 @@ class FoxholeConnectionController internal constructor(
 
     internal fun currentVpnNetwork(): Network? =
         ConnectivityNetworkRegistry.snapshot(context).firstOrNull { network ->
-            connectivityManager.getNetworkCapabilities(network)?.isFoxholeVpnNetwork(context) == true
+            connectivityManager.getNetworkCapabilities(network)?.isFoxholeVpnNetwork(context) == true &&
+                runtimeInstanceStore.current().matchesCurrentTunNetwork(connectivityManager, network)
         }
 
     internal fun currentUpstreamNetwork(): Network? =
@@ -572,6 +578,7 @@ internal fun FoxholeVpnService.currentVpnNetworkOrNullInternal(
 ): Network? =
     currentNetworkSnapshot().firstOrNull { network ->
         connectivityManager.getNetworkCapabilities(network)?.isFoxholeVpnNetwork(this) == true &&
+            matchesCurrentTunNetwork(network) &&
             vpnNetworkIdentityDiffersFrom(
                 currentHandle = network.networkHandle,
                 currentInterfaceName = connectivityManager.getLinkProperties(network)?.interfaceName,
@@ -579,6 +586,14 @@ internal fun FoxholeVpnService.currentVpnNetworkOrNullInternal(
                 previousInterfaceName = excludedInterfaceName,
             )
     }
+
+private fun FoxholeRuntime?.matchesCurrentTunNetwork(
+    connectivityManager: ConnectivityManager,
+    network: Network,
+): Boolean {
+    val properties = connectivityManager.getLinkProperties(network)
+    return this?.matchesCurrentTunNetwork(properties?.interfaceName, properties?.dnsServers.orEmpty()) != false
+}
 
 internal fun vpnNetworkIdentityDiffersFrom(
     currentHandle: Long,

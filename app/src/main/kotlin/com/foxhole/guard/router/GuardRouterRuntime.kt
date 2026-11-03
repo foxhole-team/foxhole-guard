@@ -38,7 +38,8 @@ internal class GuardRouterRuntime(context: Context, repository: ProfileRepositor
         exportProfile = profiles::selected, importRemoteProfile = profiles::importProfile, preferenceStore = preferences,
         importAuthenticatedProfile = profiles::importAuthenticated,
         readonlyInspector = WifiRouterReadonlyInspector.forWifi(manager, protection, access))
-    val control = RouterControlCoordinator(PairedRouterManagementTransport(transport, manager, access), pairing, preferences, provisioner,
+    val control = RouterControlCoordinator(PairedRouterManagementTransport(transport, manager, access, pairing,
+        (application as FoxholeApplication).routerProfileMonitor::connectedProfile), pairing, preferences, provisioner,
         deviceUpdateRelay = RouterDeviceUpdateRelay(RouterDeviceReleaseSource(application.cacheDir)),
         // This is also disabled in VPN until physical foreground-service acceptance.
         homeAutomationAvailable = false, copyProfile = { value ->

@@ -129,6 +129,8 @@ fun CliApp(viewModel: HomeViewModel) {
     CliNoticeHapticEffect(pending, CLI_EXPERIMENTAL_TOP_NOTICES_ENABLED && lockState == LockState.UNLOCKED)
 
     CliTopNoticeProvider(
+        noticeKey = pending.noticeId,
+        onNotice = pending::show,
         visible = CLI_EXPERIMENTAL_TOP_NOTICES_ENABLED && lockState == LockState.UNLOCKED &&
             (pending.action != null || pending.notice != null),
         noticeContent = {
@@ -242,6 +244,7 @@ fun CliApp(viewModel: HomeViewModel) {
                         onOpenRouter = openRouter,
                         openRouterRequested = openRouterInSettings,
                         onRouterRequestConsumed = { openRouterInSettings = false },
+                        onRouterClosed = { openRouterInSettings = false; screen = CliScreen.HOME },
                     )
                 }
                 Column(
@@ -285,6 +288,12 @@ private class CliPendingBanners(
     var noticeStartedAtElapsedMs by noticeStartedAtState
     val lifetime: NoticeLifetime? get() = notice?.let(::userNoticeDurationMillis)?.let {
         NoticeLifetime(noticeStartedAtElapsedMs, it)
+    }
+    fun show(incoming: FoxholeBannerEvent) {
+        if (retainUserNotice(notice, incoming) !== incoming) return
+        noticeId += 1L
+        noticeStartedAtElapsedMs = SystemClock.elapsedRealtime()
+        notice = incoming
     }
 }
 
@@ -339,13 +348,7 @@ private fun rememberCliPendingBanners(viewModel: HomeViewModel, terminal: CliTer
         viewModel = viewModel,
         terminal = terminal,
         onPendingActionBannerChange = { pending.action = it },
-        onUserNotice = { incoming ->
-            if (retainUserNotice(pending.notice, incoming) === incoming) {
-                pending.noticeId += 1L
-                pending.noticeStartedAtElapsedMs = SystemClock.elapsedRealtime()
-                pending.notice = incoming
-            }
-        },
+        onUserNotice = pending::show,
     )
     return pending
 }
@@ -495,6 +498,7 @@ private fun CliTabPager(
     onOpenRouter: () -> Unit,
     openRouterRequested: Boolean,
     onRouterRequestConsumed: () -> Unit,
+    onRouterClosed: () -> Unit,
 ) {
     AnimatedContent(
         targetState = screen,
@@ -519,6 +523,7 @@ private fun CliTabPager(
             onOpenRouter = onOpenRouter,
             openRouterRequested = openRouterRequested,
             onRouterRequestConsumed = onRouterRequestConsumed,
+            onRouterClosed = onRouterClosed,
         )
     }
 }
@@ -536,6 +541,7 @@ private fun CliTabContent(
     onOpenRouter: () -> Unit,
     openRouterRequested: Boolean,
     onRouterRequestConsumed: () -> Unit,
+    onRouterClosed: () -> Unit,
 ) {
     Box(modifier = Modifier.fillMaxSize().testTag(cliScreenTag(target))) {
         when (target) {
@@ -565,6 +571,7 @@ private fun CliTabContent(
                 viewModel = viewModel,
                 openRouterRequested = openRouterRequested,
                 onRouterRequestConsumed = onRouterRequestConsumed,
+                onRouterClosed = onRouterClosed,
             )
         }
     }

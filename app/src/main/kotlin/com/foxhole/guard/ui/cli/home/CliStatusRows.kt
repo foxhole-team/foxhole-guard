@@ -107,7 +107,7 @@ internal fun cliStatusModeRows(
         CliTerminalRow(
             key = if (bothLegs) "$scenarioKey · ${stringResource(R.string.cli_st_vpn)}" else scenarioKey,
             value = cliScenarioLabel(scenario),
-            tone = CliLineTone.INFO,
+            tone = if (scenario == CliStatusScenario.WHOLE_DEVICE) CliLineTone.SCENARIO_WHOLE else CliLineTone.SCENARIO_SELECTED,
         )
     }
     val torRow = torScenario?.let { scenario ->
@@ -118,7 +118,7 @@ internal fun cliStatusModeRows(
                 scenarioKey
             },
             value = cliScenarioLabel(scenario),
-            tone = CliLineTone.TOR,
+            tone = if (scenario == CliStatusScenario.WHOLE_DEVICE) CliLineTone.SCENARIO_WHOLE else CliLineTone.SCENARIO_SELECTED,
         )
     }
     return listOfNotNull(modeRow, vpnRow, torRow)

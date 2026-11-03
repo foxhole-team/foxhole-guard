@@ -1,0 +1,4 @@
+<resources>
+    <string name="router_management_disconnect_vpn">Для управления или настройки роутера отключите текущее VPN-соединение.</string>
+    <string name="router_management_unavailable_home">Роутер временно недоступен. Подключитесь к Вашей домашней Wi-Fi сети.</string>
+</resources>

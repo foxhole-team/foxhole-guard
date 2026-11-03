@@ -40,6 +40,13 @@ internal class GuardRouterProfileMonitor(private val owner: FoxholeApplication) 
             catch (_: Exception) { null }
         }
     }.distinctUntilChanged().stateIn(owner.appScope, SharingStarted.Eagerly, null)
+    fun connectedProfile(): RouterConnectedProfile? = connectedProfiles.value?.takeIf { profile ->
+        val snapshot = connection.snapshot.value
+        snapshot.state == ConnectionState.CONNECTED && snapshot.trafficMode == TrafficMode.TUNNEL &&
+            snapshot.profileId?.toString() == profile.id && connection.currentVpnNetworkHandle() == profile.networkHandle &&
+            connection.routerProbeGeneration()?.let { "$it:${profile.networkHandle}" } == profile.connectionGeneration
+    }
+
     val profileProbe = RouterProfileAutoProbe(owner.appScope, manager, pairing, preferences, connectedProfiles, access)
 
 }

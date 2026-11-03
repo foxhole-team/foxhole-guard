@@ -5,6 +5,7 @@ import hashlib,importlib.util,json,os,re,stat,subprocess,sys,tomllib
 
 HASH=re.compile(r'[0-9a-f]{64}');REVISION=re.compile(r'[0-9a-f]{40}')
 SHAPES={
+ 'android-arm64':{'aarch64-linux-android':'arm64-v8a'},
  'android4':{'aarch64-linux-android':'arm64-v8a','armv7-linux-androideabi':'armeabi-v7a','i686-linux-android':'x86','x86_64-linux-android':'x86_64'},
  'android64':{'aarch64-linux-android':'arm64-v8a','x86_64-linux-android':'x86_64'},
  'android-armv7':{'armv7-linux-androideabi':'armeabi-v7a'},
@@ -81,7 +82,7 @@ def load(snapshot_path,app_root,core_root,revision,profile,core_native,sentinel_
  app_root,core_root=Path(app_root).resolve(),Path(core_root).resolve();path=Path(snapshot_path).absolute();need(profile in SHAPES and isinstance(revision,str)and REVISION.fullmatch(revision),'Unknown canonical source/profile');raw=read(path);record=document(raw);shape=SHAPES[profile]
  need(record.get('schema')==1 and record.get('kind')=='canonical-source-legal-delivery'and record.get('coreCommit')==revision and record.get('androidDeliveryProfile')==profile and record.get('abis')==list(shape.values())and record.get('targets')==list(shape),'Canonical source/profile identity differs')
  source_producer=record.get('sourceProducerProfile')
- need((source_producer=='android3'and set(shape)<=set(SHAPES['android3']))or(source_producer=='android64'and profile=='android64')or(source_producer=='android4'and profile in('android4','android-armv7')),'Canonical producer profile differs');checkout=source_checkout(app_root,core_root,revision);source_revision=checkout['sourceCommit'];need(git(core_root,'rev-parse','HEAD').decode().strip()==source_revision,'Core checkout differs from canonical source')
+ need((source_producer=='android3'and set(shape)<=set(SHAPES['android3']))or(source_producer=='android64'and profile=='android64')or(source_producer=='android4'and profile in('android4','android-armv7'))or(source_producer=='android-arm64'and profile=='android-arm64'),'Canonical producer profile differs');checkout=source_checkout(app_root,core_root,revision);source_revision=checkout['sourceCommit'];need(git(core_root,'rev-parse','HEAD').decode().strip()==source_revision,'Core checkout differs from canonical source')
  compiled=document(read(app_root/'config/foxcore-source-manifest.json'));rows=compiled.get('files');need(isinstance(rows,list),'Compiled source inventory missing');compiled_map={row['path']:row['sha256']for row in rows}
  expected_inputs=522 if checkout.get('legacy')else checkout['producerDeclaredInputCount']
  need(len(compiled_map)==len(rows)==expected_inputs and compiled.get('commit')==revision and compiled.get('androidDeliveryProfile')==profile and compiled.get('abis')==list(shape.values())and compiled.get('targets')==list(shape)and record.get('compiledInputs')==compiled_map,'Canonical compiled source manifest differs')
@@ -112,13 +113,27 @@ def load(snapshot_path,app_root,core_root,revision,profile,core_native,sentinel_
    reference_row=native[kind][target];need(set(reference_row)=={'abi','bytes','sha256'}and reference_row['abi']==abi and type(reference_row['bytes'])is int and 0<reference_row['bytes']<=128*1024**2 and isinstance(reference_row['sha256'],str)and HASH.fullmatch(reference_row['sha256']),'Invalid canonical native row');need(set(source_native_rows[kind])==set(shape),'Source-built native target omitted');row=source_native_rows[kind][target];need(set(row)=={'abi','bytes','sha256'}and row['abi']==abi and type(row['bytes'])is int and 0<row['bytes']<=128*1024**2 and isinstance(row['sha256'],str)and HASH.fullmatch(row['sha256']),'Invalid source-built native row');body=read(root/abi/library,128*1024**2,row['sha256'],nlinks=(1,2));need(len(body)==row['bytes'],'Fresh normal JNI size differs')
    elf={'arm64-v8a':(2,183),'armeabi-v7a':(1,40),'x86':(1,3),'x86_64':(2,62)}[abi];need(len(body)>=64 and body[:4]==b'\x7fELF'and(body[4],int.from_bytes(body[18:20],'little'))==elf and body[5]==1,'Fresh normal JNI ABI differs')
  files={};manifest=record.get('files');need(isinstance(manifest,dict)and 0<len(manifest)<=4096,'Canonical license file inventory missing');need(len({n.casefold()for n in manifest})==len(manifest),'Canonical license paths collide')
- static={'foxcore/FoxHole-Core-GPL-3.0-or-later.txt','foxcore/THIRD_PARTY_NOTICES.md','foxcore/REVISION.txt','foxcore/ABI-COVERAGE.json','sentinel/LICENSE','sentinel/README.md','sentinel/vendor/PROVENANCE.json','sentinel/REVISION.txt','sentinel/ABI-COVERAGE.json','foxcore/toolchain/PROVENANCE.json'}|{'foxcore/toolchain/'+n for n in RUST_NOTICES}|{'foxcore/foxcore-'+n+'.cdx.json'for n in shape}|{'sentinel/selected-'+n+'.cdx.json'for n in shape}|{'sentinel/'+n.removeprefix('native/sentinel-yara/')for n in sentinels if n.startswith('native/sentinel-yara/vendor/patches/')}
+ retained_preview=None
+ retained_profile=profile=='android-arm64'or(profile=='android4'and(app_root/'config/sentinel-retained-native.json').is_file())
+ if retained_profile:
+  helper=app_root/'scripts/retained-sentinel-arm64.py';read(helper);spec=importlib.util.spec_from_file_location('strict_retained_sentinel_arm64',helper);retained_preview=importlib.util.module_from_spec(spec);spec.loader.exec_module(retained_preview)
+  retained_preview.verify_current_tools(core_root)
+  _authority,_reference,_payload=retained_preview.authority(app_root,revision,profile)
+  need(sentinels==_reference['sentinelInputs'],'Retained Sentinel source inventory changed')
+ sentinel_shape=SHAPES['android4']if retained_preview is not None else shape
+ static={'foxcore/FoxHole-Core-GPL-3.0-or-later.txt','foxcore/THIRD_PARTY_NOTICES.md','foxcore/REVISION.txt','foxcore/ABI-COVERAGE.json','sentinel/LICENSE','sentinel/README.md','sentinel/vendor/PROVENANCE.json','sentinel/REVISION.txt','sentinel/ABI-COVERAGE.json','foxcore/toolchain/PROVENANCE.json'}|{'foxcore/toolchain/'+n for n in RUST_NOTICES}|{'foxcore/foxcore-'+n+'.cdx.json'for n in shape}|{'sentinel/selected-'+n+'.cdx.json'for n in sentinel_shape}|{'sentinel/'+n.removeprefix('native/sentinel-yara/')for n in sentinels if n.startswith('native/sentinel-yara/vendor/patches/')}
+ if retained_preview is not None:static.add('sentinel/RETAINED-NATIVE.json'if profile=='android4'else'sentinel/RETAINED-ARM64-PREVIEW.json')
  for name,row in manifest.items():
   relative(name);need((name in static or name.startswith(('foxcore/cargo-notices/','sentinel/cargo-notices/')))and not name.endswith(('.so','.a','.rlib','.tar','.gz','.zip','.log'))and Path(name).name not in('producer-receipt.json','selected-capture-receipt.json','source-inputs.json','source-context.json'),'Operational/binary input is not canonical legal data')
   need(isinstance(row,dict)and set(row)=={'sha256','bytes'}and isinstance(row['sha256'],str)and HASH.fullmatch(row['sha256'])and type(row['bytes'])is int and 0<row['bytes']<=1048576,'Canonical legal member declaration differs');data=read(path.parent/'payload'/name,expected=row['sha256']);need(len(data)==row['bytes'],'Canonical legal member size differs');data.decode('utf-8');need(not data.startswith((b'\x7fELF',b'PK\x03\x04',b'dex\n',b'\0asm'))and not any(v in data for v in(b'/srv/foxhole/',b'/Users/',b'-----BEGIN PRIVATE KEY-----')),'Private operational/binary input in canonical legal data');files[name]=data
  actual={p.relative_to(path.parent/'payload').as_posix()for p in(path.parent/'payload').rglob('*')if p.is_file()or p.is_symlink()};need(actual==set(files),'Canonical legal payload inventory differs')
  core=core_coverage(files,revision,profile,version);need(core['authorities']['cargoLockSha256']==locks['Cargo.lock'],'Core coverage lock differs')
- module_path=app_root/'scripts/selected-sentinel-sbom.py';read(module_path);sys.dont_write_bytecode=True;spec=importlib.util.spec_from_file_location('unchanged_packaged_sentinel_legal',module_path);module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module);module.packaged_delivery(lambda n:files[n],revision,profile);sentinel=document(files['sentinel/ABI-COVERAGE.json']);need(sentinel['authorities']['cargoLockSha256']==locks['native/sentinel-yara/Cargo.lock'],'Sentinel coverage lock differs')
+ module_path=app_root/'scripts/selected-sentinel-sbom.py';read(module_path);sys.dont_write_bytecode=True;spec=importlib.util.spec_from_file_location('unchanged_packaged_sentinel_legal',module_path);module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module);
+ if retained_preview is not None:
+  retained=retained_preview.validate(app_root,revision,lambda n:files[n],sentinels,native['core']if profile=='android4'else native['core']['aarch64-linux-android'],profile)
+  need(core['authorities']['producerReceipt']==retained['authority']['coreProducerReceiptSha256'],'Retained consumer Core producer differs')
+ else:module.packaged_delivery(lambda n:files[n],revision,profile)
+ sentinel=document(files['sentinel/ABI-COVERAGE.json']);need(sentinel['authorities']['cargoLockSha256']==locks['native/sentinel-yara/Cargo.lock'],'Sentinel coverage lock differs')
  if source_producer in('android64','android4'):
   source_receipts=record.get('sourceProducerReceipts')
   need(isinstance(source_receipts,dict)and set(source_receipts)=={'core','sentinel'}and all(isinstance(v,str)and HASH.fullmatch(v)for v in source_receipts.values()),'Canonical source producer receipts missing')
@@ -127,7 +142,10 @@ def load(snapshot_path,app_root,core_root,revision,profile,core_native,sentinel_
   for target in shape:
    bom=document(files['foxcore/foxcore-'+target+'.cdx.json'])
    need(properties(bom['metadata']['properties']).get('foxhole:native:source-producer-profile')==source_producer,'Canonical Core inventory producer profile differs')
- if source_producer=='android4':
+ if source_producer=='android-arm64':
+  receipts=record.get('sourceProducerReceipts');need(isinstance(receipts,dict)and set(receipts)=={'core','sentinel'}and all(coverage['authorities']['producerReceipt']==receipts[kind]for kind,coverage in(('core',core),('sentinel',sentinel))),'ARM64 exact producer receipt join differs')
+  need(core.get('sourceProducerProfile')=='android-arm64'and sentinel.get('sourceProducerProfile')=='android4','ARM64 Core/retained Sentinel producer roles differ')
+ if source_producer in('android4','android-arm64'):
   rows=record.get('sourceProducerReceiptsByTarget')
   need(isinstance(rows,dict)and set(rows)=={'core','sentinel'},'Android4 per-ABI producer authority missing')
   for kind,coverage in(('core',core),('sentinel',sentinel)):
@@ -136,7 +154,7 @@ def load(snapshot_path,app_root,core_root,revision,profile,core_native,sentinel_
  for kind,coverage in(('core',core),('sentinel',sentinel)):
   need(all(coverage['targets'][target]['nativeLibrarySha256']==native[kind][target]['sha256']for target in shape),'Canonical legal/native identity differs')
  sentinel_notice=document(files['sentinel/cargo-notices/MANIFEST.json']);need({n.removeprefix('sentinel/cargo-notices/')for n in files if n.startswith('sentinel/cargo-notices/')}=={row['path']for row in sentinel_notice['files']}|{'MANIFEST.json'},'Extra Sentinel original notice')
- need(files['foxcore/REVISION.txt']==files['sentinel/REVISION.txt']==(revision+'\n').encode(),'Canonical legal revision differs')
+ need(files['foxcore/REVISION.txt']==(revision+'\n').encode()and files['sentinel/REVISION.txt']==((retained['authority']['originalCoreCommit']if retained_preview is not None else revision)+'\n').encode(),'Canonical legal revision differs')
  for name,pin in RUST_NOTICES.items():need(digest(files['foxcore/toolchain/'+name])==pin,'Original Rust standard-library notice differs')
  rust=document(files['foxcore/toolchain/PROVENANCE.json']);need(set(rust)=={'schema','rustVersion','rustcCommit','coreCommit','androidDeliveryProfile','nativeLibraries','installedRuntimeArchives','licenseInputs'}and rust['schema']==1 and rust['rustVersion']=='1.97.1'and rust['rustcCommit']=='8bab26f4f68e0e26f0bb7960be334d5b520ea452'and rust['coreCommit']==revision and rust['androidDeliveryProfile']==profile and rust['nativeLibraries']==native and rust['licenseInputs']==RUST_NOTICES and set(rust['installedRuntimeArchives'])==set(shape),'Canonical Rust attribution source differs')
  for rows in rust['installedRuntimeArchives'].values():

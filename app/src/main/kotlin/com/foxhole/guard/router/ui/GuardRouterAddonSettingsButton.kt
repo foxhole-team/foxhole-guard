@@ -23,17 +23,17 @@ import com.foxhole.guard.ui.cli.components.CliToggleRow
 import com.foxhole.guard.ui.cli.components.CliRowDivider
 
 @Composable
-internal fun GuardRouterAddonSettingsButton() {
+internal fun GuardRouterAddonSettingsButton(enabled: Boolean = true) {
     val repository = (LocalContext.current.applicationContext as FoxholeApplication).appGraph.settingsRepository
     val shortcutVisible by repository.routerHomeShortcutVisible.collectAsStateWithLifecycle()
     val dockShortcutVisible by repository.routerDockShortcutVisible.collectAsStateWithLifecycle()
     var open by rememberSaveable { mutableStateOf(false) }
-    IconButton(onClick = { open = true }) {
+    IconButton(onClick = { open = true }, enabled = enabled) {
         Icon(
             painterResource(R.drawable.lin_settings),
             stringResource(R.string.guard_router_addon_settings_title),
             Modifier.size(22.dp),
-            tint = LocalGuardRouterColors.current.muted,
+            tint = LocalGuardRouterColors.current.muted.copy(alpha = if (enabled) 1f else .38f),
         )
     }
     if (open) {

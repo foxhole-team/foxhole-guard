@@ -29,22 +29,12 @@ internal class AppUpdateNotifier(
         update: AppUpdateCheck.Available,
         installedVersionCode: Long = BuildConfig.VERSION_CODE.toLong(),
     ): Boolean {
+        if (!AppUpdatePolicy.selfUpdateAllowed(BuildConfig.UPDATE_CHANNEL)) return false
         val versionCode = update.manifest.versionCode
         val versionName = update.versionName
-        if (versionCode in 1L..installedVersionCode) {
-            return false
-        }
-        if (
-            !AppUpdatePolicy.updateNotificationRequired(
-                severity = update.severity,
-                availableVersionName = versionName,
-                lastNotifiedVersionName = lastNotifiedVersionName(),
-            )
-        ) {
-            return false
-        }
-        rememberNotifiedVersionCode(versionCode)
-        rememberNotifiedVersionName(versionName)
+        if (!AppUpdatePolicy.updateNotificationRequired(versionCode, installedVersionCode,
+                preferences().getLong(KEY_LAST_NOTIFIED_VERSION_CODE, 0))) return false
+        if (!NotificationManagerCompat.from(appContext).areNotificationsEnabled()) return false
         if (
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             ContextCompat.checkSelfPermission(
@@ -55,14 +45,15 @@ internal class AppUpdateNotifier(
             return false
         }
         ensureChannel()
-        val body = appContext.getString(R.string.app_update_notification_body, versionName)
-        val detail = appContext.getString(R.string.app_update_notification_required_body, versionName)
+        if (notificationManager?.getNotificationChannel(CHANNEL_ID)?.importance == NotificationManager.IMPORTANCE_NONE) return false
+        val body = appContext.getString(R.string.app_update_available_recommendation)
         val notification =
             NotificationCompat.Builder(appContext, CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_notification_update)
-                .setContentTitle(appContext.getString(R.string.app_update_notification_title))
-                .setContentText(body)
-                .setStyle(NotificationCompat.BigTextStyle().bigText("$detail\n$body"))
+                .setContentTitle(appContext.getString(R.string.app_name))
+                .setContentText(body).setOnlyAlertOnce(true)
+                .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+                .addAction(R.drawable.ic_notification_update, appContext.getString(R.string.app_update_available_action), openUpdatesPendingIntent())
                 .setCategory(NotificationCompat.CATEGORY_RECOMMENDATION)
                 .setPriority(NotificationCompat.PRIORITY_DEFAULT)
                 .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
@@ -71,6 +62,8 @@ internal class AppUpdateNotifier(
                 .build()
         return runCatching {
             NotificationManagerCompat.from(appContext).notify(NOTIFICATION_ID, notification)
+            rememberNotifiedVersionCode(versionCode)
+            rememberNotifiedVersionName(versionName)
         }.isSuccess
     }
 

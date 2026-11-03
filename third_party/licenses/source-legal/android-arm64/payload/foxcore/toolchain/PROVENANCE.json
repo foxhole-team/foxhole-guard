@@ -1,0 +1,167 @@
+{
+  "androidDeliveryProfile": "android-arm64",
+  "coreCommit": "fc2134dc15b32087516672935e64ae7b8b0d5472",
+  "installedRuntimeArchives": {
+    "aarch64-linux-android": [
+      {
+        "bytes": 29596,
+        "name": "libaddr2line-3662a29fb8682e40.rlib",
+        "sha256": "9be4f2654addac096163c5fe30400ecdc3ad2a9932c4efa0056243865c946034"
+      },
+      {
+        "bytes": 9652,
+        "name": "libadler2-808da1a483db804e.rlib",
+        "sha256": "30b0b801314e95c33ccf47dd06fb9b7af9066abb3dff1e2034158116fa7886e7"
+      },
+      {
+        "bytes": 997152,
+        "name": "liballoc-c45738f2786e0fbd.rlib",
+        "sha256": "5a9855c74979f8871eae43bd6d1b2d584b9e373eb1ac584e958d5a2d34680929"
+      },
+      {
+        "bytes": 4954,
+        "name": "libcfg_if-3324d197920a6d96.rlib",
+        "sha256": "e1fb419874870702a8cd0c6a49c6983dd40dff8499c30af78387f0104dd57e53"
+      },
+      {
+        "bytes": 4720488,
+        "name": "libcompiler_builtins-de49d4b30b156cd1.rlib",
+        "sha256": "c3669b369b10e9a3f1a27ef23ffc50b40a670f0bfbcc91fb21016f6c2e760721"
+      },
+      {
+        "bytes": 3155262,
+        "name": "libcore-61c2b492ae6a25f6.rlib",
+        "sha256": "d9e177b04f5afc9874a5ea8359c1912fcbc21723c82486dfee6770062eb7296b"
+      },
+      {
+        "bytes": 812786,
+        "name": "libgetopts-d58c723f2a36f7d6.rlib",
+        "sha256": "30cea197e4e93b20ead68e44c39f250ca2e55b37c2fccee365c6a377570631f4"
+      },
+      {
+        "bytes": 953326,
+        "name": "libgimli-00852f66806d2066.rlib",
+        "sha256": "7ef42f19e21ae04e0b94957c04827ce1d46efc7fb5ce2be38c17248b4b4839a6"
+      },
+      {
+        "bytes": 44576,
+        "name": "libhashbrown-845a35cbf6720277.rlib",
+        "sha256": "9f37c95a802d4db507e11eb08d3059f14288c2d8a420c27ebcda86bafb48ccce"
+      },
+      {
+        "bytes": 13780,
+        "name": "liblibc-c353d690ad813e47.rlib",
+        "sha256": "193941fccf50813287d39dbd914aa7d5ec200227a5a46244e50f23a1514a5cb3"
+      },
+      {
+        "bytes": 241496,
+        "name": "libmemchr-08251b3d9b34a445.rlib",
+        "sha256": "66988eb86630883955e592106c9d8934996be4df861b8f84970890cde955c01d"
+      },
+      {
+        "bytes": 100256,
+        "name": "libminiz_oxide-a1cf4c30465ff342.rlib",
+        "sha256": "36fee9e679aad6ab8a37f21263103fc19cd3a76e812070a06cbb9295f7befa0b"
+      },
+      {
+        "bytes": 190328,
+        "name": "libobject-9b170dc52f2065b5.rlib",
+        "sha256": "d0eba8303264115495e45d007c016d6c95290d391b8cb559ace972145adbdd66"
+      },
+      {
+        "bytes": 23884,
+        "name": "libpanic_abort-bb1cef5f4c285d8a.rlib",
+        "sha256": "f5081778e4e32b3cbed058dce73da90709cc16c86f2bd9d5566e35f056c76ce8"
+      },
+      {
+        "bytes": 38918,
+        "name": "libpanic_unwind-a52737136d577c01.rlib",
+        "sha256": "c0961ba972f9bd8a01fa70b513976659544f2ee4f6970167654557c2d6bc578d"
+      },
+      {
+        "bytes": 4736052,
+        "name": "libproc_macro-7ee8d01987d24c8b.rlib",
+        "sha256": "09de62d48674f9a03c34e66130f1a80a5ac70fe3f7341d334a2fdafec74ef7b7"
+      },
+      {
+        "bytes": 476736,
+        "name": "libprofiler_builtins-4d07af9bc289a10a.rlib",
+        "sha256": "a3590c6f9ad021d029518485f5e56fc78b899feedca987bc8a7ae3014a14ff59"
+      },
+      {
+        "bytes": 239198,
+        "name": "librustc_demangle-6beab707ca443aed.rlib",
+        "sha256": "1aff776f1eb42128356209694c25041acd5478d11c7a50930c78f4f13f5c0e25"
+      },
+      {
+        "bytes": 5128,
+        "name": "librustc_literal_escaper-e5a989a982b3d925.rlib",
+        "sha256": "5d59902e0cfcce8f3b71bbeb9589256331fabd5b2c9aa19bc00b060600cff263"
+      },
+      {
+        "bytes": 5208,
+        "name": "librustc_std_workspace_alloc-cbff994e1a5ebb9a.rlib",
+        "sha256": "de29d0679693c15be42f356ab5fc62c8e3744f17d76d319453da718811d9b026"
+      },
+      {
+        "bytes": 5190,
+        "name": "librustc_std_workspace_core-46e31d13e2fc3924.rlib",
+        "sha256": "f6bfeb62bc5d3b6b144f0b5c98fa36b528c3d10370b176547640adcf1b71a76c"
+      },
+      {
+        "bytes": 5188,
+        "name": "librustc_std_workspace_std-290b1d1a3edae4c8.rlib",
+        "sha256": "429ea157433d7a92932a95d0a852dad3e2256e104ed35966c5c20c5f18502d84"
+      },
+      {
+        "bytes": 12027386,
+        "name": "libstd-50ea83e28e8091b9.rlib",
+        "sha256": "6144f5b618aff7f5853a26a567a75a0d20e9b1caed331fe017a055709be806d0"
+      },
+      {
+        "bytes": 144510,
+        "name": "libstd_detect-0103e473b2ff392d.rlib",
+        "sha256": "d79e61e94d28df72933a0968fe1fbe6a1eed87e16337363c7d59b8ca48172468"
+      },
+      {
+        "bytes": 5028,
+        "name": "libsysroot-da0980d1a5792f51.rlib",
+        "sha256": "cd19aae6745e1a3e397a57569156df9684d10df7dbefcf6a7303d048f38c25c5"
+      },
+      {
+        "bytes": 7880536,
+        "name": "libtest-8f026853f87b2189.rlib",
+        "sha256": "ac16fa790798949956b25bd4def86f77dc2dd0e3f32404c80d0bbad65c28d12f"
+      },
+      {
+        "bytes": 5010,
+        "name": "libunwind-9c85e9e2c1f72b7b.rlib",
+        "sha256": "aac2b5af62da1e2bf93cf7f7dbcde2e66adcea5b68070430aed8de00cde97593"
+      }
+    ]
+  },
+  "licenseInputs": {
+    "COPYRIGHT-library.html": "0a65bb747c49c7bb816cbc7188319bd6e4e8d08091c1190b8a3c0971c47968ed",
+    "LICENSE-APACHE": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a",
+    "LICENSE-MIT": "b71bd43a069ca0641a9ecfe585ca7b3c53b5cc1608f8b68321168698e28b5ea1"
+  },
+  "nativeLibraries": {
+    "core": {
+      "aarch64-linux-android": {
+        "abi": "arm64-v8a",
+        "bytes": 24994328,
+        "sha256": "dc8ce0eeb8e4f9adf100a289b397f92380feb1635791e4a28f28298296f84189"
+      }
+    },
+    "sentinel": {
+      "aarch64-linux-android": {
+        "abi": "arm64-v8a",
+        "bytes": 15490432,
+        "sha256": "d67654bab588ae1585a660972b98d3ac665eb90a203a77557a81205290088730"
+      }
+    }
+  },
+  "rustVersion": "1.97.1",
+  "rustcCommit": "8bab26f4f68e0e26f0bb7960be334d5b520ea452",
+  "schema": 1
+}

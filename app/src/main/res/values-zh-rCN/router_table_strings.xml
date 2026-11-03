@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="router_table_router">路由器</string>
+    <string name="router_table_version">FoxHole 版本</string>
+    <string name="router_table_actions">操作</string>
+    <string name="router_table_rename">重命名路由器</string>
+    <string name="router_table_name">路由器名称</string>
+    <string name="router_table_cancel">取消</string>
+    <string name="router_table_save">保存</string>
+    <string name="router_table_default_name">路由器-%1$d</string>
+</resources>

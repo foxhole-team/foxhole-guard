@@ -10,6 +10,38 @@ import org.junit.Test
 
 class CliTopNoticeHostTest {
     @Test
+    fun parentIsReadyBeforeClosingSheetDisappears() {
+        val windows = CliNoticeWindowRegistry()
+        val activity = Any()
+        val sheet = Any()
+        windows.add(activity)
+        windows.add(sheet)
+        assertFalse(windows.draws(activity))
+        windows.handoff(sheet, true)
+        assertTrue(windows.draws(activity))
+        windows.remove(sheet)
+        assertTrue(windows.draws(activity))
+    }
+
+    @Test
+    fun interruptedCloseDoesNotRepeatTheNotice() {
+        val windows = CliNoticeWindowRegistry()
+        val activity = Any()
+        val sheet = Any()
+        windows.add(activity)
+        windows.add(sheet)
+        windows.handoff(sheet, true)
+        windows.handoff(sheet, false)
+        assertFalse(windows.draws(activity))
+        assertTrue(windows.draws(sheet))
+        val motion = NoticeDismissState()
+        motion.offsetY = -12f
+        motion.dismissing = true
+        assertEquals(-12f, motion.offsetY, 0f)
+        assertTrue(motion.dismissing)
+    }
+
+    @Test
     fun `the newest window owns notices until it is removed`() {
         val windows = CliNoticeWindowRegistry()
         val activity = Any()

@@ -7,6 +7,7 @@ import com.foxhole.core.model.RuntimeFailureException
 import com.foxhole.core.runtime.FoxCoreConfigTranslationException
 import com.foxhole.core.runtime.FoxCoreRuntimeException
 import com.foxhole.core.runtime.FoxCoreRuntimeFailure
+import com.foxhole.core.runtime.RuntimePolicyUpdateException
 import com.foxhole.core.runtime.TOR_ALL_APPS_NEEDS_FULL_TUNNEL_MARKER
 import com.foxhole.guard.core.data.DnsFilterPolicyUnavailableException
 import com.foxhole.guard.runtime.CategorizedDnsUnavailable
@@ -166,8 +167,17 @@ internal fun Context.userFacingErrorMessage(
 internal fun userFacingErrorMessageRes(
     error: Throwable?,
     @StringRes fallbackRes: Int,
-): Int =
-    when (classifyUserFacingError(error)) {
+): Int {
+    val atomic = generateSequence(error) { it.cause }.take(MAX_ERROR_CAUSE_DEPTH)
+        .filterIsInstance<RuntimePolicyUpdateException>().firstOrNull()
+    if (atomic != null) {
+        return if (atomic.reason == RuntimePolicyUpdateException.Reason.UNSUPPORTED) {
+            R.string.guard_atomic_update_unsupported
+        } else {
+            R.string.guard_atomic_update_failed
+        }
+    }
+    return when (classifyUserFacingError(error)) {
         UserFacingErrorKind.TOR_ALL_APPS_NEEDS_FULL_TUNNEL -> R.string.error_tor_all_apps_needs_full_tunnel
         UserFacingErrorKind.PACKET_TUNNEL_DNS_MISSING -> R.string.vpn_error_packet_tunnel_dns_missing
         UserFacingErrorKind.PROFILE_CONFIG_INVALID -> R.string.profile_config_invalid_reimport
@@ -187,6 +197,7 @@ internal fun userFacingErrorMessageRes(
         UserFacingErrorKind.DNS_FILTER_POLICY_UNAVAILABLE -> R.string.dns_category_profile_policy_unavailable
         UserFacingErrorKind.UNKNOWN -> fallbackRes
     }
+}
 
 private fun dnsFilterUserFacingErrorKind(error: Throwable?): UserFacingErrorKind? {
     val causes = generateSequence(error) { cause -> cause.cause }.take(MAX_ERROR_CAUSE_DEPTH)

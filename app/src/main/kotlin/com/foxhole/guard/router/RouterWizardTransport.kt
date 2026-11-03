@@ -16,6 +16,9 @@ internal interface RouterWizardTransport {
     fun api(identity: RouterTlsIdentity): RouterPanelApi
     fun discoveryApi(identity: RouterTlsIdentity): RouterPanelApi = api(identity)
     fun beginAddition() = Unit
+    suspend fun managementAccess(pairing: RouterPairing?, preferences: RouterControlPreferences?, forceLocal: Boolean = false): RouterManagementAccess =
+        if (hasPhysicalWifi()) RouterManagementAccess.LOCAL else RouterManagementAccess.UNAVAILABLE
+    fun authenticatedWifiPreferences(pairing: RouterPairing, preferences: RouterControlPreferences): RouterControlPreferences = preferences
     suspend fun openManagement(pairing: RouterPairing, preferences: RouterControlPreferences): RouterPanelApi {
         val observed = inspectIdentity(pairing.identity.endpoint)
         if (observed != pairing.identity) throw RouterApiFailure(RouterApiError.IDENTITY)

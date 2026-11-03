@@ -40,6 +40,7 @@ internal class EncryptedRouterPairingStore(context: Context, private val io: Cor
     override suspend fun readById(id: String): RouterPairing? = readVault { value -> value.routers.singleOrNull { it.pairing.id == id }?.pairing?.copy() }
     override suspend fun listSaved(): RouterSavedInventory = readVault(RouterSavedVault::inventory)
     override suspend fun selectSaved(id: String) = changeVault { it.selected(id) }
+    override suspend fun renameSaved(id: String, label: String) = changeVault { it.withLabel(id, label) }
     override suspend fun save(pairing: RouterPairing) = changeVault { it.withPairing(pairing) }
     override suspend fun remove(expectedId: String) = changeVault { it.without(expectedId) }
     internal suspend fun readPreferences(id: String): RouterControlPreferences? = readVault { value -> value.routers.singleOrNull { it.pairing.id == id }?.preferences }

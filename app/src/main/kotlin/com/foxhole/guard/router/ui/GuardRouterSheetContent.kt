@@ -66,6 +66,8 @@ internal fun GuardRouterSheetContent(
     footer: (@Composable ColumnScope.() -> Unit)? = null,
     scrollable: Boolean = true,
     showAddonSettings: Boolean = true,
+    addonSettingsLast: Boolean = false,
+    addonSettingsEnabled: Boolean = true,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Column(modifier.fillMaxSize().padding(horizontal = CliSpacing.md).padding(bottom = CliSpacing.xs)) {
@@ -81,8 +83,9 @@ internal fun GuardRouterSheetContent(
                 CircularProgressIndicator(Modifier.size(20.dp).semantics { contentDescription = working }, strokeWidth = 2.dp)
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
-                if (showAddonSettings) GuardRouterAddonSettingsButton()
+                if (showAddonSettings && !addonSettingsLast) GuardRouterAddonSettingsButton(addonSettingsEnabled)
                 actions()
+                if (showAddonSettings && addonSettingsLast) GuardRouterAddonSettingsButton(addonSettingsEnabled)
             }
         }
         val body = Modifier.weight(1f).fillMaxWidth().then(LocalGuardRouterSheetBodyGestures.current)

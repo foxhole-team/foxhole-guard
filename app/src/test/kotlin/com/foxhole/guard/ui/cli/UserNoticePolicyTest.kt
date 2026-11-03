@@ -44,11 +44,11 @@ class UserNoticePolicyTest {
     }
 
     @Test
-    fun `background success does not erase an unacknowledged error`() {
+    fun `new notice replaces the previous error immediately`() {
         val error = FoxholeBannerEvent("Connection failed", FoxholeBannerTone.ERROR)
         val update = FoxholeBannerEvent("List refreshed", FoxholeBannerTone.SUCCESS)
 
-        assertSame(error, retainUserNotice(error, update))
+        assertSame(update, retainUserNotice(error, update))
     }
 
     @Test

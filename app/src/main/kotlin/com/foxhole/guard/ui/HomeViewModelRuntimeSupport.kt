@@ -10,6 +10,7 @@ import com.foxhole.core.model.isUdpTransport
 import com.foxhole.guard.R
 import com.foxhole.guard.diagnosticFailureLabel
 import com.foxhole.guard.runtime.FoxholeVpnService
+import com.foxhole.core.runtime.RuntimePolicyUpdateException
 import com.foxhole.guard.userFacingErrorMessage
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
@@ -374,6 +375,15 @@ private suspend fun HomeViewModel.waitForRuntimeDisconnect() {
 
 internal fun HomeViewModel.runtimeConnectionFailureMessage(error: Throwable): String {
     val app = getApplication<Application>()
+    if (error is RuntimePolicyUpdateException) {
+        return app.getString(
+            if (error.reason == RuntimePolicyUpdateException.Reason.UNSUPPORTED) {
+                R.string.guard_atomic_update_unsupported
+            } else {
+                R.string.guard_atomic_update_failed
+            },
+        )
+    }
     container.diagnosticsLogger.recordFailure("connection", "connect failed: ${diagnosticFailureLabel(error)}")
     return app.userFacingErrorMessage(error, R.string.error_runtime_start_failed)
 }

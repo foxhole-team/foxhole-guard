@@ -3,6 +3,11 @@
   "scope": "actual-guard-release-runtime-notices",
   "files": [
     {
+      "path": "CONSUMER-BINDING.json",
+      "bytes": 3103,
+      "sha256": "25c5b1acc455c0f3f8d510b87667304455fd5940c2e8bfa0999780084962e66a"
+    },
+    {
       "path": "PORTABLE-PROVENANCE.json",
       "bytes": 2937,
       "sha256": "9fb79f7b841b8702f351738e4ef57b19eb6e7fe1978be328723d44623725f8f5"
@@ -11,6 +16,11 @@
       "path": "actual-material-receipt.json",
       "bytes": 675,
       "sha256": "2de44f17238542faee4aa9bfa19d8add6edc1d752022b250e99d566bdffc4891"
+    },
+    {
+      "path": "consumer-runtime-inventory.json",
+      "bytes": 508933,
+      "sha256": "b7cdcb543462a0cc9b77a34dc1bc955510844cfbe4d56e867ca7e909bed7c975"
     },
     {
       "path": "files/maven/androidx.activity/activity-compose/1.13.0/activity-compose-1.13.0.aar/META-INF/androidx/activity/activity-compose/LICENSE.txt",
@@ -1271,6 +1281,11 @@
       "path": "poms/ff236a67cb8f0f8dc3fd2db50a0f06598d118a8cc9c9528081879ebfb97c3070.pom",
       "bytes": 3333,
       "sha256": "98e7f3766211dd47adcffdb4d446a15e95f67a0448c5294d45108ece221eb2d4"
+    },
+    {
+      "path": "producer-manifest.json",
+      "bytes": 56987,
+      "sha256": "89476592db530b111b041d5b5795cbe186b3913ee9f363207d8ba4633682012f"
     },
     {
       "path": "runtime-inventory.json",

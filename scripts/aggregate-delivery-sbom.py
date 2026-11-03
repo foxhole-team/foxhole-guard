@@ -527,7 +527,7 @@ def aggregate(bom, notices, apk, root):
         pinned_profile_required = False
         if source_pins_path.is_file() and not source_pins_path.is_symlink():
             pinned_source = FORK.read_json(source_pins_path.read_bytes())
-            pinned_profile_required = (pinned_source.get("androidDeliveryProfile") in ("android64", "android-armv7", "android3", "android4") or
+            pinned_profile_required = (pinned_source.get("androidDeliveryProfile") in ("android-arm64", "android64", "android-armv7", "android3", "android4") or
                 any(isinstance(row, dict) and isinstance(row.get("path"), str) and
                     row["path"].startswith(FORK.VENDOR_PATH + "/") for row in pinned_source.get("files", [])))
         profile, _ = DELIVERY.read_profile(root, required=pinned_profile_required or actual_abis in ({"arm64-v8a", "x86_64"}, {"armeabi-v7a"}))
@@ -545,7 +545,7 @@ def aggregate(bom, notices, apk, root):
         coverage_raw = None
         if profile == "android64":
             core, coverage_raw = android64_core_union(core, archive, notices, root, revision, fork_origin)
-        elif profile in ("android-armv7", "android3", "android4"):
+        elif profile in ("android-arm64", "android-armv7", "android3", "android4"):
             core, coverage_raw = selected_core_union(core, archive, notices, root, revision, fork_origin, profile)
         core_root_ref = validate_bom(core, "Core BOM")
         core_refs = {item["bom-ref"]: "foxcore:" + item["bom-ref"] for item in core["components"]}
@@ -566,7 +566,21 @@ def aggregate(bom, notices, apk, root):
             connect("foxcore:root", [core_refs[c["bom-ref"]] for c in core["components"]])
         sentinel_revision = verified_notice(archive, notices, "sentinel/REVISION.txt").decode("ascii").strip()
         retained_role_sha = None
-        if revision == "be0ff0ed269341b4c4ee6b1f6d9976344ecbd3f1":
+        if profile == "android-arm64":
+            spec = importlib.util.spec_from_file_location("retained_sentinel_arm64_delivery", root / "scripts/retained-sentinel-arm64.py")
+            retained_module = importlib.util.module_from_spec(spec); spec.loader.exec_module(retained_module)
+            core_native = archive.read("lib/arm64-v8a/libfoxhole_native.so")
+            retained = retained_module.validate(root, revision, lambda name: verified_notice(archive, notices, name),
+                current_core_native={"abi":"arm64-v8a", "bytes":len(core_native), "sha256":sha256(core_native)})
+            sentinel = retained["bom"]; retained_role_sha = retained["authoritySHA256"]
+            sentinel_native = archive.read("lib/arm64-v8a/libfoxhole_sentinel_yara.so")
+            original_native = retained["reference"]["nativeLibraries"]["sentinel"]["aarch64-linux-android"]
+            if len(sentinel_native) != original_native["bytes"] or sha256(sentinel_native) != original_native["sha256"]:
+                raise ValueError("Retained ARM64 Sentinel native differs from original qualified producer")
+            sentinel_bytes = retained_module.encoded(sentinel)
+            sentinel_path = "sentinel/retained-android4-original-arm64-preview"
+            sentinel_root_ref = validate_bom(sentinel, "Retained original Android4 Sentinel legal evidence")
+        elif revision == "be0ff0ed269341b4c4ee6b1f6d9976344ecbd3f1":
             if sentinel_revision != "ea4f180fc2bf5a5dd108bd304bb86e97fa14a625" or coverage_raw is None:
                 raise ValueError("Current be0 Guard requires the explicit original EA Sentinel evidence")
             spec = importlib.util.spec_from_file_location("retained_sentinel_apk_delivery", root / "scripts/retained-sentinel-role.py")
@@ -583,7 +597,7 @@ def aggregate(bom, notices, apk, root):
             selected_module = importlib.util.module_from_spec(spec); spec.loader.exec_module(selected_module)
             sentinel, _coverage_digest = selected_module.packaged_delivery(
                 lambda name: verified_notice(archive, notices, name), revision, profile)
-            if profile in ("android-armv7", "android3", "android4"):
+            if profile in ("android-arm64", "android-armv7", "android3", "android4"):
                 sentinel_coverage = FORK.read_json(verified_notice(archive, notices, "sentinel/ABI-COVERAGE.json"))
                 for target, abi in zip(DELIVERY.PROFILES[profile][1], DELIVERY.PROFILES[profile][0]):
                     row = sentinel_coverage["targets"][target]

@@ -101,6 +101,34 @@ class RouterControlCoordinatorTest {
         override fun api(identity: RouterTlsIdentity) = fixture.api(identity)
     }
 
+    @Test fun removingAnOfflineSavedRouterKeepsTheCurrentConnectionAndCredentials() = runTest {
+        val fixture = Fixture()
+        val store = MemoryRouterPairingStore()
+        val other = RouterPairing(RouterTlsIdentity(RouterEndpoint("192.168.2.1"), "e".repeat(64)),
+            "pair-" + "d".repeat(32), ByteArray(32) { 9 }, "Other phone", true)
+        var homeChanges = 0
+        store.save(pair); store.save(other); store.selectSaved(pair.id)
+        store.save(RouterControlPreferences(pair.id, enabled = true, countryCode = "NL", publicIpConfirmed = true))
+        val coordinator = RouterControlCoordinator(transport(fixture), store, store,
+            RouterHttpProvisioner(localAddress = { "192.168.1.101" }, io = StandardTestDispatcher(testScheduler)),
+            applyHomeAutomation = { homeChanges++ }, copyProfile = {})
+        try {
+            coordinator.preparePairedOpen(); coordinator.open()
+            assertEquals(RouterControlStage.CONNECTED, coordinator.state.value.stage)
+            val snapshot = coordinator.state.value.snapshot
+            fixture.actions.clear(); val changesBefore = homeChanges
+            coordinator.unpair(other.id)
+            assertEquals(listOf(pair.id), store.listSaved().routers.map { it.id })
+            assertEquals(pair.id, store.listSaved().selectedId)
+            assertEquals(snapshot, coordinator.state.value.snapshot)
+            assertEquals(RouterControlStage.CONNECTED, coordinator.state.value.stage)
+            assertEquals(changesBefore, homeChanges)
+            assertTrue(fixture.actions.isEmpty())
+            val retained = requireNotNull(store.readById(pair.id))
+            try { org.junit.Assert.assertArrayEquals(pair.credential, retained.credential) } finally { retained.clear() }
+        } finally { coordinator.close(); store.close(); other.clear() }
+    }
+
     @Test fun pairedOpenReadsCurrentSnapshotWithoutEnablingManagementOrWritingSettings() = runTest {
         val fixture = Fixture().also { it.selected = "server-000000000001" }
         val original = RouterControlPreferences(pair.id, enabled = false, countryCode = "DE", countryAuto = false)

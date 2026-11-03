@@ -14,6 +14,7 @@ import com.foxhole.core.model.isUdpTransport
 import com.foxhole.core.model.torScopeRunnable
 import com.foxhole.core.model.tunnelSelectedPackages
 import com.foxhole.core.runtime.torAllAppsCollidesWithVpnIncludeSplit
+import com.foxhole.core.runtime.RuntimePolicyUpdateException
 import com.foxhole.guard.R
 import com.foxhole.guard.core.sentinel.InstalledAppSecurityNotifier
 import com.foxhole.guard.core.settings.applyAppLaneEdits
@@ -450,9 +451,11 @@ private fun HomeViewModel.updateAppRoutingSettingAndPromptReconnect(
         if (activeRuntime) {
             markRuntimeReloadPending()
         }
+        var updateFailure: Throwable? = null
         val updated =
             runCatching { updateAction() }
                 .onFailure { error ->
+                    updateFailure = error
                     container.diagnosticsLogger.recordFailure(
                         "settings",
                         "app routing update failed error=${error.javaClass.simpleName}",
@@ -460,7 +463,12 @@ private fun HomeViewModel.updateAppRoutingSettingAndPromptReconnect(
                 }.isSuccess
         if (!updated) {
             clearRuntimeReloadPending()
-            snackbars.tryEmit(errorBanner(R.string.settings_secure_storage_failed))
+            val error = updateFailure
+            if (error is RuntimePolicyUpdateException) {
+                emitError(runtimeConnectionFailureMessage(error))
+            } else {
+                snackbars.tryEmit(errorBanner(R.string.settings_secure_storage_failed))
+            }
             return@launch
         }
         val updatedMode = container.settingsRepository.current().expert.perAppRoutingMode
@@ -526,25 +534,31 @@ internal fun HomeViewModel.updateRouteModeSettingAndPromptRestart(
     updateAction: suspend () -> Unit,
 ) {
     viewModelScope.launch {
-        val currentSettings = container.settingsRepository.current()
-        val targetProfileId = activeRuntimeProfileIdForReload()
-        val activeRuntime =
-            targetProfileId != null &&
-                targetProfileId != FoxholeVpnService.TOR_ONLY_PROFILE_ID &&
-                container.connectionController.snapshot.value.state in ACTIVE_CONNECTION_STATES
-        if (!activeRuntime) {
+        try {
+            val currentSettings = container.settingsRepository.current()
+            val targetProfileId = activeRuntimeProfileIdForReload()
+            val activeRuntime =
+                targetProfileId != null &&
+                    targetProfileId != FoxholeVpnService.TOR_ONLY_PROFILE_ID &&
+                    container.connectionController.snapshot.value.state in ACTIVE_CONNECTION_STATES
+            if (!activeRuntime) {
+                updateAction()
+                clearRouteModeRestartPrompt()
+                clearRuntimeReconnectRequired()
+                return@launch
+            }
+            val baseline =
+                routeModeRestartBaseline
+                    ?: (currentSettings.traffic.mode to currentSettings.expert.perAppRoutingMode).also { routeModeRestartBaseline = it }
             updateAction()
-            clearRouteModeRestartPrompt()
-            clearRuntimeReconnectRequired()
-            return@launch
+            markRuntimeReconnectRequired()
+            markProfileReconnectPromptWindow()
+            scheduleRouteModeRestartRevert(baseline)
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            throw cancelled
+        } catch (error: Exception) {
+            emitError(runtimeConnectionFailureMessage(error))
         }
-        val baseline =
-            routeModeRestartBaseline
-                ?: (currentSettings.traffic.mode to currentSettings.expert.perAppRoutingMode).also { routeModeRestartBaseline = it }
-        updateAction()
-        markRuntimeReconnectRequired()
-        markProfileReconnectPromptWindow()
-        scheduleRouteModeRestartRevert(baseline)
     }
 }
 

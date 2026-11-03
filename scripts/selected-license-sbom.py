@@ -71,6 +71,7 @@ def properties(rows):
 
 
 DELIVERY_TARGETS = {
+    "android-arm64": {"aarch64-linux-android": "arm64-v8a"},
     "android4": {"aarch64-linux-android": "arm64-v8a", "armv7-linux-androideabi": "armeabi-v7a",
                  "i686-linux-android": "x86", "x86_64-linux-android": "x86_64"},
     "legacy4": {"aarch64-linux-android": "arm64-v8a", "armv7-linux-androideabi": "armeabi-v7a",
@@ -485,7 +486,7 @@ def combined_evidence(targets, revision, profile="legacy4"):
                 "coverage": "complete", "scope": "Four distinct captured Cargo graphs and original notice union; not an all-targets BOM or whole APK/toolchain inventory"}
     if profile != "legacy4":
         coverage.update(androidDeliveryProfile=profile, abis=list(selected_targets.values()))
-        coverage["scope"] = ("Two distinct android64 captured Cargo graphs, exact producer/native source and original notice union" if profile == "android64" else ("Four distinct android4 captured Cargo graphs, exact per-ABI producer/native source and original notice union" if profile == "android4" else ("Three distinct android3 captured Cargo graphs, exact producer/native source and original notice union" if profile == "android3" else "One exact ARMv7 captured Cargo graph, producer/native source and original notice union")))
+        coverage["scope"] = ("Two distinct android64 captured Cargo graphs, exact producer/native source and original notice union" if profile == "android64" else ("Four distinct android4 captured Cargo graphs, exact per-ABI producer/native source and original notice union" if profile == "android4" else ("Three distinct android3 captured Cargo graphs, exact producer/native source and original notice union" if profile == "android3" else ("One exact ARM64 preview captured Cargo graph, producer/native source and original notice union" if profile == "android-arm64" else "One exact ARMv7 captured Cargo graph, producer/native source and original notice union"))))
     return {"targets": {target: item["data"] for target, item in targets.items()},
             "notices": [("MANIFEST.json", notice_manifest_bytes)] + sorted(notice_bytes.items()),
             "coverage": encoded(coverage)}

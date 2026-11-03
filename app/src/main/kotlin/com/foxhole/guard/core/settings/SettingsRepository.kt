@@ -41,6 +41,8 @@ class SettingsRepository(
     }
     internal val storage = SettingsRepositoryStorage(appContext)
     private val lock = Mutex()
+    private val runtimeCommitLock = Mutex()
+    internal var prepareRuntimeCommit: (suspend (Settings, Settings) -> SettingsRuntimeCommit?)? = null
     internal val profileMutationCoordinator = ProfileMutationCoordinator()
     private val settingsMutable: MutableStateFlow<Settings>
     private val hydratedMutable = MutableStateFlow(false)
@@ -287,20 +289,25 @@ class SettingsRepository(
     internal suspend fun updateVerified(
         transform: (Settings) -> Settings,
         verifyPersisted: (Settings) -> Unit,
-    ) {
+    ): Unit = runtimeCommitLock.withLock {
         ensureInitialized()
         var changedQuarantineRevision: Long? = null
-        lock.withLock {
+        val (current, next) = lock.withLock {
             val current = settingsMutable.value
             val transformed = transform(current).normalized()
             val next = withAdvancedQuarantinePolicyRevision(current, transformed)
             if (next.expert.quarantinePolicyRevision != current.expert.quarantinePolicyRevision) {
                 changedQuarantineRevision = next.expert.quarantinePolicyRevision
             }
-            if (next == current) {
-                withContext(Dispatchers.IO) { verifyPersisted(next) }
-                return@withLock
-            }
+            current to next
+        }
+        if (next == current) {
+            withContext(Dispatchers.IO) { verifyPersisted(next) }
+            return@withLock
+        }
+        val runtimeCommit = prepareRuntimeCommit?.invoke(current, next)
+        lock.withLock {
+            check(settingsMutable.value === current) { "settings changed during runtime admission" }
             withContext(Dispatchers.IO) {
                 storage.writeEncrypted(next)
                 verifyPersisted(next)
@@ -310,10 +317,12 @@ class SettingsRepository(
             storage.writeFastUiSnapshot(next.ui)
             storage.writeFastAppLockUi(next.appLock)
         }
+        runtimeCommit?.committed()
         changedQuarantineRevision?.let { revision ->
 
             runCatching { onQuarantinePolicyRevisionChanged(revision) }
         }
+        Unit
     }
 
     /** Captures one fail-closed baseline for native new-app quarantine. */

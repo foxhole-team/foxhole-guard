@@ -1,0 +1,4 @@
+- FoxHole Core actualizado a la versión 1.0.3 con correcciones de la caché DNS.
+- Corregida la aplicación atómica de las reglas y los escenarios de enrutamiento.
+- Se han mejorado la documentación y la sección de ayuda; se han actualizado las indicaciones para gestionar el router.
+- Se añadieron notificaciones del sistema sobre nuevas versiones de la aplicación (solo la versión de GitHub).

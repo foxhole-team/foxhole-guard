@@ -7,6 +7,8 @@ import androidx.activity.compose.ManagedActivityResultLauncher
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -518,6 +520,7 @@ private fun CliQrExportOverlay(
                 background = cliModalSurfaceColor(LocalCliPanelAppearance.current, Color.Unspecified),
                 modifier = Modifier.fillMaxWidth(),
             ) {
+                Column(Modifier.weight(1f, fill = false).fillMaxWidth().verticalScroll(rememberScrollState())) {
                 Text(
                     text = export.name,
                     style = CliType.body,
@@ -548,6 +551,7 @@ private fun CliQrExportOverlay(
                             CliSpinner()
                             Text(text = " …", style = CliType.small, color = colors.dim)
                         }
+                }
                 }
                 Spacer(modifier = Modifier.height(CliSpacing.sm))
                 CliModalCloseButton(

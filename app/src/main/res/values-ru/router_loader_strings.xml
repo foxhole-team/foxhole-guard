@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="router_loader_discovering">Обнаружение роутера в локальной сети</string>
+    <string name="router_loader_data">Загрузка данных</string>
+    <string name="router_loader_paired_version">Последняя известная версия: %1$s</string>
+    <string name="router_loader_version_unknown">Версия связанного роутера пока неизвестна.</string>
+</resources>

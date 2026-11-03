@@ -1,5 +1,4 @@
-1.0.2 Stable
-• Fixed router discovery, pairing and OpenWrt inspection over SSH, and added SSH key support.
-• Fixed errors when updating the app from GitHub.
-• Added a 15-second notification dismissal timer and upward swipe dismissal.
-• Updated help and hints.
+- Updated FoxHole Core to 1.0.3 with DNS caching fixes.
+- Fixed atomic application of routing rules and scenarios.
+- Improved documentation and the help section; updated router management tips.
+- Added system notifications for new app versions (GitHub version only).

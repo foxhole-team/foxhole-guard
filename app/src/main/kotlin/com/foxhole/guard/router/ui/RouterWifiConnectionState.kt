@@ -58,7 +58,18 @@ internal fun rememberRouterNetworkGeneration(): State<Long> {
         val manager = requireNotNull(context.getSystemService(ConnectivityManager::class.java))
         val request = NetworkRequest.Builder().removeCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN)
             .removeCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET).build()
-        routerNetworkEvents(manager, request).collect { value++ }
+        var previous: String? = null
+        routerNetworkEvents(manager, request).collect {
+            val stamp = manager.allNetworks.mapNotNull { network ->
+                val caps = manager.getNetworkCapabilities(network) ?: return@mapNotNull null
+                if (!caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) && !caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)) return@mapNotNull null
+                val links = manager.getLinkProperties(network)
+                "$network:${caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)}:${links?.interfaceName}:" +
+                    links?.linkAddresses.orEmpty().map { it.toString() }.sorted().joinToString() + ":" +
+                    links?.routes.orEmpty().map { it.toString() }.sorted().joinToString()
+            }.sorted().joinToString("|")
+            if (stamp != previous) { previous = stamp; value++ }
+        }
     }
 }
 

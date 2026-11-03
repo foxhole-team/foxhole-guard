@@ -71,16 +71,11 @@ internal fun CliUpdateNoticeSheetContent(
 }
 
 @Suppress("UNUSED_PARAMETER")
-internal fun releaseNoteKeys(apiLevel: Int): List<Int> = listOf(
-    R.string.cli_release_notes_router_pairing_version,
-    R.string.cli_release_notes_db_auto,
-    R.string.cli_release_notes_router_setup,
-    R.string.cli_release_notes_app_updates,
-    R.string.cli_release_notes_notices,
+internal fun releaseNoteKeys(apiLevel: Int, channel: String = com.foxhole.guard.BuildConfig.UPDATE_CHANNEL): List<Int> = listOf(
+    R.string.cli_release_notes_core_104,
+    R.string.cli_release_notes_atomic_104,
     R.string.cli_release_notes_help,
-    R.string.cli_release_notes_router_management,
-    R.string.cli_release_notes_pin6,
-)
+) + if (channel == "github") listOf(R.string.app_update_available_release_note) else emptyList()
 
 internal fun updateNoticeItems(body: String): List<CliQuickStartItem> =
     body.lineSequence()
@@ -94,9 +89,4 @@ internal fun updateNoticeItems(body: String): List<CliQuickStartItem> =
         }
         .toList()
 
-private val UPDATE_NOTICE_ICONS = listOf(
-    R.drawable.lin_router,
-    R.drawable.lin_update,
-    R.drawable.lin_info,
-    R.drawable.lin_help,
-)
+private val UPDATE_NOTICE_ICONS = listOf(R.drawable.lin_update, R.drawable.lin_apps, R.drawable.lin_help, R.drawable.lin_update)

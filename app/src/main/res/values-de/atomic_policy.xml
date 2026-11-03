@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="guard_atomic_update_unsupported">Diese Änderung kann in der aktuellen Verbindung nicht abgesichert werden. Stoppen Sie zuerst das VPN oder deaktivieren Sie ausdrücklich das atomare Umschalten und versuchen Sie es erneut. Ihre Einstellungen wurden nicht geändert.</string>
+    <string name="guard_atomic_update_failed">Die Routingänderung konnte nicht sicher abgeschlossen werden. Stoppen Sie das VPN, bevor Sie es erneut versuchen.</string>
+</resources>

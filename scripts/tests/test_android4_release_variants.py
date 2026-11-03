@@ -140,11 +140,11 @@ class FourAbiBuilderFixtureTest(unittest.TestCase):
         (self.root / "config/foxcore-source-manifest.json").write_text(json.dumps({**source, **shape}))
         (self.root / "config/foxcore-android-delivery.json").write_text(json.dumps({"schema": 1, **shape}))
         snapshot = self.root / "third_party/licenses/source-legal/android4/snapshot.json"
-        snapshot.parent.mkdir(parents=True)
+        snapshot.parent.mkdir(parents=True, exist_ok=True)
         snapshot.write_text(json.dumps({"coreCommit": source["commit"], **shape,
                                        "compiledInputs": {row["path"]: row["sha256"] for row in source["files"]}}))
         self.git(self.root, "add", ".")
-        self.git(self.root, "-c", "user.name=Fixture", "-c", "user.email=fixture@invalid", "-c", "commit.gpgsign=false", "commit", "-qm", "four-ABI fixture")
+        self.git(self.root, "-c", "user.name=Fixture", "-c", "user.email=fixture@invalid", "-c", "commit.gpgsign=false", "commit", "--allow-empty", "-qm", "four-ABI fixture")
 
     def git(self, root, *args):
         return subprocess.run(["git", *args], cwd=root, check=True, capture_output=True, text=True).stdout

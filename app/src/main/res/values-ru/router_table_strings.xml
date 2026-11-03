@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="router_table_router">Роутер</string>
+    <string name="router_table_version">Версия FoxHole</string>
+    <string name="router_table_actions">Действия</string>
+    <string name="router_table_rename">Изменить имя роутера</string>
+    <string name="router_table_name">Имя роутера</string>
+    <string name="router_table_cancel">Отмена</string>
+    <string name="router_table_save">Сохранить</string>
+    <string name="router_table_default_name">Роутер-%1$d</string>
+</resources>

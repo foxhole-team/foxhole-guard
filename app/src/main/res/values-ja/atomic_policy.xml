@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="guard_atomic_update_unsupported">現在の接続では、この変更を安全に適用できません。先に VPN を停止するか、アトミック適用を明示的にオフにしてから再試行してください。設定は変更されていません。</string>
+    <string name="guard_atomic_update_failed">ルーティングの変更を安全に完了できませんでした。VPN を停止してから、もう一度お試しください。</string>
+</resources>

@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 PROFILES = {
+    "android-arm64": (["arm64-v8a"], ["aarch64-linux-android"]),
     "android4": (["arm64-v8a", "armeabi-v7a", "x86", "x86_64"],
                  ["aarch64-linux-android", "armv7-linux-androideabi", "i686-linux-android", "x86_64-linux-android"]),
     "legacy4": (["arm64-v8a", "armeabi-v7a", "x86", "x86_64"],
@@ -50,7 +51,7 @@ def generator_profile(args, root):
     supplied = abis.replace(",", " ").split() if isinstance(abis, str) else None
     require(supplied is None or len(supplied) == len(set(supplied)), "Duplicate selected Android ABI")
     exact64 = supplied is not None and set(supplied) == set(PROFILES["android64"][0])
-    profile, _ = read_profile(root, required=requested in ("android64", "android-armv7", "android3", "android4") or exact64 or supplied == ["armeabi-v7a"] or supplied == PROFILES["android3"][0])
+    profile, _ = read_profile(root, required=requested in ("android-arm64", "android64", "android-armv7", "android3", "android4") or exact64 or supplied == ["armeabi-v7a"] or supplied == PROFILES["android3"][0])
     if requested is not None:
         require(requested == profile, "CLI Android profile differs from trusted app configuration")
     if profile != "legacy4":

@@ -105,6 +105,7 @@ internal fun CliSettingsScreen(
     modifier: Modifier = Modifier,
     openRouterRequested: Boolean = false,
     onRouterRequestConsumed: () -> Unit = {},
+    onRouterClosed: () -> Unit = {},
 ) {
     val state by viewModel.settingsRouteState.collectAsStateWithLifecycle()
     var subScreen by rememberSaveable { mutableStateOf<String?>(null) }
@@ -146,7 +147,10 @@ internal fun CliSettingsScreen(
         }
     }
 
-    BackHandler(enabled = subScreen != null) { subScreen = null }
+    val closeSubScreen: () -> Unit = {
+        if (subScreen == SUB_ROUTER) onRouterClosed() else subScreen = null
+    }
+    BackHandler(enabled = subScreen != null, onBack = closeSubScreen)
     CompositionLocalProvider(
         LocalCliIconMetricOverrides provides iconMetrics,
         LocalCliType provides settingsTypography,
@@ -162,7 +166,7 @@ internal fun CliSettingsScreen(
                 CliCfgSubScreen(
                     key = sub,
                     viewModel = viewModel,
-                    onBack = { subScreen = null },
+                    onBack = closeSubScreen,
                     modifier = Modifier
                         .statusBarsPadding()
                         .offset(y = -CliTopBarLift)
@@ -639,6 +643,8 @@ private fun CliLanguageRow(
     viewModel: HomeViewModel,
     settings: Settings,
 ) {
+    val locales = androidx.compose.ui.platform.LocalConfiguration.current.locales
+    val effectiveLanguageTag = if (locales.isEmpty) "" else locales[0].toLanguageTag()
     val systemLocaleLabel = stringResource(R.string.cli_cfg_locale_system)
     val russianLocaleLabel = stringResource(R.string.cli_cfg_locale_ru)
     val englishLocaleLabel = stringResource(R.string.cli_cfg_locale_en)
@@ -661,7 +667,7 @@ private fun CliLanguageRow(
                     locale, systemLocaleLabel, russianLocaleLabel, englishLocaleLabel,
                     japaneseLocaleLabel, germanLocaleLabel, frenchLocaleLabel, spanishLocaleLabel, chineseLocaleLabel,
                 ),
-                flagCountry = localeFlagCountry(locale),
+                flagCountry = displayedLocaleFlagCountry(locale, effectiveLanguageTag),
             )
         },
         selectedId = settings.ui.locale.name,
@@ -931,17 +937,6 @@ private fun CliAccentColorRow(viewModel: HomeViewModel, settings: Settings) {
         onSelect = { id -> viewModel.onAccentColorSelected(AccentColor.valueOf(id)) },
         showSelectedOptionIcon = true,
     )
-}
-
-private fun localeFlagCountry(locale: AppLocale): String? = when (locale) {
-    AppLocale.SYSTEM -> null
-    AppLocale.RU -> "ru"
-    AppLocale.EN -> "gb"
-    AppLocale.JA -> "jp"
-    AppLocale.DE -> "de"
-    AppLocale.FR -> "fr"
-    AppLocale.ES -> "es"
-    AppLocale.ZH -> "cn"
 }
 
 private val expertOnlySettingsScreens = setOf(SUB_DNS_BYPASS)

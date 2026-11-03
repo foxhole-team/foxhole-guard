@@ -48,6 +48,7 @@ import com.foxhole.guard.flags.countryFlagBitmap
 import com.foxhole.guard.flags.countryFlagCode
 import com.foxhole.guard.ui.cli.CliLightColors
 import com.foxhole.guard.ui.cli.CliMainActivity
+import com.foxhole.guard.ui.cli.CliDataBlue
 import java.util.Locale
 
 class StatusWidget : GlanceAppWidget() {
@@ -194,6 +195,14 @@ private fun StatusWidgetSimpleContent(
     val contentWidth = statusWidgetSimpleContentWidth(size.width)
     val availableWidth = contentWidth - metrics.horizontalPadding * 2
     val actionWidth = statusWidgetSimpleActionWidth(availableWidth)
+    val scenarioFontSize = (metrics.locationFontSize - 2).coerceAtLeast(9)
+    val scenario = presentation.scenario
+    val scenarioVisible = scenario?.vpn != null || scenario?.tor != null
+    val textHeight = measureStyledWidgetTextHeight(context, metrics.statusFontSize) + 1.dp +
+        measureStyledWidgetTextHeight(context, metrics.locationFontSize).coerceAtLeast(metrics.deviceIconSize) +
+        (if (scenarioVisible) 1.dp + measureStyledWidgetTextHeight(context, scenarioFontSize) else 0.dp)
+    val logoSize = metrics.circleSize.coerceAtLeast(textHeight)
+    val logoTouchSize = STATUS_WIDGET_SIMPLE_TOUCH_SIZE.coerceAtLeast(logoSize)
     WidgetFrame(background = background, outlined = outlined) {
         Box(modifier = GlanceModifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
             Column(
@@ -201,14 +210,14 @@ private fun StatusWidgetSimpleContent(
                     .width(contentWidth)
                     .padding(horizontal = metrics.horizontalPadding, vertical = 4.dp)
                     .cornerRadius(WIDGET_SURFACE_CORNER_RADIUS),
-                horizontalAlignment = Alignment.CenterHorizontally,
+                horizontalAlignment = Alignment.Start,
             ) {
                 Row(
                     modifier = GlanceModifier.fillMaxWidth(),
-                    horizontalAlignment = Alignment.CenterHorizontally,
+                    horizontalAlignment = Alignment.Start,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    StatusWidgetSimpleLogo(context = context, metrics = metrics)
+                    StatusWidgetSimpleLogo(context = context, logoSize = logoSize, touchSize = logoTouchSize)
                     Spacer(modifier = GlanceModifier.width(8.dp))
                     StatusWidgetSimpleStatusBlock(
                         context = context,
@@ -218,7 +227,9 @@ private fun StatusWidgetSimpleContent(
                         deviceTone = presentation.simpleDeviceTone(),
                         background = background,
                         metrics = metrics,
-                        availableWidth = (availableWidth - STATUS_WIDGET_SIMPLE_TOUCH_SIZE - 8.dp).coerceAtLeast(0.dp),
+                        scenario = scenario,
+                        scenarioFontSize = scenarioFontSize,
+                        availableWidth = (availableWidth - logoTouchSize - 8.dp).coerceAtLeast(0.dp),
                         modifier = GlanceModifier,
                     )
                 }
@@ -241,25 +252,27 @@ private fun StatusWidgetSimpleContent(
     }
 }
 
-internal fun statusWidgetSimpleContentWidth(width: Dp): Dp = width.coerceAtMost(STATUS_WIDGET_SIMPLE_WIDE_WIDTH)
+internal fun statusWidgetSimpleContentWidth(width: Dp): Dp = width.coerceIn(0.dp, 300.dp)
 
-internal fun statusWidgetSimpleActionWidth(available: Dp): Dp = available.coerceAtLeast(0.dp)
+internal fun statusWidgetSimpleActionWidth(available: Dp, requested: Dp = available): Dp =
+    requested.coerceAtLeast(48.dp).coerceAtMost(available.coerceAtLeast(0.dp))
 
 @Composable
 private fun StatusWidgetSimpleLogo(
     context: Context,
-    metrics: StatusWidgetSimpleMetrics,
+    logoSize: Dp,
+    touchSize: Dp,
 ) {
     Box(
         modifier = GlanceModifier
-            .size(STATUS_WIDGET_SIMPLE_TOUCH_SIZE)
+            .size(touchSize)
             .clickable(actionStartActivity<CliMainActivity>()),
-        contentAlignment = Alignment.Center,
+        contentAlignment = Alignment.CenterStart,
     ) {
         Image(
             provider = ImageProvider(R.drawable.ic_launcher_openwrt),
             contentDescription = context.getString(R.string.widget_status_open_app),
-            modifier = GlanceModifier.size(metrics.circleSize),
+            modifier = GlanceModifier.size(logoSize),
         )
     }
 }
@@ -273,6 +286,8 @@ private fun StatusWidgetSimpleStatusBlock(
     deviceTone: StatusWidgetSimpleDeviceTone,
     background: WidgetBackground,
     metrics: StatusWidgetSimpleMetrics,
+    scenario: StatusWidgetScenario?,
+    scenarioFontSize: Int,
     availableWidth: Dp,
     modifier: GlanceModifier,
 ) {
@@ -291,6 +306,10 @@ private fun StatusWidgetSimpleStatusBlock(
                 fontSize = metrics.statusFontSize,
                 maxWidth = availableWidth,
             )
+            if (scenario?.vpn != null || scenario?.tor != null) {
+                Spacer(modifier = GlanceModifier.height(1.dp))
+                StatusWidgetSimpleScenarioRow(context, scenario, background, scenarioFontSize, availableWidth)
+            }
             Spacer(modifier = GlanceModifier.height(1.dp))
             StatusWidgetSimpleIdentityRow(
                 context = context,
@@ -299,6 +318,51 @@ private fun StatusWidgetSimpleStatusBlock(
                 background = background,
                 metrics = metrics,
                 maxWidth = availableWidth,
+            )
+        }
+    }
+}
+
+@Composable
+private fun StatusWidgetSimpleScenarioRow(
+    context: Context,
+    scenario: StatusWidgetScenario?,
+    background: WidgetBackground,
+    fontSize: Int,
+    maxWidth: Dp,
+) {
+    val vpn = scenario?.vpn
+    val tor = scenario?.tor
+    val scopes = if (vpn != null && tor != null && vpn != tor) {
+        listOf(context.getString(R.string.cli_st_vpn) to vpn, context.getString(R.string.cli_st_tor) to tor)
+    } else {
+        listOfNotNull((vpn ?: tor)?.let { context.getString(R.string.widget_status_scenario) to it })
+    }
+    val gap = 4.dp
+    val width = ((maxWidth - gap * (scopes.size - 1).coerceAtLeast(0)) / scopes.size.coerceAtLeast(1))
+        .coerceAtLeast(0.dp)
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        scopes.forEachIndexed { index, (label, scope) ->
+            if (index > 0) Spacer(modifier = GlanceModifier.width(gap))
+            val value = context.getString(
+                when (scope) {
+                    StatusWidgetScope.WHOLE_DEVICE -> R.string.widget_scenario_whole_device
+                    StatusWidgetScope.SELECTED_APPS -> R.string.widget_scenario_selected_apps
+                    StatusWidgetScope.EXCEPT_SELECTED -> R.string.cli_home_status_scenario_proxy_except
+                    StatusWidgetScope.PROXY_SERVER -> R.string.cli_home_status_scenario_proxy_server
+                },
+            )
+            val light = background.text == Color.Black
+            StyledWidgetText(
+                context = context,
+                text = "$label: $value",
+                color = if (scope == StatusWidgetScope.WHOLE_DEVICE) {
+                    if (light) CliLightColors.ok else WIDGET_OK
+                } else {
+                    if (light) CliLightColors.data else CliDataBlue
+                },
+                fontSize = fontSize,
+                maxWidth = width,
             )
         }
     }
@@ -514,9 +578,10 @@ private fun StatusWidgetSimplePowerButton(
     } else {
         connection.text(context)
     }
+    val buttonWidth = statusWidgetSimpleActionWidth(width)
     Box(
         modifier = GlanceModifier
-            .width(width)
+            .width(buttonWidth)
             .height(STATUS_WIDGET_SIMPLE_TOUCH_SIZE)
             .cornerRadius(STATUS_WIDGET_SIMPLE_ACTION_RADIUS)
             .let { base ->
@@ -553,7 +618,7 @@ private fun StatusWidgetSimplePowerButton(
                 color = color,
                 fontSize = 12,
                 uppercase = true,
-                maxWidth = 128.dp,
+                maxWidth = (buttonWidth - metrics.powerSize - 8.dp - 24.dp).coerceAtLeast(0.dp),
             )
         }
     }
@@ -1104,7 +1169,7 @@ internal val STATUS_WIDGET_EXPANDED_HEIGHT = 162.dp
 private val STATUS_WIDGET_SIMPLE_WIDE_WIDTH = 240.dp
 private val STATUS_WIDGET_SIMPLE_TALL_HEIGHT = 180.dp
 private val STATUS_WIDGET_SIMPLE_TOUCH_SIZE = 48.dp
-private val STATUS_WIDGET_SIMPLE_ACTION_RADIUS = 24.dp
+private val STATUS_WIDGET_SIMPLE_ACTION_RADIUS = 0.dp
 private val STATUS_WIDGET_CONTROL_HEIGHT = 32.dp
 private val STATUS_WIDGET_FACT_LABEL_MAX_WIDTH = 88.dp
 private val STATUS_WIDGET_FACT_RESERVED_WIDTH = 150.dp

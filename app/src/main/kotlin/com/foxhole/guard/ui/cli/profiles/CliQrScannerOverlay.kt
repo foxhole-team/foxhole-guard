@@ -7,6 +7,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -95,6 +97,9 @@ internal fun CliQrScannerOverlay(
                 .padding(CliSpacing.lg),
             verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
         ) {
+            Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(text = "> ${CliCommands.SCAN_QR}", style = CliType.title, color = colors.fg)
             Text(text = title, style = CliType.small, color = colors.dim)
             Box(
@@ -151,6 +156,8 @@ internal fun CliQrScannerOverlay(
                     onConfirm = { onQrDetected(detected) },
                     onReject = { payload = null },
                 )
+            }
+                }
             }
             CliModalCloseButton(
                 onClick = onDismiss,

@@ -16,6 +16,30 @@ class RouterSavedVaultTest {
     private fun pair(number: Int) = RouterPairing(RouterTlsIdentity(RouterEndpoint("192.168.1.1"), number.toString(16).padStart(64, '0')),
         "pair-" + number.toString(16).padStart(32, '0'), ByteArray(32) { number.toByte() }, "Phone", true)
 
+    @Test fun renamingOneRouterKeepsSelectionPoliciesAndAllCredentials() = runTest {
+        val store = MemoryRouterPairingStore()
+        val pairs = (1..3).map(::pair)
+        try {
+            pairs.forEach { store.save(it) }
+            store.selectSaved(pairs[1].id)
+            store.save(RouterControlPreferences(pairs[1].id, enabled = true, countryCode = "NL"))
+            store.renameSaved(pairs[0].id, "  Living room  ")
+            assertEquals(pairs[1].id, store.listSaved().selectedId)
+            assertEquals("Living room", store.listSaved().routers.first().label)
+            assertTrue(store.read(pairs[1].id).enabled)
+            pairs.forEach { expected ->
+                val actual = requireNotNull(store.readById(expected.id))
+                try { assertArrayEquals(expected.credential, actual.credential) } finally { actual.clear() }
+            }
+            for (invalid in listOf(" ", "x".repeat(65), "Room\nTwo")) {
+                val before = store.listSaved()
+                try { store.renameSaved(pairs[0].id, invalid); fail("invalid label accepted") }
+                catch (_: IllegalArgumentException) { }
+                assertEquals(before, store.listSaved())
+            }
+        } finally { store.close(); pairs.forEach(RouterPairing::clear) }
+    }
+
     @Test fun legacySingleRecordMigratesWithoutChangingIdentityCredentialsOrRemotePhoneName() {
         val old = pair(1)
         val migrated = RouterSavedVaultCodec.decode(Json.encodeToString(old))
@@ -95,7 +119,9 @@ class RouterSavedVaultTest {
             val retained = requireNotNull(decoded)
             assertEquals(11, retained.inventory().routers.size)
             assertEquals(pairs[10].id, retained.selectedId)
-            val known = pairs[10].copy(name = "Retained phone")
+            val source = pairs[10]
+            val known = RouterPairing(source.identity, source.id, source.credential.copyOf(), "Retained phone",
+                source.active, source.pendingServerId, source.pendingSyncSha256)
             try { updated = retained.withPairing(known) } finally { known.clear() }
             val current = requireNotNull(updated)
             assertEquals(11, current.routers.single { it.pairing.id == pairs[10].id }.number)

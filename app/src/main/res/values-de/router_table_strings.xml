@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="router_table_router">Router</string>
+    <string name="router_table_version">FoxHole-Version</string>
+    <string name="router_table_actions">Aktionen</string>
+    <string name="router_table_rename">Router umbenennen</string>
+    <string name="router_table_name">Routername</string>
+    <string name="router_table_cancel">Abbrechen</string>
+    <string name="router_table_save">Speichern</string>
+    <string name="router_table_default_name">Router-%1$d</string>
+</resources>

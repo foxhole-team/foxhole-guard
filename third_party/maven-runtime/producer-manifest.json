@@ -1,0 +1,1281 @@
+{
+  "schema": 1,
+  "scope": "actual-guard-release-runtime-notices",
+  "files": [
+    {
+      "path": "PORTABLE-PROVENANCE.json",
+      "bytes": 2937,
+      "sha256": "9fb79f7b841b8702f351738e4ef57b19eb6e7fe1978be328723d44623725f8f5"
+    },
+    {
+      "path": "actual-material-receipt.json",
+      "bytes": 675,
+      "sha256": "2de44f17238542faee4aa9bfa19d8add6edc1d752022b250e99d566bdffc4891"
+    },
+    {
+      "path": "files/maven/androidx.activity/activity-compose/1.13.0/activity-compose-1.13.0.aar/META-INF/androidx/activity/activity-compose/LICENSE.txt",
+      "bytes": 10175,
+      "sha256": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
+    },
+    {
+      "path": "files/maven/androidx.activity/activity-ktx/1.13.0/activity-ktx-1.13.0.aar/META-INF/androidx/activity/activity-ktx/LICENSE.txt",
+      "bytes": 10175,
+      "sha256": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
+    },
+    {
+      "path": "files/maven/androidx.activity/activity/1.13.0/activity-1.13.0.aar/META-INF/androidx/activity/activity/LICENSE.txt",
+      "bytes": 10175,
+      "sha256": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
+    },
+    {
+      "path": "files/maven/androidx.annotation/annotation-experimental/1.5.0/annotation-experimental-1.5.0.aar/META-INF/androidx/annotation/annotation-experimental/LICENSE.txt",
+      "bytes": 10175,
+      "sha256": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
+    },
+    {
+      "path": "files/maven/androidx.annotation/annotation-jvm/1.10.0/annotation-jvm-1.10.0.jar/META-INF/androidx/annotation/annotation/LICENSE.txt",
+      "bytes": 10175,
+      "sha256": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
+    },
+    {
+      "path": "files/maven/androidx.collection/collection-jvm/1.5.0/collection-jvm-1.5.0.jar/META-INF/androidx/collection/collection/LICENSE.txt",
+      "bytes": 10175,
+      "sha256": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
+    },
+    {
+      "path": "files/maven/androidx.collection/collection-ktx/1.5.0/collection-ktx-1.5.0.jar/META-INF/androidx/collection/collection-ktx/LICENSE.txt",
+      "bytes": 10175,
+      "sha256": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
+    },
+    {
+      "path": "files/maven/androidx.compose.animation/animation-android/1.11.4/animation.aar/META-INF/androidx/compose/animation/animation/LICENSE.txt",
+      "bytes": 10175,
+      "sha256": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
+    },
+    {
+      "path": "files/maven/androidx.compose.animation/animation-core-android/1.11.4/animation-core.aar/META-INF/androidx/compose/animation/animation-core/LICENSE.txt",
+      "bytes": 10175,
+      "sha256": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
+    },
+    {
+      "path": "files/maven/androidx.compose.foundation/foundation-android/1.11.4/foundation.aar/META-INF/androidx/compose/foundation/foundation/LICENSE.txt",
+      "bytes": 10175,
+      "sha256": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
+    },
+    {
+      "path": "files/maven/androidx.compose.foundation/foundation-layout-android/1.11.4/foundation-layout.aar/META-INF/androidx/compose/foundation/foundation-layout/LICENSE.txt",
+      "bytes": 10175,
+      "sha256": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
+    },
+    {
+      "path": "files/maven/androidx.compose.material/material-ripple-android/1.11.4/material-ripple.aar/META-INF/androidx/compose/material/material-ripple/LICENSE.txt",
+      "bytes": 10175,
+      "sha256": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
+    },
+    {
+      "path": "files/maven/androidx.compose.material3/material3-android/1.4.0/material3.aar/META-INF/androidx/compose/material3/material3/LICENSE.txt",
+      "bytes": 10175,
+      "sha256": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
+    },
+    {
+      "path": "files/maven/androidx.compose.runtime/runtime-android/1.11.4/runtime.aar/META-INF/androidx/compose/runtime/runtime/LICENSE.txt",
+      "bytes": 10175,
+      "sha256": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
+    },
+    {
+      "path": "files/maven/androidx.compose.runtime/runtime-annotation-android/1.11.4/runtime-annotation.aar/META-INF/androidx/compose/runtime/runtime-annotation/LICENSE.txt",
+      "bytes": 10175,
+      "sha256": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
+    },
+    {
+      "path": "files/maven/androidx.compose.runtime/runtime-retain-android/1.11.4/runtime-retain.aar/META-INF/androidx/compose/runtime/runtime-retain/LICENSE.txt",
+      "bytes": 10175,
+      "sha256": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
+    },
+    {
+      "path": "files/maven/androidx.compose.runtime/runtime-saveable-android/1.11.4/runtime-saveable.aar/META-INF/androidx/compose/runtime/runtime-saveable/LICENSE.txt",
+      "bytes": 10175,
+      "sha256": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
+    },
+    {
+      "path": "files/maven/androidx.compose.ui/ui-android/1.11.4/ui.aar/META-INF/androidx/compose/ui/ui/LICENSE.txt",
+      "bytes": 10175,
+      "sha256": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
+    },
+    {
+      "path": "files/maven/androidx.compose.ui/ui-geometry-android/1.11.4/ui-geometry.aar/META-INF/androidx/compose/ui/ui-geometry/LICENSE.txt",
+      "bytes": 10175,
+      "sha256": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
+    },
+    {
+      "path": "files/maven/androidx.compose.ui/ui-graphics-android/1.11.4/ui-graphics.aar/META-INF/androidx/compose/ui/ui-graphics/LICENSE.txt",
+      "bytes": 10175,
+      "sha256": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
+    },
+    {
+      "path": "files/maven/androidx.compose.ui/ui-text-android/1.11.4/ui-text.aar/META-INF/androidx/compose/ui/ui-text/LICENSE.txt",
+      "bytes": 10175,
+      "sha256": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
+    },
+    {
+      "path": "files/maven/androidx.compose.ui/ui-unit-android/1.11.4/ui-unit.aar/META-INF/androidx/compose/ui/ui-unit/LICENSE.txt",
+      "bytes": 10175,
+      "sha256": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
+    },
+    {
+      "path": "files/maven/androidx.compose.ui/ui-util-android/1.11.4/ui-util.aar/META-INF/androidx/compose/ui/ui-util/LICENSE.txt",
+      "bytes": 10175,
+      "sha256": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
+    },
+    {
+      "path": "files/maven/androidx.core/core-ktx/1.19.0/core-ktx-1.19.0.aar/META-INF/androidx/core/core-ktx/LICENSE.txt",
+      "bytes": 10175,
+      "sha256": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
+    },
+    {
+      "path": "files/maven/androidx.core/core-splashscreen/1.2.0/core-splashscreen-1.2.0.aar/META-INF/androidx/core/core-splashscreen/LICENSE.txt",
+      "bytes": 10175,
+      "sha256": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
+    },
+    {
+      "path": "files/maven/androidx.core/core-viewtree/1.0.0/core-viewtree-1.0.0.aar/META-INF/androidx/core/core-viewtree/LICENSE.txt",
+      "bytes": 10175,
+      "sha256": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
+    },
+    {
+      "path": "files/maven/androidx.core/core/1.19.0/core-1.19.0.aar/META-INF/androidx/core/core/LICENSE.txt",
+      "bytes": 10175,
+      "sha256": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
+    },
+    {
+      "path": "files/maven/androidx.datastore/datastore-android/1.2.1/datastore.aar/META-INF/androidx/datastore/datastore/LICENSE.txt",
+      "bytes": 10175,
+      "sha256": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
+    },
+    {
+      "path": "files/maven/androidx.datastore/datastore-core-android/1.2.1/datastore-core.aar/META-INF/androidx/datastore/datastore-core/LICENSE.txt",
+      "bytes": 10175,
+      "sha256": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
+    },
+    {
+      "path": "files/maven/androidx.datastore/datastore-core-okio-jvm/1.2.1/datastore-core-okio-jvm-1.2.1.jar/META-INF/androidx/datastore/datastore-core-okio/LICENSE.txt",
+      "bytes": 10175,
+      "sha256": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
+    },
+    {
+      "path": "files/maven/androidx.datastore/datastore-preferences-android/1.2.1/datastore-preferences.aar/META-INF/androidx/datastore/datastore-preferences/LICENSE.txt",
+      "bytes": 10175,
+      "sha256": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
+    },
+    {
+      "path": "files/maven/androidx.datastore/datastore-preferences-core-android/1.2.1/datastore-preferences-core.aar/META-INF/androidx/datastore/datastore-preferences-core/LICENSE.txt",
+      "bytes": 10175,
+      "sha256": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
+    },
+    {
+      "path": "files/maven/androidx.datastore/datastore-preferences-external-protobuf/1.2.1/datastore-preferences-external-protobuf-1.2.1.jar/META-INF/androidx/datastore/datastore-preferences-external-protobuf/LICENSE.txt",
+      "bytes": 1434,
+      "sha256": "a01b712fbb30f80b86851468b6fa58e80eab68f69f325e88bbc7ddf47cf1b063"
+    },
+    {
+      "path": "files/maven/androidx.datastore/datastore-preferences-proto/1.2.1/datastore-preferences-proto-1.2.1.jar/META-INF/androidx/datastore/datastore-preferences-proto/LICENSE.txt",
+      "bytes": 10175,
+      "sha256": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
+    },
+    {
+      "path": "files/maven/androidx.lifecycle/lifecycle-common-java8/2.11.0/lifecycle-common-java8-2.11.0.jar/META-INF/androidx/lifecycle/lifecycle-common-java8/LICENSE.txt",
+      "bytes": 10175,
+      "sha256": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
+    },
+    {
+      "path": "files/maven/androidx.lifecycle/lifecycle-common-jvm/2.11.0/lifecycle-common-jvm-2.11.0.jar/META-INF/androidx/lifecycle/lifecycle-common/LICENSE.txt",
+      "bytes": 10175,
+      "sha256": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
+    },
+    {
+      "path": "files/maven/androidx.lifecycle/lifecycle-livedata-core-ktx/2.11.0/lifecycle-livedata-core-ktx-2.11.0.aar/META-INF/androidx/lifecycle/lifecycle-livedata-core-ktx/LICENSE.txt",
+      "bytes": 10175,
+      "sha256": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
+    },
+    {
+      "path": "files/maven/androidx.lifecycle/lifecycle-livedata-core/2.11.0/lifecycle-livedata-core-2.11.0.aar/META-INF/androidx/lifecycle/lifecycle-livedata-core/LICENSE.txt",
+      "bytes": 10175,
+      "sha256": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
+    },
+    {
+      "path": "files/maven/androidx.lifecycle/lifecycle-livedata/2.11.0/lifecycle-livedata-2.11.0.aar/META-INF/androidx/lifecycle/lifecycle-livedata/LICENSE.txt",
+      "bytes": 10175,
+      "sha256": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
+    },
+    {
+      "path": "files/maven/androidx.lifecycle/lifecycle-process/2.11.0/lifecycle-process-2.11.0.aar/META-INF/androidx/lifecycle/lifecycle-process/LICENSE.txt",
+      "bytes": 10175,
+      "sha256": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
+    },
+    {
+      "path": "files/maven/androidx.lifecycle/lifecycle-runtime-android/2.11.0/lifecycle-runtime.aar/META-INF/androidx/lifecycle/lifecycle-runtime/LICENSE.txt",
+      "bytes": 10175,
+      "sha256": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
+    },
+    {
+      "path": "files/maven/androidx.lifecycle/lifecycle-runtime-compose-android/2.11.0/lifecycle-runtime-compose.aar/META-INF/androidx/lifecycle/lifecycle-runtime-compose/LICENSE.txt",
+      "bytes": 10175,
+      "sha256": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
+    },
+    {
+      "path": "files/maven/androidx.lifecycle/lifecycle-runtime-ktx-android/2.11.0/lifecycle-runtime-ktx.aar/META-INF/androidx/lifecycle/lifecycle-runtime-ktx/LICENSE.txt",
+      "bytes": 10175,
+      "sha256": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
+    },
+    {
+      "path": "files/maven/androidx.lifecycle/lifecycle-service/2.11.0/lifecycle-service-2.11.0.aar/META-INF/androidx/lifecycle/lifecycle-service/LICENSE.txt",
+      "bytes": 10175,
+      "sha256": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
+    },
+    {
+      "path": "files/maven/androidx.lifecycle/lifecycle-viewmodel-android/2.11.0/lifecycle-viewmodel.aar/META-INF/androidx/lifecycle/lifecycle-viewmodel/LICENSE.txt",
+      "bytes": 10175,
+      "sha256": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
+    },
+    {
+      "path": "files/maven/androidx.lifecycle/lifecycle-viewmodel-ktx/2.11.0/lifecycle-viewmodel-ktx-2.11.0.aar/META-INF/androidx/lifecycle/lifecycle-viewmodel-ktx/LICENSE.txt",
+      "bytes": 10175,
+      "sha256": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
+    },
+    {
+      "path": "files/maven/androidx.lifecycle/lifecycle-viewmodel-savedstate-android/2.11.0/lifecycle-viewmodel-savedstate.aar/META-INF/androidx/lifecycle/lifecycle-viewmodel-savedstate/LICENSE.txt",
+      "bytes": 10175,
+      "sha256": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
+    },
+    {
+      "path": "files/maven/androidx.lifecycle/lifecycle-viewmodel/2.11.0/lifecycle-viewmodel-2.11.0.aar/META-INF/androidx/lifecycle/lifecycle-viewmodel/LICENSE.txt",
+      "bytes": 10175,
+      "sha256": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
+    },
+    {
+      "path": "files/maven/androidx.navigationevent/navigationevent-android/1.0.0/navigationevent.aar/META-INF/androidx/navigationevent/navigationevent/LICENSE.txt",
+      "bytes": 10175,
+      "sha256": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
+    },
+    {
+      "path": "files/maven/androidx.navigationevent/navigationevent-compose-android/1.0.0/navigationevent-compose.aar/META-INF/androidx/navigationevent/navigationevent-compose/LICENSE.txt",
+      "bytes": 10175,
+      "sha256": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
+    },
+    {
+      "path": "files/maven/androidx.profileinstaller/profileinstaller/1.4.1/profileinstaller-1.4.1.aar/META-INF/androidx/profileinstaller/profileinstaller/LICENSE.txt",
+      "bytes": 10175,
+      "sha256": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
+    },
+    {
+      "path": "files/maven/androidx.room/room-common-jvm/2.8.4/room-common-jvm-2.8.4.jar/META-INF/androidx/room/room-common/LICENSE.txt",
+      "bytes": 10175,
+      "sha256": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
+    },
+    {
+      "path": "files/maven/androidx.room/room-ktx/2.8.4/room-ktx-2.8.4.aar/META-INF/androidx/room/room-ktx/LICENSE.txt",
+      "bytes": 10175,
+      "sha256": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
+    },
+    {
+      "path": "files/maven/androidx.room/room-runtime-android/2.8.4/room-runtime.aar/META-INF/androidx/room/room-runtime/LICENSE.txt",
+      "bytes": 10175,
+      "sha256": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
+    },
+    {
+      "path": "files/maven/androidx.savedstate/savedstate-android/1.4.0/savedstate.aar/META-INF/androidx/savedstate/savedstate/LICENSE.txt",
+      "bytes": 10175,
+      "sha256": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
+    },
+    {
+      "path": "files/maven/androidx.savedstate/savedstate-compose-android/1.4.0/savedstate-compose.aar/META-INF/androidx/savedstate/savedstate-compose/LICENSE.txt",
+      "bytes": 10175,
+      "sha256": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
+    },
+    {
+      "path": "files/maven/androidx.savedstate/savedstate-ktx/1.4.0/savedstate-ktx-1.4.0.aar/META-INF/androidx/savedstate/savedstate-ktx/LICENSE.txt",
+      "bytes": 10175,
+      "sha256": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
+    },
+    {
+      "path": "files/maven/androidx.security/security-crypto/1.1.0/security-crypto-1.1.0.aar/META-INF/androidx/security/security-crypto/LICENSE.txt",
+      "bytes": 10175,
+      "sha256": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
+    },
+    {
+      "path": "files/maven/androidx.sqlite/sqlite-android/2.7.0/sqlite.aar/META-INF/androidx/sqlite/sqlite/LICENSE.txt",
+      "bytes": 10175,
+      "sha256": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
+    },
+    {
+      "path": "files/maven/androidx.sqlite/sqlite-framework-android/2.7.0/sqlite-framework.aar/META-INF/androidx/sqlite/sqlite-framework/LICENSE.txt",
+      "bytes": 10175,
+      "sha256": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
+    },
+    {
+      "path": "files/maven/androidx.startup/startup-runtime/1.2.0/startup-runtime-1.2.0.aar/META-INF/androidx/startup/startup-runtime/LICENSE.txt",
+      "bytes": 10175,
+      "sha256": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
+    },
+    {
+      "path": "files/maven/androidx.transition/transition/1.6.0/transition-1.6.0.aar/META-INF/androidx/transition/transition/LICENSE.txt",
+      "bytes": 10175,
+      "sha256": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
+    },
+    {
+      "path": "files/maven/androidx.webkit/webkit/1.16.0/webkit-1.16.0.aar/META-INF/androidx/webkit/webkit/LICENSE.txt",
+      "bytes": 10175,
+      "sha256": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
+    },
+    {
+      "path": "files/maven/androidx.window/window-core-android/1.5.0/window-core.aar/META-INF/androidx/window/window-core/LICENSE.txt",
+      "bytes": 10175,
+      "sha256": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
+    },
+    {
+      "path": "files/maven/androidx.window/window/1.5.0/window-1.5.0.aar/META-INF/androidx/window/window/LICENSE.txt",
+      "bytes": 10175,
+      "sha256": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
+    },
+    {
+      "path": "files/maven/androidx.work/work-runtime-ktx/2.11.2/work-runtime-ktx-2.11.2.aar/META-INF/androidx/work/work-runtime-ktx/LICENSE.txt",
+      "bytes": 10175,
+      "sha256": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
+    },
+    {
+      "path": "files/maven/androidx.work/work-runtime/2.11.2/work-runtime-2.11.2.aar/META-INF/androidx/work/work-runtime/LICENSE.txt",
+      "bytes": 10175,
+      "sha256": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
+    },
+    {
+      "path": "files/maven/com.github.mwiede/jsch/2.28.8/jsch-2.28.8.jar/META-INF/LICENSE.JZlib.txt",
+      "bytes": 1639,
+      "sha256": "9aa93e9bc58ae423a9e6476f608ee8f46063f5679e3bac0bc55f2f4b10d243ee"
+    },
+    {
+      "path": "files/maven/com.github.mwiede/jsch/2.28.8/jsch-2.28.8.jar/META-INF/LICENSE.jBCrypt.txt",
+      "bytes": 837,
+      "sha256": "a85927641ed1c8b95a5cef79b127b2392d80e0aa9d8e2d6f3b7b7401c5396af9"
+    },
+    {
+      "path": "files/maven/com.github.mwiede/jsch/2.28.8/jsch-2.28.8.jar/META-INF/LICENSE.txt",
+      "bytes": 1651,
+      "sha256": "9c3537ab0b485b391b887b95fdff761de3dd3273a6931e8a1942dde4d2093cc5"
+    },
+    {
+      "path": "files/maven/net.java.dev.jna/jna/5.19.1/jna-5.19.1.aar/classes.jar/META-INF/LICENSE",
+      "bytes": 797,
+      "sha256": "07c938b23950ab7d47a24ef35f9f5da3a05ae164278dc959ad6994135ed59ff1"
+    },
+    {
+      "path": "files/shared/AndroidX54a066-glance-protobuf-build.gradle",
+      "bytes": 1623,
+      "sha256": "1940f83116e9ebc4d369b379581add694a7b838cc9e00bc7af7c408daa751acc"
+    },
+    {
+      "path": "files/shared/AndroidX54a066-libs.versions.toml",
+      "bytes": 22956,
+      "sha256": "2e82c193ea3c4c4f9fa9e9f3833542c1785069c8ae583cdc012c0df2d9fe5a0b"
+    },
+    {
+      "path": "files/shared/Apache-2.0.txt",
+      "bytes": 11358,
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+    },
+    {
+      "path": "files/shared/EXACT-UPSTREAM-SUPPLEMENT-PROVENANCE.json",
+      "bytes": 1611,
+      "sha256": "1a94d68046e3ee57947cbfa7fcaf1d53d7a0de348ceaa5729098507ada637970"
+    },
+    {
+      "path": "files/shared/JourneyApps-4.3.0-COPYING.txt",
+      "bytes": 11357,
+      "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+    },
+    {
+      "path": "files/shared/LazySodium5.2.0-LICENSE.txt",
+      "bytes": 16725,
+      "sha256": "1f256ecad192880510e84ad60474eab7589218784b9a50bc7ceee34c2b91f1d5"
+    },
+    {
+      "path": "files/shared/Protobuf4.28.2-LICENSE",
+      "bytes": 1732,
+      "sha256": "6e5e117324afd944dcf67f36cf329843bc1a92229a8cd9bb573d7a83130fea7d"
+    },
+    {
+      "path": "files/shared/SQLCipher4.19.1-LICENSE.txt",
+      "bytes": 1468,
+      "sha256": "09e4af560ce2e3c9c2aa6b564e35947b03db7d1ae345f22a32793ed46542cc14"
+    },
+    {
+      "path": "files/shared/Tink1.8.0-LICENSE",
+      "bytes": 11358,
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+    },
+    {
+      "path": "files/shared/error-prone-2.50.0-COPYING",
+      "bytes": 11358,
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+    },
+    {
+      "path": "maven-notice-report.json",
+      "bytes": 208750,
+      "sha256": "4c786605b1bdecd7fe634162f7e728f19eb14d76d8def441e18efa0f96892dde"
+    },
+    {
+      "path": "maven-runtime.cdx.json",
+      "bytes": 176491,
+      "sha256": "e3080b79425ec03a58f31ba73476fcc4531e7d49dc1ed01034fd6588997a7572"
+    },
+    {
+      "path": "poms/014b9497197f5177e39543d6785e7e4c37cacab647f17d476d4f6224fa6c2372.pom",
+      "bytes": 3739,
+      "sha256": "6fa20bb1f669c2fb839a575f84513f4645ad424ee57f45e424a9d58872a477af"
+    },
+    {
+      "path": "poms/02d6acfb9e96ca4392701a2f88678cf3d1d157ec02535a0e6d76892e494aef70.pom",
+      "bytes": 5631,
+      "sha256": "3d02f40af88dba161d4be407ed07723d7131ac464193ffe05c96bc9cb72e9034"
+    },
+    {
+      "path": "poms/047f4b2fdb7a825b3b55338313c999cef07e1a6c870690c8ab5a32c3d89f47f6.pom",
+      "bytes": 1798,
+      "sha256": "276a20116b705fb75b9003ee9496c56f6fd3b32375fb232472811eba60a040bd"
+    },
+    {
+      "path": "poms/048b093a00e97e365b66eef5bf341f11f1b4ffeb66c65c711f969c61e249efb9.pom",
+      "bytes": 4290,
+      "sha256": "c3fefdacba527360d7b3565a9def666753003496ce90e398adab167cd7c6304f"
+    },
+    {
+      "path": "poms/0862be3c5b5d62b32ad3d60034c209ab149ce64585481e4aca43fb0f6b742a5d.pom",
+      "bytes": 1704,
+      "sha256": "1e17d4af8d6425be2a69f8af4d654a87e0456259a9eef1542869bcb023547e28"
+    },
+    {
+      "path": "poms/08d635d4963d2700cd20de0a021e48541a24774a2701c00be5255ca385aa8808.pom",
+      "bytes": 1687,
+      "sha256": "15b4831e84f5ca52dd37c1d6e1709a2907e2e9bc2a9c3ea13f282031de0c0135"
+    },
+    {
+      "path": "poms/0949dc91ce4db46ba880598c6cebd1922b4ebad34d2a0cdb35d5748db93bd182.pom",
+      "bytes": 2286,
+      "sha256": "880f7bf4b35d060746cbef319d4a052b4bd826bb71b40500e55319721ffa4e76"
+    },
+    {
+      "path": "poms/09cf7c4eefc3f6effab18586278af242c129b8a06e01078a2721069b6997650c.pom",
+      "bytes": 3406,
+      "sha256": "5eb0acbf74d6d1b5a065db7061440212fea796ea1b46f15dd1c8ab88e827afb8"
+    },
+    {
+      "path": "poms/0e4a4c1eb2148a35957c12b0ce0ed6a75526151bfc861efda519c9a9f8122f3b.pom",
+      "bytes": 2939,
+      "sha256": "b53b26ef8d1a8b6a9765c8fbb77f7e07acfb4415aca04a989e693d0c264575e6"
+    },
+    {
+      "path": "poms/0f98ccb319c60ea653bcb8bb5bba9b1a94de4ef9f7013fa9bb9981dfaf427ce5.pom",
+      "bytes": 5014,
+      "sha256": "946982e737afe859f9039fba18575ca1d4f1e76d18821bb733d3b40b42de0af9"
+    },
+    {
+      "path": "poms/1020b390b4c04dff9ec7202ff2fc050f978ad6678a602b0c33d71324a8448d6c.pom",
+      "bytes": 2775,
+      "sha256": "b085af7cc4bb297ed0f25ca85d3629613ab253c0b532684c6cf77c2aee7471c5"
+    },
+    {
+      "path": "poms/1032f414e7b28b8cda3ae3b4a528da3836ec851d03b4821b770b732dcf5bd56a.pom",
+      "bytes": 2011,
+      "sha256": "eab40b0e64892aacd3d789f6e93d5818d3f0be1710032202efa65e4860ad46d8"
+    },
+    {
+      "path": "poms/114705e4f1f6dbf4ecabbf2100266cba8b5a82e437e4905f6e606a91ccb698b9.pom",
+      "bytes": 1808,
+      "sha256": "b8eb4938ed95d7fcdaa2712ebca363e46a0f9228b8be7f23154def56846815dc"
+    },
+    {
+      "path": "poms/11ffbd0009988bc5eeaef068d003e2bd91d10eb464b234f678416c4b074ab792.pom",
+      "bytes": 4381,
+      "sha256": "699b994558c49687851aef960e0360b9ad0fff0c84fb43f118f825423002fd85"
+    },
+    {
+      "path": "poms/141ca7ae4cbddcea39df5c86a0a0f3272373259bbb2fcfd26bb8a53632623fc3.pom",
+      "bytes": 2112,
+      "sha256": "2bd8c5e79d2fee8183a45ed869024e1d74571936960b18125d603b0718f536e3"
+    },
+    {
+      "path": "poms/1766694dc7e7b3d828467b48b41c754ae98a4215572ab6c99b9b661d9dfd5b6e.pom",
+      "bytes": 3073,
+      "sha256": "31a2cb17cf30dbd025ed50f25b9d25e0fcd790609b214735f0fac9478cf7bdaf"
+    },
+    {
+      "path": "poms/1904a3e48cabd9e433c57b873d28a3b6d730f3176f60d03caad6c07ca7ff0240.pom",
+      "bytes": 6168,
+      "sha256": "12b70a2d44383f97624307c6d9a3ff86e82657bb8ec300b95541ba48173edbac"
+    },
+    {
+      "path": "poms/195092472037bd122531b872ae220ee28f5e1398c8c98899d7b67509b223753a.pom",
+      "bytes": 1726,
+      "sha256": "5b0e2d5b2179e54804785cbc21ce5f473b5e1ddd55a57da482e94dcd39492bb2"
+    },
+    {
+      "path": "poms/197969caea799ae718874b5f7f87246b5a3a2340b906b24098fabbc2e7728eeb.pom",
+      "bytes": 6585,
+      "sha256": "c804e72f7795e17b44ab7e4be95ceb7fc22c19a07818e29f8a314ef43cf87769"
+    },
+    {
+      "path": "poms/19c95e170eacd2f73d1a2da59fd5072db7c42b34d4097cd387d7d5cdb67811e4.pom",
+      "bytes": 2479,
+      "sha256": "0410a558a68260df81994cea1f8681334cf7ebe9d8b4ab4bb546080f3e66101c"
+    },
+    {
+      "path": "poms/1ae97b136dea032f16fc7ce591326998f95c0fea73fec6766afe9df19c6d05ba.pom",
+      "bytes": 1354,
+      "sha256": "c9490f655132328df2cfbcfdf743f53fc3916d6c1d10437175a6ca6e3a67771c"
+    },
+    {
+      "path": "poms/1b3d9a0c6d97a0e055a2ab91d34ef76444f463786015a2ad3b267d6b4d6cb86e.pom",
+      "bytes": 2030,
+      "sha256": "41b6e78c1b0d11bc99de795390df9e4ece64dc113f482d6e308f1b7a421c1d30"
+    },
+    {
+      "path": "poms/1db535c5a5488f708ce07e684b24ab27e60f87cee383197c38b5321f0be989e2.pom",
+      "bytes": 5012,
+      "sha256": "97a20ccbd0f1541a3be371aca9898728f652fe1a5883ff52b9483c612bd2e728"
+    },
+    {
+      "path": "poms/227e8926b4dd091af50c05ab7278180164a1e5aee129cb5cb2cace0d74c7b58d.pom",
+      "bytes": 3433,
+      "sha256": "43db47221b797ed1bd9f641bbc4dbf9dd0b4da8e2066b6b457d7d91c5d891c75"
+    },
+    {
+      "path": "poms/229c6bdb518a67d6779394644a9910ed07a6e77fcb9208c015da6ca34295b2c6.pom",
+      "bytes": 2383,
+      "sha256": "11c415864d3402f61d426e67210158dce1b04680412526a994f1823ecd3cb388"
+    },
+    {
+      "path": "poms/22f0f97a5605d35738673497bdee2866f785b5a4268efabf0329e69834e39bda.pom",
+      "bytes": 4067,
+      "sha256": "e2f8611d35e0c2578a43333ce3fe5e1cb5e5168dd7343810d10acb6488566d06"
+    },
+    {
+      "path": "poms/230904c48fd4491107facbc3c52322d33818c99a536cabf003e4619d282ba670.pom",
+      "bytes": 7337,
+      "sha256": "1dfd1f739d71957166a0511a6fb2cbfc8da766c1840d5664063898ed6dac8aa6"
+    },
+    {
+      "path": "poms/234a747eb6ebcaacbd624ffbf4798158472c2eb2b8d075100d655612f5de3ee3.pom",
+      "bytes": 7378,
+      "sha256": "30e09e81f93f66d7dfb7771333f235ecf178b478974f09035cf2d4054cac08b8"
+    },
+    {
+      "path": "poms/2350e45c732e8d1c84d706c56e2f8725dc79067a0c8bb1362ceb12b019840c7d.pom",
+      "bytes": 6070,
+      "sha256": "8b8eb011e4a58873823406fb45220e50f39058fc9abfb2c0806735af65edf79a"
+    },
+    {
+      "path": "poms/247864cd6d7785995097afc78d5e4be1ad22005261167d7affd54c9d9c1003d6.pom",
+      "bytes": 5391,
+      "sha256": "cc0362653240708a010de50fee8caf884a610fbb10b6013e86694d77c43febc7"
+    },
+    {
+      "path": "poms/263aed992f7f62958a5744f3acea8b784861a980d020731a03178205d961209f.pom",
+      "bytes": 1608,
+      "sha256": "013288a9317a552706ce625fb24493e8223288529223ec578cf855a5ae9c16e5"
+    },
+    {
+      "path": "poms/26873e67e03757374bf1283ecefda956fc43366979ec8f43056e6c608ca065e0.pom",
+      "bytes": 6157,
+      "sha256": "421918e01dd8508b0c376207a9e98159ef77fed11eb1d9098294344ed67750c7"
+    },
+    {
+      "path": "poms/26bdc9397671bdcb721f981fbbac5e438e120a16f3a3e0cc5d777cdea062d3ab.pom",
+      "bytes": 5328,
+      "sha256": "eb214caab3dff9216119719146e110c217b11e12f1d3224752d05bf30e2857c4"
+    },
+    {
+      "path": "poms/27976986fef4dc78321d4b6ff13ab78b9b7e97ef033aee88259abd12f4ac8b35.pom",
+      "bytes": 10180,
+      "sha256": "f8698ab46ca996ce889c1afc8ca4f25eb8ac6b034dc898d4583742360016cc04"
+    },
+    {
+      "path": "poms/27c75ff377d840b0bacc6fdab1fab395e85d53bc9309009abe1184bc6dff504d.pom",
+      "bytes": 3047,
+      "sha256": "463c50b22a969c6274ebdb7b5f56ba1ea1dde352e9679f0a0ba90f3971dbcd57"
+    },
+    {
+      "path": "poms/2939cda1a208a1eb2a861a27e2d2b1aa7b20c99e3c9fa976ac35f3c94988e51a.pom",
+      "bytes": 2194,
+      "sha256": "224567420d3e0ed5fef40f789fded45dfd51b162319e28d77d3c9a8dec4821b8"
+    },
+    {
+      "path": "poms/29771c83d598613fd33749118814ff9bd852d9916b5f079402f64e82c4dc425f.pom",
+      "bytes": 7452,
+      "sha256": "dd0a7c90f8eb4cc719630aa59d6fab2b7282f98db2c97700d3b81a65bbcaa4b6"
+    },
+    {
+      "path": "poms/2be0682501b3d3a5bb1729698919243e6d6244aad33aedc54b045140b0c99a36.pom",
+      "bytes": 4929,
+      "sha256": "42b57d7c998fe5193ab7ed2b2826e6a757231755935d60a75fc961b4f97bf4ea"
+    },
+    {
+      "path": "poms/2ed3d2491def176b6d13c84966654c3933d4846bc6c7ba90ca9663ad9442bd92.pom",
+      "bytes": 2068,
+      "sha256": "9fa62196c4c4e79b6a58dbb38a8c022bef8db21989d7dae2da0f6f5b66289a9c"
+    },
+    {
+      "path": "poms/2f1e66d9e47f32e3d567f78575bbcec1c3eacb1c64398f08348353d10704d89d.pom",
+      "bytes": 2915,
+      "sha256": "e23d98c31e5048618b4be584a0e33f30ac427394fbd2c3612dd850b2f1ffa68f"
+    },
+    {
+      "path": "poms/3155032ea440bf99fd40e31c0952f3a21b2c63e451b5516a51587c7c5fae8d13.pom",
+      "bytes": 4737,
+      "sha256": "5fda28f05a6d02246245d7593330bfcc20baf50deb33b3569136953cf8da940b"
+    },
+    {
+      "path": "poms/3160ca5f95777af6a7ccb26aec79ce747f9b01c18929f1c0a8e3d0759233918b.pom",
+      "bytes": 3092,
+      "sha256": "79d63d7b13c43f92faf63ade9fc6a4ab45e8e42493dbaa138c7a736184a4c775"
+    },
+    {
+      "path": "poms/33d1d1b659277a51e62fb457f3638a02f4fa3fa828736b8145851cfd0377001b.pom",
+      "bytes": 3923,
+      "sha256": "b44b215b4cce24ca64b5faa58ff463f4b91abc02af95ba405ade488828f4f779"
+    },
+    {
+      "path": "poms/3513a4d03a180db5b2978f6d4b8297203533d298e6d8f3d1598d072980bff8e4.pom",
+      "bytes": 3189,
+      "sha256": "e38a30fe9a9ccb575531b265fec8e23207bda9818977aae495f3fe74b9c9e1f3"
+    },
+    {
+      "path": "poms/36076778574caf7fdfeaf83090e819fb19a7225c299147d67b01351fbaf4f1c4.pom",
+      "bytes": 1324,
+      "sha256": "3677abead5d4e06cf76cbacb954151e051779c2274494451fb424e375aa9e450"
+    },
+    {
+      "path": "poms/362f263030fc3dc5126cfa8525f2e1dd1d8f8eb4b998b3dc79b4080fabff194b.pom",
+      "bytes": 2847,
+      "sha256": "070d7795010071edefbef94b8c9d5a2cac5cb5f3b1a2c5e558546438177c8ef8"
+    },
+    {
+      "path": "poms/3a3f4fb497f7def84a32f95fb7a13c0d9cd06f02101bb1b99c82d516e6b9f055.pom",
+      "bytes": 3074,
+      "sha256": "de19831dabb84a4d0e120e86dceb08cf62c08606b5d99e91a8f8e6b4a4658883"
+    },
+    {
+      "path": "poms/3a5791837c184891a8a58e9a37fc63aa874840daf10404509482fdfd1b568c75.pom",
+      "bytes": 2103,
+      "sha256": "5eece0903b4810aa1da85414dc4c2746046d878a543aa12dd4f1fe74171f7506"
+    },
+    {
+      "path": "poms/405615fa4c687e692bfbb945bc22309d3779a58f007d9e534e277b98c3768648.pom",
+      "bytes": 5876,
+      "sha256": "98cee40062344063eef3f71f9d66032d69e6304ba0858561fc823d73c61b63b4"
+    },
+    {
+      "path": "poms/416e7d6fe11838af633860b837b18799c5b186dcdb55ee36bd0d7d883c0aede5.pom",
+      "bytes": 5195,
+      "sha256": "f0703497ea0c6cf4c3b242ef9baa6d8cc28c194563f95340e57f0eff4ae29ee4"
+    },
+    {
+      "path": "poms/456f6ead93dd699489cb069b9fe6e77aff6fdd4974b8e9b027e6676d47c20c04.pom",
+      "bytes": 5747,
+      "sha256": "8b7843327ff4abb661b52a38f9ecc8d895558b06c668c830d2071a8141a73d5a"
+    },
+    {
+      "path": "poms/476c9ae6eebbf2fd6faa959eb91496ddad71377e472e96b3f8a2e00103134a42.pom",
+      "bytes": 1968,
+      "sha256": "f34bec4eb58871d31002901377108aaa1ebfe77fa6d882b8b86200b158e26ea1"
+    },
+    {
+      "path": "poms/4773b7781676245fc9dcf1c19445aab9ddd1f1478f72b67b4a30b71fe3233b7f.pom",
+      "bytes": 5790,
+      "sha256": "2606f9ec805c4e0348cb25826cbc513cf92a94bbd364e6b4b4f071c4938fff9f"
+    },
+    {
+      "path": "poms/483cc9c8bedf72ad63a89ee3e85541eecc8607e1e219ed1496fe2f30fd3a331c.pom",
+      "bytes": 6440,
+      "sha256": "2bdb87ffb1d80110d1154b6e827b41872686614406d920c7a10135beb8817960"
+    },
+    {
+      "path": "poms/49f1bba3abb4ee525e14ad3150f4d3609161c393abb81abfe290134412be2c09.pom",
+      "bytes": 29498,
+      "sha256": "20281fe11b8e4bd4c17deec561444d1575bd532fecb73ecf6b89efdad7cd8938"
+    },
+    {
+      "path": "poms/4c60393c7be920d6a04b5b8ffc7297f8f72240e6d39e8d671c1154e0ce3ca7f1.pom",
+      "bytes": 2737,
+      "sha256": "58899c64fefa0768066621c8994385182c52a0848a78c882705f5e7dabd98471"
+    },
+    {
+      "path": "poms/4d8146c2bdaf1e5606d6bc9f2c81842c8f27df85689fe7ed7dd9afdd3940fcde.pom",
+      "bytes": 3188,
+      "sha256": "83e3b5cdd1fee04f3fad72c4ce584a54d0a637b93d2bb2bd85da4ae67a673e3e"
+    },
+    {
+      "path": "poms/4e2feb591e3b5aa7820a7a7388667ddc3d69e5f62990cea8b2a95cfa1de5e11c.pom",
+      "bytes": 2884,
+      "sha256": "e9b7f90b4d7c4a94bb56f76ee7e2bbe78dbaa3b18deb46858b8693fcee2d714b"
+    },
+    {
+      "path": "poms/4e626318c3f3d283c5d886c64576098cf98519d183f0de85e5c2356893a5135d.pom",
+      "bytes": 4495,
+      "sha256": "b29eac782202d9c878a0760a954766b11f8887014df9177575644355c7ac8258"
+    },
+    {
+      "path": "poms/4f4ec62868df80857a577e0b16cbb9cbb7582ffe4796fa77b1d30b2354415fee.pom",
+      "bytes": 11010,
+      "sha256": "65a05bd567f25050a4da975593d30be6a84478f37b3be78d3775f0d735443759"
+    },
+    {
+      "path": "poms/51d8d5c2ad2e81d183c2ee7e980f7411d526e546fe98fbe96e34ea17bc1aef14.pom",
+      "bytes": 1795,
+      "sha256": "ce9e47b87184f5bd5e139e9becd5b26476d42d78c31bf2fdedc37acb41b9ad49"
+    },
+    {
+      "path": "poms/523b8e06ac4034121417165cac6e221cf17c969bc89a3a504f53ae122dc6abee.pom",
+      "bytes": 2107,
+      "sha256": "d4f2ed1176fa8c5612b80f74c952a8799142a9ed36022a1a238fde5b140580d9"
+    },
+    {
+      "path": "poms/53002c3f5e10cb2d6cb5934a217498e7f1734c38fa7588897a8ec4fa21f98a45.pom",
+      "bytes": 2268,
+      "sha256": "b8fe1568a1cb462c99c660cebaf80348c2dd1881054be5d9659c1a2589cc3ba8"
+    },
+    {
+      "path": "poms/545a644809e2f18bb29ea552b167cf1a79b64dd5d7d88416c937788757c21a57.pom",
+      "bytes": 2993,
+      "sha256": "2faf922e8c3d706f29d862b3fbb3aa1347705c21c6eae18586d2bb1f7366ea01"
+    },
+    {
+      "path": "poms/55a260b81c27af1ff687f01322ea23e22c69d2bd370d529212f3e7c60afc9970.pom",
+      "bytes": 4279,
+      "sha256": "f65860bce58a2bfadf05fdc516d38333421f0e387fef87e24449c0394c80d254"
+    },
+    {
+      "path": "poms/55c1e679aab15d32e41d8437f68c13109364bc55c684954963acd06f7a6058c8.pom",
+      "bytes": 2698,
+      "sha256": "2601755587d0f4e33406c5c42fb752e55c9b7c253c28f2e17d19c9b845e50dba"
+    },
+    {
+      "path": "poms/58774981b23e6959f5e6a0133ee6ba6fcad18c27ab198d6eca3b510fdd31df8a.pom",
+      "bytes": 3161,
+      "sha256": "86f2babd867a0a3027be173cbcee624473c67d7fd68332dfac5c274c7a1f433b"
+    },
+    {
+      "path": "poms/611b14d8d0410063ecadcfb348bca2abe63fbe5cff2279c0b7e72adb1c34d0ee.pom",
+      "bytes": 1511,
+      "sha256": "cdab929a3b95211f43d2090c5e2d0dfe8465960e378bc32b35841dab324433a6"
+    },
+    {
+      "path": "poms/6191237aa961e11d8f8372f64260f2e79bb22ec7198c1c56dfe897b886212144.pom",
+      "bytes": 1643,
+      "sha256": "5f51e65873ca612de3838fa90d2ee95b8d040efd31b9c390a19bf94d615cdb2f"
+    },
+    {
+      "path": "poms/6284cc845992b9f471d1b219b0b63cfbc506e6da8674a3f4a73c1bd942dfed21.pom",
+      "bytes": 4685,
+      "sha256": "63bafe538a4452691d5ad7dc67831879e815e4c97cdb6bf3cc7afc9814a961b7"
+    },
+    {
+      "path": "poms/65f6de3ab5c8d8af9b580ade0dbfa4a4be7c8ee1189de86d17e84d9a8bc77f85.pom",
+      "bytes": 6756,
+      "sha256": "80a198f43bb65bd7b0edfa19ee2c26e144bf379141c30be3a071a47a157b65e7"
+    },
+    {
+      "path": "poms/6bbfd5a10150663d4d1cc24fc6de0331615875dfc1f5ec4faa27e0c89f6b36e0.pom",
+      "bytes": 6026,
+      "sha256": "63f3303cb0f0ece424fedaba55cd3984e44422e7dd5071debca4a4423216c420"
+    },
+    {
+      "path": "poms/72eeae69f607ee63e9235c7d3915754b2dbf6118eaf07d9b7466107458f4bca9.pom",
+      "bytes": 4234,
+      "sha256": "f8ca1877c66e642c554907e1ce5a493a897ca29270cb19e2bb6d424ba43b6c98"
+    },
+    {
+      "path": "poms/738a05aa7644de8bc8e2a4c1926da7830b775c57db577329393cee4386332e12.pom",
+      "bytes": 5605,
+      "sha256": "83790d9c428c157b1a5d87b5bdbf5d4a9b1807b6b013399371cdd578b740265f"
+    },
+    {
+      "path": "poms/7870072100f072a16b522125b039c23aa71566c2b86afa4f0f4cd44ff74b5251.pom",
+      "bytes": 5381,
+      "sha256": "98d08b944bfe947e4e3e3ae666473a8db19ae86e1ad5636d2904b6cc80bc80e4"
+    },
+    {
+      "path": "poms/7efe074273c26f64bbd131eb95cff9fe0a459c82c52db9fa7270dac23753300d.pom",
+      "bytes": 4879,
+      "sha256": "6d16dbb76f4f955c2cd6547e15d8dff4c2503434a21ea0f62c1ef49d9facc102"
+    },
+    {
+      "path": "poms/7f068ed79fa9d9b4d19fcfa902a92b9241d266a2726aa9db36df2bae1a75af9d.pom",
+      "bytes": 4915,
+      "sha256": "e761d515f4b25ed85c7badcd8869c6fc14ae1e669e2c5fa0f6c9fe89281f5d03"
+    },
+    {
+      "path": "poms/7f1e07992827afca1bc91cbe9bdb8470ba5512204c2c9615e00bee4db880b114.pom",
+      "bytes": 2841,
+      "sha256": "b15f47b42585442c9b6a9d416afc30782c69dbf9a5760a2c37175f0024f0d17e"
+    },
+    {
+      "path": "poms/814b836e8026719cc3eb7f270ab54d0d4a6018bb242ee488e3a5d806b08aaef0.pom",
+      "bytes": 3339,
+      "sha256": "1f67221484f7d1260eb6e2b490cd4e7046bf5cb536276d79f972ad3f198b474d"
+    },
+    {
+      "path": "poms/819a9e1f3a1f2e1ac3cbd096979740dd20b701db433af426f51d8530d0c1ac04.pom",
+      "bytes": 2207,
+      "sha256": "c978d550808b47434aa49a63164110a50b55b0bcc6160a93a2e37d5110df8c5e"
+    },
+    {
+      "path": "poms/83bbe6e2e02ab9067ff99b1e2d67215bf741f67cf06f26e653ba9dbf5f083f87.pom",
+      "bytes": 5701,
+      "sha256": "cf5d8651182e43675968e4bff5b018a7b5d9ad75d777ded594ffc7c2d8c0948a"
+    },
+    {
+      "path": "poms/842aa921a2c234228418a2fd6dc0bbdf6ddeb6eb41b4de5802cc831f8d2ef6c8.pom",
+      "bytes": 2193,
+      "sha256": "3272accaf7e3ad43da3e14f3ee921e43089fe65de501480cec47c8280996e850"
+    },
+    {
+      "path": "poms/8538beb75a4d44fe85cf91591ee67553812e102f5d490de01ea7cd3f104b1182.pom",
+      "bytes": 2806,
+      "sha256": "b1a0faee424a3c775534c81fa16f5a5d5aa65ca40e6ad857f6961b333ea39fd3"
+    },
+    {
+      "path": "poms/8542183863aef7678d14901612717c5f4e83610025b5031d381d02db689687b6.pom",
+      "bytes": 5688,
+      "sha256": "069d066f98299fd9386cb1904eb3d7a6f8a19781370da0814bccd90612ac45c3"
+    },
+    {
+      "path": "poms/8735856a18a4ddaab5732055a13c660a50cad978c77991e1da7c6b9e09630c4c.pom",
+      "bytes": 4561,
+      "sha256": "ca491d2d1f5d63a1c15e39a033606df51f9843b72bc9665b0d51993455d9d9e9"
+    },
+    {
+      "path": "poms/8abb4c51b3741707c6e1ff0b62fcb910f4e950dcf04bfcbe21a9f1791157341a.pom",
+      "bytes": 4545,
+      "sha256": "cb6a8ff89ffb7f107f214050e9fb32b0d0b0f665d8de7c9e4e2a4d5fea9951e9"
+    },
+    {
+      "path": "poms/8cb013b04a3dc7de13029d9227012743c5d4d35e531796adba44f20aafa774a2.pom",
+      "bytes": 2068,
+      "sha256": "83039385976fdc494241f4572558a136e7b21116d7279b26daf335478bfacb57"
+    },
+    {
+      "path": "poms/8de3b576952880faaa114577718d5f7cefdddee4708ff9ec9a46098fbf580c23.pom",
+      "bytes": 4252,
+      "sha256": "71a0680d277324bab46bec4b00f6f111c1b794a931d0d8cda79bcb9246982f92"
+    },
+    {
+      "path": "poms/8f19446ce8b78c7e3cd9f654266a5050597df8b0eace07b582272a4eccd6b20a.pom",
+      "bytes": 7668,
+      "sha256": "658d326b66a0768ccd35df85c7487494569c63951e090c3a1b019b97bb8a0110"
+    },
+    {
+      "path": "poms/8f1a224625109169a77dec1d852e69091635021be5f36481fb884b1f7bdd4d11.pom",
+      "bytes": 3186,
+      "sha256": "e0b34827bb5d6e447fc8099aeda83dfdf6af7a6fc2a75bf00875f588109f1e2d"
+    },
+    {
+      "path": "poms/933667ebcb7d387da953642f5f7e07397ebd8ed97713c5ba958422c9562eda1c.pom",
+      "bytes": 4773,
+      "sha256": "1a99fe690775ed0e84788d5895f4a55664479176737ca0986336319ecfce8538"
+    },
+    {
+      "path": "poms/9345d93d7ce93c5a6e108c52c6b26130d895c163f31171919146d876d9813366.pom",
+      "bytes": 4032,
+      "sha256": "d4f22b991a69600e2ffc36b42ac199626fd96d5f1648c3beeccd35de06fcc351"
+    },
+    {
+      "path": "poms/955f689b9bdc385c9e55851b5fbe1947e3dcd01d438e54532e3a10d62e5e3702.pom",
+      "bytes": 2226,
+      "sha256": "53873caf26bc1ed8a567ea6c939ab2aaa3f47a5e32d5cade95ddf5080d23238a"
+    },
+    {
+      "path": "poms/97a3d165a0841411e2d35f4d5bc7d3ac7e76d184e403552c50b58d17b7275b73.pom",
+      "bytes": 5668,
+      "sha256": "7ad9e46ab3c36c980ea91ec88e09020aa1c5d608291eccdcb8c7febb389b40c5"
+    },
+    {
+      "path": "poms/97abc2f00af65cf056a96570c22db22f5a0045568c929b36a60a495bfda19478.pom",
+      "bytes": 2112,
+      "sha256": "3133773fbcf9822a7f3a5e85ab19941e67bd289bf5fc3182d9db4d1cab86eb22"
+    },
+    {
+      "path": "poms/97d0eeb49aaec904a30878c030c9125bca8f68ff8224ab28c8693e2c83501429.pom",
+      "bytes": 6591,
+      "sha256": "c6d78741c43ccf10d5da5f0e040dedfffda20b9748caa038dc58be25d35c90a3"
+    },
+    {
+      "path": "poms/98995eadaaa951111e9e3c6d836c984e2858f0224c802dedd96682b5f32ccf80.pom",
+      "bytes": 3811,
+      "sha256": "3bcc0aa3bedbdeb3de376c828e4fdf0c9ebd79cb13c3353f971ba842887a8c0c"
+    },
+    {
+      "path": "poms/9917f8aa94ac68a1d04df2a8595430588d211d6803fd60018234d286711222a6.pom",
+      "bytes": 1586,
+      "sha256": "62482c0594841bee24bb996abb6cb7b320a6a3b77dca9f0a0ba4fe3be5530aa7"
+    },
+    {
+      "path": "poms/99b818ab0ec2392a8ef9b8871b5e048461a59b5b741c1e4184228e7b293aa872.pom",
+      "bytes": 4961,
+      "sha256": "0e8def7090bad1dbab9e11f0fb13f15aaa0a419c86640b82032f8dfbd9f768cc"
+    },
+    {
+      "path": "poms/9dc6ca9666319fc15896500fbc0a95cd3b590c5d9493a2e35ee64cdd2cc7b26d.pom",
+      "bytes": 2301,
+      "sha256": "b92b23ec9c444b2578b9852447565efc72c24b3ea77b4c3bf4e644f685eeef07"
+    },
+    {
+      "path": "poms/9e86d777bc4857569be10cf93ee9982139a3e3412c8c1d807519766b7306684f.pom",
+      "bytes": 2020,
+      "sha256": "69594163d8bb148df97a9fbb5aa8a92486bb8961db5f73871b8a84122616593b"
+    },
+    {
+      "path": "poms/a03f04ccbb089cafc182ca0f18679da46732262e9dfee5f4daf082e492698e92.pom",
+      "bytes": 6292,
+      "sha256": "61b13fd132369dd7c3fb9d0b3076ceefa8e57ec699a8e03fb87aecb81cedd99b"
+    },
+    {
+      "path": "poms/a17cd5f9316aa8b224c631493c06f4572022177a5648eb58d216efb6efebcdb3.pom",
+      "bytes": 4677,
+      "sha256": "c50f2e484082b86351067ef8381d3b0291535a3cdb9e522089105930f84d23b3"
+    },
+    {
+      "path": "poms/a2366c36272afd0182cd5456365690552ba265e8b02b920db3ebf3959c1f7876.pom",
+      "bytes": 2264,
+      "sha256": "d1fe80686be7c3840c0ca98c9dee54b3051e434b21944771a677683633c008f0"
+    },
+    {
+      "path": "poms/a2efffa5f9eb786960fc31c2a789d4423ca9cf85483e308a5e3b038f2dc7d996.pom",
+      "bytes": 2257,
+      "sha256": "7a94595399931c25a49f9af93daa4e977dc2d375458e4e74bb8d35ebcb51848d"
+    },
+    {
+      "path": "poms/a5213bb4bdb12c50db249a829d747c2132aaaa1a482345e18cc3fb77508197df.pom",
+      "bytes": 6729,
+      "sha256": "814782d56815d582557f6e9dedcf42b455f8cdd2ef2b25246c0374d7fb949213"
+    },
+    {
+      "path": "poms/a5e6fbbdd951b5103f83af97d1b6409290c6c9ff1f65ba1a28eb0261890929bd.pom",
+      "bytes": 5366,
+      "sha256": "1f79910cc20de198acf3867b1e93f9ed59ddb643585b2e9c28ee55518af1bc00"
+    },
+    {
+      "path": "poms/a73725288019211a54090ba7f388cbfacfff2dd8930608c85580d7fda78a6b58.pom",
+      "bytes": 2030,
+      "sha256": "911b754a03b66af0fed2bbdfdc3a86807360dd036ad3b481ef5162c685e456bf"
+    },
+    {
+      "path": "poms/a77d1e31b5a53e8bf62645f7b8febcc672ea8fadad92cbdc9f2f34de3a20e126.pom",
+      "bytes": 2086,
+      "sha256": "983f8d0630d072d5bfcd166a498ac7213f3a44a98c09051004ce96429d867cea"
+    },
+    {
+      "path": "poms/a9611f6c40b72ddd7576ed07850d0f18fe226ea54763f3a7ed04d2bb43eb7655.pom",
+      "bytes": 2880,
+      "sha256": "73c9d7da590d0b016c10c4c30c5c728842e75a79b7705d70dc9a097533b93387"
+    },
+    {
+      "path": "poms/a96db9d9025e960cf3e01f775d098e7a0a623b1373931059db2869b7116ca557.pom",
+      "bytes": 1888,
+      "sha256": "748a34eb5d13d19d187adecaea82667fded5f1b0b98a655e13ed2e4a8b3d8ae6"
+    },
+    {
+      "path": "poms/abf854a25ee95504af4aec8a76973fc4a6336128a7269d10667c5714cd402a74.pom",
+      "bytes": 6531,
+      "sha256": "5b20b0c733c5dd4d6c36d0fdc7b03d28989b5bbf228d8f69a49381c7b8c803af"
+    },
+    {
+      "path": "poms/ad42dd085f5e32414419db288837b6bde766e45747e51c6ae1d4ef895322b13d.pom",
+      "bytes": 1732,
+      "sha256": "c10bf8f20bb90d993ce5277e5b328843f0f1ff6ae8c6283e34e1cf39ec02601a"
+    },
+    {
+      "path": "poms/aea2fff3a12bf498788b36dcd6680c14be5d32a4730b2b13c63b0f17537729c9.pom",
+      "bytes": 2168,
+      "sha256": "dd54b97aa3fab91fc24f5df2916c22be9429a339d2f45b7ff092332f6c19dc39"
+    },
+    {
+      "path": "poms/af6fcc9b9eac78915472ea76286ff276d8fc708a05c077cb241bc20a3c721e39.pom",
+      "bytes": 6209,
+      "sha256": "bedbe8c2230f207c7b27c15a67fa85aff7df681b145a45fd4fd9d6ccedafb2d4"
+    },
+    {
+      "path": "poms/b111449f2de1a754c6080143145c97e3164436c188cfa5fede369066ac642368.pom",
+      "bytes": 1636,
+      "sha256": "a000041f5a1f79283c5175e1bb60cf3683780f401c6a9d34fbe9751253fa6ff9"
+    },
+    {
+      "path": "poms/b118db327db0259047b5dda6b0192a32b62762b6e45acab4230fbb814f6cf88c.pom",
+      "bytes": 3576,
+      "sha256": "5cabbb40f3fba11166576a839acf4eb6db59ab5e5ebcb16361d41f8bec805b50"
+    },
+    {
+      "path": "poms/b603ddb15e77133c5b72b55dddebfcf1d1ed0e0aa118b3d5f75f74392086c2fd.pom",
+      "bytes": 2477,
+      "sha256": "6dde43827b40535e4053d1c52d4b227a411556c289e65400c9a1cc61e2b41ce3"
+    },
+    {
+      "path": "poms/b69e9f62d5fc390a6a3372b183e9594d170e6e3660f2c23a96c212da5715071b.pom",
+      "bytes": 2633,
+      "sha256": "8fd093008b3ee7c06e52c78da2af980a7b47b69b967fa91dad7af466f7a00a38"
+    },
+    {
+      "path": "poms/b88887ca5382b6bce027a1830892feb872ad560aed8ae89da97481312277413e.pom",
+      "bytes": 4945,
+      "sha256": "1ef6c40e7b493e7e6fc6ae6cbc0645ad5c527409ab2c680df048020d511f131b"
+    },
+    {
+      "path": "poms/b965b16a53f3423c803ea82cd6e99f7f2ae6df53b30e9f5ba25087f4386410a6.pom",
+      "bytes": 5637,
+      "sha256": "ade67ab3ef85ba4a18f28a6eaf558c2128b01021cd0ca20c3999a566f1a29454"
+    },
+    {
+      "path": "poms/b9d3458cd94702e6f8c81c7f61fa848359d8380a9598777d5657a786df05af5c.pom",
+      "bytes": 6650,
+      "sha256": "ec47faea1d2f68625ac49ad260f5f5233d9b40da922253b57aa153d49b5f5ca8"
+    },
+    {
+      "path": "poms/ba71813cba49ddcb34d434c3ba75753651f0872f38963b58d54b844134a4fbed.pom",
+      "bytes": 2006,
+      "sha256": "da6733425a83f5ce850878fa7201082345fed7c668dd58550fdd19c0396c6fa4"
+    },
+    {
+      "path": "poms/bf12ad68f2678eec82f71020789189e047b9c712f58d11a8157c988b3c28f602.pom",
+      "bytes": 6089,
+      "sha256": "a5e598838f5ce314cff3b7b5cd4ed53119ae7a307a51a9a519fef9f1fe95d57f"
+    },
+    {
+      "path": "poms/bfca8697e8a53ffb3976f7b53868d05d6e8e41a4db946451ab5391a3e8d6b82b.pom",
+      "bytes": 6325,
+      "sha256": "afded6e6a690fbf3ad4ae65ada397f0a90a5f630b303d1b741b9c97926fdd4de"
+    },
+    {
+      "path": "poms/bff5f1818284811b37400c9f1734c08c371417b80f045f03abc91ba5227e6171.pom",
+      "bytes": 3667,
+      "sha256": "672b431f59c8e0a8522690b2f46f1b7966710638893c60c31c5f19f8472d62cc"
+    },
+    {
+      "path": "poms/c01564dfcaf8f305eb3beb1d6c52f4db4c16485a0804368d6e94ef4cd0c55ff6.pom",
+      "bytes": 2279,
+      "sha256": "dc6ffce390f328d9bca740a63b91092afd09f4473a1f2a80d77d64b3c5b505d3"
+    },
+    {
+      "path": "poms/c06c2c828fd84681d2b1e9b2c7a3338c5d4bad029f5851d59cdcc5f442a26162.pom",
+      "bytes": 3902,
+      "sha256": "d0c1560f3a1a0f6db446ff27c1bd5fa98cdcd88f7516ef6c53c8a94b29081add"
+    },
+    {
+      "path": "poms/c20898fdbd50488770e1de8c234f1c83e7f544f6640fd5e367ebbd59e79f7d13.pom",
+      "bytes": 1608,
+      "sha256": "0ddc07cc39699f48ecd9ec894b5830c0f09e22e82959294edf37217224c88b7b"
+    },
+    {
+      "path": "poms/c4402be2c1e79d2d3471fbbc56df89bbc1516c7a8d45f22e8f46e865bb3019af.pom",
+      "bytes": 3333,
+      "sha256": "239b42ade092ba75c443b2ae0489cb40ebb0a8d9ced02c7e6f261f10e76b2ca9"
+    },
+    {
+      "path": "poms/c4d12204690cb9adb16dc59827636ce60d2407ab9e4fac797d57533f312271d5.pom",
+      "bytes": 4648,
+      "sha256": "5bb707f87bb102d6185c7f365fb6b632ce8d93a1e0744274dfa8a99643502e85"
+    },
+    {
+      "path": "poms/c5caae73eee178b2ebae2e7e3a9528f84afebb9e54c5b135849056a3499e22c5.pom",
+      "bytes": 4651,
+      "sha256": "f63bdf1f3dc69f8c108b9ec607c4339d12159bd95b6a6aad34a340ae21b537eb"
+    },
+    {
+      "path": "poms/c6d6651546cc044bafb0c5e6ba45aeb55a9688ff3045895ddb50bf3de4b0d779.pom",
+      "bytes": 3301,
+      "sha256": "6a3b7e989b18ab25274dbd0531dcc4d66e4efb8de4985daff539d5131285bff8"
+    },
+    {
+      "path": "poms/ca94325b85a96466aea28a9530d36df3bed1d8c43f7b5edea1ac209e25508059.pom",
+      "bytes": 2143,
+      "sha256": "c903f8f51e3f4ea5e7e1f0a6fe3be873c357221227d103d08d7fd042f4b7570c"
+    },
+    {
+      "path": "poms/cf3d8dd261e90cfb7c267ca04329e7f66c2ed68ae1fda0385fa720712b032f3c.pom",
+      "bytes": 4961,
+      "sha256": "1c8f5bd00eacfc4be791390ad0d953aaee07644a91425490de790245d36a73b7"
+    },
+    {
+      "path": "poms/d1cae9b5fdd274e9873ff738c5454b5671ec8c6fb1b1eb1dfe2e0242d62a2ce5.pom",
+      "bytes": 4716,
+      "sha256": "ec6ab0eec69b5b13d09b80375abb8e7c2918d73334727ef933a7bfc7178dc19b"
+    },
+    {
+      "path": "poms/d21de7143359b3e1a8c0ae72277d6498a7ace79215931d2ace8956187f35fe26.pom",
+      "bytes": 1699,
+      "sha256": "e4e44237a66f4091bc0f5b1d5a2bbe228ac014ab3c0f918cd6fc02ba31999030"
+    },
+    {
+      "path": "poms/d2f7a226d687d64001c7018db76c5390dfa460e76f8826e5d59f4e8dd2071db2.pom",
+      "bytes": 6667,
+      "sha256": "006872b13e979a262c15b40e1422eaebce90bab240b1a08ac9fd7f6020fcca8e"
+    },
+    {
+      "path": "poms/d457ba3bc650a43e210c4f289dfe33728558cbde0b4df1c33cb98fa1e9ddd61b.pom",
+      "bytes": 1923,
+      "sha256": "44ce22ee620d28f17301bcc60ad49b69b7d0596c2a87b054ad1e3feac7b4a898"
+    },
+    {
+      "path": "poms/d533785c7968692e1dce1885a696794d0d003f81fb08ba7ad66017715b138ec6.pom",
+      "bytes": 3716,
+      "sha256": "d2b68a2d0cc76f23cebc6d4ea9bbf2d63fb536ffd94e05514ad9da6c5f530492"
+    },
+    {
+      "path": "poms/d59e9b5eac82eab76ec60c8a7e055edb3ff1887c4c639a9e609cab22e9d32e8a.pom",
+      "bytes": 2721,
+      "sha256": "e6686db4a9b05faf40298b67450ebc45395955fa52c585d6922b6bd810ad9302"
+    },
+    {
+      "path": "poms/d6be0220934a7de1aca64ae7563740870245149e3fdeedd5842adfe146c8c56a.pom",
+      "bytes": 5745,
+      "sha256": "a1738a465d06b81738ca02c925e1775169c01bee589bab71469ac57ecc5c6674"
+    },
+    {
+      "path": "poms/daef59f9d12f1881ce92d33f28bb31164d8bd6794bcc2160b4c0603dd400b5d1.pom",
+      "bytes": 2561,
+      "sha256": "2d65c8d0b36d4b4faadc44aff9bade23d871d7159eedf2b3f02d802b34b77a57"
+    },
+    {
+      "path": "poms/db6442cebb80d138dbf9ccafff9b9030e3737f8478ec7acb744bab804a789f95.pom",
+      "bytes": 1997,
+      "sha256": "1f72f836339d03c6eb013f65075e76ca87075a577578eb4f95f74a3a5d253128"
+    },
+    {
+      "path": "poms/e2eb1c6e273a500efe75d81d51ec30ed0d19ee93e9f682c27d03b66685b30110.pom",
+      "bytes": 21056,
+      "sha256": "a9d99fd7ba9c27aad1bf093268079c46e0199fa7814c6e9283094586b8b41568"
+    },
+    {
+      "path": "poms/e302832915068b15e6f307ef9f6c2fbba0d648def16556ea04433455e2de8269.pom",
+      "bytes": 2103,
+      "sha256": "b48f39cbc74e1e80ea7f9344e1e3b022b3f7c94fae349cfa8e2182c60ec4d7f5"
+    },
+    {
+      "path": "poms/e360efc334a41ff8043595b9790792dce422f70a0786e11fa5fade3ea01d6eed.pom",
+      "bytes": 3610,
+      "sha256": "7f788df98bec73611b216fb4bea625d91330054222b789e7626a146f86fb2327"
+    },
+    {
+      "path": "poms/e41fc7abd74d2e147b1ef2a8aade6ad0a6b9344eb983e998c07ef729549512c7.pom",
+      "bytes": 5134,
+      "sha256": "681e3f6fd5308843aefbbb474dd3638ffd685d1ad8f7fa96b8559e5ea5ef202c"
+    },
+    {
+      "path": "poms/e4c29afb6f3b5a3cd3085a45eac5016c6b8f8e2cd8023a4e7590bc1fa1ded5a1.pom",
+      "bytes": 7221,
+      "sha256": "48521feaf9d631743cb07c138e77c34f9f7f621804e7f4e9162a7fb5e28cd4ea"
+    },
+    {
+      "path": "poms/e51ca3f644a2d61e250d88e4b5e0ef90c5729b1e6b26a066c993e7b3bfcbfe17.pom",
+      "bytes": 4945,
+      "sha256": "976af152cb7b3e00ff882051828c62c4a87340e618ab2ae9ea422bc6e1b629b8"
+    },
+    {
+      "path": "poms/e6abdab965dfcad5dc946955606fe34652eb5fec8d7eb3a3568fafa170f2e345.pom",
+      "bytes": 4621,
+      "sha256": "a5c53e074754835d30621618616e783b5b71875c2e7988ab06082348152e314e"
+    },
+    {
+      "path": "poms/e8a89b78010d8511a27bfc75a593e3dc443a27d8be1b9ac60cc16c2d3b9351e9.pom",
+      "bytes": 2200,
+      "sha256": "8958b5a0153c1a82cb133703d3d11155898738280a354e92ca1817d7ca6f4cb7"
+    },
+    {
+      "path": "poms/ec7a5d0996b262da3c7392180184d5057a2c5bef05ee0648c6b4d27446d86961.pom",
+      "bytes": 1920,
+      "sha256": "0f953706598140d9d8735cdd5aeb1fa35933f4e2f31c0bf3eb81a053a4c8c1a5"
+    },
+    {
+      "path": "poms/ed20bd12926b7b3c2df9d9b9dd9b88f29b0eb1ead8d6bd7502174776d3545e60.pom",
+      "bytes": 4123,
+      "sha256": "f43092463eb3f24328f45851ed36992981917868aa1ed1251cfff6839ecf5a59"
+    },
+    {
+      "path": "poms/f0f9df593d85fb31f00b53e005ec5e17cb069a04b916cfcedac180ecf5b016d7.pom",
+      "bytes": 4132,
+      "sha256": "3be221b6da86dcda51cac6c4b2404b89e95ab09cc8d06a05689be2ef36735dec"
+    },
+    {
+      "path": "poms/f25f6ac01ae52f23651cc6e535e2e1795a954ce4f4aaed57e64389f303c625d0.pom",
+      "bytes": 5339,
+      "sha256": "604e3303e6c477d0a3ca07b0670d42e715569fd0fbeed36da26727c8bcb7e6b5"
+    },
+    {
+      "path": "poms/f36a67736e1e7f05e3cd56bf46152bee9e4a6434752881edf8b8b998070477ae.pom",
+      "bytes": 2348,
+      "sha256": "70cdebe55ea7f84ff63ba7fdb6dc7186476da7a0806531cb8f859b94866f15ef"
+    },
+    {
+      "path": "poms/f38052e556e131728bb546ce881179b82395cdaa536158dd54caf7f98159a6c9.pom",
+      "bytes": 1856,
+      "sha256": "ebee6842d0b5b700ab7e015fddcc3f1e575d92b31a76f7b62eb9026c3388b88b"
+    },
+    {
+      "path": "poms/f53e51e6b36dcf0649f0ca94ef75d18df2aa4f8a98ef05bb1d3dba4d1ada35d1.pom",
+      "bytes": 1611,
+      "sha256": "62d95c89850af21030b19f14d5f7ecd6d8bcc9a3014c59002ec99624caac8100"
+    },
+    {
+      "path": "poms/f5b0036dc748844850ffdec1216cb0386f0a5dc3def5ab8925e170102ee83246.pom",
+      "bytes": 5680,
+      "sha256": "07c3912eada2a60dd475e0a0bb12515124d7a6d6baa3eabfdee8fcb38e34f843"
+    },
+    {
+      "path": "poms/f63488b32ba6a894820b5a902bf392339ed81b7de7008c7d8a16584b59fe0781.pom",
+      "bytes": 40411,
+      "sha256": "271a09ce8d1cd55d259074fc73c3e4baef9d7d399ed49165b7c5e79782bbd819"
+    },
+    {
+      "path": "poms/f70834493f75926e9df6d28a83d800a98dd42c3a642951b8508c31ce1de46f4d.pom",
+      "bytes": 3354,
+      "sha256": "de7fae42b4234f6fedc7762510bcb5db9860187be56f3bfec34b73db6e4a22a2"
+    },
+    {
+      "path": "poms/f7939adf9e38b992a62c1212a0e59ebbfcceb2006c4346e42cc63308fb26e0a1.pom",
+      "bytes": 4547,
+      "sha256": "8b66644bd0009ee38f9a68fab48cefca9380d1476a1f8bb9ea77649dcbdda12b"
+    },
+    {
+      "path": "poms/f942c463e9108c500ffa0a18530e33a2d3db47998f959d4e593f619dc5fa9b9d.pom",
+      "bytes": 1590,
+      "sha256": "c4dd09974335c21efee7ca29183ecae5ef7e26b48265a605c653a3efce47f29b"
+    },
+    {
+      "path": "poms/f97338fdc2676eebeb3ccb01ae230d5d74e75be6b7f705b29be01e37964ad035.pom",
+      "bytes": 3173,
+      "sha256": "aeb69e76988f43b06c84fca25efab2e418bb98b5aabcd03fa7913bd3ed1bcaa9"
+    },
+    {
+      "path": "poms/fa3ff41d9b1c498c7b14a60464626cf8f066855c2576703eb662533f391eb443.pom",
+      "bytes": 2051,
+      "sha256": "866fb357c7146f5f7678ad44e4bc6c2823d568defce1ed2805bb6c899606b228"
+    },
+    {
+      "path": "poms/fb00128024dea0bfac0ffd9f16cb35fba988632e0c708415082af832f9591375.pom",
+      "bytes": 6601,
+      "sha256": "e22ea0fca36eed3f649120fdadcf1d96f7f9a47d58472059d234b0cc62c9f570"
+    },
+    {
+      "path": "poms/fc367d1134d6d89c69627064a26c60df1dd83af4520973534754d5bb8e2cb906.pom",
+      "bytes": 2545,
+      "sha256": "351c49fa60702a1635749dc1d24c6c02450af874fb67852cbdb0ade06beac66a"
+    },
+    {
+      "path": "poms/ff236a67cb8f0f8dc3fd2db50a0f06598d118a8cc9c9528081879ebfb97c3070.pom",
+      "bytes": 3333,
+      "sha256": "98e7f3766211dd47adcffdb4d446a15e95f67a0448c5294d45108ece221eb2d4"
+    },
+    {
+      "path": "runtime-inventory.json",
+      "bytes": 508927,
+      "sha256": "6846bce0b0bd6d47bc05012260162ac769b35d9cba23ff92f1742bcd09e108f5"
+    }
+  ]
+}

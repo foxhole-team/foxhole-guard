@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="guard_atomic_update_unsupported">当前连接无法安全地应用此更改。请先停止 VPN，或明确关闭原子应用功能，然后重试。设置未更改。</string>
+    <string name="guard_atomic_update_failed">无法安全地完成路由更改。请先停止 VPN，然后重试。</string>
+</resources>

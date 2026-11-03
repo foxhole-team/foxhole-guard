@@ -13,6 +13,7 @@ internal open class MemoryRouterPairingStore : RouterPairingStore, RouterControl
     override suspend fun listSaved(): RouterSavedInventory = mutex.withLock { value.inventory() }
     override suspend fun save(pairing: RouterPairing) = change { it.withPairing(pairing) }
     override suspend fun selectSaved(id: String) = change { it.selected(id) }
+    override suspend fun renameSaved(id: String, label: String) = change { it.withLabel(id, label) }
     override suspend fun remove(expectedId: String) = change { it.without(expectedId) }
     override suspend fun read(pairingId: String): RouterControlPreferences = mutex.withLock {
         value.routers.singleOrNull { it.pairing.id == pairingId }?.preferences ?: RouterControlPreferences(pairingId)

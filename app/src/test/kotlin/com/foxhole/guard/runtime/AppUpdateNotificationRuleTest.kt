@@ -60,10 +60,12 @@ class AppUpdateNotificationRuleTest {
         assertTrue(notifier.contains("KEY_LAST_NOTIFIED_VERSION_CODE"))
         assertTrue(notifier.contains("Manifest.permission.POST_NOTIFICATIONS"))
         assertTrue(
-            "the announcement must be recorded even when the permission is denied",
-            notifier.indexOf("rememberNotifiedVersionCode(versionCode)") <
-                notifier.indexOf("Manifest.permission.POST_NOTIFICATIONS"),
+            "record only an announcement delivered successfully",
+            notifier.indexOf("notify(NOTIFICATION_ID, notification)") <
+                notifier.indexOf("rememberNotifiedVersionCode(versionCode)"),
         )
+        assertTrue(notifier.contains("AppUpdatePolicy.selfUpdateAllowed(BuildConfig.UPDATE_CHANNEL)"))
+        assertTrue(notifier.contains("app_update_available_action"))
         assertTrue(notifier.contains("NotificationManager.IMPORTANCE_DEFAULT"))
         assertTrue(notifier.contains("CHANNEL_ID = \"foxhole_app_updates\""))
     }

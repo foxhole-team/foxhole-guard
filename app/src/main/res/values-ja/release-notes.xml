@@ -12,10 +12,12 @@
     <string name="cli_release_notes_router_setup">ルーターの検索、ペアリング、SSH経由のOpenWrt確認を修正し、SSHキーへの対応を追加しました。</string>
     <string name="cli_release_notes_app_updates">GitHubからのアプリ更新に関する不具合を修正しました。</string>
     <string name="cli_release_notes_notices">通知を閉じるタイマーと、上方向へのスワイプで閉じる操作を追加しました。</string>
-    <string name="cli_release_notes_help">ヘルプとヒントを更新しました。</string>
+    <string name="cli_release_notes_help">ドキュメントとヘルプを改善し、ルーター管理のヒントを更新しました。</string>
     <string name="cli_release_notes_vless_reality">VLESS + REALITY の互換性を修正しました。</string>
     <string name="cli_release_notes_router_management">OpenWrtの設定と、家庭内端末・VPNクライアントの管理を簡素化しました。</string>
     <string name="cli_release_notes_pin6">インストール時に確認入力する6桁のPINと、最大10台のルーターへの対応を追加しました。</string>
     <string name="cli_release_notes_db_auto">FoxHole DB データベースの自動更新に対応しました。</string>
     <string name="cli_release_notes_router_pairing_version">ルーターとのペアリング時の OpenWrt バージョン確認の不具合を修正しました。</string>
+    <string name="cli_release_notes_core_104">DNS キャッシュの修正を含む FoxHole Core 1.0.3 に更新しました。</string>
+    <string name="cli_release_notes_atomic_104">通信経路のルールとシナリオの一括適用を修正しました。</string>
 </resources>

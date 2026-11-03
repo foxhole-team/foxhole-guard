@@ -433,6 +433,10 @@ internal suspend fun FoxholeVpnService.connect(
     protocolTestTrafficFreeze: Boolean = false,
     replaceActiveTunnel: Boolean = false,
 ) {
+    if (runtimeInstanceStore.current()?.atomicPolicyUpdateActive == true) {
+        fail(getString(R.string.guard_atomic_update_failed), commandStartId)
+        return
+    }
     val start =
         resolveVpnStartOrReject(
             requestedProfileId = profileId,

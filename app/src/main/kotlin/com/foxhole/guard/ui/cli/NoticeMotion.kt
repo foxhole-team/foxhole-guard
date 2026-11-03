@@ -35,6 +35,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -77,70 +78,78 @@ internal fun Modifier.noticeRemainingLine(progress: State<Float>?, color: Color)
         drawRect(color, Offset(0f, size.height - thickness), Size(size.width * progress.value, thickness))
     }
 
+internal class NoticeDismissState {
+    var offsetY by mutableFloatStateOf(0f)
+    var height by mutableFloatStateOf(1f)
+    var dismissing by mutableStateOf(false)
+    var motion: Job? = null
+    fun stop() { motion?.cancel(); motion = null }
+}
+
 @Composable
 internal fun NoticeDismissible(
     noticeId: Any,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
+    motionState: NoticeDismissState? = null,
+    motionScope: CoroutineScope? = null,
     content: @Composable (dismiss: () -> Unit) -> Unit,
 ) {
-    var offsetY by remember(noticeId) { mutableFloatStateOf(0f) }
-    var height by remember(noticeId) { mutableFloatStateOf(1f) }
-    var dismissing by remember(noticeId) { mutableStateOf(false) }
-    var motion by remember(noticeId) { mutableStateOf<Job?>(null) }
-    val scope = rememberCoroutineScope()
+    val presentation = motionState ?: remember(noticeId) { NoticeDismissState() }
+    val localScope = rememberCoroutineScope()
+    val scope = motionScope ?: localScope
     val dismissCurrent = remember(noticeId) { onDismiss }
-    DisposableEffect(noticeId) {
-        onDispose { motion?.cancel() }
+    DisposableEffect(noticeId, presentation, motionScope) {
+        onDispose { if (motionScope == null) presentation.stop() }
     }
     val maxDistance = with(LocalDensity.current) { 48.dp.toPx() }
     val dismiss: () -> Unit = {
-        if (!dismissing) {
-            dismissing = true
-            motion?.cancel()
-            motion = scope.launch {
-                animate(offsetY, -height, animationSpec = tween(160, easing = FastOutSlowInEasing)) { value, _ ->
-                    offsetY = value
+        if (!presentation.dismissing) {
+            presentation.dismissing = true
+            presentation.motion?.cancel()
+            presentation.motion = scope.launch {
+                animate(presentation.offsetY, -presentation.height, animationSpec = tween(160, easing = FastOutSlowInEasing)) { value, _ ->
+                    presentation.offsetY = value
                 }
                 dismissCurrent()
             }
         }
     }
     val settle: () -> Unit = {
-        if (!dismissing) {
-            motion?.cancel()
-            motion = scope.launch {
-                animate(offsetY, 0f, animationSpec = tween(160, easing = FastOutSlowInEasing)) { value, _ ->
-                    offsetY = value
+        if (!presentation.dismissing) {
+            presentation.motion?.cancel()
+            presentation.motion = scope.launch {
+                animate(presentation.offsetY, 0f, animationSpec = tween(160, easing = FastOutSlowInEasing)) { value, _ ->
+                    presentation.offsetY = value
                 }
             }
         }
     }
     Box(
         modifier.semantics(mergeDescendants = true) { this.dismiss { dismiss(); true } }
-            .onSizeChanged { height = it.height.toFloat().coerceAtLeast(1f) }
+            .onSizeChanged { presentation.height = it.height.toFloat().coerceAtLeast(1f) }
             .graphicsLayer {
-                translationY = offsetY
-                alpha = (1f + offsetY / height).coerceIn(0f, 1f)
+                translationY = presentation.offsetY
+                alpha = (1f + presentation.offsetY / presentation.height).coerceIn(0f, 1f)
             }
             .pointerInput(noticeId) {
                 awaitPointerEventScope {
                     while (true) {
                         val event = awaitPointerEvent(PointerEventPass.Initial)
                         // A second tap during exit must not reach an action in the notice.
-                        if (dismissing) event.changes.forEach { it.consume() }
+                        if (presentation.dismissing) event.changes.forEach { it.consume() }
                     }
                 }
             }
             .pointerInput(noticeId, maxDistance) {
                 detectVerticalDragGestures(
-                    onDragStart = { if (!dismissing) motion?.cancel() },
+                    onDragStart = { if (!presentation.dismissing) presentation.motion?.cancel() },
                     onVerticalDrag = { change, amount ->
                         change.consume()
-                        if (!dismissing) offsetY = (offsetY + amount).coerceIn(-height, 0f)
+                        if (!presentation.dismissing) presentation.offsetY = (presentation.offsetY + amount).coerceIn(-presentation.height, 0f)
                     },
                     onDragEnd = {
-                        if (shouldDismissNoticeUp(offsetY, height, maxDistance)) dismiss() else settle()
+                        if (shouldDismissNoticeUp(presentation.offsetY, presentation.height, maxDistance)) dismiss() else settle()
                     },
                     onDragCancel = { settle() },
                 )

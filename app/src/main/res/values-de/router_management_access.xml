@@ -1,0 +1,4 @@
+<resources>
+    <string name="router_management_disconnect_vpn">Trennen Sie die aktuelle VPN-Verbindung, um den Router zu verwalten oder einzurichten.</string>
+    <string name="router_management_unavailable_home">Der Router ist vorübergehend nicht verfügbar. Verbinden Sie sich mit Ihrem WLAN zu Hause.</string>
+</resources>

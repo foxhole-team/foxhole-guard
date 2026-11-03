@@ -749,7 +749,7 @@
     <string name="cli_cfg_group_rules">ネットワークルール</string>
     <string name="cli_cfg_group_extras">追加機能</string>
     <string name="cli_cfg_atomic_connection">アトミックなシナリオ切り替え</string>
-    <string name="cli_cfg_atomic_connection_note">オフの場合、動作モードやVPN/Torシナリオの切り替え時に確認します。ネットワークルールは常に自動適用されます</string>
+    <string name="cli_cfg_atomic_connection_note">オンの場合、対応するルーティング変更では、新しいルールが適用されるまでトラフィックをブロックします。失敗するとブロックが続く場合があるため、再試行する前に VPN を停止してください。対応していない変更は保存前に拒否されます。オフの場合、動作モードや VPN/Tor シナリオの切り替えに確認が必要です</string>
     <string name="cli_cfg_auto_reconnect">自動再接続</string>
     <string name="cli_cfg_auto_reconnect_note">切断時に接続を復旧</string>
     <string name="cli_cfg_auto_start">端末起動時に開始</string>

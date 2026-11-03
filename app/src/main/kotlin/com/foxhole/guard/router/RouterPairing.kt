@@ -55,6 +55,7 @@ internal interface RouterPairingStore {
         if (saved.id == id) return saved
         saved.clear(); return null
     }
+    suspend fun renameSaved(id: String, label: String) { throw RouterApiFailure(RouterApiError.UNSUPPORTED) }
     suspend fun selectSaved(id: String) {
         val saved = read() ?: throw RouterApiFailure(RouterApiError.CONFLICT)
         try { if (saved.id != id) throw RouterApiFailure(RouterApiError.CONFLICT) } finally { saved.clear() }

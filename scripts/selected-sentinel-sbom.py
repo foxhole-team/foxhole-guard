@@ -15,9 +15,11 @@ CURRENT_TARGET_ABIS = {target: TARGET_ABIS[target] for target in ("aarch64-linux
 
 
 def delivery_targets(profile):
-    require(profile in ("legacy4", "android64", "android-armv7", "android3", "android4"), "Unknown Sentinel delivery profile")
+    require(profile in ("legacy4", "android-arm64", "android64", "android-armv7", "android3", "android4"), "Unknown Sentinel delivery profile")
     if profile == "android3":
         return {target: TARGET_ABIS[target] for target in ("aarch64-linux-android", "armv7-linux-androideabi", "x86_64-linux-android")}
+    if profile == "android-arm64":
+        return {"aarch64-linux-android": "arm64-v8a"}
     if profile == "android-armv7":
         return {"armv7-linux-androideabi": "armeabi-v7a"}
     return TARGET_ABIS if profile in ("legacy4", "android4") else CURRENT_TARGET_ABIS
@@ -411,7 +413,7 @@ def combined_evidence(targets, revision, delivery_profile="legacy4"):
                 "coverage": "complete", "scope": "Four distinct captured Cargo graphs and original notice union; not an all-targets BOM or whole APK/toolchain inventory"}
     if delivery_profile != "legacy4":
         coverage.update(androidDeliveryProfile=delivery_profile, abis=list(target_abis.values()),
-                        scope=("Two distinct android64 captured Cargo graphs and original notice union; no current32 or whole APK/toolchain claim" if delivery_profile == "android64" else ("Four distinct android4 captured Cargo graphs and original notice union; no runtime or whole APK/toolchain claim" if delivery_profile == "android4" else ("Three distinct android3 captured Cargo graphs and original notice union; no runtime or whole APK/toolchain claim" if delivery_profile == "android3" else "One exact ARMv7 captured Cargo graph and original notice union; no runtime or whole APK/toolchain claim"))))
+                        scope=("Two distinct android64 captured Cargo graphs and original notice union; no current32 or whole APK/toolchain claim" if delivery_profile == "android64" else ("Four distinct android4 captured Cargo graphs and original notice union; no runtime or whole APK/toolchain claim" if delivery_profile == "android4" else ("Three distinct android3 captured Cargo graphs and original notice union; no runtime or whole APK/toolchain claim" if delivery_profile == "android3" else ("One exact ARM64 preview captured Cargo graph and original notice union; no runtime or whole APK/toolchain claim" if delivery_profile == "android-arm64" else "One exact ARMv7 captured Cargo graph and original notice union; no runtime or whole APK/toolchain claim")))))
     return {"targets": {target: item["data"] for target, item in targets.items()},
             "notices": [("MANIFEST.json", notice_manifest_bytes)] + sorted(notice_bytes.items()),
             "coverage": encoded(coverage)}

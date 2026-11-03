@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_update_available_recommendation">Hay una nueva versión de la aplicación disponible. Se recomienda actualizar la aplicación.</string>
+    <string name="app_update_available_action">Actualizar</string>
+    <string name="app_update_available_release_note">Se añadieron notificaciones del sistema sobre nuevas versiones de la aplicación (solo la versión de GitHub).</string>
+</resources>

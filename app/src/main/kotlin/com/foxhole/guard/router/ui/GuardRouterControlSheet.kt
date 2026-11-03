@@ -1,5 +1,10 @@
 package com.foxhole.guard.router.ui
 
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.graphics.graphicsLayer
+import com.foxhole.guard.router.routerDisplayCountryCode
+
+import androidx.compose.foundation.layout.Spacer
 import com.foxhole.guard.router.RouterUpdatePollBudget
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.withTimeout
@@ -55,6 +60,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.Modifier
 import com.foxhole.guard.ui.cli.components.CliButton
+import com.foxhole.guard.ui.cli.components.CliMetricSpinner
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.LocalConfiguration
@@ -79,6 +85,7 @@ import com.foxhole.guard.router.ui.shareGuardRouterProfile
 import com.foxhole.guard.router.RouterControlCoordinator
 import com.foxhole.guard.router.RouterControlStage
 import com.foxhole.guard.router.RouterManagementLanding
+import com.foxhole.guard.router.RouterWizardError
 import com.foxhole.guard.router.RouterControlState
 import com.foxhole.guard.router.RouterLanDeviceKind
 import com.foxhole.guard.router.routerInstalledProtocols
@@ -87,6 +94,9 @@ import com.foxhole.guard.router.visibleRouterLanDevices
 import com.foxhole.guard.router.RouterUpdateAvailability
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonObject
@@ -118,13 +128,11 @@ internal fun GuardRouterControlSheet(
     val notices = requireNotNull(LocalGuardRouterNotices.current)
     val current by rememberUpdatedState(enabled)
     var settledLanding by remember(coordinator, state.selectedRouterId) { mutableStateOf<ControlPage?>(null) }
-    val landing = when (state.managementLanding) {
-        RouterManagementLanding.HUB -> ControlPage.HUB
-        RouterManagementLanding.SETTINGS -> ControlPage.SETTINGS
-        null -> settledLanding ?: ControlPage.LOADING
-    }
+    val landing = if (state.preferences != null || state.savedRouters.isNotEmpty()) ControlPage.HUB
+        else settledLanding ?: ControlPage.LOADING
     var landingResolved by remember(coordinator, state.selectedRouterId) { mutableStateOf(false) }
-    var page by remember(coordinator) { mutableStateOf(ControlPage.LOADING) }
+    var page by remember(coordinator) { mutableStateOf(if (state.preferences != null) ControlPage.HUB else ControlPage.LOADING) }
+    var settingsRouterRequested by remember(coordinator) { mutableStateOf<String?>(null) }
     var target by remember(coordinator) { mutableStateOf<RouterActionTarget?>(null) }
     var removalRevision by remember(coordinator) { mutableStateOf<Long?>(null) }
     var unpairId by remember(coordinator) { mutableStateOf<String?>(null) }
@@ -140,30 +148,102 @@ internal fun GuardRouterControlSheet(
     var engineSelection by remember(coordinator) { mutableStateOf<Set<RouterInstallProtocol>>(emptySet()) }
     var notifiedEngineJob by remember(coordinator) { mutableStateOf<String?>(null) }
     var opened by remember(coordinator, enabled) { mutableStateOf(false) }
+    var discoveryPending by remember(coordinator, enabled) { mutableStateOf(false) }
+    var discoveryAttempt by remember(coordinator) { mutableStateOf(0) }
+    var discoveryToken by remember(coordinator) { mutableStateOf(0L) }
+    var consumedDiscoveryAttempt by remember(coordinator) { mutableStateOf(0) }
+    var devicesPending by remember(coordinator) { mutableStateOf(false) }
+    var devicesFailed by remember(coordinator) { mutableStateOf(false) }
+    var devicesAttempt by remember(coordinator) { mutableStateOf(0) }
+    var devicesOwner by remember(coordinator) { mutableStateOf<String?>(null) }
+    var devicesToken by remember(coordinator) { mutableStateOf(0L) }
+    fun retryDiscovery() { discoveryAttempt++ }
+    fun requestDevices() {
+        devicesOwner = coordinator.state.value.selectedRouterId
+        devicesPending = true
+        devicesFailed = false
+        devicesAttempt++
+    }
     fun networkAction(action: suspend () -> Unit) {
         requestAccess { if (current && scope.isActive) scope.launch { action() } }
     }
     fun dashboard() {
         val latest = coordinator.state.value
-        page = when (latest.managementLanding) {
-            RouterManagementLanding.HUB -> ControlPage.HUB
-            RouterManagementLanding.SETTINGS -> ControlPage.SETTINGS
-            null -> settledLanding ?: ControlPage.LOADING
-        }
+        page = if (latest.preferences != null || latest.savedRouters.isNotEmpty()) ControlPage.HUB
+            else settledLanding ?: ControlPage.LOADING
         target = null
         qrProfile = null
         clientName = ""
     }
-    LaunchedEffect(coordinator, enabled) {
-        if (enabled) requestAccess {
-            if (current && scope.isActive) scope.launch {
-                coordinator.open(); currentCoroutineContext().ensureActive(); opened = true
+    LaunchedEffect(coordinator, enabled, discoveryAttempt, networkGeneration) {
+        val token = ++discoveryToken
+        if (!enabled) { discoveryPending = false; coordinator.close(); return@LaunchedEffect }
+        discoveryPending = false
+        val forceLocal = discoveryAttempt > consumedDiscoveryAttempt
+        consumedDiscoveryAttempt = discoveryAttempt
+        val access = coordinator.prepareDiscovery(forceLocal)
+        if (!access.canDiscover) { opened = true; return@LaunchedEffect }
+        discoveryPending = true
+        val settled = CompletableDeferred<Unit>()
+        var task: Job? = null
+        var live = true
+        try {
+            requestAccess {
+                if (live && current && scope.isActive && token == discoveryToken && task == null) {
+                    task = scope.launch {
+                        try {
+                            if (discoveryAttempt == 0) coordinator.open() else coordinator.refreshConnectedRouter()
+                        } finally { settled.complete(Unit) }
+                    }
+                }
             }
-        } else coordinator.close()
+            val completed = withTimeoutOrNull(45_000) { settled.await(); true } == true
+            if (token == discoveryToken && current) {
+                if (!completed) coordinator.close()
+                opened = true
+            }
+        } finally {
+            live = false; task?.cancel(); settled.cancel()
+            if (token == discoveryToken) discoveryPending = false
+        }
+    }
+    LaunchedEffect(coordinator, enabled, devicesAttempt, state.selectedRouterId) {
+        val token = ++devicesToken
+        val selected = devicesOwner
+        if (!enabled || devicesAttempt == 0 || selected == null || selected != state.selectedRouterId) return@LaunchedEffect
+        devicesPending = true
+        devicesFailed = false
+        val settled = CompletableDeferred<Unit>()
+        var task: Job? = null
+        var live = true
+        try {
+            requestAccess {
+                if (live && current && scope.isActive && token == devicesToken && task == null &&
+                    coordinator.state.value.selectedRouterId == selected) {
+                    task = scope.launch {
+                        try {
+                            if (coordinator.state.value.controlsAvailable) coordinator.refreshDevices()
+                        } finally { settled.complete(Unit) }
+                    }
+                }
+            }
+            val completed = withTimeoutOrNull(45_000) { settled.await(); true } == true
+            if (token == devicesToken && coordinator.state.value.selectedRouterId == selected) {
+                devicesFailed = !completed || !coordinator.state.value.lanDevicesLoaded
+            }
+        } finally {
+            live = false; task?.cancel(); settled.cancel()
+            if (token == devicesToken) devicesPending = false
+        }
     }
     LaunchedEffect(state.selectedRouterId) {
+        val openSettings = settingsRouterRequested == state.selectedRouterId && state.selectedRouterId != null
         dashboard()
+        if (openSettings) page = ControlPage.SETTINGS
         devicesExpanded = false
+        devicesPending = false
+        devicesFailed = false
+        devicesOwner = null
         profilesExpanded = false
         clientsListState.scrollToItem(0)
         profilesListState.scrollToItem(0)
@@ -173,8 +253,13 @@ internal fun GuardRouterControlSheet(
     }
     DisposableEffect(coordinator) { onDispose { coordinator.close() } }
     DisposableEffect(Unit) { onDispose { qrProfile = null } }
-    LaunchedEffect(state.error) {
-        state.error?.let { notices.show(resources.getString(
+    LaunchedEffect(state.error, state.entryAccess) {
+        val cause = if (state.entryAccess == com.foxhole.guard.router.RouterManagementAccess.VPN_ACTIVE) "VPN_ACTIVE" else state.error?.name
+        if (!coordinator.claimUiNotice("connection", cause)) return@LaunchedEffect
+        if (state.error == RouterWizardError.VPN_ACTIVE ||
+            state.entryAccess == com.foxhole.guard.router.RouterManagementAccess.VPN_ACTIVE) {
+            notices.show(resources.getString(R.string.router_management_disconnect_vpn), error = false)
+        } else state.error?.let { notices.show(resources.getString(
             if (state.stage == RouterControlStage.PAIRING_REQUIRED) R.string.guard_router_router_control_pairing_required
             else routerWizardErrorLabel(it),
         ), error = true) }
@@ -185,19 +270,15 @@ internal fun GuardRouterControlSheet(
     }
     LaunchedEffect(state.hasConfirmedDirectIp, state.snapshot != null, state.selectedRouterId) {
         if (state.snapshot != null || state.preferences?.publicIpConfirmed == true) {
-            settledLanding = when (state.managementLanding) {
-                RouterManagementLanding.HUB -> ControlPage.HUB
-                RouterManagementLanding.SETTINGS -> ControlPage.SETTINGS
-                null -> settledLanding
-            }
-            if (!landingResolved || page == ControlPage.HUB && !state.hasConfirmedDirectIp) {
+            settledLanding = ControlPage.HUB
+            if (!landingResolved && page == ControlPage.LOADING) {
                 dashboard()
                 landingResolved = true
             }
         }
     }
     LaunchedEffect(coordinator, opened, enabled, state.stage, state.busy) {
-        if (opened && enabled && !state.busy && state.stage == RouterControlStage.UNPAIRED && state.savedRouters.isEmpty()) {
+        if (opened && enabled && !discoveryPending && !state.busy && state.stage == RouterControlStage.UNPAIRED && state.savedRouters.isEmpty()) {
             val latest = coordinator.state.value
             if (!latest.busy && latest.stage == RouterControlStage.UNPAIRED && latest.savedRouters.isEmpty()) {
                 unpairId = null; onUnpaired()
@@ -255,6 +336,7 @@ internal fun GuardRouterControlSheet(
         }
     }
     fun back() {
+        settingsRouterRequested = null
         if (page == ControlPage.ENGINE_PLAN) coordinator.discardEnginePlan()
         page = when (page) {
             ControlPage.REMOVE -> if (target?.remote == true) ControlPage.PROFILE else ControlPage.ACTIONS
@@ -274,7 +356,9 @@ internal fun GuardRouterControlSheet(
         (if (selected.remote) state.snapshot?.clients else state.snapshot?.servers)?.singleOrNull { it.text("id") == selected.id }
     }
     val device = target?.takeIf { it.device }?.let { selected -> state.lanDevices.singleOrNull { it.id == selected.id } }
-    val canAct = enabled && state.controlsAvailable
+    val canAct = enabled && !discoveryPending && state.controlsAvailable
+    val discovering = discoveryPending
+    val discoveryReady = !discoveryPending && state.stage == RouterControlStage.CONNECTED && state.snapshot != null
     val rootPage = page == landing
     fun openClient(id: String) {
         val owner = coordinator.state.value.selectedRouterId
@@ -287,7 +371,24 @@ internal fun GuardRouterControlSheet(
             }
         }
     }
-    fun selectRouter(id: String) { networkAction { coordinator.selectRouter(id) } }
+    fun selectRouter(id: String) { settingsRouterRequested = null; if (id != state.selectedRouterId) networkAction { coordinator.selectRouter(id) } }
+    fun routerSettings(id: String) {
+        settingsRouterRequested = id
+        if (id == state.selectedRouterId) page = ControlPage.SETTINGS
+        else networkAction {
+            coordinator.selectRouter(id)
+            if (current && settingsRouterRequested == id && coordinator.state.value.selectedRouterId == id) page = ControlPage.SETTINGS
+        }
+    }
+    fun removeRouter(id: String) {
+        settingsRouterRequested = null
+        deletePackage = false
+        unpairId = id
+        page = ControlPage.UNPAIR
+    }
+    fun renameRouter(id: String, label: String) {
+        scope.launch { if (current) coordinator.renameRouter(id, label) }
+    }
     val title = if (rootPage) R.string.guard_router_router_review_management else when (page) {
         ControlPage.UNPAIR -> R.string.guard_router_router_review_unpair
         ControlPage.CREATE -> R.string.guard_router_router_review_create_profile
@@ -307,19 +408,15 @@ internal fun GuardRouterControlSheet(
         R.drawable.lin_router,
         busy = state.busy,
         actions = {
-            if (page in setOf(ControlPage.LOADING, ControlPage.HUB, ControlPage.ROUTER_VPN, ControlPage.CLIENTS)) {
-                IconButton(onClick = { page = ControlPage.SETTINGS }, modifier = Modifier.size(48.dp), enabled = enabled && !state.busy && state.preferences != null) {
-                    Icon(painterResource(R.drawable.lin_settings), stringResource(R.string.guard_router_router_review_settings), Modifier.size(22.dp))
-                }
-            }
             if (rootPage) {
                 IconButton(onClick = onAddRouter, modifier = Modifier.size(48.dp), enabled = enabled && state.canAddRouter) {
                     Icon(painterResource(R.drawable.lin_add), stringResource(R.string.guard_router_router_review_add_router), Modifier.size(22.dp))
                 }
-                IconButton(onClick = {
-                    deletePackage = false; unpairId = state.preferences?.pairingId; page = ControlPage.UNPAIR
-                }, modifier = Modifier.size(48.dp), enabled = enabled && !state.busy && state.preferences != null) {
-                    Icon(painterResource(R.drawable.lin_trash), stringResource(R.string.guard_router_router_review_unpair), Modifier.size(22.dp), tint = guardRouterDeleteColor())
+                if (state.savedRouters.size == 1) IconButton(
+                    onClick = { state.selectedRouterId?.let(::removeRouter) }, modifier = Modifier.size(48.dp),
+                    enabled = enabled && state.selectedRouterId != null) {
+                    Icon(painterResource(R.drawable.lin_trash), stringResource(R.string.guard_router_router_review_unpair),
+                        Modifier.size(22.dp), tint = guardRouterDeleteColor())
                 }
             } else if (page !in setOf(ControlPage.UNPAIR, ControlPage.ROUTER_VPN, ControlPage.CLIENTS)) GuardRouterHelpButton(title,
                 if (page in setOf(ControlPage.PROTOCOLS, ControlPage.ENGINE_PLAN, ControlPage.ENGINE_JOB)) R.string.guard_router_router_engines_help
@@ -329,12 +426,14 @@ internal fun GuardRouterControlSheet(
                 else if (target?.remote == true) R.string.guard_router_router_control_clients_help else R.string.guard_router_router_control_vpn_help)
         },
         scrollable = false,
-        showAddonSettings = page == ControlPage.SETTINGS,
+        showAddonSettings = rootPage,
+        addonSettingsLast = rootPage,
+        addonSettingsEnabled = enabled && !discoveryPending,
         footer = {
             // Transient recovery actions stay above the permanent dock-aligned navigation row.
             Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (state.stage != RouterControlStage.CONNECTED && (state.stage == RouterControlStage.PAIRING_REQUIRED || state.error != null ||
-                        profileProbe?.phase == com.foxhole.guard.router.RouterProfileProbePhase.FAILED)) {
+                if (!discoveryPending && state.stage != RouterControlStage.CONNECTED && (state.stage == RouterControlStage.PAIRING_REQUIRED ||
+                        profileProbe?.error in setOf(RouterWizardError.PIN, RouterWizardError.IDENTITY))) {
                     Text(stringResource(R.string.guard_router_router_profile_probe_failed), modifier = Modifier.fillMaxWidth(),
                         style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -342,25 +441,34 @@ internal fun GuardRouterControlSheet(
                         label = stringResource(R.string.guard_router_router_profile_retry_pairing),
                         onClick = onRetryPairing,
                         modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-                        enabled = enabled && !state.busy,
+                        enabled = enabled && !discoveryPending && !state.busy,
                         filled = false,
                     )
                 }
                 when (page) {
                     ControlPage.LOADING, ControlPage.HUB -> {
-                        ControlHubFooter(state, enabled, onPair) { networkAction { coordinator.refreshConnectedRouter() } }
-                        val navigationEnabled = page == ControlPage.HUB && enabled && !state.busy && state.preferences != null
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            ControlManagementButton(R.string.guard_router_router_review_router_vpn, R.drawable.lin_router,
-                                navigationEnabled, Modifier.weight(1f)) { page = ControlPage.ROUTER_VPN }
-                            ControlManagementButton(R.string.guard_router_router_review_vpn_clients, R.drawable.lin_profiles,
-                                navigationEnabled, Modifier.weight(1f)) {
-                                page = ControlPage.CLIENTS
-                                if (canAct) networkAction {
-                                    coordinator.refreshClientStatus()
+                        val controlsAlpha by animateFloatAsState(if (discovering) 0f else 1f,
+                            androidx.compose.animation.core.tween(200, easing = androidx.compose.animation.core.FastOutSlowInEasing),
+                            label = "router-controls-opacity")
+                        if (discovering || discoveryReady) Box(Modifier.fillMaxWidth().height(64.dp), contentAlignment = Alignment.Center) {
+                            Row(Modifier.fillMaxSize().graphicsLayer { alpha = controlsAlpha }
+                                .then(if (discovering) Modifier.clearAndSetSemantics { } else Modifier),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                ControlManagementButton(R.string.guard_router_router_review_router_vpn, R.drawable.lin_router,
+                                    enabled && discoveryReady && !state.busy, Modifier.weight(1f).fillMaxHeight()) { page = ControlPage.ROUTER_VPN }
+                                ControlManagementButton(R.string.guard_router_router_review_vpn_clients, R.drawable.lin_profiles,
+                                    enabled && discoveryReady && !state.busy, Modifier.weight(1f).fillMaxHeight()) {
+                                    page = ControlPage.CLIENTS
+                                    if (canAct) networkAction { coordinator.refreshClientStatus() }
                                 }
                             }
+                            androidx.compose.animation.AnimatedVisibility(discovering,
+                                enter = androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(100)),
+                                exit = androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(120))) {
+                                ControlLoading(R.string.router_loader_discovering)
+                            }
                         }
+                        if (!discovering) ControlHubFooter(state, enabled, onPair, ::retryDiscovery)
                     }
                     ControlPage.ROUTER_VPN -> {
                         val activeId = state.snapshot?.desiredServerId
@@ -409,7 +517,7 @@ internal fun GuardRouterControlSheet(
                     )
                     ControlPage.DEVICE -> Unit
                     ControlPage.UPDATES -> GuardRouterPackageUpdateFooter(state.updates,
-                        enabled && !state.busy && state.preferences?.enabled == true && state.stage != RouterControlStage.PAIRING_REQUIRED,
+                        enabled && !discoveryPending && !state.busy && state.preferences?.enabled == true && state.stage != RouterControlStage.PAIRING_REQUIRED,
                         onCheck = { networkAction { coordinator.checkUpdates() } },
                         onApply = { state.updates.plan?.let { plan -> networkAction { coordinator.applyUpdate(plan.planId, plan.planSha256) } } },
                         onRefresh = { networkAction { coordinator.refreshUpdates() } })
@@ -466,12 +574,16 @@ internal fun GuardRouterControlSheet(
                         enabled = canAct,
                         filled = false,
                     )
-                    ControlPage.UNPAIR -> ControlConfirmationFooter(enabled && !state.busy, onCancel = ::dashboard,
+                    ControlPage.UNPAIR -> ControlConfirmationFooter(enabled, onCancel = ::dashboard,
                         confirmLabel = R.string.guard_router_router_review_confirm_unpair, showCancel = false,
                         onConfirm = { unpairId?.let { id ->
                             if (deletePackage) networkAction { coordinator.unpair(id, deletePackage = true) }
-                            else scope.launch { coordinator.unpair(id) }
-                        } }, confirmEnabled = unpairId != null && unpairId == state.preferences?.pairingId && (!deletePackage || state.packageRemovalAvailable))
+                            else scope.launch {
+                                coordinator.unpair(id)
+                                if (current && coordinator.state.value.savedRouters.none { it.id == id }) dashboard()
+                            }
+                        } }, confirmEnabled = unpairId != null && state.savedRouters.any { it.id == unpairId } &&
+                            (!deletePackage || unpairId == state.preferences?.pairingId && state.packageRemovalAvailable))
                     ControlPage.REMOVE -> ControlConfirmationFooter(canAct, onCancel = ::back, confirmLabel = R.string.guard_router_vpn_remove,
                         showCancel = false, onConfirm = { target?.let { selected -> removalRevision?.let { revision -> networkAction {
                             if (selected.remote) coordinator.removeRemoteClient(selected.id, revision)
@@ -495,7 +607,7 @@ internal fun GuardRouterControlSheet(
                             else coordinator.showServer(selected.id) { shareGuardRouterProfile(context, it) }
                         } } }, onRemove = { removalRevision = state.snapshot?.revision; page = ControlPage.REMOVE })
                 }
-                GuardRouterNavigationFooter(enabled && !state.busy, if (rootPage) null else ::back, onClose)
+                GuardRouterNavigationFooter(enabled && !discoveryPending && !state.busy, if (rootPage) null else ::back, onClose)
             }
         },
     ) {
@@ -505,13 +617,19 @@ internal fun GuardRouterControlSheet(
             else GuardRouterSheetMotion.pageTransition(animateSize = false)
         }, label = "router-control-navigation") { shownPage ->
             when (shownPage) {
-                ControlPage.LOADING, ControlPage.HUB -> ControlHub(state,
-                    enabled && !state.busy && shownPage == page && shownPage == ControlPage.HUB, ::selectRouter)
+                ControlPage.LOADING, ControlPage.HUB -> ControlHub(state, enabled, ::selectRouter, ::renameRouter, ::routerSettings, ::removeRouter, discovering)
                 ControlPage.ROUTER_VPN -> ControlRouterVpn(if (enabled && shownPage == page) state else state.copy(busy = true),
                     profilesListState, profilesExpanded, devicesExpanded,
                     onDevicesExpanded = { value ->
                         devicesExpanded = value
-                        if (value && canAct) networkAction { coordinator.refreshDevices() }
+                        if (value) {
+                            if (canAct) requestDevices() else { devicesPending = false; devicesFailed = true }
+                        }
+                    },
+                    devicesPending = devicesPending, devicesFailed = devicesFailed,
+                    onRetryDevices = {
+                        if (canAct) requestDevices()
+                        else { devicesExpanded = false; dashboard(); retryDiscovery() }
                     },
                     onDevice = { id -> target = RouterActionTarget(id, device = true); page = ControlPage.DEVICE },
                     onDeviceRoute = { id, vpn -> networkAction { coordinator.setLanClient(id, vpn) } },
@@ -533,14 +651,20 @@ internal fun GuardRouterControlSheet(
                 else -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     when (shownPage) {
                         ControlPage.UNPAIR -> {
+                            state.savedRouters.singleOrNull { it.id == unpairId }?.let { router ->
+                                Text(router.label ?: stringResource(R.string.router_table_default_name, router.number),
+                                    style = MaterialTheme.typography.titleMedium)
+                            }
                             Text(stringResource(R.string.guard_router_router_review_unpair_description))
-                            Row(Modifier.fillMaxWidth().heightIn(min = 56.dp), verticalAlignment = Alignment.CenterVertically) {
+                            if (unpairId == state.selectedRouterId) {
+                            Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Checkbox(deletePackage, onCheckedChange = { selected ->
                                     if (!selected || coordinator.state.value.packageRemovalAvailable) deletePackage = selected
-                                }, enabled = enabled && !state.busy && (deletePackage || state.packageRemovalAvailable))
+                                }, enabled = enabled && !discoveryPending && !state.busy && (deletePackage || state.packageRemovalAvailable))
                                 Text(stringResource(R.string.guard_router_router_review_delete_package), style = MaterialTheme.typography.bodyMedium)
                             }
                             if (!state.packageRemovalAvailable) Text(stringResource(R.string.guard_router_router_review_delete_unavailable), style = MaterialTheme.typography.bodySmall, color = LocalGuardRouterColors.current.muted)
+                            }
                         }
                         ControlPage.SETTINGS -> ControlRouterSettings(
                             if (enabled && shownPage == page) state else state.copy(busy = true), coordinator.homeAutomationAvailable,
@@ -574,7 +698,7 @@ internal fun GuardRouterControlSheet(
                                 Text(stringResource(R.string.guard_router_router_review_active_profile, name), style = MaterialTheme.typography.bodySmall, color = LocalGuardRouterColors.current.muted)
                             }
                         }
-                        ControlPage.UPDATES -> GuardRouterPackageUpdates(state.updates, enabled && !state.busy &&
+                        ControlPage.UPDATES -> GuardRouterPackageUpdates(state.updates, enabled && !discoveryPending && !state.busy &&
                             state.stage == RouterControlStage.CONNECTED && shownPage == page,
                             onAuto = { value -> networkAction { coordinator.setUpdateAuto(value) } })
                         ControlPage.ENGINE_PLAN -> GuardRouterProtocolPlan(state.engines.plan)
@@ -606,23 +730,13 @@ internal fun GuardRouterControlSheet(
 
 @Composable
 private fun ControlHubFooter(state: RouterControlState, enabled: Boolean, onPair: () -> Unit, onRefresh: () -> Unit) {
-    if (state.stage == RouterControlStage.UNPAIRED || state.stage == RouterControlStage.PAIRING_REQUIRED) {
-        CliButton(
-            label = stringResource(R.string.guard_router_vpn_router_pair),
-            onClick = onPair,
-            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-            enabled = enabled && !state.busy,
-            filled = false,
-        )
-    } else if (state.stage == RouterControlStage.OFFLINE) {
-        CliButton(
-            label = stringResource(R.string.guard_router_vpn_refresh),
-            onClick = onRefresh,
-            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-            enabled = enabled && !state.busy,
-            filled = false,
-        )
-    }
+    if (state.stage == RouterControlStage.PAIRING_REQUIRED) return
+    val pair = state.stage == RouterControlStage.UNPAIRED && state.entryAccess?.canDiscover == true
+    if (pair || state.stage != RouterControlStage.CONNECTED) CliButton(
+        label = stringResource(if (pair) R.string.guard_router_vpn_router_pair else R.string.guard_router_vpn_refresh),
+        onClick = if (pair) onPair else onRefresh,
+        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp), enabled = enabled && !state.busy, filled = false,
+    )
 }
 
 @Composable
@@ -683,32 +797,49 @@ private fun ControlClientDetails(item: JsonObject?) {
 }
 
 @Composable
-private fun ControlLoading(state: RouterControlState) {
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            if (state.busy) androidx.compose.material3.CircularProgressIndicator(Modifier.size(32.dp))
-            Text(stringResource(if (state.busy) R.string.guard_router_vpn_working
-                else if (state.stage == RouterControlStage.DISABLED) R.string.guard_router_router_review_control_disabled
-                else R.string.guard_router_router_review_unavailable), textAlign = TextAlign.Center)
+private fun ControlLoading(label: Int) {
+    Box(Modifier.fillMaxWidth().height(64.dp), contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            CliMetricSpinner()
+            Text(stringResource(label), Modifier.fillMaxWidth(), textAlign = TextAlign.Center,
+                style = MaterialTheme.typography.bodyMedium)
         }
     }
 }
 
 @Composable
-private fun ControlHub(state: RouterControlState, enabled: Boolean, onSelect: (String) -> Unit) {
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(CliSpacing.sm)) {
-        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(CliSpacing.xs)) {
-            GuardRouterIllustration(Modifier.fillMaxWidth().height(128.dp).testTag("router-management-vector"),
-                animateEntrance = false)
-            ControlInstalledProtocols(state)
+private fun ControlHub(state: RouterControlState, enabled: Boolean, onSelect: (String) -> Unit,
+    onRename: (String, String) -> Unit, onSettings: (String) -> Unit, onDelete: (String) -> Unit, discovering: Boolean) {
+    Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        GuardRouterIllustration(Modifier.fillMaxWidth().height(128.dp).testTag("router-management-vector"), animateEntrance = false)
+        Column(Modifier.fillMaxWidth().height(if (state.savedRouters.size > 1) 24.dp else 64.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            state.lastAuthenticatedPackageVersion?.let { version ->
+                Text(stringResource(R.string.router_loader_paired_version, version),
+                    style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
+            }
+            if (state.savedRouters.size < 2) IconButton(onClick = { state.selectedRouterId?.let(onSettings) },
+                enabled = enabled && !discovering && !state.busy &&
+                    state.savedRouters.any { it.id == state.selectedRouterId && it.status == com.foxhole.guard.router.RouterSavedStatus.AVAILABLE },
+                modifier = Modifier.size(40.dp)) {
+                Icon(painterResource(R.drawable.lin_settings), stringResource(R.string.guard_router_router_review_settings), Modifier.size(22.dp))
+            }
         }
-        if (state.savedRouters.size > 1) GuardRouterSavedSelector(state.savedRouters, state.selectedRouterId,
-            enabled, showIllustration = false, onSelect = onSelect)
-        if (state.stage == RouterControlStage.OFFLINE || state.stage == RouterControlStage.PAIRING_REQUIRED)
-            Text(stringResource(R.string.guard_router_router_review_unavailable), style = MaterialTheme.typography.bodyMedium)
-        else if (state.stage == RouterControlStage.DISABLED)
-            Text(stringResource(R.string.guard_router_router_review_control_disabled), style = MaterialTheme.typography.bodyMedium)
+        if (state.savedRouters.size > 1) GuardRouterSavedTable(state.savedRouters, state.selectedRouterId,
+            enabled && !discovering && !state.busy,
+            onSelect = onSelect, onRename = onRename, onSettings = onSettings,
+            deleteEnabled = enabled, onDelete = onDelete)
+        Box(Modifier.fillMaxWidth().heightIn(min = 40.dp), contentAlignment = Alignment.Center) {
+            if (!discovering) {
+                if (state.stage == RouterControlStage.CONNECTED && state.snapshot != null) ControlInstalledProtocols(state)
+                else Text(stringResource(when {
+                    state.entryAccess == com.foxhole.guard.router.RouterManagementAccess.VPN_ACTIVE || state.error == RouterWizardError.VPN_ACTIVE -> R.string.router_management_disconnect_vpn
+                    state.stage == RouterControlStage.DISABLED -> R.string.guard_router_router_review_control_disabled
+                    state.stage == RouterControlStage.PAIRING_REQUIRED -> R.string.guard_router_router_control_pairing_required
+                    else -> R.string.router_management_unavailable_home
+                }),
+                    Modifier.fillMaxWidth(), textAlign = TextAlign.Center, style = MaterialTheme.typography.bodySmall)
+            }
+        }
     }
 }
 
@@ -735,11 +866,13 @@ private fun ControlManagementButton(title: Int, icon: Int, enabled: Boolean, mod
 @Composable
 private fun ControlRouterVpn(state: RouterControlState, listState: LazyListState,
     profilesExpanded: Boolean, devicesExpanded: Boolean, onDevicesExpanded: (Boolean) -> Unit,
+    devicesPending: Boolean, devicesFailed: Boolean, onRetryDevices: () -> Unit,
     onDevice: (String) -> Unit, onDeviceRoute: (String, Boolean) -> Unit,
     onProfilesExpanded: (Boolean) -> Unit, showRouterSelector: Boolean,
     onRouterSelect: (String) -> Unit, onSelect: (String) -> Unit, onActions: (String) -> Unit) {
     val snapshot = state.snapshot
     val devices = visibleRouterLanDevices(state.lanDevices, state.preferences?.hideOfflineDevices != false)
+    val devicesReady = !devicesPending && !devicesFailed && !state.lanDevicesLoading && state.lanDevicesLoaded
     val deviceRouteWidth = minOf(128.dp, LocalConfiguration.current.screenWidthDp.dp * 0.34f)
     LazyColumn(Modifier.fillMaxSize(), state = listState, verticalArrangement = Arrangement.spacedBy(0.dp)) {
         if (showRouterSelector) item {
@@ -784,12 +917,22 @@ private fun ControlRouterVpn(state: RouterControlState, listState: LazyListState
                 onDevicesExpanded(!devicesExpanded)
             }
         }
-        if (devicesExpanded && devices.isEmpty()) item {
+        if (devicesExpanded && (devicesPending || state.lanDevicesLoading)) item(key = "devices-loading") {
+            ControlLoading(R.string.router_loader_data)
+        } else if (devicesExpanded && !devicesReady) item(key = "devices-failed") {
+            Column(Modifier.fillMaxWidth().padding(vertical = 12.dp), horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(stringResource(R.string.guard_router_router_review_unavailable), textAlign = TextAlign.Center,
+                    style = MaterialTheme.typography.bodySmall)
+                CliButton(label = stringResource(R.string.guard_router_vpn_refresh), onClick = onRetryDevices,
+                    enabled = !state.busy && !state.updates.running && !state.engines.running, filled = false)
+            }
+        } else if (devicesExpanded && devices.isEmpty()) item {
             Text(stringResource(if (state.preferences?.hideOfflineDevices != false) R.string.guard_router_router_review_no_online_devices
                 else R.string.guard_router_router_review_no_devices), style = MaterialTheme.typography.bodySmall)
         }
-        if (devicesExpanded) items(devices, key = { "device:" + it.id }) { device ->
-            GuardRouterTableRow(Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null, placementSpec = GuardRouterSheetMotion.defaultSpatialSpec())
+        if (devicesExpanded && devicesReady) items(devices, key = { "device:" + it.id }) { device ->
+            GuardRouterTableRow(Modifier.animateItem(fadeInSpec = GuardRouterSheetMotion.fastEffectsSpec(), fadeOutSpec = GuardRouterSheetMotion.fastEffectsSpec(), placementSpec = GuardRouterSheetMotion.defaultSpatialSpec())
                 .fillMaxWidth().heightIn(min = 60.dp).combinedClickable(enabled = state.controlsAvailable,
                     onClick = { onDevice(device.id) }, onLongClick = { onDevice(device.id) })) {
                 Icon(painterResource(when (routerLanDeviceKind(device.name)) {
@@ -827,11 +970,12 @@ private fun ControlRouterSettings(state: RouterControlState, supportsHome: Boole
             state.managementEnabled, state.canToggleManagement, onEnabled)
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         val automatic = preferences?.countryAuto != false
-        val country = (if (automatic) state.routerCountryCode else preferences?.countryCode).orEmpty()
+        val country = knownRouterHomeCountry(if (automatic) state.routerCountryCode else preferences?.countryCode).orEmpty()
+        val displayCountry = routerDisplayCountryCode(preferences, state.routerCountryCode, state.snapshot?.countries).orEmpty()
         GuardRouterTableRow(Modifier.fillMaxWidth()) {
             Icon(painterResource(R.drawable.lin_globe), null, Modifier.size(20.dp))
             Text(stringResource(R.string.guard_router_router_review_local_traffic), Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
-            GuardRouterCountryFlag(country, state.controlsAvailable,
+            GuardRouterCountryFlag(displayCountry, state.controlsAvailable,
                 onSelect = { onCountry(it, preferences?.countrySitesDirect != false) }, autoSelected = automatic, onAuto = onCountryAuto)
             GuardRouterHelpButton(R.string.guard_router_router_review_local_traffic, R.string.guard_router_router_help_country_source)
             GuardRouterSwitch(state.countryDirectEffective ?: (preferences?.countrySitesDirect != false),
@@ -843,13 +987,6 @@ private fun ControlRouterSettings(state: RouterControlState, supportsHome: Boole
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         ControlSwitch(R.string.guard_router_router_review_direct_ip, R.string.guard_router_router_review_remote_help,
             preferences?.publicIpConfirmed == true, !state.busy && preferences != null, onPublicIp)
-        val detectedPublicIpv4 = state.snapshot?.publicIpv4Available
-        Text(stringResource(when (detectedPublicIpv4) {
-            true -> R.string.router_public_ipv4_detected
-            false -> R.string.router_public_ipv4_not_detected
-            null -> R.string.router_public_ipv4_unknown
-        }), Modifier.fillMaxWidth().padding(bottom = 8.dp), style = MaterialTheme.typography.bodySmall,
-            color = if (detectedPublicIpv4 == true) routerConnectColor() else LocalGuardRouterColors.current.muted)
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         ControlSwitch(R.string.guard_router_router_control_home_vpn, R.string.guard_router_router_control_home_vpn_help,
             preferences?.homeVpnManagementEnabled == true,
@@ -859,8 +996,6 @@ private fun ControlRouterSettings(state: RouterControlState, supportsHome: Boole
         ControlSwitch(R.string.guard_router_router_control_hide_offline, R.string.guard_router_router_control_hide_offline_help,
             preferences?.hideOfflineDevices != false, !state.busy && preferences != null, onHideOffline)
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-        ControlNavigationRow(R.string.guard_router_router_review_router_vpn, R.drawable.lin_router, !state.busy && preferences != null, onRouterVpn)
-        ControlNavigationRow(R.string.guard_router_router_review_vpn_clients, R.drawable.lin_profiles, !state.busy && preferences != null, onClients)
         if (state.engines.supported == true) ControlNavigationRow(R.string.guard_router_router_engines_entry,
             R.drawable.lin_power, state.controlsAvailable, onEngines)
     }
@@ -936,6 +1071,7 @@ private fun ControlSwitch(label: Int, help: Int, checked: Boolean, enabled: Bool
             R.string.guard_router_router_control_enable -> R.drawable.lin_settings
             R.string.guard_router_router_control_auto_home, R.string.guard_router_router_control_home_vpn -> R.drawable.lin_router
             R.string.guard_router_router_review_direct_ip -> R.drawable.lin_globe
+            R.string.guard_router_router_control_hide_offline -> R.drawable.lin_eye_off
             else -> null
         }
         if (icon != null) Icon(painterResource(icon), null, Modifier.size(20.dp))

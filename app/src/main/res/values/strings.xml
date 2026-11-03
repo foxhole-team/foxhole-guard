@@ -753,7 +753,7 @@
     <string name="cli_cfg_group_rules">network rules</string>
     <string name="cli_cfg_group_extras">extras</string>
     <string name="cli_cfg_atomic_connection">atomic scenario switching</string>
-    <string name="cli_cfg_atomic_connection_note">when off, every operating-mode or VPN/Tor scenario switch asks for confirmation; network rules always remain atomic</string>
+    <string name="cli_cfg_atomic_connection_note">when on, supported routing changes pause traffic before applying new rules. If a protected change fails, traffic may remain blocked; stop VPN before trying again. Unsupported changes are rejected before saving. When off, operating-mode and VPN/Tor scenario switches ask for confirmation</string>
     <string name="cli_cfg_auto_reconnect">reconnect</string>
     <string name="cli_cfg_auto_reconnect_note">restores the connection when it drops</string>
     <string name="cli_cfg_auto_start">start after a device reboot</string>

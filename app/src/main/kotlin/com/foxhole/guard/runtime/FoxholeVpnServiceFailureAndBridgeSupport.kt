@@ -30,6 +30,14 @@ internal fun FoxholeVpnService.fail(
     reasonCode: AutoConnectReasonCode? = null,
 ) {
     container.diagnosticsLogger.recordFailure("connection", "runtime failure: $message")
+    if (runtimeInstanceStore.current()?.atomicPolicyUpdateActive == true) {
+        bridgeWriter.update(FoxholeVpnRuntimeBridge.snapshot.value.copy(
+            state = ConnectionState.RECONNECTING,
+            message = getString(R.string.guard_atomic_update_failed),
+        ))
+        updateNotification()
+        return
+    }
 
     launchPriorityCommand(RuntimeCommandPriority.USER_STOP, "fail_disconnect") {
         disconnect(message, commandStartId, reasonCode)
@@ -284,7 +292,10 @@ internal fun FoxholeVpnService.onConnectionStarted(
 internal fun FoxholeVpnService.onTunnelValidated(
     session: VpnSession,
     vpnNetwork: Network,
-) = onTunnelValidatedInternal(session, vpnNetwork)
+) {
+    if (runtimeInstanceStore.current()?.atomicPolicyUpdateActive == true) return
+    onTunnelValidatedInternal(session, vpnNetwork)
+}
 
 internal fun FoxholeVpnService.currentNotificationSnapshot(): NotificationSnapshot = currentNotificationSnapshotInternal()
 

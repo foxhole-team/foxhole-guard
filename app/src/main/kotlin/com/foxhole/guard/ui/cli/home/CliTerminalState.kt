@@ -38,6 +38,8 @@ internal enum class CliLineTone {
     WARN,
     ERR,
     INFO,
+    SCENARIO_WHOLE,
+    SCENARIO_SELECTED,
     VPN,
     TOR,
     I2P,

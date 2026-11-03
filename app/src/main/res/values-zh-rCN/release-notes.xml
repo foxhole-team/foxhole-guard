@@ -12,10 +12,12 @@
     <string name="cli_release_notes_router_setup">修复了路由器发现、配对和通过 SSH 检查 OpenWrt 的问题，并添加了 SSH 密钥支持。</string>
     <string name="cli_release_notes_app_updates">修复了从 GitHub 更新应用时的错误。</string>
     <string name="cli_release_notes_notices">新增通知关闭计时器和向上滑动关闭功能。</string>
-    <string name="cli_release_notes_help">更新了帮助和提示。</string>
+    <string name="cli_release_notes_help">改进了文档和帮助部分，并更新了路由器管理提示。</string>
     <string name="cli_release_notes_vless_reality">修复了 VLESS + REALITY 的兼容性。</string>
     <string name="cli_release_notes_router_management">简化 OpenWrt 设置以及家庭设备和 VPN 客户端的管理。</string>
     <string name="cli_release_notes_pin6">新增安装时确认的六位 PIN，并支持最多 10 台路由器。</string>
     <string name="cli_release_notes_db_auto">新增 FoxHole DB 数据库自动更新支持。</string>
     <string name="cli_release_notes_router_pairing_version">修复了与路由器配对时的 OpenWrt 版本检查问题。</string>
+    <string name="cli_release_notes_core_104">将 FoxHole Core 更新至 1.0.3，修复 DNS 缓存问题。</string>
+    <string name="cli_release_notes_atomic_104">修复了路由规则和场景的原子化应用。</string>
 </resources>

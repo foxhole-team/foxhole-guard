@@ -1,0 +1,4 @@
+<resources>
+    <string name="router_management_disconnect_vpn">如需管理或设置路由器，请断开当前的 VPN 连接。</string>
+    <string name="router_management_unavailable_home">路由器暂时不可用。请连接到您的家庭 Wi-Fi 网络。</string>
+</resources>

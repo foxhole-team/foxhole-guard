@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="router_loader_discovering">ローカルネットワークでルーターを検出中</string>
+    <string name="router_loader_data">データを読み込み中</string>
+    <string name="router_loader_paired_version">最後に確認したバージョン：%1$s</string>
+    <string name="router_loader_version_unknown">ペア設定済みルーターのバージョンはまだ記録されていません。</string>
+</resources>

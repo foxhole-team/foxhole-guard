@@ -50,7 +50,7 @@ internal enum class StatusWidgetConnection {
 
 internal enum class StatusWidgetMode { VPN, TOR, VPN_TOR }
 
-internal enum class StatusWidgetScope { WHOLE_DEVICE, SELECTED_APPS, EXCEPT_SELECTED }
+internal enum class StatusWidgetScope { WHOLE_DEVICE, SELECTED_APPS, EXCEPT_SELECTED, PROXY_SERVER }
 
 internal data class StatusWidgetScenario(
     val vpn: StatusWidgetScope?,
@@ -235,7 +235,16 @@ internal fun statusWidgetPresentation(
         vpnProfile = snapshot.widgetVpnProfile(route.vpnConnected),
         vpnProtocol = snapshot.protocolHint?.name.takeIfConnected(route.vpnConnected),
         mode = mode,
-        scenario = settings.widgetScenario(mode, appliedTorRoute, route.torLive),
+        scenario = settings.widgetScenario(
+            mode = mode,
+            appliedTorRoute = appliedTorRoute,
+            torLive = route.torLive,
+            proxyServer = if (route.vpnLive) {
+                snapshot.trafficMode == TrafficMode.PROXY
+            } else {
+                settings.expert.localSurfaces.http.enabled
+            },
+        ),
         routeStatus = cliCompactRouteStatus(settings, runtimes).takeUnless {
             route.torLive && appliedTorRoute == null
         },
@@ -336,9 +345,10 @@ private fun Settings.widgetScenario(
     mode: StatusWidgetMode,
     appliedTorRoute: AppliedTorRoute? = null,
     torLive: Boolean = false,
+    proxyServer: Boolean = false,
 ): StatusWidgetScenario =
     StatusWidgetScenario(
-        vpn = vpnWidgetScope().takeIf {
+        vpn = (if (proxyServer) StatusWidgetScope.PROXY_SERVER else vpnWidgetScope()).takeIf {
             mode == StatusWidgetMode.VPN || mode == StatusWidgetMode.VPN_TOR
         },
         tor = when {

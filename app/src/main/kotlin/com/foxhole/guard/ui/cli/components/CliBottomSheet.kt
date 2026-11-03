@@ -16,6 +16,8 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -23,6 +25,7 @@ import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SheetState
+import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -40,6 +43,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -78,6 +82,7 @@ internal fun CliBottomSheet(
     footerLeading: (@Composable RowScope.() -> Unit)? = null,
     footerTrailing: (@Composable RowScope.() -> Unit)? = null,
     footerContent: (@Composable ColumnScope.() -> Unit)? = null,
+    heightFraction: Float? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val colors = LocalCliColors.current
@@ -85,9 +90,16 @@ internal fun CliBottomSheet(
     val appearance = LocalCliPanelAppearance.current
     val sheetShape = RoundedCornerShape(topStart = CliRadius.sheet, topEnd = CliRadius.sheet)
     val bodyMaxHeight = (LocalConfiguration.current.screenHeightDp * CLI_SHEET_MAX_BODY_FRACTION).dp
+    val requestedHeight = heightFraction?.let { fraction ->
+        require(fraction > 0f && fraction <= .85f)
+        LocalConfiguration.current.screenHeightDp.dp * fraction
+    }
+    val density = LocalDensity.current
+    val navigationPadding = with(density) { WindowInsets.navigationBars.getBottom(this).toDp() }
     val bodyScrollState = rememberScrollState()
     val resolvedHeaderIconRole = cliModalHeaderIconRoleFor(headerIconRole, icon)
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var noticeHandoff by remember { mutableStateOf(false) }
     val sheetMotionSpec = MaterialSheetMotion.slowSpatialSpec()
     val dismissRequests = rememberCliBottomSheetDismissRequests(sheetState, onDismiss)
     val requestDismiss = dismissRequests.now
@@ -108,20 +120,27 @@ internal fun CliBottomSheet(
         containerColor = cliModalSurfaceColor(appearance, colors.panel),
         contentColor = colors.fg,
         scrimColor = colors.bg.copy(alpha = 0.72f),
-        contentWindowInsets = { BottomSheetDefaults.windowInsets },
-        dragHandle = { CliSheetHandle() },
+        contentWindowInsets = { if (requestedHeight != null) WindowInsets(0) else BottomSheetDefaults.windowInsets },
+        dragHandle = if (requestedHeight == null) ({ CliSheetHandle() }) else null,
     ) {
-        CliTopNoticeHost()
+        CliTopNoticeHost(closing = noticeHandoff)
         SideEffect {
+            if (sheetState.targetValue == SheetValue.Expanded) noticeHandoff = false
+            else if (sheetState.isVisible && sheetState.targetValue == SheetValue.Hidden) noticeHandoff = true
             MaterialSheetMotion.applySlowSpatialSpec(sheetState, sheetMotionSpec)
         }
         CompositionLocalProvider(
             LocalCliBottomSheetDismissRequest provides requestDismiss,
             LocalCliBottomSheetDismissAfter provides requestDismissAfter,
         ) {
+            // Constrain sheet content, never the outer anchor layout's full-screen constraints.
+            Column(Modifier.fillMaxWidth().then(if (requestedHeight != null)
+                Modifier.height(requestedHeight).padding(bottom = navigationPadding) else Modifier)) {
+            if (requestedHeight != null) CliSheetHandle()
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .then(if (requestedHeight != null) Modifier.weight(1f) else Modifier)
                     .padding(horizontal = CliSpacing.md)
                     .padding(bottom = CliSpacing.lg),
             ) {
@@ -188,7 +207,7 @@ internal fun CliBottomSheet(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .then(if (footerContent == null) Modifier else Modifier.weight(1f, fill = false))
+                        .then(if (footerContent == null && heightFraction == null) Modifier else Modifier.weight(1f, fill = heightFraction != null))
                         .heightIn(max = bodyMaxHeight)
                         .then(
                             if (contentScrollEnabled) {
@@ -202,6 +221,7 @@ internal fun CliBottomSheet(
                 footerContent?.invoke(this)
                 Spacer(modifier = Modifier.height(CliSpacing.md))
                 CliSheetFooter(footerLeading, footerTrailing, requestDismiss, closeLabel, closeActionTag)
+            }
             }
         }
     }

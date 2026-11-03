@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="router_table_router">ルーター</string>
+    <string name="router_table_version">FoxHole バージョン</string>
+    <string name="router_table_actions">操作</string>
+    <string name="router_table_rename">ルーター名を変更</string>
+    <string name="router_table_name">ルーター名</string>
+    <string name="router_table_cancel">キャンセル</string>
+    <string name="router_table_save">保存</string>
+    <string name="router_table_default_name">ルーター-%1$d</string>
+</resources>

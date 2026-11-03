@@ -8,6 +8,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -43,6 +44,8 @@ internal class RouterControlCoordinator(
     private val mutex = Mutex()
     private val generation = AtomicLong()
     private val active = AtomicReference<Job?>()
+    private val uiNotices = RouterUiNoticeGate()
+    fun claimUiNotice(slot: String, key: String?): Boolean = uiNotices.claim(slot, key)
     private var owner = -1L
     private var pairing: RouterPairing? = null
     private var api: RouterPanelApi? = null
@@ -51,6 +54,14 @@ internal class RouterControlCoordinator(
     private var verifiedIdentity: RouterTlsIdentity? = null
     private var savedInventory = RouterSavedInventory(emptyList(), null)
     private var savedStatuses: Map<String, RouterSavedStatus> = emptyMap()
+    private var savedVersions: Map<String, String> = emptyMap()
+
+    suspend fun renameRouter(id: String, label: String) = operation(indicateBusy = false) {
+        pairingStore.renameSaved(id, label)
+        checkOwner()
+        refreshInventory()
+        publish(mutableState.value)
+    }
 
     suspend fun selectRouter(id: String) {
         close()
@@ -63,13 +74,13 @@ internal class RouterControlCoordinator(
                 pairingStore.selectSaved(id)
                 checkOwner()
             }
-            openSelected(identifyConnected = false)
+            openSelectedBounded(identifyConnected = false)
         }
     }
 
     suspend fun refreshConnectedRouter() {
         close()
-        operation { openSelected(identifyConnected = true) }
+        operation { openSelectedBounded(identifyConnected = true) }
     }
 
     fun homeMonitoringChanged(active: Boolean) {
@@ -90,7 +101,32 @@ internal class RouterControlCoordinator(
         }
     }
 
-    suspend fun loadPairingState() = operation {
+    suspend fun loadPairingState() = operation { loadPairingStateOwned() }
+
+    suspend fun prepareDiscovery(forceLocal: Boolean = false): RouterManagementAccess {
+        var access = RouterManagementAccess.UNAVAILABLE
+        operation(indicateBusy = false) {
+            loadPairingStateOwned()
+            access = transport.managementAccess(pairing, mutableState.value.preferences, forceLocal)
+            if (!access.canDiscover && transport.hasPhysicalWifi()) {
+                val saved = pairingStore.readAll()
+                try {
+                    for (other in saved.filter { it.id != pairing?.id }) {
+                        val candidate = transport.managementAccess(other, preferenceStore.read(other.id))
+                        checkOwner()
+                        if (candidate == RouterManagementAccess.LOCAL || candidate == RouterManagementAccess.VPN_ACTIVE) {
+                            access = candidate
+                            break
+                        }
+                    }
+                } finally { saved.forEach(RouterPairing::clear) }
+            }
+            publish(mutableState.value.copy(entryAccess = access, error = null))
+        }
+        return access
+    }
+
+    private suspend fun loadPairingStateOwned() {
         clearConnection()
         refreshInventory()
         val saved = pairingStore.read()
@@ -99,13 +135,14 @@ internal class RouterControlCoordinator(
         pairing = saved
         if (saved == null) {
             publish(RouterControlState(stage = RouterControlStage.UNPAIRED))
-            return@operation
+            return
         }
         val preferences = preferenceStore.read(saved.id)
         checkOwner()
         val needsSetup = mutableState.value.clientCreationNeedsSetup && mutableState.value.preferences?.pairingId == saved.id
         publish(RouterControlState(stage = if (preferences.enabled) RouterControlStage.OFFLINE else RouterControlStage.DISABLED,
-            preferences = preferences, address = saved.identity.endpoint.address, clientCreationNeedsSetup = needsSetup))
+            preferences = preferences, address = saved.identity.endpoint.address, clientCreationNeedsSetup = needsSetup,
+            lastAuthenticatedPackageVersion = cachedVersion(saved)))
     }
 
     suspend fun setPublicIpConfirmed(confirmed: Boolean) = operation {
@@ -254,6 +291,7 @@ internal class RouterControlCoordinator(
         var status = provisioner.updateStatus(connection.first, connection.second)
         checkOwner()
         if (current.status != null && (current.status.routerId != status.routerId || status.revision < current.status.revision)) invalidEngineResponse()
+        rememberAuthenticatedVersion(status.currentVersion)
         val own = status.activeOwnJob ?: status.lastOwnJob
         val matches = own != null && (current.pending == null || current.pending.matches(own))
         val job = if (matches) provisioner.updateJob(connection.first, connection.second, status, requireNotNull(own))
@@ -428,11 +466,24 @@ internal class RouterControlCoordinator(
     }
 
     suspend fun refreshDevices() = operation {
-        val connection = requireConnection()
-        val snapshot = requireNotNull(mutableState.value.snapshot)
-        val devices = provisioner.devices(connection.first, connection.second, snapshot)
-        checkOwner()
-        publish(mutableState.value.copy(lanDevices = devices))
+        val ticket = owner
+        publish(mutableState.value.copy(lanDevices = emptyList(), lanDevicesLoading = true,
+            lanDevicesLoaded = false, lanDevicesFailed = false))
+        try {
+            val connection = requireConnection()
+            val snapshot = requireNotNull(mutableState.value.snapshot)
+            val devices = withTimeoutOrNull(15_000) { provisioner.devices(connection.first, connection.second, snapshot) }
+                ?: throw RouterApiTimeout()
+            checkOwner()
+            publish(mutableState.value.copy(lanDevices = devices, lanDevicesLoaded = true, lanDevicesFailed = false))
+        } catch (cancelled: CancellationException) { throw cancelled }
+        catch (failure: Exception) {
+            checkOwner()
+            publish(mutableState.value.copy(lanDevicesLoaded = false, lanDevicesFailed = true))
+            throw failure
+        } finally {
+            if (ticket == generation.get()) publish(mutableState.value.copy(lanDevicesLoading = false))
+        }
     }
 
     private val readCurrentSettingsOnNextOpen = AtomicBoolean(false)
@@ -440,13 +491,39 @@ internal class RouterControlCoordinator(
     fun preparePairedOpen() { readCurrentSettingsOnNextOpen.set(true) }
 
     suspend fun open() = operation {
-        openSelected(identifyConnected = true, currentSettingsOnly = readCurrentSettingsOnNextOpen.getAndSet(false))
+        openSelectedBounded(identifyConnected = true, currentSettingsOnly = readCurrentSettingsOnNextOpen.getAndSet(false))
+    }
+
+    private suspend fun openSelectedBounded(identifyConnected: Boolean, currentSettingsOnly: Boolean = false) {
+        val completed = withTimeoutOrNull(40_000) {
+            openSelected(identifyConnected, currentSettingsOnly)
+            true
+        } == true
+        if (!completed) {
+            checkOwner()
+            fail(owner, RouterWizardError.NETWORK)
+        }
+    }
+
+    private suspend fun cachedVersion(saved: RouterPairing): String? = try {
+        preferenceStore.readAuthenticatedVersion(saved.id, saved.identity.certificateSha256)
+    } catch (_: IOException) { null }
+
+    private suspend fun rememberAuthenticatedVersion(version: String?) {
+        val value = routerDiscoveryPackageVersion(version) ?: return
+        val saved = pairing ?: return
+        checkOwner()
+        try { preferenceStore.saveAuthenticatedVersion(saved.id, saved.identity.certificateSha256, value) }
+        catch (_: IOException) { /* Public display metadata must not interrupt authenticated management. */ }
+        checkOwner()
+        savedVersions = savedVersions + (saved.id to value)
+        publish(mutableState.value.copy(lastAuthenticatedPackageVersion = value))
     }
 
     private suspend fun openSelected(identifyConnected: Boolean, currentSettingsOnly: Boolean = false) {
         clearConnection()
         refreshInventory()
-        if (!transport.hasPhysicalWifi()) {
+        if (mutableState.value.entryAccess == RouterManagementAccess.REMOTE || !transport.hasPhysicalWifi()) {
             openSavedWithoutWifi()
             return
         }
@@ -483,7 +560,8 @@ internal class RouterControlCoordinator(
         val preferences = preferenceStore.read(saved.id)
         checkOwner()
         publish(RouterControlState(stage = if (preferences.enabled) RouterControlStage.CONNECTING else RouterControlStage.DISABLED,
-            preferences = preferences, address = requireNotNull(pairing).identity.endpoint.address, clientCreationNeedsSetup = needsSetup))
+            preferences = preferences, address = requireNotNull(pairing).identity.endpoint.address, clientCreationNeedsSetup = needsSetup,
+            lastAuthenticatedPackageVersion = cachedVersion(requireNotNull(pairing))))
         if ((preferences.enabled || currentSettingsOnly) && match.pairingId == saved.id) {
             reopen(preferences, readOnly = currentSettingsOnly)
             if (currentSettingsOnly) {
@@ -509,13 +587,20 @@ internal class RouterControlCoordinator(
         val preferences = preferenceStore.read(saved.id)
         checkOwner()
         publish(RouterControlState(stage = if (preferences.enabled) RouterControlStage.CONNECTING else RouterControlStage.DISABLED,
-            preferences = preferences, address = saved.identity.endpoint.address))
+            preferences = preferences, address = saved.identity.endpoint.address, lastAuthenticatedPackageVersion = cachedVersion(saved)))
         if (preferences.enabled) reopen(preferences)
     }
 
     private suspend fun refreshInventory() {
         savedInventory = pairingStore.listSaved()
         checkOwner()
+        val saved = pairingStore.readAll()
+        try {
+            savedVersions = buildMap {
+                saved.forEach { row -> cachedVersion(row)?.let { put(row.id, it) } }
+            }
+            checkOwner()
+        } finally { saved.forEach(RouterPairing::clear) }
     }
 
     suspend fun setEnabled(enabled: Boolean) = operation {
@@ -744,6 +829,18 @@ internal class RouterControlCoordinator(
     }
 
     suspend fun unpair(expectedId: String, deletePackage: Boolean = false) = operation {
+        if (expectedId != mutableState.value.preferences?.pairingId) {
+            val inventory = pairingStore.listSaved()
+            checkOwner()
+            if (deletePackage || inventory.selectedId != mutableState.value.selectedRouterId ||
+                inventory.selectedId == expectedId || inventory.routers.none { it.id == expectedId })
+                throw RouterApiFailure(RouterApiError.CONFLICT)
+            pairingStore.remove(expectedId)
+            checkOwner()
+            refreshInventory()
+            publish(mutableState.value)
+            return@operation
+        }
         val saved = pairing ?: pairingStore.read()?.also { checkOwner(); pairing = it } ?: throw RouterApiFailure(RouterApiError.CONFLICT)
         if (saved.id != expectedId || mutableState.value.preferences?.pairingId != expectedId) throw RouterApiFailure(RouterApiError.CONFLICT)
         applyHomeAutomation?.invoke(false)
@@ -792,7 +889,9 @@ internal class RouterControlCoordinator(
         try { checkOwner(); session = unlocked } catch (error: Exception) { unlocked.close(); throw error }
         val current = provisioner.snapshot(client, unlocked)
         checkOwner()
-        val observedPreferences = preferences.withPublicIpv4Evidence(current.publicIpv4Available)
+        val observedPreferences = preferences.withPublicIpv4Evidence(current.publicIpv4Available).let {
+            if (client.homeVpnBound) it else transport.authenticatedWifiPreferences(saved, it)
+        }
         if (observedPreferences != preferences) {
             preferenceStore.save(observedPreferences)
             checkOwner()
@@ -914,7 +1013,11 @@ internal class RouterControlCoordinator(
             val statuses = if (value.snapshot == null) emptyList() else if (changed)
                 unknownRouterClientStatuses(value.snapshot) else value.remoteClients
             value.copy(revision = current.revision + 1, remoteClients = statuses,
-                savedRouters = savedInventory.routers.map { it.copy(status = savedStatuses[it.id] ?: RouterSavedStatus.UNKNOWN) },
+                entryAccess = value.entryAccess ?: current.entryAccess,
+                lanDevices = value.lanDevices.takeIf { value.snapshot != null }.orEmpty(),
+                lanDevicesLoaded = value.lanDevicesLoaded && value.snapshot != null,
+                lanDevicesLoading = value.lanDevicesLoading && value.snapshot != null,
+                savedRouters = savedInventory.routers.map { it.copy(status = savedStatuses[it.id] ?: RouterSavedStatus.UNKNOWN, packageVersion = savedVersions[it.id]) },
                 selectedRouterId = savedInventory.selectedId,
                 routerCountryCode = value.routerCountryCode.takeIf { value.snapshot != null },
                 homeAutomationEffective = value.homeAutomationEffective && observedHomeActive != false)
@@ -922,11 +1025,14 @@ internal class RouterControlCoordinator(
     }
     private fun clearConnection() { session?.close(); session = null; api?.close(); api = null; verifiedIdentity = null }
     override fun close() {
+        savedStatuses = emptyMap()
         generation.incrementAndGet(); active.getAndSet(null)?.cancel(); clearConnection(); pairing?.clear(); pairing = null
         mutableState.update { current ->
             if (current.preferences == null) current.copy(busy = false)
             else current.copy(stage = if (current.preferences.enabled) RouterControlStage.OFFLINE else RouterControlStage.DISABLED,
-                snapshot = null, lanDevices = emptyList(), remoteClients = emptyList(), routerCountryCode = null, busy = false, engines = RouterEngineControlState(), updates = RouterUpdateControlState())
+                snapshot = null, lanDevices = emptyList(), lanDevicesLoading = false, lanDevicesLoaded = false, lanDevicesFailed = false,
+                remoteClients = emptyList(), routerCountryCode = null, busy = false,
+                savedRouters = current.savedRouters.map { it.copy(status = RouterSavedStatus.UNKNOWN) }, engines = RouterEngineControlState(), updates = RouterUpdateControlState())
         }
     }
 }

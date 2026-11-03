@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="router_loader_discovering">Détection du routeur sur le réseau local</string>
+    <string name="router_loader_data">Chargement des données</string>
+    <string name="router_loader_paired_version">Dernière version connue : %1$s</string>
+    <string name="router_loader_version_unknown">La version du routeur associé n’a pas encore été enregistrée.</string>
+</resources>

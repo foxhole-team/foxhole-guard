@@ -69,6 +69,7 @@ internal class ProfileSessionFactory(
         deferTorRoute: Boolean = false,
         protocolTestTrafficFreeze: Boolean = false,
         preparedSnapshot: PreparedProfileSessionSnapshot? = null,
+        presetOverride: RuntimePresetSnapshot? = null,
     ): VpnSession {
         preparedSnapshot.requireMatchingRequest(profileId, protocolOptionIdOverride)
         val profile = preparedSnapshot?.profile ?: profileProvider(profileId)
@@ -95,7 +96,7 @@ internal class ProfileSessionFactory(
                 baseRuntimeSettings
             }
         val runtimeSettings = requestedRuntimeSettings.withSupportedI2pLane(selectedProtocolHint)
-        val activePreset = routingRepository.currentPresetForRuntime()
+        val activePreset = if (presetOverride != null) presetOverride.preset else routingRepository.currentPresetForRuntime()
         requireI2pPrivateDnsCompatibility(
             i2pActive = runtimeSettings.i2pRuntimeActive(),
             privateDnsMode = privateDnsState?.mode ?: privateDnsMode,
@@ -177,8 +178,10 @@ internal class ProfileSessionFactory(
     suspend fun getTorOnlySession(
         privateDnsMode: PrivateDnsMode? = null,
         privateDnsState: PrivateDnsState? = null,
+        settingsOverride: Settings? = null,
+        presetOverride: RuntimePresetSnapshot? = null,
     ): VpnSession {
-        val settings = settingsRepository.ensureNewAppQuarantineBaseline()
+        val settings = settingsOverride ?: settingsRepository.ensureNewAppQuarantineBaseline()
         require(settings.privacyRoute.permitted && settings.privacyRoute.enabled) { "TOR route is disabled" }
         val correlationId = newRuntimeCorrelationId()
         val dnsFilterRuntimePaths = settings.prepareVerifiedDnsFilterRuntimePaths()
@@ -188,7 +191,7 @@ internal class ProfileSessionFactory(
             privateDnsMode = privateDnsState?.mode ?: privateDnsMode,
         )
         val knownApplications = runtimeSettings.knownApplicationsForNativeQuarantine()
-        val activePreset = routingRepository.currentPresetForRuntime()
+        val activePreset = if (presetOverride != null) presetOverride.preset else routingRepository.currentPresetForRuntime()
         val i2pEndpoint = startI2pEndpointOrNull(runtimeSettings)
         val assembled =
             dnsCategoryAttempt {

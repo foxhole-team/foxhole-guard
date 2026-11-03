@@ -1149,7 +1149,7 @@
     <string name="cli_home_key_protocol">протокол VPN</string>
     <string name="cli_cfg_latency_method">метод определения задержки</string>
     <string name="cli_cfg_atomic_connection">атомарное переключение сценариев</string>
-    <string name="cli_cfg_atomic_connection_note">если выключено, каждое переключение режима работы или сценария VPN/Tor требует подтверждения; правила сети всегда применяются атомарно</string>
+    <string name="cli_cfg_atomic_connection_note">если включено, перед поддерживаемыми изменениями маршрутизации трафик блокируется до применения новых правил. При ошибке трафик может остаться заблокированным; остановите VPN перед повторной попыткой. Неподдерживаемые изменения отклоняются до сохранения. Если выключено, смена режима работы или сценария VPN/Tor требует подтверждения</string>
     <string name="cli_cfg_terminal_clear">очистка истории консоли</string>
     <string name="cli_cfg_firewall">фаервол</string>
     <string name="cli_firewall_quarantine_title">карантин новых приложений</string>

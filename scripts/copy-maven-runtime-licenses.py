@@ -8,7 +8,7 @@ import shutil
 
 
 HOOK = '    inputs.file(rootProject.file("scripts/copy-maven-runtime-licenses.py"))\n    inputs.dir(rootProject.file("third_party/maven-runtime"))\n'
-EXPECTED_PUBLIC_MANIFEST_SHA256 = '89476592db530b111b041d5b5795cbe186b3913ee9f363207d8ba4633682012f'
+EXPECTED_PUBLIC_MANIFEST_SHA256 = '1d2ca024976017f9e8a28eaf4d88bad379724c3e59655e2ec5bf9a47c91e1cfe'
 ACTUAL_CAPTURE_SHA256 = 'f95d54be9840fe2e5eec4df4fe82d5dc1555f4cb426080b5536278bd098da413'
 ACTUAL_COLLECTOR_REPORT_SHA256 = '6ba294c123d6e9724908945c5d0eed03b26a6c773ca370de2ef85cebacf746e2'
 FDROID_UNSIGNED_PROJECTION = {'mode': 'exact-stock-fdroid-unsigned-source',
@@ -27,6 +27,8 @@ FDROID_UNSIGNED_PROJECTION = {'mode': 'exact-stock-fdroid-unsigned-source',
           'native/reproducibility acceptance'}
 
 
+CURRENT_FDROID_UNSIGNED_PROJECTION = {'rawSha256': '31f63c8165564595903121cb20cb27332a0b7cf40195c0ec5fa2bc1bc7222c0f', 'rawBytes': 103316, 'unsignedSha256': '0ee81501766570d83a7dd1ed9d0ba82d60eb12bd04f76e8bb325e2d4fd0058c6', 'unsignedBytes': 102860, 'transformationFunctionSha256': '9fe344aa703b2ab4414d3e9eb3b3ff90c7b76dd4168749f9eebe0d878b40d5cc'}
+
 def digest(data):
     return hashlib.sha256(data).hexdigest()
 
@@ -43,6 +45,17 @@ def matches_captured_gradle(data, expected, allow_fdroid_unsigned_projection=Fal
             allow_fdroid_unsigned_projection and actual == FDROID_UNSIGNED_PROJECTION['unsignedSourceSha256'])
 
 
+
+def matches_current_consumer_source(name, data, expected, allow_fdroid_unsigned_projection=False):
+    actual = digest(data)
+    if actual == expected:
+        return True
+    proof = CURRENT_FDROID_UNSIGNED_PROJECTION
+    return (allow_fdroid_unsigned_projection and name == 'app/build.gradle.kts' and
+            expected == proof['rawSha256'] and len(data) == proof['unsignedBytes'] and
+            actual == proof['unsignedSha256'])
+
+
 def regular(root, name):
     relative = PurePosixPath(name)
     if relative.is_absolute() or not relative.parts or '..' in relative.parts:
@@ -56,6 +69,116 @@ def regular(root, name):
             raise ValueError('Maven legal bundle parent is a link')
         parent = parent.parent
     return path
+
+
+"""Strict current-consumer join to an unchanged original Maven legal producer."""
+import hashlib
+import json
+
+
+def consumer_canonical(value):
+    return json.dumps(value, sort_keys=True, separators=(',', ':')).encode()
+
+
+def consumer_require(condition, message):
+    if not condition:
+        raise ValueError('Maven consumer binding: ' + message)
+
+
+def consumer_rows(rows, key):
+    result = {row[key]: row for row in rows}
+    consumer_require(len(result) == len(rows), 'duplicate ' + key)
+    return result
+
+
+def compare_consumer_graph(original, current):
+    """Only project version and project publication variant are consumer metadata."""
+    need = consumer_require
+    need(current.get('schema_version') == 1 and current.get('gradle_version') == '9.6.1', 'capture format/tool version')
+    need(current.get('offline') is True and current.get('pom_errors') == [], 'complete offline capture required')
+    need(current.get('configuration') == ':app:publicReleaseRuntimeClasspath', 'exact public release scope')
+    need(current.get('additional_configurations') == [] and original.get('additional_configurations') == [], 'configuration scope changed')
+    need(current.get('root') == original.get('root'), 'project root changed')
+    old = consumer_rows(original['components'], 'id')
+    new = consumer_rows(current['components'], 'id')
+    need(set(old) == set(new), 'selected component identities changed')
+    versions = []
+    for identity, before in old.items():
+        after = new[identity]
+        if before['kind'] == 'maven':
+            need(before == after, 'external component changed: ' + identity)
+        else:
+            need(before['kind'] == after['kind'] == 'project', 'component kind changed')
+            need({k: v for k, v in before.items() if k != 'version'} ==
+                 {k: v for k, v in after.items() if k != 'version'}, 'project identity changed')
+            need(after['version'] == '1.0.4', 'unexpected current project version')
+            if before['version'] != after['version']:
+                versions.append({'component': identity, 'before': before['version'], 'after': after['version']})
+    def archives(capture):
+        rows = []
+        for row in capture['artifacts']:
+            need(set(row) == {'component', 'name', 'bytes', 'sha256', 'variant'}, 'portable artifact field set')
+            rows.append({k: row[k] for k in ('component', 'name', 'bytes', 'sha256', 'variant')})
+        need(len({(r['component'], r['name']) for r in rows}) == len(rows), 'duplicate runtime archive')
+        return sorted(rows, key=consumer_canonical)
+    need(archives(original) == archives(current), 'external archive identity/hash/size/variant changed')
+    def edges(capture):
+        rows = []
+        for row in capture['edges']:
+            need(set(row) == {'from', 'to', 'constraint', 'requested', 'selectedVariant'}, 'dependency edge field set')
+            need(row['from'] in new and row['to'] in new, 'unresolved dependency edge')
+            item = dict(row)
+            if new[row['to']]['kind'] == 'project':
+                need(item['selectedVariant'] in ('runtimeElements', 'releaseRuntimeElements', 'publicReleaseRuntimeElements'), 'unexpected project publication variant')
+                if item['selectedVariant'] != 'runtimeElements':
+                    item['selectedVariant'] = 'project-release-runtime'
+            rows.append(item)
+        return sorted(rows, key=consumer_canonical)
+    need(edges(original) == edges(current), 'dependency edges/constraints/requests changed')
+    def poms(capture):
+        result = {}
+        for row in capture['pom_files']:
+            need(set(row) == {'coordinate', 'path', 'sha256', 'parent', 'resolution', 'licenses'}, 'portable POM field set')
+            need(row['resolution'] in ('MavenPomArtifact query', 'detached exact @pom artifact (non-transitive)'), 'unknown POM resolution')
+            result[row['coordinate']] = {k: v for k, v in row.items() if k != 'resolution'}
+        need(len(result) == len(capture['pom_files']), 'duplicate POM coordinate')
+        return result
+    need(poms(original) == poms(current), 'original POM bytes/parents/license declarations changed')
+    need(sorted(original['licenses'], key=consumer_canonical) == sorted(current['licenses'], key=consumer_canonical), 'effective license declarations changed')
+    need(set(current['source_sha256']) == set(original['source_sha256']), 'Gradle source input scope changed')
+    return {'externalComponents': sum(r['kind'] == 'maven' for r in new.values()),
+            'runtimeArchives': len(current['artifacts']), 'poms': len(current['pom_files']),
+            'edges': len(current['edges']), 'projectVersionChanges': versions,
+            'externalClosureSha256': hashlib.sha256(consumer_canonical({
+                'components': [new[k] for k in sorted(new) if new[k]['kind'] == 'maven'],
+                'artifacts': archives(current), 'edges': edges(current),
+                'poms': poms(current), 'licenses': sorted(current['licenses'], key=consumer_canonical)})).hexdigest()}
+
+
+def validate_current_consumer(repo, checked, original, original_manifest_sha256, *, allow_fdroid_unsigned_projection=False):
+    need = consumer_require
+    proof = json.loads(checked['CONSUMER-BINDING.json'])
+    raw = checked['consumer-runtime-inventory.json']
+    current = json.loads(raw)
+    need(proof.get('schema') == 1 and proof.get('kind') == 'actual-current-consumer-original-Maven-notices', 'proof type')
+    need(proof.get('originalProducerRelabelled') is False and proof.get('freshCaptureExecuted') is True, 'producer/consumer distinction')
+    need(proof.get('originalProducerManifestSha256') == original_manifest_sha256 and
+         hashlib.sha256(checked['producer-manifest.json']).hexdigest() == original_manifest_sha256, 'original producer manifest identity')
+    old_manifest = json.loads(checked['producer-manifest.json'])
+    old_names = set()
+    for row in old_manifest['files']:
+        need(row['path'] not in old_names and row['path'] in checked, 'original producer inventory missing/duplicate')
+        old_names.add(row['path'])
+        need(len(checked[row['path']]) == row['bytes'] and hashlib.sha256(checked[row['path']]).hexdigest() == row['sha256'], 'original producer bytes changed')
+    need(set(checked) == old_names | {'producer-manifest.json', 'consumer-runtime-inventory.json', 'CONSUMER-BINDING.json'}, 'foreign consumer material')
+    need(proof.get('portableConsumerCaptureSha256') == hashlib.sha256(raw).hexdigest(), 'consumer capture digest')
+    need(isinstance(proof.get('actualConsumerCaptureSha256'), str) and len(proof['actualConsumerCaptureSha256']) == 64, 'actual capture identity')
+    comparison = compare_consumer_graph(original, current)
+    need(proof.get('comparison') == comparison and proof.get('sourceInputs') == current['source_sha256'], 'comparison/source proof changed')
+    for name, expected in current['source_sha256'].items():
+        path = regular(repo, name)
+        need(path.stat().st_size <= 4 * 1024 * 1024 and matches_current_consumer_source(name, path.read_bytes(), expected, allow_fdroid_unsigned_projection), 'current Gradle source changed: ' + name)
+    return current
 
 
 def load(repo, bundle, expected_manifest_sha256=EXPECTED_PUBLIC_MANIFEST_SHA256, *, allow_fdroid_unsigned_projection=False):
@@ -126,7 +249,8 @@ def load(repo, bundle, expected_manifest_sha256=EXPECTED_PUBLIC_MANIFEST_SHA256,
     projected = projection.get('sourceInputProjections')
     if projected not in (identity_policy, source_policy) or (projected == source_policy and capture['source_sha256']['app/build.gradle.kts'] != source_policy['app/build.gradle.kts']['capturedSha256']):
         raise ValueError('Maven current source identity projection differs')
-    for name, expected in capture['source_sha256'].items():
+    current_consumer = validate_current_consumer(repo, checked, capture, '89476592db530b111b041d5b5795cbe186b3913ee9f363207d8ba4633682012f', allow_fdroid_unsigned_projection=allow_fdroid_unsigned_projection)
+    for name, expected in current_consumer['source_sha256'].items():
         source_path = regular(repo, name)
         if source_path.stat().st_size > 4 * 1024 * 1024:
             raise ValueError('Maven legal source input size exceeded')
@@ -136,7 +260,7 @@ def load(repo, bundle, expected_manifest_sha256=EXPECTED_PUBLIC_MANIFEST_SHA256,
             if text.count(HOOK) != 1:
                 raise ValueError('Maven legal Gradle projection hook differs')
             # Current capture/provenance bytes and declarations retain exact identity.
-            matches = (matches_captured_gradle(data, expected, allow_fdroid_unsigned_projection) if projected == source_policy else digest(data) == expected)
+            matches = matches_current_consumer_source(name, data, expected, allow_fdroid_unsigned_projection)
         else:
             matches = digest(data) == expected
         if not matches:

@@ -4,5 +4,5 @@
     <string name="guard_router_router_setup_pin_repeat">PINコードを再入力</string>
     <string name="guard_router_router_pin_cooldown">%1$d秒後に再試行してください。</string>
     <string name="guard_router_router_setup_all_lan_vpn">すべてのホームデバイスでVPNを使用</string>
-    <string name="guard_router_router_setup_all_lan_vpn_help">接続時に、ルーティングの例外を維持したまますべてのホームデバイスでVPNを使用します。無効にできます。この設定だけではVPNは起動しません。</string>
+    <string name="guard_router_router_setup_all_lan_vpn_help">接続後、通信経路の除外設定を考慮して、すべての家庭内端末で VPN を使います。この設定は無効にできます。</string>
 </resources>

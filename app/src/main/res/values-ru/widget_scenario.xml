@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="widget_scenario_whole_device">Всё устройство</string>
+    <string name="widget_scenario_selected_apps">Выбранные</string>
+</resources>

@@ -86,6 +86,13 @@ internal fun measureStyledWidgetTextWidth(
     return (widthPx / metrics.density).dp
 }
 
+internal fun measureStyledWidgetTextHeight(context: Context, fontSize: Int): Dp {
+    val pixel = widgetTextPaint(context, R.font.tiny5_regular, Color.Transparent, fontSize, pixelArt = true).fontMetrics
+    val mono = widgetTextPaint(context, R.font.jetbrains_mono_bold, Color.Transparent, fontSize, pixelArt = false).fontMetrics
+    return (ceil(max(pixel.descent, mono.descent) - min(pixel.ascent, mono.ascent)) /
+        context.resources.displayMetrics.density).dp
+}
+
 private data class RenderedWidgetText(
     val bitmap: Bitmap,
     val width: Dp,

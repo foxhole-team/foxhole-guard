@@ -9,12 +9,15 @@ import com.foxhole.core.model.LocalProxyStatusSnapshot
 import com.foxhole.core.model.VpnSession
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import java.io.File
+import java.net.InetAddress
 
 @Suppress("LargeClass")
 // Single Android owner of the JNI handle and master TUN; stale native work commits only under its generation.
@@ -69,6 +72,150 @@ internal class FoxCoreRuntime internal constructor(
     /** Native JNI work runs outside [transitionMutex]; this is the owned transition it may finish. */
     private var pendingTransition: PendingNativeTransition? = null
 
+    @Volatile
+    private var heldPolicyUpdate: HeldPolicyUpdate? = null
+
+    override val atomicPolicyUpdateActive: Boolean get() = heldPolicyUpdate != null
+
+    private class HeldPolicyUpdate(
+        val identity: Any,
+        var candidate: FoxCoreSessionConfig,
+    )
+
+    override suspend fun prepareAtomicPolicyUpdate(session: VpnSession): RuntimePolicyUpdate {
+        val prepared = transitionMutex.withLock {
+            val current = active ?: throw RuntimePolicyUpdateException(RuntimePolicyUpdateException.Reason.UNSUPPORTED)
+            if (pendingTransition != null || heldPolicyUpdate != null || state != RuntimeState.RUNNING) {
+                throw RuntimePolicyUpdateException(RuntimePolicyUpdateException.Reason.BUSY)
+            }
+            val candidate = nativeEngine.translate(session, current.policyRevision)
+                ?: throw RuntimePolicyUpdateException(RuntimePolicyUpdateException.Reason.UNSUPPORTED)
+            if (!current.translated.tunPlan.capturesWholeDevice() || candidate.tunPlan != current.translated.tunPlan ||
+                nativeEngine.immutableFingerprint(candidate) != current.immutableFingerprint
+            ) {
+                throw RuntimePolicyUpdateException(RuntimePolicyUpdateException.Reason.UNSUPPORTED)
+            }
+            val held = HeldPolicyUpdate(current.sessionIdentity, candidate)
+            val permit = nativeStartOwnership.open("policy_gate")
+            heldPolicyUpdate = held
+            pendingTransition = PendingNativeTransition.PolicyGate(permit)
+            Triple(held, current, permit)
+        }
+        val (held, current, permit) = prepared
+        val blocked = current.translated.withPolicyGate(true, current.policyRevision)
+        val outcome = runAbandonableNativeRuntimeCall("policy_gate", 3_000L) {
+            nativeEngine.reloadPolicy(current, blocked)
+        }
+        transitionMutex.withLock {
+            requirePolicyUpdateOwner(held, permit)
+            pendingTransition = null
+            if (outcome !is PolicyReloadOutcome.Applied) {
+                throw RuntimePolicyUpdateException(RuntimePolicyUpdateException.Reason.FAILED)
+            }
+            active = current.copy(translated = blocked, policyRevision = outcome.revision)
+        }
+        current.host.onRoutingPolicyGateEstablished()
+        return object : RuntimePolicyUpdate {
+            override suspend fun stage(session: VpnSession) {
+                transitionMutex.withLock {
+                    val current = active
+                    if (heldPolicyUpdate !== held || current?.sessionIdentity !== held.identity) {
+                        throw RuntimePolicyUpdateException(RuntimePolicyUpdateException.Reason.SUPERSEDED)
+                    }
+                    if (pendingTransition != null) throw RuntimePolicyUpdateException(RuntimePolicyUpdateException.Reason.BUSY)
+                    val admitted = requireNotNull(current)
+                    val candidate = nativeEngine.translate(session, admitted.policyRevision)
+                        ?: throw RuntimePolicyUpdateException(RuntimePolicyUpdateException.Reason.UNSUPPORTED)
+                    if (candidate.tunPlan != admitted.translated.tunPlan ||
+                        nativeEngine.immutableFingerprint(candidate) != admitted.immutableFingerprint
+                    ) throw RuntimePolicyUpdateException(RuntimePolicyUpdateException.Reason.UNSUPPORTED)
+                    held.candidate = candidate
+                }
+            }
+            override suspend fun commit(): Result<Unit> = runCatching { commitPolicyUpdate(held) }
+        }
+    }
+
+    private fun requirePolicyUpdateOwner(held: HeldPolicyUpdate, permit: Long) {
+        if (heldPolicyUpdate !== held || active?.sessionIdentity !== held.identity ||
+            pendingTransition?.generation != permit || !nativeStartOwnership.isCurrent(permit)
+        ) {
+            throw RuntimePolicyUpdateException(RuntimePolicyUpdateException.Reason.SUPERSEDED)
+        }
+    }
+
+    private suspend fun commitPolicyUpdate(held: HeldPolicyUpdate) {
+        val permit = transitionMutex.withLock {
+            if (heldPolicyUpdate !== held || active?.sessionIdentity !== held.identity) {
+                throw RuntimePolicyUpdateException(RuntimePolicyUpdateException.Reason.SUPERSEDED)
+            }
+            if (pendingTransition != null) throw RuntimePolicyUpdateException(RuntimePolicyUpdateException.Reason.BUSY)
+            nativeStartOwnership.open("policy_gate_commit").also {
+                pendingTransition = PendingNativeTransition.PolicyGate(it)
+            }
+        }
+        try {
+            // Install the exact candidate while blocked, then release only after that ACK.
+            listOf(true, false).forEach { blocked ->
+                val current = transitionMutex.withLock {
+                    requirePolicyUpdateOwner(held, permit)
+                    requireNotNull(active)
+                }
+                val translated = held.candidate.withPolicyGate(blocked, current.policyRevision)
+                val outcome = runAbandonableNativeRuntimeCall("policy_gate_commit", 3_000L) {
+                    nativeEngine.reloadPolicy(current, translated)
+                }
+                transitionMutex.withLock {
+                    requirePolicyUpdateOwner(held, permit)
+                    if (outcome !is PolicyReloadOutcome.Applied) {
+                        throw RuntimePolicyUpdateException(RuntimePolicyUpdateException.Reason.FAILED)
+                    }
+                    active = current.copy(translated = translated, policyRevision = outcome.revision)
+                }
+            }
+            transitionMutex.withLock {
+                requirePolicyUpdateOwner(held, permit)
+                heldPolicyUpdate = null
+                pendingTransition = null
+                publish(requireNotNull(active), permit)
+            }
+        } catch (failure: Throwable) {
+            withContext(NonCancellable) { rearmPolicyUpdate(held, permit) }
+            throw failure
+        } finally {
+            transitionMutex.withLock {
+                if (pendingTransition?.generation == permit) pendingTransition = null
+            }
+        }
+    }
+
+    private suspend fun rearmPolicyUpdate(held: HeldPolicyUpdate, permit: Long) {
+        val current = transitionMutex.withLock {
+            active?.takeIf {
+                heldPolicyUpdate === held && it.sessionIdentity === held.identity &&
+                    nativeStartOwnership.isCurrent(permit)
+            }
+        } ?: return
+        // An unacknowledged release may have advanced the revision. This owned
+        // emergency block must win whichever JNI call reaches the policy lock first.
+        val blocked = held.candidate.withPolicyGate(true, null)
+        val outcome = runAbandonableNativeRuntimeCall("policy_gate_rearm", 3_000L) {
+            nativeEngine.reloadPolicy(current, blocked)
+        }
+        transitionMutex.withLock {
+            if (heldPolicyUpdate === held && active?.sessionIdentity === held.identity &&
+                nativeStartOwnership.isCurrent(permit)
+            ) {
+                if (outcome is PolicyReloadOutcome.Applied) {
+                    active = current.copy(translated = blocked, policyRevision = outcome.revision)
+                } else {
+                    setState(RuntimeState.ERROR)
+                    diagnosticsLogger.recordFailure("foxcore", "atomic routing gate rearm was not acknowledged")
+                }
+            }
+        }
+    }
+
     override suspend fun start(
         session: VpnSession,
         host: RuntimeServiceHost,
@@ -91,6 +238,9 @@ internal class FoxCoreRuntime internal constructor(
             transitionMutex.withLock {
                 preemptSupersededPendingStart(generation)
                 when {
+                    heldPolicyUpdate != null -> NativeTransitionPreparation.Failed(
+                        Result.failure(RuntimePolicyUpdateException(RuntimePolicyUpdateException.Reason.BUSY)),
+                    )
                     forceStopPoison.processPoisoned ->
                         NativeTransitionPreparation.Failed(
                             forceStopPoison.failure("start_prepare") { setState(RuntimeState.ERROR) },
@@ -176,6 +326,9 @@ internal class FoxCoreRuntime internal constructor(
             transitionMutex.withLock {
                 val current = active
                 when {
+                    heldPolicyUpdate != null -> NativeTransitionPreparation.Failed(
+                        Result.failure(RuntimePolicyUpdateException(RuntimePolicyUpdateException.Reason.BUSY)),
+                    )
                     forceStopPoison.processPoisoned ->
                         NativeTransitionPreparation.Failed(
                             forceStopPoison.failure("reload_prepare") { setState(RuntimeState.ERROR) },
@@ -605,6 +758,7 @@ internal class FoxCoreRuntime internal constructor(
     override suspend fun quiesceForInterfaceHandover(): Boolean =
         transitionMutex.withLock {
             val current = active ?: return@withLock true
+            if (heldPolicyUpdate != null) return@withLock false
             if (handoverQuiesced) {
                 return@withLock true
             }
@@ -754,12 +908,14 @@ internal class FoxCoreRuntime internal constructor(
 
     /** Fences the JNI frame before releasing any Android-owned pending TUN. Mutex-only. */
     private fun cancelPendingTransition(reason: String): Boolean {
+        heldPolicyUpdate = null
         val pending = pendingTransition ?: return true
         nativeStartOwnership.invalidate(pending.generation, reason)
         pendingTransition = null
         return when (pending) {
             is PendingNativeTransition.Start -> pending.tun?.let(tunOwner::close) ?: true
             is PendingNativeTransition.Reload -> true
+            is PendingNativeTransition.PolicyGate -> true
         }
     }
 
@@ -781,6 +937,31 @@ internal class FoxCoreRuntime internal constructor(
     }
 
     override fun currentDnsServerAddress(): String? = active?.dnsServers?.firstOrNull()
+
+    override fun matchesCurrentTunNetwork(interfaceName: String?, dnsServers: List<InetAddress>): Boolean? {
+        val current = active
+        val masterFd = tunOwner.masterTunFd
+        if (current == null && masterFd == null) return null
+        if (current == null || masterFd != current.masterTunFd) return false
+        val ownerGeneration = generation
+        return matchesOwnedTunNetwork(
+            tunFd = current.masterTunFd,
+            advertisedDnsServers = current.dnsServers,
+            networkInterfaceName = interfaceName,
+            networkDnsServers = dnsServers,
+            readFdInfo = { fd ->
+                File("/proc/self/fdinfo/$fd").bufferedReader().use { reader ->
+                    val buffer = CharArray(4096)
+                    val count = reader.read(buffer)
+                    if (count > 0) String(buffer, 0, count) else ""
+                }
+            },
+            isCurrent = {
+                active === current && generation == ownerGeneration &&
+                    tunOwner.masterTunFd == current.masterTunFd && current.tun.fileDescriptor.valid()
+            },
+        )
+    }
 
     override fun onDefaultNetworkAvailable() {
         val owner = synchronized(stateLock) { networkChanges.runningNetworkOwner()?.let { it to generation } } ?: return
@@ -1305,6 +1486,7 @@ internal class FoxCoreRuntime internal constructor(
     private fun clearActive(reason: String) {
         synchronized(stateLock) {
             active = null
+            heldPolicyUpdate = null
             activeTransitionGeneration = null
             handoverQuiesced = false
             shareRuntime.detach()
@@ -1399,6 +1581,8 @@ internal class FoxCoreRuntime internal constructor(
             override val generation: Long,
             val session: ActiveFoxCoreSession,
         ) : PendingNativeTransition
+
+        data class PolicyGate(override val generation: Long) : PendingNativeTransition
     }
 
     private companion object {

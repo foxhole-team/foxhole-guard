@@ -6,7 +6,7 @@
     "x86_64"
   ],
   "androidDeliveryProfile": "android4",
-  "commit": "66286391a715fbc1c2bbabb2581c5295f76a1acd",
+  "commit": "fc2134dc15b32087516672935e64ae7b8b0d5472",
   "files": [
     {
       "path": ".cargo/config.toml",
@@ -14,11 +14,11 @@
     },
     {
       "path": "Cargo.lock",
-      "sha256": "c82e5f7351ad507789a41f589f2541eb65c08fe96c9421d7f8068262f9b45880"
+      "sha256": "5e09f6a9cccfbfc98e5aff5c95604c2297e394916b74984226434a75bc017f5d"
     },
     {
       "path": "Cargo.toml",
-      "sha256": "006fdbc4357c022628ee0afed0aec0c960acc9ad56b97ab07350a4b79837d464"
+      "sha256": "91038dfb48ae506f4f6207b91994e1e49d0d3cf93a7b18c1abdbd2be9addfd57"
     },
     {
       "path": "config/foxcore-android-delivery.json",
@@ -297,8 +297,12 @@
       "sha256": "bedbe83399b08ba1b94cb36e0e426ec8693ed93eebbb22f197ced6007ce80dd2"
     },
     {
+      "path": "crates/foxcore-dns/src/identity_scope_tests.rs",
+      "sha256": "9786e6b98927c614071ade55684741dd71dac379756b4c7a84687a8e784f94c8"
+    },
+    {
       "path": "crates/foxcore-dns/src/lib.rs",
-      "sha256": "0f5ded58b145b8e83b5781acda42dc451df2d42eede975d05e7b9c684c162e25"
+      "sha256": "2df9c3cec0cbc6096c9386b16a1da885beaca8c8d6e33eab2570e28115d0687f"
     },
     {
       "path": "crates/foxcore-dns/src/message.rs",
@@ -770,7 +774,7 @@
     },
     {
       "path": "crates/foxcore-tun/src/dns/proxy.rs",
-      "sha256": "cc488fcd1c91c3b8a46051892981b1c9dd7ab38cab6ecf941bde996eef42f230"
+      "sha256": "e11e78754aa9615245f79d056020f562f5f06a844e1b8cfc0d1ac5855326c54e"
     },
     {
       "path": "crates/foxcore-tun/src/dns/tests.rs",
@@ -794,7 +798,7 @@
     },
     {
       "path": "crates/foxcore-tun/src/flow/policy.rs",
-      "sha256": "8dc951a7aefbe6a5b5fa0af3d493031837a902cb20934cc7081a1e81f17c6565"
+      "sha256": "e375997557dff343a3ba5000562fd80b0e195a19b242e7d83423040857bd9fb0"
     },
     {
       "path": "crates/foxcore-tun/src/flow/route.rs",
@@ -2125,6 +2129,7 @@
       "sha256": "e036e80ceb688d1b7ff2ff82a63e99545678b262cf5af0c331fbebc714db4444"
     }
   ],
+  "schema": 1,
   "targets": [
     "aarch64-linux-android",
     "armv7-linux-androideabi",

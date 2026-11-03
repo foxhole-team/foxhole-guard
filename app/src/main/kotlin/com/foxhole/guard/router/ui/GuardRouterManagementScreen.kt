@@ -50,6 +50,9 @@ import com.foxhole.guard.router.RouterWizardStage
 import com.foxhole.guard.router.routerLocalNetworkAccessGranted
 import com.foxhole.guard.ui.cli.LocalCliBottomChromeClearance
 import com.foxhole.guard.ui.cli.LocalCliColors
+import com.foxhole.guard.ui.cli.LocalCliNoticeSink
+import com.foxhole.guard.ui.FoxholeBannerEvent
+import com.foxhole.guard.ui.FoxholeBannerTone
 
 @Composable
 internal fun GuardRouterManagementScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
@@ -64,7 +67,11 @@ internal fun GuardRouterManagementScreen(onBack: () -> Unit, modifier: Modifier 
     val profiles by model.profiles.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     val snackbar = remember { SnackbarHostState() }
-    val notices = remember(scope, snackbar) { GuardRouterNotices(scope, snackbar) }
+    val topNoticeSink = LocalCliNoticeSink.current
+    val notices = remember(scope, snackbar, topNoticeSink) { GuardRouterNotices(scope, snackbar,
+        topNoticeSink?.let { sink -> { message, error ->
+            sink(FoxholeBannerEvent(message, if (error) FoxholeBannerTone.ERROR else FoxholeBannerTone.INFO))
+        } }) }
     val permissionError = stringResource(R.string.guard_router_vpn_router_error_local_network_permission)
     val unavailableError = stringResource(R.string.guard_router_vpn_router_error_unavailable)
     val networkError = stringResource(R.string.guard_router_vpn_router_error_network)
@@ -95,7 +102,11 @@ internal fun GuardRouterManagementScreen(onBack: () -> Unit, modifier: Modifier 
     LaunchedEffect(state.error) {
         val inlinePin = state.path == RouterWizardPath.PAIR && state.stage == RouterWizardStage.LOGIN &&
             state.error in setOf(RouterWizardError.PIN, RouterWizardError.LOCKED)
-        if (!inlinePin) wizardError?.let { notices.show(it, error = true) }
+        if (!inlinePin) wizardError?.let { message ->
+            val vpnBlocked = state.error == RouterWizardError.VPN_ACTIVE
+            notices.show(if (vpnBlocked) noticeResources.getString(R.string.router_management_disconnect_vpn) else message,
+                error = !vpnBlocked)
+        }
     }
     LaunchedEffect(state.stage) { if (state.stage == RouterWizardStage.COMPLETE) model.completed() }
     BackHandler(enabled = !betaNoticeVisible) { if (page == GuardRouterPage.WIZARD) model.entry() else close() }
@@ -167,8 +178,8 @@ internal fun GuardRouterManagementScreen(onBack: () -> Unit, modifier: Modifier 
                         }
                     }
                 }
-                SnackbarHost(snackbar, modifier = Modifier.align(Alignment.TopCenter).fillMaxWidth()) { notice ->
-                    GuardRouterNoticeContent(notice)
+                snackbar.currentSnackbarData?.let { notice ->
+                    Box(Modifier.align(Alignment.TopCenter).fillMaxWidth()) { GuardRouterNoticeContent(notice) }
                 }
             }
         }

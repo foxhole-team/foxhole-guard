@@ -757,7 +757,7 @@
     <string name="cli_cfg_group_rules">reglas de red</string>
     <string name="cli_cfg_group_extras">extras</string>
     <string name="cli_cfg_atomic_connection">cambio atómico de escenario</string>
-    <string name="cli_cfg_atomic_connection_note">desactivado: cada cambio de modo o escenario VPN/Tor pide confirmación; las reglas de red siempre se aplican atómicamente</string>
+    <string name="cli_cfg_atomic_connection_note">si está activado, el tráfico se bloquea antes de los cambios de enrutamiento compatibles hasta aplicar las nuevas reglas. Si ocurre un error, puede permanecer bloqueado; detenga la VPN antes de volver a intentarlo. Los cambios no compatibles se rechazan antes de guardar. Si está desactivado, los cambios del modo de funcionamiento o del escenario VPN/Tor requieren confirmación</string>
     <string name="cli_cfg_auto_reconnect">reconectar</string>
     <string name="cli_cfg_auto_reconnect_note">restablece la conexión si se interrumpe</string>
     <string name="cli_cfg_auto_start">iniciar tras reiniciar el dispositivo</string>

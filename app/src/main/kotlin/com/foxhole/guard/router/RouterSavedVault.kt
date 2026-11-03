@@ -9,7 +9,7 @@ internal const val MAX_SAVED_ROUTERS = 10
 internal const val MAX_RETAINED_ROUTERS = 64
 internal enum class RouterSavedStatus { UNKNOWN, AVAILABLE, UNAVAILABLE }
 internal data class RouterSavedSummary(val id: String, val number: Int, val label: String?, val address: String,
-    val status: RouterSavedStatus = RouterSavedStatus.UNKNOWN)
+    val status: RouterSavedStatus = RouterSavedStatus.UNKNOWN, val packageVersion: String? = null)
 internal data class RouterSavedInventory(val routers: List<RouterSavedSummary>, val selectedId: String?)
 
 @Serializable
@@ -66,6 +66,14 @@ internal data class RouterSavedVault(val schema: Int = 2, val selectedId: String
         return copy(routers = routers.map { row -> row.copy(pairing = row.pairing.copy(), trustedProfiles =
             if (row.pairing.id == entry.pairing.id) (row.trustedProfiles.filterNot { it.profileId == profile.profileId } + profile).takeLast(32)
             else row.trustedProfiles) }).also(RouterSavedVault::validate)
+    }
+
+    fun withLabel(id: String, label: String): RouterSavedVault {
+        val normalized = label.trim()
+        require(normalized.isNotEmpty() && normalized.length <= 64 && label.none(Char::isISOControl))
+        if (routers.none { it.pairing.id == id }) throw RouterApiFailure(RouterApiError.CONFLICT)
+        return copy(routers = routers.map { entry -> entry.copy(pairing = entry.pairing.copy(),
+            label = if (entry.pairing.id == id) normalized else entry.label) }).also(RouterSavedVault::validate)
     }
 
     fun withPreferences(preferences: RouterControlPreferences): RouterSavedVault {
