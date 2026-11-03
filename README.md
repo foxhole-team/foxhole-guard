@@ -1,14 +1,5 @@
 <h1 align="center">FoxHole Guard</h1>
 
-<a id="whats-new"></a>
-
-> **🆕 What's new - 1.0.4 Stable**
->
-> - Updated FoxHole Core to 1.0.3 with DNS caching fixes.
-> - Fixed atomic application of routing rules and scenarios.
-> - Improved documentation and the help section; updated router management tips.
-> - Added system notifications for new app versions (GitHub version only).
-
 <div align="center">
 
 **FoxHole Guard** is a network protection, privacy, and local network activity control suite for Android.
@@ -67,6 +58,14 @@ The core idea of the project is a single application for everyday network protec
 
 <p align="center"><a href="#quickstart">Get started</a> · <a href="#features">Features</a> · <a href="#details">Details</a> · <a href="#whats-new">What's new</a></p>
 
+<a id="whats-new"></a>
+
+> **🆕 What's new - 1.0.4 Stable**
+>
+> - Updated FoxHole Core to 1.0.3 with DNS caching fixes.
+> - Fixed atomic application of routing rules and scenarios.
+> - Improved documentation and the help section; updated router management tips.
+> - Added system notifications for new app versions (GitHub version only).
 
 <a id="quickstart"></a>
 

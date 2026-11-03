@@ -1,14 +1,5 @@
 <h1 align="center">FoxHole Guard</h1>
 
-<a id="whats-new"></a>
-
-> **🆕 更新内容 - 1.0.4 Stable**
->
-> - 将 FoxHole Core 更新至 1.0.3，修复了 DNS 缓存问题。
-> - 修复了路由规则和场景的原子应用。
-> - 改进了文档和帮助板块，并更新了路由器管理提示。
-> - 新增应用新版本的系统通知（仅限 GitHub 版本）。
-
 <div align="center">
 
 **FoxHole Guard** 是 Android 网络防护、隐私保护和本地网络活动管理工具。
@@ -71,6 +62,14 @@
 
 <p align="center"><a href="#quickstart">开始使用</a> · <a href="#features">功能</a> · <a href="#details">详情</a> · <a href="#whats-new">更新内容</a></p>
 
+<a id="whats-new"></a>
+
+> **🆕 更新内容 - 1.0.4 Stable**
+>
+> - 将 FoxHole Core 更新至 1.0.3，修复了 DNS 缓存问题。
+> - 修复了路由规则和场景的原子应用。
+> - 改进了文档和帮助板块，并更新了路由器管理提示。
+> - 新增应用新版本的系统通知（仅限 GitHub 版本）。
 
 <a id="quickstart"></a>
 
