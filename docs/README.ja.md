@@ -72,11 +72,9 @@
 
 Android 8（API 26）以降が必要です。利用可能なAPKアーキテクチャは公開済みリリースを参照してください。
 
-1. [GitHub Releases](https://github.com/foxhole-team/foxhole-guard/releases)からAPKをインストールします。
+1. APKをインストールします。
 2. 自分のVPNプロファイルを追加するか、Torモジュールを有効にします。
 3. シナリオを選び、システムトンネル起動時にAndroidのVPN要求を承認します。
-
-Obtainium · ARM64。他のアーキテクチャは[GitHub Releases](https://github.com/foxhole-team/foxhole-guard/releases)でAPKを選んでください。
 
 ## 🔏 リリースの検証
 

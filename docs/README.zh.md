@@ -72,11 +72,9 @@
 
 需要Android 8（API 26）或更新版本。可用APK架构见各已发布版本。
 
-1. 从[GitHub Releases](https://github.com/foxhole-team/foxhole-guard/releases)安装APK。
+1. 安装APK。
 2. 添加自己的VPN配置或启用Tor模块。
 3. 选择场景，启动系统隧道时确认Android的VPN请求。
-
-Obtainium · ARM64。其他架构请在[GitHub Releases](https://github.com/foxhole-team/foxhole-guard/releases)选择APK。
 
 ## 🔏 发布验证
 

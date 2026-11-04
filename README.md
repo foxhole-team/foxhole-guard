@@ -68,11 +68,9 @@ The core idea of the project is a single application for everyday network protec
 
 Android 8 (API 26) or later is required. Choose the APK architecture listed in the published release.
 
-1. Install an APK from [GitHub Releases](https://github.com/foxhole-team/foxhole-guard/releases).
+1. Install an APK.
 2. Add your VPN profile or enable the Tor module.
 3. Choose a scenario and approve Android’s VPN request when starting the system tunnel.
-
-Obtainium · ARM64. For other architectures, choose an APK in [GitHub Releases](https://github.com/foxhole-team/foxhole-guard/releases).
 
 <p align="center">
   <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/00_main_en.png" width="24%" alt="Main">
@@ -663,8 +661,6 @@ Third-party dependency licenses are listed in:
 The dependency and license graph is validated in CI.
 
 ---
-
-Atomic connection blocks captured traffic before supported live routing changes and commits settings and policy together. Unsupported capture or engine changes are rejected before saving; stop the connection first. See [atomic routing updates](docs/atomic-routing-updates.md) for the transaction and platform limits.
 
 ## Roadmap
 

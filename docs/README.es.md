@@ -72,11 +72,9 @@ El objetivo es ofrecer en una sola aplicación protección cotidiana, acceso a V
 
 Se necesita Android 8 (API 26) o posterior. Las arquitecturas APK disponibles se indican en cada versión publicada.
 
-1. Instale un APK de [GitHub Releases](https://github.com/foxhole-team/foxhole-guard/releases).
+1. Instale un APK.
 2. Añada su perfil VPN o active el módulo Tor.
 3. Elija un escenario y confirme la solicitud VPN de Android al iniciar el túnel del sistema.
-
-Obtainium · ARM64. Para otras arquitecturas, elija el APK en [GitHub Releases](https://github.com/foxhole-team/foxhole-guard/releases).
 
 ## 🔏 Verificación de publicaciones
 

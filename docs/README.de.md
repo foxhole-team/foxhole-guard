@@ -70,11 +70,9 @@ Die Anwendung verbindet den eigenen, **in Rust geschriebenen FoxHole Core** mit 
 
 Android 8 (API 26) oder neuer ist erforderlich. Verfügbare APK-Architekturen stehen im veröffentlichten Release.
 
-1. Ein APK aus [GitHub Releases](https://github.com/foxhole-team/foxhole-guard/releases) installieren.
+1. Ein APK installieren.
 2. Ein eigenes VPN-Profil hinzufügen oder das Tor-Modul aktivieren.
 3. Ein Szenario wählen und beim Systemtunnel die Android-VPN-Anfrage bestätigen.
-
-Obtainium · ARM64. Für andere Architekturen das APK unter [GitHub Releases](https://github.com/foxhole-team/foxhole-guard/releases) auswählen.
 
 ## 🔏 Release-Prüfung
 
