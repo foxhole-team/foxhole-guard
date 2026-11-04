@@ -54,7 +54,7 @@ class RouterCompactBootstrapServiceTest {
         // Original budget fits, but a larger backup no longer fits the current memory facts.
         client.memoryKiB = 70_000
         client.backup = "67108864\n"
-        val install = async { runCatching { service.install(proposal) }.exceptionOrNull() }
+        val install = async { runCatching { service.install(proposal, licenseAccepted = true) }.exceptionOrNull() }
         runCurrent()
         val failure = install.await()
         assertTrue(failure is RouterSetupFailure && failure.kind == RouterWizardError.STORAGE)
@@ -89,7 +89,7 @@ class RouterCompactBootstrapServiceTest {
         val proposal = inspection.await()
         val plan = requireNotNull(fixture.release.payload(fixture.system, selection).compact).modes.getValue(proposal.storageMode)
         client.packageReceipt = fixture.readback(proposal.binding, plan.packages)
-        val installation = async { service.install(proposal) }
+        val installation = async { service.install(proposal, licenseAccepted = true) }
         runCurrent()
         installation.await()
         assertEquals(1, client.installCount)

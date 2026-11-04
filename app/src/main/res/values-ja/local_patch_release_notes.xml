@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="cli_release_notes_translations_105">アラビア語とRTLに対応し、ウィジェットを調整して、翻訳とルーター設定を修正しました。</string>
+    <string name="cli_release_notes_router_cleanup_105">ルーター設定時のリソース解放とエラー表示を改善しました。</string>
+</resources>

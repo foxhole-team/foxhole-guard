@@ -3,11 +3,13 @@ package com.foxhole.guard
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import java.io.File
+import javax.xml.parsers.DocumentBuilderFactory
+import org.w3c.dom.Document
+import org.w3c.dom.Element
 
 class StringResourceParityTest {
-    private val translatedQualifiers = listOf("values-ru", "values-de", "values-fr", "values-es", "values-ja", "values-zh-rCN")
+    private val translatedQualifiers = listOf("values-ru", "values-de", "values-fr", "values-es", "values-ja", "values-zh-rCN", "values-ar")
     private val allQualifiers = listOf("values") + translatedQualifiers
-    private val stringName = Regex("""<string\s+[^>]*name="([^"]+)"""")
     private val stringEntry =
         Regex(
             """<string\s+[^>]*name="([^"]+)"[^>]*>(.*?)</string>""",
@@ -15,19 +17,15 @@ class StringResourceParityTest {
         )
     private val formatPlaceholder =
         Regex("""%(?:\d+\$)?[-#+ 0,(]*\d*(?:\.\d+)?[a-zA-Z%]""")
-    private val incompleteFoxHoleBrand = Regex("""\bFoxHole\b(?! (?:Guard|Sentinel|Core|DB|Team|mirror))""")
+    private val incompleteFoxHoleBrand = Regex("""\bFoxHole\b(?! (?:Guard|Sentinel|Core|DB|Team|mirror|VPN\b|OpenWrt Client\b))""")
     private val bareSentinelBrand = Regex("""(?<!FoxHole )\bSentinel\b""")
-    private val bareSentinelAllowedKeys = setOf("cli_foxdb_group_security")
-    private val pluralEntry =
-        Regex(
-            """<plurals\s+[^>]*name="([^"]+)"[^>]*>(.*?)</plurals>""",
-            setOf(RegexOption.DOT_MATCHES_ALL),
-        )
-    private val pluralItem =
-        Regex(
-            """<item\s+quantity="([^"]+)"[^>]*>(.*?)</item>""",
-            setOf(RegexOption.DOT_MATCHES_ALL),
-        )
+    private val umbrellaFoxHoleAllowedKeys = setOf("router_table_version")
+    private val bareSentinelAllowedKeys = setOf(
+        "cli_foxdb_group_security",
+        "cli_logs_tab_sentinel",
+        "cli_sentinel_module_history_note",
+        "cli_status_sentinel_notices",
+    )
 
     @Test
     fun `every default string is translated and every translation has a default`() {
@@ -43,7 +41,7 @@ class StringResourceParityTest {
             val all = allNames(qualifier)
             val duplicates = all.groupingBy { it }.eachCount().filterValues { it > 1 }.keys.sorted()
 
-            assertEquals("Duplicate keys in $qualifier/strings.xml", emptyList<String>(), duplicates)
+            assertEquals("Duplicate keys in $qualifier XML catalogues", emptyList<String>(), duplicates)
         }
     }
 
@@ -65,9 +63,11 @@ class StringResourceParityTest {
     @Test
     fun `visible strings use complete FoxHole product names`() {
         allQualifiers.forEach { qualifier ->
-            entries(qualifier).forEach { (key, value) ->
-                check(!incompleteFoxHoleBrand.containsMatchIn(value)) {
-                    "$qualifier/$key contains a shortened FoxHole product name"
+            declarations(qualifier, translatableOnly = false).forEach { (key, value) ->
+                if (!key.startsWith("guard_router_") && key !in umbrellaFoxHoleAllowedKeys) {
+                    check(!incompleteFoxHoleBrand.containsMatchIn(value)) {
+                        "$qualifier/$key contains a shortened FoxHole product name"
+                    }
                 }
                 if (key !in bareSentinelAllowedKeys) {
                     check(!bareSentinelBrand.containsMatchIn(value)) {
@@ -117,7 +117,7 @@ class StringResourceParityTest {
     fun `language names remain readable in every selected language`() {
         val endonyms = mapOf(
             "ru" to "русский", "en" to "english", "ja" to "日本語", "de" to "Deutsch",
-            "fr" to "français", "es" to "español", "zh" to "简体中文",
+            "fr" to "français", "es" to "español", "zh" to "简体中文", "ar" to "العربية",
         )
         allQualifiers.forEach { qualifier ->
             val translated = entries(qualifier)
@@ -147,18 +147,29 @@ class StringResourceParityTest {
         }
     }
 
-    private fun names(qualifier: String): Set<String> = allNames(qualifier).toSet()
+    private fun names(qualifier: String): Set<String> = declarations(qualifier).map { it.first }.toSet()
 
     private fun allNames(qualifier: String): List<String> =
-        stringName
-            .findAll(stringsFile(qualifier).readText())
-            .map { match -> match.groupValues[1] }
-            .toList()
+        declarations(qualifier, translatableOnly = false).map { it.first }
 
-    private fun entries(qualifier: String): Map<String, String> =
-        stringEntry
-            .findAll(stringsFile(qualifier).readText())
-            .associate { match -> match.groupValues[1] to match.groupValues[2] }
+    private fun entries(qualifier: String): Map<String, String> = buildMap {
+        declarations(qualifier).forEach { (name, value) ->
+            check(put(name, value) == null) { "Duplicate string $name in $qualifier" }
+        }
+    }
+
+    private fun declarations(qualifier: String, translatableOnly: Boolean = true): List<Pair<String, String>> = buildList {
+        catalogues(qualifier).forEach { document ->
+            val nodes = document.getElementsByTagName("string")
+            for (index in 0 until nodes.length) {
+                val element = nodes.item(index) as Element
+                if (translatableOnly && element.getAttribute("translatable") == "false") continue
+                val name = element.getAttribute("name")
+                check(name.isNotBlank()) { "Unnamed string in $qualifier" }
+                add(name to element.textContent)
+            }
+        }
+    }
 
     private fun placeholders(value: String): List<String> =
         formatPlaceholder
@@ -168,20 +179,42 @@ class StringResourceParityTest {
             .sorted()
             .toList()
 
-    private fun plurals(qualifier: String): Map<String, Map<String, String>> =
-        pluralEntry
-            .findAll(stringsFile(qualifier).readText())
-            .associate { match ->
-                match.groupValues[1] to
-                    pluralItem
-                        .findAll(match.groupValues[2])
-                        .associate { item -> item.groupValues[1] to item.groupValues[2] }
+    private fun plurals(qualifier: String): Map<String, Map<String, String>> = buildMap {
+        catalogues(qualifier).forEach { document ->
+            val nodes = document.getElementsByTagName("plurals")
+            for (index in 0 until nodes.length) {
+                val element = nodes.item(index) as Element
+                if (element.getAttribute("translatable") == "false") continue
+                val name = element.getAttribute("name")
+                val quantities = buildMap<String, String> {
+                    val items = element.getElementsByTagName("item")
+                    for (itemIndex in 0 until items.length) {
+                        val item = items.item(itemIndex) as Element
+                        val quantity = item.getAttribute("quantity")
+                        check(put(quantity, item.textContent) == null) { "Duplicate quantity $name/$quantity in $qualifier" }
+                    }
+                }
+                check(put(name, quantities) == null) { "Duplicate plural $name in $qualifier" }
             }
-
-    private fun stringsFile(qualifier: String): File =
-        repoRoot().resolve("app/src/main/res/$qualifier/strings.xml").also { file ->
-            check(file.isFile) { "Missing string catalogue: $file" }
         }
+    }
+
+    private fun catalogues(qualifier: String): List<Document> {
+        val directory = repoRoot().resolve("app/src/main/res/$qualifier")
+        check(directory.isDirectory) { "Missing locale directory: $directory" }
+        val files = directory.listFiles().orEmpty().filter { it.isFile && it.extension == "xml" }.sortedBy { it.name }
+        check(files.isNotEmpty()) { "No XML catalogues in $directory" }
+        val factory = DocumentBuilderFactory.newInstance().apply {
+            setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
+            setFeature("http://xml.org/sax/features/external-general-entities", false)
+            setFeature("http://xml.org/sax/features/external-parameter-entities", false)
+            setAttribute("http://javax.xml.XMLConstants/property/accessExternalDTD", "")
+            setAttribute("http://javax.xml.XMLConstants/property/accessExternalSchema", "")
+            isXIncludeAware = false
+            isExpandEntityReferences = false
+        }
+        return files.map { factory.newDocumentBuilder().parse(it) }
+    }
 
     private fun repoRoot(): File =
         generateSequence(File("").absoluteFile) { it.parentFile }

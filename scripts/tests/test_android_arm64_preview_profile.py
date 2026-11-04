@@ -58,7 +58,7 @@ class Arm64PreviewProfileTest(unittest.TestCase):
                 RETAINED.authority(Path(directory).resolve(),'1'*40)
 
     def fixture(self, root):
-        baseline = ROOT/'third_party/licenses/source-legal/android4/snapshot.json'
+        baseline = ROOT/'third_party/licenses/source-legal/reference-android4/snapshot.json'
         destination = root/'third_party/licenses/source-legal/android4/snapshot.json'
         destination.parent.mkdir(parents=True); shutil.copyfile(baseline,destination)
         (root/'config').mkdir(); (root/'scripts').mkdir()

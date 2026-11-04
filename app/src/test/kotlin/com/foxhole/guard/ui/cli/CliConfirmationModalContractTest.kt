@@ -229,7 +229,8 @@ class CliConfirmationModalContractTest {
 
         assertTrue(bottomSheet.contains("CliModalCloseButton("))
         assertTrue(bottomSheet.contains("R.string.cli_common_close_action"))
-        assertTrue(bottomSheet.contains("contentWindowInsets = { BottomSheetDefaults.windowInsets }"))
+        assertTrue(bottomSheet.contains("if (requestedHeight != null) WindowInsets(0) else BottomSheetDefaults.windowInsets"))
+        assertTrue(bottomSheet.contains("Modifier.height(requestedHeight).padding(bottom = navigationPadding)"))
         assertTrue(input.contains("CliModalCloseButton("))
         assertTrue(button.contains(".defaultMinSize(minHeight = 48.dp)"))
         listOf(

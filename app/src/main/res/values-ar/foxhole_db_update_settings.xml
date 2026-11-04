@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="cli_foxdb_settings_title">إعدادات FoxHole DB</string>
+    <string name="cli_foxdb_auto_enabled">التحديثات التلقائية مفعّلة</string>
+    <string name="cli_foxdb_auto_disabled">التحديثات التلقائية معطّلة</string>
+</resources>

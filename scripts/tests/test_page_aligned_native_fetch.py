@@ -20,7 +20,7 @@ SPEC.loader.exec_module(FETCHER)
 class NativeFetchTest(unittest.TestCase):
     def setUp(self):
         self.owned = tempfile.TemporaryDirectory(prefix='native-fetch-contract-')
-        self.root = Path(self.owned.name)
+        self.root = Path(self.owned.name).resolve()
         self.path = self.root / 'publisher-source'
         self.data = b'original publisher bytes'
         self.identity = {'url': 'https://dl.google.com/exact-publisher-artifact',
@@ -175,7 +175,7 @@ class GraphicsCanonicalSourceTest(unittest.TestCase):
                                       'format': 'canonical-ustar-v1', 'sha256': '0' * 64,
                                       'historicalPublisherArchiveSha256': 'f' * 64}}
         with tempfile.TemporaryDirectory() as directory:
-            target = Path(directory) / 'canonical.tar'
+            target = Path(directory).resolve() / 'canonical.tar'
             with mock.patch.object(FETCHER, 'download', return_value=self.transport()), self.assertRaisesRegex(ValueError, 'archive digest'):
                 FETCHER.fetch_graphics_source(graphics, target, False)
             self.assertFalse(target.exists())
@@ -184,7 +184,7 @@ class GraphicsCanonicalSourceTest(unittest.TestCase):
         first, second = self.transport(timestamp=1), self.transport(timestamp=2)
         identity = {'url': 'https://android.googlesource.com/original', 'sha256': hashlib.sha256(first).hexdigest()}
         with tempfile.TemporaryDirectory() as directory:
-            target = Path(directory) / 'original.tar.gz'
+            target = Path(directory).resolve() / 'original.tar.gz'
             with mock.patch.object(FETCHER, 'download', return_value=second), self.assertRaisesRegex(ValueError, 'Publisher source digest'):
                 FETCHER.fetch(identity, target, False)
             self.assertFalse(target.exists())

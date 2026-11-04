@@ -1,0 +1,24 @@
+# Synthetic external Binaries contract fixture; not a live or authenticated F-Droid recipe.
+# Values exercise parser, source/signing policy and channel boundaries only.
+Categories:
+  - Connectivity
+Binaries:
+  https://github.com/foxhole-team/foxhole-guard/releases/download/v%v/FoxHole-v%v-arm64-v8a-fdroid.apk
+Builds:
+  - versionName: 0.1.1
+    versionCode: 122
+    commit: v0.1.1
+    sudo:
+      - apt-get install -y make g++ libc-dev cmake ninja-build perl pkg-config rustup
+    output: app/build/outputs/apk/release/app-release.apk
+    srclibs:
+      - FoxHoleCore@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    prebuild:
+      - test -s config/foxcore-revision.txt
+    build:
+      - ./gradlew --offline -Pfoxhole.updateChannel=fdroid -Pfoxhole.splitApks=true :app:assembleRelease
+    ndk: r29
+AllowedAPKSigningKeys: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+AutoUpdateMode: Version
+CurrentVersion: 0.1.1
+CurrentVersionCode: 122

@@ -364,7 +364,7 @@ class RouterPanelApiTest {
         api("""{"token":"$token","pinChangeRequired":false,"extra":"[{{\\\""}""").unlock("123456".toCharArray()).close()
     }
 
-    @Test fun closingTheOwnedTransportIsIdempotentAndPreventsFurtherCredentials() = runTest {
+    @Test fun closingTheOwnedTransportIsIdempotentAndPreventsFurtherCredentials() = runBlocking {
         var closed = 0
         var requests = 0
         val client = RouterPanelApi(identity, Call.Factory { requests++; FixtureCall(it, "{}") }, { closed++ })

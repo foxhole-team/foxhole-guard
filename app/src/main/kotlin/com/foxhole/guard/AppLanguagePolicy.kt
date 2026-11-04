@@ -2,7 +2,7 @@ package com.foxhole.guard
 
 import com.foxhole.core.model.AppLocale
 
-internal val GUARD_APP_LANGUAGE_CHOICES = listOf(AppLocale.SYSTEM, AppLocale.EN, AppLocale.RU, AppLocale.DE, AppLocale.FR, AppLocale.ES, AppLocale.JA, AppLocale.ZH)
+internal val GUARD_APP_LANGUAGE_CHOICES = listOf(AppLocale.SYSTEM, AppLocale.EN, AppLocale.RU, AppLocale.DE, AppLocale.FR, AppLocale.ES, AppLocale.JA, AppLocale.ZH, AppLocale.AR)
 
 internal data class AppLanguageDecision<T>(val language: T, val applyStored: Boolean)
 
@@ -24,6 +24,7 @@ internal fun languageFromPlatformTag(tag: String): AppLocale? {
         "fr" -> AppLocale.FR
         "es" -> AppLocale.ES
         "ja" -> AppLocale.JA
+        "ar" -> AppLocale.AR
         "zh" -> AppLocale.ZH.takeIf { locale.script != "Hant" && locale.country !in setOf("TW", "HK", "MO") }
         else -> null
     }

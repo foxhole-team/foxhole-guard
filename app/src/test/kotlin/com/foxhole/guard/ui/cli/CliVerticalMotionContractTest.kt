@@ -47,7 +47,7 @@ internal class CliVerticalMotionContractTest {
     }
 
     @Test
-    fun `direct vertical call sites consume the shared law without local timings`() {
+    fun `direct vertical call sites keep shared bounds and the anchored profile selector`() {
         val consumers = listOf(
             cli("components/CliPanel.kt"),
             cli("home/CliHomeScreen.kt"),
@@ -56,12 +56,19 @@ internal class CliVerticalMotionContractTest {
             cli("settings/CliHelpSubScreen.kt"),
         )
 
-        consumers.forEach { source ->
+        consumers.filterIndexed { index, _ -> index != 1 }.forEach { source ->
             assertFalse(source.contains("expandVertically("))
             assertFalse(source.contains("shrinkVertically("))
         }
+        val home = consumers[1]
+        assertEquals(1, Regex("expandVertically\\(").findAll(home).count())
+        assertEquals(1, Regex("shrinkVertically\\(").findAll(home).count())
+        assertTrue(home.contains("val sizeSpec = cliProfileSelectorSizeSpec()"))
+        assertTrue(home.contains("expandVertically(sizeSpec, expandFrom = Alignment.Bottom)"))
+        assertTrue(home.contains("shrinkVertically(sizeSpec, shrinkTowards = Alignment.Bottom)"))
+        assertTrue(home.contains(".heightIn(max = availableHeight)"))
         assertTrue(consumers[0].contains("enter = cliVerticalEnter()"))
-        assertTrue(consumers[1].contains("animationSpec = cliVerticalSizeSpec()"))
+        assertTrue(consumers[1].contains("val sizeSpec = cliProfileSelectorSizeSpec()"))
         assertTrue(consumers[2].contains("enter = cliVerticalEnter()"))
         assertTrue(consumers[3].contains("transitionSpec = { cliVerticalSwap() }"))
         assertTrue(consumers[4].contains("exit = cliVerticalExit()"))

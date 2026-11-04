@@ -19,6 +19,10 @@ display role.
 The full upstream TTF is used without subsetting so English and Russian headings
 always render through one font rather than a script-specific fallback.
 
+Tiny5 has no Japanese (CJK) glyphs. Japanese text uses the system font fallback,
+so Latin and CJK text may have different styles. This keeps Japanese text readable
+without adding a dense pixel font. JetBrains Mono uses the same CJK fallback.
+
 ## JetBrains Mono
 
 - Upstream: https://github.com/JetBrains/JetBrainsMono
@@ -32,3 +36,7 @@ always render through one font rather than a script-specific fallback.
 - License: SIL Open Font License 1.1; upstream `OFL.txt` is stored as
   `JetBrainsMono-OFL.txt` (SHA-256
   `30f0c136e3c88e422d0791acd97238870f9054a9729bc34cf2ff0d4ed8cac4ad`).
+
+Arabic uses the Android system sans-serif font for readable joined glyphs.
+The saved Tiny5/JetBrains Mono preference is retained for other languages.
+No Arabic font binary is bundled.

@@ -8,7 +8,7 @@ import org.junit.Test
 import org.w3c.dom.Element
 
 internal class SupplementaryLocaleCoverageTest {
-    private val qualifiers = listOf("values-ru", "values-de", "values-fr", "values-es", "values-ja", "values-zh-rCN")
+    private val qualifiers = listOf("values-ru", "values-de", "values-fr", "values-es", "values-ja", "values-zh-rCN", "values-ar")
     private val formatPlaceholder =
         Regex("""%(?:[1-9]\d*\$)?[-#+ 0,(<]*\d*(?:\.\d+)?(?:[tT][a-zA-Z]|[bBhHsScCdoxXeEfgGaA%n])""")
     private val explicitEscape = Regex("""\\+n|\\+r|\\+t""")

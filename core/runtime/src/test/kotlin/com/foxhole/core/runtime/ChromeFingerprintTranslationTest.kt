@@ -24,14 +24,18 @@ internal class ChromeFingerprintTranslationTest {
 
     @Test
     fun `ordinary Chrome TLS preserves its requested hello and HTTP one ALPN`() {
-        for (name in listOf("chrome", "chrome_151")) {
+        for ((name, expected) in listOf(
+            "chrome" to "chrome_156",
+            "chrome_156" to "chrome_156",
+            "chrome_151" to "chrome_151",
+        )) {
             val utls =
                 Json.parseToJsonElement(
                     """{"enabled":true,"fingerprint":"$name"}""",
                 )
             val input = JsonObject(tls + ("utls" to utls))
             val result = translateFoxCoreTls(input, "tls", mandatory = false, allowReality = false)
-            assertEquals(JsonPrimitive("chrome_151"), result.tls["fingerprint"])
+            assertEquals(JsonPrimitive(expected), result.tls["fingerprint"])
             assertEquals(tls["alpn"], result.tls["alpn"])
             assertEquals(tls["server_name"], result.tls["server_name"])
             assertEquals(null, result.reality)
@@ -43,7 +47,7 @@ internal class ChromeFingerprintTranslationTest {
         val utls = Json.parseToJsonElement("""{"fingerprint":"chrome"}""")
         val input = JsonObject(tls + ("utls" to utls))
         val result = translateFoxCoreTls(input, "tls", mandatory = false, allowReality = false)
-        assertEquals(JsonPrimitive("chrome_151"), result.tls["fingerprint"])
+        assertEquals(JsonPrimitive("chrome_156"), result.tls["fingerprint"])
     }
 
     @Test

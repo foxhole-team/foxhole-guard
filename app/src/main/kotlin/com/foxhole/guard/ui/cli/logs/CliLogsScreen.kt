@@ -558,7 +558,7 @@ private fun CliJournalTableRow(row: CliJournalRow) {
             Spacer(modifier = Modifier.width(JOURNAL_GLYPH_GAP))
             Text(
                 text = row.eventType,
-                style = CliType.small,
+                style = CliType.small.copy(textDirection = androidx.compose.ui.text.style.TextDirection.ContentOrLtr),
                 color = toneColor,
                 textAlign = TextAlign.Start,
                 maxLines = 3,
@@ -595,7 +595,7 @@ private fun CliJournalDescriptionLine(
     val colors = LocalCliColors.current
     Text(
         text = field,
-        style = CliType.small,
+        style = CliType.small.copy(textDirection = androidx.compose.ui.text.style.TextDirection.ContentOrLtr),
         color = when {
             index == 0 && row.tone == CliJournalRowTone.ERROR -> colors.err
             index == 0 -> colors.fg
@@ -1126,7 +1126,8 @@ private fun CliJournalTimestamp(timestamp: Long) {
     val colors = LocalCliColors.current
     Text(
         text = "[${CliFormat.clock(timestamp)}]",
-        style = CliType.title.copy(fontSize = cliScaledSp(7f), lineHeight = CliType.small.lineHeight),
+        style = CliType.title.copy(fontSize = cliScaledSp(7f), lineHeight = CliType.small.lineHeight,
+            textDirection = androidx.compose.ui.text.style.TextDirection.Ltr),
         color = colors.faint,
         maxLines = 1,
         textAlign = TextAlign.Start,

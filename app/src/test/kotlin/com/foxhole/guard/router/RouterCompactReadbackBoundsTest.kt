@@ -38,13 +38,16 @@ class RouterCompactReadbackBoundsTest {
         assertEquals(524288, output.bytes().size)
     }
 
-    @Test fun otherReadCommandsStillRejectA262145ByteResponse() {
+    @Test fun otherReadCommandsRejectTheFirstByteBeyondTheirDeclaredBudget() {
         for (command in RouterReadCommand.entries.filter { it != RouterReadCommand.PACKAGE_MANIFEST }) {
-            val output = BoundedRouterOutput(command.maximumOutputBytes)
-            output.write(ByteArray(262144))
+            val limit = command.maximumOutputBytes
+            assertTrue("Unexpected non-manifest output budget for $command", limit in 1..262144)
+            val output = BoundedRouterOutput(limit)
+            output.write(ByteArray(limit))
+            assertEquals(limit, output.bytes().size)
             assertThrows(IOException::class.java) { output.write(byteArrayOf(1), 0, 1) }
             assertTrue(output.overflowed)
-            assertEquals(262144, output.bytes().size)
+            assertEquals(limit, output.bytes().size)
         }
     }
 }

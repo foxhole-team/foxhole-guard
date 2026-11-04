@@ -4,8 +4,8 @@
   "files": [
     {
       "path": "CONSUMER-BINDING.json",
-      "bytes": 3103,
-      "sha256": "25c5b1acc455c0f3f8d510b87667304455fd5940c2e8bfa0999780084962e66a"
+      "bytes": 3018,
+      "sha256": "f8740e30d15d0e45bbcf90054837f9fae06bf8de1a6e8d216935e3798cc44869"
     },
     {
       "path": "PORTABLE-PROVENANCE.json",
@@ -20,7 +20,7 @@
     {
       "path": "consumer-runtime-inventory.json",
       "bytes": 508933,
-      "sha256": "b7cdcb543462a0cc9b77a34dc1bc955510844cfbe4d56e867ca7e909bed7c975"
+      "sha256": "3fbbdc0ad94e9509fd2c367812f4805cd16d61f9dc4cc8cd6114aa15d201cfad"
     },
     {
       "path": "files/maven/androidx.activity/activity-compose/1.13.0/activity-compose-1.13.0.aar/META-INF/androidx/activity/activity-compose/LICENSE.txt",

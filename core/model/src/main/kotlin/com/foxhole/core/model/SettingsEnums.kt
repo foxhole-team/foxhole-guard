@@ -100,6 +100,7 @@ enum class AppLocale(val tag: String) {
     FR("fr"),
     ES("es"),
     ZH("zh"),
+    AR("ar"),
 
     ;
 

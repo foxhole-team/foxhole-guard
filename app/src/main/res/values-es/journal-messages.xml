@@ -43,7 +43,7 @@
     <string name="journal_unavailable_config">La configuración de la salida no se puede usar.</string>
     <string name="journal_unavailable_config_action">Revisa el perfil antes de volver a intentarlo.</string>
     <string name="journal_unavailable_unsupported">Esta compilación de Core no admite el protocolo configurado.</string>
-    <string name="journal_unavailable_unsupported_action">Usa un protocolo compatible o actualiza FoxHole.</string>
+    <string name="journal_unavailable_unsupported_action">Usa un protocolo compatible o actualiza FoxHole Guard.</string>
     <string name="journal_unavailable_disabled">Esta salida está desactivada.</string>
     <string name="journal_unavailable_disabled_action">Revisa los ajustes de habilitación de la ruta.</string>
     <string name="journal_unavailable_internal">Un fallo interno impidió iniciar esta salida.</string>

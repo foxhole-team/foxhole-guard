@@ -175,8 +175,10 @@ class CliVisualPolishContractTest {
 
         val english = resource("values/strings.xml")
         val russian = resource("values-ru/strings.xml")
-        assertTrue(english.contains("every operating-mode or VPN/Tor scenario switch asks for confirmation"))
-        assertTrue(russian.contains("требует подтверждения"))
+        assertTrue(english.contains("when on, supported routing changes pause traffic before applying new rules"))
+        assertTrue(english.contains("When off, operating-mode and VPN/Tor scenario switches ask for confirmation"))
+        assertTrue(russian.contains("если включено, перед поддерживаемыми изменениями маршрутизации трафик блокируется"))
+        assertTrue(russian.contains("Если выключено, смена режима работы или сценария VPN/Tor требует подтверждения"))
     }
 
     @Test
@@ -467,7 +469,10 @@ class CliVisualPolishContractTest {
         assertTrue(source.contains("CliTopBarSettingsButton("))
         assertEquals(1, Regex("R\\.drawable\\.lin_settings").findAll(source).count())
         assertFalse(source.contains("R.drawable.lin_link"))
-        assertFalse(source.contains("R.drawable.lin_update"))
+        val header = source.substringBefore("label = stringResource(R.string.cli_updates_check)")
+        assertFalse(header.contains("R.drawable.lin_update"))
+        assertTrue(source.substringAfter("label = stringResource(R.string.cli_updates_check)")
+            .substringBefore("CliRowDivider()").contains("icon = R.drawable.lin_update"))
     }
 
     @Test

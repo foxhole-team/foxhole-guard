@@ -206,6 +206,7 @@ internal fun GuardRouterLoginSheet(
             if (!installed) Text(stringResource(R.string.guard_router_vpn_router_root_login))
             OutlinedTextField(
                 state = address,
+                textStyle = MaterialTheme.typography.bodyLarge.copy(textDirection = androidx.compose.ui.text.style.TextDirection.Ltr),
                 modifier = Modifier.fillMaxWidth(),
                 enabled = addressEditable && !busy && !submitting && !readingKey,
                 lineLimits = TextFieldLineLimits.SingleLine,

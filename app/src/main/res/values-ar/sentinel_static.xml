@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="sentinel_static_expert">إعدادات الفحص الثابت للخبراء</string>
+    <string name="sentinel_static_title">فحوص APK</string>
+    <string name="sentinel_static_reference_summary">%1$s: %2$s من فئات مراجع API الثابتة و%3$s من مطابقات القواعد. لا تثبت هذه الملاحظات التنفيذ أو وجود برمجيات ضارة.</string>
+    <string name="sentinel_static_notification_title">FoxHole Sentinel: ملاحظات ثابتة</string>
+    <string name="sentinel_static_select_app">التطبيق</string>
+    <string name="sentinel_static_run">فحص التطبيق المختار</string>
+    <string name="sentinel_static_baseline">فحص التطبيقات المثبتة</string>
+    <string name="sentinel_static_cancel">إلغاء الفحص</string>
+    <string name="sentinel_static_dex">فحوص DEX</string>
+    <string name="sentinel_static_yara">فحوص YARA</string>
+    <string name="sentinel_static_notify">الإشعار بالنتائج</string>
+    <string name="sentinel_static_automatic">فحص التطبيقات الجديدة والمحدَّثة</string>
+    <string name="sentinel_static_charging">الفحوص التلقائية أثناء الشحن</string>
+    <string name="sentinel_static_battery">الفحوص التلقائية عند تجاوز حد انخفاض البطارية</string>
+    <string name="sentinel_static_cost">ميزانية الفحص</string>
+    <string name="sentinel_static_economy">اقتصادي · 16 MiB</string>
+    <string name="sentinel_static_balanced">متوازن · 64 MiB</string>
+    <string name="sentinel_static_coverage_note">تقتصر التطبيقات المثبتة على ما يتيحه Android للرؤية. تُجرى فقط فحوص APK/DEX ثابتة ومحدودة. لا تعني التغطية المفقودة أو الجزئية أن التطبيق آمن. لا يُقيَّم الكود الأصلي أو المنزّل.</string>
+    <string name="sentinel_static_journal_deferred">السجل مقفل: تُحفَظ هذه النتيجة في الذاكرة ويمكن تسجيلها بعد إلغاء القفل.</string>
+    <string name="sentinel_static_status_disabled">معطّل</string>
+    <string name="sentinel_static_status_idle">جاهز</string>
+    <string name="sentinel_static_status_waiting">بانتظار شروط الشحن أو البطارية</string>
+    <string name="sentinel_static_status_running">جارٍ الفحص</string>
+    <string name="sentinel_static_status_complete">اكتملت الفحوص الثابتة</string>
+    <string name="sentinel_static_status_partial">تغطية جزئية</string>
+    <string name="sentinel_static_status_stale">تغير التثبيت أو الإعدادات</string>
+    <string name="sentinel_static_status_cancelled">أُلغي</string>
+    <string name="sentinel_static_status_unavailable">الفحص غير متاح</string>
+    <string name="sentinel_static_status_unsupported">صيغة APK غير مدعومة</string>
+    <string name="sentinel_static_engine_unavailable">محرك الفحص المضمّن غير متاح لهذا الجهاز.</string>
+    <string name="sentinel_static_type_label">مراجع ثابتة</string>
+</resources>

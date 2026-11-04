@@ -1,4 +1,1 @@
-- Updated FoxHole Core to 1.0.3 with DNS caching fixes.
-- Fixed atomic application of routing rules and scenarios.
-- Improved documentation and the help section; updated router management tips.
-- Added system notifications for new app versions (GitHub version only).
+Added Arabic language and RTL support, adapted the widget, and fixed translations and router settings.

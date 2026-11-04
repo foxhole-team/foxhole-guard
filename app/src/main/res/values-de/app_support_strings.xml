@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="cli_wizard_license_save_failed">Ihre Zustimmung zur Lizenz konnte nicht gespeichert werden. Versuchen Sie es erneut.</string>
+    <string name="guard_router_dock_shortcut_label">Schnellzugriff im Dock</string>
+    <string name="guard_router_dock_title">OpenWrt</string>
+    <string name="guard_router_home_shortcut_label">Schnellzugriff auf der Startseite</string>
+    <string name="guard_router_router_discovery_api_absent">Die FoxHole-HTTPS-API hat unter dieser Adresse nicht geantwortet. Prüfen Sie die Routeradresse oder versuchen Sie es erneut.</string>
+    <string name="guard_router_router_discovery_network">Der Router ist über dieses WLAN nicht erreichbar. Versuchen Sie es erneut oder geben Sie seine Adresse ein.</string>
+    <string name="guard_router_router_discovery_package_check">Der HTTPS-Dienst hat geantwortet, aber FoxHole konnte nicht verifiziert werden. Prüfen Sie die Webeinrichtung des Routers oder versuchen Sie es erneut.</string>
+    <string name="guard_router_router_discovery_ssh_only">SSH ist verfügbar, die FoxHole-HTTPS-API jedoch nicht. Sie können OpenWrt vor der Installation prüfen.</string>
+    <string name="guard_router_router_discovery_timeout">Die Zeit für die Routerprüfung ist abgelaufen. Versuchen Sie es erneut oder geben Sie die aktuelle LAN-Adresse ein.</string>
+    <string name="guard_router_router_discovery_tls">Die HTTPS-Verbindung zum Router konnte nicht verifiziert werden. Prüfen Sie seine Uhrzeit und sein Zertifikat und versuchen Sie es erneut.</string>
+    <string name="guard_router_router_profile_pair_wifi">Verbinden Sie sich erneut mit dem WLAN des Routers, um die Kopplung zu wiederholen</string>
+    <string name="guard_router_router_profile_retry_pairing">Kopplung wiederholen</string>
+    <string name="guard_router_router_review_enter_manually">Manuell eingeben</string>
+    <string name="guard_router_router_review_not_found">Router nicht gefunden.</string>
+    <string name="guard_router_router_review_retry_search">Suche wiederholen</string>
+    <string name="guard_router_router_review_wifi_connected">WLAN verbunden</string>
+    <string name="guard_router_router_ssh_checking_openwrt">OpenWrt-Version, Architektur und Installationsvoraussetzungen werden geprüft…</string>
+    <string name="guard_router_router_ssh_key_error">Der private SSH-Schlüssel konnte nicht gelesen werden. Wählen Sie einen PEM- oder OpenSSH-Schlüssel mit höchstens 64 KiB.</string>
+    <string name="guard_router_router_ssh_key_file">SSH-SCHLÜSSELDATEI AUSWÄHLEN</string>
+    <string name="guard_router_router_ssh_key_loaded">Der private SSH-Schlüssel wurde nur für diese Verbindung geladen.</string>
+    <string name="guard_router_router_ssh_key_passphrase">Passphrase des SSH-Schlüssels (falls festgelegt)</string>
+    <string name="guard_router_router_ssh_key_paste">SSH-SCHLÜSSEL EINFÜGEN</string>
+    <string name="guard_router_router_ssh_manual_setup">OPENWRT PRÜFEN / SSH EINRICHTEN</string>
+    <string name="guard_router_router_ssh_use_password">PASSWORT VERWENDEN</string>
+    <string name="guard_router_router_updates_device_download">Das FoxHole-Paket wird über Ihr Gerät heruntergeladen</string>
+    <string name="guard_router_settings_info">Die App verwendet Ihr lokales Netzwerk, um den OpenWrt-Router zu finden und sein VPN von diesem Telefon aus zu verwalten. Wenn Sie die Verwaltung ausschalten, läuft das VPN des Routers weiter.</string>
+    <string name="guard_router_settings_pair_first">Richten Sie einen Router ein oder koppeln Sie ihn, um die Verwaltung zu aktivieren.</string>
+    <string name="guard_router_vpn_router_error_home_vpn">Es gibt keine verifizierte VPN-Route zum gekoppelten Router. Verbinden Sie sich mit dessen VPN und aktivieren Sie die Verwaltung über das Heim-VPN in den Routereinstellungen.</string>
+    <string name="guard_router_wifi_status_label">WLAN-Status</string>
+</resources>

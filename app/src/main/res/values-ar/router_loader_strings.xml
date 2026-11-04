@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="router_loader_discovering">جارٍ اكتشاف الموجّه على الشبكة المحلية</string>
+    <string name="router_loader_data">جارٍ تحميل البيانات</string>
+    <string name="router_loader_paired_version">آخر إصدار معروف: %1$s</string>
+    <string name="router_loader_version_unknown">لم يُسجَّل إصدار الموجّه المقترن بعد.</string>
+</resources>

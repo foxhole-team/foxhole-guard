@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="error_flow_attribution_unavailable">يتطلب جدار الحماية والتوجيه حسب التطبيق Android 10 أو أحدث. لا يمكن بدء هذه الإعدادات على هذا الجهاز.</string>
+</resources>

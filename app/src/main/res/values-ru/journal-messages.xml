@@ -42,7 +42,7 @@
     <string name="journal_unavailable_config">Конфигурация исходящего маршрута непригодна для запуска.</string>
     <string name="journal_unavailable_config_action">Проверьте профиль перед повторной попыткой.</string>
     <string name="journal_unavailable_unsupported">Эта сборка Core не поддерживает указанный протокол.</string>
-    <string name="journal_unavailable_unsupported_action">Выберите поддерживаемый протокол или обновите FoxHole.</string>
+    <string name="journal_unavailable_unsupported_action">Выберите поддерживаемый протокол или обновите FoxHole Guard.</string>
     <string name="journal_unavailable_disabled">Этот исходящий маршрут отключён.</string>
     <string name="journal_unavailable_disabled_action">Проверьте настройки разрешения маршрута.</string>
     <string name="journal_unavailable_internal">Внутренняя ошибка помешала запуску исходящего маршрута.</string>

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="guard_router_router_ssh_key_file">اختيار ملف مفتاح SSH</string>
+    <string name="guard_router_router_ssh_key_paste">لصق مفتاح SSH</string>
+    <string name="guard_router_router_ssh_key_loaded">حُمّل مفتاح SSH الخاص لهذا الاتصال فقط.</string>
+    <string name="guard_router_router_ssh_use_password">استخدام كلمة المرور</string>
+    <string name="guard_router_router_ssh_key_error">تعذرت قراءة مفتاح SSH خاص. اختر مفتاح PEM أو OpenSSH بحجم لا يتجاوز 64 KiB.</string>
+    <string name="guard_router_router_ssh_key_passphrase">عبارة مرور مفتاح SSH (إن وُجدت)</string>
+    <string name="guard_router_router_ssh_checking_openwrt">جارٍ التحقق من إصدار OpenWrt والمعمارية ومتطلبات التثبيت…</string>
+    <string name="guard_router_router_discovery_api_absent">لم تستجب واجهة FoxHole HTTPS API على هذا العنوان. تحقق من عنوان الموجّه أو حاول مجددًا.</string>
+    <string name="guard_router_router_discovery_ssh_only">يتوفر SSH، لكن واجهة FoxHole HTTPS API غير متاحة. يمكنك فحص OpenWrt قبل التثبيت.</string>
+    <string name="guard_router_router_discovery_timeout">انتهت مهلة فحص الموجّه. حاول مجددًا أو أدخل عنوان LAN الحالي له.</string>
+    <string name="guard_router_router_discovery_tls">تعذر التحقق من اتصال HTTPS بالموجّه. تحقق من ساعته وشهادته، ثم حاول مجددًا.</string>
+    <string name="guard_router_router_discovery_network">تعذر الوصول إلى الموجّه عبر شبكة Wi-Fi هذه. حاول مجددًا أو أدخل عنوانه.</string>
+    <string name="guard_router_router_discovery_package_check">استجابت خدمة HTTPS، لكن تعذر التحقق من FoxHole. تحقق من إعداد الموجّه عبر الويب أو حاول مجددًا.</string>
+    <string name="guard_router_router_ssh_manual_setup">فحص OPENWRT / إعداد SSH</string>
+    <string name="guard_router_router_updates_device_download">جارٍ تنزيل حزمة FoxHole عبر جهازك</string>
+</resources>

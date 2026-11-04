@@ -43,7 +43,7 @@
     <string name="journal_unavailable_config">出站配置无法使用。</string>
     <string name="journal_unavailable_config_action">请先检查配置，再重试。</string>
     <string name="journal_unavailable_unsupported">此 Core 构建不支持所配置的协议。</string>
-    <string name="journal_unavailable_unsupported_action">请使用受支持的协议，或更新 FoxHole。</string>
+    <string name="journal_unavailable_unsupported_action">请使用受支持的协议，或更新 FoxHole Guard。</string>
     <string name="journal_unavailable_disabled">此出站通道已停用。</string>
     <string name="journal_unavailable_disabled_action">请检查路由启用条件设置。</string>
     <string name="journal_unavailable_internal">内部故障阻止了此出站通道启动。</string>

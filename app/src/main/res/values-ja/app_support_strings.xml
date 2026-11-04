@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="cli_wizard_license_save_failed">ライセンスへの同意を保存できませんでした。もう一度お試しください。</string>
+    <string name="guard_router_dock_shortcut_label">ドックからすぐにアクセス</string>
+    <string name="guard_router_dock_title">OpenWrt</string>
+    <string name="guard_router_home_shortcut_label">ホーム画面からすぐにアクセス</string>
+    <string name="guard_router_router_discovery_api_absent">このアドレスの FoxHole HTTPS API から応答がありませんでした。ルーターのアドレスを確認するか、もう一度お試しください。</string>
+    <string name="guard_router_router_discovery_network">この Wi-Fi ネットワーク経由でルーターに接続できませんでした。もう一度試すか、アドレスを入力してください。</string>
+    <string name="guard_router_router_discovery_package_check">HTTPS サービスは応答しましたが、FoxHole を確認できませんでした。ルーターのウェブ設定を確認するか、もう一度お試しください。</string>
+    <string name="guard_router_router_discovery_ssh_only">SSH は利用できますが、FoxHole HTTPS API は利用できません。インストール前に OpenWrt を確認できます。</string>
+    <string name="guard_router_router_discovery_timeout">ルーターの確認がタイムアウトしました。もう一度試すか、現在の LAN アドレスを入力してください。</string>
+    <string name="guard_router_router_discovery_tls">ルーターの HTTPS 接続を検証できませんでした。ルーターの時刻と証明書を確認してから、もう一度お試しください。</string>
+    <string name="guard_router_router_profile_pair_wifi">ペアリングをやり直すには、ルーターの Wi-Fi に接続してください</string>
+    <string name="guard_router_router_profile_retry_pairing">ペアリングをやり直す</string>
+    <string name="guard_router_router_review_enter_manually">手動で入力</string>
+    <string name="guard_router_router_review_not_found">ルーターが見つかりません。</string>
+    <string name="guard_router_router_review_retry_search">再検索</string>
+    <string name="guard_router_router_review_wifi_connected">Wi-Fi 接続済み</string>
+    <string name="guard_router_router_ssh_checking_openwrt">OpenWrt のバージョン、アーキテクチャ、インストール条件を確認中…</string>
+    <string name="guard_router_router_ssh_key_error">SSH 秘密鍵を読み取れませんでした。64 KiB 以下の PEM または OpenSSH 鍵を選択してください。</string>
+    <string name="guard_router_router_ssh_key_file">SSH 鍵ファイルを選択</string>
+    <string name="guard_router_router_ssh_key_loaded">SSH 秘密鍵は、この接続に限って読み込まれています。</string>
+    <string name="guard_router_router_ssh_key_passphrase">SSH 鍵のパスフレーズ（設定されている場合）</string>
+    <string name="guard_router_router_ssh_key_paste">SSH 鍵を貼り付け</string>
+    <string name="guard_router_router_ssh_manual_setup">OpenWrt の確認 / SSH 設定</string>
+    <string name="guard_router_router_ssh_use_password">パスワードを使用</string>
+    <string name="guard_router_router_updates_device_download">お使いの端末経由で FoxHole パッケージをダウンロード中</string>
+    <string name="guard_router_settings_info">本アプリはローカルネットワークを使用して OpenWrt ルーターを検索し、このスマートフォンからその VPN を管理します。管理をオフにしても、ルーターの VPN は動作し続けます。</string>
+    <string name="guard_router_settings_pair_first">管理を有効にするには、ルーターをセットアップするか、ペアリングしてください。</string>
+    <string name="guard_router_vpn_router_error_home_vpn">ペアリング済みルーターへの確認済み VPN 経路がありません。そのルーターの VPN に接続し、ルーターの設定でホーム VPN 経由の管理を有効にしてください。</string>
+    <string name="guard_router_wifi_status_label">Wi-Fi の状態</string>
+</resources>

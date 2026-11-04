@@ -43,7 +43,7 @@
     <string name="journal_unavailable_config">La configuration de sortie est inutilisable.</string>
     <string name="journal_unavailable_config_action">Vérifiez le profil avant de réessayer.</string>
     <string name="journal_unavailable_unsupported">Cette version de Core ne prend pas en charge le protocole configuré.</string>
-    <string name="journal_unavailable_unsupported_action">Utilisez un protocole pris en charge ou mettez FoxHole à jour.</string>
+    <string name="journal_unavailable_unsupported_action">Utilisez un protocole pris en charge ou mettez FoxHole Guard à jour.</string>
     <string name="journal_unavailable_disabled">Cette sortie est désactivée.</string>
     <string name="journal_unavailable_disabled_action">Vérifiez les réglages d’activation de la route.</string>
     <string name="journal_unavailable_internal">Une erreur interne a empêché le démarrage de cette sortie.</string>

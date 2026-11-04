@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="error_route_excludes_android_version">تتطلب استثناءات المسارات Android 13 أو أحدث. لا يمكن بدء هذا الملف الشخصي بأمان على هذا الجهاز</string>
+    <string name="error_route_excludes_too_many">يحتوي هذا الملف الشخصي على استثناءات مسارات كثيرة جدًا (%1$d؛ حد Android هو %2$d). قلّل قواعد المسارات وحاول مجددًا</string>
+    <string name="error_runtime_missing">مكتبة FoxCore الأصلية غير مُضمَّنة في هذا البناء</string>
+    <string name="error_vpn_package_split_unavailable">لم تعد بعض التطبيقات المختارة مثبتة. حدّث قائمة توجيه التطبيقات وأعد الاتصال</string>
+</resources>

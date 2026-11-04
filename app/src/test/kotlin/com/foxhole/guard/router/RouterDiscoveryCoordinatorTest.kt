@@ -4,6 +4,7 @@ import java.io.IOException
 import java.net.ConnectException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -86,7 +87,10 @@ class RouterDiscoveryCoordinatorTest {
                         assertEquals("true", payload["confirm"]?.jsonPrimitive?.content)
                         assertEquals("7", payload["revision"]?.jsonPrimitive?.content)
                         resetObservation?.invoke()
-                        if (resetReplyLost) null else """{"schema":1,"scope":"foxhole","reset":true,"revision":8,"token":"${"d".repeat(64)}","pinChangeRequired":true}"""
+                        if (resetReplyLost) null else {
+                            configured = false
+                            """{"schema":1,"scope":"foxhole","reset":true,"revision":8,"token":"${"d".repeat(64)}","pinChangeRequired":true}"""
+                        }
                     }
                     "pin.change" -> """{"token":"${"e".repeat(64)}"}"""
                     "pair.create" -> {
@@ -120,8 +124,8 @@ class RouterDiscoveryCoordinatorTest {
             override suspend fun finish(api: RouterPanelApi, session: RouterPanelSession, pairing: RouterPairing,
                 options: RouterWizardOptions, selectedProfile: RouterProfileSelection?) = RouterWizardResult(pairing.id)
         }, { null }, { true })
-        suspend fun find() = coroutineScope {
-            coordinator.begin(RouterWizardPath.PAIR, "NL")
+        suspend fun find(addingNew: Boolean = false) = coroutineScope {
+            coordinator.begin(RouterWizardPath.PAIR, "NL", addingNew = addingNew)
             // Await the owned operation on a real clock: production cleanup uses real IO.
             launch(Dispatchers.Default) { coordinator.findRouter() }.join()
         }
@@ -151,7 +155,7 @@ class RouterDiscoveryCoordinatorTest {
         f.coordinator.close()
     }
 
-    @Test fun retryNeverRetainsInstalledAuthorityOrAnOldResultId() = runTest {
+    @Test fun retryNeverRetainsInstalledAuthorityOrAnOldResultId() = runBlocking {
         val f = Fixture()
         f.find()
         val previous = requireNotNull(f.coordinator.state.value.discovery)
@@ -316,22 +320,29 @@ class RouterDiscoveryCoordinatorTest {
 
     @Test fun connectWithoutResetPreservesExistingPairingAndPendingSync() = runTest {
         val f = Fixture(); f.store.value = f.oldPair()
-        f.find(); f.coordinator.connectDiscovered(); f.coordinator.login("5678".toCharArray())
+        f.find(); f.coordinator.connectDiscovered(); f.coordinator.login("567890".toCharArray())
         assertEquals(RouterWizardStage.COMPLETE, f.coordinator.state.value.stage)
         assertFalse(f.actions.contains("setup.reset"))
         assertEquals("pair-" + "1".repeat(32), f.store.value?.id)
         assertEquals("server-" + "2".repeat(12), f.store.value?.pendingServerId)
     }
 
-    @Test fun resetAcknowledgmentRemovesOnlyOldRouterSyncIdentityAndCreatesFreshEnrollment() = runTest {
+    @Test fun resetAcknowledgmentRemovesOnlyOldRouterSyncIdentityAndCreatesFreshEnrollment() = runBlocking {
         val f = Fixture(); f.store.value = f.oldPair()
         val oldId = requireNotNull(f.store.value).id
         val oldKey = requireNotNull(f.store.value).credential.copyOf()
         f.resetObservation = { assertEquals(oldId, f.store.value?.id); assertEquals("server-" + "2".repeat(12), f.store.value?.pendingServerId) }
-        f.find(); f.coordinator.connectDiscovered(resetFoxHole = true); f.coordinator.login("5678".toCharArray())
-        assertEquals(RouterWizardStage.NEW_PIN, f.coordinator.state.value.stage)
+        f.find(); f.coordinator.connectDiscovered(resetFoxHole = true); f.coordinator.login("567890".toCharArray())
+        assertEquals(RouterWizardStage.PIN_SETUP_REQUIRED, f.coordinator.state.value.stage)
+        assertFalse(f.configured)
         assertEquals(null, f.store.value)
-        f.coordinator.changePin("7890".toCharArray())
+        // Initial PIN setup is performed in LuCI before authenticated rediscovery.
+        assertFalse(f.actions.contains("pin.change"))
+        f.configured = true
+        f.find(); f.coordinator.connectDiscovered()
+        val pin = "789012".toCharArray()
+        f.coordinator.login(pin)
+        assertArrayEquals(CharArray(6), pin)
         assertEquals(RouterWizardStage.COMPLETE, f.coordinator.state.value.stage)
         assertNotEquals(oldId, f.store.value?.id)
         assertFalse(oldKey.contentEquals(requireNotNull(f.store.value).credential))
@@ -342,7 +353,7 @@ class RouterDiscoveryCoordinatorTest {
 
     @Test fun lostResetReplyRetainsTheOldPairAndPendingSyncForHonestRecovery() = runTest {
         val f = Fixture(); f.store.value = f.oldPair(); f.resetReplyLost = true
-        f.find(); f.coordinator.connectDiscovered(resetFoxHole = true); f.coordinator.login("5678".toCharArray())
+        f.find(); f.coordinator.connectDiscovered(resetFoxHole = true); f.coordinator.login("567890".toCharArray())
         assertEquals(RouterWizardError.NETWORK, f.coordinator.state.value.error)
         assertEquals(RouterWizardStage.LOGIN, f.coordinator.state.value.stage)
         assertEquals("pair-" + "1".repeat(32), f.store.value?.id)
@@ -354,23 +365,30 @@ class RouterDiscoveryCoordinatorTest {
         val f = Fixture(); f.store.value = f.oldPair()
         val replacement = RouterPairing.create(identity, "Other phone")
         f.resetObservation = { f.store.value?.clear(); f.store.value = replacement.copy() }
-        f.find(); f.coordinator.connectDiscovered(resetFoxHole = true); f.coordinator.login("5678".toCharArray())
+        f.find(); f.coordinator.connectDiscovered(resetFoxHole = true); f.coordinator.login("567890".toCharArray())
         assertEquals(RouterWizardError.UNAVAILABLE, f.coordinator.state.value.error)
         assertEquals(replacement.id, f.store.value?.id)
         assertTrue(f.enrolled.isEmpty())
         replacement.clear()
     }
 
-    @Test fun resetAcknowledgmentPreservesAnUnrelatedRouterThroughFreshEnrollment() = runTest {
+    @Test fun resetAcknowledgmentPreservesAnUnrelatedRouterThroughFreshEnrollment() = runBlocking {
         val f = Fixture(); f.store.value = f.oldPair()
         val other = RouterPairing.create(RouterTlsIdentity(RouterEndpoint("192.168.50.1"), "f".repeat(64)), "Other router")
         f.store.otherRouter = other.copy()
         try {
-            f.find(); f.coordinator.connectDiscovered(resetFoxHole = true); f.coordinator.login("5678".toCharArray())
-            assertEquals(RouterWizardStage.NEW_PIN, f.coordinator.state.value.stage)
+            f.find(); f.coordinator.connectDiscovered(resetFoxHole = true); f.coordinator.login("567890".toCharArray())
+            assertEquals(RouterWizardStage.PIN_SETUP_REQUIRED, f.coordinator.state.value.stage)
+            assertFalse(f.configured)
             assertEquals(null, f.coordinator.state.value.error)
             assertEquals(other.id, f.store.otherRouter?.id)
-            f.coordinator.changePin("7890".toCharArray())
+            // Initial PIN setup is performed in LuCI before authenticated rediscovery.
+            assertFalse(f.actions.contains("pin.change"))
+            f.configured = true
+            f.find(addingNew = true); f.coordinator.connectDiscovered()
+            val pin = "789012".toCharArray()
+            f.coordinator.login(pin)
+            assertArrayEquals(CharArray(6), pin)
             assertEquals(RouterWizardStage.COMPLETE, f.coordinator.state.value.stage)
             val created = requireNotNull(f.store.value)
             assertNotEquals(other.id, created.id)

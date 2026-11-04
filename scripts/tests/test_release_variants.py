@@ -17,15 +17,17 @@ BUILDER = Path(os.environ.get("FOXHOLE_RELEASE_TEST_BUILDER", ROOT / "scripts/bu
 COMMIT = "a" * 40
 TREE = "b" * 40
 CORE = (ROOT / "config/foxcore-revision.txt").read_text().strip()
-GH_APK = "FoxHole-v1.0.0-arm64-v8a-release.apk"
-ARMV7_APK = "FoxHole-v1.0.0-armeabi-v7a-release.apk"
-FDROID_APK = "FoxHole-v1.0.0-universal-fdroid.apk"
-GH_SBOM = "FoxHole-v1.0.0-sbom.cdx.json"
-ARMV7_SBOM = "FoxHole-v1.0.0-armeabi-v7a-sbom.cdx.json"
-FDROID_SBOM = "FoxHole-v1.0.0-fdroid-sbom.cdx.json"
-LICENSES = "FoxHole-v1.0.0-license-notices.zip"
-ARMV7_LICENSES = "FoxHole-v1.0.0-armeabi-v7a-license-notices.zip"
-FDROID_LICENSES = "FoxHole-v1.0.0-fdroid-license-notices.zip"
+VERSION_CODE = int(re.search(r"^val baseAppVersionCode = ([0-9]+)$", (ROOT / "app/build.gradle.kts").read_text(), re.M).group(1))
+VERSION_NAME = re.search(r'version = "([^"\n]+)"', (ROOT / "build.gradle.kts").read_text()).group(1)
+GH_APK = f"FoxHole-v{VERSION_NAME}-arm64-v8a-release.apk"
+ARMV7_APK = f"FoxHole-v{VERSION_NAME}-armeabi-v7a-release.apk"
+FDROID_APK = f"FoxHole-v{VERSION_NAME}-universal-fdroid.apk"
+GH_SBOM = f"FoxHole-v{VERSION_NAME}-sbom.cdx.json"
+ARMV7_SBOM = f"FoxHole-v{VERSION_NAME}-armeabi-v7a-sbom.cdx.json"
+FDROID_SBOM = f"FoxHole-v{VERSION_NAME}-fdroid-sbom.cdx.json"
+LICENSES = f"FoxHole-v{VERSION_NAME}-license-notices.zip"
+ARMV7_LICENSES = f"FoxHole-v{VERSION_NAME}-armeabi-v7a-license-notices.zip"
+FDROID_LICENSES = f"FoxHole-v{VERSION_NAME}-fdroid-license-notices.zip"
 INSTALL_PERMISSION = "uses-permission: name='android.permission.REQUEST_INSTALL_PACKAGES'"
 
 
@@ -38,7 +40,7 @@ class ReleaseBuildTest(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
-        self.base = Path(self.temporary.name)
+        self.base = Path(self.temporary.name).resolve()
         self.root = self.base / "app"
         self.root.mkdir()
         core = self.base / "core"
@@ -50,7 +52,7 @@ class ReleaseBuildTest(unittest.TestCase):
         pin = self.git(core, "rev-parse", "HEAD").strip()
         (self.root / "config").mkdir()
         (self.root / "config/foxcore-revision.txt").write_text(pin)
-        files = [{"path": f"src/{n}.rs", "sha256": hashlib.sha256(str(n).encode()).hexdigest()} for n in range(522)]
+        files = [{"path": f"src/{n}.rs", "sha256": hashlib.sha256(str(n).encode()).hexdigest()} for n in range(530)]
         shapes = {"android4": (["arm64-v8a", "armeabi-v7a", "x86", "x86_64"], ["aarch64-linux-android", "armv7-linux-androideabi", "i686-linux-android", "x86_64-linux-android"]),
                   "android64": (["arm64-v8a", "x86_64"], ["aarch64-linux-android", "x86_64-linux-android"]),
                   "android-armv7": (["armeabi-v7a"], ["armv7-linux-androideabi"]),
@@ -120,6 +122,39 @@ if ":app:publicReleasePreflight" in args:
         self.assertEqual("", self.git(self.root, "diff", "--name-only", "HEAD"))
         self.assertTrue((self.base / "private-signing.properties").exists())
 
+    def commit_inventory_fixture(self):
+        self.git(self.root, "add", "config", "third_party/licenses/source-legal")
+        self.git(self.root, "-c", "user.name=Fixture", "-c", "user.email=fixture@invalid",
+                 "-c", "commit.gpgsign=false", "commit", "-qm", "inventory fixture")
+
+    def test_bound_source_hash_drift_is_rejected_before_any_gradle_call(self):
+        path = self.root / "config/foxcore-source-manifest.json"
+        source = json.loads(path.read_text())
+        source["files"][0]["sha256"] = "f" * 64
+        path.write_text(json.dumps(source))
+        self.commit_inventory_fixture()
+        result = subprocess.run(["bash", str(BUILDER), "172"], cwd=self.root,
+                                env=self.environment, capture_output=True, text=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("AssertionError", result.stderr)
+        self.assertFalse(self.log.exists())
+
+    def test_empty_source_and_snapshot_cannot_pass_inventory_admission(self):
+        path = self.root / "config/foxcore-source-manifest.json"
+        source = json.loads(path.read_text())
+        source["files"] = []
+        path.write_text(json.dumps(source))
+        for path in (self.root / "third_party/licenses/source-legal").glob("*/snapshot.json"):
+            snapshot = json.loads(path.read_text())
+            snapshot["compiledInputs"] = {}
+            path.write_text(json.dumps(snapshot))
+        self.commit_inventory_fixture()
+        result = subprocess.run(["bash", str(BUILDER), "172"], cwd=self.root,
+                                env=self.environment, capture_output=True, text=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("AssertionError", result.stderr)
+        self.assertFalse(self.log.exists())
+
     def test_failed_profile_never_reaches_public_preflight(self):
         result = subprocess.run(["bash", str(BUILDER), "172"], cwd=self.root,
                                 env={**self.environment, "FAIL_CHANNEL": "fdroid"}, capture_output=True, text=True)
@@ -135,7 +170,7 @@ class CandidateChannelsTest(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
-        self.root = Path(self.temporary.name)
+        self.root = Path(self.temporary.name).resolve()
         self.candidate = self.root / "candidate"
         self.candidate.mkdir()
         self.aapt = self.root / "aapt2"
@@ -162,10 +197,10 @@ print("Signer #1 certificate SHA-256 digest: " + certificate)
             (self.candidate / name).write_bytes(b"license fixture")
         (self.candidate / "release-certs.txt").write_text("certificate fixture")
         for manifest, apk in [("update-manifest.json", GH_APK), ("update-manifest-armeabi-v7a.json", ARMV7_APK)]:
-            self.write_json(manifest, {"versionCode": 174, "versionName": "1.0.0", "apkName": apk, "apkSha256": self.digest(apk)})
+            self.write_json(manifest, {"versionCode": VERSION_CODE, "versionName": VERSION_NAME, "apkName": apk, "apkSha256": self.digest(apk)})
         self.write_json("CANDIDATE.json", {
-            "schema": 2, "artifactMatrixVersion": 1, "sourceCommit": COMMIT, "sourceTree": TREE, "versionName": "1.0.0",
-            "versionCode": 174, "tag": "v1.0.0", "coreRevision": CORE,
+            "schema": 2, "artifactMatrixVersion": 1, "sourceCommit": COMMIT, "sourceTree": TREE, "versionName": VERSION_NAME,
+            "versionCode": VERSION_CODE, "tag": "v" + VERSION_NAME, "coreRevision": CORE,
             "arm64Apk": GH_APK, "fdroidArm64Apk": FDROID_APK, "fdroidUniversalApk": FDROID_APK,
             "sbom": GH_SBOM, "fdroidSbom": FDROID_SBOM, "licenseNotices": LICENSES,
             "armv7Apk": ARMV7_APK, "armv7Sbom": ARMV7_SBOM, "armv7LicenseNotices": ARMV7_LICENSES,
@@ -181,7 +216,7 @@ print("Signer #1 certificate SHA-256 digest: " + certificate)
             apk.writestr("test-permissions.txt", permissions)
             if abis is None:
                 abis = ["armeabi-v7a"] if name == ARMV7_APK else ["arm64-v8a", "armeabi-v7a", "x86", "x86_64"]
-            apk.writestr("test-badging.txt", "package: name='com.foxhole.guard' versionCode='174' versionName='1.0.0'\n" +
+            apk.writestr("test-badging.txt", f"package: name='com.foxhole.guard' versionCode='{VERSION_CODE}' versionName='{VERSION_NAME}'\n" +
                          "native-code: " + " ".join("'" + abi + "'" for abi in abis))
             apk.writestr("test-cert.txt", certificate)
             apk.writestr("META-INF/version-control-info.textproto", f'''repositories {{
@@ -245,7 +280,7 @@ verify_candidate "$2" "$3" "$4"
 
     def test_in_app_manifest_cannot_switch_users_to_the_fdroid_variant(self):
         self.write_json("update-manifest.json", {
-            "versionCode": 174, "versionName": "1.0.0", "apkName": FDROID_APK,
+            "versionCode": VERSION_CODE, "versionName": VERSION_NAME, "apkName": FDROID_APK,
             "apkSha256": self.digest(FDROID_APK)})
         self.assertNotEqual(self.verify().returncode, 0)
 
@@ -270,7 +305,7 @@ verify_candidate "$2" "$3" "$4"
                 sbom = {GH_APK: GH_SBOM, ARMV7_APK: ARMV7_SBOM, FDROID_APK: FDROID_SBOM}[name]
                 self.write_json(sbom, {"metadata": {"properties": [{"name": "foxhole:apkSha256", "value": self.digest(name)}]}})
                 for manifest, target in [("update-manifest.json", GH_APK), ("update-manifest-armeabi-v7a.json", ARMV7_APK)]:
-                    self.write_json(manifest, {"versionCode": 174, "versionName": "1.0.0", "apkName": target, "apkSha256": self.digest(target)})
+                    self.write_json(manifest, {"versionCode": VERSION_CODE, "versionName": VERSION_NAME, "apkName": target, "apkSha256": self.digest(target)})
                 result = self.verify()
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn("native ABI inventory", result.stderr)
@@ -278,13 +313,13 @@ verify_candidate "$2" "$3" "$4"
                 self.write_json(sbom, {"metadata": {"properties": [{"name": "foxhole:apkSha256", "value": self.digest(name)}]}})
 
     def test_armv7_manifest_cannot_select_the_github64_apk(self):
-        self.write_json("update-manifest-armeabi-v7a.json", {"versionCode": 174, "versionName": "1.0.0", "apkName": GH_APK, "apkSha256": self.digest(GH_APK)})
+        self.write_json("update-manifest-armeabi-v7a.json", {"versionCode": VERSION_CODE, "versionName": VERSION_NAME, "apkName": GH_APK, "apkSha256": self.digest(GH_APK)})
         self.assertNotEqual(self.verify().returncode, 0)
 
     def test_armv7_must_keep_the_github_install_permission(self):
         self.write_apk(ARMV7_APK, "")
         self.write_json(ARMV7_SBOM, {"metadata": {"properties": [{"name": "foxhole:apkSha256", "value": self.digest(ARMV7_APK)}]}})
-        self.write_json("update-manifest-armeabi-v7a.json", {"versionCode": 174, "versionName": "1.0.0", "apkName": ARMV7_APK, "apkSha256": self.digest(ARMV7_APK)})
+        self.write_json("update-manifest-armeabi-v7a.json", {"versionCode": VERSION_CODE, "versionName": VERSION_NAME, "apkName": ARMV7_APK, "apkSha256": self.digest(ARMV7_APK)})
         result = self.verify()
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("GitHub APK is missing", result.stderr)
@@ -292,7 +327,7 @@ verify_candidate "$2" "$3" "$4"
     def test_certificate_mismatch_is_not_a_profile_exception(self):
         self.write_apk(ARMV7_APK, INSTALL_PERMISSION, certificate="1" * 64)
         self.write_json(ARMV7_SBOM, {"metadata": {"properties": [{"name": "foxhole:apkSha256", "value": self.digest(ARMV7_APK)}]}})
-        self.write_json("update-manifest-armeabi-v7a.json", {"versionCode": 174, "versionName": "1.0.0", "apkName": ARMV7_APK, "apkSha256": self.digest(ARMV7_APK)})
+        self.write_json("update-manifest-armeabi-v7a.json", {"versionCode": VERSION_CODE, "versionName": VERSION_NAME, "apkName": ARMV7_APK, "apkSha256": self.digest(ARMV7_APK)})
         result = self.verify()
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("certificate mismatch", result.stderr)
@@ -306,7 +341,7 @@ class ReleaseCoordinatesTest(unittest.TestCase):
     def test_actual_current_gradle_coordinates_without_function_override(self):
         result = self.coordinates(ROOT)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(f"174 1.0.0 {CORE}", result.stdout.strip())
+        self.assertEqual(f"{VERSION_CODE} {VERSION_NAME} {CORE}", result.stdout.strip())
 
     def test_unknown_or_ambiguous_base_expression_is_rejected(self):
         for expression in ["baseAppVersionCode + 1", "localBuildNumber ?: baseAppVersionCode + 1"]:
@@ -324,7 +359,7 @@ class AggregateProfileProjectionTest(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
-        self.root = Path(self.temporary.name)
+        self.root = Path(self.temporary.name).resolve()
         (self.root / "config").mkdir()
         (self.root / "scripts").mkdir()
         self.files = [{"path": f"src/input{n:03}.rs", "sha256": hashlib.sha256(str(n).encode()).hexdigest()} for n in range(522)]
@@ -421,8 +456,10 @@ class ObtainiumChannelTest(unittest.TestCase):
                 encoded = re.search(r"r=obtainium://app/([^\"]+)", text).group(1)
                 payload = json.loads(urllib.parse.unquote(encoded))
                 pattern = json.loads(payload["additionalSettings"])["apkFilterRegEx"]
-                self.assertIsNotNone(re.search(pattern, GH_APK))
-                self.assertIsNone(re.search(pattern, FDROID_APK))
+                self.assertIsNotNone(re.search(pattern, f"FoxHole-Guard-{VERSION_NAME}-arm64-v8a.apk"))
+                for name in (f"FoxHole-Guard-{VERSION_NAME}-universal-fdroid.apk",
+                             *(f"FoxHole-Guard-{VERSION_NAME}-{abi}.apk" for abi in ("armeabi-v7a", "x86", "x86_64"))):
+                    self.assertIsNone(re.search(pattern, name))
 
 
 if __name__ == "__main__":

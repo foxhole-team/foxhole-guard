@@ -143,7 +143,8 @@ class CliAccentColorTest {
 
         assertTrue(checkGlyph.contains("checkedTrackColor = colors.accent"))
         assertTrue(checkGlyph.contains("checkedBorderColor = colors.accent"))
-        assertTrue(toggleRow.contains("tint = if (checked) colors.accent else colors.dim"))
+        assertTrue(toggleRow.contains("tint = (if (checked) colors.accent else colors.dim)"))
+        assertTrue(toggleRow.contains("it.copy(alpha = it.alpha * controlAlpha)"))
         assertFalse(checkGlyph.contains("colors.ok"))
         assertFalse(toggleRow.contains("colors.ok"))
         assertTrue(module.contains("val settingsActionColor = colors.accent"))

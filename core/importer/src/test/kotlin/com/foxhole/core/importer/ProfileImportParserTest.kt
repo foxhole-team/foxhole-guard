@@ -634,7 +634,7 @@ internal class ProfileImportParserTest : ProfileImportParserTestSupport() {
     }
 
     @Test
-    fun `an implemented utls fingerprint survives import under its own name`() {
+    fun `implemented utls fingerprints and the legacy REALITY QQ alias keep their mapped names`() {
         val requestedNames =
             listOf(
                 "qq",
@@ -644,6 +644,8 @@ internal class ProfileImportParserTest : ProfileImportParserTestSupport() {
                 "edge",
                 "safari",
                 "ios",
+                "chrome",
+                "chrome_156",
                 "chrome_151",
                 "chrome_131",
                 "randomized",
@@ -659,7 +661,7 @@ internal class ProfileImportParserTest : ProfileImportParserTestSupport() {
             val root = json.parseToJsonElement(parsed.normalizedConfigJson!!).jsonObject
             val tls = root["outbounds"]!!.jsonArray.first().jsonObject["tls"]!!.jsonObject
             assertEquals(
-                requested,
+                if (requested == "qq") "chrome_156" else requested,
                 tls["utls"]!!.jsonObject["fingerprint"]!!.jsonPrimitive.content,
             )
         }
@@ -675,7 +677,7 @@ internal class ProfileImportParserTest : ProfileImportParserTestSupport() {
 
         val root = json.parseToJsonElement(parsed.normalizedConfigJson!!).jsonObject
         val tls = root["outbounds"]!!.jsonArray.first().jsonObject["tls"]!!.jsonObject
-        assertEquals("chrome", tls["utls"]!!.jsonObject["fingerprint"]!!.jsonPrimitive.content)
+        assertEquals("chrome_151", tls["utls"]!!.jsonObject["fingerprint"]!!.jsonPrimitive.content)
         assertEquals("hellogolang", unsupportedUtlsFingerprint("hellogolang"))
     }
 

@@ -133,7 +133,8 @@ class RouterCompactBootstrapReleaseTest {
         val server = RouterInstallCommand(RouterCompactBootstrapFixtures.BASE, "a".repeat(64), RouterStorageMode.RAM, protocols, true, licenseAccepted = true).command
         assertTrue("'--ram'" in ordinary && "'--auto'" !in ordinary && "'--flash'" !in ordinary)
         assertTrue("'--vless'" in ordinary && "'--wg'" in ordinary && "'--hy2'" !in ordinary && "'--server'" !in ordinary)
-        assertEquals(ordinary.removeSuffix("'--apply'") + "'--server' '--apply'", server)
+        assertTrue(ordinary.endsWith("'--apply' '--accept-license'"))
+        assertEquals(ordinary.removeSuffix("'--apply' '--accept-license'") + "'--server' '--apply' '--accept-license'", server)
     }
 
     @Test fun aSchemaOneLabelCannotDowngradeCompactFieldsIntoTheLegacyParser() {

@@ -8,7 +8,7 @@ import org.junit.Test
 
 class UpdateNoticeContentRevision4Test {
     @Test fun updatedReleaseCopyIsShownOnceBeyondRevisionSix() {
-        assertEquals(7L, CURRENT_UPDATE_NOTICE.revision)
+        assertEquals(8L, CURRENT_UPDATE_NOTICE.revision)
         val previous = UiSettings(
             updateNoticeAcknowledgedContentId = CURRENT_UPDATE_NOTICE.contentId,
             updateNoticeAcknowledgedRevision = 6,

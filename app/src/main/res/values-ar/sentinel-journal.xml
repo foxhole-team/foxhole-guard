@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="cli_logs_tab_sentinel">Sentinel</string>
+    <string name="cli_sentinel_installations">التطبيقات المثبتة</string>
+    <string name="cli_sentinel_recent_installations">التثبيتات الأخيرة</string>
+    <string name="cli_sentinel_view_all_installations">عرض الكل (%1$d)</string>
+    <string name="cli_sentinel_installations_empty">لا توجد تطبيقات مثبتة مرئية.</string>
+    <string name="cli_sentinel_install_history">تغييرات التطبيقات المسجلة</string>
+    <string name="cli_sentinel_install_history_retention">سجل تغييرات التطبيقات</string>
+    <string name="cli_sentinel_history_detected">وقت الاكتشاف: %1$s</string>
+    <string name="cli_sentinel_history_empty">لا توجد تغييرات تطبيقات مسجلة.</string>
+    <string name="cli_sentinel_activity_history">نشاط التطبيقات المرصود</string>
+    <string name="cli_sentinel_inventory_refresh">تحديث التطبيقات</string>
+    <string name="cli_sentinel_inventory_failed">تعذر تحميل قائمة التطبيقات المثبتة.</string>
+    <string name="cli_sentinel_apps_updated">حُدّث</string>
+    <string name="cli_sentinel_module_history_note">توجد التثبيتات والنتائج في السجلات ← Sentinel.</string>
+</resources>

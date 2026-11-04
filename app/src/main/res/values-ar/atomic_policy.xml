@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="guard_atomic_update_unsupported">لا يمكن حماية هذا التغيير على الاتصال النشط. أوقف VPN أولًا، أو عطّل التبديل الذرّي صراحةً، ثم حاول مجددًا. لم تتغير إعداداتك.</string>
+    <string name="guard_atomic_update_failed">تعذر إكمال تغيير التوجيه بأمان. أوقف VPN قبل المحاولة مجددًا.</string>
+</resources>

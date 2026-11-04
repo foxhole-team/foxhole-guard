@@ -49,11 +49,25 @@ internal fun releaseNoteCopy(qualifier: String): Map<String, String> {
         .first { it.resolve("settings.gradle.kts").isFile }
     val factory = DocumentBuilderFactory.newInstance().apply {
         setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
+        setFeature("http://xml.org/sax/features/external-general-entities", false)
+        setFeature("http://xml.org/sax/features/external-parameter-entities", false)
+        setAttribute("http://javax.xml.XMLConstants/property/accessExternalDTD", "")
+        setAttribute("http://javax.xml.XMLConstants/property/accessExternalSchema", "")
+        isXIncludeAware = false
+        isExpandEntityReferences = false
     }
-    val nodes = factory.newDocumentBuilder().parse(root.resolve("app/src/main/res/$qualifier/release-notes.xml"))
-        .getElementsByTagName("string")
-    return (0 until nodes.length).associate { index ->
-        val node = nodes.item(index)
-        node.attributes.getNamedItem("name").nodeValue to node.textContent
+    val folder = root.resolve("app/src/main/res/$qualifier")
+    val files = folder.listFiles().orEmpty().filter { it.isFile && it.extension == "xml" }.sortedBy { it.name }
+    check(files.isNotEmpty()) { "Missing release-note catalogues in $qualifier" }
+    return buildMap {
+        files.forEach { file ->
+            val nodes = factory.newDocumentBuilder().parse(file).getElementsByTagName("string")
+            for (index in 0 until nodes.length) {
+                val node = nodes.item(index)
+                val name = node.attributes.getNamedItem("name").nodeValue
+                if (!name.startsWith("cli_release_notes_")) continue
+                check(put(name, node.textContent) == null) { "Duplicate release-note key $name in $qualifier" }
+            }
+        }
     }
 }

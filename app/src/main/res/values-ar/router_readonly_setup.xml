@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="guard_router_setup_readonly_complete">تم تأكيد OpenWrt. لا تتوفر حزمة تثبيت متحقق منها في هذا التطبيق بعد. لم تُجرَ أي تغييرات على الموجّه.</string>
+</resources>

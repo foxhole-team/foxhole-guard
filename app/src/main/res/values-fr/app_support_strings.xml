@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="cli_wizard_license_save_failed">Impossible d’enregistrer votre acceptation de la licence. Réessayez.</string>
+    <string name="guard_router_dock_shortcut_label">Accès rapide dans le dock</string>
+    <string name="guard_router_dock_title">OpenWrt</string>
+    <string name="guard_router_home_shortcut_label">Accès rapide sur l’accueil</string>
+    <string name="guard_router_router_discovery_api_absent">L’API HTTPS de FoxHole n’a pas répondu à cette adresse. Vérifiez l’adresse du routeur ou réessayez.</string>
+    <string name="guard_router_router_discovery_network">Impossible de joindre le routeur via ce réseau Wi-Fi. Réessayez ou saisissez son adresse.</string>
+    <string name="guard_router_router_discovery_package_check">Le service HTTPS a répondu, mais FoxHole n’a pas pu être vérifié. Vérifiez la configuration web du routeur ou réessayez.</string>
+    <string name="guard_router_router_discovery_ssh_only">SSH est disponible, mais l’API HTTPS de FoxHole ne l’est pas. Vous pouvez vérifier OpenWrt avant l’installation.</string>
+    <string name="guard_router_router_discovery_timeout">Le délai de vérification du routeur a expiré. Réessayez ou saisissez son adresse actuelle sur le réseau local.</string>
+    <string name="guard_router_router_discovery_tls">Impossible de vérifier la connexion HTTPS du routeur. Vérifiez son horloge et son certificat, puis réessayez.</string>
+    <string name="guard_router_router_profile_pair_wifi">Connectez-vous au Wi-Fi du routeur pour réessayer l’association</string>
+    <string name="guard_router_router_profile_retry_pairing">Réessayer l’association</string>
+    <string name="guard_router_router_review_enter_manually">Saisir manuellement</string>
+    <string name="guard_router_router_review_not_found">Routeur introuvable.</string>
+    <string name="guard_router_router_review_retry_search">Relancer la recherche</string>
+    <string name="guard_router_router_review_wifi_connected">Wi-Fi connecté</string>
+    <string name="guard_router_router_ssh_checking_openwrt">Vérification de la version d’OpenWrt, de l’architecture et des conditions d’installation…</string>
+    <string name="guard_router_router_ssh_key_error">Impossible de lire la clé privée SSH. Choisissez une clé PEM ou OpenSSH de 64 KiB maximum.</string>
+    <string name="guard_router_router_ssh_key_file">CHOISIR LE FICHIER DE CLÉ SSH</string>
+    <string name="guard_router_router_ssh_key_loaded">La clé privée SSH est chargée uniquement pour cette connexion.</string>
+    <string name="guard_router_router_ssh_key_passphrase">Phrase secrète de la clé SSH (si définie)</string>
+    <string name="guard_router_router_ssh_key_paste">COLLER LA CLÉ SSH</string>
+    <string name="guard_router_router_ssh_manual_setup">VÉRIFIER OPENWRT / CONFIGURER SSH</string>
+    <string name="guard_router_router_ssh_use_password">UTILISER UN MOT DE PASSE</string>
+    <string name="guard_router_router_updates_device_download">Téléchargement du paquet FoxHole via votre appareil</string>
+    <string name="guard_router_settings_info">L’application utilise votre réseau local pour trouver le routeur OpenWrt et gérer son VPN depuis ce téléphone. Désactiver la gestion laisse le VPN du routeur en fonctionnement.</string>
+    <string name="guard_router_settings_pair_first">Configurez ou associez un routeur pour activer la gestion.</string>
+    <string name="guard_router_vpn_router_error_home_vpn">Aucune route VPN vérifiée vers le routeur associé. Connectez-vous à son VPN et activez la gestion via le VPN domestique dans les paramètres du routeur.</string>
+    <string name="guard_router_wifi_status_label">État du Wi-Fi</string>
+</resources>

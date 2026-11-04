@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="guard_router_addon_settings_title">إعدادات OpenWRT</string>
+    <string name="guard_router_home_shortcut_label">وصول سريع على الرئيسية</string>
+    <string name="guard_router_dock_shortcut_label">وصول سريع في الشريط</string>
+    <string name="guard_router_dock_title">OpenWrt</string>
+</resources>

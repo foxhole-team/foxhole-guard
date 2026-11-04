@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="cli_core_expert_title">إعدادات الخبراء</string>
+    <string name="cli_core_expert_note">تُطبَّق التغييرات على النفق النشط. تؤدي تغييرات موارد النواة إلى إعادة تشغيله. قد تزيد المخازن المؤقتة وحدود التدفقات الأكبر استهلاك الذاكرة.</string>
+    <string name="cli_core_workers">خيوط النواة</string>
+    <string name="cli_core_connect_timeout">مهلة الاتصال</string>
+    <string name="cli_core_handshake_timeout">مهلة المصافحة</string>
+    <string name="cli_core_relay_buffer">مخزن الإدخال والإخراج</string>
+    <string name="cli_core_tcp_flows">حد تدفقات TCP</string>
+    <string name="cli_core_udp_flows">حد تدفقات UDP</string>
+    <string name="cli_core_dns_timeout">مهلة DNS</string>
+    <string name="cli_core_dns_cache">إدخالات ذاكرة DNS المؤقتة</string>
+    <string name="cli_core_reset">استعادة إعدادات النواة الافتراضية</string>
+    <string name="cli_core_default">الافتراضي</string>
+    <string name="cli_core_range">النطاق المسموح: %1$d–%2$d</string>
+</resources>

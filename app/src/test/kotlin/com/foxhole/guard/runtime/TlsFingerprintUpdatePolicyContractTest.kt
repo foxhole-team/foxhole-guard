@@ -92,7 +92,7 @@ class TlsFingerprintUpdatePolicyContractTest {
     }
 
     @Test
-    fun `the settings entry sits in the panel the master switch governs`() {
+    fun `the unified source settings carry the master switches beside the fingerprint panel`() {
         val source = source("app/src/main/kotlin/com/foxhole/guard/ui/cli/settings/CliUpdatesSubScreen.kt")
         val panel =
             source
@@ -100,8 +100,11 @@ class TlsFingerprintUpdatePolicyContractTest {
                 .substringBefore("private fun CliFoxholeDbGroupRow")
 
         assertTrue("the FoxHole DB panel must render a fingerprint row", panel.contains("R.string.cli_foxdb_group_tls"))
-        assertTrue("the panel must carry the check master switch", panel.contains("componentUpdateCheckEnabled"))
-        assertTrue("the panel must carry the auto master switch", panel.contains("componentAutoUpdateEnabled"))
+        val sourceSettings = source.substringAfter("CliUpdateSourcesButton(").substringBefore("CliFoxholeDbPanel(")
+        assertTrue("unified settings must carry the check master switch", sourceSettings.contains("updateChecksEnabled = settings.connection.componentUpdateCheckEnabled"))
+        assertTrue("unified settings must carry the auto master switch", sourceSettings.contains("autoUpdateEnabled = settings.connection.componentAutoUpdateEnabled"))
+        assertTrue(sourceSettings.contains("onUpdateChecksChange = viewModel::onComponentUpdateCheckChanged"))
+        assertTrue(sourceSettings.contains("onAutoUpdateChange = viewModel::onComponentAutoUpdateChanged"))
         assertTrue(
             "the manual check must refresh every group at once",
             panel.contains("onFoxholeDbRefreshAll"),

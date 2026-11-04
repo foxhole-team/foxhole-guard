@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="cli_status_sentinel_notices">إشعارات Sentinel</string>
+    <string name="cli_status_sentinel_traffic_notices">تنبيهات حركة البيانات</string>
+    <string name="cli_status_sentinel_static_notices">إشعارات الفحص الثابت</string>
+    <string name="cli_status_sentinel_install_notices">إشعارات تثبيت التطبيقات</string>
+    <string name="cli_status_notices_off">معطّلة في الإعدادات</string>
+    <string name="cli_status_notices_allowed">مسموح بها في Android</string>
+    <string name="cli_status_notices_android_blocked">محظورة بواسطة Android</string>
+    <string name="cli_status_notices_channel_blocked">قناة الإشعارات معطّلة</string>
+    <string name="cli_status_notices_channel_pending">لم تُهيَّأ قناة الإشعارات</string>
+    <string name="cli_status_notices_partly_blocked">بعض قنوات الإشعارات معطّلة</string>
+    <string name="cli_status_notices_unavailable">الوصول إلى الإشعارات غير متاح</string>
+</resources>

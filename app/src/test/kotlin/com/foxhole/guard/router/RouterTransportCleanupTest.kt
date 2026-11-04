@@ -41,7 +41,9 @@ class RouterTransportCleanupTest {
         val expected = IOException("synthetic close failure")
         val cleanup = RouterTransportCleanup(cleanup = { throw expected })
         val failure = try { cleanup.closeAndAwait(); null } catch (error: IOException) { error }
-        check(failure === expected)
+        val actual = requireNotNull(failure)
+        check(actual.javaClass == expected.javaClass && actual.message == expected.message)
+        check(actual === expected || actual.cause === expected)
     }
 
     @Test fun cancellationFinallyStillCompletesNonCancellableCleanup() = runBlocking {

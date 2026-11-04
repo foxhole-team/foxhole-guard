@@ -8,7 +8,7 @@ import shutil
 
 
 HOOK = '    inputs.file(rootProject.file("scripts/copy-maven-runtime-licenses.py"))\n    inputs.dir(rootProject.file("third_party/maven-runtime"))\n'
-EXPECTED_PUBLIC_MANIFEST_SHA256 = '1d2ca024976017f9e8a28eaf4d88bad379724c3e59655e2ec5bf9a47c91e1cfe'
+EXPECTED_PUBLIC_MANIFEST_SHA256 = 'cb0f0270389562f213576f91861c8637f044443d0f9ec7b3f27a6c7deb571473'
 ACTUAL_CAPTURE_SHA256 = 'f95d54be9840fe2e5eec4df4fe82d5dc1555f4cb426080b5536278bd098da413'
 ACTUAL_COLLECTOR_REPORT_SHA256 = '6ba294c123d6e9724908945c5d0eed03b26a6c773ca370de2ef85cebacf746e2'
 FDROID_UNSIGNED_PROJECTION = {'mode': 'exact-stock-fdroid-unsigned-source',
@@ -27,7 +27,7 @@ FDROID_UNSIGNED_PROJECTION = {'mode': 'exact-stock-fdroid-unsigned-source',
           'native/reproducibility acceptance'}
 
 
-CURRENT_FDROID_UNSIGNED_PROJECTION = {'rawSha256': '31f63c8165564595903121cb20cb27332a0b7cf40195c0ec5fa2bc1bc7222c0f', 'rawBytes': 103316, 'unsignedSha256': '0ee81501766570d83a7dd1ed9d0ba82d60eb12bd04f76e8bb325e2d4fd0058c6', 'unsignedBytes': 102860, 'transformationFunctionSha256': '9fe344aa703b2ab4414d3e9eb3b3ff90c7b76dd4168749f9eebe0d878b40d5cc'}
+CURRENT_FDROID_UNSIGNED_PROJECTION = {'rawSha256': 'd55afe555c35020700c420130478d2c0542e15697605add165e2d45517107780', 'rawBytes': 103322, 'unsignedSha256': 'a6e92e4c002352755474f769d5179fd183312e63d0146bec25f41c2b4a24de35', 'unsignedBytes': 102866, 'transformationFunctionSha256': '9fe344aa703b2ab4414d3e9eb3b3ff90c7b76dd4168749f9eebe0d878b40d5cc'}
 
 def digest(data):
     return hashlib.sha256(data).hexdigest()
@@ -111,7 +111,7 @@ def compare_consumer_graph(original, current):
             need(before['kind'] == after['kind'] == 'project', 'component kind changed')
             need({k: v for k, v in before.items() if k != 'version'} ==
                  {k: v for k, v in after.items() if k != 'version'}, 'project identity changed')
-            need(after['version'] == '1.0.4', 'unexpected current project version')
+            need(after['version'] == '1.0.5', 'unexpected current project version')
             if before['version'] != after['version']:
                 versions.append({'component': identity, 'before': before['version'], 'after': after['version']})
     def archives(capture):

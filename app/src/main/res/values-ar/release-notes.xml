@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="cli_release_notes_title">ما الجديد</string>
+    <string name="cli_release_notes_runtime">صيغ اشتراكات جديدة: YAML/JSON المتوافقة مع Clash/Mihomo وOutline JSON.</string>
+    <string name="cli_release_notes_sentinel_network">استيراد روابط v2rayTun وملفات FoxHole Guard JSON الشخصية؛ ولصق SIP008 JSON مباشرةً.</string>
+    <string name="cli_release_notes_sentinel_apps">استيراد روابط v2rayTun وملفات FoxHole Guard JSON الشخصية؛ ولصق SIP008 JSON مباشرةً.</string>
+    <string name="cli_release_notes_backup">أُضيف وضعا واجهة المستخدم والخبير.</string>
+    <string name="cli_release_notes_core">ثبّت VPN وأدِره على موجّه يشغّل FoxHole OpenWrt Client مباشرةً من التطبيق.</string>
+    <string name="cli_release_notes_details">التفاصيل</string>
+    <string name="cli_release_notes_details_body">حُسّن أيضًا تحديث الاشتراكات وDNS والنسخ الاحتياطية وفحوص تطبيقات FoxHole Sentinel.\nيستورد Clash/Mihomo إدخالات الخادم المدعومة من YAML/JSON؛ ولا تُستورَد قواعد العميل أو المزوّدون الخارجيون. يدعم Outline صيغة JSON القياسية ومفاتيح ssconf:// الديناميكية.\nيفعّل مفتاح OpenWrt إدارة الموجّه من الهاتف بعد الإعداد أو الاقتران. لا يؤدي إيقافه إلى إيقاف VPN الموجّه.</string>
+    <string name="cli_release_notes_ack_failed">تعذر حفظ اختيار الإشعار. حاول مجددًا.</string>
+    <string name="cli_release_notes_router_setup">أُصلح اكتشاف الموجّه واقترانه وفحص OpenWrt عبر SSH، وأُضيف دعم مفاتيح SSH.</string>
+    <string name="cli_release_notes_app_updates">أُصلحت أخطاء تحديث التطبيق من GitHub.</string>
+    <string name="cli_release_notes_notices">أُضيف مؤقت لإخفاء الإشعارات وإمكانية إخفائها بالسحب لأعلى.</string>
+    <string name="cli_release_notes_help">حُسّنت الوثائق وقسم المساعدة؛ وحُدّثت إرشادات إدارة الموجّه.</string>
+    <string name="cli_release_notes_vless_reality">أُصلح التوافق مع VLESS + REALITY.</string>
+    <string name="cli_release_notes_router_management">بُسّط إعداد OpenWrt وإدارة الأجهزة المنزلية وعملاء VPN.</string>
+    <string name="cli_release_notes_pin6">أُضيف رمز PIN من ستة أرقام مع تأكيده أثناء التثبيت، ودعم ما يصل إلى 10 موجّهات.</string>
+    <string name="cli_release_notes_db_auto">أُضيف دعم تحديثات FoxHole DB التلقائية.</string>
+    <string name="cli_release_notes_router_pairing_version">أُصلح التحقق من إصدار OpenWrt عند الاقتران بموجّه.</string>
+    <string name="cli_release_notes_core_104">حُدّث FoxHole Core إلى 1.0.3 مع إصلاحات التخزين المؤقت لـ DNS.</string>
+    <string name="cli_release_notes_atomic_104">أُصلح التطبيق الذرّي لقواعد التوجيه والسيناريوهات.</string>
+</resources>

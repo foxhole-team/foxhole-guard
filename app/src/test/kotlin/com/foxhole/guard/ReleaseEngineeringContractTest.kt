@@ -93,16 +93,20 @@ class ReleaseEngineeringContractTest {
     }
 
     @Test
-    fun `fdroid metadata delegates store copy and preserves the committed historical recipe`() {
-        val metadata = projectFile("../metadata/com.foxhole.guard.yml").readText()
+    fun `external recipe fixture preserves parser policy while live metadata stays delegated`() {
+        val metadata = externalFdroidBinariesFixture()
+        val delegation = projectFile("../metadata/README.md")
+        assertTrue(delegation.readText().contains("https://gitlab.com/fdroid/fdroiddata/-/merge_requests/45667"))
+        assertFalse(File(delegation.parentFile, "com.foxhole.guard.yml").exists())
         val builds = fdroidBuildBlocks(metadata)
 
         assertEquals(listOf("0.1.1"), builds.map(FdroidBuildBlock::versionName))
-        val historicalBlock = metadata.substringAfter("Builds:\n").substringBefore("\nAllowedAPKSigningKeys:")
-        val historicalDigest =
-            MessageDigest.getInstance("SHA-256").digest(historicalBlock.toByteArray())
+        val fixtureBlock = metadata.substringAfter("Builds:\n").substringBefore("\nAllowedAPKSigningKeys:")
+        val syntheticFixtureDigest =
+            MessageDigest.getInstance("SHA-256").digest(fixtureBlock.toByteArray())
                 .joinToString("") { byte -> "%02x".format(byte.toInt() and 0xff) }
-        assertEquals("01f5d9e3143662437844bd2765c07a2a5ea633992393d330f1aaa3994b66b22c", historicalDigest)
+        // Integrity of explicit synthetic test data, not historical authenticity.
+        assertEquals("9449205658f7e92308e40157d4767fef110ec4d881b61b7ab0331125915ee0f2", syntheticFixtureDigest)
         assertTrue(
             builds.single().body.contains("    commit: v0.1.1\n"),
         )
@@ -115,7 +119,7 @@ class ReleaseEngineeringContractTest {
         val prebuild = current.substringAfter("    prebuild:").substringBefore("    build:")
 
         assertTrue(current.contains("versionCode: 122"))
-        assertTrue("Historical recipe cannot be ahead of this candidate", 122 < BuildConfig.VERSION_CODE)
+        assertTrue("Synthetic external fixture cannot be ahead of this candidate", 122 < BuildConfig.VERSION_CODE)
         assertTrue(current.contains("config/foxcore-revision.txt"))
         assertTrue(metadata.contains("AutoUpdateMode: Version"))
         assertTrue(current.contains("srclibs:"))
@@ -135,7 +139,8 @@ class ReleaseEngineeringContractTest {
 
     @Test
     fun `store descriptions list all five independently signed data sets`() {
-        val fdroid = projectFile("../metadata/com.foxhole.guard.yml").readText()
+        val fdroid = externalFdroidBinariesFixture()
+        assertTrue(projectFile("../metadata/README.md").readText().contains("authoritative recipe"))
         val english = projectFile("../fastlane/metadata/android/en-US/full_description.txt").readText()
         val russian = projectFile("../fastlane/metadata/android/ru-RU/full_description.txt").readText()
 
@@ -394,7 +399,6 @@ class ReleaseEngineeringContractTest {
         val generator = projectFile("../scripts/generate-license-assets.py").readText()
         val candidate = projectFile("../scripts/package-release-candidate.sh").readText()
         sourceOnlyGithubWorkflow()
-        val workflow = retainedLabRecipe("release.yml")
         val about = projectFile("src/main/kotlin/com/foxhole/guard/ui/cli/settings/CliAboutSubScreen.kt").readText()
         val notices = projectFile("../THIRD_PARTY_NOTICES.md").readText()
 
@@ -434,15 +438,41 @@ class ReleaseEngineeringContractTest {
                 }
             assertTrue("generator does not package $required", generator.contains(generatorPath))
             assertTrue("APK gate does not require $required", appBuild.contains(required))
-            assertTrue("candidate does not require $required", candidate.contains(required))
+            if (!required.startsWith("foxcore/foxcore-")) {
+                assertTrue("candidate does not require $required", candidate.contains(required))
+            }
         }
+        val licenseVerifier = candidate.substringAfter("verify_license_notices_archive() {")
+            .substringBefore("\nverify_android_sbom_inventory() {")
+        val releaseProfiles = mapOf(
+            "android4" to (listOf("arm64-v8a", "armeabi-v7a", "x86", "x86_64") to
+                listOf("aarch64-linux-android", "armv7-linux-androideabi", "i686-linux-android", "x86_64-linux-android")),
+            "android64" to (listOf("arm64-v8a", "x86_64") to
+                listOf("aarch64-linux-android", "x86_64-linux-android")),
+            "android-armv7" to (listOf("armeabi-v7a") to listOf("armv7-linux-androideabi")),
+            "android3" to (listOf("arm64-v8a", "armeabi-v7a", "x86_64") to
+                listOf("aarch64-linux-android", "armv7-linux-androideabi", "x86_64-linux-android")),
+        )
+        releaseProfiles.forEach { (profile, expected) ->
+            val declared = requireNotNull(Regex(
+                """'${Regex.escape(profile)}':\s*\(\[([^\]]+)\],\s*\[([^\]]+)\]\)""",
+            ).find(licenseVerifier)) { "Missing candidate license profile $profile" }
+            fun values(group: Int) = Regex("'([^']+)'").findAll(declared.groupValues[group])
+                .map { it.groupValues[1] }.toList()
+            assertEquals("ABI inventory for $profile", expected.first, values(1))
+            assertEquals("Core SBOM inventory for $profile", expected.second, values(2))
+        }
+        assertTrue(licenseVerifier.contains("abis, targets = profiles[profile]"))
+        assertTrue(licenseVerifier.contains("required.update('foxcore/foxcore-' + target + '.cdx.json' for target in targets)"))
+        assertTrue(licenseVerifier.contains("if not required.issubset(names):"))
+        assertTrue(candidate.contains("verify_license_notices_archive \"${'$'}output_dir/${'$'}{license_names[${'$'}i]}\" \"${'$'}{profiles[${'$'}i]}\""))
         assertTrue(candidate.contains("licenseNotices"))
         assertTrue(candidate.contains("verify_license_notices_archive"))
         assertTrue(candidate.contains("verify_android_sbom_inventory"))
         assertTrue(generator.contains("require_lyrebird_composite_license"))
         assertTrue(generator.contains("not any(part.startswith(\".\") for part in relative.parts)"))
         assertTrue(generator.contains("GO-MODULES.json"))
-        assertCandidateAssetInventory(workflow, candidate)
+        assertCandidateAssetInventory(candidate)
         assertFalse(about.contains("CliLicenseNoticesSheet"))
         assertFalse(about.contains("THIRD_PARTY_NOTICES.md"))
         assertTrue(notices.contains("GPL-3.0-or-later AND BSD-3-Clause"))
@@ -656,9 +686,18 @@ class ReleaseEngineeringContractTest {
         val script = projectFile("../scripts/build-release-variants.sh").readText()
         assertTrue(script.contains("set -euo pipefail"))
         assertTrue(script.contains("[[ ${'$'}# -eq 1 && \"${'$'}1\" =~ ^[0-9]+${'$'} ]]"))
-        assertTrue(script.contains("for channel in github fdroid; do"))
-        assertTrue(script.contains("\"-Pfoxhole.updateChannel=${'$'}channel\""))
+        assertTrue(script.contains("lanes=(github github-armv7 fdroid)"))
+        assertTrue(script.contains("channels=(github github fdroid)"))
+        assertTrue(script.contains("profiles=(android4 android-armv7 android4)"))
+        assertTrue(script.contains("abis=(\"arm64-v8a armeabi-v7a x86 x86_64\" \"armeabi-v7a\" \"arm64-v8a armeabi-v7a x86 x86_64\")"))
+        assertTrue(script.contains("for i in 0 1 2; do"))
+        assertTrue(script.contains("\"-Pfoxhole.abis=${'$'}{abis[${'$'}i]}\""))
+        assertTrue(script.contains("\"-Pfoxhole.updateChannel=${'$'}{channels[${'$'}i]}\""))
         assertTrue(script.contains("\"-Pfoxhole.lastUploadedVersionCode=${'$'}1\""))
+        assertTrue(script.contains("git -C \"${'$'}clone\" checkout --quiet --detach \"${'$'}commit\""))
+        assertTrue(script.contains("snapshot['compiledInputs'] == {row['path']: row['sha256'] for row in source['files']}"))
+        assertTrue(script.contains("Release source must have no tracked changes"))
+        assertTrue(script.contains("Core checkout differs from the release pin"))
         assertTrue(script.contains("-Pfoxhole.updateChannel=github"))
         assertTrue(script.contains(":app:validateReleaseSigningInputs"))
         assertTrue(script.contains(":app:assembleRelease"))
@@ -666,30 +705,59 @@ class ReleaseEngineeringContractTest {
         return "$workflow\n$script"
     }
 
-    private fun assertCandidateAssetInventory(workflow: String, candidate: String) {
+    private fun assertCandidateAssetInventory(candidate: String) {
+        // This is the retained lab matrix, not the separately published split-APK asset set.
+        val matrix = candidate.substringAfter("release_matrix_names() {")
+            .substringBefore("\nwrite_update_manifest() {")
+        fun names(variable: String): List<String> {
+            val declaration = requireNotNull(Regex(
+                """(?m)^\s*${Regex.escape(variable)}=\(([^\n]*)\)$""",
+            ).find(matrix)) { "Missing retained candidate array $variable" }
+            return Regex("\"([^\"]+)\"").findAll(declaration.groupValues[1])
+                .map { it.groupValues[1] }.toList()
+        }
+        val prefix = "FoxHole-${'$'}{RELEASE_TAG}"
+        assertEquals(listOf("$prefix-arm64-v8a-release.apk", "$prefix-armeabi-v7a-release.apk", "$prefix-universal-fdroid.apk"), names("apk_names"))
+        assertEquals(listOf("$prefix-sbom.cdx.json", "$prefix-armeabi-v7a-sbom.cdx.json", "$prefix-fdroid-sbom.cdx.json"), names("sbom_names"))
+        assertEquals(listOf("$prefix-license-notices.zip", "$prefix-armeabi-v7a-license-notices.zip", "$prefix-fdroid-license-notices.zip"), names("license_names"))
+        assertTrue(matrix.contains("profiles=(android4 android-armv7 android4)"))
+        assertTrue(matrix.contains("channels=(github github fdroid)"))
         val fileList = candidate.substringAfter("  expected_files=\"${'$'}(")
             .substringBefore("  actual_files=\"${'$'}(")
-        val dualVariants = fileList.contains("\"${'$'}canonical_fdroid_name\"")
-        val expected = mutableListOf("CANDIDATE.json", "SHA256SUMS", "\"${'$'}canonical_arm64_name\"")
-        if (dualVariants) expected.add("\"${'$'}canonical_fdroid_name\"")
-        expected.add("\"${'$'}canonical_license_name\"")
-        expected.add("\"${'$'}canonical_sbom_name\"")
-        if (dualVariants) expected.add("\"${'$'}canonical_fdroid_sbom_name\"")
-        expected.addAll(listOf("release-certs.txt", "update-manifest.json"))
-        val declared = fileList.substringAfter("printf '%s\\n'").substringBefore("LC_ALL=C sort")
-            .lineSequence().map { it.trim().removeSuffix("\\").removeSuffix("|").trim() }
-            .filter(String::isNotEmpty).toList()
+        val expected = listOf("CANDIDATE.json", "SHA256SUMS", "\"${'$'}{apk_names[@]}\"",
+            "\"${'$'}{sbom_names[@]}\"", "\"${'$'}{license_names[@]}\"", "release-certs.txt",
+            "update-manifest.json", "update-manifest-armeabi-v7a.json")
+        val declared = fileList.substringAfter("printf '%s\\n'").substringBefore("| LC_ALL=C sort")
+            .trim().split(Regex("\\s+"))
         assertEquals(expected, declared)
+        assertEquals(14, names("apk_names").size + names("sbom_names").size + names("license_names").size + 5)
         assertTrue(candidate.contains("[[ \"${'$'}actual_files\" == \"${'$'}expected_files\" ]] || die"))
-        assertTrue(workflow.contains("[[ ${'$'}{#assets[@]} -eq ${expected.size} ]]"))
+        assertTrue(candidate.contains("candidate contains a directory, symlink, or special file"))
+        assertTrue(candidate.contains("verify_candidate \"${'$'}output_dir\" \"${'$'}source_commit\" \"${'$'}source_tree\""))
     }
 
     private fun sourceOnlyGithubWorkflow(): String {
         val directory = projectFile("../.github/workflows")
         val active = directory.listFiles().orEmpty()
             .filter { it.isFile && it.extension in setOf("yml", "yaml") }.sortedBy { it.name }
-        assertEquals("Only the source-check workflow may be active on GitHub", listOf("android.yml"), active.map { it.name })
-        val workflow = active.single().readText()
+        assertEquals("Only reviewed light source workflows may be active on GitHub",
+            listOf("android-router-contract.yml", "android.yml"), active.map { it.name })
+        active.forEach { file ->
+            val source = file.readText()
+            assertTrue(source.contains("contents: read"))
+            assertFalse(Regex("""(?m)^\s*(?:contents|actions|attestations|id-token):\s*write\s*$""").containsMatchIn(source))
+            assertTrue(source.contains("persist-credentials: false"))
+            assertEquals(listOf("actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09"),
+                Regex("""(?m)^\s*uses:\s+([^\s#]+)""").findAll(source).map { it.groupValues[1] }.toList())
+            listOf("./gradlew", "setup-foxcore", "upload-artifact@", "download-artifact@", "attest-build-provenance@",
+                "emulator-runner@", "gh release", "secrets.", "release-candidate:", "FOXHOLE_RELEASE_").forEach { forbidden ->
+                assertFalse("Readonly source workflow ${file.name} must not build/sign/publish: $forbidden", source.contains(forbidden))
+            }
+        }
+        val router = active.single { it.name == "android-router-contract.yml" }.readText()
+        assertTrue(router.contains("timeout-minutes: 3"))
+        assertTrue(router.contains("python3 scripts/check-android-router-contract.py --root ."))
+        val workflow = active.single { it.name == "android.yml" }.readText()
         assertTrue(workflow.contains("contents: read"))
         assertFalse(Regex("""(?m)^\s*(?:contents|actions|attestations|id-token):\s*write\s*$""").containsMatchIn(workflow))
         val actions = Regex("""(?m)^\s*uses:\s+([^\s#]+)""").findAll(workflow).map { it.groupValues[1] }.toList()

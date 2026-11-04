@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.5
+
+- Added Arabic language and RTL support, adapted the widget, and fixed translations and router settings.
+
 ## 1.0.4 Stable
 
 - Updated FoxHole Core to 1.0.3 with DNS caching fixes.

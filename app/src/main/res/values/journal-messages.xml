@@ -42,7 +42,7 @@
     <string name="journal_unavailable_config">The outbound configuration is not usable.</string>
     <string name="journal_unavailable_config_action">Review the profile before retrying.</string>
     <string name="journal_unavailable_unsupported">This Core build does not support the configured protocol.</string>
-    <string name="journal_unavailable_unsupported_action">Use a supported protocol or update FoxHole.</string>
+    <string name="journal_unavailable_unsupported_action">Use a supported protocol or update FoxHole Guard.</string>
     <string name="journal_unavailable_disabled">This outbound is disabled.</string>
     <string name="journal_unavailable_disabled_action">Review the route gate settings.</string>
     <string name="journal_unavailable_internal">An internal failure prevented this outbound from starting.</string>

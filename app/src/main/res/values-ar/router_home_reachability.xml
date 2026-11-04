@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="guard_router_router_personal_vpn_at_home">لا يمكنك بدء VPN الشخصي لهذا الموجّه أثناء الاتصال بشبكة Wi-Fi المنزلية الخاصة به.</string>
+</resources>

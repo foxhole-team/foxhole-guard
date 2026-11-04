@@ -1,6 +1,7 @@
 package com.foxhole.guard.ui
 
 import com.foxhole.guard.BuildConfig
+import com.foxhole.guard.externalFdroidBinariesFixture
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -43,12 +44,11 @@ class AppUpdateChannelTest {
     }
 
     @Test
-    fun `every Binaries recipe matches the channel of its published APK`() {
-        val metadata =
-            listOf(
-                File("metadata/com.foxhole.guard.yml"),
-                File("../metadata/com.foxhole.guard.yml"),
-            ).first(File::isFile).readText()
+    fun `synthetic external Binaries recipe keeps its declared APK channel policy`() {
+        val metadata = externalFdroidBinariesFixture()
+        val delegation = projectFile("metadata/README.md")
+        assertTrue(delegation.readText().contains("fdroid/fdroiddata"))
+        assertFalse(File(delegation.parentFile, "com.foxhole.guard.yml").exists())
         val builds = fdroidBuildBlocks(metadata)
 
         assertTrue(metadata.contains("Binaries:"))

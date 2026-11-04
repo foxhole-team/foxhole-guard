@@ -102,13 +102,17 @@ class AppUpdateRepositoryOwnershipTest {
         val background = async { repository.checkInBackground() }
         runCurrent()
         factory.calls.last().respond(
-            """{"tag_name":"v0.1.2","assets":[{"name":"update-manifest.json","url":"https://api.example/manifest","browser_download_url":"https://api.example/manifest","size":256},{"name":"foxhole.apk","url":"https://cdn.example/foxhole.apk","browser_download_url":"https://cdn.example/foxhole.apk","size":32}]}""".toResponseBody()
+            """{"tag_name":"v0.1.2","assets":[{"name":"update-manifest.json","url":"https://api.example/manifest","browser_download_url":"https://api.example/manifest","size":256},{"name":"foxhole.apk","url":"https://cdn.example/foxhole.apk","browser_download_url":"https://cdn.example/foxhole.apk","size":32},{"name":"SHA256SUMS","url":"https://api.example/checksums","browser_download_url":"https://api.example/checksums","size":78}]}""".toResponseBody()
         )
         runCurrent()
         val manifest = available().manifest
         factory.calls.last().respond(
             """{"versionCode":2,"versionName":"0.1.2","apkName":"foxhole.apk","apkSha256":"${manifest.apkSha256}"}""".toResponseBody()
         )
+        runCurrent()
+
+        assertEquals("https://api.example/checksums", factory.calls.last().request().url.toString())
+        factory.calls.last().respond((manifest.apkSha256 + "  foxhole.apk\n").toResponseBody())
         runCurrent()
 
         assertTrue(background.await() is AppUpdateCheck.Available)

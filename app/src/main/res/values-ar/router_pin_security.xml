@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="guard_router_router_setup_pin">رمز PIN</string>
+    <string name="guard_router_router_setup_pin_repeat">كرر رمز PIN</string>
+    <string name="guard_router_router_pin_cooldown">حاول مجددًا بعد %1$d ث.</string>
+    <string name="guard_router_router_setup_all_lan_vpn">VPN لجميع الأجهزة المنزلية</string>
+    <string name="guard_router_router_setup_all_lan_vpn_help">بعد الاتصال، يُستخدم VPN لجميع الأجهزة المنزلية مع مراعاة استثناءات التوجيه. يمكن تعطيل هذا الإعداد.</string>
+</resources>

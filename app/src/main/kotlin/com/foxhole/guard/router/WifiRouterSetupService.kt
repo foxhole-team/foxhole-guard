@@ -137,6 +137,7 @@ internal class WifiRouterSetupService(
         check(transaction.started.compareAndSet(false, true))
         var localBundle: RouterDeviceInstallBundle? = null
         var transferFacts: RouterBundleTransferFacts? = null
+        var operationFailure: Throwable? = null
         try {
             val provider = deviceBundleProvider
             if (provider != null) {
@@ -196,7 +197,23 @@ internal class WifiRouterSetupService(
                     throw failure
                 } finally { try { remoteBundle?.close() } finally { transaction.close() } }
             }
-        } finally { try { localBundle?.close() } finally { transaction.closeAndAwait() } }
+        } catch (failure: Throwable) {
+            operationFailure = failure
+            throw failure
+        } finally {
+            var cleanupFailure: Throwable? = null
+            try { localBundle?.close() } catch (cleanup: Throwable) { cleanupFailure = cleanup }
+            try { transaction.closeAndAwait() } catch (cleanup: Throwable) {
+                val earlierCleanup = cleanupFailure
+                if (earlierCleanup == null) cleanupFailure = cleanup
+                else if (earlierCleanup !== cleanup) earlierCleanup.addSuppressed(cleanup)
+            }
+            cleanupFailure?.let { cleanup ->
+                val primary = operationFailure
+                if (primary == null) throw cleanup
+                if (primary !== cleanup) primary.addSuppressed(cleanup)
+            }
+        }
     }
 
     companion object {

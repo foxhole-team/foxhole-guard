@@ -270,8 +270,19 @@ jobs:
           while IFS= read -r asset; do
             assets+=("$asset")
           done < <(find "$candidate_dir" -mindepth 1 -maxdepth 1 -type f | LC_ALL=C sort)
-          [[ ${#assets[@]} -eq 9 ]] || {
-            echo "Expected exactly nine verified release files." >&2
+          expected_assets="$RUNNER_TEMP/foxhole-release-expected-assets.txt"
+          jq -er '
+            select(.schema == 2 and .artifactMatrixVersion == 1) |
+            ([.artifacts[] | .apk, .sbom, .licenseNotices] +
+             [.updaterManifests[]] + ["CANDIDATE.json", "SHA256SUMS", "release-certs.txt"]) |
+            if length == (unique | length) and
+               all(.[]; type == "string" and test("^[A-Za-z0-9][A-Za-z0-9._-]*$"))
+            then .[] else error("Invalid release asset inventory") end
+          ' "$candidate_dir/CANDIDATE.json" | LC_ALL=C sort > "$expected_assets"
+          actual_assets="$RUNNER_TEMP/foxhole-release-actual-assets.txt"
+          printf '%s\n' "${assets[@]##*/}" | LC_ALL=C sort > "$actual_assets"
+          cmp --silent "$expected_assets" "$actual_assets" || {
+            echo "Release files differ from the verified profile inventory." >&2
             exit 1
           }
 

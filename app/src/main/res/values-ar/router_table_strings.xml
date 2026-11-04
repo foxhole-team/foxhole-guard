@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="router_table_router">الموجّه</string>
+    <string name="router_table_version">إصدار FoxHole</string>
+    <string name="router_table_actions">الإجراءات</string>
+    <string name="router_table_rename">إعادة تسمية الموجّه</string>
+    <string name="router_table_name">اسم الموجّه</string>
+    <string name="router_table_cancel">إلغاء</string>
+    <string name="router_table_save">حفظ</string>
+    <string name="router_table_default_name">الموجّه-%1$d</string>
+</resources>

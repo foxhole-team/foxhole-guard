@@ -72,6 +72,7 @@ internal fun CliUpdateNoticeSheetContent(
 
 @Suppress("UNUSED_PARAMETER")
 internal fun releaseNoteKeys(apiLevel: Int, channel: String = com.foxhole.guard.BuildConfig.UPDATE_CHANNEL): List<Int> = listOf(
+    R.string.cli_release_notes_translations_105,
     R.string.cli_release_notes_core_104,
     R.string.cli_release_notes_atomic_104,
     R.string.cli_release_notes_help,
@@ -89,4 +90,4 @@ internal fun updateNoticeItems(body: String): List<CliQuickStartItem> =
         }
         .toList()
 
-private val UPDATE_NOTICE_ICONS = listOf(R.drawable.lin_update, R.drawable.lin_apps, R.drawable.lin_help, R.drawable.lin_update)
+private val UPDATE_NOTICE_ICONS = listOf(R.drawable.lin_help, R.drawable.lin_update, R.drawable.lin_apps, R.drawable.lin_help, R.drawable.lin_update)

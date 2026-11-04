@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="cli_updates_app_install_vpn_notice">يقطع التثبيت اتصال VPN لفترة وجيزة. سيحاول التطبيق استعادة الاتصال النشط؛ افتح التطبيق وأعد الاتصال عند الحاجة.</string>
+</resources>

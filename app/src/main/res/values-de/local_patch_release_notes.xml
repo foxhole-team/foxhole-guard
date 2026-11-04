@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="cli_release_notes_translations_105">Arabisch und RTL werden unterstützt, das Widget wurde angepasst und Übersetzungen sowie Router-Einstellungen wurden korrigiert.</string>
+    <string name="cli_release_notes_router_cleanup_105">Die Ressourcenfreigabe und Fehlerausgabe bei der Routereinrichtung wurden verbessert.</string>
+</resources>

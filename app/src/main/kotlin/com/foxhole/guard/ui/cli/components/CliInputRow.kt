@@ -59,7 +59,8 @@ internal fun CliInputRow(
             BasicTextField(
                 value = value,
                 onValueChange = onValueChange,
-                textStyle = CliType.body.copy(color = colors.fg),
+                textStyle = CliType.body.copy(color = colors.fg,
+                    textDirection = if (numeric || password) androidx.compose.ui.text.style.TextDirection.Ltr else androidx.compose.ui.text.style.TextDirection.ContentOrLtr),
                 cursorBrush = SolidColor(colors.fg),
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(

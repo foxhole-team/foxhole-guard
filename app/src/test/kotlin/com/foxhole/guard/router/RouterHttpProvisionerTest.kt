@@ -153,12 +153,33 @@ class RouterHttpProvisionerTest {
         val pairing = pairing()
         val result = provisioner.finish(api(router), session, pairing, RouterWizardOptions(countryCode = "NL", registerPhone = false), null)
         assertEquals(pairing.id, result.pairedId)
-        assertEquals(JsonPrimitive(true), router.settings["localRules"])
+        assertEquals(JsonPrimitive(false), router.settings["localRules"])
         assertEquals(JsonPrimitive(true), router.settings["killSwitch"])
         assertEquals(JsonPrimitive("selected"), router.settings["localScope"])
         assertEquals(oldDevices, router.devices); assertEquals(oldSites, router.sites)
         assertEquals(2, router.countries.size)
         assertEquals("DE", router.countries[0].jsonObject["code"]!!.jsonPrimitive.content)
+        assertEquals("direct", router.countries[1].jsonObject["route"]!!.jsonPrimitive.content)
+        assertEquals(listOf(RouterMobileAction.PHONE_CAPABILITIES, RouterMobileAction.SETTINGS), router.calls.map { it.first })
+    }
+
+    @Test fun explicitLocalRulesOptInEnablesTheWholeLanWithoutReplacingAdvancedRules() = runTest {
+        val router = Router()
+        val oldDevices = router.devices
+        val oldSites = router.sites
+        val provisioner = RouterHttpProvisioner(router::request, { "192.168.1.101" }, io = StandardTestDispatcher(testScheduler), pairingStore = Store(pairing()))
+        val pairing = pairing()
+        val result = provisioner.finish(api(router), session, pairing,
+            RouterWizardOptions(countryCode = "NL", registerPhone = false, localRules = true), null)
+        assertEquals(pairing.id, result.pairedId)
+        assertEquals(JsonPrimitive(true), router.settings["localRules"])
+        assertEquals(JsonPrimitive("all"), router.settings["localScope"])
+        assertEquals(JsonPrimitive(true), router.settings["killSwitch"])
+        assertEquals(oldDevices, router.devices)
+        assertEquals(oldSites, router.sites)
+        assertEquals(2, router.countries.size)
+        assertEquals("DE", router.countries[0].jsonObject["code"]!!.jsonPrimitive.content)
+        assertEquals("NL", router.countries[1].jsonObject["code"]!!.jsonPrimitive.content)
         assertEquals("direct", router.countries[1].jsonObject["route"]!!.jsonPrimitive.content)
         assertEquals(listOf(RouterMobileAction.PHONE_CAPABILITIES, RouterMobileAction.SETTINGS), router.calls.map { it.first })
     }

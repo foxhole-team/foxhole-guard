@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="cli_release_notes_translations_105">新增阿拉伯语和RTL支持，适配了小组件，并修复了翻译和路由器设置。</string>
+    <string name="cli_release_notes_router_cleanup_105">改进了路由器设置过程中的资源释放和错误提示。</string>
+</resources>

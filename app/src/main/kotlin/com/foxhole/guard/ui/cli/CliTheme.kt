@@ -24,6 +24,7 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
@@ -276,8 +277,16 @@ internal const val CLI_MONO_FONT_CAP_HEIGHT_RATIO = 730f / 1000f
 internal const val CLI_PIXEL_FONT_SIZE_SCALE =
     CLI_MONO_FONT_CAP_HEIGHT_RATIO / CLI_PIXEL_FONT_CAP_HEIGHT_RATIO
 
-internal fun cliTypography(pixelArtEnabled: Boolean = true): CliTypography =
-    if (pixelArtEnabled) CliPixelArtTypography else CliUnifiedTypography
+internal fun cliTypography(pixelArtEnabled: Boolean = true, arabic: Boolean = false): CliTypography {
+    val type = if (pixelArtEnabled) CliPixelArtTypography else CliUnifiedTypography
+    if (!arabic) return type
+    return type.copy(body = type.body.arabic(), small = type.small.arabic(),
+        title = type.title.arabic(), display = type.display.arabic(), button = type.button.arabic())
+}
+
+private fun TextStyle.arabic(): TextStyle = copy(fontFamily = FontFamily.SansSerif, letterSpacing = 0.sp)
+
+private fun String.hasArabic(): Boolean = any { it in '\u0600'..'\u06ff' || it in '\u0750'..'\u077f' || it in '\u08a0'..'\u08ff' }
 
 internal val CLI_ICON_OPTICAL_OFFSET = 0.dp
 
@@ -306,16 +315,18 @@ fun cliScreenTitleStyle(text: String): TextStyle =
     cliScreenTitleStyleFor(text, LocalCliPixelArtEnabled.current)
 
 internal fun cliScreenTitleStyleFor(
-    @Suppress("UNUSED_PARAMETER") text: String,
+    text: String,
     pixelArtEnabled: Boolean = true,
 ): TextStyle =
-    if (pixelArtEnabled) CliHeadingDisplay else CliMonoHeadingDisplay
+    if (text.hasArabic()) CliMonoHeadingDisplay.arabic()
+    else if (pixelArtEnabled) CliHeadingDisplay else CliMonoHeadingDisplay
 
 internal fun cliDisplayStyleFor(
-    @Suppress("UNUSED_PARAMETER") text: String,
+    text: String,
     pixelArtEnabled: Boolean = true,
 ): TextStyle =
-    if (pixelArtEnabled) CliHeadingDisplay else CliMonoHeadingDisplay
+    if (text.hasArabic()) CliMonoHeadingDisplay.arabic()
+    else if (pixelArtEnabled) CliHeadingDisplay else CliMonoHeadingDisplay
 
 @Composable
 @ReadOnlyComposable
@@ -323,10 +334,11 @@ fun cliTitleStyle(text: String): TextStyle =
     cliTitleStyleFor(text, LocalCliPixelArtEnabled.current)
 
 internal fun cliTitleStyleFor(
-    @Suppress("UNUSED_PARAMETER") text: String,
+    text: String,
     pixelArtEnabled: Boolean = true,
 ): TextStyle =
-    if (pixelArtEnabled) CliHeadingTitle else CliMonoHeadingTitle
+    if (text.hasArabic()) CliMonoHeadingTitle.arabic()
+    else if (pixelArtEnabled) CliHeadingTitle else CliMonoHeadingTitle
 
 @Composable
 @ReadOnlyComposable
@@ -334,10 +346,11 @@ fun cliPanelTitleStyle(text: String): TextStyle =
     cliPanelTitleStyleFor(text, LocalCliPixelArtEnabled.current)
 
 internal fun cliPanelTitleStyleFor(
-    @Suppress("UNUSED_PARAMETER") text: String,
+    text: String,
     pixelArtEnabled: Boolean = true,
 ): TextStyle =
-    if (pixelArtEnabled) CliHeadingTitle else CliMonoHeadingTitle
+    if (text.hasArabic()) CliMonoHeadingTitle.arabic()
+    else if (pixelArtEnabled) CliHeadingTitle else CliMonoHeadingTitle
 
 @Composable
 @ReadOnlyComposable
@@ -367,7 +380,8 @@ fun cliRowTextStyle(): TextStyle =
 
 @Composable
 internal fun cliFontPreviewStyle(pixelArtEnabled: Boolean): TextStyle = cliRowTextStyle().copy(
-    fontFamily = if (pixelArtEnabled) Tiny5Family else JetBrainsMonoBoldFamily,
+    fontFamily = if (LocalConfiguration.current.locales[0].language == "ar") FontFamily.SansSerif
+        else if (pixelArtEnabled) Tiny5Family else JetBrainsMonoBoldFamily,
     fontWeight = if (pixelArtEnabled) FontWeight.Normal else FontWeight.Bold,
 )
 
@@ -654,7 +668,7 @@ fun CliTheme(
         LocalCliColors provides colors,
         LocalCliPanelAppearance provides resolvedAppearance,
         LocalCliDynamicColors provides (dynamicScheme != null),
-        LocalCliType provides cliTypography(pixelArtEnabled),
+        LocalCliType provides cliTypography(pixelArtEnabled, LocalConfiguration.current.locales[0].language == "ar"),
         LocalCliPixelArtEnabled provides pixelArtEnabled,
     ) {
         MaterialTheme(colorScheme = scheme, content = content)

@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="cli_wizard_license_save_failed">无法保存您对许可协议的同意。请重试。</string>
+    <string name="guard_router_dock_shortcut_label">在程序坞中快速访问</string>
+    <string name="guard_router_dock_title">OpenWrt</string>
+    <string name="guard_router_home_shortcut_label">在主屏幕上快速访问</string>
+    <string name="guard_router_router_discovery_api_absent">FoxHole HTTPS API 未在此地址响应。请检查路由器地址或重试。</string>
+    <string name="guard_router_router_discovery_network">无法通过此 Wi-Fi 网络连接路由器。请重试或输入其地址。</string>
+    <string name="guard_router_router_discovery_package_check">HTTPS 服务已响应，但无法验证 FoxHole。请检查路由器的网页设置或重试。</string>
+    <string name="guard_router_router_discovery_ssh_only">SSH 可用，但 FoxHole HTTPS API 不可用。您可以在安装前检查 OpenWrt。</string>
+    <string name="guard_router_router_discovery_timeout">路由器检查已超时。请重试或输入其当前局域网地址。</string>
+    <string name="guard_router_router_discovery_tls">无法验证路由器的 HTTPS 连接。请检查其时钟和证书，然后重试。</string>
+    <string name="guard_router_router_profile_pair_wifi">请连接路由器的 Wi-Fi 以重新配对</string>
+    <string name="guard_router_router_profile_retry_pairing">重新配对</string>
+    <string name="guard_router_router_review_enter_manually">手动输入</string>
+    <string name="guard_router_router_review_not_found">未找到路由器。</string>
+    <string name="guard_router_router_review_retry_search">重新搜索</string>
+    <string name="guard_router_router_review_wifi_connected">Wi-Fi 已连接</string>
+    <string name="guard_router_router_ssh_checking_openwrt">正在检查 OpenWrt 版本、架构和安装要求…</string>
+    <string name="guard_router_router_ssh_key_error">无法读取 SSH 私钥。请选择不超过 64 KiB 的 PEM 或 OpenSSH 密钥。</string>
+    <string name="guard_router_router_ssh_key_file">选择 SSH 密钥文件</string>
+    <string name="guard_router_router_ssh_key_loaded">SSH 私钥仅为本次连接加载。</string>
+    <string name="guard_router_router_ssh_key_passphrase">SSH 密钥口令（如已设置）</string>
+    <string name="guard_router_router_ssh_key_paste">粘贴 SSH 密钥</string>
+    <string name="guard_router_router_ssh_manual_setup">检查 OpenWrt / SSH 设置</string>
+    <string name="guard_router_router_ssh_use_password">使用密码</string>
+    <string name="guard_router_router_updates_device_download">正在通过您的设备下载 FoxHole 软件包</string>
+    <string name="guard_router_settings_info">本应用使用您的局域网查找 OpenWrt 路由器，并从此手机管理其 VPN。关闭管理不会停止路由器的 VPN。</string>
+    <string name="guard_router_settings_pair_first">请先设置或配对路由器，以启用管理。</string>
+    <string name="guard_router_vpn_router_error_home_vpn">没有通往已配对路由器的已验证 VPN 路由。请连接到该路由器的 VPN，并在路由器设置中启用通过家庭 VPN 进行管理。</string>
+    <string name="guard_router_wifi_status_label">Wi-Fi 状态</string>
+</resources>

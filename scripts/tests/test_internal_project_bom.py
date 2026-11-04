@@ -1,5 +1,5 @@
 """Regressions for genuine internal Gradle projects, separate from Maven coordinates."""
-import argparse,copy,importlib.util,json,sys,unittest
+import argparse,copy,importlib.util,json,shutil,sys,unittest
 from pathlib import Path
 SCRIPTS=Path(__file__).resolve().parents[1]
 s=importlib.util.spec_from_file_location('existing_delivery_fixture',SCRIPTS/'tests/test_delivery_sbom.py')
@@ -63,8 +63,17 @@ class InternalProjectBomTest(unittest.TestCase):
 
 
 class DerivedNativeAggregateTest(unittest.TestCase):
-    """Real two-ABI aggregate/producer checks; unrelated Core union is isolated."""
-    setUp = BASE.DeliverySbomTest.setUp
+    """Synthetic two-ABI inputs exercise real Core, Sentinel and derived validators."""
+    def setUp(self):
+        spec = importlib.util.spec_from_file_location('derived_complete_core_fixture', SCRIPTS / 'tests/test_android64_delivery.py')
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        owner = module.Android64DeliveryTest()
+        owner.setUp()
+        self.addCleanup(owner.doCleanups)
+        delivery = owner.delivery_fixture()
+        self.__dict__.update({name: value for name, value in delivery.__dict__.items() if not name.startswith('_')})
+        shutil.copyfile(SCRIPTS / 'copy-derived-native-licenses.py', self.root / 'scripts/copy-derived-native-licenses.py')
     write_inputs = BASE.DeliverySbomTest.write_inputs
     aggregate = BASE.DeliverySbomTest.aggregate
 
@@ -115,7 +124,7 @@ class DerivedNativeAggregateTest(unittest.TestCase):
                 name = self.derived_names[kind]
                 body = ('synthetic ' + kind + ' ' + abi).encode()
                 self.libraries['lib/' + abi + '/' + name] = body
-                producer['libraries'].append({'abi': abi, 'path': abi + '/' + name,
+                producer['libraries'].append({'abi': abi, 'path': 'jniLibs/' + abi + '/' + name,
                                               'sha256': MODULE.sha256(body), 'bytes': len(body)})
             if kind == 'graphics':
                 producer.update(graphicsReleaseCommit=config[kind]['commit'], graphicsOriginalSource=source_files)
@@ -127,17 +136,17 @@ class DerivedNativeAggregateTest(unittest.TestCase):
                                 effectivePatchedSodiumSource=original | changes)
             prefix = 'derived-native/' + kind + '/'
             self.inventory[prefix + 'producer-inputs.json'] = input_raw
-            self.inventory[prefix + 'producer-receipt.json'] = json.dumps(producer).encode()
+            spec = importlib.util.spec_from_file_location('derived_evidence_contract_fixture', SCRIPTS / 'tests/test_derived_native_provenance.py')
+            evidence = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(evidence)
+            raw = evidence.raw(kind)
+            raw.update(producer)
+            self.inventory[prefix + 'producer-evidence.json'] = evidence.COPY.encoded(evidence.COPY.canonical_evidence(kind, raw))
         (self.root / 'config/native/page-aligned-native.json').write_text(json.dumps(config))
         self.write_inputs()
 
     def complete_aggregate(self):
-        from unittest.mock import patch
-        core = json.loads(self.inventory['foxcore/foxcore-aarch64-linux-android.cdx.json'])
-        # Only the unrelated Core cross-target union has separate fixtures. Both real
-        # derived verifiers, actual ZIP/notices, native file hashes and final graph run.
-        with patch.object(MODULE, 'android64_core_union', return_value=(copy.deepcopy(core), b'{}')):
-            return self.aggregate()
+        return self.aggregate()
 
     def test_two_abis_share_verified_logical_libraries_and_keep_all_file_edges(self):
         self.derived_delivery()
@@ -153,8 +162,8 @@ class DerivedNativeAggregateTest(unittest.TestCase):
             self.assertEqual([self.owners[kind]], edges[logical['bom-ref']])
             properties = {row['name']: row['value'] for row in logical['properties']}
             prefix = 'derived-native/' + kind + '/'
-            self.assertEqual(MODULE.sha256(self.inventory[prefix + 'producer-receipt.json']),
-                             properties['foxhole:producerReceiptSha256'])
+            self.assertEqual(MODULE.sha256(self.inventory[prefix + 'producer-evidence.json']),
+                             properties['foxhole:producerEvidenceSha256'])
             self.assertEqual(MODULE.sha256(self.inventory[prefix + 'producer-inputs.json']),
                              properties['foxhole:producerInputsSha256'])
             abi_refs = []
@@ -183,7 +192,7 @@ class DerivedNativeAggregateTest(unittest.TestCase):
                                                           archive, self.notices, self.root)
             for field, value in (('name', 'conflicting logical library'),
                                  ('licenses', [{'license': {'id': 'MIT'}}]),
-                                 ('properties', [{'name': 'foxhole:producerReceiptSha256', 'value': '0' * 64}])):
+                                 ('properties', [{'name': 'foxhole:producerEvidenceSha256', 'value': '0' * 64}])):
                 self.maven = copy.deepcopy(original)
                 conflicting = copy.deepcopy(verified)
                 conflicting[field] = value

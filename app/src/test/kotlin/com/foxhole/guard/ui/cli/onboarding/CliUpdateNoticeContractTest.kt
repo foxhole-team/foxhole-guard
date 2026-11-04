@@ -22,15 +22,23 @@ class CliUpdateNoticeContractTest {
         }
     }
 
-    @Test fun currentReleaseScopesTheUpdateNotificationNoteToGitHubOnEveryAndroidVersion() {
+    @Test fun currentReleasePrependsOnePointAndRetainsPublishedNotes() {
         val expected = listOf(
+            R.string.cli_release_notes_translations_105,
             R.string.cli_release_notes_core_104,
             R.string.cli_release_notes_atomic_104,
             R.string.cli_release_notes_help,
         )
-        listOf(28, 29).forEach { apiLevel ->
+        listOf("values", "values-ru", "values-de", "values-fr", "values-es", "values-ja", "values-zh-rCN", "values-ar").forEach { qualifier ->
+            val copy = releaseNoteCopy(qualifier)
+            listOf("cli_release_notes_translations_105", "cli_release_notes_core_104", "cli_release_notes_atomic_104", "cli_release_notes_help").forEach { key ->
+                assertTrue("Missing current release copy in $qualifier/$key", copy.getValue(key).isNotBlank())
+            }
+        }
+        listOf(26, 28, 29, 33).forEach { apiLevel ->
             assertEquals(expected, releaseNoteKeys(apiLevel, "fdroid"))
             assertEquals(expected + R.string.app_update_available_release_note, releaseNoteKeys(apiLevel, "github"))
+            assertFalse(releaseNoteKeys(apiLevel, "fdroid").contains(R.string.app_update_available_release_note))
         }
     }
 

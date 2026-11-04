@@ -213,17 +213,13 @@ class GuardForkLegalTest(unittest.TestCase):
         self.assertEqual(2, len(result["components"]))
 
     def make_delivery_fixture(self):
-        fixtures = load("delivery_fixture", "tests/test_delivery_sbom.py")
-        delivery = fixtures.DeliverySbomTest()
-        delivery.setUp()
-        self.addCleanup(delivery.doCleanups)
-        delivery.inventory["foxcore/foxcore-aarch64-linux-android.cdx.json"] = encoded(self.view)
-        for path, raw in self.descriptor["noticeFiles"]:
-            delivery.inventory["foxcore/cargo-notices/" + path] = raw
-        pins = {"commit": REVISION, "files": [{"path": p, "sha256": sha(raw)} for p, (raw, _) in sorted(self.files.items())]}
+        fixtures = load("fork_current_delivery_fixture", "tests/test_android64_delivery.py")
+        owner = fixtures.Android64DeliveryTest()
+        owner.setUp()
+        self.addCleanup(owner.doCleanups)
+        delivery = owner.delivery_fixture()
         pins_path = delivery.root / "config/foxcore-source-manifest.json"
-        pins_path.write_bytes(encoded(pins))
-        delivery.write_inputs()
+        pins = json.loads(pins_path.read_bytes())
         return delivery, pins, pins_path
 
     def test_real_aggregate_path_binds_apk_notices_and_pinned_source_map(self):

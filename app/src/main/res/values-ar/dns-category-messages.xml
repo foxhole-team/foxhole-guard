@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="dns_category_prepared_pending">مرشحات DNS المختارة جاهزة. يتطلب تفعيلها تحققًا من المكوّن الأصلي عند بدء الاتصال أو إعادة تحميله.</string>
+    <string name="dns_category_prepared_short">بانتظار التفعيل</string>
+    <string name="dns_category_catalog_missing">مرشحات DNS المختارة غير متاحة: كتالوج الفئات المضمّن مفقود.</string>
+    <string name="dns_category_catalog_invalid">مرشحات DNS المختارة غير متاحة: تعذر التحقق من بيانات الفئات المضمّنة.</string>
+    <string name="dns_category_required_missing">فئات DNS المطلوبة أو نوع القائمة غير متاحة. تحقق من القوائم المختارة وحدّث بياناتها.</string>
+    <string name="dns_category_signed_invalid">مرشحات DNS المختارة غير متاحة: تعذر التحقق من بيانات الفئات المنزّلة.</string>
+    <string name="dns_category_profile_policy_unavailable">لا يمكن لهذا الملف الشخصي تطبيق مرشحات DNS المختارة في هذا البناء. عطّل التصفية أو اختر ملفًا شخصيًا يدعمها.</string>
+</resources>

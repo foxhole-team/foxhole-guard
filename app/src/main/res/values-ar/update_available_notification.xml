@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_update_available_recommendation">يتوفر إصدار جديد من التطبيق. نوصي بتحديث تطبيقك.</string>
+    <string name="app_update_available_action">تحديث</string>
+    <string name="app_update_available_release_note">أُضيفت إشعارات النظام بإصدارات التطبيق الجديدة (نسخة GitHub فقط).</string>
+</resources>

@@ -18,6 +18,7 @@ import okhttp3.ResponseBody.Companion.toResponseBody
 import okio.Buffer
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Assert.assertFalse
 import org.junit.Test
 
@@ -42,20 +43,20 @@ class RouterLicenseWireFlowTest {
     @Test fun firstPinWithoutConsentDoesNotSendAnHttpMutationAndClearsTheSecret() = runTest {
         val requests = mutableListOf<JsonObject>()
         val client = api("""{"token":"$token","pinChangeRequired":true,"licenseRequired":true,"licenseVersion":1}""", requests)
-        val session = client.unlock("1234".toCharArray())
-        val pin = "5678".toCharArray()
+        val session = client.unlock("123456".toCharArray())
+        val pin = "567890".toCharArray()
         try { client.changePin(session, pin); error("missing license accepted") }
         catch (_: RouterLicenseRequired) { }
         assertEquals(1, requests.size)
-        assertArrayEquals(CharArray(4), pin)
+        assertArrayEquals(CharArray(6), pin)
         session.close(); client.close()
     }
 
     @Test fun anAcceptedFirstPinUsesTypedAcknowledgmentAndRetiresTheRestrictedSession() = runTest {
         val requests = mutableListOf<JsonObject>()
         val client = api("""{"token":"$token","pinChangeRequired":true,"licenseRequired":true,"licenseVersion":1}""", requests)
-        val session = client.unlock("1234".toCharArray())
-        val pin = "5678".toCharArray()
+        val session = client.unlock("123456".toCharArray())
+        val pin = "567890".toCharArray()
         val changed = client.changePin(session, pin, licenseAccepted = true, licenseVersion = 1)
         val fields = requests.last()
         assertEquals(2, requests.size)
@@ -63,19 +64,23 @@ class RouterLicenseWireFlowTest {
         assertEquals(1, (fields.getValue("licenseVersion") as JsonPrimitive).intOrNull)
         assertFalse((fields.getValue("licenseAccepted") as JsonPrimitive).isString)
         assertFalse((fields.getValue("licenseVersion") as JsonPrimitive).isString)
-        assertArrayEquals(CharArray(4), pin)
+        assertArrayEquals(CharArray(6), pin)
         assertFalse(changed.changePinRequired)
         try { session.token(); error("old PIN session survived") } catch (_: IllegalStateException) { }
         changed.close(); client.close()
     }
 
-    @Test fun legacyPairedSessionDoesNotInventAnAgreementOrChangeItsVersion() = runTest {
+    @Test fun legacyRestrictedFirstPinDoesNotInventAnAgreementOrChangeItsVersion() = runTest {
         val requests = mutableListOf<JsonObject>()
-        val client = api("""{"token":"$token","pinChangeRequired":false}""", requests)
-        val session = client.unlock("1234".toCharArray())
+        val client = api("""{"token":"$token","pinChangeRequired":true}""", requests)
+        val session = client.unlock("123456".toCharArray())
+        assertTrue(session.changePinRequired)
         assertFalse(session.licenseRequired)
         assertEquals(0, session.licenseVersion)
-        val changed = client.changePin(session, "5678".toCharArray())
+        val newPin = "567890".toCharArray()
+        val changed = client.changePin(session, newPin)
+        assertArrayEquals(CharArray(6), newPin)
+        assertEquals(2, requests.size)
         assertEquals(false, (requests.last().getValue("licenseAccepted") as JsonPrimitive).booleanOrNull)
         assertEquals(0, (requests.last().getValue("licenseVersion") as JsonPrimitive).intOrNull)
         changed.close(); client.close()

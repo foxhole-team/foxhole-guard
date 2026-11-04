@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="cli_release_notes_translations_105">La prise en charge de l’arabe et du RTL a été ajoutée, le widget a été adapté et les traductions ainsi que les paramètres du routeur ont été corrigés.</string>
+    <string name="cli_release_notes_router_cleanup_105">Amélioration de la libération des ressources et du signalement des erreurs lors de la configuration du routeur.</string>
+</resources>

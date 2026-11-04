@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="router_management_disconnect_vpn">افصل اتصال VPN الحالي لإدارة الموجّه أو إعداده.</string>
+    <string name="router_management_unavailable_home">الموجّه غير متاح مؤقتًا. اتصل بشبكة Wi-Fi المنزلية.</string>
+</resources>

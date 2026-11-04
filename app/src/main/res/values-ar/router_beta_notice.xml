@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="router_beta_notice_title" formatted="false">ميزة تجريبية</string>
+    <string name="router_beta_notice_body" formatted="false">الميزة قيد الاختبار التجريبي. قبل التثبيت، يتحقق التطبيق من توافق OpenWrt. يجب أن يكون الهاتف والموجّه على الشبكة المحلية نفسها للتثبيت والاقتران. إذا لم يكن لدى الموجّه اتصال بالإنترنت، فسينزّل التطبيق الحزمة وينقلها عبر جهازك.</string>
+    <string name="router_beta_notice_dont_show_again" formatted="false">عدم الإظهار مجددًا</string>
+</resources>

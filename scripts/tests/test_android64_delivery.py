@@ -128,7 +128,13 @@ class Android64DeliveryTest(unittest.TestCase):
         coverage = {'schema':1,'coreCommit':REVISION,'consumer':'guard','features':'shipped','primaryTarget':SHAPE['targets'][0],
             'authorities':authorities,'targets':target_rows,'unionComponents':len(all_refs),'unionEdges':len(all_edges),
             'unionComponentRefs':sorted(all_refs),'noticeManifestSha256':sha(self.union.read_bytes()),'coverage':'complete',
-            'scope':('Two distinct android64 captured Cargo graphs, exact producer/native source and original notice union' if SHAPE['androidDeliveryProfile'] == 'android64' else 'One exact ARMv7 captured Cargo graph, producer/native source and original notice union'),
+            'scope':{
+                'android64': 'Two distinct android64 captured Cargo graphs, exact producer/native source and original notice union',
+                'android4': 'Four distinct android4 captured Cargo graphs, exact per-ABI producer/native source and original notice union',
+                'android3': 'Three distinct android3 captured Cargo graphs, exact producer/native source and original notice union',
+                'android-arm64': 'One exact ARM64 preview captured Cargo graph, producer/native source and original notice union',
+                'android-armv7': 'One exact ARMv7 captured Cargo graph, producer/native source and original notice union',
+            }[SHAPE['androidDeliveryProfile']],
             'androidDeliveryProfile':SHAPE['androidDeliveryProfile'],'abis':SHAPE['abis']}
         self.coverage = self.root/'coverage.json'; self.coverage.write_bytes(encoded(coverage))
         self.receipt = {'schema':2,'coreCommit':REVISION,'consumer':'guard','features':'shipped','target':SHAPE['targets'][0],

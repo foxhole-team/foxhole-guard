@@ -4,7 +4,6 @@ import android.net.ConnectivityManager
 import com.foxhole.guard.FoxholeApplication
 import com.foxhole.core.model.ConnectionState
 import com.foxhole.core.model.TrafficMode
-import com.foxhole.core.runtime.FoxholeVpnRuntimeBridge
 import com.foxhole.guard.core.settings.onboardingLicenseAccepted
 import com.foxhole.guard.runtime.currentVpnNetworkHandle
 import kotlinx.coroutines.CancellationException
@@ -25,7 +24,7 @@ internal class GuardRouterProfileMonitor(private val owner: FoxholeApplication) 
     private val profiles = GuardRouterProfiles(repository, pairing)
     private val access = { requireRouterLocalNetworkAccess(owner) }
     private val connection get() = owner.appGraph.connectionController
-    private val connectedProfiles = FoxholeVpnRuntimeBridge.snapshot.flatMapLatest { snapshot ->
+    private val connectedProfiles = connection.snapshot.flatMapLatest { snapshot ->
         if (snapshot.state != ConnectionState.CONNECTED || snapshot.trafficMode != TrafficMode.TUNNEL || snapshot.profileId == null) flowOf(null)
         else combine(repository.activeProfile, owner.appGraph.settingsRepository.settings, connection.networkRevision) { active, settings, _ ->
             if (!settings.ui.onboardingCompleted ||

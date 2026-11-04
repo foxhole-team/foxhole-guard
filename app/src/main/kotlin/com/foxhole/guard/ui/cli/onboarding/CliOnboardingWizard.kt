@@ -457,6 +457,7 @@ private fun WizardAppearancePanel(viewModel: HomeViewModel) {
         val frenchLocaleLabel = stringResource(R.string.cli_cfg_locale_fr)
         val spanishLocaleLabel = stringResource(R.string.cli_cfg_locale_es)
         val chineseLocaleLabel = stringResource(R.string.cli_cfg_locale_zh)
+        val arabicLocaleLabel = stringResource(R.string.cli_cfg_locale_ar)
         val localeLabel = { locale: AppLocale ->
             when (locale) {
                 AppLocale.SYSTEM -> systemLocaleLabel
@@ -467,6 +468,7 @@ private fun WizardAppearancePanel(viewModel: HomeViewModel) {
                 AppLocale.FR -> frenchLocaleLabel
                 AppLocale.ES -> spanishLocaleLabel
                 AppLocale.ZH -> chineseLocaleLabel
+                AppLocale.AR -> arabicLocaleLabel
             }
         }
         val selectedLocale = settingsState.settings.ui.locale
@@ -534,6 +536,7 @@ private fun wizardLocaleFlagCountry(locale: AppLocale): String? = when (locale) 
     AppLocale.FR -> "fr"
     AppLocale.ES -> "es"
     AppLocale.ZH -> "cn"
+    AppLocale.AR -> "sa"
 }
 
 @Composable

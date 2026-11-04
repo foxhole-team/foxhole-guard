@@ -49,7 +49,7 @@ class UpdateNoticeStateTest {
 
     @Test fun futureAcknowledgementSuppressesOlderContentAndCannotBeOverwritten() {
         val future =
-            UiSettings(updateNoticeAcknowledgedContentId = "foxhole.future", updateNoticeAcknowledgedRevision = 10)
+            UiSettings(updateNoticeAcknowledgedContentId = CURRENT_UPDATE_NOTICE.contentId, updateNoticeAcknowledgedRevision = 10)
         assertFalse(shouldShowUpdateNotice(future, CURRENT_UPDATE_NOTICE))
         assertEquals(
             future.copy(monochromeEnabled = true),

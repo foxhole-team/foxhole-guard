@@ -89,7 +89,7 @@ class SubscriptionProviderImportTest {
         val tls = outbound["tls"]!!.jsonObject
         assertEquals("true", tls.string("enabled"))
         assertEquals("iv.example.net", tls.string("server_name"))
-        assertEquals("qq", tls["utls"]!!.jsonObject.string("fingerprint"))
+        assertEquals("chrome_156", tls["utls"]!!.jsonObject.string("fingerprint"))
         assertNull(unsupportedUtlsFingerprint("qq"))
         assertEquals(
             "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA01",

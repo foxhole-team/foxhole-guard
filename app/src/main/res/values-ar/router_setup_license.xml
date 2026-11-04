@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="guard_router_setup_license_title">FoxHole OpenWRT Client · اتفاقية الترخيص</string>
+    <string name="guard_router_setup_license_body">1. يجب استخدام التطبيق وفقًا للقوانين المعمول بها حصرًا.\n\n2. ليس FoxHole OpenWRT Client برنامجًا لمكافحة الفيروسات، ولا يضمن اكتشاف الملفات التنفيذية الضارة أو إبطالها.\n\n3. لا يتحمل المطورون مسؤولية أي ضرر محتمل ناتج عن استخدام التطبيق.\n\n4. يُعد استخدام التطبيق قبولًا كاملًا لشروط تراخيص جميع مكوناته الداخلية ومجموعات بياناته.\n\n5. بمتابعة الاستخدام، تؤكد موافقتك على جميع أحكام هذه الاتفاقية.</string>
+    <string name="guard_router_setup_license_accept">أوافق على اتفاقية الترخيص</string>
+    <string name="guard_router_setup_license_required">وافق على اتفاقية الترخيص أولًا</string>
+</resources>

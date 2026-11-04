@@ -32,10 +32,15 @@ class SourceBuildLegalTest(unittest.TestCase):
                 path.write_bytes(raw)
                 native[kind][target] = {'abi': abi, 'bytes': len(raw), 'sha256': hashlib.sha256(raw).hexdigest()}
         tree = subprocess.check_output(['git', '-C', str(self.core), 'rev-parse', 'HEAD^{tree}']).decode().strip()
-        checkout = patch.object(M, 'source_checkout', return_value={'sourceCommit': self.revision, 'sourceTree': tree})
+        compiled_digest = hashlib.sha256((self.app / 'config/foxcore-source-manifest.json').read_bytes()).hexdigest()
+        checkout = patch.object(M, 'source_checkout', return_value={
+            'schema': 1, 'sourceCommit': self.revision, 'sourceTree': tree, 'producerCommit': self.revision,
+            'compiledSourceManifestSha256': compiled_digest,
+            'legacy': False, 'producerDeclaredInputCount': len(self.reference['compiledInputs']),
+            'sourceOnlyTestInputs': {},
+        })
         checkout.start()
         self.addCleanup(checkout.stop)
-        compiled_digest = hashlib.sha256((self.app / 'config/foxcore-source-manifest.json').read_bytes()).hexdigest()
         (self.app / 'config/foxcore-source-checkout.json').write_text(json.dumps({
             'schema': 1, 'sourceCommit': self.revision, 'sourceTree': tree,
             'producerCommit': self.revision, 'compiledSourceManifestSha256': compiled_digest,

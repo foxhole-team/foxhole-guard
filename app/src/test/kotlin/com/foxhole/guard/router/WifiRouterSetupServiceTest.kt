@@ -1,9 +1,15 @@
 package com.foxhole.guard.router
 
+import java.io.IOException
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -21,6 +27,9 @@ import org.junit.Test
 class WifiRouterSetupServiceTest {
     private class Client : RouterSshClient {
         val closed = AtomicBoolean()
+        val closeCalls = AtomicInteger()
+        val closeCompleted = CompletableDeferred<Unit>()
+        var closeFailure: IOException? = null
         var connectedWithoutPassword = false
         var boardVersion = "25.12.5"
         var kernelQueried = false
@@ -47,9 +56,13 @@ class WifiRouterSetupServiceTest {
         override fun install(script: RouterVerifiedInstallScript, command: RouterInstallCommand) { installed = true }
         override fun bootstrapEnrollment(): ByteArray {
             enrollmentRequested = true
-            return """{"schema":1,"status":"fresh","bootstrapPin":"1943","expiresInSeconds":300}""".toByteArray()
+            return """{"schema":1,"status":"fresh","bootstrapPin":"194356","expiresInSeconds":300}""".toByteArray()
         }
-        override fun close() { closed.set(true) }
+        override fun close() {
+            closeCalls.incrementAndGet()
+            closed.set(true)
+            try { closeFailure?.let { throw it } } finally { closeCompleted.complete(Unit) }
+        }
     }
 
     private class Release : RouterSetupRelease {
@@ -57,9 +70,11 @@ class WifiRouterSetupServiceTest {
         override val supportedPlatforms = setOf(RouterPlatform("25.12", "x86/64", "x86_64"))
         var initialized = false
         var gate: CompletableDeferred<Unit>? = null
+        val preparationStarted = CompletableDeferred<Unit>()
         var failInitialize = false
         override suspend fun initialize() { if (failInitialize) throw IllegalArgumentException("fixture"); initialized = true }
         override suspend fun payload(system: RouterSystemInspection, selection: RouterInstallProtocolSelection): RouterSetupPayload {
+            preparationStarted.complete(Unit)
             gate?.await()
             val bytes = "#!/bin/sh\nexit 0\n".toByteArray()
             return RouterSetupPayload(catalog.variants.single(), mapOf(RouterStorageMode.FLASH to RouterInstallBudget(1048576, 1048576, 1048576, 1048576)),
@@ -69,42 +84,44 @@ class WifiRouterSetupServiceTest {
         }
     }
 
-    @Test fun initialSshProbeCannotCarryAPasswordAndLoadsOnlyVerifiedReleaseMetadata() = runTest {
+    @Test fun initialSshProbeCannotCarryAPasswordAndLoadsOnlyVerifiedReleaseMetadata() = runBlocking {
         val client = Client()
         val release = Release()
-        val service = WifiRouterSetupService(release, { _, key -> assertEquals(null, key); client }, {}, StandardTestDispatcher(testScheduler))
+        val service = WifiRouterSetupService(release, { _, key -> assertEquals(null, key); client }, {}, Dispatchers.IO)
         val request = async { service.inspectSshIdentity("192.168.1.1") }
-        runCurrent()
         assertArrayEquals(byteArrayOf(1, 2, 3), request.await())
+        withTimeout(5000) { client.closeCompleted.await() }
         assertTrue(client.connectedWithoutPassword && client.closed.get() && release.initialized)
     }
 
-    @Test fun successfulInspectionRetainsALiveTransactionAndClearsThePassword() = runTest {
+    @Test fun successfulInspectionRetainsALiveTransactionAndClearsThePassword() = runBlocking {
         val client = Client()
         val release = Release()
         val password = "synthetic-password".toCharArray()
-        val service = WifiRouterSetupService(release, { _, key -> assertArrayEquals(byteArrayOf(1, 2, 3), key); client }, {}, StandardTestDispatcher(testScheduler))
+        val service = WifiRouterSetupService(release, { _, key -> assertArrayEquals(byteArrayOf(1, 2, 3), key); client }, {}, Dispatchers.IO)
         val request = async { service.inspect("192.168.1.1", byteArrayOf(1, 2, 3), password, requireNotNull(release.catalog.defaultSelection), licenseAccepted = true) }
-        runCurrent()
         val proposal = request.await()
         assertFalse(client.closed.get())
         assertEquals(RouterStorageMode.FLASH, proposal.storageMode)
         assertArrayEquals(CharArray(password.size), password)
         proposal.close()
+        withTimeout(5000) { client.closeCompleted.await() }
         assertTrue(client.closed.get())
     }
 
-    @Test fun cancellationDuringReleasePreparationClosesTheInspectedSession() = runTest {
+    @Test fun cancellationDuringReleasePreparationClosesTheInspectedSession() = runBlocking {
         val client = Client()
         val release = Release().apply { gate = CompletableDeferred() }
         val password = "synthetic-password".toCharArray()
-        val service = WifiRouterSetupService(release, { _, _ -> client }, {}, StandardTestDispatcher(testScheduler))
+        val service = WifiRouterSetupService(release, { _, _ -> client }, {}, Dispatchers.IO)
         val request = async { service.inspect("192.168.1.1", byteArrayOf(1, 2, 3), password, requireNotNull(release.catalog.defaultSelection), licenseAccepted = true) }
-        runCurrent()
-        request.cancel()
-        runCurrent()
+        withTimeout(5000) { release.preparationStarted.await() }
+        request.cancelAndJoin()
+        withTimeout(5000) { client.closeCompleted.await() }
         assertTrue(client.closed.get())
         assertArrayEquals(CharArray(password.size), password)
+        assertEquals(1, client.closeCalls.get())
+        assertFalse(client.installed)
     }
 
     @Test fun insufficientStorageCannotProduceAnInstallProposal() = runTest {
@@ -118,18 +135,17 @@ class WifiRouterSetupServiceTest {
         assertFalse(client.installed)
     }
 
-    @Test fun resourceChangesAreCheckedAgainBeforeAnyInstallerMutation() = runTest {
+    @Test fun resourceChangesAreCheckedAgainBeforeAnyInstallerMutation() = runBlocking {
         val client = Client()
         val release = Release()
-        val service = WifiRouterSetupService(release, { _, _ -> client }, {}, StandardTestDispatcher(testScheduler))
+        val service = WifiRouterSetupService(release, { _, _ -> client }, {}, Dispatchers.IO)
         val inspection = async { service.inspect("192.168.1.1", byteArrayOf(1, 2, 3), "fixture".toCharArray(), requireNotNull(release.catalog.defaultSelection), licenseAccepted = true) }
-        runCurrent()
         val proposal = inspection.await()
         client.availableFlashKiB = 1
         val install = async { runCatching { service.install(proposal, licenseAccepted = true) } }
-        runCurrent()
         assertEquals(RouterWizardError.STORAGE, (install.await().exceptionOrNull() as RouterSetupFailure).kind)
         assertFalse(client.installed)
+        withTimeout(5000) { client.closeCompleted.await() }
         assertTrue(client.closed.get())
     }
 
@@ -143,32 +159,30 @@ class WifiRouterSetupServiceTest {
         assertFalse(opened || release.initialized)
     }
 
-    @Test fun unsupportedFirmwareIsReportedBeforeRequestingItsAbsentApkTools() = runTest {
+    @Test fun unsupportedFirmwareIsReportedBeforeRequestingItsAbsentApkTools() = runBlocking {
         val client = Client().apply { boardVersion = "24.10.6" }
         val release = Release()
-        val service = WifiRouterSetupService(release, { _, _ -> client }, {}, StandardTestDispatcher(testScheduler))
+        val service = WifiRouterSetupService(release, { _, _ -> client }, {}, Dispatchers.IO)
         val inspection = async { runCatching { service.inspect("192.168.1.1", byteArrayOf(1, 2, 3), "fixture".toCharArray(), requireNotNull(release.catalog.defaultSelection), licenseAccepted = true) } }
-        runCurrent()
         assertEquals(RouterWizardError.UNSUPPORTED, (inspection.await().exceptionOrNull() as RouterSetupFailure).kind)
+        withTimeout(5000) { client.closeCompleted.await() }
         assertTrue(client.closed.get())
         assertFalse(client.kernelQueried)
     }
 
-    @Test fun successfulInstallRequiresReadbackAndCertificateBeforeReturningAFreshBootstrap() = runTest {
+    @Test fun successfulInstallRequiresReadbackAndCertificateBeforeReturningAFreshBootstrap() = runBlocking {
         val client = Client()
         val release = Release()
-        val service = WifiRouterSetupService(release, { _, _ -> client }, {}, StandardTestDispatcher(testScheduler))
+        val service = WifiRouterSetupService(release, { _, _ -> client }, {}, Dispatchers.IO)
         val inspection = async { service.inspect("192.168.1.1", byteArrayOf(1, 2, 3), "fixture".toCharArray(), requireNotNull(release.catalog.defaultSelection), licenseAccepted = true) }
-        runCurrent()
         val proposal = inspection.await()
         client.packageReceipt = receipt(proposal.binding)
         val installation = async { service.install(proposal, licenseAccepted = true) }
-        runCurrent()
         val result = installation.await()
         assertTrue(client.installed && client.closed.get() && client.enrollmentRequested)
         assertEquals("192.168.1.1", result.identity.endpoint.address)
         val pin = result.takeBootstrapCredential()
-        assertArrayEquals("1943".toCharArray(), pin)
+        assertArrayEquals("194356".toCharArray(), pin)
         pin?.fill('\u0000')
         result.close()
         proposal.close()
@@ -186,6 +200,48 @@ class WifiRouterSetupServiceTest {
         runCurrent()
         assertTrue(failure.await().isFailure && client.closed.get())
         assertFalse(client.enrollmentRequested)
+    }
+
+    @Test fun storageFailureRetainsItsTypeWhenTransportCleanupAlsoFails() = runBlocking {
+        val client = Client()
+        val release = Release()
+        val password = "synthetic-password".toCharArray()
+        val service = WifiRouterSetupService(release, { _, _ -> client }, {}, Dispatchers.IO)
+        val proposal = service.inspect("192.168.1.1", byteArrayOf(1, 2, 3), password,
+            requireNotNull(release.catalog.defaultSelection), licenseAccepted = true)
+        client.availableFlashKiB = 1
+        client.closeFailure = IOException("synthetic storage cleanup failure")
+
+        val failure = runCatching { service.install(proposal, licenseAccepted = true) }.exceptionOrNull()
+
+        assertTrue(failure is RouterSetupFailure)
+        val primary = failure as RouterSetupFailure
+        assertEquals(RouterWizardError.STORAGE, primary.kind)
+        assertTrue(primary.suppressed.any { it is IOException && it.message == "synthetic storage cleanup failure" })
+        assertFalse(client.installed || client.enrollmentRequested)
+        assertTrue(client.closed.get())
+        assertEquals(1, client.closeCalls.get())
+        assertArrayEquals(CharArray(password.size), password)
+    }
+
+    @Test fun successfulInstallationStillFailsWhenTransportCleanupFails() = runBlocking {
+        val client = Client()
+        val release = Release()
+        val password = "synthetic-password".toCharArray()
+        val service = WifiRouterSetupService(release, { _, _ -> client }, {}, Dispatchers.IO)
+        val proposal = service.inspect("192.168.1.1", byteArrayOf(1, 2, 3), password,
+            requireNotNull(release.catalog.defaultSelection), licenseAccepted = true)
+        client.packageReceipt = receipt(proposal.binding)
+        client.closeFailure = IOException("synthetic successful-install cleanup failure")
+
+        val failure = runCatching { service.install(proposal, licenseAccepted = true) }.exceptionOrNull()
+
+        assertTrue(failure is IOException)
+        assertEquals("synthetic successful-install cleanup failure", failure?.message)
+        assertTrue(client.installed && client.enrollmentRequested)
+        assertTrue(client.closed.get())
+        assertEquals(1, client.closeCalls.get())
+        assertArrayEquals(CharArray(password.size), password)
     }
 
     private fun receipt(binding: RouterInstallBinding): String = buildJsonObject {

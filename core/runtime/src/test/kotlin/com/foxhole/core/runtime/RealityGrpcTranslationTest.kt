@@ -148,7 +148,7 @@ internal class RealityGrpcTranslationTest {
                 put("server_name", "peer.example")
                 put("public_key", publicKey)
                 put("short_id", "0102030405060708")
-                put("fingerprint", "chrome_151")
+                put("fingerprint", "chrome_156")
             }
         assertEquals(expected, result.getValue("reality"))
         assertEquals(buildJsonObject { put("enabled", false) }, result.getValue("tls"))

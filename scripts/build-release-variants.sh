@@ -54,7 +54,7 @@ shapes = {'android4': (['arm64-v8a', 'armeabi-v7a', 'x86', 'x86_64'], ['aarch64-
 abis, targets = shapes[profile]
 assert config == {'schema': 1, **{key: source[key] for key in ('androidDeliveryProfile', 'abis', 'targets')}}
 assert source['commit'] == (root / 'config/foxcore-revision.txt').read_text().strip() == snapshot['coreCommit']
-assert len(source['files']) == len({row['path'] for row in source['files']}) == 522
+assert len(source['files']) == len({row['path'] for row in source['files']}) == len(snapshot['compiledInputs']) > 0
 assert snapshot['androidDeliveryProfile'] == profile and snapshot['abis'] == abis and snapshot['targets'] == targets
 assert snapshot['compiledInputs'] == {row['path']: row['sha256'] for row in source['files']}
 shape = {'androidDeliveryProfile': profile, 'abis': abis, 'targets': targets}

@@ -9,8 +9,8 @@ import org.junit.Assert.assertArrayEquals
 import org.junit.Test
 
 class RouterMultiWizardTest {
-    private fun pair(index: Int) = RouterPairing(RouterTlsIdentity(RouterEndpoint("192.168.1.1"), index.toString().repeat(64)),
-        "pair-${index.toString().repeat(32)}", ByteArray(32) { index.toByte() }, "Phone", true)
+    private fun pair(index: Int) = RouterPairing(RouterTlsIdentity(RouterEndpoint("192.168.1.1"), index.toString(16).padStart(64, '0')),
+        "pair-${index.toString(16).padStart(32, '0')}", ByteArray(32) { index.toByte() }, "Phone", true)
     private class Transport(var observed: RouterTlsIdentity) : RouterWizardTransport {
         var discoveries = 0
         var apiCreations = 0
@@ -54,12 +54,13 @@ class RouterMultiWizardTest {
         } finally { store.close(); original.clear(); other.clear() }
     }
 
-    @Test fun aFourthAdditionFailsBeforeDiscoveryOrCredentialTransport() = runTest {
+    @Test fun anAdditionBeyondTheSavedRouterLimitFailsBeforeDiscoveryOrCredentialTransport() = runTest {
         val store = MemoryRouterPairingStore()
-        val pairs = (1..3).map(::pair)
+        assertEquals(10, MAX_SAVED_ROUTERS)
+        val pairs = (1..MAX_SAVED_ROUTERS).map(::pair)
         try {
             pairs.forEach { store.save(it) }
-            val transport = Transport(pair(4).identity)
+            val transport = Transport(pair(MAX_SAVED_ROUTERS + 1).identity)
             val wizard = wizard(store, transport)
             wizard.begin(RouterWizardPath.PAIR, null, addingNew = true)
             wizard.findRouter()

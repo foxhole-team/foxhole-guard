@@ -7,7 +7,7 @@ import org.junit.Test
 internal class AppLocaleSerializationTest {
     @Test
     fun `supported locales retain unique canonical tags and stored identities`() {
-        assertEquals(listOf("", "ru", "en", "ja", "de", "fr", "es", "zh-CN"), AppLocale.entries.map { it.appLanguageTags() })
+        assertEquals(listOf("", "ru", "en", "ja", "de", "fr", "es", "zh-CN", "ar"), AppLocale.entries.map { it.appLanguageTags() })
         AppLocale.entries.forEach { locale ->
             assertEquals(locale, Json.decodeFromString(AppLocale.serializer(), Json.encodeToString(AppLocale.serializer(), locale)))
         }

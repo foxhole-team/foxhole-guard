@@ -17,13 +17,7 @@
 
 <div align="center">
 
-[![English](https://img.shields.io/badge/%F0%9F%87%AC%F0%9F%87%A7-English-ff7a00?style=flat-square)](README.md)
-[![Русский](https://img.shields.io/badge/%F0%9F%87%B7%F0%9F%87%BA-%D0%A0%D1%83%D1%81%D1%81%D0%BA%D0%B8%D0%B9-ff7a00?style=flat-square)](docs/README.ru.md)
-[![Deutsch](https://img.shields.io/badge/%F0%9F%87%A9%F0%9F%87%AA-Deutsch-ff7a00?style=flat-square)](docs/README.de.md)
-[![Français](https://img.shields.io/badge/%F0%9F%87%AB%F0%9F%87%B7-Fran%C3%A7ais-ff7a00?style=flat-square)](docs/README.fr.md)
-[![Español](https://img.shields.io/badge/%F0%9F%87%AA%F0%9F%87%B8-Espa%C3%B1ol-ff7a00?style=flat-square)](docs/README.es.md)
-[![日本語](https://img.shields.io/badge/%F0%9F%87%AF%F0%9F%87%B5-%E6%97%A5%E6%9C%AC%E8%AA%9E-ff7a00?style=flat-square)](docs/README.ja.md)
-[![简体中文](https://img.shields.io/badge/%F0%9F%87%A8%F0%9F%87%B3-%E7%AE%80%E4%BD%93%E4%B8%AD%E6%96%87-ff7a00?style=flat-square)](docs/README.zh.md)
+[English](README.md) · [Русский](docs/README.ru.md) · [Deutsch](docs/README.de.md) · [Français](docs/README.fr.md) · [Español](docs/README.es.md) · [日本語](docs/README.ja.md) · [简体中文](docs/README.zh.md) · [العربية](docs/README.ar.md)
 
 </div>
 
@@ -60,8 +54,9 @@ The core idea of the project is a single application for everyday network protec
 
 <a id="whats-new"></a>
 
-> **🆕 What's new - 1.0.4 Stable**
+> **🆕 What's new - 1.0.5 Stable**
 >
+> - Added Arabic language and RTL support, adapted the widget, and fixed translations and router settings.
 > - Updated FoxHole Core to 1.0.3 with DNS caching fixes.
 > - Fixed atomic application of routing rules and scenarios.
 > - Improved documentation and the help section; updated router management tips.

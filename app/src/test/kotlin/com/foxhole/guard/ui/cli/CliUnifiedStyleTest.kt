@@ -128,7 +128,8 @@ class CliUnifiedStyleTest {
             .orEmpty()
 
         assertTrue(pixelAssets.toString(), pixelAssets.isEmpty())
-        assertEquals(44, outlineAssets.size)
+        assertEquals(45, outlineAssets.size)
+        assertTrue(outlineAssets.all { it.readText().contains("<vector") })
     }
 
     @Test

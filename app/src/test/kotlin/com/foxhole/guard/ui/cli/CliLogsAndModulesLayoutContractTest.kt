@@ -177,7 +177,7 @@ class CliLogsAndModulesLayoutContractTest {
         assertTrue(block.contains("MODULE_SETTINGS_CONNECTOR_GAP = 4.dp"))
         assertTrue(block.indexOf("CliToggleRow(") < block.indexOf("CliActionRow("))
         assertEquals(3, Regex("CliDivider\\(color = colors\\.borderBright\\)").findAll(modules).count())
-        assertEquals(1, Regex("CliDivider\\(color = colors\\.borderBright\\)").findAll(extras).count())
+        assertEquals(2, Regex("CliDivider\\(color = colors\\.borderBright\\)").findAll(extras).count())
     }
 
     @Test

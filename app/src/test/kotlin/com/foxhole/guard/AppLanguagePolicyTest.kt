@@ -11,14 +11,14 @@ internal class AppLanguagePolicyTest {
     private val system = AppLocale.SYSTEM
     private val choices = GUARD_APP_LANGUAGE_CHOICES
 
-    @Test fun `picker has seven languages with Japanese immediately before Chinese`() {
-        assertEquals(listOf("SYSTEM", "EN", "RU", "DE", "FR", "ES", "JA", "ZH"), choices.map { it.name })
-        assertEquals(8, choices.distinct().size)
+    @Test fun `picker has eight languages with Arabic appended after Chinese`() {
+        assertEquals(listOf("SYSTEM", "EN", "RU", "DE", "FR", "ES", "JA", "ZH", "AR"), choices.map { it.name })
+        assertEquals(9, choices.distinct().size)
         assertEquals("zh-CN", AppLocale.ZH.appLanguageTags())
     }
 
     @Test fun `stored enum names and legacy order remain unchanged`() {
-        assertEquals(listOf("SYSTEM", "RU", "EN", "JA", "DE", "FR", "ES", "ZH"), AppLocale.entries.map { it.name })
+        assertEquals(listOf("SYSTEM", "RU", "EN", "JA", "DE", "FR", "ES", "ZH", "AR"), AppLocale.entries.map { it.name })
     }
 
     @Test fun `empty OS list does not erase an existing explicit choice on first migration`() {
@@ -69,6 +69,9 @@ internal class AppLanguagePolicyTest {
         assertNull(languageFromPlatformTag("zh-Hant-TW"))
         assertNull(languageFromPlatformTag("zh-HK"))
         assertNull(languageFromPlatformTag("it"))
+        assertEquals(AppLocale.AR, languageFromPlatformTag("ar"))
+        assertEquals(AppLocale.AR, languageFromPlatformTag("ar-EG"))
+        assertEquals(AppLocale.AR, languageFromPlatformTag("ar-SA"))
     }
 
     @Test fun `completed app checkpoint lets the next OS change win`() {

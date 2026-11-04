@@ -5,6 +5,11 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Typeface
+import android.text.Layout
+import android.text.StaticLayout
+import android.text.TextDirectionHeuristics
+import android.text.TextPaint
+import android.text.TextUtils
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
@@ -79,6 +84,10 @@ internal fun measureStyledWidgetTextWidth(
     fontSize: Int,
 ): Dp {
     val metrics = context.resources.displayMetrics
+    if (text.hasArabicGlyphs()) {
+        val paint = arabicWidgetPaint(context, Color.Transparent, fontSize)
+        return ((ceil(paint.measureText(text)) + ceil(metrics.density) * 2) / metrics.density).dp
+    }
     val pixelPaint = widgetTextPaint(context, R.font.tiny5_regular, Color.Transparent, fontSize, pixelArt = true)
     val monoPaint = widgetTextPaint(context, R.font.jetbrains_mono_bold, Color.Transparent, fontSize, pixelArt = false)
     val horizontalPadding = ceil(metrics.density).toInt().coerceAtLeast(1)
@@ -107,6 +116,7 @@ private fun renderStyledWidgetText(
     pixelArtEnabled: Boolean,
     maxWidth: Dp?,
 ): RenderedWidgetText {
+    if (text.hasArabicGlyphs()) return renderArabicWidgetText(context, text, color, fontSizeSp, maxWidth)
     val metrics = context.resources.displayMetrics
     val pixelPaint = widgetTextPaint(context, R.font.tiny5_regular, color, fontSizeSp, pixelArt = true)
     val monoPaint = widgetTextPaint(context, R.font.jetbrains_mono_bold, color, fontSizeSp, pixelArt = false)
@@ -183,3 +193,38 @@ private fun fitWidgetText(
 
 private fun widgetTextWidth(text: String, firstPaint: Paint, secondPaint: Paint): Float =
     max(firstPaint.measureText(text), secondPaint.measureText(text))
+
+private fun String.hasArabicGlyphs(): Boolean = any { it in '\u0600'..'\u06ff' || it in '\u0750'..'\u077f' || it in '\u08a0'..'\u08ff' }
+
+private fun arabicWidgetPaint(context: Context, color: Color, fontSizeSp: Int): TextPaint =
+    TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+        typeface = Typeface.create("sans-serif", Typeface.NORMAL)
+        textSize = fontSizeSp * context.resources.displayMetrics.density * context.resources.configuration.fontScale
+        this.color = color.toArgb()
+        isSubpixelText = true
+    }
+
+private fun renderArabicWidgetText(
+    context: Context, text: String, color: Color, fontSizeSp: Int, maxWidth: Dp?,
+): RenderedWidgetText {
+    val metrics = context.resources.displayMetrics
+    val paint = arabicWidgetPaint(context, color, fontSizeSp)
+    val padding = ceil(metrics.density).toInt().coerceAtLeast(1)
+    val width = (ceil(paint.measureText(text)).toInt() + padding * 2)
+        .coerceAtMost(maxWidth?.let { (it.value * metrics.density).toInt() } ?: Int.MAX_VALUE)
+        .coerceAtLeast(padding * 2 + 1)
+    // StaticLayout shapes joined glyphs and resolves mixed Arabic/Latin runs before drawing.
+    val layout = StaticLayout.Builder.obtain(text, 0, text.length, paint, width - padding * 2)
+        .setTextDirection(TextDirectionHeuristics.FIRSTSTRONG_RTL)
+        .setAlignment(Layout.Alignment.ALIGN_NORMAL)
+        .setIncludePad(true)
+        .setMaxLines(1)
+        .setEllipsize(TextUtils.TruncateAt.END)
+        .build()
+    val bitmap = Bitmap.createBitmap(width, layout.height.coerceAtLeast(1), Bitmap.Config.ARGB_8888)
+        .apply { density = metrics.densityDpi }
+    val canvas = Canvas(bitmap)
+    canvas.translate(padding.toFloat(), 0f)
+    layout.draw(canvas)
+    return RenderedWidgetText(bitmap, (width / metrics.density).dp, (bitmap.height / metrics.density).dp)
+}

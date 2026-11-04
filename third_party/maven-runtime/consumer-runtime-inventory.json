@@ -1179,49 +1179,49 @@
       "id": "project::app",
       "kind": "project",
       "name": "app",
-      "version": "1.0.4",
+      "version": "1.0.5",
       "projectPath": ":app"
     },
     {
       "id": "project::core:importer",
       "kind": "project",
       "name": "importer",
-      "version": "1.0.4",
+      "version": "1.0.5",
       "projectPath": ":core:importer"
     },
     {
       "id": "project::core:model",
       "kind": "project",
       "name": "model",
-      "version": "1.0.4",
+      "version": "1.0.5",
       "projectPath": ":core:model"
     },
     {
       "id": "project::core:network",
       "kind": "project",
       "name": "network",
-      "version": "1.0.4",
+      "version": "1.0.5",
       "projectPath": ":core:network"
     },
     {
       "id": "project::core:profile",
       "kind": "project",
       "name": "profile",
-      "version": "1.0.4",
+      "version": "1.0.5",
       "projectPath": ":core:profile"
     },
     {
       "id": "project::core:runtime",
       "kind": "project",
       "name": "runtime",
-      "version": "1.0.4",
+      "version": "1.0.5",
       "projectPath": ":core:runtime"
     },
     {
       "id": "project::core:sentinel",
       "kind": "project",
       "name": "sentinel",
-      "version": "1.0.4",
+      "version": "1.0.5",
       "projectPath": ":core:sentinel"
     }
   ],
@@ -13590,10 +13590,10 @@
   ],
   "pom_errors": [],
   "source_sha256": {
-    "build.gradle.kts": "223baf710e9d8171260fb03764b8e0cffa26eacb486deefc0c56e29fdaf1209c",
+    "build.gradle.kts": "f564e60487f6d3aa2cb75db9306d033be4df18a17da5df7a8f40d894bc3ace10",
     "settings.gradle.kts": "1ed609b2ea8f4bc9aeb00aa84799d90a6d3abc08a072d5a8b5373515e645e363",
     "gradle.properties": "6e4df59398dc356f917839ee3b605c021f7089e6627e3f484597916c334b0a81",
-    "app/build.gradle.kts": "31f63c8165564595903121cb20cb27332a0b7cf40195c0ec5fa2bc1bc7222c0f",
+    "app/build.gradle.kts": "d55afe555c35020700c420130478d2c0542e15697605add165e2d45517107780",
     "core/model/build.gradle.kts": "fc3fe8dc73fdc65871eeb5120ba2c96d0ee97205b1f11f170cc18a959aeb0a69",
     "core/network/build.gradle.kts": "37caa5cb68e71d03ef64fcb61fa87628f778393c7e186541714ff6a2ea1853a0",
     "core/importer/build.gradle.kts": "c99dd464e1135c2bc7942911d4908d06424e5a5790d65009397026e29d077de8",

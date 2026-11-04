@@ -43,7 +43,7 @@
     <string name="journal_unavailable_config">Die Ausgangskonfiguration ist nicht verwendbar.</string>
     <string name="journal_unavailable_config_action">Prüfe das Profil vor einem erneuten Versuch.</string>
     <string name="journal_unavailable_unsupported">Dieser Core-Build unterstützt das konfigurierte Protokoll nicht.</string>
-    <string name="journal_unavailable_unsupported_action">Verwende ein unterstütztes Protokoll oder aktualisiere FoxHole.</string>
+    <string name="journal_unavailable_unsupported_action">Verwende ein unterstütztes Protokoll oder aktualisiere FoxHole Guard.</string>
     <string name="journal_unavailable_disabled">Dieser Ausgang ist deaktiviert.</string>
     <string name="journal_unavailable_disabled_action">Prüfe die Freigabeeinstellungen der Route.</string>
     <string name="journal_unavailable_internal">Ein interner Fehler hat den Start dieses Ausgangs verhindert.</string>

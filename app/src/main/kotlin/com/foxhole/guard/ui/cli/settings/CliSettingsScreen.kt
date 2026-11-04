@@ -653,19 +653,20 @@ private fun CliLanguageRow(
     val frenchLocaleLabel = stringResource(R.string.cli_cfg_locale_fr)
     val spanishLocaleLabel = stringResource(R.string.cli_cfg_locale_es)
     val chineseLocaleLabel = stringResource(R.string.cli_cfg_locale_zh)
+    val arabicLocaleLabel = stringResource(R.string.cli_cfg_locale_ar)
     CliDropdownRow(
         label = stringResource(R.string.cli_cfg_language),
         icon = R.drawable.lin_globe,
         value = localeLabel(
             settings.ui.locale, systemLocaleLabel, russianLocaleLabel, englishLocaleLabel,
-            japaneseLocaleLabel, germanLocaleLabel, frenchLocaleLabel, spanishLocaleLabel, chineseLocaleLabel,
+            japaneseLocaleLabel, germanLocaleLabel, frenchLocaleLabel, spanishLocaleLabel, chineseLocaleLabel, arabicLocaleLabel,
         ),
         options = com.foxhole.guard.GUARD_APP_LANGUAGE_CHOICES.map { locale ->
             CliDropdownOption(
                 id = locale.name,
                 label = localeLabel(
                     locale, systemLocaleLabel, russianLocaleLabel, englishLocaleLabel,
-                    japaneseLocaleLabel, germanLocaleLabel, frenchLocaleLabel, spanishLocaleLabel, chineseLocaleLabel,
+                    japaneseLocaleLabel, germanLocaleLabel, frenchLocaleLabel, spanishLocaleLabel, chineseLocaleLabel, arabicLocaleLabel,
                 ),
                 flagCountry = displayedLocaleFlagCountry(locale, effectiveLanguageTag),
             )
@@ -862,6 +863,7 @@ private fun localeLabel(
     frenchLabel: String,
     spanishLabel: String,
     chineseLabel: String,
+    arabicLabel: String,
 ): String = when (locale) {
     AppLocale.SYSTEM -> systemLabel
     AppLocale.RU -> russianLabel
@@ -871,6 +873,7 @@ private fun localeLabel(
     AppLocale.FR -> frenchLabel
     AppLocale.ES -> spanishLabel
     AppLocale.ZH -> chineseLabel
+    AppLocale.AR -> arabicLabel
 }
 
 private fun themeModeLabel(

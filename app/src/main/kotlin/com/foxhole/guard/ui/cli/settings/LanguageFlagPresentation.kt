@@ -14,5 +14,6 @@ internal fun displayedLocaleFlagCountry(locale: AppLocale, effectiveTag: String)
         AppLocale.ES -> "es"
         AppLocale.JA -> "jp"
         AppLocale.ZH -> "cn"
+        AppLocale.AR -> "sa"
     }
 }

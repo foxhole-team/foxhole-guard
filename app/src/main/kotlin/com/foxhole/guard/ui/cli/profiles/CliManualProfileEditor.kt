@@ -53,7 +53,8 @@ internal fun CliManualProfileEditor(
         BasicTextField(
             value = text,
             onValueChange = { text = it },
-            textStyle = CliType.small.copy(color = colors.fg),
+            textStyle = CliType.small.copy(color = colors.fg,
+                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace, textDirection = androidx.compose.ui.text.style.TextDirection.Ltr),
             cursorBrush = SolidColor(colors.fg),
             modifier = Modifier
                 .fillMaxWidth()
