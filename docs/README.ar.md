@@ -12,6 +12,22 @@
 
 [English](../README.md) · [Русский](README.ru.md) · [Deutsch](README.de.md) · [Français](README.fr.md) · [Español](README.es.md) · [日本語](README.ja.md) · [简体中文](README.zh.md) · [العربية](README.ar.md)
 
+![❤️ We support I2P](https://img.shields.io/badge/❤️_We_support-I2P-7B1FA2?style=flat-square)
+
+<p align="center">
+  <strong>نسخة VPN فقط</strong><br>
+  <strong>FoxHole VPN</strong> — عميل VPN مبسّط لنظام Android يعمل بمحرك FoxHole Core،<br>
+  بدون أدوات الحماية والمراقبة الإضافية في Guard.
+</p>
+
+<p align="center">
+  <a href="https://github.com/foxhole-team/foxhole-vpn"><strong>المزيد عن FoxHole VPN →</strong></a>
+  &nbsp;·&nbsp;
+  <a href="https://github.com/foxhole-team/foxhole-vpn/releases">تنزيل APK</a>
+</p>
+
+تُدرج الإصدارات المنشورة وملفات APK في [GitHub Releases](https://github.com/foxhole-team/foxhole-guard/releases).
+
 <a id="whats-new"></a>
 
 > **ما الجديد — 1.0.6 Stable**

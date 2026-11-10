@@ -22,16 +22,10 @@
 </div>
 
 <p align="center">
-  <a href="https://github.com/foxhole-team/foxhole-guard/releases">
-    <img src="https://img.shields.io/github/v/release/foxhole-team/foxhole-guard?label=version&style=flat-square" alt="Version">
-  </a>
+  <a href="https://github.com/foxhole-team/foxhole-guard/releases"><img src="https://img.shields.io/github/v/release/foxhole-team/foxhole-guard?label=version&style=flat-square" alt="Version"></a>
   <img src="https://img.shields.io/badge/status-stable-success?style=flat-square" alt="Status: stable">
-  <a href="https://f-droid.org/packages/com.foxhole.guard/">
-    <img src="https://img.shields.io/f-droid/v/com.foxhole.guard?label=F-Droid&logo=f-droid&style=flat-square" alt="F-Droid Version">
-  </a>
-  <a href="https://apps.obtainium.imranr.dev/redirect?r=obtainium://app/%7B%22id%22%3A%22com.foxhole.guard%22%2C%22url%22%3A%22https%3A%2F%2Fgithub.com%2Ffoxhole-team%2Ffoxhole-guard%22%2C%22author%22%3A%22FoxHole%20Team%22%2C%22name%22%3A%22FoxHole%20Guard%22%2C%22preferredApkIndex%22%3A0%2C%22additionalSettings%22%3A%22%7B%5C%22apkFilterRegEx%5C%22%3A%5C%22arm64-v8a%5B.%5Dapk%24%5C%22%2C%5C%22invertAPKFilter%5C%22%3Afalse%2C%5C%22verifyLatestTag%5C%22%3Atrue%7D%22%2C%22overrideSource%22%3A%22GitHub%22%7D" title="Obtainium · ARM64">
-    <img src="https://img.shields.io/badge/Obtainium-add%20app-1A73E8?style=flat-square" alt="Get it on Obtainium · ARM64">
-  </a>
+  <a href="https://f-droid.org/packages/com.foxhole.guard/"><img src="https://img.shields.io/f-droid/v/com.foxhole.guard?label=F-Droid&logo=f-droid&style=flat-square" alt="F-Droid Version"></a>
+  <a href="https://apps.obtainium.imranr.dev/redirect?r=obtainium://app/%7B%22id%22%3A%22com.foxhole.guard%22%2C%22url%22%3A%22https%3A%2F%2Fgithub.com%2Ffoxhole-team%2Ffoxhole-guard%22%2C%22author%22%3A%22FoxHole%20Team%22%2C%22name%22%3A%22FoxHole%20Guard%22%2C%22preferredApkIndex%22%3A0%2C%22additionalSettings%22%3A%22%7B%5C%22apkFilterRegEx%5C%22%3A%5C%22arm64-v8a%5B.%5Dapk%24%5C%22%2C%5C%22invertAPKFilter%5C%22%3Afalse%2C%5C%22verifyLatestTag%5C%22%3Atrue%7D%22%2C%22overrideSource%22%3A%22GitHub%22%7D" title="Obtainium · ARM64"><img src="https://img.shields.io/badge/Obtainium-add%20app-1A73E8?style=flat-square" alt="Get it on Obtainium · ARM64"></a>
 </p>
 
 ![Platform](https://img.shields.io/badge/platform-Android-3DDC84?style=flat-square&logo=android&logoColor=white)
@@ -39,6 +33,18 @@
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-007ec6?style=flat-square)](https://www.gnu.org/licenses/gpl-3.0.html)
 ![Telemetry](https://img.shields.io/badge/telemetry-none-success?style=flat-square)
 ![❤️ We support I2P](https://img.shields.io/badge/❤️_We_support-I2P-7B1FA2?style=flat-square)
+
+<p align="center">
+  <strong>VPN only version</strong><br>
+  <strong>FoxHole VPN</strong> — a simplified VPN client for Android based on FoxHole Core,<br>
+  without Guard’s additional protection and monitoring tools.
+</p>
+
+<p align="center">
+  <a href="https://github.com/foxhole-team/foxhole-vpn"><strong>Learn more about FoxHole VPN →</strong></a>
+  &nbsp;·&nbsp;
+  <a href="https://github.com/foxhole-team/foxhole-vpn/releases">Download APK</a>
+</p>
 
 Published versions and APK assets are listed in [GitHub Releases](https://github.com/foxhole-team/foxhole-guard/releases).
 
