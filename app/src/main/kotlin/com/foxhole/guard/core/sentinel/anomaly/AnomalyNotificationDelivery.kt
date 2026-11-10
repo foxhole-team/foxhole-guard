@@ -17,6 +17,8 @@ import androidx.core.content.getSystemService
 import com.foxhole.core.model.AnomalyEvent
 import com.foxhole.core.model.AnomalySeverity
 import com.foxhole.guard.R
+import com.foxhole.guard.platform.notificationChannelValue
+import com.foxhole.guard.platform.withNotificationChannels
 import com.foxhole.guard.ui.cli.CliMainActivity
 import com.foxhole.guard.withStoredAppLocale
 
@@ -43,10 +45,11 @@ internal class AndroidAnomalyNotificationDelivery(context: Context) : AnomalyNot
         return NotificationManagerCompat.from(appContext).areNotificationsEnabled()
     }
 
-    override fun isChannelEnabled(): Boolean =
+    override fun isChannelEnabled(): Boolean = notificationChannelValue(true) {
         notificationManager?.getNotificationChannel(AnomalyNotifier.CHANNEL_ID)?.importance?.let {
             it != NotificationManager.IMPORTANCE_NONE
         } == true
+    }
 
     @RequiresPermission(Manifest.permission.POST_NOTIFICATIONS)
     override fun submit(event: AnomalyEvent, notificationId: Int) {
@@ -72,16 +75,18 @@ internal class AndroidAnomalyNotificationDelivery(context: Context) : AnomalyNot
     }
 
     override fun ensureChannel() {
-        notificationManager?.createNotificationChannel(
-            NotificationChannel(
-                AnomalyNotifier.CHANNEL_ID,
-                appContext.getString(R.string.anomaly_notification_channel_name),
-                NotificationManager.IMPORTANCE_DEFAULT,
-            ).apply {
-                lockscreenVisibility = Notification.VISIBILITY_PRIVATE
-                description = appContext.getString(R.string.anomaly_notification_channel_description)
-            },
-        )
+        withNotificationChannels {
+            notificationManager?.createNotificationChannel(
+                NotificationChannel(
+                    AnomalyNotifier.CHANNEL_ID,
+                    appContext.getString(R.string.anomaly_notification_channel_name),
+                    NotificationManager.IMPORTANCE_DEFAULT,
+                ).apply {
+                    lockscreenVisibility = Notification.VISIBILITY_PRIVATE
+                    description = appContext.getString(R.string.anomaly_notification_channel_description)
+                },
+            )
+        }
     }
 
     private fun appPendingIntent(notificationId: Int): PendingIntent =

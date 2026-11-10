@@ -155,7 +155,7 @@
     <string name="guard_router_router_updates_check">ПРОВЕРИТЬ</string>
     <string name="guard_router_router_updates_check_failed">Не удалось проверить обновления</string>
     <string name="guard_router_router_updates_current">Установлены актуальные версии</string>
-    <string name="guard_router_router_updates_current_version">Текущая версия: %1$s</string>
+    <string name="guard_router_router_updates_current_version">Версия пакета: %1$s</string>
     <string name="guard_router_router_updates_disconnect_before_update">Отключите VPN на роутере перед обновлением</string>
     <string name="guard_router_router_updates_done">Готово</string>
     <string name="guard_router_router_updates_download_failed">Не удалось загрузить обновление.</string>
@@ -277,4 +277,5 @@
     <string name="guard_router_router_control_protocols_unknown">Доступные протоколы: неизвестно</string>
     <string name="guard_router_router_control_protocols_loading">Доступные протоколы: проверка…</string>
     <string name="guard_router_router_control_protocols_empty">Доступные протоколы: не установлены</string>
+    <string name="guard_router_router_updates_core_current">Модули Core актуальны; пакет ещё не проверен</string>
 </resources>

@@ -24,6 +24,7 @@ import com.foxhole.guard.R
 import com.foxhole.guard.core.sentinel.InstalledAppSecurityNotifier
 import com.foxhole.guard.core.sentinel.anomaly.SentinelDetectionNotifier
 import com.foxhole.guard.core.sentinel.sentinelAttempt
+import com.foxhole.guard.platform.notificationChannelValue
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -152,14 +153,16 @@ private fun readSentinelNoticeAccess(context: Context): CliSentinelNoticeAccess 
 
 private fun sentinelChannelAccess(manager: NotificationManager?, id: String): CliNotificationAccess {
     if (manager == null) return CliNotificationAccess.UNKNOWN
-    val channel = manager.getNotificationChannel(id) ?: return CliNotificationAccess.NOT_CREATED
-    val group = channel.group
-    val groupBlocked = Build.VERSION.SDK_INT >= Build.VERSION_CODES.P && group != null &&
-        manager.getNotificationChannelGroup(group)?.isBlocked == true
-    return if (channel.importance == NotificationManager.IMPORTANCE_NONE || groupBlocked) {
-        CliNotificationAccess.BLOCKED
-    } else {
-        CliNotificationAccess.ALLOWED
+    return notificationChannelValue(CliNotificationAccess.ALLOWED) {
+        val channel = manager.getNotificationChannel(id) ?: return@notificationChannelValue CliNotificationAccess.NOT_CREATED
+        val group = channel.group
+        val groupBlocked = Build.VERSION.SDK_INT >= Build.VERSION_CODES.P && group != null &&
+            manager.getNotificationChannelGroup(group)?.isBlocked == true
+        if (channel.importance == NotificationManager.IMPORTANCE_NONE || groupBlocked) {
+            CliNotificationAccess.BLOCKED
+        } else {
+            CliNotificationAccess.ALLOWED
+        }
     }
 }
 

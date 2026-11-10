@@ -6,7 +6,7 @@
     "x86_64"
   ],
   "androidDeliveryProfile": "android4",
-  "commit": "fc2134dc15b32087516672935e64ae7b8b0d5472",
+  "commit": "3fc3b70d8e9d700b3e07ec27638515c00651b013",
   "files": [
     {
       "path": ".cargo/config.toml",
@@ -14,15 +14,23 @@
     },
     {
       "path": "Cargo.lock",
-      "sha256": "5e09f6a9cccfbfc98e5aff5c95604c2297e394916b74984226434a75bc017f5d"
+      "sha256": "59eadfc1e0e036186e35e438a91e955bf1c82d283c9cf28312fbdd4ae00cbc80"
     },
     {
       "path": "Cargo.toml",
-      "sha256": "91038dfb48ae506f4f6207b91994e1e49d0d3cf93a7b18c1abdbd2be9addfd57"
+      "sha256": "c42f0cc4ced06c1278158ed98dc7da405a9d313e225d1d498b7c23f692a1412a"
     },
     {
       "path": "config/foxcore-android-delivery.json",
       "sha256": "3edb85a047f7edfe0fb35df3737da24fcc7ee7829f0b547ca05e471382eab96d"
+    },
+    {
+      "path": "config/source-forks/libsqlite3-sys-0.37.0.NOTICE.md",
+      "sha256": "07a26c59cef771e659d9c8a321b192b93e00a741d66a6bf33b87d8353a2e25bd"
+    },
+    {
+      "path": "config/source-forks/libsqlite3-sys-0.37.0.json",
+      "sha256": "915c72ca6c61f84b3da38a887f80e3f2dbf4517aad262208b837cb9f3812ef6d"
     },
     {
       "path": "config/source-forks/rustls-0.23.46.NOTICE.md",
@@ -58,7 +66,7 @@
     },
     {
       "path": "crates/foxcore-android/src/capabilities.rs",
-      "sha256": "7a3c1d16298524bd91b616d4747ceaa10ea4faac97d3667fa4b8ea78fca7f301"
+      "sha256": "be05ae54fd457655f5bcce273c420127975cd7e0cb24ab74c6e45dd0f6edec92"
     },
     {
       "path": "crates/foxcore-android/src/dns_continuation.rs",
@@ -106,11 +114,11 @@
     },
     {
       "path": "crates/foxcore-api/src/config/dns.rs",
-      "sha256": "e36e07bf17a26f9709e8e78239e413f84b38abdbd1a97c131a2ac0d3d960729e"
+      "sha256": "10567c401030db72efdad5b5af794160b815c74ccf49ec0ee56effde01d9481d"
     },
     {
       "path": "crates/foxcore-api/src/config/engine.rs",
-      "sha256": "60ca68a367bcae2e253947b3fb478cb7c0d41c1f9811eb47db708b427b9359ab"
+      "sha256": "9533646d03d3e28f77317fcf148610ec034a59696ed1df26011e8bfde2f960b6"
     },
     {
       "path": "crates/foxcore-api/src/config/mod.rs",
@@ -158,7 +166,7 @@
     },
     {
       "path": "crates/foxcore-api/src/config/tests/protocols.rs",
-      "sha256": "1730a40fdd91f365b83d943fda5194cd4c906bb24cc1da275736e5aa91cb1cd8"
+      "sha256": "2f1cbb3eb7efe8e11f0909ff6d9717053d1bb8e03b72ee458c2100b78b77c1e6"
     },
     {
       "path": "crates/foxcore-api/src/config/tls.rs",
@@ -298,11 +306,11 @@
     },
     {
       "path": "crates/foxcore-dns/src/identity_scope_tests.rs",
-      "sha256": "9786e6b98927c614071ade55684741dd71dac379756b4c7a84687a8e784f94c8"
+      "sha256": "6bebb1c92e4bc6362ac81a24dc77396e058b6c482f256e782b94fbd896b241db"
     },
     {
       "path": "crates/foxcore-dns/src/lib.rs",
-      "sha256": "2df9c3cec0cbc6096c9386b16a1da885beaca8c8d6e33eab2570e28115d0687f"
+      "sha256": "aa8564c2b3f61095f229f8b76375b81a289ec0075e161b4f3acfae1c13e5df62"
     },
     {
       "path": "crates/foxcore-dns/src/message.rs",
@@ -342,7 +350,7 @@
     },
     {
       "path": "crates/foxcore-link/tests/ordinary_tls_chrome.rs",
-      "sha256": "7dd1f6c4dafdc7a6d117d095a32495bac424f460f5b23934089090bea1109f24"
+      "sha256": "15334429c2671dd09208359a4d93d0289b73662d3390a271e17fa8a9d78c6b1b"
     },
     {
       "path": "crates/foxcore-outbound/Cargo.toml",
@@ -398,7 +406,7 @@
     },
     {
       "path": "crates/foxcore-route/src/lib.rs",
-      "sha256": "00eb594a4c4c23debbdbad94cde4c9dffa1096a3acff477876502b288716e6f4"
+      "sha256": "797a7c707a6726cbd5f3cf47c44e3800ce2f3ce537514c6a8136d89b8695cfd4"
     },
     {
       "path": "crates/foxcore-route/src/ruleset.rs",
@@ -458,7 +466,7 @@
     },
     {
       "path": "crates/foxcore-runtime/src/control.rs",
-      "sha256": "44709c6b2f044f32c7c75f9f02a20ba3715a65e81d60c39f17c7076cd9a10a95"
+      "sha256": "68a3385865bb930ca5f05150a360495064b8ea0b9628ebed27044626623634ba"
     },
     {
       "path": "crates/foxcore-runtime/src/dns_continuation.rs",
@@ -490,7 +498,7 @@
     },
     {
       "path": "crates/foxcore-runtime/src/start.rs",
-      "sha256": "ed1c5da1927fb03774a0781dcb560bdd04b64416b3025fd06e975c954b08134a"
+      "sha256": "1e1ac7027f65aabb306ff5f337a2a2b8f2feba6822f14e6cc1eff9cd3957716a"
     },
     {
       "path": "crates/foxcore-runtime/src/state.rs",
@@ -510,7 +518,7 @@
     },
     {
       "path": "crates/foxcore-runtime/src/tests/lifecycle.rs",
-      "sha256": "e20575940320068bcf4f3dae1d0ae712c480c37ed608c60489d66d69b133a030"
+      "sha256": "7de3baa09cfe9f2f32534cef189020577788da6e2ce23ac975be4dd9911d7a24"
     },
     {
       "path": "crates/foxcore-runtime/src/tests/mod.rs",
@@ -742,7 +750,7 @@
     },
     {
       "path": "crates/foxcore-tun/Cargo.toml",
-      "sha256": "d23d5a52294a949e19124503ee281aa938d5335e077251bdf2fcf114899eec72"
+      "sha256": "f09b1ac1392fc185e16d1022ce23ad96df9eb2417ad89532df5a0c01594638b4"
     },
     {
       "path": "crates/foxcore-tun/benches/packet_path.rs",
@@ -790,7 +798,7 @@
     },
     {
       "path": "crates/foxcore-tun/src/flow/engine.rs",
-      "sha256": "14e997b8149a7d31aed3db44b3c2f6fee78605aa404d0d5a05f57328d725ffc7"
+      "sha256": "fa6cc0b74b7202e11f3db6cb644899dae1be1b5dc04e96b356137f587554d6ee"
     },
     {
       "path": "crates/foxcore-tun/src/flow/mod.rs",
@@ -798,19 +806,19 @@
     },
     {
       "path": "crates/foxcore-tun/src/flow/policy.rs",
-      "sha256": "e375997557dff343a3ba5000562fd80b0e195a19b242e7d83423040857bd9fb0"
+      "sha256": "8348353b7550fee433980dcf01ccdb402d054825f6ab41a775beb56631976f6f"
     },
     {
       "path": "crates/foxcore-tun/src/flow/route.rs",
-      "sha256": "e7c1c3e9412b9fe265e0443fc75a57ed3101ea4ca75e34664baf3d9e2ae9de9a"
+      "sha256": "79d51e5779e017feefde2f3aa22d96003cda72a1b6e1b66d5b73d2d0ae6f664e"
     },
     {
       "path": "crates/foxcore-tun/src/flow/select.rs",
-      "sha256": "f5d626331914b865b21fbf10c8f5c42018d54b52aee380f6318411411c30192d"
+      "sha256": "eb955db3c31bb90618ff1da0e5bd9acea919a933ff1fab029031065dc9e179ae"
     },
     {
       "path": "crates/foxcore-tun/src/flow/state.rs",
-      "sha256": "7b9a7325b224673e739cea42e6b1d3ce89f729434974ae95e854c4afdb5c8679"
+      "sha256": "6774f75961cb5702ad4e2e947714b458c048c303348958e4272b3e114a02953e"
     },
     {
       "path": "crates/foxcore-tun/src/flow/tests/dnsflow.rs",
@@ -818,11 +826,15 @@
     },
     {
       "path": "crates/foxcore-tun/src/flow/tests/lanes.rs",
-      "sha256": "9ae13751e16b4cb5fd30ec56efc50f2edb3f60cf443f0affda1adfe2bc008f38"
+      "sha256": "a044eb9f8e79614f5443ef31a8a06a8a0578a799362f9476b82ffca57483c228"
     },
     {
       "path": "crates/foxcore-tun/src/flow/tests/mod.rs",
-      "sha256": "10dddf60eb342d82bda1eee12ed03a9fe27805336f6dcc78fd24ed1f9d51e3e2"
+      "sha256": "a033f85b61d752cc33d400dce85ac70fce9227f63ea736b9723366dc4bea9f5e"
+    },
+    {
+      "path": "crates/foxcore-tun/src/flow/tests/packet_dns.rs",
+      "sha256": "344ea30c521af42fbe702c03d8187740ec3dd6738333614e98c8e543c89f4d8f"
     },
     {
       "path": "crates/foxcore-tun/src/flow/tests/policy_dns_revocation.rs",
@@ -842,7 +854,7 @@
     },
     {
       "path": "crates/foxcore-tun/src/ingress.rs",
-      "sha256": "a65539825fa3a987acede581017815b0059e5f54d2d42fc01e1703850c92cbb4"
+      "sha256": "d62a50c947075c697fb794773b3e8211055c2bb515d26e5088e32e62429609ba"
     },
     {
       "path": "crates/foxcore-tun/src/l3.rs",
@@ -850,7 +862,7 @@
     },
     {
       "path": "crates/foxcore-tun/src/lib.rs",
-      "sha256": "fddacf6a3caffaea9de90c3cc9dff7a2bc7794ffe744fa03481d77a592085a81"
+      "sha256": "c35be47b278d4066acb09b39167ca81cd58346806b61a8da465862a1fb0b6b50"
     },
     {
       "path": "crates/foxcore-tun/src/metrics.rs",
@@ -889,8 +901,16 @@
       "sha256": "89a7b52008f115a12571f177faddb592cf0e648c92af9244290494634bb499cd"
     },
     {
+      "path": "crates/foxcore-tun/src/packet_dns.rs",
+      "sha256": "0a211bedee71bef1f907bea48c2bb165d6c0f0081f73d3d212bdc08e1edee59c"
+    },
+    {
+      "path": "crates/foxcore-tun/src/packet_dns_ttl.rs",
+      "sha256": "a26964409d3fbdc79bf4730889fb5ae12ab7b62e37d063c11441b89478250d71"
+    },
+    {
       "path": "crates/foxcore-tun/src/relay/engine.rs",
-      "sha256": "38c67a435e3a9f0afa8412b7b5f754ba76829ce862f97c200e628422b4d94a53"
+      "sha256": "2247a00e1af45fe4b32440f1ed1d707ed926293c74a4ae553d930085aaa01ec0"
     },
     {
       "path": "crates/foxcore-tun/src/relay/mod.rs",
@@ -898,7 +918,7 @@
     },
     {
       "path": "crates/foxcore-tun/src/relay/state.rs",
-      "sha256": "979cad2518205932f202bdc012251b42b50607d732e3bffc5e6c66395aecb8cf"
+      "sha256": "39c7f3c656ee81ed4cbad73ceb62f1da535b43c431d0b97a59e09016d7beea97"
     },
     {
       "path": "crates/foxcore-tun/src/relay/tests/datapath.rs",
@@ -910,11 +930,15 @@
     },
     {
       "path": "crates/foxcore-tun/src/relay/tests/mod.rs",
-      "sha256": "517c9ac0000ab84f96893604575dae00850a69e61e75b14c8b7639cf8ba437cd"
+      "sha256": "edfa805810bba160a008b42e08c4b6b610bfeac964b6645502d6b82e8d50add2"
+    },
+    {
+      "path": "crates/foxcore-tun/src/relay/tests/packet_dns.rs",
+      "sha256": "a3de08ffc02c6eb39d3727e5862dcaa9f1dafbbda3890a42574e5fe1f98486ea"
     },
     {
       "path": "crates/foxcore-tun/src/split.rs",
-      "sha256": "04e424f471e9be608de333e43b3b4fe42643144aaf1364dc4059ad73e43fd189"
+      "sha256": "ba8b74b913776ad026e9ae0f424565c0b4e385592db64a911ffa29d27c2c2ee9"
     },
     {
       "path": "crates/foxcore-tun/tests/a_full_core_refuses_out_loud.rs",
@@ -1230,7 +1254,7 @@
     },
     {
       "path": "crates/proto-reality/src/reality/signature_grease.rs",
-      "sha256": "21d96ce61a71c0b2f66ac40df4537f75b67b74620601c23342afcab8520edb18"
+      "sha256": "49f1aa66a53671bdf237ae645bf1c6f686345890969d871759cd2d9ffc45f608"
     },
     {
       "path": "crates/proto-reality/src/reality/testkit_internals.rs",
@@ -1450,7 +1474,7 @@
     },
     {
       "path": "crates/proto-vless/tests/reality_transport.rs",
-      "sha256": "d5374650f39d9018828a7e32fd6501f33e9944ce20f79c1850f7ff12110e3590"
+      "sha256": "bb8d03f8e47d05e06a97896f04c07df547daf4cc8b41945475b2b188d74dd6e4"
     },
     {
       "path": "crates/proto-vmess/Cargo.toml",
@@ -1629,6 +1653,10 @@
       "sha256": "bffb28961586a9665a5eeae73f6b209304dee37ff31aec5f26190170b7b09999"
     },
     {
+      "path": "patches/libsqlite3-sys-0.37.0-CVE-2026-119375.patch",
+      "sha256": "79d17741e57ce5e8d09ee3f992bd3ca7946cd35f6e0efbf7599b92523ae53f4b"
+    },
+    {
       "path": "patches/rustls-0.23.46-chrome151.patch",
       "sha256": "a63cadc3346277f82594b6dcd818f56796c39c44aa0ef1377c6da90328631638"
     },
@@ -1647,6 +1675,110 @@
     {
       "path": "scripts/android-path-leaks.py",
       "sha256": "38a3c3449e9339c931c6b686cad8fa4a191cf40f3758935529635fa372485faf"
+    },
+    {
+      "path": "vendor/libsqlite3-sys/.cargo_vcs_info.json",
+      "sha256": "51cd79ec7d1b5b4c72b29c0552369d2715bfed17ba97cc47c80f8b168cf5f2e0"
+    },
+    {
+      "path": "vendor/libsqlite3-sys/.gitignore",
+      "sha256": "d89b7a44f37a816f5b0ca8297e0d17067ca5f41e45d1455b0a56d072679a00a6"
+    },
+    {
+      "path": "vendor/libsqlite3-sys/Cargo.lock",
+      "sha256": "bb2bfd125e29c4d2e9ced4c73320df360c55cd8cd71bb4aebc401ae3e5cc31ab"
+    },
+    {
+      "path": "vendor/libsqlite3-sys/Cargo.toml",
+      "sha256": "a9aa51a627758b0f65cb063cd81fc2b45ab3440ab3e9c6876deaf5fe048cf1db"
+    },
+    {
+      "path": "vendor/libsqlite3-sys/Cargo.toml.orig",
+      "sha256": "e0f5f73f6a36336b53d0e4321f48e852aa2fff8f8d2e0033025a4bdc6c5625ed"
+    },
+    {
+      "path": "vendor/libsqlite3-sys/LICENSE",
+      "sha256": "c10c1f27337546471e5f7e4e97fdd398b35b9d4e126115dcd22de8d8e65abf6f"
+    },
+    {
+      "path": "vendor/libsqlite3-sys/README.md",
+      "sha256": "5b18c0bcfdca043d0d69560fe900083bca053c6a507f51d5c388bab4e7deb34b"
+    },
+    {
+      "path": "vendor/libsqlite3-sys/Upgrade.md",
+      "sha256": "d151a67d4bbb1a5a300d084d210d6cd238d833a6d4bd5d958ae7469a9deccb36"
+    },
+    {
+      "path": "vendor/libsqlite3-sys/bindgen-bindings/bindgen_3.34.1.rs",
+      "sha256": "4f94d0192ec890b62773368cb026daf219f5182094952c007d28ed6d3812fd68"
+    },
+    {
+      "path": "vendor/libsqlite3-sys/bindgen-bindings/bindgen_3.34.1_ext.rs",
+      "sha256": "44ff11f09886f8c41494f65043ac2ddba4e476bb17a81fe93a8c10c7bffdf4a8"
+    },
+    {
+      "path": "vendor/libsqlite3-sys/build.rs",
+      "sha256": "239297962bfdc78cd420b44142ee6801d2fc9375bf8470207669f416446ebb9e"
+    },
+    {
+      "path": "vendor/libsqlite3-sys/sqlcipher/LICENSE",
+      "sha256": "ea4fcb309f14a22065e1ea45362d494d320012249ed865fe9c7c0946db754131"
+    },
+    {
+      "path": "vendor/libsqlite3-sys/sqlcipher/bindgen_bundled_version.rs",
+      "sha256": "eb685154c9825ed324e3e7e2eb11efd1a6fd53634e65342856ec459bcbf2f536"
+    },
+    {
+      "path": "vendor/libsqlite3-sys/sqlcipher/sqlite3.c",
+      "sha256": "da7cdd55cdee08b61ead43a9725032c2f7b0e19d07e3fb7d95b21f144b37b3f8"
+    },
+    {
+      "path": "vendor/libsqlite3-sys/sqlcipher/sqlite3.h",
+      "sha256": "d02f73fba63a21a6f5df9f2eef5df8bff5d7bace10aba54910ee28050f7eb573"
+    },
+    {
+      "path": "vendor/libsqlite3-sys/sqlcipher/sqlite3ext.h",
+      "sha256": "9a91de0d5e5ccc04ec59041275c67972d6f8894f7543a10033e387b69987beb5"
+    },
+    {
+      "path": "vendor/libsqlite3-sys/sqlite3/bindgen_bundled_version.rs",
+      "sha256": "3640b99203cb2c2dfa5797043cf01dc8dcee8cef62c6b88e937e364a8614744b"
+    },
+    {
+      "path": "vendor/libsqlite3-sys/sqlite3/bindgen_bundled_version_ext.rs",
+      "sha256": "037f54e88e052f8d309b60966c282c47264ab450fd97d8a409b32f67f3cb3983"
+    },
+    {
+      "path": "vendor/libsqlite3-sys/sqlite3/sqlite3.c",
+      "sha256": "1792e34d22e514ffb21f7938cdc63a193bd75331a88eeed75d529d5ff8c3e2b9"
+    },
+    {
+      "path": "vendor/libsqlite3-sys/sqlite3/sqlite3.h",
+      "sha256": "19585c8b5230e9d4f223bf31b709ece7b6a0bb3faf00d8310625d8e58cda1b1d"
+    },
+    {
+      "path": "vendor/libsqlite3-sys/sqlite3/sqlite3ext.h",
+      "sha256": "ea81fb7bd05882e0e0b92c4d60f677b205f7f1fbf085f218b12f0b5b3f0b9e48"
+    },
+    {
+      "path": "vendor/libsqlite3-sys/sqlite3/wasm32-wasi-vfs.c",
+      "sha256": "b95842044da2b8777876b7d3fef8c9711e8c201fb4a4255dbac98729a456bb5d"
+    },
+    {
+      "path": "vendor/libsqlite3-sys/src/error.rs",
+      "sha256": "9685678a8752bf47e5e39923bb2cf466cc312a25848d91cc206bf89eaccfb7d6"
+    },
+    {
+      "path": "vendor/libsqlite3-sys/src/lib.rs",
+      "sha256": "f61d8e306e11357479e20999f7b7adc5f3dbaea40cd17361853574001cf79360"
+    },
+    {
+      "path": "vendor/libsqlite3-sys/wrapper.h",
+      "sha256": "b78f576f7eeabf316e183d476b0f16344b6897680b4df47628d3ce38c0aa979a"
+    },
+    {
+      "path": "vendor/libsqlite3-sys/wrapper_ext.h",
+      "sha256": "fa7a53fea99318ee29d75e6d5fab4d7ed26e9599803268e6a24396265f2a6f3a"
     },
     {
       "path": "vendor/rustls/.cargo_vcs_info.json",

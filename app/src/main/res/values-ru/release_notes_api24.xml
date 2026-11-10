@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="cli_release_notes_android7_106">Добавлена поддержка Android 7.</string>
+</resources>

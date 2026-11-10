@@ -14,6 +14,10 @@ FORK_SPEC = importlib.util.spec_from_file_location("guard_rustls_delivery_origin
 FORK = importlib.util.module_from_spec(FORK_SPEC)
 FORK_SPEC.loader.exec_module(FORK)
 
+SQLITE_SPEC = importlib.util.spec_from_file_location("guard_sqlite_delivery_origin", pathlib.Path(__file__).with_name("sqlite-fork-origin.py"))
+SQLITE = importlib.util.module_from_spec(SQLITE_SPEC)
+SQLITE_SPEC.loader.exec_module(SQLITE)
+
 DELIVERY_SPEC = importlib.util.spec_from_file_location("guard_android_delivery", pathlib.Path(__file__).with_name("android-delivery-profile.py"))
 DELIVERY = importlib.util.module_from_spec(DELIVERY_SPEC)
 DELIVERY_SPEC.loader.exec_module(DELIVERY)
@@ -157,7 +161,7 @@ def validate_bom(bom, label):
     return root_ref
 
 
-def validate_explicit_workspace(document, properties, revision, fork_origin=None):
+def validate_explicit_workspace(document, properties, revision, fork_origin=None, sqlite_origin=None):
     count = properties["foxhole:native:explicit-workspace-components"]
     if not re.fullmatch(r"[1-9][0-9]*", count) or "foxcore:workspace_members" in properties:
         raise ValueError("Invalid explicit Core workspace component count")
@@ -169,6 +173,7 @@ def validate_explicit_workspace(document, properties, revision, fork_origin=None
     root = document["metadata"]["component"]
     nodes = [root] + document["components"]
     refs, local_count, fork_count = set(), 0, 0
+    seen_forks = set()
     for item in nodes:
         ref = item["bom-ref"]
         if ref in refs:
@@ -177,9 +182,21 @@ def validate_explicit_workspace(document, properties, revision, fork_origin=None
         values = {row["name"]: row["value"] for row in item.get("properties", [])}
         purl = item.get("purl", "")
         if purl.startswith("pkg:generic/foxhole-source-fork/") or values.get("foxhole:source-kind") == "vendored-modified":
-            if fork_origin is None or fork_origin.get("sourcePinsBound") is not True:
-                raise ValueError("Modified Core fork lacks packaged source pin binding")
-            FORK.validate_component(item, fork_origin, source_revision)
+            if item["name"] in seen_forks:
+                raise ValueError("Duplicate explicit Core source fork")
+            seen_forks.add(item["name"])
+            if item["name"] == "libsqlite3-sys":
+                if item.get("licenses") not in ([{"expression": "MIT"}], [{"license": {"id": "MIT"}}], [{"license": {"name": "MIT"}}]):
+                    raise ValueError("SQLite fork license differs from its pinned upstream source")
+                if sqlite_origin is None or sqlite_origin.get("sourcePinsBound") is not True:
+                    raise ValueError("Modified SQLite fork lacks packaged source pin binding")
+                SQLITE.validate_component(item, sqlite_origin, source_revision)
+            elif item["name"] == "rustls":
+                if fork_origin is None or fork_origin.get("sourcePinsBound") is not True:
+                    raise ValueError("Modified Core fork lacks packaged source pin binding")
+                FORK.validate_component(item, fork_origin, source_revision)
+            else:
+                raise ValueError("Unknown modified Core source fork")
             fork_count += 1
         elif purl.startswith("pkg:generic/foxhole/") or "cargo:source-revision" in values:
             expected = ("pkg:generic/foxhole/" + urllib.parse.quote(item["name"], safe="-._~")
@@ -192,7 +209,8 @@ def validate_explicit_workspace(document, properties, revision, fork_origin=None
                 raise ValueError("Invalid explicit local Core manifest")
             local_count += 1
     declared_forks = properties.get("foxhole:native:vendored-fork-components")
-    if (fork_origin is not None and fork_count != 1) or (fork_count and (fork_count != 1 or declared_forks != "1")) or (not fork_count and declared_forks is not None):
+    expected_forks = int(fork_origin is not None) + int(sqlite_origin is not None)
+    if fork_count != expected_forks or (fork_count and declared_forks != str(fork_count)) or (not fork_count and declared_forks is not None):
         raise ValueError("Explicit Core vendored fork count differs from its actual nodes")
     if local_count != int(count):
         raise ValueError("Explicit Core workspace count differs from its actual local nodes")
@@ -214,16 +232,16 @@ def validate_explicit_workspace(document, properties, revision, fork_origin=None
         raise ValueError("Explicit Core graph has disconnected components")
 
 
-def expand_core_workspace(bom, revision=None, fork_origin=None):
+def expand_core_workspace(bom, revision=None, fork_origin=None, sqlite_origin=None):
     document = copy.deepcopy(bom)
     rows = document["metadata"].get("properties", [])
     properties = {row["name"]: row["value"] for row in rows}
     if len(properties) != len(rows):
         raise ValueError("Duplicate Core inventory properties")
     if "foxhole:native:explicit-workspace-components" in properties:
-        validate_explicit_workspace(document, properties, revision, fork_origin)
+        validate_explicit_workspace(document, properties, revision, fork_origin, sqlite_origin)
         return document
-    if fork_origin is not None or "foxhole:native:vendored-fork-components" in properties or any(
+    if fork_origin is not None or sqlite_origin is not None or "foxhole:native:vendored-fork-components" in properties or any(
             item.get("purl", "").startswith("pkg:generic/foxhole-source-fork/") or
             any(row.get("name") == "foxhole:source-kind" and row.get("value") == "vendored-modified"
                 for row in item.get("properties", []))
@@ -383,9 +401,9 @@ def validate_replacement(item, archive, notices):
 
 def packaged_core_fork(document, archive, notices, root, revision):
     nodes = [document["metadata"]["component"]] + document["components"]
-    fork_nodes = [item for item in nodes if item.get("purl", "").startswith("pkg:generic/foxhole-source-fork/") or
+    fork_nodes = [item for item in nodes if item.get("name") == "rustls" and (item.get("purl", "").startswith("pkg:generic/foxhole-source-fork/") or
                   any(row.get("name") == "foxhole:source-kind" and row.get("value") == "vendored-modified"
-                      for row in item.get("properties", []))]
+                      for row in item.get("properties", [])))]
     prefix = "foxcore/cargo-notices/"
     notice_names = {p.removeprefix("assets/licenses/") for p in archive.namelist()
                     if p.startswith("assets/licenses/" + prefix + FORK.NOTICE_PREFIX)}
@@ -414,11 +432,44 @@ def packaged_core_fork(document, archive, notices, root, revision):
     return FORK.validate_packaged_origin(lambda p: verified_notice(archive, notices, prefix + p), pins)
 
 
-def android64_core_union(primary, archive, notices, root, revision, fork_origin):
-    return selected_core_union(primary, archive, notices, root, revision, fork_origin, "android64")
+
+def packaged_core_sqlite(document, archive, notices, root, revision):
+    nodes = [document["metadata"]["component"]] + document["components"]
+    selected = [item for item in nodes if item.get("name") == "libsqlite3-sys" and any(
+        row.get("name") == "foxhole:source-kind" and row.get("value") == "vendored-modified"
+        for row in item.get("properties", []))]
+    prefix = "foxcore/cargo-notices/"
+    names = {name.removeprefix("assets/licenses/") for name in archive.namelist()
+             if name.startswith("assets/licenses/" + prefix + SQLITE.NOTICE_PREFIX)}
+    if not selected and not names:
+        return None
+    if len(selected) != 1:
+        raise ValueError("Packaged SQLite fork count differs")
+    path = root / "config/foxcore-source-manifest.json"
+    if path.is_symlink() or not path.is_file() or path.stat().st_size > 4 * 1024 ** 2:
+        raise ValueError("SQLite fork lacks a bounded source pin manifest")
+    source = FORK.read_json(path.read_bytes())
+    if source.get("commit") != revision or not isinstance(source.get("files"), list):
+        raise ValueError("SQLite source manifest differs from Core revision")
+    pins = {}
+    for row in source["files"]:
+        if not isinstance(row, dict) or set(row) != {"path", "sha256"}:
+            raise ValueError("Invalid SQLite compiled source row")
+        name = FORK.safe_path(row["path"])
+        if name in pins or not re.fullmatch("[0-9a-f]{64}", row["sha256"]):
+            raise ValueError("Duplicate or invalid SQLite compiled source pin")
+        pins[name] = row["sha256"]
+    expected = {prefix + SQLITE.NOTICE_PREFIX + name for name in ("ORIGIN.json", "upstream-security.patch", "FOXHOLE-MODIFICATIONS.md", "LICENSE")}
+    if names != expected:
+        raise ValueError("Packaged SQLite notice file set differs")
+    return SQLITE.validate_packaged_origin(lambda name: verified_notice(archive, notices, prefix + name), pins)
 
 
-def selected_core_union(primary, archive, notices, root, revision, fork_origin, profile):
+def android64_core_union(primary, archive, notices, root, revision, fork_origin, sqlite_origin=None):
+    return selected_core_union(primary, archive, notices, root, revision, fork_origin, "android64", sqlite_origin)
+
+
+def selected_core_union(primary, archive, notices, root, revision, fork_origin, profile, sqlite_origin=None):
     """Recompute the selected target union and bind each actual APK Core ELF."""
     pins = FORK.read_json((root / "config/foxcore-source-manifest.json").read_bytes())
     DELIVERY.require_fields(pins, profile)
@@ -444,7 +495,7 @@ def selected_core_union(primary, archive, notices, root, revision, fork_origin, 
     root_ref = primary["metadata"]["component"]["bom-ref"]
     for target, abi in expected_targets.items():
         raw = verified_notice(archive, notices, "foxcore/foxcore-" + target + ".cdx.json")
-        document = expand_core_workspace(FORK.read_json(raw), revision, fork_origin)
+        document = expand_core_workspace(FORK.read_json(raw), revision, fork_origin, sqlite_origin)
         props = {r["name"]: r["value"] for r in document["metadata"].get("properties", [])}
         if props.get("foxhole:native:android-delivery-profile") != profile or props.get("foxhole:native:target") != target:
             raise ValueError("android64 selected target lacks explicit profile/target metadata")
@@ -541,12 +592,13 @@ def aggregate(bom, notices, apk, root):
         core_bytes = verified_notice(archive, notices, core_path)
         core_document = json.loads(core_bytes)
         fork_origin = packaged_core_fork(core_document, archive, notices, root, revision)
-        core = expand_core_workspace(core_document, revision, fork_origin)
+        sqlite_origin = packaged_core_sqlite(core_document, archive, notices, root, revision)
+        core = expand_core_workspace(core_document, revision, fork_origin, sqlite_origin)
         coverage_raw = None
         if profile == "android64":
-            core, coverage_raw = android64_core_union(core, archive, notices, root, revision, fork_origin)
+            core, coverage_raw = android64_core_union(core, archive, notices, root, revision, fork_origin, sqlite_origin)
         elif profile in ("android-arm64", "android-armv7", "android3", "android4"):
-            core, coverage_raw = selected_core_union(core, archive, notices, root, revision, fork_origin, profile)
+            core, coverage_raw = selected_core_union(core, archive, notices, root, revision, fork_origin, profile, sqlite_origin)
         core_root_ref = validate_bom(core, "Core BOM")
         core_refs = {item["bom-ref"]: "foxcore:" + item["bom-ref"] for item in core["components"]}
         core_refs[core_root_ref] = "foxcore:root"

@@ -58,19 +58,17 @@ Le projet propose une application unique pour la protection quotidienne, l’acc
 
 <a id="whats-new"></a>
 
-> **🆕 Nouveautés - 1.0.5 Stable**
+> **🆕 Nouveautés - 1.0.6 Stable**
 >
-> - La prise en charge de l’arabe et du RTL a été ajoutée, le widget a été adapté et les traductions ainsi que les paramètres du routeur ont été corrigés.
-> - Mise à jour de FoxHole Core vers la version 1.0.3 avec des corrections du cache DNS.
-> - Correction de l’application atomique des règles et des scénarios de routage.
-> - Amélioration de la documentation et de la section d’aide ; mise à jour des conseils de gestion du routeur.
-> - Ajout de notifications système pour les nouvelles versions de l’application (version GitHub uniquement).
+> - Ajout de la prise en charge d’Android 7.
+> - Filtres de routage des adresses web améliorés.
+> - Style visuel des notifications amélioré.
 
 <a id="quickstart"></a>
 
 ## ⬇️ Démarrage et téléchargement
 
-Android 8 (API 26) ou ultérieur est requis. Les architectures APK disponibles sont indiquées dans la version publiée.
+Android 7 (API 24) ou ultérieur est requis. Les architectures APK disponibles sont indiquées dans la version publiée.
 
 1. Installez un APK.
 2. Ajoutez votre profil VPN ou activez le module Tor.
@@ -581,7 +579,7 @@ FoxHole DB contient cinq jeux signés indépendants, téléchargés selon les be
 
 ## 🤖 Android / ABI native
 
-Android 8 (API 26) ou ultérieur est requis. FoxHole Core communique via une ABI C/JNI versionnée ; l’API Capabilities indique les protocoles et fonctions compilés dans la version.
+Android 7 (API 24) ou ultérieur est requis. FoxHole Core communique via une ABI C/JNI versionnée ; l’API Capabilities indique les protocoles et fonctions compilés dans la version.
 
 Le profil de livraison `android4` cible `arm64-v8a`, `armeabi-v7a`, `x86` et `x86_64`. Chaque ABI exige les bibliothèques natives et licences correspondantes. Les architectures APK et noms de fichiers disponibles dépendent de la version réellement publiée ; une option de compilation ne prouve pas la compatibilité avec un appareil ou son exécution.
 

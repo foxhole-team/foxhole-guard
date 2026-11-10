@@ -1,26 +1,31 @@
 {
-  "schema": 1,
-  "scope": "actual-guard-release-runtime-notices",
+  "schema": 2,
+  "scope": "actual-guard-runtime-and-desugaring-notices",
   "files": [
     {
-      "path": "CONSUMER-BINDING.json",
-      "bytes": 3018,
-      "sha256": "f8740e30d15d0e45bbcf90054837f9fae06bf8de1a6e8d216935e3798cc44869"
+      "path": "L8-INPUTS.json",
+      "bytes": 526,
+      "sha256": "9c884447be1794139f6b5251453d2c6a85e50c8d65267db06f833e8a0d89b781"
     },
     {
-      "path": "PORTABLE-PROVENANCE.json",
-      "bytes": 2937,
-      "sha256": "9fb79f7b841b8702f351738e4ef57b19eb6e7fe1978be328723d44623725f8f5"
+      "path": "NIO-CONFIGURATION.json",
+      "bytes": 146914,
+      "sha256": "742e831792335e35e76cc2e752eab4bfd0d0cb5b09bb59b9ba215996e1cb354e"
     },
     {
-      "path": "actual-material-receipt.json",
-      "bytes": 675,
-      "sha256": "2de44f17238542faee4aa9bfa19d8add6edc1d752022b250e99d566bdffc4891"
+      "path": "NIO-PUBLISHER-SOURCE.json",
+      "bytes": 837,
+      "sha256": "c0754c4f8fa7b098c1b536f32193b1de132685fafe02a652e612cdce0325ce15"
     },
     {
-      "path": "consumer-runtime-inventory.json",
-      "bytes": 508933,
-      "sha256": "3fbbdc0ad94e9509fd2c367812f4805cd16d61f9dc4cc8cd6114aa15d201cfad"
+      "path": "PRODUCER.json",
+      "bytes": 120479,
+      "sha256": "d4b00281d9c055d4ca788a46042624595bba99fc4f540cfa487afb25a97f731c"
+    },
+    {
+      "path": "files/maven/androidx.activity/activity/1.13.0/activity-1.13.0.aar/META-INF/androidx/activity/activity/LICENSE.txt",
+      "bytes": 10175,
+      "sha256": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
     },
     {
       "path": "files/maven/androidx.activity/activity-compose/1.13.0/activity-compose-1.13.0.aar/META-INF/androidx/activity/activity-compose/LICENSE.txt",
@@ -29,11 +34,6 @@
     },
     {
       "path": "files/maven/androidx.activity/activity-ktx/1.13.0/activity-ktx-1.13.0.aar/META-INF/androidx/activity/activity-ktx/LICENSE.txt",
-      "bytes": 10175,
-      "sha256": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
-    },
-    {
-      "path": "files/maven/androidx.activity/activity/1.13.0/activity-1.13.0.aar/META-INF/androidx/activity/activity/LICENSE.txt",
       "bytes": 10175,
       "sha256": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
     },
@@ -138,6 +138,11 @@
       "sha256": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
     },
     {
+      "path": "files/maven/androidx.core/core/1.19.0/core-1.19.0.aar/META-INF/androidx/core/core/LICENSE.txt",
+      "bytes": 10175,
+      "sha256": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
+    },
+    {
       "path": "files/maven/androidx.core/core-ktx/1.19.0/core-ktx-1.19.0.aar/META-INF/androidx/core/core-ktx/LICENSE.txt",
       "bytes": 10175,
       "sha256": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
@@ -149,11 +154,6 @@
     },
     {
       "path": "files/maven/androidx.core/core-viewtree/1.0.0/core-viewtree-1.0.0.aar/META-INF/androidx/core/core-viewtree/LICENSE.txt",
-      "bytes": 10175,
-      "sha256": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
-    },
-    {
-      "path": "files/maven/androidx.core/core/1.19.0/core-1.19.0.aar/META-INF/androidx/core/core/LICENSE.txt",
       "bytes": 10175,
       "sha256": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
     },
@@ -203,7 +203,7 @@
       "sha256": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
     },
     {
-      "path": "files/maven/androidx.lifecycle/lifecycle-livedata-core-ktx/2.11.0/lifecycle-livedata-core-ktx-2.11.0.aar/META-INF/androidx/lifecycle/lifecycle-livedata-core-ktx/LICENSE.txt",
+      "path": "files/maven/androidx.lifecycle/lifecycle-livedata/2.11.0/lifecycle-livedata-2.11.0.aar/META-INF/androidx/lifecycle/lifecycle-livedata/LICENSE.txt",
       "bytes": 10175,
       "sha256": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
     },
@@ -213,7 +213,7 @@
       "sha256": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
     },
     {
-      "path": "files/maven/androidx.lifecycle/lifecycle-livedata/2.11.0/lifecycle-livedata-2.11.0.aar/META-INF/androidx/lifecycle/lifecycle-livedata/LICENSE.txt",
+      "path": "files/maven/androidx.lifecycle/lifecycle-livedata-core-ktx/2.11.0/lifecycle-livedata-core-ktx-2.11.0.aar/META-INF/androidx/lifecycle/lifecycle-livedata-core-ktx/LICENSE.txt",
       "bytes": 10175,
       "sha256": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
     },
@@ -243,6 +243,11 @@
       "sha256": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
     },
     {
+      "path": "files/maven/androidx.lifecycle/lifecycle-viewmodel/2.11.0/lifecycle-viewmodel-2.11.0.aar/META-INF/androidx/lifecycle/lifecycle-viewmodel/LICENSE.txt",
+      "bytes": 10175,
+      "sha256": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
+    },
+    {
       "path": "files/maven/androidx.lifecycle/lifecycle-viewmodel-android/2.11.0/lifecycle-viewmodel.aar/META-INF/androidx/lifecycle/lifecycle-viewmodel/LICENSE.txt",
       "bytes": 10175,
       "sha256": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
@@ -254,11 +259,6 @@
     },
     {
       "path": "files/maven/androidx.lifecycle/lifecycle-viewmodel-savedstate-android/2.11.0/lifecycle-viewmodel-savedstate.aar/META-INF/androidx/lifecycle/lifecycle-viewmodel-savedstate/LICENSE.txt",
-      "bytes": 10175,
-      "sha256": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
-    },
-    {
-      "path": "files/maven/androidx.lifecycle/lifecycle-viewmodel/2.11.0/lifecycle-viewmodel-2.11.0.aar/META-INF/androidx/lifecycle/lifecycle-viewmodel/LICENSE.txt",
       "bytes": 10175,
       "sha256": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
     },
@@ -338,12 +338,17 @@
       "sha256": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
     },
     {
+      "path": "files/maven/androidx.window/window/1.5.0/window-1.5.0.aar/META-INF/androidx/window/window/LICENSE.txt",
+      "bytes": 10175,
+      "sha256": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
+    },
+    {
       "path": "files/maven/androidx.window/window-core-android/1.5.0/window-core.aar/META-INF/androidx/window/window-core/LICENSE.txt",
       "bytes": 10175,
       "sha256": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
     },
     {
-      "path": "files/maven/androidx.window/window/1.5.0/window-1.5.0.aar/META-INF/androidx/window/window/LICENSE.txt",
+      "path": "files/maven/androidx.work/work-runtime/2.11.2/work-runtime-2.11.2.aar/META-INF/androidx/work/work-runtime/LICENSE.txt",
       "bytes": 10175,
       "sha256": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
     },
@@ -353,9 +358,9 @@
       "sha256": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
     },
     {
-      "path": "files/maven/androidx.work/work-runtime/2.11.2/work-runtime-2.11.2.aar/META-INF/androidx/work/work-runtime/LICENSE.txt",
-      "bytes": 10175,
-      "sha256": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
+      "path": "files/maven/com.android.tools/desugar_jdk_libs_configuration_nio/2.1.5/desugar_jdk_libs_configuration_nio-2.1.5.jar/LICENSE",
+      "bytes": 1491,
+      "sha256": "68834f116f8ff545f05d14753357b620748156d60ee36b26beab4cb3f317efe4"
     },
     {
       "path": "files/maven/com.github.mwiede/jsch/2.28.8/jsch-2.28.8.jar/META-INF/LICENSE.JZlib.txt",
@@ -413,14 +418,34 @@
       "sha256": "6e5e117324afd944dcf67f36cf329843bc1a92229a8cd9bb573d7a83130fea7d"
     },
     {
-      "path": "files/shared/SQLCipher4.19.1-LICENSE.txt",
+      "path": "files/shared/SQLCipher4.20.0-LICENSE.txt",
       "bytes": 1468,
       "sha256": "09e4af560ce2e3c9c2aa6b564e35947b03db7d1ae345f22a32793ed46542cc14"
+    },
+    {
+      "path": "files/shared/SQLCipher4.20.0-PUBLISHER-SOURCE.json",
+      "bytes": 999,
+      "sha256": "ded351cabbb6af4308f9fbdf0a1c2803d755e1d2209acb8282d21b608494c23b"
     },
     {
       "path": "files/shared/Tink1.8.0-LICENSE",
       "bytes": 11358,
       "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+    },
+    {
+      "path": "files/shared/desugar-2.1.5-ADDITIONAL_LICENSE_INFO.txt",
+      "bytes": 2114,
+      "sha256": "a69bce275ba7a3570af6579cb0f55682cd75fedfcd49e0e8e9022270c447c916"
+    },
+    {
+      "path": "files/shared/desugar-2.1.5-ASSEMBLY_EXCEPTION.txt",
+      "bytes": 1522,
+      "sha256": "a44eb7b5caf5534c6ef536b21edb40b4d6babf91bf97d9d45596868618b2c6fb"
+    },
+    {
+      "path": "files/shared/desugar-2.1.5-LICENSE.txt",
+      "bytes": 19274,
+      "sha256": "4b9abebc4338048a7c2dc184e9f800deb349366bdf28eb23c2677a77b4c87726"
     },
     {
       "path": "files/shared/error-prone-2.50.0-COPYING",
@@ -429,13 +454,13 @@
     },
     {
       "path": "maven-notice-report.json",
-      "bytes": 208750,
-      "sha256": "4c786605b1bdecd7fe634162f7e728f19eb14d76d8def441e18efa0f96892dde"
+      "bytes": 235985,
+      "sha256": "336874fd6bfe291d7bc38a878b6253f90297df4c3ad5851054281231c23b323c"
     },
     {
       "path": "maven-runtime.cdx.json",
-      "bytes": 176491,
-      "sha256": "e3080b79425ec03a58f31ba73476fcc4531e7d49dc1ed01034fd6588997a7572"
+      "bytes": 182409,
+      "sha256": "379725597fd274f59253f72b73f50ea8d60592e79472e8f0927177534e131dbc"
     },
     {
       "path": "poms/014b9497197f5177e39543d6785e7e4c37cacab647f17d476d4f6224fa6c2372.pom",
@@ -491,11 +516,6 @@
       "path": "poms/1020b390b4c04dff9ec7202ff2fc050f978ad6678a602b0c33d71324a8448d6c.pom",
       "bytes": 2775,
       "sha256": "b085af7cc4bb297ed0f25ca85d3629613ab253c0b532684c6cf77c2aee7471c5"
-    },
-    {
-      "path": "poms/1032f414e7b28b8cda3ae3b4a528da3836ec851d03b4821b770b732dcf5bd56a.pom",
-      "bytes": 2011,
-      "sha256": "eab40b0e64892aacd3d789f6e93d5818d3f0be1710032202efa65e4860ad46d8"
     },
     {
       "path": "poms/114705e4f1f6dbf4ecabbf2100266cba8b5a82e437e4905f6e606a91ccb698b9.pom",
@@ -758,6 +778,11 @@
       "sha256": "2faf922e8c3d706f29d862b3fbb3aa1347705c21c6eae18586d2bb1f7366ea01"
     },
     {
+      "path": "poms/5568b127f6ef6ec07876efb9b9d43be626c108302210cbb733f64a394a8a9fed.pom",
+      "bytes": 2011,
+      "sha256": "9d882f462c6fb4063b1c3bfb3df913c5929bf8cf73d7f6787f341672f23c1549"
+    },
+    {
       "path": "poms/55a260b81c27af1ff687f01322ea23e22c69d2bd370d529212f3e7c60afc9970.pom",
       "bytes": 4279,
       "sha256": "f65860bce58a2bfadf05fdc516d38333421f0e387fef87e24449c0394c80d254"
@@ -786,6 +811,11 @@
       "path": "poms/6284cc845992b9f471d1b219b0b63cfbc506e6da8674a3f4a73c1bd942dfed21.pom",
       "bytes": 4685,
       "sha256": "63bafe538a4452691d5ad7dc67831879e815e4c97cdb6bf3cc7afc9814a961b7"
+    },
+    {
+      "path": "poms/6339f0de31c1121d8da7f8b8f47bc757e71084606104b51b354f3236f8bb2af7.pom",
+      "bytes": 1265,
+      "sha256": "1ba5db067a494d09f5c4a94f4cb4d58fc6fd33e0a55417e0e46d3b288328f3bc"
     },
     {
       "path": "poms/65f6de3ab5c8d8af9b580ade0dbfa4a4be7c8ee1189de86d17e84d9a8bc77f85.pom",
@@ -1038,6 +1068,11 @@
       "sha256": "1ef6c40e7b493e7e6fc6ae6cbc0645ad5c527409ab2c680df048020d511f131b"
     },
     {
+      "path": "poms/b89059e6a07ea61b524cfc90e5c26e766aa012c8750d201015f07fe272bae7eb.pom",
+      "bytes": 1071,
+      "sha256": "6e5e9ec6db8093d26c469c18b9231b033e670333a770852debda90c222fa4835"
+    },
+    {
       "path": "poms/b965b16a53f3423c803ea82cd6e99f7f2ae6df53b30e9f5ba25087f4386410a6.pom",
       "bytes": 5637,
       "sha256": "ade67ab3ef85ba4a18f28a6eaf558c2128b01021cd0ca20c3999a566f1a29454"
@@ -1283,14 +1318,9 @@
       "sha256": "98e7f3766211dd47adcffdb4d446a15e95f67a0448c5294d45108ece221eb2d4"
     },
     {
-      "path": "producer-manifest.json",
-      "bytes": 56987,
-      "sha256": "89476592db530b111b041d5b5795cbe186b3913ee9f363207d8ba4633682012f"
-    },
-    {
       "path": "runtime-inventory.json",
-      "bytes": 508927,
-      "sha256": "6846bce0b0bd6d47bc05012260162ac769b35d9cba23ff92f1742bcd09e108f5"
+      "bytes": 876601,
+      "sha256": "960547e1b3a220d72572e7fe885562b9de4c069f7db69e3c5e9982b94fa00453"
     }
   ]
 }

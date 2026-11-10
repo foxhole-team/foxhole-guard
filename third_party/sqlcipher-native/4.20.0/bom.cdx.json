@@ -1,0 +1,292 @@
+{
+  "$schema": "http://cyclonedx.org/schema/bom-1.5.schema.json",
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.5",
+  "serialNumber": "urn:uuid:f9f30026-d156-5929-a32d-75860c499b2c",
+  "version": 1,
+  "metadata": {
+    "component": {
+      "type": "library",
+      "bom-ref": "maven:net.zetetic:sqlcipher-android:4.20.0",
+      "group": "net.zetetic",
+      "name": "sqlcipher-android",
+      "version": "4.20.0",
+      "purl": "pkg:maven/net.zetetic/sqlcipher-android@4.20.0?type=aar",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "1e57857adfd29e2f5ddb4686e1e5ec6659920220d4bf182fdb5ef085b5577100"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "BSD-3-Clause",
+            "url": "https://github.com/sqlcipher/sqlcipher/blob/355d4db92d3404e71faa8088d071a71d767807f4/LICENSE.md"
+          }
+        }
+      ]
+    },
+    "properties": [
+      {
+        "name": "foxhole:bom-scope",
+        "value": "standalone native-subcomponents companion; not the Maven resolution BOM"
+      },
+      {
+        "name": "foxhole:source-backport-witness-sha256",
+        "value": "ec7ff2a5907fcca66d4092e8993bc14c65860130386b94f1fd3b148ffbbde586"
+      },
+      {
+        "name": "foxhole:runtime-claim",
+        "value": "false"
+      },
+      {
+        "name": "foxhole:reproduced-build-claim",
+        "value": "false"
+      },
+      {
+        "name": "foxhole:global-clean-claim",
+        "value": "false"
+      }
+    ]
+  },
+  "components": [
+    {
+      "type": "library",
+      "bom-ref": "native:libtomcrypt:1.18.2:476a9579ae94f32b9ea9e2747bfb04b302370259",
+      "name": "LibTomCrypt",
+      "version": "1.18.2",
+      "purl": "pkg:generic/libtomcrypt@1.18.2",
+      "licenses": [
+        {
+          "license": {
+            "name": "LibTomCrypt License #1 (Public Domain)",
+            "url": "https://github.com/sqlcipher/libtomcrypt/blob/476a9579ae94f32b9ea9e2747bfb04b302370259/LICENSE"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/sqlcipher/libtomcrypt/tree/476a9579ae94f32b9ea9e2747bfb04b302370259"
+        }
+      ],
+      "properties": [
+        {
+          "name": "foxhole:component-scope",
+          "value": "embedded-native-subcomponent"
+        },
+        {
+          "name": "foxhole:source-commit",
+          "value": "476a9579ae94f32b9ea9e2747bfb04b302370259"
+        },
+        {
+          "name": "foxhole:notice-file",
+          "value": "NOTICE.txt"
+        },
+        {
+          "name": "foxhole:license-source-sha256",
+          "value": "8f196cb13afd271f5e267fd29543fc454596382ad580e7592709492843996ac8"
+        },
+        {
+          "name": "foxhole:source-backport:CVE-2019-17362",
+          "value": "476a9579ae94f32b9ea9e2747bfb04b302370259"
+        },
+        {
+          "name": "foxhole:upstream-fix-commit",
+          "value": "25c26a3b7a9ad8192ccc923e15cf62bf0108ef94"
+        },
+        {
+          "name": "foxhole:source-backport-witness-sha256",
+          "value": "ec7ff2a5907fcca66d4092e8993bc14c65860130386b94f1fd3b148ffbbde586"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "native:sqlite:3.54.1:355d4db92d3404e71faa8088d071a71d767807f4",
+      "name": "SQLite",
+      "version": "3.54.1",
+      "purl": "pkg:generic/sqlite@3.54.1",
+      "licenses": [
+        {
+          "license": {
+            "name": "SQLite public-domain dedication",
+            "url": "https://github.com/sqlcipher/sqlcipher/blob/355d4db92d3404e71faa8088d071a71d767807f4/SQLITE_LICENSE.md"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/sqlcipher/sqlcipher/tree/355d4db92d3404e71faa8088d071a71d767807f4"
+        }
+      ],
+      "properties": [
+        {
+          "name": "foxhole:component-scope",
+          "value": "embedded-native-subcomponent"
+        },
+        {
+          "name": "foxhole:source-commit",
+          "value": "355d4db92d3404e71faa8088d071a71d767807f4"
+        },
+        {
+          "name": "foxhole:notice-file",
+          "value": "NOTICE.txt"
+        },
+        {
+          "name": "foxhole:license-source-sha256",
+          "value": "595e823c2ada6c839679e693bee1f4d7f88e2d34ac99a913ae41e3d43fb10c7d"
+        }
+      ]
+    },
+    {
+      "type": "file",
+      "bom-ref": "native-file:sqlcipher:4.20.0:arm64-v8a",
+      "name": "jni/arm64-v8a/libsqlcipher.so",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "46a06f81da976f690c18c79e58f7742a2b1aa144301a35a0bb81ffa32da73756"
+        }
+      ],
+      "properties": [
+        {
+          "name": "foxhole:abi",
+          "value": "arm64-v8a"
+        },
+        {
+          "name": "foxhole:member-bytes",
+          "value": "2110992"
+        },
+        {
+          "name": "foxhole:hash-scope",
+          "value": "combined SQLCipher/SQLite/LibTomCrypt ELF member"
+        }
+      ]
+    },
+    {
+      "type": "file",
+      "bom-ref": "native-file:sqlcipher:4.20.0:armeabi-v7a",
+      "name": "jni/armeabi-v7a/libsqlcipher.so",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "fa761c03dac08249a2b663a1a2a2c19d6a3433c6c03a063f5ee4427ca2d4a827"
+        }
+      ],
+      "properties": [
+        {
+          "name": "foxhole:abi",
+          "value": "armeabi-v7a"
+        },
+        {
+          "name": "foxhole:member-bytes",
+          "value": "1057676"
+        },
+        {
+          "name": "foxhole:hash-scope",
+          "value": "combined SQLCipher/SQLite/LibTomCrypt ELF member"
+        }
+      ]
+    },
+    {
+      "type": "file",
+      "bom-ref": "native-file:sqlcipher:4.20.0:x86",
+      "name": "jni/x86/libsqlcipher.so",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "309726bc1287683cf33fdb88e11f4079d0d718dc5f7c567029b5d74905dc40e5"
+        }
+      ],
+      "properties": [
+        {
+          "name": "foxhole:abi",
+          "value": "x86"
+        },
+        {
+          "name": "foxhole:member-bytes",
+          "value": "2260832"
+        },
+        {
+          "name": "foxhole:hash-scope",
+          "value": "combined SQLCipher/SQLite/LibTomCrypt ELF member"
+        }
+      ]
+    },
+    {
+      "type": "file",
+      "bom-ref": "native-file:sqlcipher:4.20.0:x86_64",
+      "name": "jni/x86_64/libsqlcipher.so",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "ec1e8a082116f386951309b1a1cd40a01bf1acb8518f67f3be10d03023f3f5d0"
+        }
+      ],
+      "properties": [
+        {
+          "name": "foxhole:abi",
+          "value": "x86_64"
+        },
+        {
+          "name": "foxhole:member-bytes",
+          "value": "2249352"
+        },
+        {
+          "name": "foxhole:hash-scope",
+          "value": "combined SQLCipher/SQLite/LibTomCrypt ELF member"
+        }
+      ]
+    }
+  ],
+  "dependencies": [
+    {
+      "ref": "maven:net.zetetic:sqlcipher-android:4.20.0",
+      "dependsOn": [
+        "native-file:sqlcipher:4.20.0:arm64-v8a",
+        "native-file:sqlcipher:4.20.0:armeabi-v7a",
+        "native-file:sqlcipher:4.20.0:x86",
+        "native-file:sqlcipher:4.20.0:x86_64"
+      ]
+    },
+    {
+      "ref": "native-file:sqlcipher:4.20.0:arm64-v8a",
+      "dependsOn": [
+        "native:libtomcrypt:1.18.2:476a9579ae94f32b9ea9e2747bfb04b302370259",
+        "native:sqlite:3.54.1:355d4db92d3404e71faa8088d071a71d767807f4"
+      ]
+    },
+    {
+      "ref": "native-file:sqlcipher:4.20.0:armeabi-v7a",
+      "dependsOn": [
+        "native:libtomcrypt:1.18.2:476a9579ae94f32b9ea9e2747bfb04b302370259",
+        "native:sqlite:3.54.1:355d4db92d3404e71faa8088d071a71d767807f4"
+      ]
+    },
+    {
+      "ref": "native-file:sqlcipher:4.20.0:x86",
+      "dependsOn": [
+        "native:libtomcrypt:1.18.2:476a9579ae94f32b9ea9e2747bfb04b302370259",
+        "native:sqlite:3.54.1:355d4db92d3404e71faa8088d071a71d767807f4"
+      ]
+    },
+    {
+      "ref": "native-file:sqlcipher:4.20.0:x86_64",
+      "dependsOn": [
+        "native:libtomcrypt:1.18.2:476a9579ae94f32b9ea9e2747bfb04b302370259",
+        "native:sqlite:3.54.1:355d4db92d3404e71faa8088d071a71d767807f4"
+      ]
+    },
+    {
+      "ref": "native:libtomcrypt:1.18.2:476a9579ae94f32b9ea9e2747bfb04b302370259",
+      "dependsOn": []
+    },
+    {
+      "ref": "native:sqlite:3.54.1:355d4db92d3404e71faa8088d071a71d767807f4",
+      "dependsOn": []
+    }
+  ]
+}

@@ -58,19 +58,17 @@ El objetivo es ofrecer en una sola aplicación protección cotidiana, acceso a V
 
 <a id="whats-new"></a>
 
-> **🆕 Novedades - 1.0.5 Stable**
+> **🆕 Novedades - 1.0.6 Stable**
 >
-> - Se añadió compatibilidad con árabe y RTL, se adaptó el widget y se corrigieron las traducciones y los ajustes del router.
-> - Se ha actualizado FoxHole Core a la versión 1.0.3 con correcciones de la caché DNS.
-> - Se ha corregido la aplicación atómica de las reglas y los escenarios de enrutamiento.
-> - Se han mejorado la documentación y la sección de ayuda; se han actualizado los consejos para gestionar el router.
-> - Se han añadido notificaciones del sistema sobre nuevas versiones de la aplicación (solo en la versión de GitHub).
+> - Se añadió compatibilidad con Android 7.
+> - Mejorados los filtros de enrutamiento de direcciones web.
+> - Mejorado el estilo visual de las notificaciones.
 
 <a id="quickstart"></a>
 
 ## ⬇️ Inicio y descarga
 
-Se necesita Android 8 (API 26) o posterior. Las arquitecturas APK disponibles se indican en cada versión publicada.
+Se necesita Android 7 (API 24) o posterior. Las arquitecturas APK disponibles se indican en cada versión publicada.
 
 1. Instale un APK.
 2. Añada su perfil VPN o active el módulo Tor.
@@ -581,7 +579,7 @@ FoxHole DB contiene cinco conjuntos firmados independientes que se descargan cua
 
 ## 🤖 Android / ABI nativa
 
-Se requiere Android 8 (API 26) o posterior. FoxHole Core se conecta mediante una ABI C/JNI versionada; la API Capabilities informa de los protocolos y funciones compilados en la aplicación.
+Se requiere Android 7 (API 24) o posterior. FoxHole Core se conecta mediante una ABI C/JNI versionada; la API Capabilities informa de los protocolos y funciones compilados en la aplicación.
 
 El perfil de entrega `android4` tiene como destinos `arm64-v8a`, `armeabi-v7a`, `x86` y `x86_64`. Cada ABI necesita bibliotecas nativas y licencias correspondientes. Las arquitecturas APK y los nombres de archivo disponibles se determinan en la versión realmente publicada; una opción de compilación no demuestra compatibilidad con dispositivos o ejecución.
 

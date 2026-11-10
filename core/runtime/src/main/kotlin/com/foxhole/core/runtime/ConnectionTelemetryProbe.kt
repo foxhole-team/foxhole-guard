@@ -326,16 +326,9 @@ class ConnectionTelemetryProbe(
                 interfaceName = interfaceName,
             )
         val startedAt = SystemClock.elapsedRealtime()
-        val process = ProcessBuilder(command).redirectErrorStream(true).start()
-        val finished = process.waitFor(timeoutMs.coerceAtLeast(1L), TimeUnit.MILLISECONDS)
-        val elapsedMs = (SystemClock.elapsedRealtime() - startedAt).coerceAtLeast(1L)
-        if (!finished) {
-            process.destroyForcibly()
-            error("server icmp ping timed out")
-        }
-        val output = process.inputStream.bufferedReader().use { it.readText() }
-        if (process.exitValue() != 0) {
-            error("server icmp ping failed")
+        var elapsedMs = 1L
+        val output = runRuntimeProbeProcess(command, timeoutMs, "server icmp ping") {
+            elapsedMs = (SystemClock.elapsedRealtime() - startedAt).coerceAtLeast(1L)
         }
         return parseIcmpPingLatencyMs(output) ?: elapsedMs
     }
@@ -513,16 +506,9 @@ private suspend fun measureIcmpLatency(
             ?: error("latency endpoint host is unavailable")
         val command = icmpPingCommand(host = host, timeoutMs = timeoutMs, interfaceName = interfaceName)
         val startedAt = SystemClock.elapsedRealtime()
-        val process = ProcessBuilder(command).redirectErrorStream(true).start()
-        val finished = process.waitFor(timeoutMs.coerceAtLeast(1L), TimeUnit.MILLISECONDS)
-        val elapsedMs = (SystemClock.elapsedRealtime() - startedAt).coerceAtLeast(1L)
-        if (!finished) {
-            process.destroyForcibly()
-            error("icmp ping timed out")
-        }
-        val output = process.inputStream.bufferedReader().use { it.readText() }
-        if (process.exitValue() != 0) {
-            error("icmp ping failed")
+        var elapsedMs = 1L
+        val output = runRuntimeProbeProcess(command, timeoutMs, "icmp ping") {
+            elapsedMs = (SystemClock.elapsedRealtime() - startedAt).coerceAtLeast(1L)
         }
         parseIcmpPingLatencyMs(output) ?: elapsedMs
     }

@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="site_routing_modes_title">シナリオとアプリのルール</string>
+    <string name="site_routing_direct_title">直接接続</string>
+    <string name="site_routing_block_title">ブロック</string>
+    <string name="site_mask_format">形式 / 例</string>
+    <string name="site_mask_scope">一致する対象</string>
+    <string name="site_mask_exact_scope">このホスト名だけに一致します。サブドメインは含みません。</string>
+    <string name="site_mask_suffix_scope">example.com とすべてのサブドメイン。名前の一部分に含まれるワイルドカードには対応していません。</string>
+    <string name="site_mask_zone_scope">指定したサフィックスと、その配下のすべての名前。単一の名前はサフィックスとして扱われ、co.uk だけの場合は完全一致のホスト名になります。</string>
+    <string name="site_mask_url_scope">ホスト example.com だけを保存します。スキーム、ポート、パス、クエリ、フラグメントはルーティング条件ではありません。HTTP/HTTPS のみ対応し、認証情報は拒否します。</string>
+    <string name="site_mask_idn_scope">国際化ドメイン名はブラウザー互換の ASCII/Punycode に正規化されます。完全一致とサフィックスのルールは同じです。</string>
+    <string name="site_mask_ip_scope">宛先 IP 1 件：IPv4 /32 または IPv6 /128。DNS 検索は行いません。</string>
+    <string name="site_mask_cidr_scope">ネットワーク全体。ホスト部のビットはクリアされます：192.0.2.0/24。</string>
+    <string name="site_mask_range_scope">両端を含む範囲内のすべての IP。同じ IP ファミリーで開始 ≤ 終了とし、正確な CIDR 範囲に変換します。</string>
+    <string name="site_mask_unsupported_formats">ページのパス、任意の * パターン、kw: キーワード、re: 正規表現には対応していません。入力 1 件につきアドレス 1 件、最大 2,048 文字です。</string>
+    <string name="site_mask_formats">形式：完全一致ホスト / full: · サフィックス *. / . / +. / domain: / suffix: · zone:ru / ru · HTTP/HTTPS ホスト · IDN · IPv4/IPv6 · CIDR · IP 範囲。URL のパスやクエリでは通信を選択できません。現在のエンジンは kw: と re: に対応していません。</string>
+    <string name="site_mask_required">Web アドレス、ドメインマスク、または IP ルールを入力してください。</string>
+    <string name="site_mask_unsupported">現在のエンジンはキーワード (kw:) と正規表現 (re:) のルールに対応していません。</string>
+    <string name="site_mask_legacy_unsupported">保存済みの kw:/re: ルールは現在のエンジンに対応していません。ルールは保持されています。削除するか、対応するホスト/IP ルールに置き換えてください。</string>
+    <string name="cli_release_notes_web_filters">Web アドレスのルーティングフィルターを改善しました。</string>
+    <string name="cli_release_notes_notice_style">通知の表示スタイルを改善しました。</string>
+    <string name="guard_router_router_updates_core_current">Core モジュールは最新です。パッケージの確認は保留中です</string>
+    <string name="site_mask_exact_example">example.com\nfull:example.com</string>
+    <string name="site_mask_suffix_example">*.example.com\n.example.com\n+.example.com\ndomain:example.com\nsuffix:example.com</string>
+    <string name="site_mask_zone_example">ru · .ru · *.ru\nzone:ru · suffix:ru\n*.co.uk</string>
+    <string name="site_mask_url_example">https://example.com:443/page?q=1\nexample.com/path</string>
+    <string name="site_mask_idn_example">пример.рф\nfaß.de</string>
+    <string name="site_mask_ip_example">192.0.2.1\n2001:db8::1</string>
+    <string name="site_mask_cidr_example">192.0.2.99/24\ncidr:2001:db8::/32</string>
+    <string name="site_mask_range_example">192.0.2.3-192.0.2.9\nrange:2001:db8::1-2001:db8::ffff</string>
+</resources>

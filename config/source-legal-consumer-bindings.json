@@ -1,0 +1,10 @@
+{
+  "coverage": "complete",
+  "inputJoinSHA256": {
+    "coreC3": "fc5b0c2d55f5aae9f20f232bd48656e1f6df62315e1e39cfbac862102331e514",
+    "sentinel": "3364a6e31aa745a9ad4a2edaabd51f2afa58699431b10bfc9fe8ef44e7b773f5"
+  },
+  "kind": "pinned-current-guard-source-native-legal-bindings",
+  "schema": 1,
+  "snapshotSHA256": "24cd4f92962a70021baee3de65a9fddf63dc37f81029c3e5e3ecbcb32caadddb"
+}

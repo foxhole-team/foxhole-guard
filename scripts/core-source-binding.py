@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Keep a pinned delivery checkout separate from the unchanged compiled producer."""
 from pathlib import Path,PurePosixPath
-import argparse,hashlib,json,os,re,stat,subprocess
+import argparse,hashlib,importlib.util,json,os,re,stat,subprocess
 FIELDS={'schema','sourceCommit','sourceTree','producerCommit','compiledSourceManifestSha256'}
 FIXED={'.cargo/config.toml','Cargo.toml','Cargo.lock','rust-toolchain.toml','scripts/android-build.sh','scripts/android-elf-gate.sh','scripts/android-path-leaks.py','config/foxcore-android-delivery.json','config/source-forks/rustls-0.23.46.json','config/source-forks/rustls-0.23.46.upstream-files.json','config/source-forks/rustls-0.23.46.NOTICE.md','patches/rustls-0.23.46-chrome151.patch'}
 ROOTS=('crates/','fingerprints/','fixtures/','vendor/rustls/')
+SQLITE_FIXED={'config/source-forks/libsqlite3-sys-0.37.0.json','config/source-forks/libsqlite3-sys-0.37.0.NOTICE.md','patches/libsqlite3-sys-0.37.0-CVE-2026-119375.patch'}
 # The historical T producer predates one separately fenced integration test.
 SOURCE_ONLY_TEST_INPUTS={'crates/foxcore-tun/tests/tun_descriptor_lifetime.rs':'a8caaf8265f3984d1f298d9b62672f3335a1f479761f7dbbaf56bc5d179c9e86'}
 F=('st_dev','st_ino','st_mode','st_uid','st_gid','st_nlink','st_size','st_mtime_ns','st_ctime_ns')
@@ -33,8 +34,17 @@ def resolve(app_root,core_root,producer,git_reader=git):
  binding=json.loads(source_read(path));mapping=validate(binding,source_read(app_root/'config/foxcore-source-manifest.json'),producer)
  need(git_reader(core_root,'rev-parse','HEAD').decode().strip()==binding['sourceCommit'],'Core checkout commit differs');need(git_reader(core_root,'rev-parse','HEAD^{tree}').decode().strip()==binding['sourceTree'],'Core checkout tree differs');need(not git_reader(core_root,'status','--porcelain=v1','--untracked-files=normal').strip(),'Core checkout is not clean')
  source_only=SOURCE_ONLY_TEST_INPUTS if producer=='543efe47cb002af1aa768b9c482a2adc79b323f1'else{}
- names=git_reader(core_root,'ls-tree','-r','--name-only','HEAD').decode().splitlines();need(len(names)==len(set(names)),'Duplicate Core Git paths');selected={p for p in names if p in FIXED or p.startswith(ROOTS)};need(FIXED<=selected and sum(p.startswith('fingerprints/')for p in selected)==10 and not(set(mapping)&set(source_only))and selected==set(mapping)|set(source_only),'Git-derived Core producer and source-only test inventory differs')
- for name,pin in mapping.items():need(digest(source_read(core_root/name))==pin,'Compiled Core input differs: '+name)
+ sqlite=None
+ if 'config/source-forks/libsqlite3-sys-0.37.0.json' in mapping:
+  spec=importlib.util.spec_from_file_location('guard_sqlite_source_binding',app_root/'scripts/sqlite-fork-origin.py');sqlite=importlib.util.module_from_spec(spec);spec.loader.exec_module(sqlite)
+  sqlite.validate(core_root)
+ fixed=FIXED|SQLITE_FIXED if sqlite is not None else FIXED;roots=ROOTS+('vendor/libsqlite3-sys/',) if sqlite is not None else ROOTS
+ names=git_reader(core_root,'ls-tree','-r','--name-only','HEAD').decode().splitlines();need(len(names)==len(set(names)),'Duplicate Core Git paths');selected={p for p in names if p in fixed or p.startswith(roots)};need(fixed<=selected and sum(p.startswith('fingerprints/')for p in selected)==10 and not(set(mapping)&set(source_only))and selected==set(mapping)|set(source_only),'Git-derived Core producer and source-only test inventory differs')
+ for name,pin in mapping.items():
+  if sqlite is not None and name in sqlite.SQLITE_INPUTS:
+   need(pin==sqlite.SQLITE_INPUTS[name][1],'Unknown SQLite source digest refused before reading');raw=sqlite.source_bytes(core_root,name)[0]
+  else:raw=source_read(core_root/name)
+  need(digest(raw)==pin,'Compiled Core input differs: '+name)
  for name,pin in source_only.items():need(digest(source_read(core_root/name))==pin,'Source-only Core regression input differs: '+name)
  return{**binding,'legacy':False,'producerDeclaredInputCount':len(mapping),'sourceOnlyTestInputs':dict(source_only)}
 def main():

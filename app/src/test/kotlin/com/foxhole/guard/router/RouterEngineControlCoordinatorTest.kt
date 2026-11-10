@@ -68,6 +68,7 @@ class RouterEngineControlCoordinatorTest {
         val f = EngineApiFixture(); val c = control(f, StandardTestDispatcher(testScheduler)); f.hold = "engines.status"
         val request = launch { c.refreshEngines() }; runCurrent()
         c.close(); f.delayed?.invoke(); runCurrent(); request.join()
+        f.cancelled.await()
         assertNull(c.state.value.engines.status)
         assertTrue(f.cancellations > 0)
     }

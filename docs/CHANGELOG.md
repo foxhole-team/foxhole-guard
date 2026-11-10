@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.6 - 2026-11-10
+
+- Added Android 7 support.
+- Improved web-address routing filters.
+- Improved the visual style of notifications.
+
 ## 1.0.5
 
 - Added Arabic language and RTL support, adapted the widget, and fixed translations and router settings.

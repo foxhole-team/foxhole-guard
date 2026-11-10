@@ -22,24 +22,32 @@ class CliUpdateNoticeContractTest {
         }
     }
 
-    @Test fun currentReleasePrependsOnePointAndRetainsPublishedNotes() {
+    @Test fun currentReleaseShowsAndroid7SupportInEveryLanguageAndChannel() {
         val expected = listOf(
-            R.string.cli_release_notes_translations_105,
-            R.string.cli_release_notes_core_104,
-            R.string.cli_release_notes_atomic_104,
-            R.string.cli_release_notes_help,
+            R.string.cli_release_notes_android7_106,
+            R.string.cli_release_notes_web_filters,
+            R.string.cli_release_notes_notice_style,
         )
         listOf("values", "values-ru", "values-de", "values-fr", "values-es", "values-ja", "values-zh-rCN", "values-ar").forEach { qualifier ->
             val copy = releaseNoteCopy(qualifier)
-            listOf("cli_release_notes_translations_105", "cli_release_notes_core_104", "cli_release_notes_atomic_104", "cli_release_notes_help").forEach { key ->
+            listOf("cli_release_notes_android7_106").forEach { key ->
                 assertTrue("Missing current release copy in $qualifier/$key", copy.getValue(key).isNotBlank())
             }
         }
-        listOf(26, 28, 29, 33).forEach { apiLevel ->
+        listOf(24, 25, 26, 28, 29, 33).forEach { apiLevel ->
             assertEquals(expected, releaseNoteKeys(apiLevel, "fdroid"))
-            assertEquals(expected + R.string.app_update_available_release_note, releaseNoteKeys(apiLevel, "github"))
+            assertEquals(expected, releaseNoteKeys(apiLevel, "github"))
             assertFalse(releaseNoteKeys(apiLevel, "fdroid").contains(R.string.app_update_available_release_note))
         }
+    }
+
+    @Test fun routingAndNotificationSummariesUseTheApprovedRussianAndEnglishCopy() {
+        val ru = releaseNoteCopy("values-ru")
+        val en = releaseNoteCopy("values")
+        assertEquals("Доработаны фильтры для маршрутизации web-адресов", ru.getValue("cli_release_notes_web_filters"))
+        assertEquals("Доработан визуальный стиль уведомлений", ru.getValue("cli_release_notes_notice_style"))
+        assertEquals("Improved web-address routing filters.", en.getValue("cli_release_notes_web_filters"))
+        assertEquals("Improved the visual style of notifications.", en.getValue("cli_release_notes_notice_style"))
     }
 
     @Test fun noticeOnlyChangesMonochromeAndAcknowledgement() {

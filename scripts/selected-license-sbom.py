@@ -13,6 +13,10 @@ FORK_SPEC = importlib.util.spec_from_file_location("guard_rustls_origin", Path(_
 FORK = importlib.util.module_from_spec(FORK_SPEC)
 FORK_SPEC.loader.exec_module(FORK)
 
+SQLITE_SPEC = importlib.util.spec_from_file_location("guard_sqlite_origin", Path(__file__).with_name("sqlite-fork-origin.py"))
+SQLITE = importlib.util.module_from_spec(SQLITE_SPEC)
+SQLITE_SPEC.loader.exec_module(SQLITE)
+
 HASH = re.compile(r"[0-9a-f]{64}")
 TARGET_ABIS = {"aarch64-linux-android": "arm64-v8a", "armv7-linux-androideabi": "armeabi-v7a",
                "i686-linux-android": "x86", "x86_64-linux-android": "x86_64"}
@@ -176,7 +180,7 @@ def checked_input(root, record, limit):
     return source
 
 
-def validate_graph(bom, metadata, revision, pinned_version, fork_origin=None):
+def validate_graph(bom, metadata, revision, pinned_version, fork_origin=None, sqlite_origin=None):
     require(bom.get("bomFormat") == "CycloneDX" and bom.get("specVersion") == "1.6", "Invalid selected BOM")
     root = bom["metadata"]["component"]
     require(root.get("name") == "foxcore-android", "Selected inventory is not the Android root")
@@ -197,7 +201,7 @@ def validate_graph(bom, metadata, revision, pinned_version, fork_origin=None):
         if node.get("purl", "").startswith("pkg:generic/foxhole-source-fork/") or any(
                 row.get("name") == "foxhole:source-kind" and row.get("value") == "vendored-modified"
                 for row in node.get("properties", [])):
-            require(package["source"] is None and package["name"] == "rustls", "Fork identity is not the captured local rustls package")
+            require(package["source"] is None and package["name"] in ("rustls", "libsqlite3-sys"), "Fork identity is not the captured local rustls or SQLite package")
         if package["source"] is None and package["name"] == "rustls":
             require(fork_origin is not None and fork_origin.get("sourceBound") is True,
                     "Local rustls requires an archive-bound fork origin")
@@ -208,6 +212,18 @@ def validate_graph(bom, metadata, revision, pinned_version, fork_origin=None):
                     package.get("manifest_path") == str(workspace_root / fork_origin["vendorManifest"]),
                     "Local rustls is not the exact non-workspace vendored fork")
             FORK.validate_component(node, fork_origin, revision)
+        elif package["source"] is None and package["name"] == "libsqlite3-sys":
+            require(node.get("licenses") in ([{"expression": "MIT"}], [{"license": {"id": "MIT"}}], [{"license": {"name": "MIT"}}]),
+                    "SQLite fork license differs from its pinned upstream source")
+            require(sqlite_origin is not None and sqlite_origin.get("sourceBound") is True,
+                    "Local SQLite requires an archive-bound fork origin")
+            workspace_root = PurePosixPath(metadata.get("workspace_root", ""))
+            require(workspace_root.is_absolute() and ".." not in workspace_root.parts and
+                    isinstance(metadata.get("workspace_members"), list) and
+                    package["version"] == "0.37.0" and package["id"] not in metadata["workspace_members"] and
+                    package.get("manifest_path") == str(workspace_root / sqlite_origin["vendorManifest"]),
+                    "Local SQLite is not the exact non-workspace vendored fork")
+            SQLITE.validate_component(node, sqlite_origin, revision)
         elif package["source"] is None:
             require(node["version"] == pinned_version, "Workspace package differs from the pinned source version")
             props = properties(node.get("properties", []))
@@ -274,6 +290,46 @@ def load_fork_origin(archive_path, source):
             require(len(raw) == member.size and digest(raw) == pins[path], "Fork source differs from source manifest")
             return raw, member.mode
         return FORK.validate_origin(read_source, members)
+
+
+
+def load_sqlite_origin(archive_path, source):
+    pins = source.get("files")
+    require(isinstance(pins, dict), "Invalid SQLite source pin map")
+    with tarfile.open(archive_path, "r:*") as archive:
+        members, names = {}, set()
+        for member in archive:
+            name = member.name.rstrip("/") if member.isdir() else member.name
+            FORK.safe_path(name)
+            require(name not in names, "Duplicate SQLite source archive path")
+            names.add(name)
+            require(member.isdir() or member.isfile(), "SQLite source archive contains a link or special entry")
+            if member.isfile():
+                members[name] = member
+        require(set(members) == set(pins), "SQLite source archive differs from source manifest")
+        def read_source(name):
+            member = members[name]
+            if name in SQLITE.SQLITE_INPUTS:
+                size, expected = SQLITE.SQLITE_INPUTS[name]
+                require(member.size == size and pins.get(name) == expected, "Exact SQLite source role differs before reading")
+            else:
+                require(0 < member.size <= 1048576, "Bounded SQLite provenance source required")
+            stream = archive.extractfile(member)
+            require(stream is not None, "SQLite source member cannot be read")
+            with stream:
+                raw = stream.read(member.size + 1)
+            require(len(raw) == member.size and digest(raw) == pins[name], "SQLite source differs from source manifest")
+            return raw, member.mode
+        return SQLITE.validate_origin(read_source, members)
+
+
+def validate_sqlite_notices(material, origin, ref):
+    files = dict(material)
+    expected = origin["noticeFiles"]
+    require({name for name in files if name.startswith(SQLITE.NOTICE_PREFIX)} == set(expected) and
+            all(files[name] == raw for name, raw in expected.items()), "SQLite notices differ from bound source")
+    owners = {row["path"]: row["owners"] for row in read_json(files["MANIFEST.json"])["files"]}
+    require(all(ref in owners[name] for name in expected), "SQLite notices lack their captured component owner")
 
 
 def validate_fork_notices(material, fork_origin, fork_ref):
@@ -392,7 +448,15 @@ def _load_selected_target_sbom(sbom_path, receipt_path, revision, pinned_lock, p
                      "urn:foxhole:cargo:" + digest(package["id"].encode()) in selected_refs]
     require(len(fork_packages) <= 1, "Multiple local rustls forks are not admitted")
     fork_origin = load_fork_origin(files["sourceArchive"], source) if fork_packages else None
-    validate_graph(original, values["cargoMetadata"], revision, pinned_version, fork_origin)
+    sqlite_packages = [package for package in values["cargoMetadata"]["packages"]
+                       if package["source"] is None and package["name"] == "libsqlite3-sys" and
+                       "urn:foxhole:cargo:" + digest(package["id"].encode()) in selected_refs]
+    require(len(sqlite_packages) <= 1, "Multiple local SQLite forks are not admitted")
+    sqlite_origin = load_sqlite_origin(files["sourceArchive"], source) if sqlite_packages else None
+    if sqlite_packages:
+        require(target.get("source_sqlite_fork_origin_sha256") == source["files"].get(SQLITE.METADATA),
+                "Target capture lacks exact SQLite source-fork binding")
+    validate_graph(original, values["cargoMetadata"], revision, pinned_version, fork_origin, sqlite_origin)
     tree_root, tree_edges = captured_tree(files["cargoTree"], values["cargoMetadata"])
     graph_edges = {row["ref"]: set(row["dependsOn"]) for row in original["dependencies"]}
     require(tree_root == original["metadata"]["component"]["bom-ref"] and tree_edges == graph_edges,
@@ -405,7 +469,7 @@ def _load_selected_target_sbom(sbom_path, receipt_path, revision, pinned_lock, p
                     "Non-workspace component has no package URL")
             node["purl"] = local_purl(node["name"], node["version"], revision)
             local_count += 1
-    expected_view["metadata"]["properties"] += delivery_properties(local_count, input_hash("originalSbom"), len(fork_packages))
+    expected_view["metadata"]["properties"] += delivery_properties(local_count, input_hash("originalSbom"), len(fork_packages) + len(sqlite_packages))
     if profile != "legacy4":
         expected_view["metadata"]["properties"].append(
             {"name": "foxhole:native:android-delivery-profile", "value": profile})
@@ -418,6 +482,8 @@ def _load_selected_target_sbom(sbom_path, receipt_path, revision, pinned_lock, p
     material = load_notice_files(data, receipt_path)
     if fork_origin is not None:
         validate_fork_notices(material, fork_origin, "urn:foxhole:cargo:" + digest(fork_packages[0]["id"].encode()))
+    if sqlite_origin is not None:
+        validate_sqlite_notices(material, sqlite_origin, "urn:foxhole:cargo:" + digest(sqlite_packages[0]["id"].encode()))
     return data
 
 def encoded(value):

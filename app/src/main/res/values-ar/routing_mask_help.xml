@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="site_routing_modes_title">السيناريوهات وقواعد التطبيقات</string>
+    <string name="site_routing_direct_title">اتصال مباشر</string>
+    <string name="site_routing_block_title">الحظر</string>
+    <string name="site_mask_format">التنسيق / مثال</string>
+    <string name="site_mask_scope">نطاق المطابقة</string>
+    <string name="site_mask_exact_scope">اسم المضيف المحدد فقط، دون نطاقاته الفرعية.</string>
+    <string name="site_mask_suffix_scope">example.com وجميع نطاقاته الفرعية. لا تدعم أحرف البدل داخل جزء من الاسم.</string>
+    <string name="site_mask_zone_scope">اللاحقة المحددة وجميع الأسماء التابعة لها. يعد الاسم المفرد لاحقة؛ أما co.uk وحده فيعد اسم مضيف مطابقًا تمامًا.</string>
+    <string name="site_mask_url_scope">يحفظ المضيف example.com فقط. لا يعد المخطط أو المنفذ أو المسار أو الاستعلام أو الجزء شروطًا للتوجيه. يدعم HTTP/HTTPS فقط؛ وترفض بيانات الاعتماد.</string>
+    <string name="site_mask_idn_scope">تحول الأسماء الدولية إلى ASCII/Punycode المتوافق مع المتصفحات. تنطبق قواعد المطابقة التامة واللاحقة نفسها.</string>
+    <string name="site_mask_ip_scope">عنوان IP وجهة واحد: IPv4 /32 أو IPv6 /128. لا يجرى استعلام DNS.</string>
+    <string name="site_mask_cidr_scope">الشبكة بأكملها. تصفر بتات المضيف: 192.0.2.0/24.</string>
+    <string name="site_mask_range_scope">يشمل الطرفين وجميع عناوين IP بينهما. يجب استخدام عائلة IP نفسها وأن تكون البداية ≤ النهاية؛ ويحول إلى نطاق CIDR دقيق.</string>
+    <string name="site_mask_unsupported_formats">لا تدعم مسارات الصفحات أو أنماط * العشوائية أو كلمات kw: أو تعبيرات re:. عنوان واحد لكل إدخال؛ بحد أقصى 2,048 محرفًا.</string>
+    <string name="site_mask_formats">التنسيقات: مضيف مطابق تمامًا / full: · لاحقة *. / . / +. / domain: / suffix: · zone:ru / ru · مضيف HTTP/HTTPS · IDN · IPv4/IPv6 · CIDR · نطاق IP. لا تحدد مسارات URL واستعلاماتها حركة المرور. لا يدعم المحرك الحالي kw: وre:.</string>
+    <string name="site_mask_required">أدخل عنوان ويب أو قناع نطاق أو قاعدة IP.</string>
+    <string name="site_mask_unsupported">لا يدعم المحرك الحالي قواعد الكلمات المفتاحية (kw:) والتعبيرات النمطية (re:).</string>
+    <string name="site_mask_legacy_unsupported">قاعدة kw:/re: المحفوظة هذه غير مدعومة في المحرك الحالي. احتفظ بها؛ احذفها أو استبدلها بقاعدة مضيف/IP مدعومة.</string>
+    <string name="cli_release_notes_web_filters">تحسين مرشحات توجيه عناوين الويب.</string>
+    <string name="cli_release_notes_notice_style">تحسين النمط المرئي للإشعارات.</string>
+    <string name="guard_router_router_updates_core_current">وحدات Core محدثة؛ فحص الحزمة معلق</string>
+    <string name="site_mask_exact_example">example.com\nfull:example.com</string>
+    <string name="site_mask_suffix_example">*.example.com\n.example.com\n+.example.com\ndomain:example.com\nsuffix:example.com</string>
+    <string name="site_mask_zone_example">ru · .ru · *.ru\nzone:ru · suffix:ru\n*.co.uk</string>
+    <string name="site_mask_url_example">https://example.com:443/page?q=1\nexample.com/path</string>
+    <string name="site_mask_idn_example">пример.рф\nfaß.de</string>
+    <string name="site_mask_ip_example">192.0.2.1\n2001:db8::1</string>
+    <string name="site_mask_cidr_example">192.0.2.99/24\ncidr:2001:db8::/32</string>
+    <string name="site_mask_range_example">192.0.2.3-192.0.2.9\nrange:2001:db8::1-2001:db8::ffff</string>
+</resources>

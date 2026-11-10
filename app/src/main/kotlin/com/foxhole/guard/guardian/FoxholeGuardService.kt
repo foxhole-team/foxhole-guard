@@ -15,6 +15,7 @@ import androidx.core.content.ContextCompat
 import com.foxhole.guard.FoxholeApplication
 import com.foxhole.guard.R
 import com.foxhole.guard.WatchdogNames
+import com.foxhole.guard.platform.withNotificationChannels
 import com.foxhole.guard.withStoredAppLocale
 
 class FoxholeGuardService : Service() {
@@ -90,16 +91,18 @@ class FoxholeGuardService : Service() {
     }
 
     private fun ensureChannel(manager: NotificationManager) {
-        val channel =
-            NotificationChannel(
-                CHANNEL_ID,
-                WatchdogNames.GUARD,
-                NotificationManager.IMPORTANCE_MIN
-            )
-        channel.setShowBadge(false)
-        channel.description = getString(R.string.guard_service_channel_name)
-        channel.lockscreenVisibility = Notification.VISIBILITY_SECRET
-        manager.createNotificationChannel(channel)
+        withNotificationChannels {
+            val channel =
+                NotificationChannel(
+                    CHANNEL_ID,
+                    WatchdogNames.GUARD,
+                    NotificationManager.IMPORTANCE_MIN
+                )
+            channel.setShowBadge(false)
+            channel.description = getString(R.string.guard_service_channel_name)
+            channel.lockscreenVisibility = Notification.VISIBILITY_SECRET
+            manager.createNotificationChannel(channel)
+        }
     }
 
     companion object {

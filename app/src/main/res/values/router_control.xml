@@ -155,7 +155,7 @@
     <string name="guard_router_router_updates_check">CHECK</string>
     <string name="guard_router_router_updates_check_failed">Could not check for updates</string>
     <string name="guard_router_router_updates_current">Up to date</string>
-    <string name="guard_router_router_updates_current_version">Current version: %1$s</string>
+    <string name="guard_router_router_updates_current_version">Package version: %1$s</string>
     <string name="guard_router_router_updates_disconnect_before_update">Disconnect the router VPN before updating</string>
     <string name="guard_router_router_updates_done">Done</string>
     <string name="guard_router_router_updates_download_failed">Could not download the update.</string>
@@ -277,4 +277,5 @@
     <string name="guard_router_router_control_protocols_unknown">Available protocols: unknown</string>
     <string name="guard_router_router_control_protocols_loading">Available protocols: checking…</string>
     <string name="guard_router_router_control_protocols_empty">Available protocols: none installed</string>
+    <string name="guard_router_router_updates_core_current">Core modules are up to date; package check pending</string>
 </resources>

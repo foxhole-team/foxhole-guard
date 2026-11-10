@@ -127,6 +127,13 @@ internal class RouterPanelApi internal constructor(val identity: RouterTlsIdenti
         }))
     }
 
+    internal suspend fun coreUpdateRequest(action: String, session: RouterPanelSession, payload: JsonObject): JsonObject {
+        require(action in setOf("updates.deviceBegin", "updates.deviceChunk", "updates.deviceStatus", "updates.deviceFinish"))
+        require(payload.engineText("cohortKind") == "CORE")
+        requireRouterCoreAssetId(payload.engineText("assetId"))
+        return pairedDeviceRequest(action, session, payload)
+    }
+
     private suspend fun pairedDeviceRequest(action: String, session: RouterPanelSession, payload: JsonObject): JsonObject {
         currentCoroutineContext().ensureActive()
         requireTransportCurrent()

@@ -15,7 +15,8 @@ internal fun registerUpstreamNetworkCallback(
     when {
         sdkVersion >= Build.VERSION_CODES.S && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ->
             manager.registerBestMatchingNetworkCallback(request, callback, handler)
-        sdkVersion >= Build.VERSION_CODES.O -> manager.registerNetworkCallback(request, callback, handler)
+        sdkVersion >= Build.VERSION_CODES.O && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O ->
+            manager.registerNetworkCallback(request, callback, handler)
         else -> manager.registerNetworkCallback(request, callback)
     }
 }

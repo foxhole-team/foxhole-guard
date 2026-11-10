@@ -89,9 +89,9 @@ internal class PairedRouterManagementTransport(
         return true
     }
 
-    private fun wifiHint(pairing: RouterPairing, local: RouterWifiConnection): String? {
-        return try {
-            val info = manager.getNetworkCapabilities(local.network)?.transportInfo as? WifiInfo ?: return null
+    private fun wifiHint(pairing: RouterPairing, local: RouterWifiConnection): String? = routerWifiTransportHint {
+        try {
+            val info = manager.getNetworkCapabilities(local.network)?.transportInfo as? WifiInfo ?: return@routerWifiTransportHint null
             routerWifiIdentityHash(pairing.credential, info.bssid, info.ssid)
         } catch (_: SecurityException) { null }
     }

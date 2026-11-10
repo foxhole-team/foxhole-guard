@@ -65,9 +65,9 @@ internal class RouterDeviceReleaseHttp(private val calls: Call.Factory = routerP
 
     private fun requireSource(url: HttpUrl) {
         require(url.isHttps && url.port == 443 && url.username.isEmpty() && url.password.isEmpty() && url.fragment == null)
-        require(if (url.host == "api.github.com") url.toString() == ROUTER_DEVICE_RELEASE_METADATA else
+        require(if (url.host == "api.github.com") url.toString() in setOf(ROUTER_DEVICE_RELEASE_METADATA, ROUTER_CORE_RELEASE_METADATA) else
             url.host == "github.com" && url.query == null && url.encodedPath.matches(Regex(
-                "/foxhole-team/foxhole-openwrt-client/releases/download/v[0-9]+\\.[0-9]+\\.[0-9]+/[A-Za-z0-9][A-Za-z0-9._-]{0,159}")))
+                "/foxhole-team/(foxhole-openwrt-client|foxhole-core)/releases/download/v[0-9]+\\.[0-9]+\\.[0-9]+/[A-Za-z0-9][A-Za-z0-9._-]{0,254}")))
     }
 
     private suspend fun request(url: HttpUrl, maximum: Int, target: File?, progress: (Long, Long?) -> Unit): Reply =

@@ -1,0 +1,10 @@
+{
+  "schema": 1,
+  "kind": "actual-publicRelease-l8-input-binding",
+  "taskPath": ":app:l8DexDesugarLibPublicRelease",
+  "executed": false,
+  "libraryArchiveSha256": "d8044befae095781b9a80bf1faa92edc30382d75d437476784c1bf991598a976",
+  "configurationArchiveSha256": "7db51661cd07d1fd5cf12769a75ba201910624bb3801c09363dd3cb28e31c51b",
+  "configurationMemberSha256": "742e831792335e35e76cc2e752eab4bfd0d0cb5b09bb59b9ba215996e1cb354e",
+  "sourceInputsSha256": "52f94dc017a909b725098463a503cf827d76bfaab4c3f1f0802b82be0fa1d177"
+}

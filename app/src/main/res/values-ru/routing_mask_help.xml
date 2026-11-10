@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="site_routing_modes_title">Сценарии и правила приложений</string>
+    <string name="site_routing_direct_title">Прямое подключение</string>
+    <string name="site_routing_block_title">Блокировка</string>
+    <string name="site_mask_format">Формат / пример</string>
+    <string name="site_mask_scope">Что совпадает</string>
+    <string name="site_mask_exact_example">example.com\nfull:example.com</string>
+    <string name="site_mask_exact_scope">Только точное имя хоста, без поддоменов.</string>
+    <string name="site_mask_suffix_example">*.example.com\n.example.com\n+.example.com\ndomain:example.com\nsuffix:example.com</string>
+    <string name="site_mask_suffix_scope">example.com и все его поддомены. Звёздочки внутри имени не поддерживаются.</string>
+    <string name="site_mask_zone_example">ru · .ru · *.ru\nzone:ru · suffix:ru\n*.co.uk</string>
+    <string name="site_mask_zone_scope">Указанный суффикс и все имена под ним. Одно слово без точки — суффикс; co.uk без маски — точное имя хоста.</string>
+    <string name="site_mask_url_example">https://example.com:443/page?q=1\nexample.com/path</string>
+    <string name="site_mask_url_scope">Сохраняется только хост example.com. Схема, порт, путь, query и фрагмент не являются условиями маршрутизации. Только HTTP/HTTPS; адреса с логином или паролем отклоняются.</string>
+    <string name="site_mask_idn_example">пример.рф\nfaß.de</string>
+    <string name="site_mask_idn_scope">Международные имена приводятся к совместимому с браузером ASCII/Punycode. Правила точного имени и суффикса те же.</string>
+    <string name="site_mask_ip_example">192.0.2.1\n2001:db8::1</string>
+    <string name="site_mask_ip_scope">Один IP назначения: IPv4 /32 или IPv6 /128. DNS-запрос не выполняется.</string>
+    <string name="site_mask_cidr_example">192.0.2.99/24\ncidr:2001:db8::/32</string>
+    <string name="site_mask_cidr_scope">Вся сеть. Биты хоста обнуляются: 192.0.2.0/24.</string>
+    <string name="site_mask_range_example">192.0.2.3-192.0.2.9\nrange:2001:db8::1-2001:db8::ffff</string>
+    <string name="site_mask_range_scope">Оба конца и все IP между ними. Одна версия IP, начало ≤ конца; преобразуется в точное покрытие CIDR.</string>
+    <string name="site_mask_unsupported_formats">Не поддерживаются выбор пути страницы, произвольные маски *, ключевые слова kw: и регулярные выражения re:. Один адрес в поле, не более 2048 символов.</string>
+    <string name="site_mask_formats">Форматы: точный хост / full: · суффикс *. / . / +. / domain: / suffix: · зона zone:ru / ru · хост HTTP/HTTPS · IDN · IPv4/IPv6 · CIDR · диапазон IP. Путь и query URL не выбирают трафик. kw: и re: не поддерживаются текущим ядром.</string>
+    <string name="site_mask_required">Введите web-адрес, маску домена или правило IP.</string>
+    <string name="site_mask_unsupported">Правила по ключевым словам (kw:) и регулярным выражениям (re:) не поддерживаются текущим ядром.</string>
+    <string name="site_mask_legacy_unsupported">Это сохранённое правило kw:/re: не поддерживается текущим ядром. Оно сохранено; удалите его или замените поддерживаемым правилом хоста/IP.</string>
+    <string name="cli_release_notes_web_filters">Доработаны фильтры для маршрутизации web-адресов</string>
+    <string name="cli_release_notes_notice_style">Доработан визуальный стиль уведомлений</string>
+</resources>

@@ -23,7 +23,9 @@ internal fun requireRouterDeviceUploadId(value: String) {
 internal class RouterDeviceUpdateRelay(private val source: RouterDeviceReleaseSource) {
     suspend fun prepare(api: RouterPanelApi, session: RouterPanelSession, status: RouterUpdateStatus,
         progress: (Int?) -> Unit): RouterUpdateStatus? = try {
-        withTimeout(180000) { withContext(Dispatchers.IO) {
+        if (status.deviceDownloadKind == RouterUpdateCohortKind.CORE) {
+            RouterCoreUpdateRelay(source.coreSource()).prepare(api, session, status, progress)
+        } else withTimeout(180000) { withContext(Dispatchers.IO) {
             require(status.supported && status.deviceDownloadRequired && !status.busy)
             val current = status.currentVersion ?: invalidEngineResponse()
             val downloaded = try { source.downloadNewer(current, progress) }

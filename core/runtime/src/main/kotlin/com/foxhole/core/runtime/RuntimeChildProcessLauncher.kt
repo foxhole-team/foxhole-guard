@@ -7,4 +7,10 @@ internal fun interface RuntimeChildProcessLauncher {
         command: List<String>,
         workingDirectory: File,
     ): Process
+
+    fun launch(
+        command: List<String>,
+        workingDirectory: File,
+        control: RuntimeProcessLaunchControl,
+    ): Process = launch(command, workingDirectory).also(control.onSpawn)
 }

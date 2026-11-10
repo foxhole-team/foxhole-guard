@@ -81,21 +81,15 @@ internal fun HomeViewModel.saveSiteRule(
 ) {
     viewModelScope.launch {
         runCatching {
-            val normalizedTokens =
-                domains
-                    .mapNotNull(::normalizedSiteMaskToken)
-                    .distinct()
-            require(normalizedTokens.isNotEmpty()) {
-                getApplication<Application>().getString(R.string.site_exception_validation_error)
+            require(domains.all { siteMaskValidationErrorRes(it) == null }) {
+                getApplication<Application>().getString(
+                    if (domains.any(::unsupportedSiteMask)) R.string.site_mask_unsupported else R.string.site_exception_invalid_error,
+                )
             }
-            require(normalizedTokens.all { siteMaskValidationErrorRes(it) == null }) {
-                getApplication<Application>().getString(R.string.site_exception_invalid_error)
-            }
-            val normalizedDomains = normalizedTokens.filterNot { it.startsWith(SITE_CIDR_PREFIX) }
-            val normalizedIpCidrs =
-                normalizedTokens
-                    .filter { it.startsWith(SITE_CIDR_PREFIX) }
-                    .map { it.removePrefix(SITE_CIDR_PREFIX) }
+            val matches = siteRuleMaskParts(domains)
+            val normalizedTokens = matches.tokens
+            val normalizedDomains = matches.domains
+            val normalizedIpCidrs = matches.cidrs
             val presetId =
                 controlUiState.value.activePreset?.id ?: container.routingRepository.createPreset(
                     name = getApplication<Application>().getString(R.string.local_rules_preset_name),

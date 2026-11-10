@@ -3,6 +3,7 @@ package com.foxhole.guard.ui
 import android.app.Application
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName
+import android.os.Build
 import androidx.lifecycle.viewModelScope
 import com.foxhole.core.model.StatusWidgetLayoutMode
 import com.foxhole.guard.core.settings.updateFoxWidgetAnimationEnabled
@@ -80,6 +81,10 @@ internal fun HomeViewModel.onAddHomeWidget(kind: HomeWidgetKind) {
             HomeWidgetKind.STATUS -> FoxStatusWidgetReceiver::class.java
         }
     val pinRequest = runCatching {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            container.diagnosticsLogger.record("widget", "manual launcher widget selection required before Android 8")
+            return
+        }
         val manager = AppWidgetManager.getInstance(app)
         if (!manager.isRequestPinAppWidgetSupported) {
             container.diagnosticsLogger.record(

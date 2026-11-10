@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Check the authenticated Core release against the exact source revision and shipped ABI bytes."""
 
+import importlib.util
 import hashlib
 import json
 from pathlib import Path
@@ -8,7 +9,25 @@ import shutil
 import sys
 
 
-def verify(source, release, revision, abis, output=None):
+def verify(source, release, revision, abis, output=None, app_root=None):
+    app_root = Path(app_root) if app_root is not None else Path(__file__).resolve().parents[1]
+    marker = app_root / "config/foxcore-native-inputs.json"
+    if marker.exists() or marker.is_symlink():
+        spec = importlib.util.spec_from_file_location("strict_normal_core_native", app_root / "scripts/normal-core-native.py")
+        normal = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(normal)
+        config, verified = normal.verify(app_root, release, "guard", abis)
+        if config["producerCommit"] != revision:
+            raise ValueError("Retained normal JNI producer differs from requested source")
+        compiled = normal.document(normal.read(app_root / "config/foxcore-source-manifest.json"))
+        lock = next(row["sha256"] for row in compiled["files"] if row["path"] == "Cargo.lock")
+        normal.read(source / "Cargo.lock", expected_hash=lock)
+        if output is not None:
+            for abi, library in verified:
+                destination = output / abi / library.name
+                normal.copy_verified_library(library, destination, config["libraries"][abi])
+        return
+
     manifest = json.loads((release / "MANIFEST.json").read_text())
     provenance = json.loads((release / "RELEASE.json").read_text())
     if manifest["git"]["commit"] != revision or manifest["git"]["dirty"] or provenance["main_commit"] != revision:

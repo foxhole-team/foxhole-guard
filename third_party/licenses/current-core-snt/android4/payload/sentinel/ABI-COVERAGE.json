@@ -1,0 +1,34 @@
+{
+  "claims": {
+    "APKQualified": false,
+    "completeConsumerLegalQualification": false,
+    "exactCompiledUnitGraphClaim": false,
+    "perUnitFeatureTopology": "UNKNOWN_NOT_CLAIMED",
+    "runtimeQualified": false
+  },
+  "format": "original-c1-current-consumer-source-legal",
+  "inputJoinSHA256": "3364a6e31aa745a9ad4a2edaabd51f2afa58699431b10bfc9fe8ef44e7b773f5",
+  "nativeLibraries": {
+    "aarch64-linux-android": {
+      "abi": "arm64-v8a",
+      "bytes": 15491496,
+      "sha256": "40efadee23a67ad978b4ebd088b07531461445e30c1945d488ebaa7c2e9c3e4b"
+    },
+    "armv7-linux-androideabi": {
+      "abi": "armeabi-v7a",
+      "bytes": 10498080,
+      "sha256": "b544e5103cc83145978192e5b52294e5082d9ba236648bb0a171932d6a466019"
+    },
+    "i686-linux-android": {
+      "abi": "x86",
+      "bytes": 19097680,
+      "sha256": "44610773f9f9565d44501697e388d8b98e6d752073770c6e4a8c1b93d56e38e4"
+    },
+    "x86_64-linux-android": {
+      "abi": "x86_64",
+      "bytes": 18707472,
+      "sha256": "d25056370792cd148f036862e6e9fd884aaec3e26abdf34eb8a1155e706e977f"
+    }
+  },
+  "schema": 3
+}

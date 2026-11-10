@@ -1,0 +1,231 @@
+{
+  "schema": 1,
+  "crate": "libsqlite3-sys",
+  "version": "0.37.0",
+  "sourceKind": "vendored-modified",
+  "vendorPath": "vendor/libsqlite3-sys",
+  "upstreamCrateURL": "https://static.crates.io/crates/libsqlite3-sys/libsqlite3-sys-0.37.0.crate",
+  "upstreamCrateSHA256": "b1f111c8c41e7c61a49cd34e44c7619462967221a6443b0ec299e0ac30cfb9b1",
+  "advisory": "RUSTSEC-2026-0459",
+  "CVE": "CVE-2026-119375",
+  "upstreamFix": "https://github.com/sqlite/sqlite/commit/e5bf119821f25be1d7f10ef0a2edbe175289166e",
+  "patchPath": "patches/libsqlite3-sys-0.37.0-CVE-2026-119375.patch",
+  "patchSHA256": "79d17741e57ce5e8d09ee3f992bd3ca7946cd35f6e0efbf7599b92523ae53f4b",
+  "changedPaths": [
+    "sqlite3/sqlite3.c",
+    "sqlcipher/sqlite3.c"
+  ],
+  "upstreamFiles": [
+    {
+      "path": ".cargo_vcs_info.json",
+      "sha256": "51cd79ec7d1b5b4c72b29c0552369d2715bfed17ba97cc47c80f8b168cf5f2e0"
+    },
+    {
+      "path": ".gitignore",
+      "sha256": "d89b7a44f37a816f5b0ca8297e0d17067ca5f41e45d1455b0a56d072679a00a6"
+    },
+    {
+      "path": "Cargo.lock",
+      "sha256": "bb2bfd125e29c4d2e9ced4c73320df360c55cd8cd71bb4aebc401ae3e5cc31ab"
+    },
+    {
+      "path": "Cargo.toml",
+      "sha256": "a9aa51a627758b0f65cb063cd81fc2b45ab3440ab3e9c6876deaf5fe048cf1db"
+    },
+    {
+      "path": "Cargo.toml.orig",
+      "sha256": "e0f5f73f6a36336b53d0e4321f48e852aa2fff8f8d2e0033025a4bdc6c5625ed"
+    },
+    {
+      "path": "LICENSE",
+      "sha256": "c10c1f27337546471e5f7e4e97fdd398b35b9d4e126115dcd22de8d8e65abf6f"
+    },
+    {
+      "path": "README.md",
+      "sha256": "5b18c0bcfdca043d0d69560fe900083bca053c6a507f51d5c388bab4e7deb34b"
+    },
+    {
+      "path": "Upgrade.md",
+      "sha256": "d151a67d4bbb1a5a300d084d210d6cd238d833a6d4bd5d958ae7469a9deccb36"
+    },
+    {
+      "path": "bindgen-bindings/bindgen_3.34.1.rs",
+      "sha256": "4f94d0192ec890b62773368cb026daf219f5182094952c007d28ed6d3812fd68"
+    },
+    {
+      "path": "bindgen-bindings/bindgen_3.34.1_ext.rs",
+      "sha256": "44ff11f09886f8c41494f65043ac2ddba4e476bb17a81fe93a8c10c7bffdf4a8"
+    },
+    {
+      "path": "build.rs",
+      "sha256": "239297962bfdc78cd420b44142ee6801d2fc9375bf8470207669f416446ebb9e"
+    },
+    {
+      "path": "sqlcipher/LICENSE",
+      "sha256": "ea4fcb309f14a22065e1ea45362d494d320012249ed865fe9c7c0946db754131"
+    },
+    {
+      "path": "sqlcipher/bindgen_bundled_version.rs",
+      "sha256": "eb685154c9825ed324e3e7e2eb11efd1a6fd53634e65342856ec459bcbf2f536"
+    },
+    {
+      "path": "sqlcipher/sqlite3.c",
+      "sha256": "de78ef087cbc26e8fe584de05f1790f3e34897db8731e8154dc674d3f2df28cb"
+    },
+    {
+      "path": "sqlcipher/sqlite3.h",
+      "sha256": "d02f73fba63a21a6f5df9f2eef5df8bff5d7bace10aba54910ee28050f7eb573"
+    },
+    {
+      "path": "sqlcipher/sqlite3ext.h",
+      "sha256": "9a91de0d5e5ccc04ec59041275c67972d6f8894f7543a10033e387b69987beb5"
+    },
+    {
+      "path": "sqlite3/bindgen_bundled_version.rs",
+      "sha256": "3640b99203cb2c2dfa5797043cf01dc8dcee8cef62c6b88e937e364a8614744b"
+    },
+    {
+      "path": "sqlite3/bindgen_bundled_version_ext.rs",
+      "sha256": "037f54e88e052f8d309b60966c282c47264ab450fd97d8a409b32f67f3cb3983"
+    },
+    {
+      "path": "sqlite3/sqlite3.c",
+      "sha256": "9512509b1bccb7461f79bea8aad6280ae4699e925fa4804381b71f59e7efb0c5"
+    },
+    {
+      "path": "sqlite3/sqlite3.h",
+      "sha256": "19585c8b5230e9d4f223bf31b709ece7b6a0bb3faf00d8310625d8e58cda1b1d"
+    },
+    {
+      "path": "sqlite3/sqlite3ext.h",
+      "sha256": "ea81fb7bd05882e0e0b92c4d60f677b205f7f1fbf085f218b12f0b5b3f0b9e48"
+    },
+    {
+      "path": "sqlite3/wasm32-wasi-vfs.c",
+      "sha256": "b95842044da2b8777876b7d3fef8c9711e8c201fb4a4255dbac98729a456bb5d"
+    },
+    {
+      "path": "src/error.rs",
+      "sha256": "9685678a8752bf47e5e39923bb2cf466cc312a25848d91cc206bf89eaccfb7d6"
+    },
+    {
+      "path": "src/lib.rs",
+      "sha256": "f61d8e306e11357479e20999f7b7adc5f3dbaea40cd17361853574001cf79360"
+    },
+    {
+      "path": "wrapper.h",
+      "sha256": "b78f576f7eeabf316e183d476b0f16344b6897680b4df47628d3ce38c0aa979a"
+    },
+    {
+      "path": "wrapper_ext.h",
+      "sha256": "fa7a53fea99318ee29d75e6d5fab4d7ed26e9599803268e6a24396265f2a6f3a"
+    }
+  ],
+  "vendorFiles": [
+    {
+      "path": ".cargo_vcs_info.json",
+      "sha256": "51cd79ec7d1b5b4c72b29c0552369d2715bfed17ba97cc47c80f8b168cf5f2e0"
+    },
+    {
+      "path": ".gitignore",
+      "sha256": "d89b7a44f37a816f5b0ca8297e0d17067ca5f41e45d1455b0a56d072679a00a6"
+    },
+    {
+      "path": "Cargo.lock",
+      "sha256": "bb2bfd125e29c4d2e9ced4c73320df360c55cd8cd71bb4aebc401ae3e5cc31ab"
+    },
+    {
+      "path": "Cargo.toml",
+      "sha256": "a9aa51a627758b0f65cb063cd81fc2b45ab3440ab3e9c6876deaf5fe048cf1db"
+    },
+    {
+      "path": "Cargo.toml.orig",
+      "sha256": "e0f5f73f6a36336b53d0e4321f48e852aa2fff8f8d2e0033025a4bdc6c5625ed"
+    },
+    {
+      "path": "LICENSE",
+      "sha256": "c10c1f27337546471e5f7e4e97fdd398b35b9d4e126115dcd22de8d8e65abf6f"
+    },
+    {
+      "path": "README.md",
+      "sha256": "5b18c0bcfdca043d0d69560fe900083bca053c6a507f51d5c388bab4e7deb34b"
+    },
+    {
+      "path": "Upgrade.md",
+      "sha256": "d151a67d4bbb1a5a300d084d210d6cd238d833a6d4bd5d958ae7469a9deccb36"
+    },
+    {
+      "path": "bindgen-bindings/bindgen_3.34.1.rs",
+      "sha256": "4f94d0192ec890b62773368cb026daf219f5182094952c007d28ed6d3812fd68"
+    },
+    {
+      "path": "bindgen-bindings/bindgen_3.34.1_ext.rs",
+      "sha256": "44ff11f09886f8c41494f65043ac2ddba4e476bb17a81fe93a8c10c7bffdf4a8"
+    },
+    {
+      "path": "build.rs",
+      "sha256": "239297962bfdc78cd420b44142ee6801d2fc9375bf8470207669f416446ebb9e"
+    },
+    {
+      "path": "sqlcipher/LICENSE",
+      "sha256": "ea4fcb309f14a22065e1ea45362d494d320012249ed865fe9c7c0946db754131"
+    },
+    {
+      "path": "sqlcipher/bindgen_bundled_version.rs",
+      "sha256": "eb685154c9825ed324e3e7e2eb11efd1a6fd53634e65342856ec459bcbf2f536"
+    },
+    {
+      "path": "sqlcipher/sqlite3.c",
+      "sha256": "da7cdd55cdee08b61ead43a9725032c2f7b0e19d07e3fb7d95b21f144b37b3f8"
+    },
+    {
+      "path": "sqlcipher/sqlite3.h",
+      "sha256": "d02f73fba63a21a6f5df9f2eef5df8bff5d7bace10aba54910ee28050f7eb573"
+    },
+    {
+      "path": "sqlcipher/sqlite3ext.h",
+      "sha256": "9a91de0d5e5ccc04ec59041275c67972d6f8894f7543a10033e387b69987beb5"
+    },
+    {
+      "path": "sqlite3/bindgen_bundled_version.rs",
+      "sha256": "3640b99203cb2c2dfa5797043cf01dc8dcee8cef62c6b88e937e364a8614744b"
+    },
+    {
+      "path": "sqlite3/bindgen_bundled_version_ext.rs",
+      "sha256": "037f54e88e052f8d309b60966c282c47264ab450fd97d8a409b32f67f3cb3983"
+    },
+    {
+      "path": "sqlite3/sqlite3.c",
+      "sha256": "1792e34d22e514ffb21f7938cdc63a193bd75331a88eeed75d529d5ff8c3e2b9"
+    },
+    {
+      "path": "sqlite3/sqlite3.h",
+      "sha256": "19585c8b5230e9d4f223bf31b709ece7b6a0bb3faf00d8310625d8e58cda1b1d"
+    },
+    {
+      "path": "sqlite3/sqlite3ext.h",
+      "sha256": "ea81fb7bd05882e0e0b92c4d60f677b205f7f1fbf085f218b12f0b5b3f0b9e48"
+    },
+    {
+      "path": "sqlite3/wasm32-wasi-vfs.c",
+      "sha256": "b95842044da2b8777876b7d3fef8c9711e8c201fb4a4255dbac98729a456bb5d"
+    },
+    {
+      "path": "src/error.rs",
+      "sha256": "9685678a8752bf47e5e39923bb2cf466cc312a25848d91cc206bf89eaccfb7d6"
+    },
+    {
+      "path": "src/lib.rs",
+      "sha256": "f61d8e306e11357479e20999f7b7adc5f3dbaea40cd17361853574001cf79360"
+    },
+    {
+      "path": "wrapper.h",
+      "sha256": "b78f576f7eeabf316e183d476b0f16344b6897680b4df47628d3ce38c0aa979a"
+    },
+    {
+      "path": "wrapper_ext.h",
+      "sha256": "fa7a53fea99318ee29d75e6d5fab4d7ed26e9599803268e6a24396265f2a6f3a"
+    }
+  ],
+  "scope": "Upstream WAL-page tail initialization backported to SQLite and SQLCipher amalgamations. No upstream version relabel. Native artifact rebuild required."
+}

@@ -1,0 +1,54 @@
+{
+  "appNativeInputHashes": {
+    "config/foxcore-native-inputs.json": "47c418f52d402d1356e4e8961f9fd7cafe192f49326aac05378825cd703e1c22",
+    "config/foxcore-revision.txt": "c83f59d36f54d9bd5f77630e3186e51e555aaeb186e258258361dd1e489c1ede",
+    "config/foxcore-source-checkout.json": "1d3dacdedff889e21306c5c10fced0ef84246ab5c45a47659516b1c30ad5e974",
+    "config/foxcore-source-manifest.json": "1cc9afa207f2d89b46e4dd0ea4e12bd3a2409bd39a4b1875829daf32c05fba4a",
+    "scripts/core-source-binding.py": "4a0f792bdee945848c8e434ed0758ffcf60db4be82e3246f178b4a7a490fca98",
+    "scripts/sqlite-fork-origin.py": "d75a10310694caae886d334fd9026e38a2677b104bb50b045ac261b4bd95d4c2"
+  },
+  "claims": {
+    "APKQualified": false,
+    "completeConsumerLegalQualification": false,
+    "exactCompiledUnitGraphClaim": false,
+    "perUnitFeatureTopology": "UNKNOWN_NOT_CLAIMED",
+    "runtimeQualified": false
+  },
+  "consumer": "guard",
+  "coverage": "complete",
+  "kind": "current-core-source-native-legal-input-admission",
+  "legalHeaderSHA256": "4c9eed23073b43b1cf803b7b34c5821403673293a642f44a6558ff966ef9fed4",
+  "legalJoinSHA256": "33b5863464fcb82b560c46ab07c5d3c22beb725da65c3d18ca223c1e9c72875e",
+  "nativeLibraries": {
+    "aarch64-linux-android": {
+      "abi": "arm64-v8a",
+      "bytes": 25125448,
+      "sha256": "3363c32476938a2631cb7fdf99f18b6247f307f4adbb66198a24cdbfd3857f04"
+    },
+    "armv7-linux-androideabi": {
+      "abi": "armeabi-v7a",
+      "bytes": 18109648,
+      "sha256": "47399c85ba94c28c5733d2a0f09affb448f8e3621ca2fd94651f705df106bdd1"
+    },
+    "i686-linux-android": {
+      "abi": "x86",
+      "bytes": 27557236,
+      "sha256": "22b22f0a0471b87dc114b76e4be434ec8bec94bbd7e8110c131e8a488b5b2864"
+    },
+    "x86_64-linux-android": {
+      "abi": "x86_64",
+      "bytes": 28598376,
+      "sha256": "f4ef168f3793c75b12e30c84e8c4bef6f8ab55f84efd00b2c2e7c5b357d4db98"
+    }
+  },
+  "normalReceiptSHA256": "5126e7b4d99485bb1719875918f76add73dbc0825b08bd4f7f89566980471065",
+  "schema": 1,
+  "source": {
+    "checkoutCommit": "90ae3e0d60de3d35e88e24558c99e771d9ca0bcf",
+    "checkoutTree": "ab7dbd0fb7dec20685dc4c279497b2abc78df8d2",
+    "compiledManifestSHA256": "1cc9afa207f2d89b46e4dd0ea4e12bd3a2409bd39a4b1875829daf32c05fba4a",
+    "producerCommit": "3fc3b70d8e9d700b3e07ec27638515c00651b013",
+    "producerTree": "1fd25d80359fd8b12765baec7c6d3093e92f89db"
+  },
+  "staticSourceNativeLegalInputsBound": true
+}

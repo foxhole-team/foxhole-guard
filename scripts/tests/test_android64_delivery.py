@@ -33,7 +33,7 @@ class Android64DeliveryTest(unittest.TestCase):
         temp = tempfile.TemporaryDirectory(); self.addCleanup(temp.cleanup)
         self.root = Path(temp.name)
         self.app = self.root/'app-source'; (self.app/'scripts').mkdir(parents=True); (self.app/'config').mkdir()
-        for name in ('selected-license-sbom.py','rustls-fork-origin.py','android-delivery-profile.py'):
+        for name in ('selected-license-sbom.py','rustls-fork-origin.py','sqlite-fork-origin.py','android-delivery-profile.py'):
             shutil.copyfile(SCRIPTS/name, self.app/'scripts'/name)
         (self.app/'config/foxcore-android-delivery.json').write_bytes(encoded({'schema':1,**SHAPE}))
         self.cases = {}; self.rows = {}; self.target_data = {}

@@ -18,6 +18,7 @@ import androidx.core.net.toUri
 import com.foxhole.core.model.InstalledAppRiskLevel
 import com.foxhole.core.model.InstalledAppRiskSignal
 import com.foxhole.guard.R
+import com.foxhole.guard.platform.withNotificationChannels
 import com.foxhole.guard.ui.cli.CliMainActivity
 import com.foxhole.guard.withStoredAppLocale
 
@@ -144,16 +145,18 @@ class InstalledAppSecurityNotifier(
         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
 
     internal fun ensureChannel() {
-        notificationManager?.createNotificationChannel(
-            NotificationChannel(
-                CHANNEL_ID,
-                appContext.getString(R.string.installed_app_notification_channel_name),
-                NotificationManager.IMPORTANCE_DEFAULT,
-            ).apply {
-                lockscreenVisibility = Notification.VISIBILITY_PRIVATE
-                description = appContext.getString(R.string.installed_app_notification_channel_description)
-            },
-        )
+        withNotificationChannels {
+            notificationManager?.createNotificationChannel(
+                NotificationChannel(
+                    CHANNEL_ID,
+                    appContext.getString(R.string.installed_app_notification_channel_name),
+                    NotificationManager.IMPORTANCE_DEFAULT,
+                ).apply {
+                    lockscreenVisibility = Notification.VISIBILITY_PRIVATE
+                    description = appContext.getString(R.string.installed_app_notification_channel_description)
+                },
+            )
+        }
     }
 
     companion object {

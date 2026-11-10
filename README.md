@@ -54,19 +54,17 @@ The core idea of the project is a single application for everyday network protec
 
 <a id="whats-new"></a>
 
-> **🆕 What's new - 1.0.5 Stable**
+> **🆕 What's new - 1.0.6 Stable**
 >
-> - Added Arabic language and RTL support, adapted the widget, and fixed translations and router settings.
-> - Updated FoxHole Core to 1.0.3 with DNS caching fixes.
-> - Fixed atomic application of routing rules and scenarios.
-> - Improved documentation and the help section; updated router management tips.
-> - Added system notifications for new app versions (GitHub version only).
+> - Added Android 7 support.
+> - Improved web-address routing filters.
+> - Improved the visual style of notifications.
 
 <a id="quickstart"></a>
 
 ## ⬇️ Get started and download
 
-Android 8 (API 26) or later is required. Choose the APK architecture listed in the published release.
+Android 7 (API 24) or later is required. Choose the APK architecture listed in the published release.
 
 1. Install an APK.
 2. Add your VPN profile or enable the Tor module.
@@ -587,7 +585,7 @@ FoxHole DB contains five independent signed datasets downloaded by the applicati
 
 ## 🤖 Android / Native ABI
 
-Android 8 (API 26) or later is required. FoxHole Core connects through a versioned C/JNI ABI; the Capabilities API reports the protocols and features compiled into the build.
+Android 7 (API 24) or later is required. FoxHole Core connects through a versioned C/JNI ABI; the Capabilities API reports the protocols and features compiled into the build.
 
 The `android4` delivery profile targets `arm64-v8a`, `armeabi-v7a`, `x86` and `x86_64`. Each ABI needs matching native libraries and license data. Available APK architectures and asset names are determined by the actual published release; a build option alone is not device/runtime acceptance.
 

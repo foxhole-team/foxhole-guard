@@ -58,19 +58,17 @@
 
 <a id="whats-new"></a>
 
-> **🆕 更新内容 - 1.0.5 Stable**
+> **🆕 更新内容 - 1.0.6 Stable**
 >
-> - 新增阿拉伯语和RTL支持，适配了小组件，并修复了翻译和路由器设置。
-> - 将 FoxHole Core 更新至 1.0.3，修复了 DNS 缓存问题。
-> - 修复了路由规则和场景的原子应用。
-> - 改进了文档和帮助板块，并更新了路由器管理提示。
-> - 新增应用新版本的系统通知（仅限 GitHub 版本）。
+> - 新增 Android 7 支持。
+> - 改进了网页地址路由筛选器。
+> - 改进了通知的视觉样式。
 
 <a id="quickstart"></a>
 
 ## ⬇️ 开始使用与下载
 
-需要Android 8（API 26）或更新版本。可用APK架构见各已发布版本。
+需要Android 7（API 24）或更新版本。可用APK架构见各已发布版本。
 
 1. 安装APK。
 2. 添加自己的VPN配置或启用Tor模块。
@@ -581,7 +579,7 @@ FoxHole DB 提供五个独立签名的数据集，由对应功能按需下载。
 
 ## 🤖 Android / 原生 ABI
 
-需要 Android 8（API 26）或更高版本。FoxHole Core 通过版本化的 C/JNI ABI 连接；Capabilities API 报告构建中实际编译的协议与功能。
+需要 Android 7（API 24）或更高版本。FoxHole Core 通过版本化的 C/JNI ABI 连接；Capabilities API 报告构建中实际编译的协议与功能。
 
 交付配置 `android4` 面向 `arm64-v8a`、`armeabi-v7a`、`x86` 和 `x86_64`。每种 ABI 都需要匹配的原生库和许可证数据。可用 APK 架构和文件名由实际发布版本决定；构建选项本身不能证明设备或运行时兼容性。
 

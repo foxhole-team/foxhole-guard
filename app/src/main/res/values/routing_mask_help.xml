@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="site_routing_modes_title">Scenarios and app rules</string>
+    <string name="site_routing_direct_title">Direct connection</string>
+    <string name="site_routing_block_title">Blocking</string>
+    <string name="site_mask_format">Format / example</string>
+    <string name="site_mask_scope">Matches</string>
+    <string name="site_mask_exact_example">example.com\nfull:example.com</string>
+    <string name="site_mask_exact_scope">This exact hostname only; not its subdomains.</string>
+    <string name="site_mask_suffix_example">*.example.com\n.example.com\n+.example.com\ndomain:example.com\nsuffix:example.com</string>
+    <string name="site_mask_suffix_scope">example.com and every subdomain. Wildcards inside a label are unsupported.</string>
+    <string name="site_mask_zone_example">ru · .ru · *.ru\nzone:ru · suffix:ru\n*.co.uk</string>
+    <string name="site_mask_zone_scope">The named suffix and all names below it. A bare single label is a suffix; co.uk alone is an exact hostname.</string>
+    <string name="site_mask_url_example">https://example.com:443/page?q=1\nexample.com/path</string>
+    <string name="site_mask_url_scope">Only the host example.com is saved. Scheme, port, path, query and fragment are not routing conditions. HTTP/HTTPS only; credentials are rejected.</string>
+    <string name="site_mask_idn_example">пример.рф\nfaß.de</string>
+    <string name="site_mask_idn_scope">International names are normalized to browser-compatible ASCII/Punycode. The same exact/suffix rules apply.</string>
+    <string name="site_mask_ip_example">192.0.2.1\n2001:db8::1</string>
+    <string name="site_mask_ip_scope">One destination IP: IPv4 /32 or IPv6 /128. No DNS lookup is performed.</string>
+    <string name="site_mask_cidr_example">192.0.2.99/24\ncidr:2001:db8::/32</string>
+    <string name="site_mask_cidr_scope">The whole network. Host bits are cleared: 192.0.2.0/24.</string>
+    <string name="site_mask_range_example">192.0.2.3-192.0.2.9\nrange:2001:db8::1-2001:db8::ffff</string>
+    <string name="site_mask_range_scope">Both endpoints and all IPs between them. Same IP family, start ≤ end; converted to exact CIDR coverage.</string>
+    <string name="site_mask_unsupported_formats">No page-path matching, arbitrary * patterns, kw: keywords or re: regular expressions. One address per input; maximum 2,048 characters.</string>
+    <string name="site_mask_formats">Formats: exact host / full: · suffix *. / . / +. / domain: / suffix: · zone:ru / ru · HTTP/HTTPS host · IDN · IPv4/IPv6 · CIDR · IP range. URL paths and queries do not select traffic. kw: and re: are not supported by the current engine.</string>
+    <string name="site_mask_required">Enter a web address, domain mask or IP rule.</string>
+    <string name="site_mask_unsupported">Keyword (kw:) and regular-expression (re:) rules are not supported by the current engine.</string>
+    <string name="site_mask_legacy_unsupported">This saved kw:/re: rule is unsupported by the current engine. It has been preserved; remove it or replace it with a supported host/IP rule.</string>
+    <string name="cli_release_notes_web_filters">Improved web-address routing filters.</string>
+    <string name="cli_release_notes_notice_style">Improved the visual style of notifications.</string>
+</resources>

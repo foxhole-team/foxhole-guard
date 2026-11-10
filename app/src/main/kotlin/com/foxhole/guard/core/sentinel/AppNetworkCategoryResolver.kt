@@ -2,6 +2,7 @@ package com.foxhole.guard.core.sentinel
 
 import android.content.Context
 import android.content.pm.ApplicationInfo
+import android.os.Build
 import com.foxhole.core.model.AppNetworkUsageCategory
 import java.util.concurrent.ConcurrentHashMap
 
@@ -14,6 +15,7 @@ class AppNetworkCategoryResolver(
     fun categoryOf(packageName: String): AppNetworkUsageCategory =
         cache.getOrPut(packageName) {
             runCatching {
+                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return@runCatching AppNetworkUsageCategory.STANDARD
                 when (packageManager.getApplicationInfo(packageName, 0).category) {
                     ApplicationInfo.CATEGORY_VIDEO,
                     ApplicationInfo.CATEGORY_AUDIO,

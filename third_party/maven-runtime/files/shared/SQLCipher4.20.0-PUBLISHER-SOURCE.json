@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "kind": "retained-actual-sqlcipher420-publisher-license-attribution",
+  "coordinate": "net.zetetic:sqlcipher-android:4.20.0",
+  "repository": "https://github.com/sqlcipher/sqlcipher-android",
+  "releaseTag": "v4.20.0",
+  "publisherCommit": "94bdf2589942b11a53b7d9a005d5c1e66920d4e8",
+  "licenseGitBlobSHA1": "7167addca133ce72d9cb791929d2e168d9204bc2",
+  "licenseSHA256": "09e4af560ce2e3c9c2aa6b564e35947b03db7d1ae345f22a32793ed46542cc14",
+  "licenseBytes": 1468,
+  "publisherPOMSHA256": "9d882f462c6fb4063b1c3bfb3df913c5929bf8cf73d7f6787f341672f23c1549",
+  "licenseSourceURL": "https://raw.githubusercontent.com/sqlcipher/sqlcipher-android/94bdf2589942b11a53b7d9a005d5c1e66920d4e8/LICENSE",
+  "retainedActualAuthoritySHA256": "1fe47183fbdb66c8d93a89c6efc3052540d261be1618866f0897651cecb1ea35",
+  "original419LicenseByteIdentical": true,
+  "scope": "Original publisher420 license attribution; no fresh network retrieval, AAR runtime, encrypted-data upgrade or post-R8/L8 claim."
+}

@@ -153,7 +153,7 @@ abstract class VerifyBundledLicenseAssetsInReleaseApkTask : DefaultTask() {
                 "assets/licenses/i2pd/Android-NDK-29-NOTICE.txt",
                 "assets/licenses/i2pd/Android-NDK-29-NOTICE.toolchain.txt",
                 "assets/licenses/i2pd/Boost-1.84.0-BSL-1.0.txt",
-                "assets/licenses/i2pd/OpenSSL-3.5.8-Apache-2.0.txt",
+                "assets/licenses/i2pd/OpenSSL-3.5.9-Apache-2.0.txt",
                 "assets/licenses/i2pd/i2pd-BSD-3-Clause.txt",
                 "assets/licenses/icons/Tabler-MIT.txt",
                 "assets/licenses/tor/GO-MODULES.json",
@@ -276,7 +276,7 @@ val releaseSigningStoreFile =
                 }
             candidates.firstOrNull(File::isFile)
         }
-val baseAppVersionCode = 179
+val baseAppVersionCode = 180
 val localBuildNumber = providers.gradleProperty("foxhole.localBuildNumber").orNull?.let { raw ->
     requireNotNull(raw.toIntOrNull()?.takeIf { it in (baseAppVersionCode + 1)..2_100_000_000 }) {
         "foxhole.localBuildNumber must exceed $baseAppVersionCode and be at most 2100000000"
@@ -819,6 +819,43 @@ val prepareBundledLicenseAssets = tasks.register("prepareBundledLicenseAssets") 
     val generator = rootProject.file("scripts/generate-license-assets.py")
     sourceNativeManifest?.let { inputs.file(it) }
 
+    val nativeSourceMaterialManifest =
+        providers.gradleProperty("foxhole.nativeSourceMaterialManifest").orNull?.let(rootProject::file)
+    val nativeSourceMaterialRoot =
+        providers.gradleProperty("foxhole.nativeSourceMaterialRoot").orNull?.let(rootProject::file)
+    require((nativeSourceMaterialManifest == null) == (nativeSourceMaterialRoot == null)) {
+        "Native source material manifest and payload root must be supplied together"
+    }
+    val nativeSourceMaterialBindings = rootProject.file("config/native-source-material-bindings.json")
+    inputs.files(nativeSourceMaterialBindings, rootProject.file("scripts/native-source-license-material.py"))
+    if (nativeSourceMaterialManifest != null && nativeSourceMaterialRoot != null) {
+        inputs.file(nativeSourceMaterialManifest)
+        inputs.dir(nativeSourceMaterialRoot)
+    }
+    outputs.upToDateWhen { false }
+    outputs.doNotCacheIf("Qualified external native material requires current consumer validation") { true }
+    doFirst {
+        require(nativeSourceMaterialManifest != null && nativeSourceMaterialRoot != null) {
+            "License generation requires explicit current qualified native source material; legacy Go/CPP fallback is disabled"
+        }
+        require(nativeSourceMaterialManifest.isFile && nativeSourceMaterialRoot.isDirectory) {
+            "Current native source material manifest or payload root is missing"
+        }
+        val bindings = JsonSlurper().parse(nativeSourceMaterialBindings) as? Map<*, *>
+            ?: error("Current native source material bindings are missing")
+        val digest = Regex("^[0-9a-f]{64}$")
+        val consumers = bindings["consumerBindings"] as? Map<*, *>
+        require(bindings["schema"] == 1 &&
+            bindings["kind"] == "qualified-go8-cpp4-consumer-material-bindings" &&
+            bindings["coverage"] == "complete" &&
+            (bindings["manifestSHA256"] as? String)?.matches(digest) == true &&
+            consumers?.keys == setOf("coreC3", "sentinel", "maven420") &&
+            consumers.values.all { (it as? String)?.matches(digest) == true }
+        ) {
+            "CoreC3, Sentinel and Maven420 native material consumer qualification is incomplete"
+        }
+    }
+
     val selectedCoreSbom =
         providers.gradleProperty("foxhole.licenseCoreSbom").orNull?.let { rootProject.file(it) }
     val selectedCoreReceipt =
@@ -905,6 +942,7 @@ val prepareBundledLicenseAssets = tasks.register("prepareBundledLicenseAssets") 
     dependsOn("preparePageAlignedNative")
     inputs.dir(layout.buildDirectory.dir("generated/pageAlignedNative"))
     inputs.file(rootProject.file("scripts/copy-maven-runtime-licenses.py"))
+    inputs.file(rootProject.file("scripts/maven180_contract.py"))
     inputs.dir(rootProject.file("third_party/maven-runtime"))
     inputs.files(
         generator,
@@ -968,6 +1006,12 @@ val prepareBundledLicenseAssets = tasks.register("prepareBundledLicenseAssets") 
         sourceNativeManifest?.let {
             arguments.addAll(listOf("--source-native-manifest", it.absolutePath))
         }
+        arguments.addAll(
+            listOf(
+                "--native-source-material-manifest", requireNotNull(nativeSourceMaterialManifest).absolutePath,
+                "--native-source-material-root", requireNotNull(nativeSourceMaterialRoot).absolutePath,
+            ),
+        )
         if (sourceLegalSnapshot != null) {
             arguments.addAll(
                 listOf(
@@ -1257,7 +1301,7 @@ val verifyReleaseSbom = tasks.register("verifyReleaseSbom") {
                 "lazysodium-android" to ("5.2.0" to "pkg:maven/com.goterl/lazysodium-android@5.2.0"),
                 "okhttp" to ("5.4.0" to "pkg:maven/com.squareup.okhttp3/okhttp@5.4.0"),
                 "jsch" to ("2.28.8" to "pkg:maven/com.github.mwiede/jsch@2.28.8"),
-                "sqlcipher-android" to ("4.19.1" to "pkg:maven/net.zetetic/sqlcipher-android@4.19.1"),
+                "sqlcipher-android" to ("4.20.0" to "pkg:maven/net.zetetic/sqlcipher-android@4.20.0"),
                 "zxing-android-embedded" to
                     ("4.3.0" to "pkg:maven/com.journeyapps/zxing-android-embedded@4.3.0"),
             )
@@ -1429,7 +1473,7 @@ android {
 
     defaultConfig {
         applicationId = publicApplicationId
-        minSdk = 26
+        minSdk = 24
         targetSdk = 37
         versionCode = localBuildNumber ?: baseAppVersionCode
         versionName = project.version.toString() + localBuildNumber?.let { "-Local.$it" }.orEmpty()
@@ -2204,7 +2248,7 @@ tasks.register("verifyRequiredBehaviorTests") {
 }
 
 dependencies {
-    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs_nio:2.1.5")
     implementation(project(":core:importer"))
     implementation(project(":core:model"))
     implementation(project(":core:network"))

@@ -56,19 +56,17 @@ Die Anwendung verbindet den eigenen, **in Rust geschriebenen FoxHole Core** mit 
 
 <a id="whats-new"></a>
 
-> **🆕 Was ist neu - 1.0.5 Stable**
+> **🆕 Was ist neu - 1.0.6 Stable**
 >
-> - Arabisch und RTL werden unterstützt, das Widget wurde angepasst und Übersetzungen sowie Router-Einstellungen wurden korrigiert.
-> - FoxHole Core wurde auf Version 1.0.3 mit Korrekturen am DNS-Cache aktualisiert.
-> - Die atomare Anwendung von Routing-Regeln und -Szenarien wurde korrigiert.
-> - Dokumentation und Hilfebereich wurden überarbeitet; die Hinweise zur Routerverwaltung wurden aktualisiert.
-> - Systembenachrichtigungen über neue Anwendungsversionen wurden hinzugefügt (nur GitHub-Version).
+> - Unterstützung für Android 7 hinzugefügt.
+> - Webadressfilter für das Routing verbessert.
+> - Visuellen Stil der Benachrichtigungen verbessert.
 
 <a id="quickstart"></a>
 
 ## ⬇️ Einstieg und Download
 
-Android 8 (API 26) oder neuer ist erforderlich. Verfügbare APK-Architekturen stehen im veröffentlichten Release.
+Android 7 (API 24) oder neuer ist erforderlich. Verfügbare APK-Architekturen stehen im veröffentlichten Release.
 
 1. Ein APK installieren.
 2. Ein eigenes VPN-Profil hinzufügen oder das Tor-Modul aktivieren.
@@ -581,7 +579,7 @@ FoxHole DB enthält fünf unabhängige signierte Datensätze, die nach Bedarf de
 
 ## 🤖 Android / Native ABI
 
-Android 8 (API 26) oder neuer ist erforderlich. FoxHole Core ist über eine versionierte C/JNI-ABI angebunden; die Capabilities-API meldet die tatsächlich einkompilierten Protokolle und Funktionen.
+Android 7 (API 24) oder neuer ist erforderlich. FoxHole Core ist über eine versionierte C/JNI-ABI angebunden; die Capabilities-API meldet die tatsächlich einkompilierten Protokolle und Funktionen.
 
 Das Auslieferungsprofil `android4` zielt auf `arm64-v8a`, `armeabi-v7a`, `x86` und `x86_64`. Jedes ABI benötigt passende native Bibliotheken und Lizenzdaten. Verfügbare APK-Architekturen und Dateinamen ergeben sich aus der tatsächlich veröffentlichten Version; eine Build-Option allein bestätigt keine Geräte- oder Laufzeitkompatibilität.
 

@@ -5,6 +5,7 @@ import android.content.Context
 import androidx.core.content.edit
 import androidx.core.content.getSystemService
 import androidx.work.WorkManager
+import com.foxhole.guard.platform.withNotificationChannels
 
 internal fun Context.migrateRenamedWatchdogs() {
     val preferences = getSharedPreferences(MIGRATION_PREFS, Context.MODE_PRIVATE)
@@ -19,10 +20,12 @@ internal fun Context.migrateRenamedWatchdogs() {
         LEGACY_WORK_NAMES.forEach(workManager::cancelUniqueWork)
     }
     runCatching {
-        val notificationManager = getSystemService<NotificationManager>() ?: return@runCatching
-        val registered = notificationManager.notificationChannels.mapTo(mutableSetOf()) { it.id }
-        LEGACY_CHANNEL_IDS.filter { id -> id in registered }
-            .forEach(notificationManager::deleteNotificationChannel)
+        withNotificationChannels {
+            val notificationManager = getSystemService<NotificationManager>() ?: return@runCatching
+            val registered = notificationManager.notificationChannels.mapTo(mutableSetOf()) { it.id }
+            LEGACY_CHANNEL_IDS.filter { id -> id in registered }
+                .forEach(notificationManager::deleteNotificationChannel)
+        }
     }
 }
 

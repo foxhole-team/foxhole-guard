@@ -1,5 +1,6 @@
 package com.foxhole.guard.router
 
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -65,6 +66,7 @@ internal class EngineApiFixture {
     var hold: String? = null
     var delayed: (() -> Unit)? = null
     var cancellations = 0
+    val cancelled = CompletableDeferred<Unit>()
     var reply: (String, JsonObject) -> JsonObject = { action, _ -> when (action) {
         "phone.capabilities" -> UpdateDocuments.capabilities()
                             "pair.unlock" -> buildJsonObject { put("token", TOKEN) }
@@ -95,7 +97,7 @@ internal class EngineApiFixture {
                 }
                 if (hold == action) delayed = respond else respond()
             }
-            override fun cancel() { cancellations++ }
+            override fun cancel() { cancellations++; cancelled.complete(Unit) }
         }
     })
     companion object { val TOKEN = "p1." + "b".repeat(64) }

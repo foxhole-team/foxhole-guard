@@ -1,1 +1,3 @@
-Added Arabic language and RTL support, adapted the widget, and fixed translations and router settings.
+- Se añadió compatibilidad con Android 7.
+- Mejorados los filtros de enrutamiento de direcciones web.
+- Mejorado el estilo visual de las notificaciones.

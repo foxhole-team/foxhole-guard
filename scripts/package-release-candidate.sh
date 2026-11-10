@@ -384,7 +384,7 @@ verify_android_sbom_inventory() {
       exact_component("jna"; "5.19.1"; "pkg:maven/net.java.dev.jna/jna@5.19.1") and
       exact_component("lazysodium-android"; "5.2.0"; "pkg:maven/com.goterl/lazysodium-android@5.2.0") and
       exact_component("okhttp"; "5.4.0"; "pkg:maven/com.squareup.okhttp3/okhttp@5.4.0") and
-      exact_component("sqlcipher-android"; "4.19.1"; "pkg:maven/net.zetetic/sqlcipher-android@4.19.1") and
+      exact_component("sqlcipher-android"; "4.20.0"; "pkg:maven/net.zetetic/sqlcipher-android@4.20.0") and
       exact_component(
         "zxing-android-embedded";
         "4.3.0";

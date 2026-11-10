@@ -219,7 +219,7 @@ release dependency inventory. The current Gradle CycloneDX output does not carry
 licence fields. Exact texts for the bundled native Android dependencies are
 therefore copied independently to `assets/licenses/android/`:
 
-- **SQLCipher Android 4.19.1** — BSD-3-Clause —
+- **SQLCipher Android 4.20.0** — BSD-3-Clause —
   https://github.com/sqlcipher/sqlcipher-android
 - **lazysodium-android** — MPL-2.0 — https://github.com/terl/lazysodium-android
 - **libsodium 1.0.20** — ISC — https://github.com/jedisct1/libsodium

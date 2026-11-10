@@ -1,0 +1,154 @@
+SQLCipher for Android 4.20.0 — embedded native subcomponents
+
+This companion notice covers the SQLCipher, SQLite and LibTomCrypt source components identified in INVENTORY.json. SQLCipher modifications retain their separate license. LibTomCrypt License #1 (public domain) is selected; its complete upstream dual-license notice is reproduced below. SQLite public-domain terms apply to the SQLite code, not the SQLCipher modifications.
+
+===== SQLCipher =====
+Source: https://github.com/sqlcipher/sqlcipher/blob/355d4db92d3404e71faa8088d071a71d767807f4/LICENSE.md
+
+----- BEGIN VERBATIM UPSTREAM NOTICE -----
+Copyright (c) 2025, ZETETIC LLC
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+    * Redistributions of source code must retain the above copyright
+      notice, this list of conditions and the following disclaimer.
+    * Redistributions in binary form must reproduce the above copyright
+      notice, this list of conditions and the following disclaimer in the
+      documentation and/or other materials provided with the distribution.
+    * Neither the name of the ZETETIC LLC nor the
+      names of its contributors may be used to endorse or promote products
+      derived from this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY ZETETIC LLC ''AS IS'' AND ANY
+EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL ZETETIC LLC BE LIABLE FOR ANY
+DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+----- END VERBATIM UPSTREAM NOTICE -----
+
+===== SQLite =====
+Source: https://github.com/sqlcipher/sqlcipher/blob/355d4db92d3404e71faa8088d071a71d767807f4/SQLITE_LICENSE.md
+
+----- BEGIN VERBATIM UPSTREAM NOTICE -----
+The SQLite source code, including all of the files in the directories
+listed in the bullets below are 
+[Public Domain](https://sqlite.org/copyright.html).
+The authors have submitted written affidavits releasing their work to
+the public for any use.  Every byte of the public-domain code can be
+traced back to the original authors.  The files of this repository
+that are public domain include the following:
+
+  *  All of the primary SQLite source code files found in the
+     [src/ directory](https://sqlite.org/src/tree/src?type=tree&expand)
+  *  All of the test cases and testing code in the
+     [test/ directory](https://sqlite.org/src/tree/test?type=tree&expand)
+  *  All of the SQLite extension source code and test cases in the
+     [ext/ directory](https://sqlite.org/src/tree/ext?type=tree&expand)
+  *  All code that ends up in the "sqlite3.c" and "sqlite3.h" build products
+     that actually implement the SQLite RDBMS.
+  *  All of the code used to compile the
+     [command-line interface](https://sqlite.org/cli.html)
+  *  All of the code used to build various utility programs such as
+     "sqldiff", "sqlite3_rsync", and "sqlite3_analyzer".
+
+
+The public domain source files usually contain a header comment
+similar to the following to make it clear that the software is
+public domain.
+
+> The author disclaims copyright to this source code.  In place of
+> a legal notice, here is a blessing:
+> 
+>   *   May you do good and not evil.
+>   *   May you find forgiveness for yourself and forgive others.
+>   *   May you share freely, never taking more than you give.
+
+Almost every file you find in this source repository will be
+public domain.  But there are a small number of exceptions:
+
+Non-Public-Domain Code Included With This Source Repository AS A Convenience
+----------------------------------------------------------------------------
+
+This repository contains a (relatively) small amount of non-public-domain
+code used to help implement the configuration and build logic.  In other
+words, there are some non-public-domain files used to implement:
+
+> ./configure && make
+
+In all cases, the non-public-domain files included with this
+repository have generous BSD-style licenses.  So anyone is free to
+use any of the code in this source repository for any purpose, though
+attribution may be required to reuse or republish the configure and
+build scripts.  None of the non-public-domain code ever actually reaches
+the build products, such as "sqlite3.c", however, so no attribution is
+required to use SQLite itself.  The non-public-domain code consists of
+scripts used to help compile SQLite.  The non-public-domain code is
+technically not part of SQLite.  The non-public-domain code is
+included in this repository as a convenience to developers, so that those
+who want to build SQLite do not need to go download a bunch of
+third-party build scripts in order to compile SQLite.
+
+Non-public-domain code included in this respository includes:
+
+  *  The ["autosetup"](http://msteveb.github.io/autosetup/) configuration
+     system that is contained (mostly) in the autosetup/ directory, but also
+     includes the "./configure" script at the top-level of this archive.
+     Autosetup has a separate BSD-style license.  See the
+     [autosetup/LICENSE](http://msteveb.github.io/autosetup/license/)
+     for details.
+
+  *  There are BSD-style licenses on some of the configuration
+     software found in the legacy autoconf/ directory and its
+     subdirectories.
+
+The following unix shell command can be run from the top-level
+of this source repository in order to remove all non-public-domain
+code:
+
+> rm -rf configure autosetup autoconf
+
+If you unpack this source repository and then run the command above, what
+is left will be 100% public domain.
+----- END VERBATIM UPSTREAM NOTICE -----
+
+===== LibTomCrypt =====
+Source: https://github.com/sqlcipher/libtomcrypt/blob/476a9579ae94f32b9ea9e2747bfb04b302370259/LICENSE
+
+----- BEGIN VERBATIM UPSTREAM NOTICE -----
+LibTomCrypt is licensed under DUAL licensing terms.
+
+Choose and use the license of your needs.
+
+[LICENSE #1]
+
+LibTomCrypt is public domain.  As should all quality software be.
+
+Tom St Denis
+
+[/LICENSE #1]
+
+[LICENSE #2]
+
+            DO WHAT THE FUCK YOU WANT TO PUBLIC LICENSE
+                    Version 2, December 2004
+
+ Copyright (C) 2004 Sam Hocevar <sam@hocevar.net>
+
+ Everyone is permitted to copy and distribute verbatim or modified
+ copies of this license document, and changing it is allowed as long
+ as the name is changed.
+
+            DO WHAT THE FUCK YOU WANT TO PUBLIC LICENSE
+   TERMS AND CONDITIONS FOR COPYING, DISTRIBUTION AND MODIFICATION
+
+  0. You just DO WHAT THE FUCK YOU WANT TO. 
+
+[/LICENSE #2]
+----- END VERBATIM UPSTREAM NOTICE -----
+

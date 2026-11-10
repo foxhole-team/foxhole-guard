@@ -36,14 +36,15 @@ import com.foxhole.core.runtime.stopEveryRetiredRuntime
 import com.foxhole.core.runtime.stopFailClosed
 import com.foxhole.guard.R
 import com.foxhole.guard.core.diagnostics.DiagnosticsLoggerRuntimeDiagnosticsSink
+import com.foxhole.guard.platform.withNotificationChannels
 import com.foxhole.guard.ui.cli.CliMainActivity
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
-import java.util.concurrent.atomic.AtomicBoolean
 
 internal enum class RuntimeInterfaceDisposition {
     STOP,
@@ -592,16 +593,18 @@ private fun FoxholeVpnService.postAbnormalTeardownNotification() {
         return
     }
     val notificationManager = getSystemService(NotificationManager::class.java) ?: return
-    notificationManager.createNotificationChannel(
-        NotificationChannel(
-            ABNORMAL_TEARDOWN_CHANNEL_ID,
-            getString(R.string.abnormal_teardown_notification_channel_name),
-            NotificationManager.IMPORTANCE_HIGH,
-        ).apply {
-            lockscreenVisibility = Notification.VISIBILITY_PRIVATE
-            description = getString(R.string.abnormal_teardown_notification_channel_description)
-        },
-    )
+    withNotificationChannels {
+        notificationManager.createNotificationChannel(
+            NotificationChannel(
+                ABNORMAL_TEARDOWN_CHANNEL_ID,
+                getString(R.string.abnormal_teardown_notification_channel_name),
+                NotificationManager.IMPORTANCE_HIGH,
+            ).apply {
+                lockscreenVisibility = Notification.VISIBILITY_PRIVATE
+                description = getString(R.string.abnormal_teardown_notification_channel_description)
+            },
+        )
+    }
     val body = getString(R.string.abnormal_teardown_notification_body)
     val openAppIntent =
         PendingIntent.getActivity(

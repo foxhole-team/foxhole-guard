@@ -1,0 +1,113 @@
+{
+  "schema": 1,
+  "kind": "sqlcipher420-native-subcomponents-material",
+  "parentAAR": {
+    "coordinate": "net.zetetic:sqlcipher-android:4.20.0",
+    "purl": "pkg:maven/net.zetetic/sqlcipher-android@4.20.0?type=aar",
+    "bytes": 4050842,
+    "sha256": "1e57857adfd29e2f5ddb4686e1e5ec6659920220d4bf182fdb5ef085b5577100"
+  },
+  "nativeMembers": [
+    {
+      "abi": "arm64-v8a",
+      "path": "jni/arm64-v8a/libsqlcipher.so",
+      "bytes": 2110992,
+      "sha256": "46a06f81da976f690c18c79e58f7742a2b1aa144301a35a0bb81ffa32da73756",
+      "elfClass": 64,
+      "eMachine": 183,
+      "neededLibraries": [
+        "libdl.so",
+        "liblog.so",
+        "libc.so",
+        "libm.so"
+      ]
+    },
+    {
+      "abi": "armeabi-v7a",
+      "path": "jni/armeabi-v7a/libsqlcipher.so",
+      "bytes": 1057676,
+      "sha256": "fa761c03dac08249a2b663a1a2a2c19d6a3433c6c03a063f5ee4427ca2d4a827",
+      "elfClass": 32,
+      "eMachine": 40,
+      "neededLibraries": [
+        "libdl.so",
+        "liblog.so",
+        "libc.so",
+        "libm.so"
+      ]
+    },
+    {
+      "abi": "x86",
+      "path": "jni/x86/libsqlcipher.so",
+      "bytes": 2260832,
+      "sha256": "309726bc1287683cf33fdb88e11f4079d0d718dc5f7c567029b5d74905dc40e5",
+      "elfClass": 32,
+      "eMachine": 3,
+      "neededLibraries": [
+        "libdl.so",
+        "liblog.so",
+        "libc.so",
+        "libm.so"
+      ]
+    },
+    {
+      "abi": "x86_64",
+      "path": "jni/x86_64/libsqlcipher.so",
+      "bytes": 2249352,
+      "sha256": "ec1e8a082116f386951309b1a1cd40a01bf1acb8518f67f3be10d03023f3f5d0",
+      "elfClass": 64,
+      "eMachine": 62,
+      "neededLibraries": [
+        "libdl.so",
+        "liblog.so",
+        "libc.so",
+        "libm.so"
+      ]
+    }
+  ],
+  "payloadFiles": [
+    {
+      "path": "INVENTORY.json",
+      "bytes": 6736,
+      "sha256": "5195f564509e72080b00de701ec6a4cb27f95649fa7270e29562b31bfcd1b1fd"
+    },
+    {
+      "path": "bom.cdx.json",
+      "bytes": 8419,
+      "sha256": "525981e9cde52c5f281e96d35bdacde0ef155fbc84c222e6e7a3246c132028b5"
+    },
+    {
+      "path": "NOTICE.txt",
+      "bytes": 7019,
+      "sha256": "391074388ef716a6636b14ef0c228b304680d746e3e0e267676fac7dee70ea64"
+    }
+  ],
+  "sourceBackportWitnessSHA256": "ec7ff2a5907fcca66d4092e8993bc14c65860130386b94f1fd3b148ffbbde586",
+  "licenseMaterial": {
+    "SQLCipher": {
+      "noticeSection": "SQLCipher",
+      "sourceURL": "https://github.com/sqlcipher/sqlcipher/blob/355d4db92d3404e71faa8088d071a71d767807f4/LICENSE.md",
+      "sha256": "2a2826f6acf46fa650730cf42cbb22a642be33a7ef119c9c4f4bf6daf3bef48e",
+      "bytes": 1463
+    },
+    "LibTomCrypt": {
+      "noticeSection": "LibTomCrypt",
+      "sourceURL": "https://github.com/sqlcipher/libtomcrypt/blob/476a9579ae94f32b9ea9e2747bfb04b302370259/LICENSE",
+      "sha256": "8f196cb13afd271f5e267fd29543fc454596382ad580e7592709492843996ac8",
+      "bytes": 719
+    },
+    "SQLite": {
+      "noticeSection": "SQLite",
+      "sourceURL": "https://github.com/sqlcipher/sqlcipher/blob/355d4db92d3404e71faa8088d071a71d767807f4/SQLITE_LICENSE.md",
+      "sha256": "595e823c2ada6c839679e693bee1f4d7f88e2d34ac99a913ae41e3d43fb10c7d",
+      "bytes": 3760
+    }
+  },
+  "counts": {
+    "nativeLibraryComponents": 2,
+    "combinedNativeELFMembers": 4,
+    "payloadFiles": 3,
+    "companionFilesIncludingManifest": 4
+  },
+  "scope": "Independent companion; no Maven component/POM scope change, reproduced-build, full-SCA, global-clean or runtime claim."
+}

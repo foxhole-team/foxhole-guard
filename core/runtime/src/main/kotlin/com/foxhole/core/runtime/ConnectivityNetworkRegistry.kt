@@ -5,13 +5,14 @@ import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
-import java.util.concurrent.ConcurrentHashMap
 
 object ConnectivityNetworkRegistry {
     @Volatile
@@ -103,15 +104,19 @@ object ConnectivityNetworkRegistry {
             }
 
         private fun register() {
-            runCatching {
-                connectivity.registerNetworkCallback(request, callback, mainHandler)
-            }.recoverCatching {
-                connectivity.registerNetworkCallback(request, callback)
-            }
-            runCatching {
-                connectivity.registerNetworkCallback(vpnRequest, vpnCallback, mainHandler)
-            }.recoverCatching {
-                connectivity.registerNetworkCallback(vpnRequest, vpnCallback)
+            registerCallback(request, callback)
+            registerCallback(vpnRequest, vpnCallback)
+        }
+
+        private fun registerCallback(request: NetworkRequest, callback: ConnectivityManager.NetworkCallback) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                runCatching {
+                    connectivity.registerNetworkCallback(request, callback, mainHandler)
+                }.recoverCatching {
+                    connectivity.registerNetworkCallback(request, callback)
+                }
+            } else {
+                runCatching { connectivity.registerNetworkCallback(request, callback) }
             }
         }
 

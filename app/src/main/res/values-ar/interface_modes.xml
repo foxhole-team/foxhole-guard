@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="interface_mode_title">وضع الواجهة</string>
-    <string name="interface_mode_user">تطبيقات المستخدم</string>
+    <string name="interface_mode_user">مستخدم</string>
     <string name="interface_mode_expert">خبير</string>
     <string name="interface_mode_description">يُحافظ تغيير الواجهة على اتصالك وإعداداتك المتقدمة.</string>
     <string name="user_home_choose_profile">اختيار ملف شخصي</string>

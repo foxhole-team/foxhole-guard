@@ -29,6 +29,7 @@ import com.foxhole.guard.ui.cli.components.CliPanel
 import com.foxhole.guard.ui.cli.components.CliRowDivider
 import com.foxhole.guard.ui.deleteRule
 import com.foxhole.guard.ui.normalizedSiteMaskToken
+import com.foxhole.guard.ui.unsupportedSiteMask
 import com.foxhole.guard.ui.saveSiteRule
 import com.foxhole.guard.ui.siteMaskValidationErrorRes
 
@@ -60,7 +61,7 @@ internal fun CliSiteRulesSection(
         icon = R.drawable.lin_link,
         title = stringResource(R.string.cli_route_sites_title),
         infoText = stringResource(R.string.cli_route_sites_note) + "\n" +
-            stringResource(R.string.cli_route_sites_formats),
+            stringResource(R.string.site_mask_formats),
         modifier = modifier.fillMaxWidth(),
     ) {
         if (rules.isEmpty()) {
@@ -104,6 +105,10 @@ internal fun CliSiteRulesSection(
                 prompt = "add",
                 value = newDomain,
                 belowInput = {
+                    if (showInvalid) CliElbowLine(
+                        text = stringResource(siteMaskValidationErrorRes(newDomain) ?: R.string.cli_route_sites_invalid),
+                        color = colors.warn,
+                    )
                     CliDropdownRow(
                         label = stringResource(R.string.cli_route_sites_lane),
                         value = siteLaneSelectedLabel(newLane),
@@ -137,12 +142,6 @@ internal fun CliSiteRulesSection(
                 onDismiss = { addOpen = false },
             )
         }
-        if (showInvalid) {
-            CliElbowLine(
-                text = stringResource(R.string.cli_route_sites_invalid),
-                color = colors.warn,
-            )
-        }
     }
 }
 
@@ -166,7 +165,7 @@ private fun CliSiteRuleRow(
         onSelect = { id ->
             if (id == SITE_OPT_REMOVE) onRemove() else onLaneSelect(CliSiteLane.valueOf(id))
         },
-        note = siteLaneNote(lane),
+        note = if (rule.matchDomains.any(::unsupportedSiteMask)) stringResource(R.string.site_mask_legacy_unsupported) else siteLaneNote(lane),
         labelColor = colors.fg,
         valueColor = siteLaneColor(lane, colors),
         showSelectedOptionIcon = true,
@@ -226,5 +225,5 @@ private fun siteLaneColor(
     CliSiteLane.BLOCK -> colors.err
 }
 
-private const val MAX_DOMAIN_INPUT = 253
+private const val MAX_DOMAIN_INPUT = 2_048
 private const val SITE_OPT_REMOVE = "remove"

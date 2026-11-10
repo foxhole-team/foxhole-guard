@@ -1,0 +1,161 @@
+{
+  "schema": 1,
+  "kind": "sqlcipher420-native-subcomponents-inventory",
+  "scope": "Embedded native subcomponents of the exact release AAR; separate from Maven dependency resolution.",
+  "parentAAR": {
+    "coordinate": "net.zetetic:sqlcipher-android:4.20.0",
+    "purl": "pkg:maven/net.zetetic/sqlcipher-android@4.20.0?type=aar",
+    "bytes": 4050842,
+    "sha256": "1e57857adfd29e2f5ddb4686e1e5ec6659920220d4bf182fdb5ef085b5577100"
+  },
+  "publisherSource": {
+    "repository": "https://github.com/sqlcipher/sqlcipher-android",
+    "tag": "v4.20.0",
+    "tagObject": "fd9265cfca1e419c1887752b9fb754232628807f",
+    "commit": "94bdf2589942b11a53b7d9a005d5c1e66920d4e8",
+    "tree": "e595fbdadb570176e4c9cd0c74d1e829ddce64fa",
+    "SQLCipherGitlink": "355d4db92d3404e71faa8088d071a71d767807f4",
+    "LibTomCryptGitlink": "476a9579ae94f32b9ea9e2747bfb04b302370259",
+    "buildRecipeURLs": [
+      "https://github.com/sqlcipher/sqlcipher-android/blob/94bdf2589942b11a53b7d9a005d5c1e66920d4e8/sqlcipher/src/main/jni/sqlcipher/Android.mk",
+      "https://github.com/sqlcipher/sqlcipher-android/blob/94bdf2589942b11a53b7d9a005d5c1e66920d4e8/sqlcipher/src/main/jni/libtomcrypt/Android.mk"
+    ]
+  },
+  "nativeMembers": [
+    {
+      "abi": "arm64-v8a",
+      "path": "jni/arm64-v8a/libsqlcipher.so",
+      "bytes": 2110992,
+      "sha256": "46a06f81da976f690c18c79e58f7742a2b1aa144301a35a0bb81ffa32da73756",
+      "elfClass": 64,
+      "eMachine": 183,
+      "neededLibraries": [
+        "libdl.so",
+        "liblog.so",
+        "libc.so",
+        "libm.so"
+      ]
+    },
+    {
+      "abi": "armeabi-v7a",
+      "path": "jni/armeabi-v7a/libsqlcipher.so",
+      "bytes": 1057676,
+      "sha256": "fa761c03dac08249a2b663a1a2a2c19d6a3433c6c03a063f5ee4427ca2d4a827",
+      "elfClass": 32,
+      "eMachine": 40,
+      "neededLibraries": [
+        "libdl.so",
+        "liblog.so",
+        "libc.so",
+        "libm.so"
+      ]
+    },
+    {
+      "abi": "x86",
+      "path": "jni/x86/libsqlcipher.so",
+      "bytes": 2260832,
+      "sha256": "309726bc1287683cf33fdb88e11f4079d0d718dc5f7c567029b5d74905dc40e5",
+      "elfClass": 32,
+      "eMachine": 3,
+      "neededLibraries": [
+        "libdl.so",
+        "liblog.so",
+        "libc.so",
+        "libm.so"
+      ]
+    },
+    {
+      "abi": "x86_64",
+      "path": "jni/x86_64/libsqlcipher.so",
+      "bytes": 2249352,
+      "sha256": "ec1e8a082116f386951309b1a1cd40a01bf1acb8518f67f3be10d03023f3f5d0",
+      "elfClass": 64,
+      "eMachine": 62,
+      "neededLibraries": [
+        "libdl.so",
+        "liblog.so",
+        "libc.so",
+        "libm.so"
+      ]
+    }
+  ],
+  "components": [
+    {
+      "name": "LibTomCrypt",
+      "version": "1.18.2",
+      "purl": "pkg:generic/libtomcrypt@1.18.2",
+      "sourceCommit": "476a9579ae94f32b9ea9e2747bfb04b302370259",
+      "sourceURL": "https://github.com/sqlcipher/libtomcrypt/tree/476a9579ae94f32b9ea9e2747bfb04b302370259",
+      "licenseName": "LibTomCrypt License #1 (Public Domain)",
+      "licenseNotice": {
+        "noticeSection": "LibTomCrypt",
+        "sourceURL": "https://github.com/sqlcipher/libtomcrypt/blob/476a9579ae94f32b9ea9e2747bfb04b302370259/LICENSE",
+        "sha256": "8f196cb13afd271f5e267fd29543fc454596382ad580e7592709492843996ac8",
+        "bytes": 719
+      },
+      "sourceBackportWitnessSHA256": "ec7ff2a5907fcca66d4092e8993bc14c65860130386b94f1fd3b148ffbbde586"
+    },
+    {
+      "name": "SQLite",
+      "version": "3.54.1",
+      "purl": "pkg:generic/sqlite@3.54.1",
+      "sourceCommit": "355d4db92d3404e71faa8088d071a71d767807f4",
+      "sourceURL": "https://github.com/sqlcipher/sqlcipher/tree/355d4db92d3404e71faa8088d071a71d767807f4",
+      "sourceRelation": "SQLite 3.54.1 embedded in the SQLCipher publisher source fork",
+      "licenseName": "SQLite public-domain dedication",
+      "licenseNotice": {
+        "noticeSection": "SQLite",
+        "sourceURL": "https://github.com/sqlcipher/sqlcipher/blob/355d4db92d3404e71faa8088d071a71d767807f4/SQLITE_LICENSE.md",
+        "sha256": "595e823c2ada6c839679e693bee1f4d7f88e2d34ac99a913ae41e3d43fb10c7d",
+        "bytes": 3760
+      }
+    }
+  ],
+  "parentLicense": {
+    "name": "BSD-3-Clause",
+    "notice": {
+      "noticeSection": "SQLCipher",
+      "sourceURL": "https://github.com/sqlcipher/sqlcipher/blob/355d4db92d3404e71faa8088d071a71d767807f4/LICENSE.md",
+      "sha256": "2a2826f6acf46fa650730cf42cbb22a642be33a7ef119c9c4f4bf6daf3bef48e",
+      "bytes": 1463
+    }
+  },
+  "sourceBackportWitness": {
+    "kind": "publisher-source-backport-observation",
+    "cve": "CVE-2019-17362",
+    "forkSourceCommit": "476a9579ae94f32b9ea9e2747bfb04b302370259",
+    "upstreamBaseCommit": "7e7eb695d581782f04b24dc444cbfde86af59853",
+    "upstreamBaseVersion": "1.18.2",
+    "upstreamFixCommit": "25c26a3b7a9ad8192ccc923e15cf62bf0108ef94",
+    "changedFile": "src/pk/asn1/der/utf8/der_decode_utf8_string.c",
+    "changedFileGitBlob": "b2dcf49819eb24f43a0e9e6f5bdc82147bd531e0",
+    "addedLinesSHA256": "7596ea459da6790dae9de73abacb00eec2bb6d0b6442f0752b77f5d4aa5e2681",
+    "addedLinesMatchUpstreamFix": true,
+    "forkDiffSHA256": "471fd788e9f43310b36c4cc53a38ca1d9d093f836edbe8591db7080e7008ffe8",
+    "upstreamDiffSHA256": "edf767daa8c26f2a064b2d3739a18d3db9bb0c6fe4c86e4db65f142ce82ed29d",
+    "sourceURLs": [
+      "https://github.com/sqlcipher/libtomcrypt/commit/476a9579ae94f32b9ea9e2747bfb04b302370259",
+      "https://github.com/libtom/libtomcrypt/commit/25c26a3b7a9ad8192ccc923e15cf62bf0108ef94",
+      "https://github.com/libtom/libtomcrypt/pull/508"
+    ],
+    "advisoryURL": "https://github.com/CVEProject/cvelistV5/blob/main/cves/2019/17xxx/CVE-2019-17362.json",
+    "advisoryCanonicalJSONSHA256": "ff2c5a3e8a3fdb14ad4d1d874ad530e08b09b5338bbd049deed5d137e167e0c6",
+    "canonicalJSONMethod": "UTF-8 JSON; sorted object keys; no insignificant whitespace; Unicode unescaped",
+    "scope": "Source-level backport identity; not a complete vulnerability verdict or binary reproduction proof."
+  },
+  "sourceBackportWitnessSHA256": "ec7ff2a5907fcca66d4092e8993bc14c65860130386b94f1fd3b148ffbbde586",
+  "claims": {
+    "fourNativeELFMemberHashesObserved": true,
+    "sourceRecipeAndEmbeddedProviderCorroborated": true,
+    "reproducedBuild": false,
+    "fullSCA": false,
+    "globalClean": false,
+    "runtimeQualified": false
+  },
+  "associationLimits": [
+    "Member hashes identify each combined libsqlcipher.so, not an isolated LibTomCrypt or SQLite binary.",
+    "The native subcomponents are not additional Maven coordinates or POM dependencies.",
+    "Maven124 pre-R8/L8 component and POM171 scope remains separate and unchanged.",
+    "Default source recipe lists broad LibTomCrypt sources; no DER/ECC/RSA absence or exact compiled-unit claim."
+  ]
+}

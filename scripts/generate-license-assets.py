@@ -17,7 +17,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 NATIVE_PINS = {
-    "openssl": ("3.5.8", "a8f84a39918ec6415ce765d9b429d313ba97b8143169c172e734b9514464f5b2"),
+    "openssl": ("3.5.9", "603f5602e2eef00d77fbd429d34dcd5822bb301757a1bc9cdb24c670f1eb859a"),
     "boost": ("1.84.0", "cc4b893acf645c9d4b698e9a0f08ca8846aa5d6c68275c14c3e7949c24109454"),
     "go": ("go1.26.10", None),
     "lyrebird": ("0b10edbb61e0ca6fb70c7d57aeaabf315f1fade1", None),
@@ -88,7 +88,7 @@ def copy(output: Path, source: Path, relative: str, expected_hash: str | None = 
 def require_native_pins() -> None:
     pins = (REPO_ROOT / "scripts/native-deps.sh").read_text()
     required = (
-        'openssl_ver="${I2PD_OPENSSL_VERSION:-3.5.8}"',
+        'openssl_ver="${I2PD_OPENSSL_VERSION:-3.5.9}"',
         'boost_ver="${I2PD_BOOST_VERSION:-1.84.0}"',
         'go_version="${TOR_TRANSPORT_GO:-go1.26.10}"',
         'lyrebird_commit="0b10edbb61e0ca6fb70c7d57aeaabf315f1fade1"',
@@ -101,7 +101,7 @@ def require_native_pins() -> None:
 
 def require_android_pins() -> None:
     catalog = (REPO_ROOT / "gradle/libs.versions.toml").read_text()
-    required = ('sqlcipher = "4.19.1"', 'lazysodium = "5.2.0"', 'jna = "5.19.1"')
+    required = ('sqlcipher = "4.20.0"', 'lazysodium = "5.2.0"', 'jna = "5.19.1"')
     missing = [value for value in required if value not in catalog]
     if missing:
         raise SystemExit("Android dependency pins changed; review the license bundle: " + ", ".join(missing))
@@ -557,80 +557,7 @@ def resolve_ndk(configured: str | None) -> Path:
     raise SystemExit("Android NDK 29.0.14206865 license notices were not found")
 
 
-def generate(args: argparse.Namespace) -> None:
-    output = Path(args.output).resolve()
-    if output.exists() or output.is_symlink():
-        raise SystemExit(f"license output must not already exist: {output}")
-    output.mkdir(parents=True)
-    require_native_pins()
-    require_android_pins()
-    require_flag_assets()
-    require_tor_config()
-
-    native_root = Path(
-        args.native_deps_root
-        or os.environ.get("FOXHOLE_NATIVE_DEPS_DIR", REPO_ROOT.parent / "foxhole-native-deps")
-    )
-    foxcore_root = Path(args.foxcore_root or os.environ.get("FOXCORE_SOURCE_ROOT", REPO_ROOT.parent / "foxhole-core"))
-    ndk_root = resolve_ndk(args.ndk_root)
-    canonical = None
-    canonical_module = None
-    if getattr(args, "source_legal_snapshot", None):
-        if any(getattr(args, name, None) for name in (
-            "foxcore_sbom", "foxcore_sbom_receipt", "sentinel_sbom", "sentinel_sbom_receipt",
-            "sentinel_retained_role", "sentinel_current_source_manifest",
-            "sentinel_current_producer", "sentinel_current_stage",
-        )):
-            raise ValueError("Canonical source legal data cannot relabel raw producer inputs")
-        module_path = REPO_ROOT / "scripts/source-legal-snapshot.py"
-        spec = importlib.util.spec_from_file_location("canonical_source_legal_snapshot", module_path)
-        canonical_module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(canonical_module)
-        canonical = canonical_module.load(
-            args.source_legal_snapshot, REPO_ROOT, foxcore_root,
-            (REPO_ROOT / "config/foxcore-revision.txt").read_text().strip(),
-            core_delivery_profile(args), args.fresh_core_native_root, args.fresh_sentinel_native_root, getattr(args, "source_native_manifest", None),
-        )
-    else:
-        copy_rust_std_material(args, output, foxcore_root, (REPO_ROOT / "config/foxcore-revision.txt").read_text().strip())
-
-    copy(output, REPO_ROOT / "LICENSE", "FoxHole-Guard-GPL-3.0-or-later.txt")
-    copy(output, REPO_ROOT / "THIRD_PARTY_NOTICES.md", "THIRD_PARTY_NOTICES.md")
-    for relative, expected in STATIC_HASHES.items():
-        destination = relative.removeprefix("third_party/")
-        if destination.startswith("licenses/"):
-            destination = destination.replace("licenses/", "android/", 1)
-        if destination == "tor-config/README.md":
-            destination = "tor-config/PROVENANCE.txt"
-        copy(output, REPO_ROOT / relative, destination, expected)
-    for relative in (
-        "third_party/fonts/README.md",
-        "third_party/icons/README.md",
-        "third_party/flags/README.md",
-        "third_party/licenses/README.md",
-    ):
-        destination = relative.removeprefix("third_party/")
-        if destination == "licenses/README.md":
-            destination = "android/README.md"
-        copy(output, REPO_ROOT / relative, destination)
-
-    tor_config_root = REPO_ROOT / "app/src/main/assets/tor/arm64-v8a"
-    copy(
-        output,
-        tor_config_root / "data/torrc-defaults",
-        "tor-config/upstream-members/torrc-defaults.txt",
-    )
-    copy(
-        output,
-        tor_config_root / "tor/pluggable_transports/pt_config.json",
-        "tor-config/upstream-members/pt_config.json",
-    )
-    copy(
-        output,
-        tor_config_root / "tor/pluggable_transports/README.CONJURE.md",
-        "tor-config/upstream-members/README.CONJURE.md",
-    )
-
+def copy_legacy_cpp_and_go_material(output, args, native_root, ndk_root):
     i2pd_version = read_checked(REPO_ROOT / "third_party/i2pd.version", I2PD_VERSION_SHA256).decode()
     if "ref=2.61.0" not in i2pd_version or "commit=635b013a612ff47278ef02acf8580a28e10e26c5" not in i2pd_version:
         raise SystemExit("i2pd pin changed; review the license bundle")
@@ -710,6 +637,99 @@ def generate(args: argparse.Namespace) -> None:
     copy(output, REPO_ROOT / "config/native/conjure/stun-v3-patch.json", "tor/CONJURE-PATCH.json")
     copy(output, REPO_ROOT / "scripts/prepare-tor-dependency.py", "tor/CONJURE-PATCH.py")
 
+
+
+def generate(args: argparse.Namespace) -> None:
+    output = Path(args.output).resolve()
+    if output.exists() or output.is_symlink():
+        raise SystemExit(f"license output must not already exist: {output}")
+    output.mkdir(parents=True)
+    require_native_pins()
+    require_android_pins()
+    require_flag_assets()
+    require_tor_config()
+
+    native_root = Path(
+        args.native_deps_root
+        or os.environ.get("FOXHOLE_NATIVE_DEPS_DIR", REPO_ROOT.parent / "foxhole-native-deps")
+    )
+    foxcore_root = Path(args.foxcore_root or os.environ.get("FOXCORE_SOURCE_ROOT", REPO_ROOT.parent / "foxhole-core"))
+    native_source_manifest = getattr(args, 'native_source_material_manifest', None)
+    native_source_root = getattr(args, 'native_source_material_root', None)
+    if bool(native_source_manifest) != bool(native_source_root):
+        raise ValueError('Native source material manifest and payload root are required together')
+    ndk_root = None if native_source_manifest is not None else resolve_ndk(args.ndk_root)
+    canonical = None
+    canonical_module = None
+    if getattr(args, "source_legal_snapshot", None):
+        if any(getattr(args, name, None) for name in (
+            "foxcore_sbom", "foxcore_sbom_receipt", "sentinel_sbom", "sentinel_sbom_receipt",
+            "sentinel_retained_role", "sentinel_current_source_manifest",
+            "sentinel_current_producer", "sentinel_current_stage",
+        )):
+            raise ValueError("Canonical source legal data cannot relabel raw producer inputs")
+        module_path = REPO_ROOT / "scripts/source-legal-snapshot.py"
+        spec = importlib.util.spec_from_file_location("canonical_source_legal_snapshot", module_path)
+        canonical_module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(canonical_module)
+        canonical = canonical_module.load(
+            args.source_legal_snapshot, REPO_ROOT, foxcore_root,
+            (REPO_ROOT / "config/foxcore-revision.txt").read_text().strip(),
+            core_delivery_profile(args), args.fresh_core_native_root, args.fresh_sentinel_native_root, getattr(args, "source_native_manifest", None),
+        )
+    else:
+        copy_rust_std_material(args, output, foxcore_root, (REPO_ROOT / "config/foxcore-revision.txt").read_text().strip())
+
+    copy(output, REPO_ROOT / "LICENSE", "FoxHole-Guard-GPL-3.0-or-later.txt")
+    copy(output, REPO_ROOT / "THIRD_PARTY_NOTICES.md", "THIRD_PARTY_NOTICES.md")
+    for relative, expected in STATIC_HASHES.items():
+        destination = relative.removeprefix("third_party/")
+        if destination.startswith("licenses/"):
+            destination = destination.replace("licenses/", "android/", 1)
+        if destination == "tor-config/README.md":
+            destination = "tor-config/PROVENANCE.txt"
+        copy(output, REPO_ROOT / relative, destination, expected)
+    for relative in (
+        "third_party/fonts/README.md",
+        "third_party/icons/README.md",
+        "third_party/flags/README.md",
+        "third_party/licenses/README.md",
+    ):
+        destination = relative.removeprefix("third_party/")
+        if destination == "licenses/README.md":
+            destination = "android/README.md"
+        copy(output, REPO_ROOT / relative, destination)
+
+    tor_config_root = REPO_ROOT / "app/src/main/assets/tor/arm64-v8a"
+    copy(
+        output,
+        tor_config_root / "data/torrc-defaults",
+        "tor-config/upstream-members/torrc-defaults.txt",
+    )
+    copy(
+        output,
+        tor_config_root / "tor/pluggable_transports/pt_config.json",
+        "tor-config/upstream-members/pt_config.json",
+    )
+    copy(
+        output,
+        tor_config_root / "tor/pluggable_transports/README.CONJURE.md",
+        "tor-config/upstream-members/README.CONJURE.md",
+    )
+
+    native_material = None
+    native_material_module = None
+    if native_source_manifest is not None:
+        helper_path = REPO_ROOT / 'scripts/native-source-license-material.py'
+        spec = importlib.util.spec_from_file_location('strict_current_native_source_material', helper_path)
+        native_material_module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(native_material_module)
+        native_material = native_material_module.load(native_source_manifest, native_source_root, REPO_ROOT, args.android_abis.split())
+        for relative, body in native_material['files'].items():
+            write(output, relative, body)
+    else:
+        copy_legacy_cpp_and_go_material(output, args, native_root, ndk_root)
+
     core_revision = (REPO_ROOT / "config/foxcore-revision.txt").read_text().strip()
     if not re.fullmatch(r"[0-9a-f]{40}", core_revision):
         raise SystemExit("invalid FoxCore revision pin")
@@ -759,6 +779,13 @@ def generate(args: argparse.Namespace) -> None:
     if canonical is not None and canonical.get("sourceNativeProvenance") is not None:
         maven_args.append("--fdroid-unsigned-source")
     subprocess.run(maven_args, check=True)
+    sqlcipher_spec = importlib.util.spec_from_file_location(
+        "sqlcipher_native_material", REPO_ROOT / "scripts/sqlcipher-native-material.py")
+    sqlcipher_material = importlib.util.module_from_spec(sqlcipher_spec)
+    sqlcipher_spec.loader.exec_module(sqlcipher_material)
+    sqlcipher_material.copy_material(REPO_ROOT, output / "maven-runtime", output)
+    if native_material is not None:
+        native_material_module.recheck(native_material)
     files = sorted(path for path in output.rglob("*") if path.is_file())
     manifest = {
         "schema": 1,
@@ -807,6 +834,8 @@ def main() -> None:
     parser.add_argument("--sentinel-current-stage")
     parser.add_argument("--native-deps-root")
     parser.add_argument("--ndk-root")
+    parser.add_argument("--native-source-material-manifest")
+    parser.add_argument("--native-source-material-root")
     parser.add_argument("--android-abis", default="arm64-v8a")
     parser.add_argument("--derived-native-root")
     generate(parser.parse_args())

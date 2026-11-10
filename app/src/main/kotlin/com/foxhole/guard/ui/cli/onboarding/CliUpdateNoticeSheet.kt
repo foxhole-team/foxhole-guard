@@ -72,11 +72,10 @@ internal fun CliUpdateNoticeSheetContent(
 
 @Suppress("UNUSED_PARAMETER")
 internal fun releaseNoteKeys(apiLevel: Int, channel: String = com.foxhole.guard.BuildConfig.UPDATE_CHANNEL): List<Int> = listOf(
-    R.string.cli_release_notes_translations_105,
-    R.string.cli_release_notes_core_104,
-    R.string.cli_release_notes_atomic_104,
-    R.string.cli_release_notes_help,
-) + if (channel == "github") listOf(R.string.app_update_available_release_note) else emptyList()
+    R.string.cli_release_notes_android7_106,
+    R.string.cli_release_notes_web_filters,
+    R.string.cli_release_notes_notice_style,
+)
 
 internal fun updateNoticeItems(body: String): List<CliQuickStartItem> =
     body.lineSequence()

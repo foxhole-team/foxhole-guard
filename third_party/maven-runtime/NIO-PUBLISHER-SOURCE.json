@@ -1,0 +1,15 @@
+{
+  "schema": 1,
+  "kind": "actual-nio-2.1.5-publisher-source-attribution",
+  "coordinate": "com.android.tools:desugar_jdk_libs_nio:2.1.5",
+  "repository": "https://github.com/google/desugar_jdk_libs",
+  "revision": "73170c345e6a762fc6a1f0301bb15218850023ef",
+  "licenseFileSha256": {
+    "LICENSE": "4b9abebc4338048a7c2dc184e9f800deb349366bdf28eb23c2677a77b4c87726",
+    "ASSEMBLY_EXCEPTION": "a44eb7b5caf5534c6ef536b21edb40b4d6babf91bf97d9d45596868618b2c6fb",
+    "ADDITIONAL_LICENSE_INFO": "a69bce275ba7a3570af6579cb0f55682cd75fedfcd49e0e8e9022270c447c916"
+  },
+  "artifactSha256": "d8044befae095781b9a80bf1faa92edc30382d75d437476784c1bf991598a976",
+  "pomSha256": "1ba5db067a494d09f5c4a94f4cb4d58fc6fd33e0a55417e0e46d3b288328f3bc",
+  "configurationArchiveSha256": "7db51661cd07d1fd5cf12769a75ba201910624bb3801c09363dd3cb28e31c51b"
+}

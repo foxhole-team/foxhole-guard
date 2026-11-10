@@ -8,6 +8,7 @@ import androidx.core.net.toUri
 import androidx.lifecycle.viewModelScope
 import com.foxhole.guard.BuildConfig
 import com.foxhole.guard.R
+import com.foxhole.guard.platform.requiresPerAppInstallSettings
 import com.foxhole.guard.runtime.AppUpdateCheck
 import com.foxhole.guard.runtime.AppUpdateFailure
 import com.foxhole.guard.runtime.AppUpdateNotifier
@@ -108,7 +109,8 @@ internal fun HomeViewModel.onAppUpdateInstallRequested() {
 
 private fun HomeViewModel.launchAppUpdateInstaller(downloaded: AppUpdateState.Downloaded) {
     val context: android.content.Context = getApplication()
-    if (!context.packageManager.canRequestPackageInstalls()) {
+    // Before O, the system installer enforces the global unknown-sources policy.
+    if (requiresPerAppInstallSettings { context.packageManager.canRequestPackageInstalls() }) {
         val permissionIntent =
             Intent(
                 Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,

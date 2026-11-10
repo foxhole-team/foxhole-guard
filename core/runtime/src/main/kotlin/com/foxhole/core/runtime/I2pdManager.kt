@@ -7,7 +7,9 @@ import com.foxhole.core.model.I2pSettings
 import com.foxhole.core.model.i2pdBandwidthChar
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -125,11 +127,21 @@ private object DefaultI2pdProcessLauncher : RuntimeChildProcessLauncher {
     override fun launch(
         command: List<String>,
         workingDirectory: File,
-    ): Process =
-        ProcessBuilder(command)
+    ): Process {
+        check(runtimeProcessPlatformSdk() >= 26) { "legacy runtime launch requires owned startup control" }
+        return ProcessBuilder(command)
             .directory(workingDirectory)
             .redirectErrorStream(true)
             .start()
+    }
+
+    override fun launch(
+        command: List<String>,
+        workingDirectory: File,
+        control: RuntimeProcessLaunchControl,
+    ): Process = startRuntimeProcess(
+        ProcessBuilder(command).directory(workingDirectory).redirectErrorStream(true), control,
+    )
 }
 
 class I2pdProcessManager internal constructor(
@@ -187,7 +199,7 @@ class I2pdProcessManager internal constructor(
         synchronized(stateLock) {
             val running = process
             val endpoints = currentSnapshot.endpoints
-            if (running != null && running.isAlive && endpoints != null &&
+            if (running != null && running.isAliveCompat() && endpoints != null &&
                 startConfiguration.fingerprint == appliedConfigFingerprint
             ) {
                 return endpoints
@@ -209,7 +221,7 @@ class I2pdProcessManager internal constructor(
                 if (lifecycleGeneration != priorStopGeneration) {
                     cancelI2pdStart()
                 }
-                if (process?.isAlive == true) {
+                if (process?.isAliveCompat() == true) {
                     currentSnapshot = I2pdSnapshot(I2pdState.ERROR)
                     error("previous i2pd process did not terminate")
                 }
@@ -249,7 +261,30 @@ class I2pdProcessManager internal constructor(
                     paths.dataDirectory,
                 )
             requireCurrentGeneration(generation)
-            val started = hooks.processLauncher.launch(args, File(paths.dataDirectory))
+            val coroutine = currentCoroutineContext()
+            val launchControl = RuntimeProcessLaunchControl(
+                deadline = RuntimeLaunchDeadline(I2pdStopPolicy().processDestroyForciblyTimeoutMs),
+                checkActive = { coroutine.ensureActive(); requireCurrentGeneration(generation) },
+                authorizeExec = { acknowledge ->
+                    synchronized(stateLock) {
+                        coroutine.ensureActive()
+                        requireCurrentGeneration(generation)
+                        acknowledge()
+                    }
+                },
+                onSpawn = { child ->
+                    startedProcess = child
+                    if (child is OwnedLegacyProcess) synchronized(stateLock) {
+                        requireCurrentGeneration(generation)
+                        check(process == null) { "previous i2pd process is still owned" }
+                        process = child
+                        processGeneration = generation
+                    }
+                },
+                // Failed starts remain registered by this actor's existing cleanup path.
+                retainFailed = {},
+            )
+            val started = hooks.processLauncher.launch(args, File(paths.dataDirectory), launchControl)
             startedProcess = started
             val gate =
                 hooks.startSocksCredentialGate(
@@ -279,7 +314,7 @@ class I2pdProcessManager internal constructor(
             drainProcessOutput(started, generation)
             val running =
                 synchronized(stateLock) {
-                    if (isCurrentProcessLocked(started, generation) && started.isAlive) {
+                    if (isCurrentProcessLocked(started, generation) && started.isAliveCompat()) {
                         currentSnapshot = I2pdSnapshot(I2pdState.RUNNING, endpoints)
                         true
                     } else {
@@ -317,7 +352,7 @@ class I2pdProcessManager internal constructor(
         val outcome =
             I2pdReadyProbe(
                 sessionCurrent = {
-                    isCurrentProcess(session.process, session.generation) && session.process.isAlive
+                    isCurrentProcess(session.process, session.generation) && session.process.isAliveCompat()
                 },
                 listenerReady = {
                     hooks.socksProxyReady?.invoke(session.endpoints)
@@ -326,7 +361,7 @@ class I2pdProcessManager internal constructor(
                 networkTunnelPairReady = {
                     synchronized(stateLock) {
                         isCurrentProcessLocked(session.process, session.generation) &&
-                            session.process.isAlive &&
+                            session.process.isAliveCompat() &&
                             establishedNetworkTunnels.ready
                     }
                 },
@@ -351,7 +386,7 @@ class I2pdProcessManager internal constructor(
             if (
                 !generationCurrent ||
                 readyProxyGeneration != expectedGeneration ||
-                active?.isAlive != true
+                active?.isAliveCompat() != true
             ) {
                 false
             } else {
@@ -374,7 +409,7 @@ class I2pdProcessManager internal constructor(
                 return
             }
             FoxholeVpnRuntimeBridge.updateI2pPhase(
-                if (active?.isAlive == true && processGeneration == lifecycleGeneration) {
+                if (active?.isAliveCompat() == true && processGeneration == lifecycleGeneration) {
                     previous.copy(
                         phase = I2pNetworkPhase.BUILDING_TUNNELS,
                         connectedAt = 0L,
@@ -410,9 +445,9 @@ class I2pdProcessManager internal constructor(
             }
         val active = capture.process ?: return capture.generation
 
-        active.destroyForcibly()
+        active.destroyForciblyCompat()
         val terminated =
-            active.waitFor(policy.processDestroyForciblyTimeoutMs, TimeUnit.MILLISECONDS) || !active.isAlive
+            active.waitForCompat(policy.processDestroyForciblyTimeoutMs, TimeUnit.MILLISECONDS) || !active.isAliveCompat()
         synchronized(stateLock) {
             if (lifecycleGeneration == capture.generation && process === active) {
                 if (terminated) {
@@ -451,10 +486,10 @@ class I2pdProcessManager internal constructor(
                     null
                 }
             } ?: return
-        runCatching { kill.process.destroyForcibly() }
+        runCatching { kill.process.destroyForciblyCompat() }
         synchronized(stateLock) {
             if (lifecycleGeneration == kill.generation && process === kill.process) {
-                if (kill.process.isAlive) {
+                if (kill.process.isAliveCompat()) {
                     currentSnapshot = I2pdSnapshot(I2pdState.ERROR)
                 } else {
                     process = null
@@ -478,7 +513,8 @@ class I2pdProcessManager internal constructor(
         webConsolePassword: String,
     ): Boolean =
         synchronized(stateLock) {
-            if (lifecycleGeneration != generation || process != null) {
+            if (lifecycleGeneration != generation ||
+                (process != null && (process !== started || processGeneration != generation))) {
                 false
             } else {
                 process = started
@@ -680,12 +716,12 @@ class I2pdProcessManager internal constructor(
         generation: Long,
         startedProcess: Process?,
     ) {
-        if (startedProcess?.isAlive == true) {
-            runCatching { startedProcess.destroyForcibly() }
+        if (startedProcess?.isAliveCompat() == true) {
+            runCatching { startedProcess.destroyForciblyCompat() }
         }
         synchronized(stateLock) {
             if (lifecycleGeneration != generation) {
-                if (startedProcess?.isAlive == true && process == null) {
+                if (startedProcess?.isAliveCompat() == true && process == null) {
                     process = startedProcess
                     processGeneration = lifecycleGeneration
                     currentSnapshot = I2pdSnapshot(I2pdState.ERROR)
@@ -693,7 +729,7 @@ class I2pdProcessManager internal constructor(
                 return
             }
             if (startedProcess == null || process === startedProcess) {
-                if (startedProcess?.isAlive == true) {
+                if (startedProcess?.isAliveCompat() == true) {
                     process = startedProcess
                     processGeneration = generation
                 } else {
@@ -707,8 +743,8 @@ class I2pdProcessManager internal constructor(
     }
 
     private fun retainIfTerminationFailed(activeProcess: Process) {
-        runCatching { activeProcess.destroyForcibly() }
-        if (!activeProcess.isAlive) {
+        runCatching { activeProcess.destroyForciblyCompat() }
+        if (!activeProcess.isAliveCompat()) {
             return
         }
         synchronized(stateLock) {
@@ -735,7 +771,7 @@ class I2pdProcessManager internal constructor(
 
     private fun recordProxyReady(session: I2pdReadySession): Boolean =
         synchronized(stateLock) {
-            if (!isCurrentProcessLocked(session.process, session.generation) || !session.process.isAlive) {
+            if (!isCurrentProcessLocked(session.process, session.generation) || !session.process.isAliveCompat()) {
                 false
             } else {
                 readyProxyGeneration = session.generation

@@ -16,6 +16,8 @@ import androidx.core.content.edit
 import androidx.core.content.getSystemService
 import com.foxhole.guard.BuildConfig
 import com.foxhole.guard.R
+import com.foxhole.guard.platform.notificationChannelValue
+import com.foxhole.guard.platform.withNotificationChannels
 import com.foxhole.guard.withStoredAppLocale
 
 internal class AppUpdateNotifier(
@@ -45,7 +47,7 @@ internal class AppUpdateNotifier(
             return false
         }
         ensureChannel()
-        if (notificationManager?.getNotificationChannel(CHANNEL_ID)?.importance == NotificationManager.IMPORTANCE_NONE) return false
+        if (notificationChannelValue<Int?>(null) { notificationManager?.getNotificationChannel(CHANNEL_ID)?.importance } == NotificationManager.IMPORTANCE_NONE) return false
         val body = appContext.getString(R.string.app_update_available_recommendation)
         val notification =
             NotificationCompat.Builder(appContext, CHANNEL_ID)
@@ -76,16 +78,18 @@ internal class AppUpdateNotifier(
     }
 
     internal fun ensureChannel() {
-        notificationManager?.createNotificationChannel(
-            NotificationChannel(
-                CHANNEL_ID,
-                appContext.getString(R.string.app_update_notification_channel_name),
-                NotificationManager.IMPORTANCE_DEFAULT,
-            ).apply {
-                lockscreenVisibility = Notification.VISIBILITY_PRIVATE
-                description = appContext.getString(R.string.app_update_notification_channel_description)
-            },
-        )
+        withNotificationChannels {
+            notificationManager?.createNotificationChannel(
+                NotificationChannel(
+                    CHANNEL_ID,
+                    appContext.getString(R.string.app_update_notification_channel_name),
+                    NotificationManager.IMPORTANCE_DEFAULT,
+                ).apply {
+                    lockscreenVisibility = Notification.VISIBILITY_PRIVATE
+                    description = appContext.getString(R.string.app_update_notification_channel_description)
+                },
+            )
+        }
     }
 
     private fun lastNotifiedVersionName(): String = preferences().getString(

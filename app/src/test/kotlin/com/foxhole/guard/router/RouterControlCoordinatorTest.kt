@@ -1,5 +1,6 @@
 package com.foxhole.guard.router
 
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -47,6 +48,7 @@ class RouterControlCoordinatorTest {
         var hold: String? = null
         var delayed: (() -> Unit)? = null
         var cancellations = 0
+        val cancelled = CompletableDeferred<Unit>()
         var revoked = false
         var proofConnected = true
         var wanCountry: String? = null
@@ -91,7 +93,7 @@ class RouterControlCoordinatorTest {
                     }
                     if (hold == action) delayed = reply else reply()
                 }
-                override fun cancel() { cancellations++ }
+                override fun cancel() { cancellations++; cancelled.complete(Unit) }
             }
         })
     }
@@ -290,6 +292,7 @@ class RouterControlCoordinatorTest {
         runCurrent()
         val oldReply = fixture.delayed!!
         coordinator.close()
+        fixture.cancelled.await()
         runCurrent()
         assertTrue(first.isCompleted); assertFalse(first.isCancelled); assertTrue(fixture.cancellations > 0)
         fixture.hold = null

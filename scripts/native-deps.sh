@@ -3,9 +3,9 @@
 # shellcheck disable=SC2034  # every pin below is consumed by the scripts that source this file
 
 
-openssl_ver="${I2PD_OPENSSL_VERSION:-3.5.8}"
+openssl_ver="${I2PD_OPENSSL_VERSION:-3.5.9}"
 case "$openssl_ver" in
-  3.5.8) openssl_sha256="${I2PD_OPENSSL_SHA256:-a8f84a39918ec6415ce765d9b429d313ba97b8143169c172e734b9514464f5b2}" ;;
+  3.5.9) openssl_sha256="${I2PD_OPENSSL_SHA256:-603f5602e2eef00d77fbd429d34dcd5822bb301757a1bc9cdb24c670f1eb859a}" ;;
   *) openssl_sha256="${I2PD_OPENSSL_SHA256:?set I2PD_OPENSSL_SHA256 when overriding I2PD_OPENSSL_VERSION}" ;;
 esac
 openssl_url="https://github.com/openssl/openssl/releases/download/openssl-$openssl_ver/openssl-$openssl_ver.tar.gz"

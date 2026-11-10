@@ -55,7 +55,7 @@ internal fun GuardRouterPackageUpdates(state: RouterUpdateControlState, enabled:
     Text(stringResource(R.string.guard_router_router_updates_scope), style = MaterialTheme.typography.bodyMedium)
     if (status != null) {
         status.currentVersion?.let { Text(stringResource(R.string.guard_router_router_updates_current_version, it)) }
-        status.availableVersion?.let { Text(stringResource(R.string.guard_router_router_updates_available_version, it)) }
+        status.availableVersion?.takeIf { it != status.currentVersion }?.let { Text(stringResource(R.string.guard_router_router_updates_available_version, it)) }
     }
     Text(stringResource(updateAvailabilityLabel(state)), style = MaterialTheme.typography.titleSmall)
     if (state.deviceDownloading) {
@@ -136,6 +136,8 @@ private fun updateAvailabilityLabel(state: RouterUpdateControlState): Int = when
     state.deviceCheckedCurrent -> R.string.guard_router_router_updates_current
     state.pending != null || state.reconnecting -> R.string.guard_router_router_updates_waiting
     state.job?.running == true || state.status?.busy == true || state.status?.activeAutomaticJob?.running == true -> R.string.guard_router_router_updates_running
+    state.status?.availability == RouterUpdateAvailability.NOT_CHECKED &&
+        state.status?.coreAvailability == com.foxhole.guard.router.RouterCoreUpdateAvailability.CURRENT -> R.string.guard_router_router_updates_core_current
     state.supported == false -> R.string.guard_router_router_updates_unsupported
     else -> when (state.status?.availability) {
         RouterUpdateAvailability.CURRENT -> R.string.guard_router_router_updates_current

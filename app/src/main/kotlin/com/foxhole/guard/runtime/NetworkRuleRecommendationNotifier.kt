@@ -14,6 +14,7 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.core.content.getSystemService
 import com.foxhole.guard.R
+import com.foxhole.guard.platform.withNotificationChannels
 import com.foxhole.guard.withStoredAppLocale
 
 internal class NetworkRuleRecommendationNotifier(
@@ -84,16 +85,18 @@ internal class NetworkRuleRecommendationNotifier(
         )
 
     internal fun ensureChannel() {
-        notificationManager?.createNotificationChannel(
-            NotificationChannel(
-                CHANNEL_ID,
-                appContext.getString(R.string.network_rule_notification_channel_name),
-                NotificationManager.IMPORTANCE_DEFAULT,
-            ).apply {
-                lockscreenVisibility = Notification.VISIBILITY_PRIVATE
-                description = appContext.getString(R.string.network_rule_notification_channel_description)
-            },
-        )
+        withNotificationChannels {
+            notificationManager?.createNotificationChannel(
+                NotificationChannel(
+                    CHANNEL_ID,
+                    appContext.getString(R.string.network_rule_notification_channel_name),
+                    NotificationManager.IMPORTANCE_DEFAULT,
+                ).apply {
+                    lockscreenVisibility = Notification.VISIBILITY_PRIVATE
+                    description = appContext.getString(R.string.network_rule_notification_channel_description)
+                },
+            )
+        }
     }
 
     companion object {

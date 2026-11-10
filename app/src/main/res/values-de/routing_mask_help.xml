@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="site_routing_modes_title">Szenarien und App-Regeln</string>
+    <string name="site_routing_direct_title">Direktverbindung</string>
+    <string name="site_routing_block_title">Blockieren</string>
+    <string name="site_mask_format">Format / Beispiel</string>
+    <string name="site_mask_scope">Übereinstimmung</string>
+    <string name="site_mask_exact_scope">Nur dieser genaue Hostname, ohne Subdomains.</string>
+    <string name="site_mask_suffix_scope">example.com und alle Subdomains. Platzhalter innerhalb eines Namensbestandteils werden nicht unterstützt.</string>
+    <string name="site_mask_zone_scope">Das angegebene Suffix und alle darunterliegenden Namen. Ein einzelner Name gilt als Suffix; co.uk allein ist ein genauer Hostname.</string>
+    <string name="site_mask_url_scope">Nur der Host example.com wird gespeichert. Schema, Port, Pfad, Abfrage und Fragment sind keine Routingbedingungen. Nur HTTP/HTTPS; Zugangsdaten werden abgelehnt.</string>
+    <string name="site_mask_idn_scope">Internationale Namen werden in browserkompatibles ASCII/Punycode umgewandelt. Es gelten dieselben Regeln für genaue Namen und Suffixe.</string>
+    <string name="site_mask_ip_scope">Eine Ziel-IP: IPv4 /32 oder IPv6 /128. Es erfolgt keine DNS-Abfrage.</string>
+    <string name="site_mask_cidr_scope">Das gesamte Netzwerk. Hostbits werden gelöscht: 192.0.2.0/24.</string>
+    <string name="site_mask_range_scope">Beide Endpunkte und alle IPs dazwischen. Gleiche IP-Familie, Anfang ≤ Ende; Umwandlung in eine genaue CIDR-Abdeckung.</string>
+    <string name="site_mask_unsupported_formats">Keine Seitenpfade, beliebigen *-Muster, kw:-Schlüsselwörter oder re:-Ausdrücke. Eine Adresse je Eingabe; höchstens 2.048 Zeichen.</string>
+    <string name="site_mask_formats">Formate: genauer Host / full: · Suffix *. / . / +. / domain: / suffix: · zone:ru / ru · HTTP/HTTPS-Host · IDN · IPv4/IPv6 · CIDR · IP-Bereich. URL-Pfade und Abfragen wählen keinen Datenverkehr aus. kw: und re: werden von der aktuellen Engine nicht unterstützt.</string>
+    <string name="site_mask_required">Webadresse, Domainmaske oder IP-Regel eingeben.</string>
+    <string name="site_mask_unsupported">Schlüsselwortregeln (kw:) und reguläre Ausdrücke (re:) werden von der aktuellen Engine nicht unterstützt.</string>
+    <string name="site_mask_legacy_unsupported">Diese gespeicherte kw:/re:-Regel wird nicht unterstützt. Sie wurde beibehalten; entfernen oder durch eine unterstützte Host-/IP-Regel ersetzen.</string>
+    <string name="cli_release_notes_web_filters">Webadressfilter für das Routing verbessert.</string>
+    <string name="cli_release_notes_notice_style">Visuellen Stil der Benachrichtigungen verbessert.</string>
+    <string name="guard_router_router_updates_core_current">Core-Module sind aktuell; Paketprüfung steht aus</string>
+    <string name="site_mask_exact_example">example.com\nfull:example.com</string>
+    <string name="site_mask_suffix_example">*.example.com\n.example.com\n+.example.com\ndomain:example.com\nsuffix:example.com</string>
+    <string name="site_mask_zone_example">ru · .ru · *.ru\nzone:ru · suffix:ru\n*.co.uk</string>
+    <string name="site_mask_url_example">https://example.com:443/page?q=1\nexample.com/path</string>
+    <string name="site_mask_idn_example">пример.рф\nfaß.de</string>
+    <string name="site_mask_ip_example">192.0.2.1\n2001:db8::1</string>
+    <string name="site_mask_cidr_example">192.0.2.99/24\ncidr:2001:db8::/32</string>
+    <string name="site_mask_range_example">192.0.2.3-192.0.2.9\nrange:2001:db8::1-2001:db8::ffff</string>
+</resources>

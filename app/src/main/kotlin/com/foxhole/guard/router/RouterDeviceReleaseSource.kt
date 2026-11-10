@@ -31,6 +31,8 @@ internal class RouterDevicePackage(val release: RouterDeviceRelease, val file: F
 internal class RouterDeviceReleaseSource(private val cache: File,
     private val http: RouterDeviceReleaseHttp = RouterDeviceReleaseHttp(),
     private val io: CoroutineDispatcher = Dispatchers.IO) {
+    internal fun coreSource() = RouterCoreUpdateSource(cache, http, io)
+
     suspend fun downloadNewer(currentVersion: String, progress: (Int?) -> Unit): RouterDevicePackage? {
         val pending = AtomicReference<RouterDevicePackage?>()
         try {

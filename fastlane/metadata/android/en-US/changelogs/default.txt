@@ -1,1 +1,3 @@
-Added Arabic language and RTL support, adapted the widget, and fixed translations and router settings.
+- Added Android 7 support.
+- Improved web-address routing filters.
+- Improved the visual style of notifications.

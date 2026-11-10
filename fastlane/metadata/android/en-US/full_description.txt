@@ -1,3 +1,5 @@
+Requires Android 7 (API 24) or later.
+
 FoxHole Guard is a privacy-focused app for VPN, Tor and I2P networking, with firewall, DNS filtering, and FoxHole Sentinel network anomaly monitoring.
 
 It also offers a traffic map, web applications, and a local-network proxy. Separate web-app cookies and data require MULTI_PROFILE support in Android WebView; otherwise a shared profile is used.

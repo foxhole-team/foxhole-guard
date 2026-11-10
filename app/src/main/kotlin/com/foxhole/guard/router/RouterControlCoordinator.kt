@@ -339,6 +339,7 @@ internal class RouterControlCoordinator(
             }
             checkOwner()
             if (uploaded == null) {
+                if (status.deviceDownloadKind == RouterUpdateCohortKind.CORE) invalidEngineResponse()
                 publish(mutableState.value.copy(updates = refreshed.copy(failure = null, job = null, deviceCheckedCurrent = true)))
                 return
             }

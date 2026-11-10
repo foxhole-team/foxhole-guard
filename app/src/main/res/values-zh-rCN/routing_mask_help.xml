@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="site_routing_modes_title">场景和应用规则</string>
+    <string name="site_routing_direct_title">直接连接</string>
+    <string name="site_routing_block_title">拦截</string>
+    <string name="site_mask_format">格式 / 示例</string>
+    <string name="site_mask_scope">匹配范围</string>
+    <string name="site_mask_exact_scope">仅匹配此完整主机名，不包括其子域名。</string>
+    <string name="site_mask_suffix_scope">匹配 example.com 及其所有子域名。不支持在名称片段内部使用通配符。</string>
+    <string name="site_mask_zone_scope">匹配指定后缀及其下的所有名称。单个名称视为后缀；单独的 co.uk 视为完整主机名。</string>
+    <string name="site_mask_url_scope">仅保存主机 example.com。协议、端口、路径、查询和片段均不是路由条件。仅支持 HTTP/HTTPS；拒绝包含凭据的地址。</string>
+    <string name="site_mask_idn_scope">国际化域名会转换为兼容浏览器的 ASCII/Punycode。完整匹配和后缀规则保持不变。</string>
+    <string name="site_mask_ip_scope">单个目标 IP：IPv4 /32 或 IPv6 /128。不执行 DNS 查询。</string>
+    <string name="site_mask_cidr_scope">整个网络。清除主机位：192.0.2.0/24。</string>
+    <string name="site_mask_range_scope">包含两个端点及其间的所有 IP。须属于同一 IP 地址族，起始 ≤ 结束；转换为精确的 CIDR 范围。</string>
+    <string name="site_mask_unsupported_formats">不支持页面路径、任意 * 模式、kw: 关键词或 re: 正则表达式。每次输入一个地址，最多 2,048 个字符。</string>
+    <string name="site_mask_formats">格式：完整主机名 / full: · 后缀 *. / . / +. / domain: / suffix: · zone:ru / ru · HTTP/HTTPS 主机 · IDN · IPv4/IPv6 · CIDR · IP 范围。URL 路径和查询不用于选择流量。当前引擎不支持 kw: 和 re:。</string>
+    <string name="site_mask_required">请输入网页地址、域名掩码或 IP 规则。</string>
+    <string name="site_mask_unsupported">当前引擎不支持关键词 (kw:) 和正则表达式 (re:) 规则。</string>
+    <string name="site_mask_legacy_unsupported">此已保存的 kw:/re: 规则不受当前引擎支持。规则已保留；请删除或替换为支持的主机/IP 规则。</string>
+    <string name="cli_release_notes_web_filters">改进了网页地址路由筛选器。</string>
+    <string name="cli_release_notes_notice_style">改进了通知的视觉样式。</string>
+    <string name="guard_router_router_updates_core_current">Core 模块已是最新；等待检查软件包</string>
+    <string name="site_mask_exact_example">example.com\nfull:example.com</string>
+    <string name="site_mask_suffix_example">*.example.com\n.example.com\n+.example.com\ndomain:example.com\nsuffix:example.com</string>
+    <string name="site_mask_zone_example">ru · .ru · *.ru\nzone:ru · suffix:ru\n*.co.uk</string>
+    <string name="site_mask_url_example">https://example.com:443/page?q=1\nexample.com/path</string>
+    <string name="site_mask_idn_example">пример.рф\nfaß.de</string>
+    <string name="site_mask_ip_example">192.0.2.1\n2001:db8::1</string>
+    <string name="site_mask_cidr_example">192.0.2.99/24\ncidr:2001:db8::/32</string>
+    <string name="site_mask_range_example">192.0.2.3-192.0.2.9\nrange:2001:db8::1-2001:db8::ffff</string>
+</resources>

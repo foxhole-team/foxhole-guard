@@ -14,6 +14,8 @@ import androidx.core.content.getSystemService
 import com.foxhole.guard.R
 import com.foxhole.guard.WatchdogNames
 import com.foxhole.guard.core.data.WebAppEntity
+import com.foxhole.guard.platform.notificationChannelValue
+import com.foxhole.guard.platform.withNotificationChannels
 import com.foxhole.guard.withStoredAppLocale
 import kotlin.math.roundToInt
 
@@ -71,8 +73,9 @@ class WebAppsNotifier(
         if (!NotificationManagerCompat.from(appContext).areNotificationsEnabled()) {
             return true
         }
-        val channel = notificationManager?.getNotificationChannel(CHANNEL_ID)
-        return channel != null && channel.importance == NotificationManager.IMPORTANCE_NONE
+        return notificationChannelValue(false) {
+            notificationManager?.getNotificationChannel(CHANNEL_ID)?.importance == NotificationManager.IMPORTANCE_NONE
+        }
     }
 
     /** Removes the app's notification: a deleted or wiped app must not keep ringing in the shade. */
@@ -86,16 +89,18 @@ class WebAppsNotifier(
         (NOTIFICATION_ID_BASE + (appId % NOTIFICATION_ID_RANGE)).toInt()
 
     internal fun ensureChannel() {
-        notificationManager?.createNotificationChannel(
-            NotificationChannel(
-                CHANNEL_ID,
-                WatchdogNames.WEB,
-                NotificationManager.IMPORTANCE_DEFAULT,
-            ).apply {
-                lockscreenVisibility = Notification.VISIBILITY_PRIVATE
-                description = appContext.getString(R.string.cli_webapps_channel_name)
-            },
-        )
+        withNotificationChannels {
+            notificationManager?.createNotificationChannel(
+                NotificationChannel(
+                    CHANNEL_ID,
+                    WatchdogNames.WEB,
+                    NotificationManager.IMPORTANCE_DEFAULT,
+                ).apply {
+                    lockscreenVisibility = Notification.VISIBILITY_PRIVATE
+                    description = appContext.getString(R.string.cli_webapps_channel_name)
+                },
+            )
+        }
     }
 
     companion object {

@@ -1,0 +1,58 @@
+{
+  "appNativeInputHashes": {
+    "config/foxcore-native-inputs.json": "47c418f52d402d1356e4e8961f9fd7cafe192f49326aac05378825cd703e1c22",
+    "config/foxcore-revision.txt": "c83f59d36f54d9bd5f77630e3186e51e555aaeb186e258258361dd1e489c1ede",
+    "config/foxcore-source-checkout.json": "1d3dacdedff889e21306c5c10fced0ef84246ab5c45a47659516b1c30ad5e974",
+    "config/foxcore-source-manifest.json": "1cc9afa207f2d89b46e4dd0ea4e12bd3a2409bd39a4b1875829daf32c05fba4a",
+    "scripts/core-source-binding.py": "4a0f792bdee945848c8e434ed0758ffcf60db4be82e3246f178b4a7a490fca98",
+    "scripts/sqlite-fork-origin.py": "d75a10310694caae886d334fd9026e38a2677b104bb50b045ac261b4bd95d4c2"
+  },
+  "claims": {
+    "APKQualified": false,
+    "completeConsumerLegalQualification": false,
+    "exactCompiledUnitGraphClaim": false,
+    "perUnitFeatureTopology": "UNKNOWN_NOT_CLAIMED",
+    "runtimeQualified": false
+  },
+  "consumer": "guard",
+  "consumerSource": {
+    "checkoutCommit": "90ae3e0d60de3d35e88e24558c99e771d9ca0bcf",
+    "checkoutTree": "ab7dbd0fb7dec20685dc4c279497b2abc78df8d2",
+    "compiledManifestSHA256": "1cc9afa207f2d89b46e4dd0ea4e12bd3a2409bd39a4b1875829daf32c05fba4a",
+    "producerCommit": "3fc3b70d8e9d700b3e07ec27638515c00651b013",
+    "producerTree": "1fd25d80359fd8b12765baec7c6d3093e92f89db"
+  },
+  "coverage": "complete",
+  "kind": "current-retained-sentinel-source-native-legal-input-admission",
+  "legalResultSHA256": "d8fc7e76dfc25630912188eef8f532b8e9a8442db5d803fff723789245f12899",
+  "nativeLibraries": {
+    "aarch64-linux-android": {
+      "abi": "arm64-v8a",
+      "bytes": 15491496,
+      "sha256": "40efadee23a67ad978b4ebd088b07531461445e30c1945d488ebaa7c2e9c3e4b"
+    },
+    "armv7-linux-androideabi": {
+      "abi": "armeabi-v7a",
+      "bytes": 10498080,
+      "sha256": "b544e5103cc83145978192e5b52294e5082d9ba236648bb0a171932d6a466019"
+    },
+    "i686-linux-android": {
+      "abi": "x86",
+      "bytes": 19097680,
+      "sha256": "44610773f9f9565d44501697e388d8b98e6d752073770c6e4a8c1b93d56e38e4"
+    },
+    "x86_64-linux-android": {
+      "abi": "x86_64",
+      "bytes": 18707472,
+      "sha256": "d25056370792cd148f036862e6e9fd884aaec3e26abdf34eb8a1155e706e977f"
+    }
+  },
+  "normalReceiptSHA256": "66cd84c17384063a6a3a52fc220e33be637971fca8b3b26b38a64d3528e12be1",
+  "noticeValidatorSHA256": "3248517bc892ab37dafcdcb491c5831ec35cf5a730d5d4bdf99f53967fc8423c",
+  "originalProducerCommit": "8e152b83650022a3350d555783eb98f1bd978d9f",
+  "originalProducerTree": "f048fce743818d0a2e5715773c9ca04b2cc6ac0c",
+  "retainedInputCount": 1486,
+  "retentionProofSHA256": "cd327bdbd5024abede3cf39d9d5abe65d372bbfb43050d9be28ee18ccc6f5de0",
+  "schema": 1,
+  "staticSourceNativeLegalInputsBound": true
+}

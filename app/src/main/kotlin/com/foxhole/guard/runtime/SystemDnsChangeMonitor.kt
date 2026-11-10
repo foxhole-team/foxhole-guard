@@ -20,6 +20,7 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.core.content.getSystemService
 import com.foxhole.guard.R
+import com.foxhole.guard.platform.withNotificationChannels
 import com.foxhole.guard.ui.cli.CliMainActivity
 import com.foxhole.guard.withStoredAppLocale
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -180,16 +181,18 @@ internal class SystemDnsChangeMonitor(
     }
 
     internal fun ensureChannel() {
-        notificationManager?.createNotificationChannel(
-            NotificationChannel(
-                CHANNEL_ID,
-                appContext.getString(R.string.dns_change_notification_channel_name),
-                NotificationManager.IMPORTANCE_HIGH,
-            ).apply {
-                lockscreenVisibility = Notification.VISIBILITY_PRIVATE
-                description = appContext.getString(R.string.dns_change_notification_channel_description)
-            },
-        )
+        withNotificationChannels {
+            notificationManager?.createNotificationChannel(
+                NotificationChannel(
+                    CHANNEL_ID,
+                    appContext.getString(R.string.dns_change_notification_channel_name),
+                    NotificationManager.IMPORTANCE_HIGH,
+                ).apply {
+                    lockscreenVisibility = Notification.VISIBILITY_PRIVATE
+                    description = appContext.getString(R.string.dns_change_notification_channel_description)
+                },
+            )
+        }
     }
 
     internal companion object {

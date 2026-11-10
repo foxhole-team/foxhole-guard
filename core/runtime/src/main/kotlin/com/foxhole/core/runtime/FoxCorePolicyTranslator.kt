@@ -277,7 +277,14 @@ internal object FoxCorePolicyTranslator {
                 packageName = packageName,
                 action = action,
             )
-        target.routes += route
+        val cidrs = route["cidrs"] as? JsonArray
+        val boundedRoutes = if (cidrs != null && cidrs.size > 64) {
+            cidrs.chunked(64).map { chunk -> JsonObject(route + ("cidrs" to JsonArray(chunk))) }
+        } else listOf(route)
+        if (target.routes.size + boundedRoutes.size > 4_096) {
+            rejectFoxCoreConfig(FoxCoreConfigRejection.POLICY_UNREPRESENTABLE, path)
+        }
+        target.routes.addAll(boundedRoutes)
         target.recordPackageRoute(
             packageName = packageName,
             transport = route["transport"]?.jsonPrimitive?.contentOrNull,

@@ -2,14 +2,11 @@ package com.foxhole.guard.ui.cli
 
 import android.view.HapticFeedbackConstants
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalView
@@ -20,9 +17,10 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.intl.LocaleList
 import androidx.compose.ui.text.style.Hyphens
 import androidx.compose.ui.text.style.LineBreak
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.foxhole.guard.ui.FoxholeBannerEvent
+import com.foxhole.guard.ui.FoxholeBannerTone
+import com.foxhole.guard.R
 
 @Composable
 internal fun CliUserNoticeRow(
@@ -57,21 +55,14 @@ internal fun CliUserNoticeRow(
             shape = RoundedCornerShape(16.dp),
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Row(
-                modifier = Modifier.noticeRemainingLine(progress, color).padding(12.dp)
-                    .semantics { liveRegion = LiveRegionMode.Polite },
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    notice.message,
-                    style = noticeStyle,
-                    softWrap = true,
-                    color = color,
-                    textAlign = TextAlign.Start,
-                    modifier = Modifier.weight(1f),
-                )
-            }
+            InlineNoticeText(notice.message, icon = when (notice.tone) {
+                FoxholeBannerTone.INFO -> R.drawable.lin_info
+                FoxholeBannerTone.WARNING -> R.drawable.lin_warning
+                FoxholeBannerTone.ERROR -> R.drawable.lin_error
+                FoxholeBannerTone.SUCCESS -> R.drawable.lin_check
+            }, color = color, style = noticeStyle,
+                modifier = Modifier.fillMaxWidth().noticeRemainingLine(progress, color).padding(12.dp)
+                    .semantics { liveRegion = LiveRegionMode.Polite })
         }
     }
 }
-

@@ -40,6 +40,14 @@ def read(path,limit=1048576,expected=None,source_empty=False,nlinks=(1,)):
  finally:os.close(pd)
  need(len(raw)==before.st_size and facts(path.lstat())==facts(before)and facts(path.parent.lstat())==facts(parent),'Legal input changed after read')
  need(expected is None or digest(raw)==expected,'Canonical legal input digest differs');return raw
+def verify_source_input(core_root,name,pin,revision,source_empty=False):
+ if name in ('vendor/libsqlite3-sys/sqlcipher/sqlite3.c','vendor/libsqlite3-sys/sqlite3/sqlite3.c'):
+  helper=Path(__file__).with_name('sqlite-fork-origin.py');read(helper)
+  spec=importlib.util.spec_from_file_location('typed_SQLite_source_digest',helper);module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+  need(pin==module.SQLITE_INPUTS[name][1],'Unknown SQLite source digest refused before reading')
+  module.source_bytes(Path(core_root),name)
+ else:read(Path(core_root)/name,expected=pin,source_empty=source_empty)
+
 def git(root,*args):
  result=subprocess.run(['git','-C',str(root),*args],check=True,capture_output=True)
  need(len(result.stdout)<=1048576,'Oversized source identity');return result.stdout
@@ -80,6 +88,11 @@ def source_checkout(app_root,core_root,revision):
  helper=Path(__file__).with_name('core-source-binding.py');read(helper);spec=importlib.util.spec_from_file_location('exact_Core_source_checkout_binding',helper);module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module);return module.resolve(app_root,core_root,revision)
 def load(snapshot_path,app_root,core_root,revision,profile,core_native,sentinel_native,source_native_manifest=None,source_native_staging=False):
  app_root,core_root=Path(app_root).resolve(),Path(core_root).resolve();path=Path(snapshot_path).absolute();need(profile in SHAPES and isinstance(revision,str)and REVISION.fullmatch(revision),'Unknown canonical source/profile');raw=read(path);record=document(raw);shape=SHAPES[profile]
+ if record.get('kind')=='current-guard-source-native-legal-consumer-v1':
+  helper=app_root/'scripts/current-source-legal-consumer.py';read(helper)
+  spec=importlib.util.spec_from_file_location('current_guard_source_native_legal_consumer',helper);module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+  return module.load(path,app_root,core_root,revision,profile,core_native,sentinel_native,source_native_manifest)
+
  need(record.get('schema')==1 and record.get('kind')=='canonical-source-legal-delivery'and record.get('coreCommit')==revision and record.get('androidDeliveryProfile')==profile and record.get('abis')==list(shape.values())and record.get('targets')==list(shape),'Canonical source/profile identity differs')
  source_producer=record.get('sourceProducerProfile')
  need((source_producer=='android3'and set(shape)<=set(SHAPES['android3']))or(source_producer=='android64'and profile=='android64')or(source_producer=='android4'and profile in('android4','android-armv7'))or(source_producer=='android-arm64'and profile=='android-arm64'),'Canonical producer profile differs');checkout=source_checkout(app_root,core_root,revision);source_revision=checkout['sourceCommit'];need(git(core_root,'rev-parse','HEAD').decode().strip()==source_revision,'Core checkout differs from canonical source')
@@ -88,7 +101,7 @@ def load(snapshot_path,app_root,core_root,revision,profile,core_native,sentinel_
  need(len(compiled_map)==len(rows)==expected_inputs and compiled.get('commit')==revision and compiled.get('androidDeliveryProfile')==profile and compiled.get('abis')==list(shape.values())and compiled.get('targets')==list(shape)and record.get('compiledInputs')==compiled_map,'Canonical compiled source manifest differs')
  sentinels=record.get('sentinelInputs');need(isinstance(sentinels,dict)and sentinels,'Sentinel source inventory missing');names=git(core_root,'ls-tree','-r','--name-only',source_revision,'native/sentinel-yara').decode().splitlines();need(len(names)==len(set(names))and set(names)==set(sentinels),'Whole Sentinel source tree differs')
  source={**compiled_map,**sentinels};need(all(n.startswith('native/sentinel-yara/')for n in sentinels),'Sentinel source scope differs')
- for name,pin in source.items():relative(name);need(isinstance(pin,str)and HASH.fullmatch(pin),'Invalid source digest');read(core_root/name,expected=pin,source_empty=pin==digest(b''))
+ for name,pin in source.items():relative(name);need(isinstance(pin,str)and HASH.fullmatch(pin),'Invalid source digest');verify_source_input(core_root,name,pin,revision,source_empty=pin==digest(b''))
  locks=record.get('locks');need(isinstance(locks,dict)and set(locks)==set(LOCKS)and all(locks[n]==digest(read(core_root/n))for n in LOCKS),'Canonical source lock differs')
  version=tomllib.loads(read(core_root/'Cargo.toml').decode())['workspace']['package']['version'];need(record.get('version')==version,'Canonical Core version differs')
  need(tomllib.loads(read(core_root/'rust-toolchain.toml').decode())['toolchain']['channel']=='1.97.1','Canonical Rust compiler differs')
@@ -165,9 +178,13 @@ def load(snapshot_path,app_root,core_root,revision,profile,core_native,sentinel_
   if name.startswith(('sentinel/LICENSE','sentinel/README.md','sentinel/vendor/')):need(files[name]==read(core_root/'native/sentinel-yara'/name.removeprefix('sentinel/')),'Pinned Sentinel original material differs')
  return MappingProxyType({'files':MappingProxyType(files),'snapshotSha256':digest(raw),'coreCommit':revision,'sourceCommit':source_revision,'sourceTree':checkout['sourceTree'],'appRoot':app_root,'profile':profile,'nativeLibraries':source_native_rows,'referenceNativeLibraries':native,'sourceNativeProvenance':source_native,'sourceNativeManifestPath':Path(source_native_manifest).absolute()if source_native_manifest is not None else None,'sourceFiles':source,'locks':locks,'roots':roots,'snapshotPath':path})
 def recheck(material,core_root):
+ if material.get('currentMode')=='current-guard-source-native-legal-consumer-v1':
+  helper=Path(material['appRoot'])/'scripts/current-source-legal-consumer.py';read(helper)
+  spec=importlib.util.spec_from_file_location('recheck_current_guard_source_native_legal_consumer',helper);module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+  module.recheck(material,core_root);return
  if material.get('sourceNativeProvenance')is not None:need(document(read(material['sourceNativeManifestPath']))==material['sourceNativeProvenance'],'Native source-build provenance changed during legal generation')
  checkout=source_checkout(material['appRoot'],core_root,material['coreCommit']);need(checkout['sourceCommit']==material['sourceCommit']and checkout['sourceTree']==material['sourceTree']and git(Path(core_root),'rev-parse','HEAD').decode().strip()==material['sourceCommit'],'Core checkout changed during legal generation')
- for name,pin in material['sourceFiles'].items():read(Path(core_root)/name,expected=pin,source_empty=pin==digest(b''))
+ for name,pin in material['sourceFiles'].items():verify_source_input(core_root,name,pin,material['coreCommit'],source_empty=pin==digest(b''))
  for kind,rows in material['nativeLibraries'].items():
   library='libfoxhole_native.so'if kind=='core'else'libfoxhole_sentinel_yara.so'
   for row in rows.values():read(material['roots'][kind]/row['abi']/library,128*1024**2,row['sha256'],nlinks=(1,2))

@@ -30,6 +30,7 @@ import com.foxhole.core.runtime.FoxholeVpnRuntimeBridge
 import com.foxhole.core.runtime.LocalGuardMode
 import com.foxhole.core.runtime.i2pRuntimeActive
 import com.foxhole.guard.R
+import com.foxhole.guard.platform.withNotificationChannels
 
 internal data class ConnectionNotificationAction(
     val serviceAction: String,
@@ -71,23 +72,25 @@ internal fun Service.removeForegroundNotification() {
 }
 
 internal fun Context.ensureConnectionNotificationChannel(notificationManager: NotificationManager) {
-    notificationManager.createNotificationChannel(
-        NotificationChannel(
-            FoxholeConnectionServiceContract.NOTIFICATION_CHANNEL_ID,
-            getString(R.string.notification_channel_name),
-            NotificationManager.IMPORTANCE_LOW,
-        ).apply {
-            description = getString(R.string.notification_channel_description)
-            setSound(null, null)
-            enableVibration(false)
-            enableLights(false)
-            setShowBadge(false)
-            lockscreenVisibility = Notification.VISIBILITY_SECRET
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                setAllowBubbles(false)
-            }
-        },
-    )
+    withNotificationChannels {
+        notificationManager.createNotificationChannel(
+            NotificationChannel(
+                FoxholeConnectionServiceContract.NOTIFICATION_CHANNEL_ID,
+                getString(R.string.notification_channel_name),
+                NotificationManager.IMPORTANCE_LOW,
+            ).apply {
+                description = getString(R.string.notification_channel_description)
+                setSound(null, null)
+                enableVibration(false)
+                enableLights(false)
+                setShowBadge(false)
+                lockscreenVisibility = Notification.VISIBILITY_SECRET
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    setAllowBubbles(false)
+                }
+            },
+        )
+    }
 }
 
 internal fun Service.claimForegroundSlotEarly(notificationManager: NotificationManager) {

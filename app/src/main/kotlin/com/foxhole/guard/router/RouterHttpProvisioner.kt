@@ -62,7 +62,7 @@ internal data class RouterPhoneStatus(val pairingId: String, val lanDeviceId: St
 internal data class RouterPanelCapabilities(val coreProtocols: Set<String>, val legacyProtocols: Set<String>,
     val inboundProtocols: Set<String>, val subscriptionSelection: Boolean, val independentPhoneChoices: Boolean,
     val phoneRegistration: Boolean, val homeProof: Boolean, val phoneHandoff: Boolean = false, val providerResolve: Boolean = false,
-    val profileSourceImport: Boolean = false, val packageUpdates: Boolean = false)
+    val profileSourceImport: Boolean = false, val packageUpdates: Boolean = false, val coreCohortRelay: Int = 0)
 
 internal data class RouterClientCreation(val snapshot: RouterControlSnapshot, val clientId: String, val provisioned: Boolean)
 
@@ -682,7 +682,8 @@ internal fun parseRouterPanelCapabilities(value: JsonObject): RouterPanelCapabil
         value["phoneHandoff"]?.let { (it as? JsonPrimitive)?.takeIf { item -> !item.isString }?.booleanOrNull ?: malformed() } ?: false,
         value["providerResolve"]?.let { (it as? JsonPrimitive)?.takeIf { item -> !item.isString }?.booleanOrNull ?: malformed() } ?: false,
         value["profileSourceImport"]?.let { (it as? JsonPrimitive)?.takeIf { item -> !item.isString }?.booleanOrNull ?: malformed() } ?: false,
-        value["packageUpdates"]?.let { (it as? JsonPrimitive)?.takeIf { item -> !item.isString }?.booleanOrNull ?: malformed() } ?: false)
+        value["packageUpdates"]?.let { (it as? JsonPrimitive)?.takeIf { item -> !item.isString }?.booleanOrNull ?: malformed() } ?: false,
+        if ("coreCohortRelay" in value) value.number("coreCohortRelay").also { if (it !in 0..1) malformed() }.toInt() else 0)
 }
 
 private fun parsePhoneStatus(value: JsonObject, expectedPairId: String, address: String, now: Long, requestDurationMs: Long): RouterPhoneStatus {

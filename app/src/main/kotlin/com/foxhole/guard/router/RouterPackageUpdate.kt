@@ -5,6 +5,8 @@ import kotlinx.serialization.json.JsonObject
 
 internal enum class RouterUpdateAvailability { NOT_CHECKED, CURRENT, AVAILABLE, UNSUPPORTED, CHECK_FAILED }
 internal enum class RouterUpdateOperation { CHECK, APPLY }
+internal enum class RouterUpdateCohortKind { BASE, CORE }
+internal enum class RouterCoreUpdateAvailability { UNKNOWN, CURRENT, AVAILABLE }
 internal enum class RouterUpdateStep {
     PREPARING, CHECKING_RELEASE, DOWNLOADING_INDEX, DOWNLOADING_PACKAGE, VERIFYING_PACKAGE, BACKING_UP,
     INSTALLING_PACKAGE, CHECKING_PACKAGE, RECONNECTING_VPN, COMPLETED, FAILED, RECOVERY_REQUIRED,
@@ -36,7 +38,9 @@ internal data class RouterUpdateStatus(val supported: Boolean, val routerId: Str
     val lastCheckedAtUnixMs: Long?, val failureReason: RouterUpdateFailureReason?, val busy: Boolean,
     val autoUpdate: RouterUpdateAuto, val installedModules: List<RouterUpdateModule>,
     val activeOwnJob: RouterUpdateJobRef?, val lastOwnJob: RouterUpdateJobRef?, val activeAutomaticJob: RouterUpdateProgress?,
-    val deviceDownloadRequired: Boolean = false)
+    val deviceDownloadRequired: Boolean = false, val deviceDownloadKind: RouterUpdateCohortKind = RouterUpdateCohortKind.BASE,
+    val coreCohortRelay: Int = 0, val coreAvailability: RouterCoreUpdateAvailability = RouterCoreUpdateAvailability.UNKNOWN,
+    val coreCohortSha256: String? = null)
 internal data class RouterUpdateChange(val id: String, val fromVersion: String, val toVersion: String, val storage: RouterEngineStorage?)
 internal data class RouterUpdatePlan(val routerId: String, val revision: Long, val planId: String, val planSha256: String,
     val fromVersion: String, val toVersion: String, val protocols: Set<RouterInstallProtocol>, val changes: List<RouterUpdateChange>,
@@ -87,6 +91,12 @@ internal fun parseRouterUpdateStatus(value: JsonObject): RouterUpdateStatus {
     val available = value.engineNullableText("availableVersion", 96)
     val failure = value.updateFailure("failureReason")
     val deviceDownload = if ("deviceDownloadRequired" in value) value.engineBoolean("deviceDownloadRequired") else false
+    val kind = if ("deviceDownloadKind" in value) value.engineEnum<RouterUpdateCohortKind>("deviceDownloadKind") else RouterUpdateCohortKind.BASE
+    val coreRelay = if ("coreCohortRelay" in value) value.engineNumber("coreCohortRelay").also { if (it !in 0..1) invalidEngineResponse() }.toInt() else 0
+    val coreAvailability = if ("coreAvailability" in value) value.engineEnum<RouterCoreUpdateAvailability>("coreAvailability") else RouterCoreUpdateAvailability.UNKNOWN
+    val cohort = value.engineNullableHash("coreCohortSha256")
+    if (deviceDownload && kind == RouterUpdateCohortKind.CORE && coreRelay != 1 ||
+        coreAvailability != RouterCoreUpdateAvailability.UNKNOWN && cohort == null) invalidEngineResponse()
     if (deviceDownload && (!supported || failure !in setOf(null, RouterUpdateFailureReason.DOWNLOAD_FAILED,
             RouterUpdateFailureReason.RELEASE_UNAVAILABLE, RouterUpdateFailureReason.ROUTER_UNAVAILABLE))) invalidEngineResponse()
     if (supported && current == null || !supported && availability != RouterUpdateAvailability.UNSUPPORTED ||
@@ -113,7 +123,7 @@ internal fun parseRouterUpdateStatus(value: JsonObject): RouterUpdateStatus {
     return RouterUpdateStatus(supported, value.engineHash("routerId"), value.engineNumber("revision"), current, available,
         availability, value.engineNullableNumber("lastCheckedAtUnixMs"), failure, value.engineBoolean("busy"),
         RouterUpdateAuto(auto.engineBoolean("enabled"), 86400, auto.engineNullableNumber("lastAttemptAtUnixMs"),
-            auto.engineNullableNumber("nextCheckAtUnixMs"), suspended), modules, active, last, automatic, deviceDownload)
+            auto.engineNullableNumber("nextCheckAtUnixMs"), suspended), modules, active, last, automatic, deviceDownload, kind, coreRelay, coreAvailability, cohort)
 }
 
 internal fun parseRouterUpdatePlan(value: JsonObject, status: RouterUpdateStatus): RouterUpdatePlan {

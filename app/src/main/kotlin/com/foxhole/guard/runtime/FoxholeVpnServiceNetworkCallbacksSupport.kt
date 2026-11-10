@@ -13,6 +13,7 @@ import com.foxhole.core.runtime.FoxholeVpnRuntimeBridge
 import com.foxhole.core.runtime.LocalGuardMode
 import com.foxhole.core.runtime.i2pRuntimeActive
 import com.foxhole.guard.R
+import com.foxhole.guard.platform.androidApi26Value
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
@@ -144,7 +145,10 @@ internal fun FoxholeVpnService.registerVpnNetworkCallbackIfNeeded() {
     }
     val registration =
         runCatching {
-            connectivityManager.registerNetworkCallback(trackedVpnNetworkRequest, vpnNetworkCallback, mainHandler)
+            androidApi26Value(
+                legacy = { connectivityManager.registerNetworkCallback(trackedVpnNetworkRequest, vpnNetworkCallback) },
+                modern = { connectivityManager.registerNetworkCallback(trackedVpnNetworkRequest, vpnNetworkCallback, mainHandler) },
+            )
         }.recoverCatching {
             connectivityManager.registerNetworkCallback(trackedVpnNetworkRequest, vpnNetworkCallback)
         }
@@ -277,7 +281,10 @@ internal fun FoxholeVpnService.registerDefaultNetworkCallbackIfNeeded() {
     }
     val registration =
         runCatching {
-            connectivityManager.registerDefaultNetworkCallback(defaultNetworkCallback, mainHandler)
+            androidApi26Value(
+                legacy = { connectivityManager.registerDefaultNetworkCallback(defaultNetworkCallback) },
+                modern = { connectivityManager.registerDefaultNetworkCallback(defaultNetworkCallback, mainHandler) },
+            )
         }
     registration
         .onSuccess { defaultNetworkCallbackRegistered = true }
