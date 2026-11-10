@@ -1,0 +1,125 @@
+{
+  "checkerSha256": "787fc4e276197bf765c6941324b4578d7ada826bde73835344e87ae0f61179f6",
+  "consumerExtension": {
+    "baseCanonicalManifestSha256": "7a5851596b3c882b4bf8da1fca83f6a5880c7ba30350de7c631e89f634303b50",
+    "kind": "additive-core-cohort-status",
+    "scope": "Both applications already share optional Core cohort relay/status fields; wire revision and native facade unchanged. Base canonical origin remains pinned."
+  },
+  "contract": "android-router",
+  "fixtureTest": {
+    "canonicalPath": "RouterContractFixtureTest.kt.template",
+    "normalizedSha256": "5349815cc253e2fa871f54897603cfbf76cc47bc965919d5328621bbac95fe2c",
+    "paths": {
+      "guard": "app/src/test/kotlin/com/foxhole/guard/router/RouterContractFixtureTest.kt",
+      "vpn": "app/src/test/kotlin/com/foxhole/vpn/router/RouterContractFixtureTest.kt"
+    },
+    "templateSha256": "b7317bba99cbbdd80a621dcb1794bde365dc2aa8597165306c7b60b27c618ff3"
+  },
+  "fixtures": [
+    {
+      "consumerPath": "app/src/test/resources/android-router-contract-v1/catalog-valid.json",
+      "path": "test-resources/android-router-contract-v1/catalog-valid.json",
+      "sha256": "628820277288776e56a1703179d5e4fb3eb7a791467d40c93fdb9f5e11dcf69c"
+    },
+    {
+      "consumerPath": "app/src/test/resources/android-router-contract-v1/catalog-invalid.json",
+      "path": "test-resources/android-router-contract-v1/catalog-invalid.json",
+      "sha256": "52ad3f21523142db0feb4ccddbc8c71b0dea4a8b156f6bd448961801a37a1309"
+    },
+    {
+      "consumerPath": "app/src/test/resources/android-router-contract-v1/tls.json",
+      "path": "test-resources/android-router-contract-v1/tls.json",
+      "sha256": "aebb41607c33b3dc8430ffec440a52acbbf34def9a63ae0a244efee12087e3c3"
+    }
+  ],
+  "javaFacade": {
+    "paths": {
+      "guard": "core/runtime/src/main/java/com/foxhole/core/runtime/FoxholeNativeEngine.java",
+      "vpn": "vpn-engine/src/main/java/com/foxhole/core/runtime/FoxholeNativeEngine.java"
+    },
+    "sha256": "0f591d1976f88858f51ec3d0b77c9ae509ea3c180127afcc64687b1c8ada055d"
+  },
+  "jni": {
+    "allowedLegacyExtraExports": [
+      "Java_com_foxhole_core_runtime_FoxholeNativeEngine_nativeStart"
+    ],
+    "otherExtraExports": "reported-without-rejection",
+    "policy": "required-java-exports-subset",
+    "requiredExports": [
+      "Java_com_foxhole_core_runtime_FoxholeNativeEngine_nativeAbiVersion",
+      "Java_com_foxhole_core_runtime_FoxholeNativeEngine_nativeCapabilities",
+      "Java_com_foxhole_core_runtime_FoxholeNativeEngine_nativeClearTlsFingerprintTables",
+      "Java_com_foxhole_core_runtime_FoxholeNativeEngine_nativeConfirmContinuity",
+      "Java_com_foxhole_core_runtime_FoxholeNativeEngine_nativeConfirmLanNetwork",
+      "Java_com_foxhole_core_runtime_FoxholeNativeEngine_nativeConnections",
+      "Java_com_foxhole_core_runtime_FoxholeNativeEngine_nativeDrainEvents",
+      "Java_com_foxhole_core_runtime_FoxholeNativeEngine_nativeDrainTrafficEvents",
+      "Java_com_foxhole_core_runtime_FoxholeNativeEngine_nativeForceKill",
+      "Java_com_foxhole_core_runtime_FoxholeNativeEngine_nativeImportLink",
+      "Java_com_foxhole_core_runtime_FoxholeNativeEngine_nativeImportSubscription",
+      "Java_com_foxhole_core_runtime_FoxholeNativeEngine_nativeInstallDnsRuleSet",
+      "Java_com_foxhole_core_runtime_FoxholeNativeEngine_nativeInstallTlsFingerprintTables",
+      "Java_com_foxhole_core_runtime_FoxholeNativeEngine_nativeLanProxyStatus",
+      "Java_com_foxhole_core_runtime_FoxholeNativeEngine_nativeLastPolicyError",
+      "Java_com_foxhole_core_runtime_FoxholeNativeEngine_nativeLastStopDiagnostics",
+      "Java_com_foxhole_core_runtime_FoxholeNativeEngine_nativeLoopbackInbounds",
+      "Java_com_foxhole_core_runtime_FoxholeNativeEngine_nativeNetworkChanged",
+      "Java_com_foxhole_core_runtime_FoxholeNativeEngine_nativeNetworkChangedWithHandle",
+      "Java_com_foxhole_core_runtime_FoxholeNativeEngine_nativeReleaseDnsContinuation",
+      "Java_com_foxhole_core_runtime_FoxholeNativeEngine_nativeReloadPolicy",
+      "Java_com_foxhole_core_runtime_FoxholeNativeEngine_nativeRetainDnsContinuation",
+      "Java_com_foxhole_core_runtime_FoxholeNativeEngine_nativeRevokeFlows",
+      "Java_com_foxhole_core_runtime_FoxholeNativeEngine_nativeStartLanProxy",
+      "Java_com_foxhole_core_runtime_FoxholeNativeEngine_nativeStartLoopbackInbound",
+      "Java_com_foxhole_core_runtime_FoxholeNativeEngine_nativeStartOnNetworkWithDnsContinuity",
+      "Java_com_foxhole_core_runtime_FoxholeNativeEngine_nativeStartWithNetwork",
+      "Java_com_foxhole_core_runtime_FoxholeNativeEngine_nativeStartWithNetworkAndDnsRuleSet",
+      "Java_com_foxhole_core_runtime_FoxholeNativeEngine_nativeStartWithNetworkAndTrustedDnsRuleSet",
+      "Java_com_foxhole_core_runtime_FoxholeNativeEngine_nativeStats",
+      "Java_com_foxhole_core_runtime_FoxholeNativeEngine_nativeStop",
+      "Java_com_foxhole_core_runtime_FoxholeNativeEngine_nativeStopLanProxy",
+      "Java_com_foxhole_core_runtime_FoxholeNativeEngine_nativeStopLoopbackInbound",
+      "Java_com_foxhole_core_runtime_FoxholeNativeEngine_nativeTrafficMap",
+      "Java_com_foxhole_core_runtime_FoxholeNativeEngine_nativeVersion"
+    ],
+    "selectedNativeEvidence": null
+  },
+  "kotlinMirrors": [
+    {
+      "name": "RouterInstallCatalog.kt",
+      "normalizedSha256": "a2e7152af3521bc838b3bd299da0f092998399715cd68e2bdb11df8912061679",
+      "paths": {
+        "guard": "app/src/main/kotlin/com/foxhole/guard/router/RouterInstallCatalog.kt",
+        "vpn": "app/src/main/kotlin/com/foxhole/vpn/router/RouterInstallCatalog.kt"
+      }
+    },
+    {
+      "name": "RouterTlsIdentity.kt",
+      "normalizedSha256": "0f99816a11dbab4e4ef91db61d9e11abc6ca910d7dfac8e9db1a5284205af60e",
+      "paths": {
+        "guard": "app/src/main/kotlin/com/foxhole/guard/router/RouterTlsIdentity.kt",
+        "vpn": "app/src/main/kotlin/com/foxhole/vpn/router/RouterTlsIdentity.kt"
+      }
+    },
+    {
+      "name": "RouterPackageUpdate.kt",
+      "normalizedSha256": "892970abb8f5d016cf0ee6fa3b0814db7ed80c9f3e069fbb00f8bed8a81036c1",
+      "paths": {
+        "guard": "app/src/main/kotlin/com/foxhole/guard/router/RouterPackageUpdate.kt",
+        "vpn": "app/src/main/kotlin/com/foxhole/vpn/router/RouterPackageUpdate.kt"
+      }
+    },
+    {
+      "name": "RouterSetupLicense.kt",
+      "normalizedSha256": "9049f3e11bc049896f39a59cc3d67e26a79057df9ffeccda845c753bcdc5b712",
+      "paths": {
+        "guard": "app/src/main/kotlin/com/foxhole/guard/router/RouterSetupLicense.kt",
+        "vpn": "app/src/main/kotlin/com/foxhole/vpn/router/RouterSetupLicense.kt"
+      }
+    }
+  ],
+  "normalization": "replace-exact-router-package-prefix-only-v1",
+  "revision": 1,
+  "schema": 1,
+  "scope": "Source/fixture metadata only; not a native producer or release pin"
+}
