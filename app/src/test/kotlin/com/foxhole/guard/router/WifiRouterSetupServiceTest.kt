@@ -48,7 +48,7 @@ class WifiRouterSetupServiceTest {
             RouterReadCommand.FLASH -> "Filesystem 1024-blocks Used Available Capacity Mounted on\n/dev/root 10000 2000 $availableFlashKiB 20% /overlay\n"
             RouterReadCommand.MEMORY -> "MemAvailable: 400000 kB\n"
             RouterReadCommand.CONFIGURATION -> ""
-            RouterReadCommand.KERNEL_PACKAGE -> { kernelQueried = true; "kernel-6.12.75~fixture-r1\n" }
+            RouterReadCommand.KERNEL_PACKAGE -> { kernelQueried = true; """[{"name":"kernel","version":"6.12.75~fixture-r1"}]""" }
             RouterReadCommand.PACKAGE_MANIFEST -> packageReceipt
             RouterReadCommand.MOBILE_CERTIFICATE -> requireNotNull(javaClass.getResourceAsStream("/router/router-fixture.crt")).use { it.readBytes() }.toString(Charsets.US_ASCII)
             else -> error("unexpected read")

@@ -86,6 +86,8 @@ internal fun parseRouterCompactPlatforms(value: JsonObject): List<RouterCompactP
             platform.compactAsset("engineCatalog"), platform.compactAsset("packageUniverse"), clients, server)
     }
     require(platforms.map { it.id }.distinct().size == platforms.size)
+    val cohorts = platforms.flatMap { it.clients }.map { routerModuleReleaseOrigin(it.entry.compactText("indexUrl")) to it.entry.compactText("version") }.distinct()
+    require(cohorts.size <= 1)
     val coverage = mutableSetOf<List<String>>()
     for (platform in platforms) for (target in platform.supportedTargets) for (version in platform.supportedOpenWrt) {
         require(coverage.add(listOf(platform.architecture, target, version)))
@@ -109,7 +111,10 @@ internal fun parseRouterCompactClient(value: JsonObject, architecture: String): 
     if (storage == RouterStorageMode.FLASH) require(entry.compactHash("binarySha256") == entry.compactHash("executableSha256"))
     val packageName = "foxcore-engine-${protocol.canonical}-${storage.name.lowercase()}-${entry.compactHash("manifestSha256")}"
     val packageVersion = entry.compactText("packageVersion").also { require(it.matches(Regex("[A-Za-z0-9][A-Za-z0-9_.~+-]{0,159}"))) }
-    val base = "https://github.com/foxhole-team/foxhole-openwrt-client/releases/download/v$version/"
+    val origin = routerModuleReleaseOrigin(entry.compactText("indexUrl"))
+    if (origin.repository == "foxhole-core") require(origin.version == version)
+    requireRouterCoreModuleOrigin(entry.compactText("indexUrl"), packageName, packageVersion)
+    val base = origin.baseUrl
     require(entry.compactText("packageName") == packageName && entry.compactText("packageUrl") == "$base$packageName-$packageVersion.apk" &&
         entry.compactText("indexUrl") == "${base}engines.adb")
     val producer = value.compactAsset("producer")

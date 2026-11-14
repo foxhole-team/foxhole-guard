@@ -161,13 +161,15 @@ internal fun CliToggleRow(
     enabled: Boolean = true,
     icon: Int? = null,
     infoAlwaysActive: Boolean = false,
+    infoContent: (@Composable () -> Unit)? = null,
 ) {
     val colors = LocalCliColors.current
     val controlAlpha = if (!enabled && infoAlwaysActive) 0.4f else 1f
     var infoOpen by rememberSaveable(label) { mutableStateOf(false) }
-    if (infoOpen && infoText != null) {
+    if (infoOpen && (infoText != null || infoContent != null)) {
         CliInfoSheet(
-            text = infoText,
+            text = infoText.orEmpty(),
+            helpContent = infoContent,
             onDismiss = { infoOpen = false },
         )
     }
@@ -198,7 +200,7 @@ internal fun CliToggleRow(
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
-                if (infoText != null) {
+                if (infoText != null || infoContent != null) {
                     CliRowInfoGlyph(onTap = { infoOpen = true })
                 }
             }

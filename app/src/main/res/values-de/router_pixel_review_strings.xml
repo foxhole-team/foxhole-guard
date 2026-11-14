@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="router_local_traffic_enable_title">Ausnahme vom VPN für lokalen Datenverkehr innerhalb Ihres Landes aktivieren?</string>
+    <string name="router_local_traffic_disable_title">Ausnahme vom VPN für lokalen Datenverkehr innerhalb Ihres Landes deaktivieren?</string>
+    <string name="router_local_traffic_confirm">Bestätigen</string>
+</resources>

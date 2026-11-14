@@ -90,11 +90,11 @@ else:
                  'flags/app-assets.sha256', 'flags/flag-icons-LICENSE.txt', 'fonts/JetBrainsMono-OFL.txt',
                  'fonts/Tiny5-OFL.txt', 'foxcore/FoxHole-Core-GPL-3.0-or-later.txt', 'foxcore/THIRD_PARTY_NOTICES.md',
                  'i2pd/Android-NDK-29-NOTICE.toolchain.txt', 'i2pd/Android-NDK-29-NOTICE.txt',
-                 'i2pd/Boost-1.84.0-BSL-1.0.txt', 'i2pd/OpenSSL-3.5.8-Apache-2.0.txt', 'i2pd/i2pd-BSD-3-Clause.txt',
+                 'i2pd/Boost-1.84.0-BSL-1.0.txt', 'i2pd/OpenSSL-3.5.9-Apache-2.0.txt', 'i2pd/i2pd-BSD-3-Clause.txt',
                  'icons/Tabler-MIT.txt', 'tor-config/PROVENANCE.txt', 'tor-config/assets.sha256',
                  'tor-config/upstream-members/README.CONJURE.md', 'tor-config/upstream-members/pt_config.json',
                  'tor-config/upstream-members/torrc-defaults.txt', 'tor/GO-MODULES.json',
-                 'tor/Go-1.26.10-BSD-3-Clause.txt', 'tor/conjure-client-BSD-3-Clause.txt',
+                 'tor/Go-1.26.11-BSD-3-Clause.txt', 'tor/conjure-client-BSD-3-Clause.txt',
                  'tor/lyrebird-BSD-3-Clause.txt', 'tor/lyrebird-GPL-3.0-or-later.txt']
         files = {name: b"synthetic license body" for name in names}
         files.update({"foxcore/foxcore-" + target + ".cdx.json": b"{}" for target in TARGETS})

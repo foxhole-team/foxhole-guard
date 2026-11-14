@@ -27,6 +27,6 @@
     <string name="guard_router_router_updates_device_download">お使いの端末経由で FoxHole パッケージをダウンロード中</string>
     <string name="guard_router_settings_info">本アプリはローカルネットワークを使用して OpenWrt ルーターを検索し、このスマートフォンからその VPN を管理します。管理をオフにしても、ルーターの VPN は動作し続けます。</string>
     <string name="guard_router_settings_pair_first">管理を有効にするには、ルーターをセットアップするか、ペアリングしてください。</string>
-    <string name="guard_router_vpn_router_error_home_vpn">ペアリング済みルーターへの確認済み VPN 経路がありません。そのルーターの VPN に接続し、ルーターの設定でホーム VPN 経由の管理を有効にしてください。</string>
+    <string name="guard_router_vpn_router_error_home_vpn">ペアリング済みルーターへの確認済み VPN 経路がありません。そのルーターの VPN に接続し、ルーターの設定でホーム VPN 経由の管理を有効にしてください。 ホームVPN経由でルーターを管理するには、GuardのLANバイパスを無効にしてください。</string>
     <string name="guard_router_wifi_status_label">Wi-Fi の状態</string>
 </resources>

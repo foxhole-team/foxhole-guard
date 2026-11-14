@@ -23,13 +23,21 @@ class PublicVersionCopyTest {
         val rootBuild = File(delegation.parentFile.parentFile, "build.gradle.kts").readText()
         val declaredVersion = Regex("""(?m)^\s*version\s*=\s*["]([^"\r\n]+)["]\s*$""").find(rootBuild)!!.groupValues[1]
         assertEquals(declaredVersion, BuildConfig.VERSION_NAME.removeSuffix("-Debug").removeSuffix("-Internal"))
-        val englishNotes = projectFile("fastlane/metadata/android/en-US/changelogs/${BuildConfig.VERSION_CODE}.txt").readText()
-        listOf("en-US", "ru-RU", "es-ES").forEach { locale ->
+        val releaseSuffix = declaredVersion.replace(".", "")
+        mapOf("en-US" to "values", "ru-RU" to "values-ru", "es-ES" to "values-es").forEach { (locale, values) ->
             val directory = "fastlane/metadata/android/$locale/changelogs"
             val current = projectFile("$directory/${BuildConfig.VERSION_CODE}.txt").readText()
             val default = projectFile("$directory/default.txt").readText()
             assertTrue(current.isNotBlank())
-            assertEquals("Current candidate notes remain English in every retained store locale", englishNotes, current)
+            val document = javax.xml.parsers.DocumentBuilderFactory.newInstance().apply {
+                setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
+            }.newDocumentBuilder().parse(projectFile("app/src/main/res/$values/local_patch_release_notes.xml"))
+            val strings = document.getElementsByTagName("string")
+            val expected = (0 until strings.length).map { strings.item(it) as org.w3c.dom.Element }
+                .filter { it.getAttribute("name").startsWith("cli_release_notes_") && it.getAttribute("name").endsWith("_$releaseSuffix") }
+                .joinToString("") { "- ${it.textContent}\n" }
+            assertTrue("Missing localized current release notes", expected.isNotBlank())
+            assertEquals("$locale store notes must follow current in-app copy", expected, current)
             assertEquals("$locale current candidate/default store notes differ", current, default)
         }
     }

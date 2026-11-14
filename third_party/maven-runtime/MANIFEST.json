@@ -4,8 +4,8 @@
   "files": [
     {
       "path": "L8-INPUTS.json",
-      "bytes": 526,
-      "sha256": "9c884447be1794139f6b5251453d2c6a85e50c8d65267db06f833e8a0d89b781"
+      "bytes": 542,
+      "sha256": "fc88e94b455db7de1144713373ddc39fbe2aba242775062ef4ee437562088c4b"
     },
     {
       "path": "NIO-CONFIGURATION.json",
@@ -19,8 +19,8 @@
     },
     {
       "path": "PRODUCER.json",
-      "bytes": 120479,
-      "sha256": "d4b00281d9c055d4ca788a46042624595bba99fc4f540cfa487afb25a97f731c"
+      "bytes": 121021,
+      "sha256": "d15be1746409265404e7d86bb64bd60a7bf97947ca8de2667abf12b24a12fb63"
     },
     {
       "path": "files/maven/androidx.activity/activity/1.13.0/activity-1.13.0.aar/META-INF/androidx/activity/activity/LICENSE.txt",
@@ -455,12 +455,12 @@
     {
       "path": "maven-notice-report.json",
       "bytes": 235985,
-      "sha256": "336874fd6bfe291d7bc38a878b6253f90297df4c3ad5851054281231c23b323c"
+      "sha256": "c94e85946eee7734065c3093acd5a5e2ab2ff5ee01db633f48c7dd398cc91f99"
     },
     {
       "path": "maven-runtime.cdx.json",
-      "bytes": 182409,
-      "sha256": "379725597fd274f59253f72b73f50ea8d60592e79472e8f0927177534e131dbc"
+      "bytes": 194397,
+      "sha256": "c2f2f273f79866972d1341dda671647ca2e6bfe646cb6302e3b497f5462f3f7f"
     },
     {
       "path": "poms/014b9497197f5177e39543d6785e7e4c37cacab647f17d476d4f6224fa6c2372.pom",
@@ -1320,7 +1320,7 @@
     {
       "path": "runtime-inventory.json",
       "bytes": 876601,
-      "sha256": "960547e1b3a220d72572e7fe885562b9de4c069f7db69e3c5e9982b94fa00453"
+      "sha256": "960523348984859393ff87d91d6d85d34bf9a828280052ca0ce71bafefc2b6be"
     }
   ]
 }

@@ -1,4 +1,7 @@
 package com.foxhole.guard.runtime
+import com.foxhole.guard.core.data.getSession
+import com.foxhole.core.model.VpnSession
+import com.foxhole.core.model.Settings
 
 import android.content.Context
 import android.net.ConnectivityManager
@@ -403,6 +406,162 @@ class FoxholeConnectionController internal constructor(
             protocolOptionId = protocolOptionId,
             timeoutMs = timeoutMs,
         )
+
+    internal fun routerSmartManualGeneration(): Long = lifecycle.routerSmartManualGeneration()
+    @Volatile private var routerSmartState: RouterSmartGuardState? = null
+    private val routerSmartProfileAccess by lazy { com.foxhole.guard.router.GuardRouterRepositoryProfileAccess(profileRepository) }
+
+    internal fun routerSmartPauseCurrent(value: com.foxhole.guard.router.RouterSmartPause): Boolean {
+        val owned = routerSmartState ?: return false
+        val wanted = owned.queued?.requestGeneration ?: owned.stop.requestGeneration
+        return owned.pause == value && lifecycle.routerRequestGeneration() == wanted &&
+            profileRepository.routerSmartSelectionGeneration() == owned.selectionGeneration &&
+            routerSmartVpnOnly(settingsRepository.settings.value, owned.session) &&
+            runtimeConfigAssembler.runtimeSettingsEquivalent(owned.settings, settingsRepository.settings.value)
+    }
+    internal fun routerSmartIdle(): Boolean {
+        val native = runtimeInstanceStore.nativeSnapshot()
+        return snapshot.value.state == ConnectionState.IDLE && !native.hasEngineHandle &&
+            !native.hasTunFileDescriptor && !native.cleanupDraining && !hasActiveVpnNetwork()
+    }
+    internal fun pauseRouterSmartIfCurrent(expected: com.foxhole.guard.router.RouterConnectedProfile,
+        local: com.foxhole.guard.router.RouterWifiConnection, verifiedAt: Long, authorityRevision: Long,
+        pairingId: String): com.foxhole.guard.router.RouterSmartPause? {
+        val current = snapshot.value
+        val session = runtimeSupervisor.ownership.value.activeSession ?: return null
+        val settings = settingsRepository.settings.value
+        val material = expected.materialGeneration?.takeIf { it.isNotEmpty() } ?: return null
+        if (!routerSmartVpnOnly(settings, session) || current.profileId?.toString() != expected.id ||
+            current.state != ConnectionState.CONNECTED || current.trafficMode != TrafficMode.TUNNEL ||
+            expected.networkHandle != currentVpnNetworkHandle()) return null
+        val request = lifecycle.routerRequestGeneration()
+        val native = routerProbeGeneration() ?: return null
+        if (expected.connectionGeneration != "$native:${expected.networkHandle}") return null
+        val token = java.util.UUID.randomUUID().toString()
+        val pause = com.foxhole.guard.router.RouterSmartPause(expected, pairingId, token)
+        val stop = RouterOwnedDisconnect(requireNotNull(current.profileId), current.protocolOptionId, native,
+            expected.networkHandle, request, local.network.networkHandle, local.endpoint.address, local.endpoint.port,
+            verifiedAt, authorityRevision, token)
+        val value = RouterSmartGuardState(pause, stop, settings, session, material, profileRepository.routerSmartSelectionGeneration())
+        if (lifecycle.routerRequestGeneration() != request) return null
+        routerSmartState = value
+        FoxholeConnectionServiceContract.requestRouterOwnedDisconnect(context, stop)
+        return pause
+    }
+    private suspend fun smartProfileCurrent(value: RouterSmartGuardState): Boolean {
+        val capture = try { routerSmartProfileAccess.captureOption(value.stop.profileId, value.stop.protocolOptionId) }
+            catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+            catch (_: Exception) { return false }
+        if (capture.materialGeneration != value.materialGeneration ||
+            com.foxhole.guard.router.routerProfileDigest(capture.rawConfig) != value.pause.profile.configSha256 ||
+            !routerSmartProfileAccess.isCurrent(capture)) return false
+        val active = profileRepository.mutationCoordinator.readCommitted { profileRepository.dao.getActiveProfile()?.id }
+        return active == value.stop.profileId && profileRepository.routerSmartSelectionGeneration() == value.selectionGeneration
+    }
+    internal suspend fun acknowledgeRouterSmartPause(owner: RouterOwnedDisconnect, session: VpnSession?, settings: Settings): Boolean {
+        val value = routerSmartState ?: return false
+        val applied = session ?: return false
+        if (value.stop != owner || applied.correlationId != value.session.correlationId ||
+            applied.runtimeConfigFingerprint != value.session.runtimeConfigFingerprint || !routerSmartVpnOnly(settings, applied) ||
+            !runtimeConfigAssembler.runtimeSettingsEquivalent(value.settings, settings) || !smartProfileCurrent(value) ||
+            !routerSmartPauseCurrent(value.pause)) return false
+        return true
+    }
+    internal fun acknowledgeRouterSmartPauseNow(owner: RouterOwnedDisconnect): Boolean {
+        val value = routerSmartState?.takeIf { it.stop == owner } ?: return false
+        if (!routerSmartPauseCurrent(value.pause)) return false
+        value.acknowledged = true
+        return true
+    }
+    private fun routerSmartCellularNetwork(): android.net.Network? {
+        val network = connectivityManager.activeNetwork ?: return null
+        val caps = connectivityManager.getNetworkCapabilities(network) ?: return null
+        if (!caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_CELLULAR) ||
+            caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) || caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_VPN) ||
+            !caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_VALIDATED)) return null
+        if (connectivityManager.allNetworks.any { connectivityManager.getNetworkCapabilities(it)?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_VPN) == true }) return null
+        return network
+    }
+    internal suspend fun resumeRouterSmart(value: com.foxhole.guard.router.RouterSmartPause, authorityRevision: Long,
+        stillAllowed: () -> Boolean): Boolean {
+        val owned = routerSmartState?.takeIf { it.pause == value && it.acknowledged && it.queued == null } ?: return false
+        if (!routerSmartPauseCurrent(value) || !routerSmartIdle() || routerSmartCellularNetwork() == null ||
+            !smartProfileCurrent(owned) || !stillAllowed()) return false
+        val next = lifecycle.reserveRouterSmartStart(owned.stop.requestGeneration) ?: return false
+        val command = RouterOwnedResume(value.token, owned.stop.profileId, owned.stop.protocolOptionId, next, authorityRevision)
+        owned.queued = command; owned.authority = stillAllowed
+        if (!stillAllowed() || !FoxholeConnectionServiceContract.requestRouterOwnedConnect(context, command)) {
+            if (routerSmartState === owned) routerSmartState = null
+            return false
+        }
+        return true
+    }
+    internal fun routerSmartQueuedCurrent(owner: RouterOwnedResume): Boolean {
+        val value = routerSmartState ?: return false
+        return value.queued == owner && routerSmartPauseCurrent(value.pause) && value.authority?.invoke() == true &&
+            routerSmartPreTunVacant(owner) &&
+            routerSmartCellularNetwork() != null &&
+            com.foxhole.guard.router.EncryptedRouterPairingStore(context).startRevision == owner.authorityRevision
+    }
+    internal suspend fun prepareRouterSmartStart(owner: RouterOwnedResume): RouterSmartPreparedStart? {
+        val value = routerSmartState?.takeIf { it.queued == owner && it.acknowledged } ?: return null
+        if (!routerSmartIdle() || !routerSmartQueuedCurrent(owner) || !smartProfileCurrent(value)) return null
+        val settings = settingsRepository.current()
+        if (!runtimeConfigAssembler.runtimeSettingsEquivalent(value.settings, settings)) return null
+        val dns = com.foxhole.core.runtime.PrivateDnsSettings.currentState(context)
+        val session = profileRepository.getSession(owner.profileId, owner.protocolOptionId, privateDnsState = dns)
+        if (!routerSmartVpnOnly(settings, session) || session.runtimeConfigFingerprint != value.session.runtimeConfigFingerprint ||
+            !routerSmartQueuedCurrent(owner) || !smartProfileCurrent(value)) return null
+        if (com.foxhole.core.runtime.PrivateDnsSettings.currentState(context) != dns) return null
+        return RouterSmartPreparedStart(owner, settings, session, dns).also { value.prepared = it }
+    }
+    private fun routerSmartPreTunVacant(owner: RouterOwnedResume): Boolean {
+        val native = runtimeInstanceStore.nativeSnapshot()
+        val ui = snapshot.value
+        return !native.hasEngineHandle && !native.hasTunFileDescriptor && !native.cleanupDraining &&
+            ui.state in setOf(ConnectionState.IDLE, ConnectionState.CONNECTING) &&
+            (ui.profileId == null || ui.profileId == owner.profileId && ui.protocolOptionId == owner.protocolOptionId)
+    }
+    internal fun establishRouterSmartTun(owner: RouterOwnedResume, establish: () -> android.os.ParcelFileDescriptor?): android.os.ParcelFileDescriptor? =
+        kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.IO) {
+            profileRepository.mutationCoordinator.readCommitted {
+                val value = routerSmartState?.takeIf { it.queued == owner } ?: return@readCommitted null
+                val entity = profileRepository.dao.getById(owner.profileId) ?: return@readCommitted null
+                val active = profileRepository.dao.getActiveProfile()?.id
+                if (!routerSmartResumeOwnerMatches(owner, value.queued ?: return@readCommitted null,
+                        lifecycle.routerRequestGeneration(), active, entity.secretRef, value.materialGeneration,
+                        profileRepository.routerSmartSelectionGeneration(), value.selectionGeneration,
+                        com.foxhole.guard.router.EncryptedRouterPairingStore(context).startRevision,
+                        routerSmartPreTunVacant(owner), routerSmartCellularNetwork() != null, hasActiveVpnNetwork(), value.authority?.invoke() == true)) return@readCommitted null
+                if (!runtimeConfigAssembler.runtimeSettingsEquivalent(value.settings, settingsRepository.settings.value) ||
+                    value.prepared?.privateDnsState != com.foxhole.core.runtime.PrivateDnsSettings.currentState(context)) return@readCommitted null
+                establish()
+            }
+        }
+    internal fun forgetRouterSmartPause(value: com.foxhole.guard.router.RouterSmartPause) {
+        if (routerSmartState?.pause == value) routerSmartState = null
+    }
+    internal fun consumeRouterSmartStart(owner: RouterOwnedResume) {
+        if (routerSmartState?.queued == owner) routerSmartState = null
+    }
+
+    internal fun routerRequestGeneration(): Long = lifecycle.routerRequestGeneration()
+
+    internal fun disconnectRouterProfileIfCurrent(expected: com.foxhole.guard.router.RouterConnectedProfile,
+        local: com.foxhole.guard.router.RouterWifiConnection, verifiedAtElapsedMs: Long, authorityRevision: Long) {
+        val request = lifecycle.routerRequestGeneration()
+        val current = snapshot.value
+        val generation = routerProbeGeneration() ?: return
+        val network = currentVpnNetworkHandle() ?: return
+        if (current.state != ConnectionState.CONNECTED || current.trafficMode != TrafficMode.TUNNEL ||
+            current.profileId?.toString() != expected.id || expected.networkHandle != network ||
+            expected.connectionGeneration != "$generation:$network") return
+        val owner = RouterOwnedDisconnect(requireNotNull(current.profileId), current.protocolOptionId,
+            generation, network, request, local.network.networkHandle,
+            local.endpoint.address, local.endpoint.port, verifiedAtElapsedMs, authorityRevision)
+        if (lifecycle.routerRequestGeneration() != request) return
+        FoxholeConnectionServiceContract.requestRouterOwnedDisconnect(context, owner)
+    }
 
     internal fun routerProbeGeneration(): Long? {
         val native = runtimeInstanceStore.nativeSnapshot()

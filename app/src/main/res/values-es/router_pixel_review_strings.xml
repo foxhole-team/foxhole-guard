@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="router_local_traffic_enable_title">¿Activar la exclusión del tráfico local de su país de la VPN?</string>
+    <string name="router_local_traffic_disable_title">¿Desactivar la exclusión del tráfico local de su país de la VPN?</string>
+    <string name="router_local_traffic_confirm">Confirmar</string>
+</resources>

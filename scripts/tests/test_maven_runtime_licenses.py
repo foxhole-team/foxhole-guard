@@ -1,335 +1,218 @@
+"""Current producer, source and legal payload boundaries; no legacy projection hooks."""
+import copy
 import hashlib
 import importlib.util
 import json
-import copy
+import os
+from pathlib import Path
 import re
 import shutil
-from pathlib import Path
 import tempfile
 import unittest
-from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[2]
-SPEC = importlib.util.spec_from_file_location('maven_legal', ROOT / 'scripts/copy-maven-runtime-licenses.py')
+SPEC = importlib.util.spec_from_file_location('current_maven_legal', ROOT / 'scripts/copy-maven-runtime-licenses.py')
 HELPER = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(HELPER)
 
 
 class MavenRuntimeLicenseTests(unittest.TestCase):
     def setUp(self):
-        self.owned = tempfile.TemporaryDirectory(prefix='maven-legal-contract-')
+        self.owned = tempfile.TemporaryDirectory(prefix='current-maven-legal-')
+        self.addCleanup(self.owned.cleanup)
         self.root = Path(self.owned.name).resolve()
-        self.repo = self.root / 'repo'
-        self.bundle = self.root / 'bundle'
+        self.repo, self.bundle = self.root / 'repo', self.root / 'bundle'
         self.repo.mkdir()
         shutil.copytree(ROOT / 'third_party/maven-runtime', self.bundle)
-        self.capture_raw = (self.bundle / 'runtime-inventory.json').read_bytes()
-        self.report_raw = (self.bundle / 'maven-notice-report.json').read_bytes()
-        self.projection_raw = (self.bundle / 'PORTABLE-PROVENANCE.json').read_bytes()
-        self.capture = json.loads(self.capture_raw)
-        self.report = json.loads(self.report_raw)
-        self.projection = json.loads(self.projection_raw)
-        self.consumer = json.loads((self.bundle / 'consumer-runtime-inventory.json').read_bytes())
-        self.proof = json.loads((self.bundle / 'CONSUMER-BINDING.json').read_bytes())
-        for name in self.proof['sourceInputs']:
+        self.manifest = json.loads((self.bundle / 'MANIFEST.json').read_bytes())
+        self.producer = json.loads((self.bundle / 'PRODUCER.json').read_bytes())
+        for name in self.producer['sourceInputs']:
             target = self.repo / name
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(ROOT / name, target)
-        self.actual_capture = HELPER.ACTUAL_CAPTURE_SHA256
-        self.actual_report = HELPER.ACTUAL_COLLECTOR_REPORT_SHA256
-        self.expected_files = {row['path'] for row in json.loads((self.bundle / 'MANIFEST.json').read_bytes())['files']}
-        self.load_actual_projection_fixture()
 
-    def tearDown(self):
-        self.owned.cleanup()
+    def load(self):
+        return HELPER.load(self.repo, self.bundle)
 
-    @staticmethod
-    def preserved_bytes(value, original):
-        return original if value == json.loads(original) else json.dumps(value).encode()
+    def rehashed_manifest(self):
+        # Only the synthetic manifest is rebound; the independent producer pin stays fixed.
+        raw = json.dumps(self.manifest).encode()
+        (self.bundle / 'MANIFEST.json').write_bytes(raw)
+        return HELPER.contract.load_bundle(self.repo, self.bundle, hashlib.sha256(raw).hexdigest(),
+            expected_producer=HELPER.EXPECTED_PRODUCER_SHA256)[0]
 
-    def write_manifest(self):
-        rows = [{'path': p.relative_to(self.bundle).as_posix(), 'bytes': p.stat().st_size,
-                 'sha256': hashlib.sha256(p.read_bytes()).hexdigest()}
-                for p in sorted(self.bundle.rglob('*')) if p.is_file() and p.name != 'MANIFEST.json']
-        (self.bundle / 'MANIFEST.json').write_text(json.dumps({'schema': 1,
-            'scope': 'actual-guard-release-runtime-notices', 'files': rows}))
+    def update_member_hash(self, name):
+        raw = (self.bundle / name).read_bytes()
+        row = next(r for r in self.manifest['files'] if r['path'] == name)
+        row.update(bytes=len(raw), sha256=hashlib.sha256(raw).hexdigest())
 
-    def write_bundle(self):
-        capture = self.preserved_bytes(self.capture, self.capture_raw)
-        self.report['capture_sha256'] = hashlib.sha256(capture).hexdigest()
-        report_bytes = self.preserved_bytes(self.report, self.report_raw)
-        projection = copy.deepcopy(self.projection)
-        projection['portableCaptureSha256'] = hashlib.sha256(capture).hexdigest()
-        projection['derivedCollectorReportSha256'] = hashlib.sha256(report_bytes).hexdigest()
-        identity = {key: self.capture[key] for key in ['components', 'edges', 'artifacts', 'configuration', 'source_sha256']}
-        projection['artifactIdentityAndHashProjectionSha256'] = hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()
-        (self.bundle / 'runtime-inventory.json').write_bytes(capture)
-        (self.bundle / 'maven-notice-report.json').write_bytes(report_bytes)
-        (self.bundle / 'PORTABLE-PROVENANCE.json').write_bytes(self.preserved_bytes(projection, self.projection_raw))
-        self.write_manifest()
+    def test_current_exact_capture_and_all_legal_bytes_are_accepted_without_mutation(self):
+        expected = {r['path']: (self.bundle / r['path']).read_bytes() for r in self.manifest['files']}
+        self.assertEqual(expected, self.load())
+        self.assertEqual(expected, {name: (self.bundle / name).read_bytes() for name in expected})
+        capture = json.loads(expected['runtime-inventory.json'])
+        self.assertEqual(176, len(capture['components']))
+        self.assertEqual(124, len(capture['artifacts']))
 
-    def bind_consumer_source(self, name, data):
-        # Only the synthetic current consumer changes; original producer bytes stay frozen.
-        self.consumer['source_sha256'][name] = hashlib.sha256(data).hexdigest()
-        raw = json.dumps(self.consumer).encode()
-        self.proof['portableConsumerCaptureSha256'] = hashlib.sha256(raw).hexdigest()
-        self.proof['sourceInputs'] = copy.deepcopy(self.consumer['source_sha256'])
-        (self.bundle / 'consumer-runtime-inventory.json').write_bytes(raw)
-        (self.bundle / 'CONSUMER-BINDING.json').write_text(json.dumps(self.proof))
-        self.write_manifest()
+    def test_every_captured_source_input_is_required_byte_for_byte(self):
+        for name in self.producer['sourceInputs']:
+            path = self.repo / name
+            original = path.read_bytes()
+            path.write_bytes(original + b'\n')
+            with self.subTest(source=name), self.assertRaises(ValueError):
+                self.load()
+            path.write_bytes(original)
 
-    def test_bound_capture_and_exact_projection_are_accepted(self):
-        self.assertEqual(set(self.load_actual_projection_fixture()), self.expected_files)
-
-    def test_identity_capture_does_not_remove_the_declared_input_hook(self):
-        full = (self.repo / 'app/build.gradle.kts').read_bytes()
-        self.assertEqual(self.proof['sourceInputs']['app/build.gradle.kts'], hashlib.sha256(full).hexdigest())
-        self.assertEqual(set(self.load_actual_projection_fixture()), self.expected_files)
-
-    def test_duplicate_input_hook_is_rejected(self):
+    def test_previous_and_future_versions_cannot_borrow_the_current_capture(self):
         path = self.repo / 'app/build.gradle.kts'
-        data = path.read_bytes() + HELPER.HOOK.encode()
-        path.write_bytes(data)
-        self.bind_consumer_source('app/build.gradle.kts', data)
-        with self.assertRaisesRegex(ValueError, 'projection hook differs'):
-            HELPER.load(self.repo, self.bundle, hashlib.sha256((self.bundle / 'MANIFEST.json').read_bytes()).hexdigest())
+        original = path.read_bytes()
+        code = int(re.search(rb'val baseAppVersionCode = ([0-9]+)', original).group(1))
+        for value in [code - 1, code + 1]:
+            path.write_bytes(original.replace(f'val baseAppVersionCode = {code}'.encode(),
+                f'val baseAppVersionCode = {value}'.encode(), 1))
+            with self.subTest(version=value), self.assertRaises(ValueError):
+                self.load()
 
-    def test_version_or_dependency_delta_is_rejected_without_recapture(self):
-        (self.repo / 'app/build.gradle.kts').write_text('changed version or dependency\n' + HELPER.HOOK)
-        with self.assertRaisesRegex(ValueError, 'current Gradle source changed'):
-            HELPER.load(self.repo, self.bundle, hashlib.sha256((self.bundle / 'MANIFEST.json').read_bytes()).hexdigest())
+    def test_dependency_native_task_and_source_channel_changes_are_not_normalized(self):
+        path = self.repo / 'app/build.gradle.kts'
+        original = path.read_bytes()
+        changes = [
+            (b'implementation(libs.androidx.core.ktx)', b'implementation("org.example:foreign:1.0")'),
+            (b'outputs.doNotCacheIf("Selected Sentinel legal inputs require validation") { true }',
+             b'outputs.doNotCacheIf("Selected Sentinel legal inputs require validation") { false }'),
+            (b'require(sourceNativeManifest == null || appUpdateChannel == "fdroid")', b'require(true)'),
+        ]
+        for before, after in changes:
+            changed = original.replace(before, after, 1)
+            self.assertNotEqual(original, changed)
+            path.write_bytes(changed)
+            with self.subTest(change=before.decode()), self.assertRaises(ValueError):
+                self.load()
 
-    def test_foreign_manifest_cannot_replace_the_captured_bundle(self):
-        manifest = self.bundle / 'MANIFEST.json'
-        manifest.write_bytes(manifest.read_bytes() + b'\n')
-        with self.assertRaisesRegex(ValueError, 'manifest is not'):
-            HELPER.load(self.repo, self.bundle)
+    def test_source_symlinks_and_missing_source_inputs_are_rejected(self):
+        path = self.repo / 'app/build.gradle.kts'
+        held = self.root / 'held-gradle.kts'
+        path.replace(held)
+        with self.assertRaises(FileNotFoundError):
+            self.load()
+        path.symlink_to(held)
+        with self.assertRaises(ValueError):
+            self.load()
 
-    def test_changed_file_bytes_are_rejected(self):
-        (self.bundle / 'runtime-inventory.json').write_text('tampered')
-        with self.assertRaisesRegex(ValueError, 'captured file (changed|size differs)'):
-            HELPER.load(self.repo, self.bundle, hashlib.sha256((self.bundle / "MANIFEST.json").read_bytes()).hexdigest())
+    def test_foreign_manifest_and_relabelled_producer_are_rejected(self):
+        path = self.bundle / 'MANIFEST.json'
+        path.write_bytes(path.read_bytes() + b'\n')
+        with self.assertRaises(ValueError):
+            self.load()
+        self.producer['versionCode'] += 1
+        (self.bundle / 'PRODUCER.json').write_text(json.dumps(self.producer))
+        self.update_member_hash('PRODUCER.json')
+        with self.assertRaises(ValueError):
+            self.rehashed_manifest()
 
-    def test_stale_source_graph_is_rejected(self):
-        (self.repo / 'app/build.gradle.kts').write_text('other\n' + HELPER.HOOK)
-        with self.assertRaisesRegex(ValueError, 'current Gradle source changed'):
-            HELPER.load(self.repo, self.bundle, hashlib.sha256((self.bundle / "MANIFEST.json").read_bytes()).hexdigest())
+    def test_missing_changed_and_extra_payloads_are_rejected(self):
+        path = self.bundle / 'runtime-inventory.json'
+        original = path.read_bytes()
+        for value in [None, b'tampered']:
+            if value is None:
+                path.unlink()
+            else:
+                path.write_bytes(value)
+            expected_error = FileNotFoundError if value is None else ValueError
+            with self.subTest(value=value), self.assertRaises(expected_error):
+                self.load()
+        path.write_bytes(original)
+        (self.bundle / 'foreign.txt').write_text('unlisted')
+        with self.assertRaises(ValueError):
+            self.load()
 
-    def test_missing_file_is_rejected(self):
-        (self.bundle / 'runtime-inventory.json').unlink()
-        with self.assertRaisesRegex(ValueError, 'missing'):
-            HELPER.load(self.repo, self.bundle, hashlib.sha256((self.bundle / "MANIFEST.json").read_bytes()).hexdigest())
+    def test_duplicate_paths_and_parent_escape_fail_before_external_reads(self):
+        original = copy.deepcopy(self.manifest)
+        self.manifest['files'].append(copy.deepcopy(self.manifest['files'][0]))
+        with self.assertRaises(ValueError):
+            self.rehashed_manifest()
+        self.manifest = original
+        self.manifest['files'][0]['path'] = '../outside'
+        with self.assertRaises(ValueError):
+            self.rehashed_manifest()
 
-    def test_duplicate_manifest_path_is_rejected(self):
-        p = self.bundle / 'MANIFEST.json'
-        v = json.loads(p.read_text())
-        v['files'].append(v['files'][0])
-        p.write_text(json.dumps(v))
-        with self.assertRaisesRegex(ValueError, 'Duplicate'):
-            HELPER.load(self.repo, self.bundle, hashlib.sha256((self.bundle / "MANIFEST.json").read_bytes()).hexdigest())
-
-    def test_parent_escape_is_rejected(self):
-        p = self.bundle / 'MANIFEST.json'
-        v = json.loads(p.read_text())
-        v['files'][0]['path'] = '../outside'
-        p.write_text(json.dumps(v))
-        with self.assertRaisesRegex(ValueError, 'escaped'):
-            HELPER.load(self.repo, self.bundle, hashlib.sha256((self.bundle / "MANIFEST.json").read_bytes()).hexdigest())
-
-    def test_oversized_file_is_rejected_before_reading(self):
+    def test_oversized_manifest_and_payload_are_rejected(self):
+        path = self.bundle / 'MANIFEST.json'
+        original = path.read_bytes()
+        with path.open('wb') as stream:
+            stream.truncate(HELPER.contract.MAX_FILE + 1)
+        with self.assertRaises(ValueError):
+            self.load()
+        path.write_bytes(original)
         with (self.bundle / 'runtime-inventory.json').open('wb') as stream:
-            stream.truncate(9 * 1024 * 1024)
-        with self.assertRaisesRegex(ValueError, 'size differs'):
-            HELPER.load(self.repo, self.bundle, hashlib.sha256((self.bundle / "MANIFEST.json").read_bytes()).hexdigest())
+            stream.truncate(HELPER.contract.MAX_FILE + 1)
+        with self.assertRaises(ValueError):
+            self.load()
 
-    def test_oversized_manifest_is_rejected_before_reading(self):
-        with (self.bundle / 'MANIFEST.json').open('wb') as stream:
-            stream.truncate(1024 * 1024 + 1)
-        with self.assertRaisesRegex(ValueError, 'manifest size'):
-            HELPER.load(self.repo, self.bundle)
+    def test_bundle_and_repository_root_links_are_rejected(self):
+        for target, repo, bundle in [(self.repo, True, False), (self.bundle, False, True)]:
+            link = self.root / ('repo-link' if repo else 'bundle-link')
+            link.symlink_to(target, target_is_directory=True)
+            with self.subTest(target=target.name), self.assertRaises(ValueError):
+                HELPER.load(link if repo else self.repo, link if bundle else self.bundle)
 
-    def test_bundle_root_symlink_is_rejected(self):
-        link = self.root / 'bundle-link'
-        link.symlink_to(self.bundle, target_is_directory=True)
-        with self.assertRaisesRegex(ValueError, 'root is a link'):
-            HELPER.load(self.repo, link)
+    def test_payload_symlinks_and_hardlinks_are_rejected(self):
+        path = self.bundle / 'runtime-inventory.json'
+        held = self.root / 'held-capture.json'
+        path.replace(held)
+        path.symlink_to(held)
+        with self.assertRaises(ValueError):
+            self.load()
+        path.unlink()
+        os.link(held, path)
+        with self.assertRaises(ValueError):
+            self.load()
 
-    def test_repository_root_symlink_is_rejected(self):
-        link = self.root / 'repo-link'
-        link.symlink_to(self.repo, target_is_directory=True)
-        with self.assertRaisesRegex(ValueError, 'root is a link'):
-            HELPER.load(link, self.bundle)
+    def test_a_changed_original_license_cannot_be_hidden_by_a_new_manifest(self):
+        name = next(r['path'] for r in self.manifest['files'] if r['path'].startswith('files/'))
+        path = self.bundle / name
+        path.write_bytes(path.read_bytes() + b'altered')
+        self.update_member_hash(name)
+        with self.assertRaises(ValueError):
+            self.rehashed_manifest()
 
-    def test_private_artifact_path_cannot_enter_the_portable_view(self):
-        self.capture['artifacts'][0]['path'] = '/example/private-cache'
-        self.write_bundle()
-        with self.assertRaisesRegex(ValueError, 'whitelisted'):
-            HELPER.load(self.repo, self.bundle, hashlib.sha256((self.bundle / "MANIFEST.json").read_bytes()).hexdigest())
+    def test_incomplete_legal_report_and_false_collector_identity_are_rejected(self):
+        path = self.bundle / 'maven-notice-report.json'
+        original = json.loads(path.read_bytes())
+        for key, value in [('missing', ['missing original']), ('derived_from_actual_report_sha256', 'd' * 64)]:
+            report = copy.deepcopy(original)
+            report[key] = value
+            path.write_text(json.dumps(report))
+            self.update_member_hash(path.name)
+            with self.subTest(field=key), self.assertRaises(ValueError):
+                self.rehashed_manifest()
 
-    def test_false_actual_collector_identity_is_rejected(self):
-        self.report['derived_from_actual_report_sha256'] = 'foreign'
-        self.write_bundle()
-        path = self.bundle / 'PORTABLE-PROVENANCE.json'
-        projection = json.loads(path.read_text())
-        projection['actualCollectorReportSha256'] = 'foreign'
-        path.write_text(json.dumps(projection))
-        rows = json.loads((self.bundle / 'MANIFEST.json').read_text())
-        for row in rows['files']:
-            data = (self.bundle / row['path']).read_bytes()
-            row['bytes'] = len(data)
-            row['sha256'] = hashlib.sha256(data).hexdigest()
-        (self.bundle / 'MANIFEST.json').write_text(json.dumps(rows))
-        with self.assertRaisesRegex(ValueError, 'provenance chain'):
-            HELPER.load(self.repo, self.bundle, hashlib.sha256((self.bundle / "MANIFEST.json").read_bytes()).hexdigest())
+    def test_private_artifact_paths_cannot_enter_a_rebound_capture(self):
+        path = self.bundle / 'runtime-inventory.json'
+        capture = json.loads(path.read_bytes())
+        capture['artifacts'][0]['path'] = '/example/private-cache'
+        path.write_text(json.dumps(capture))
+        self.update_member_hash(path.name)
+        with self.assertRaises(ValueError):
+            self.rehashed_manifest()
 
-    def test_unreported_legal_gap_is_rejected(self):
-        self.report['missing'] = ['missing original']
-        self.write_bundle()
-        with self.assertRaisesRegex(ValueError, 'incomplete'):
-            HELPER.load(self.repo, self.bundle, hashlib.sha256((self.bundle / "MANIFEST.json").read_bytes()).hexdigest())
-
-
-    def use_actual_current_gradle(self, data=None):
-        current = (ROOT / 'app/build.gradle.kts').read_bytes()
-        self.assertEqual(hashlib.sha256(current).hexdigest(),
-                         self.proof['sourceInputs']['app/build.gradle.kts'])
-        (self.repo / 'app/build.gradle.kts').write_bytes(current if data is None else data)
-        return current
-
-    def load_actual_projection_fixture(self):
-        return HELPER.load(self.repo, self.bundle,
-                           hashlib.sha256((self.bundle / 'MANIFEST.json').read_bytes()).hexdigest())
-
-    def test_current_metadata_rebind_preserves_original_capture_bytes(self):
-        current = self.use_actual_current_gradle()
-        original_capture = (self.bundle / 'runtime-inventory.json').read_bytes()
-        original_manifest = (self.bundle / 'MANIFEST.json').read_bytes()
-        checked = self.load_actual_projection_fixture()
-        self.assertEqual(checked['runtime-inventory.json'], original_capture)
-        self.assertEqual((self.bundle / 'MANIFEST.json').read_bytes(), original_manifest)
-        self.assertEqual((self.repo / 'app/build.gradle.kts').read_bytes(), current)
-        self.assertEqual(json.loads(checked['runtime-inventory.json'])['source_sha256'],
-                         self.capture['source_sha256'])
-
-    def test_previous_version_cannot_borrow_the_current_capture(self):
-        current = self.use_actual_current_gradle()
-        code = int(re.search(rb'val baseAppVersionCode = ([0-9]+)', current).group(1))
-        previous = current.replace(f'val baseAppVersionCode = {code}\n'.encode(),
-                                   f'val baseAppVersionCode = {code - 1}\n'.encode(), 1)
-        self.assertNotEqual(previous, current)
-        (self.repo / 'app/build.gradle.kts').write_bytes(previous)
-        with self.assertRaisesRegex(ValueError, 'current Gradle source changed'):
-            self.load_actual_projection_fixture()
-
-    def test_dependency_change_cannot_borrow_current_source_identity(self):
-        current = self.use_actual_current_gradle()
-        changed = current.replace(b'implementation(libs.androidx.core.ktx)',
-                                  b'implementation("org.example:foreign:1.0")', 1)
-        self.assertNotEqual(changed, current)
-        (self.repo / 'app/build.gradle.kts').write_bytes(changed)
-        with self.assertRaisesRegex(ValueError, 'current Gradle source changed'):
-            self.load_actual_projection_fixture()
-
-    def test_changed_native_task_behavior_is_not_normalized_away(self):
-        current = self.use_actual_current_gradle()
-        changed = current.replace(b'outputs.doNotCacheIf("Selected Sentinel legal inputs require validation") { true }',
-                                  b'outputs.doNotCacheIf("Selected Sentinel legal inputs require validation") { false }', 1)
-        self.assertNotEqual(changed, current)
-        (self.repo / 'app/build.gradle.kts').write_bytes(changed)
-        with self.assertRaisesRegex(ValueError, 'current Gradle source changed'):
-            self.load_actual_projection_fixture()
-
-    def test_partial_native_task_plus_review_code_is_rejected(self):
-        current = self.use_actual_current_gradle()
-        changed = current.replace(b'        rootProject.file("scripts/selected-sentinel-sbom.py"),\n', b'', 1)
-        self.assertNotEqual(changed, current)
-        (self.repo / 'app/build.gradle.kts').write_bytes(changed)
-        with self.assertRaisesRegex(ValueError, 'current Gradle source changed'):
-            self.load_actual_projection_fixture()
-
-    def test_unreviewed_version_change_cannot_borrow_current_source_identity(self):
-        current = self.use_actual_current_gradle()
-        code = int(re.search(rb'val baseAppVersionCode = ([0-9]+)', current).group(1))
-        changed = current.replace(f'val baseAppVersionCode = {code}\n'.encode(),
-                                  f'val baseAppVersionCode = {code + 1}\n'.encode(), 1)
-        self.assertNotEqual(changed, current)
-        (self.repo / 'app/build.gradle.kts').write_bytes(changed)
-        with self.assertRaisesRegex(ValueError, 'current Gradle source changed'):
-            self.load_actual_projection_fixture()
-
-    def test_current_source_projection_does_not_relabel_portable_provenance(self):
-        self.use_actual_current_gradle()
-        path = self.bundle / 'PORTABLE-PROVENANCE.json'
-        value = json.loads(path.read_bytes())
-        value['sourceInputProjections']['app/build.gradle.kts']['mode'] = 'unverified-skip'
-        path.write_text(json.dumps(value))
-        manifest_path = self.bundle / 'MANIFEST.json'
-        manifest = json.loads(manifest_path.read_bytes())
-        for row in manifest['files']:
-            data = (self.bundle / row['path']).read_bytes()
-            row.update(bytes=len(data), sha256=hashlib.sha256(data).hexdigest())
-        manifest_path.write_text(json.dumps(manifest))
-        with self.assertRaisesRegex(ValueError, 'current source identity projection differs'):
-            self.load_actual_projection_fixture()
-
-    def test_bound_source_cannot_claim_original_identity_policy(self):
-        self.use_actual_current_gradle()
-        raw_hash = self.capture['source_sha256']['app/build.gradle.kts']
-        self.assertNotEqual(raw_hash, self.proof['sourceInputs']['app/build.gradle.kts'])
-        self.consumer['source_sha256']['app/build.gradle.kts'] = raw_hash
-        raw = json.dumps(self.consumer).encode()
-        self.proof['sourceInputs'] = copy.deepcopy(self.consumer['source_sha256'])
-        self.proof['portableConsumerCaptureSha256'] = hashlib.sha256(raw).hexdigest()
-        (self.bundle / 'consumer-runtime-inventory.json').write_bytes(raw)
-        (self.bundle / 'CONSUMER-BINDING.json').write_text(json.dumps(self.proof))
-        self.write_manifest()
-        with self.assertRaisesRegex(ValueError, 'current Gradle source changed'):
-            self.load_actual_projection_fixture()
-
-    def test_projected_source_symlink_is_still_rejected(self):
-        self.use_actual_current_gradle()
+    def test_fdroid_projection_requires_the_exact_actual_stock_signing_removal(self):
+        expected = self.load()
+        with self.assertRaises(ValueError):
+            HELPER.load(self.repo, self.bundle, allow_fdroid_unsigned_projection=True)
         path = self.repo / 'app/build.gradle.kts'
-        target = self.root / 'actual-gradle.kts'
-        path.replace(target)
-        path.symlink_to(target)
-        with self.assertRaisesRegex(ValueError, 'regular input is missing'):
-            self.load_actual_projection_fixture()
-
-
-    def test_previous_bound_hash_cannot_borrow_updated_projection(self):
-        with patch.object(HELPER, 'digest', return_value='41f22b62565e33fe47432d7aaa9908cc770b64802b7c5f6ec0574d67bc573ee2'):
-            self.assertFalse(HELPER.matches_captured_gradle(b'unused',
-                '31d354e6572649d9e5f47cd6cf0110ff8a766d63331fc819d3b80c949345a06b'))
-
-    def test_original_capture_hash_cannot_claim_current_source_projection(self):
-        with patch.object(HELPER, 'digest', return_value='31d354e6572649d9e5f47cd6cf0110ff8a766d63331fc819d3b80c949345a06b'):
-            self.assertFalse(HELPER.matches_captured_gradle(b'unused',
-                '31d354e6572649d9e5f47cd6cf0110ff8a766d63331fc819d3b80c949345a06b'))
-
-    def test_source_native_channel_policy_change_is_not_normalized_away(self):
-        current = self.use_actual_current_gradle()
-        changed = current.replace(b'require(sourceNativeManifest == null || appUpdateChannel == "fdroid")',
-                                  b'require(true)', 1)
-        self.assertNotEqual(changed, current)
-        (self.repo / 'app/build.gradle.kts').write_bytes(changed)
-        with self.assertRaisesRegex(ValueError, 'current Gradle source changed'):
-            self.load_actual_projection_fixture()
-
-
-class ActualMavenRuntimeBundleTests(unittest.TestCase):
-    def test_actual_source_projection_loads_without_recapturing_graph_or_notices(self):
-        bundle = ROOT / 'third_party/maven-runtime'
-        capture_before = (bundle / 'runtime-inventory.json').read_bytes()
-        report_before = (bundle / 'maven-notice-report.json').read_bytes()
-        checked = HELPER.load(ROOT, bundle)
-        self.assertEqual(checked['runtime-inventory.json'], capture_before)
-        self.assertEqual(checked['maven-notice-report.json'], report_before)
-        capture = json.loads(capture_before)
-        projection = json.loads((bundle / 'PORTABLE-PROVENANCE.json').read_bytes())
-        self.assertEqual(capture['source_sha256']['app/build.gradle.kts'],
-                         projection['sourceInputProjections']['app/build.gradle.kts']['capturedSha256'])
-        self.assertEqual(len(capture['components']), 174)
-        self.assertEqual(len(capture['artifacts']), 122)
+        fixture = {
+            '633f3b0609e2b4acffac2921c71d2a3aaeb0cbf1f93b36ad87e80f6023a0e605': 'guard181-unsigned-app.gradle.kts',
+            'bb3fc5290b204bb9dad942787ba64c7949cf19cf0e46876749238e6ba9cbfd31': 'guard181-delivery-arm64-unsigned-app.gradle.kts',
+        }[self.producer['sourceInputs']['app/build.gradle.kts']]
+        unsigned = (ROOT / 'scripts/tests/fixtures/fdroid' / fixture).read_bytes()
+        path.write_bytes(unsigned)
+        self.assertEqual(expected, HELPER.load(self.repo, self.bundle, allow_fdroid_unsigned_projection=True))
+        with self.assertRaises(ValueError):
+            self.load()
+        path.write_bytes(unsigned + b'\n')
+        with self.assertRaises(ValueError):
+            HELPER.load(self.repo, self.bundle, allow_fdroid_unsigned_projection=True)
 
 
 if __name__ == '__main__':

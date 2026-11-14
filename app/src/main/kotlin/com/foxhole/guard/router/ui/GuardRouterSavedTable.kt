@@ -85,10 +85,7 @@ internal fun GuardRouterSavedTable(routers: List<RouterSavedSummary>, selectedId
                                     modifier = Modifier.size(40.dp)) {
                                     Icon(painterResource(R.drawable.lin_settings), stringResource(R.string.guard_router_router_review_settings), Modifier.size(22.dp))
                                 }
-                                IconButton(onClick = { onDelete(router.id) }, enabled = deleteEnabled,
-                                    modifier = Modifier.size(40.dp)) {
-                                    Icon(painterResource(R.drawable.lin_trash), stringResource(R.string.guard_router_router_review_unpair), Modifier.size(22.dp), tint = guardRouterDeleteColor())
-                                }
+
                             }
                         }
                     }

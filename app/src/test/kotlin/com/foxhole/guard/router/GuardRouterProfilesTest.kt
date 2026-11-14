@@ -4,6 +4,7 @@ import com.foxhole.core.model.Profile
 import com.foxhole.core.model.ProfileSourceType
 import com.foxhole.core.model.ProtocolHint
 import com.foxhole.core.model.Settings
+import com.foxhole.core.model.StoredProfileProtocolOption
 import com.foxhole.core.model.StoredProfileSecret
 import com.foxhole.guard.router.profile.VpnProfileImporter
 import kotlinx.coroutines.test.runTest
@@ -58,5 +59,21 @@ class GuardRouterProfilesTest {
         try { GuardRouterProfiles(access).selected("../7"); fail("invalid id read") }
         catch (failure: RouterApiFailure) { assertEquals(RouterApiError.UNSUPPORTED, failure.kind) }
         assertEquals(0, access.reads); assertEquals(0, access.imports)
+    }
+
+    @Test fun anUnselectedSubscriptionNodeExportsWithoutChangingTheSavedSelection() = runTest {
+        val original = snapshot(subscription = "https://profiles.example.com/list")
+        val first = StoredProfileProtocolOption("first", "First node", ProtocolHint.HYSTERIA2, original.rawConfig)
+        val second = first.copy(id = "second", displayName = "Second node", normalizedConfigJson = snapshot("8.8.8.8").rawConfig)
+        val secret = original.secret.copy(protocolOptions = listOf(first, second), selectedProtocolOptionId = first.id)
+        val capture = GuardRouterProfileCapture(original.profile, secret, original.settings, first, first.normalizedConfigJson)
+        val access = Access(capture)
+        val exported = GuardRouterProfiles(access).requested(RouterPhoneTransferRequest("7", "second"))
+        assertEquals("second", exported.selectedOptionId)
+        assertEquals("Second node", exported.selectedNodeName)
+        assertTrue(VpnProfileImporter().import(exported.selectedConfiguration).profiles.single().normalizedConfigJson.contains("8.8.8.8"))
+        assertEquals(capture, access.current)
+        assertEquals("first", access.current.secret.selectedProtocolOptionId)
+        assertEquals(0, access.imports)
     }
 }

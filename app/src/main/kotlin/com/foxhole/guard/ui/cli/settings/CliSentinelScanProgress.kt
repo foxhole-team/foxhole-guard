@@ -36,9 +36,7 @@ internal fun CliSentinelScanProgress(
     val colors = LocalCliColors.current
     val percent = sentinelScanProgressPercent(scan)
     val currentPackage = scan.packageName?.takeIf(String::isNotBlank)
-    val currentLabel =
-        installedApps.firstOrNull { it.packageName == currentPackage }?.label?.takeIf(String::isNotBlank)
-            ?: currentPackage ?: stringResource(R.string.sentinel_static_current_app_unknown)
+    val currentApp = installedApps.firstOrNull { it.packageName == currentPackage }
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(CliSpacing.xs),
@@ -63,12 +61,8 @@ internal fun CliSentinelScanProgress(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(CliSpacing.sm),
         ) {
-            Text(
-                text = currentLabel,
-                modifier = Modifier.weight(1f).testTag(CLI_SENTINEL_SCAN_CURRENT_APP_TAG),
-                style = CliType.small,
-                color = colors.fg,
-            )
+            com.foxhole.guard.ui.cli.sentinel.SentinelAppIdentity(currentApp, currentPackage,
+                Modifier.weight(1f).testTag(CLI_SENTINEL_SCAN_CURRENT_APP_TAG))
             if (percent != null) {
                 Text(
                     text = stringResource(R.string.sentinel_static_progress_percent, percent),

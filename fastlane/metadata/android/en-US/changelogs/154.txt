@@ -1,6 +1,6 @@
 0.1.1 public beta — security and reliability fixes
 
-- Add User/Expert modes, monochrome themes and accessible setting states.
-- FoxCore 0.0.5: connection revocation, DNS and routing fixes.
-- Improve Sentinel queues, local-proxy consent, WebApp controls and profile editing.
-- Update I2P/Tor, licenses and F-Droid builds; improve update checks.
+- Add User/Expert modes, monochrome themes and accessible setting states
+- FoxCore 0.0.5: connection revocation, DNS and routing fixes
+- Improve Sentinel queues, local-proxy consent, WebApp controls and profile editing
+- Update I2P/Tor, licenses and F-Droid builds; improve update checks

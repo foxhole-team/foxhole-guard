@@ -9,7 +9,7 @@ import androidx.compose.animation.fadeOut
 
 // Material3 1.4 keeps MotionScheme internal; use its standard fast motion tokens.
 internal object GuardRouterSheetMotion {
-    fun <T> defaultSpatialSpec(): FiniteAnimationSpec<T> = spring(dampingRatio = .9f, stiffness = 1400f)
+    fun <T> defaultSpatialSpec(): FiniteAnimationSpec<T> = spring(dampingRatio = 1f, stiffness = 1400f)
     fun <T> fastEffectsSpec(): FiniteAnimationSpec<T> = spring(dampingRatio = 1f, stiffness = 3800f)
 
     fun pageTransition(animateSize: Boolean = true): ContentTransform = ContentTransform(

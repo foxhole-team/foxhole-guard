@@ -105,6 +105,11 @@ import com.foxhole.guard.ui.prepareJournalExportEntries
 import com.foxhole.guard.ui.redactedJournalExportEvent
 import com.foxhole.guard.ui.sentinelScanAvailable
 import com.foxhole.guard.ui.sentinelScanState
+import com.foxhole.guard.ui.sentinelReportHistory
+import com.foxhole.guard.ui.clearSentinelReports
+import com.foxhole.guard.ui.refreshSentinelScanPolicy
+import com.foxhole.guard.ui.requestSentinelPackage
+import com.foxhole.guard.ui.requestSentinelBaseline
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -748,6 +753,8 @@ private fun androidx.compose.foundation.layout.ColumnScope.CliSentinelLog(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val scan by viewModel.sentinelScanState.collectAsStateWithLifecycle()
+    val reportHistory by viewModel.sentinelReportHistory.collectAsStateWithLifecycle()
+    LaunchedEffect(viewModel) { viewModel.refreshSentinelScanPolicy() }
     val context = LocalContext.current
     CliRefreshInstalledAppsOnResume(viewModel)
     val retention = state.settings.expert.effectiveDiagnosticsRetention()
@@ -777,6 +784,10 @@ private fun androidx.compose.foundation.layout.ColumnScope.CliSentinelLog(
                 scannerAvailable = viewModel.sentinelScanAvailable,
                 onResolveQuarantine = viewModel::onQuarantinedAppResolved,
                 onCancelScan = viewModel::cancelSentinelScan,
+                history = reportHistory,
+                onRequestPackage = viewModel::requestSentinelPackage,
+                onRequestBaseline = viewModel::requestSentinelBaseline,
+                onClearReports = viewModel::clearSentinelReports,
             )
         },
         actions = {

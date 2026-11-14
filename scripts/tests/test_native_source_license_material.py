@@ -14,7 +14,7 @@ REPO = HERE.parents[1]
 spec = importlib.util.spec_from_file_location('strict_native_material', REPO / 'scripts/native-source-license-material.py')
 M = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(M)
-ACTUAL_GO = HERE / 'fixtures/native-source-material/go1.26.10'
+ACTUAL_GO = HERE / 'fixtures/native-source-material/go1.26.11'
 
 
 class LoaderTests(unittest.TestCase):
@@ -50,8 +50,8 @@ class LoaderTests(unittest.TestCase):
                      'i2pd/i2pd-BSD-3-Clause.txt', 'i2pd/VERSION.txt', 'i2pd/OpenSSL-3.5.9-Apache-2.0.txt',
                      'i2pd/Boost-1.84.0-BSL-1.0.txt', 'i2pd/Android-NDK-29-NOTICE.txt', 'i2pd/Android-NDK-29-NOTICE.toolchain.txt']
         for name in originals: self.add(name, (self.repo / 'third_party/i2pd.version').read_bytes() if name == 'i2pd/VERSION.txt' else b'Synthetic unit original\n')
-        self.add('tor/Go-1.26.10-BSD-3-Clause.txt', (ACTUAL_GO / 'LICENSE').read_bytes())
-        self.add('tor/Go-1.26.10-PATENTS.txt', (ACTUAL_GO / 'PATENTS').read_bytes())
+        self.add('tor/Go-1.26.11-BSD-3-Clause.txt', (ACTUAL_GO / 'LICENSE').read_bytes())
+        self.add('tor/Go-1.26.11-PATENTS.txt', (ACTUAL_GO / 'PATENTS').read_bytes())
         for source, name in [('config/native/conjure/stun-v3-patch.json', 'tor/CONJURE-PATCH.json'), ('scripts/prepare-tor-dependency.py', 'tor/CONJURE-PATCH.py')]:
             self.add(name, (self.repo / source).read_bytes())
         self.add('tor/GO-MODULES.json', M.encoded(self.modules))
@@ -59,11 +59,11 @@ class LoaderTests(unittest.TestCase):
                          'abis': list(M.ABIS), 'producerReceipts': M.PRODUCERS, 'nativeLibraries': natives, 'modules': self.modules,
                          'consumerBindings': {key: 'b' * 64 for key in M.CONSUMERS}, 'files': self.rows,
                          'origins': {key: {'coverage': 'complete', 'authoritySHA256': 'a' * 64} for key in ('goStd', 'localConjure', 'lyrebirdComposite', 'cppAndNDK')}}
-        self.manifest['origins']['goStd'].update(authoritySHA256='5f41fd9468bc246e78bd56952951dcb5f846a1b07a7b5399a00dd1bf82846704', sourceCommit='4e8c85f5319d999bfd7617fdc191631e5634e3c5', sourceArchiveSHA256='1e2d5e06a2f103d11f9ae23a39cf3f79d4c7ed6f1335b7715ac2e65894fe1405')
+        self.manifest['origins']['goStd'].update(authoritySHA256='d9f39341ef44a2e20b173747b8c48e83aa699e1e1687a399dfa1e56a3e3f7476', sourceCommit='26b4433366fce47e480679e0b5a30222b63996e0', sourceArchiveSHA256='d44101b0ff27ed2a4c75ad46c17b9c74359209e2eb2ca7c9df6cb4fdb68e1969')
         self.manifest['origins']['localConjure'].update(originalTreeSHA256='c' * 64, effectiveTreeSHA256='d' * 64,
             originalLicenseSHA256=M.digest(b'Synthetic unit license\n'), patchManifestSHA256=self.source['config/native/conjure/stun-v3-patch.json'], patchScriptSHA256=self.source['scripts/prepare-tor-dependency.py'])
         self.manifest['origins']['lyrebirdComposite'].update(sourceCommit='0b10edbb61e0ca6fb70c7d57aeaabf315f1fade1', packageGraphSHA256ByABI={abi: 'e' * 64 for abi in M.ABIS})
-        self.manifest['origins']['cppAndNDK'].update(sourceCommit='635b013a612ff47278ef02acf8580a28e10e26c5', OpenSSLArchiveSHA256='603f5602e2eef00d77fbd429d34dcd5822bb301757a1bc9cdb24c670f1eb859a', BoostArchiveSHA256='cc4b893acf645c9d4b698e9a0f08ca8846aa5d6c68275c14c3e7949c24109454', NDKVersion='29.0.14206865')
+        self.manifest['origins']['cppAndNDK'].update(sourceCommit='635b013a612ff47278ef02acf8580a28e10e26c5', OpenSSLArchiveSHA256='603f5602e2eef00d77fbd429d34dcd5822bb301757a1bc9cdb24c670f1eb859a', BoostArchiveSHA256='cc4b893acf645c9d4b698e9a0f08ca8846aa5d6c68275c14c3e7949c24109454', NDKVersion='29.0.14206865', currentGoOnlyRecipeDeltaSHA256='44a0a23abd31c3c46f3c58c0260daeb99944374fc9570696936aaf4ea82d1e70')
         self.manifest_path = self.root / 'manifest.json'
         self.binding_path = self.repo / 'config/native-source-material-bindings.json'
         self.sync()
@@ -130,9 +130,9 @@ class LoaderTests(unittest.TestCase):
     def test_wrong_go_std_origin_or_body_rejects(self):
         self.manifest['origins']['goStd']['sourceCommit'] = '0' * 40; self.sync()
         with self.assertRaisesRegex(ValueError, 'standard-library notice origin'): self.load()
-        self.manifest['origins']['goStd']['sourceCommit'] = '4e8c85f5319d999bfd7617fdc191631e5634e3c5'
-        file = self.payload / 'tor/Go-1.26.10-BSD-3-Clause.txt'; file.write_bytes(b'Wrong substituted license\n')
-        row = next(row for row in self.rows if row['path'] == 'tor/Go-1.26.10-BSD-3-Clause.txt'); row.update(bytes=file.stat().st_size, sha256=M.digest(file.read_bytes())); self.sync()
+        self.manifest['origins']['goStd']['sourceCommit'] = '26b4433366fce47e480679e0b5a30222b63996e0'
+        file = self.payload / 'tor/Go-1.26.11-BSD-3-Clause.txt'; file.write_bytes(b'Wrong substituted license\n')
+        row = next(row for row in self.rows if row['path'] == 'tor/Go-1.26.11-BSD-3-Clause.txt'); row.update(bytes=file.stat().st_size, sha256=M.digest(file.read_bytes())); self.sync()
         with self.assertRaisesRegex(ValueError, 'standard-library notice origin'): self.load()
 
     def test_stale_cpp_and_missing_gpl_composite_reject(self):

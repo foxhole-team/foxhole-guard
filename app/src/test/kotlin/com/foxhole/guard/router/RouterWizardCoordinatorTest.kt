@@ -35,21 +35,31 @@ class RouterWizardCoordinatorTest {
         override suspend fun save(pairing: RouterPairing) { saved?.clear(); saved = pairing.copy() }
         override suspend fun remove(expectedId: String) { if (saved?.id == expectedId) { saved?.clear(); saved = null } }
     }
-    private class FixtureCall(private val request: Request, private val body: String?, private val failure: Boolean = false) : Call by OkHttpClient().newCall(request) {
+    private class FixtureCall(private val request: Request, private val body: String?, private val failure: Boolean = false, private val httpCode: Int = 200) : Call by OkHttpClient().newCall(request) {
         override fun enqueue(callback: Callback) {
             if (failure) callback.onFailure(this, IOException("synthetic lost acknowledgment"))
-            else callback.onResponse(this, Response.Builder().request(request).protocol(Protocol.HTTP_1_1).code(200).message("fixture")
+            else callback.onResponse(this, Response.Builder().request(request).protocol(Protocol.HTTP_1_1).code(httpCode).message("fixture")
                 .body(requireNotNull(body).toResponseBody("application/json".toMediaType())).build())
         }
     }
 
     private fun transport(pairedIds: MutableList<String> = mutableListOf(), failFirstCreate: Boolean = false,
-        initialPin: Boolean = false): RouterWizardTransport {
+        initialPin: Boolean = false, readinessUnavailableResponses: Int = 0,
+        readinessStatus: Int = 503, requestActions: MutableList<String> = mutableListOf()): RouterWizardTransport {
         var first = true
+        var remainingReadiness = readinessUnavailableResponses
         val api = RouterPanelApi(identity, Call.Factory { request ->
             val body = Json.parseToJsonElement(Buffer().also { requireNotNull(request.body).writeTo(it) }.readUtf8()).jsonObject
             val payload = requireNotNull(body["payload"]).jsonObject
-            val result = when (body["action"]?.jsonPrimitive?.content) {
+            val action = requireNotNull(body["action"]).jsonPrimitive.content
+            requestActions += action
+            if (action in setOf("package.status", "unlock") && remainingReadiness > 0) {
+                if (action == "package.status") remainingReadiness--
+                return@Factory FixtureCall(request, "{}", httpCode = readinessStatus)
+            }
+            val result = when (action) {
+                "package.status" -> """{"schema":1,"product":"foxhole","installed":true,"pinConfigured":false,"resetSupported":true,"version":"1.0.6"}"""
+
                 "unlock" -> """{"token":"${"b".repeat(64)}","pinChangeRequired":$initialPin}"""
                 "pin.change" -> """{"token":"${"b".repeat(64)}"}"""
                 "pair.create" -> {
@@ -97,7 +107,7 @@ class RouterWizardCoordinatorTest {
     private suspend fun installedOptions(coordinator: RouterWizardCoordinator) {
         coordinator.begin(RouterWizardPath.SETUP, "NL")
         coordinator.inspectAddress("192.168.1.1"); coordinator.acceptIdentity()
-        coordinator.confirmInstallProtocols(); coordinator.login("fixture".toCharArray())
+        coordinator.login("fixture".toCharArray()); coordinator.confirmCompatibility(); coordinator.confirmInstallProtocols()
         coordinator.options(coordinator.state.value.options.copy(licenseAccepted = true))
         coordinator.install()
         assertEquals(RouterWizardStage.OPTIONS, coordinator.state.value.stage)
@@ -176,7 +186,7 @@ class RouterWizardCoordinatorTest {
     @Test fun anInspectionReturnedAfterCloseIsClosedAndCannotReplaceANewWizard() = runTest {
         val ready = CompletableDeferred<Unit>()
         var closed = 0
-        val setup = object : RouterSetupService {
+        val setup = object : RouterPrecheckedSetupFixture() {
             override val installCatalog = RouterInstallCatalogTest.catalog(setOf(RouterInstallProtocol.HYSTERIA2))
             override suspend fun inspectSshIdentity(address: String) = byteArrayOf(1, 2, 3)
             override suspend fun inspect(address: String, hostKey: ByteArray, password: CharArray,
@@ -192,9 +202,10 @@ class RouterWizardCoordinatorTest {
         assertEquals(network.gatewayHint(), coordinator.state.value.address)
         coordinator.inspectAddress("192.168.1.1")
         coordinator.acceptIdentity()
-        coordinator.confirmInstallProtocols()
         val secret = "root-fixture".toCharArray()
-        val job = launch { coordinator.login(secret) }
+        coordinator.login(secret)
+        coordinator.confirmCompatibility()
+        val job = launch { coordinator.confirmInstallProtocols() }
         runCurrent()
         coordinator.begin(RouterWizardPath.PAIR, "NL")
         ready.complete(Unit)
@@ -229,7 +240,7 @@ class RouterWizardCoordinatorTest {
         val hy2 = setOf(RouterInstallProtocol.HYSTERIA2)
         val combined = setOf(RouterInstallProtocol.VLESS, RouterInstallProtocol.WIREGUARD)
         var inspected: RouterInstallProtocolSelection? = null
-        val setup = object : RouterSetupService {
+        val setup = object : RouterPrecheckedSetupFixture() {
             override val installCatalog = RouterInstallCatalogTest.catalog(hy2, combined)
             override suspend fun inspectSshIdentity(address: String) = byteArrayOf(1)
             override suspend fun inspect(address: String, hostKey: ByteArray, password: CharArray,
@@ -244,13 +255,16 @@ class RouterWizardCoordinatorTest {
         assertEquals(hy2, coordinator.state.value.installSelection?.protocols)
         coordinator.inspectAddress("192.168.1.1")
         coordinator.acceptIdentity()
+        assertEquals(RouterWizardStage.LOGIN, coordinator.state.value.stage)
+        val secret = "fixture".toCharArray()
+        coordinator.login(secret)
+        assertEquals(RouterWizardStage.COMPATIBILITY, coordinator.state.value.stage)
+        coordinator.confirmCompatibility()
         assertEquals(RouterWizardStage.PROTOCOLS, coordinator.state.value.stage)
         coordinator.installProtocols(hy2 + RouterInstallProtocol.VLESS)
         assertEquals(hy2, coordinator.state.value.installSelection?.protocols)
         coordinator.installProtocols(combined)
         coordinator.confirmInstallProtocols()
-        val secret = "fixture".toCharArray()
-        coordinator.login(secret)
         assertEquals(combined, inspected?.protocols)
         assertEquals(setup.installCatalog.sha256, inspected?.catalogSha256)
         assertEquals(RouterWizardStage.INSTALL, coordinator.state.value.stage)
@@ -262,7 +276,7 @@ class RouterWizardCoordinatorTest {
         val vless = setOf(RouterInstallProtocol.VLESS)
         var closed = 0
         var installed = 0
-        val setup = object : RouterSetupService {
+        val setup = object : RouterPrecheckedSetupFixture() {
             override val installCatalog = RouterInstallCatalogTest.catalog(hy2, vless)
             override suspend fun inspectSshIdentity(address: String) = byteArrayOf(1)
             override suspend fun inspect(address: String, hostKey: ByteArray, password: CharArray,
@@ -274,8 +288,9 @@ class RouterWizardCoordinatorTest {
         coordinator.begin(RouterWizardPath.SETUP, "NL")
         coordinator.inspectAddress("192.168.1.1")
         coordinator.acceptIdentity()
-        coordinator.confirmInstallProtocols()
         coordinator.login("fixture".toCharArray())
+        coordinator.confirmCompatibility()
+        coordinator.confirmInstallProtocols()
         assertEquals(RouterWizardError.UNSUPPORTED, coordinator.state.value.error)
         assertEquals(RouterWizardStage.LOGIN, coordinator.state.value.stage)
         assertEquals(1, closed)
@@ -284,7 +299,7 @@ class RouterWizardCoordinatorTest {
     }
 
     @Test fun absentVerifiedHysteriaBuildDoesNotEnableSetupOrRequestRootPassword() = runTest {
-        val setup = object : RouterSetupService {
+        val setup = object : RouterPrecheckedSetupFixture() {
             override val installCatalog = RouterInstallCatalogTest.catalog(setOf(RouterInstallProtocol.VLESS))
             override suspend fun inspectSshIdentity(address: String) = byteArrayOf(1)
             override suspend fun inspect(address: String, hostKey: ByteArray, password: CharArray,
@@ -388,7 +403,7 @@ class RouterWizardCoordinatorTest {
     @Test fun aConfiguredReleaseCanLoadItsVerifiedCatalogBeforeChoosingTheHysteriaDefault() = runTest {
         val catalog = RouterInstallCatalogTest.catalog(setOf(RouterInstallProtocol.HYSTERIA2))
         var initialized = false
-        val setup = object : RouterSetupService {
+        val setup = object : RouterPrecheckedSetupFixture() {
             override val installCatalog get() = catalog.takeIf { initialized }
             override suspend fun inspectSshIdentity(address: String): ByteArray { initialized = true; return byteArrayOf(1) }
             override suspend fun inspect(address: String, hostKey: ByteArray, password: CharArray,
@@ -400,14 +415,14 @@ class RouterWizardCoordinatorTest {
         coordinator.begin(RouterWizardPath.SETUP, "NL")
         coordinator.inspectAddress("192.168.1.1")
         coordinator.acceptIdentity()
-        assertEquals(RouterWizardStage.PROTOCOLS, coordinator.state.value.stage)
+        assertEquals(RouterWizardStage.LOGIN, coordinator.state.value.stage)
         assertEquals(setOf(RouterInstallProtocol.HYSTERIA2), coordinator.state.value.installSelection?.protocols)
     }
 
     @Test fun measuredInstallProgressIsClearedOnCloseAndLateEventsCannotReachANewWizard() = runTest {
         var listener: ((RouterInstallProgress) -> Unit)? = null
         val pending = CompletableDeferred<RouterInstallResult>()
-        val setup = object : RouterSetupService {
+        val setup = object : RouterPrecheckedSetupFixture() {
             override val installCatalog = RouterInstallCatalogTest.catalog(setOf(RouterInstallProtocol.HYSTERIA2))
             override suspend fun inspectSshIdentity(address: String) = byteArrayOf(1)
             override suspend fun inspect(address: String, hostKey: ByteArray, password: CharArray,
@@ -487,8 +502,14 @@ class RouterWizardCoordinatorTest {
         coordinator.begin(RouterWizardPath.SETUP, "NL")
         coordinator.inspectAddress("192.168.1.1"); coordinator.acceptIdentity()
         assertTrue(coordinator.state.value.options.autoUpdateEnabled)
+        coordinator.login("fixture".toCharArray())
+        coordinator.confirmCompatibility()
+        assertEquals(RouterWizardStage.PROTOCOLS, coordinator.state.value.stage)
+        assertTrue(coordinator.state.value.options.autoUpdateEnabled)
         coordinator.options(coordinator.state.value.options.copy(autoUpdateEnabled = enabled))
-        coordinator.confirmInstallProtocols(); coordinator.login("fixture".toCharArray())
+        assertEquals(enabled, coordinator.state.value.options.autoUpdateEnabled)
+        coordinator.confirmInstallProtocols()
+        assertEquals(enabled, coordinator.state.value.options.autoUpdateEnabled)
         coordinator.options(coordinator.state.value.options.copy(licenseAccepted = true))
         coordinator.install()
         assertTrue(coordinator.state.value.installedInThisWizard)
@@ -618,7 +639,67 @@ class RouterWizardCoordinatorTest {
         coordinator.close()
     }
 
-    private fun installingSetup(install: suspend () -> RouterInstallResult) = object : RouterSetupService {
+
+    @Test fun freshInstallReadinessWaitsBeforeSendingBootstrapOnce() = runTest {
+        val actions = mutableListOf<String>()
+        val coordinator = RouterWizardCoordinator(transport(initialPin = true,
+            readinessUnavailableResponses = 2, requestActions = actions), Store(), "Phone",
+            installingSetup { RouterInstallResult(identity, "947215".toCharArray()) },
+            provisioner { RouterWizardResult(it.id) }, { null }, { true })
+        preparedSetup(coordinator)
+        coordinator.install()
+        assertEquals(RouterWizardStage.OPTIONS, coordinator.state.value.stage)
+        assertTrue(coordinator.state.value.initialPinRequired)
+        assertEquals(listOf("package.status", "package.status", "package.status", "unlock"), actions)
+        coordinator.close()
+    }
+
+    @Test fun freshInstallReadinessDoesNotRetryForbiddenOrSendBootstrap() = runTest {
+        val actions = mutableListOf<String>()
+        val coordinator = RouterWizardCoordinator(transport(initialPin = true,
+            readinessUnavailableResponses = 2, readinessStatus = 403, requestActions = actions), Store(), "Phone",
+            installingSetup { RouterInstallResult(identity, "947215".toCharArray()) },
+            provisioner { RouterWizardResult(it.id) }, { null }, { true })
+        preparedSetup(coordinator)
+        coordinator.install()
+        assertEquals(RouterWizardError.UNAVAILABLE, coordinator.state.value.error)
+        assertEquals(listOf("package.status"), actions)
+        assertFalse(coordinator.state.value.initialPinRequired)
+        coordinator.close()
+    }
+
+    @Test fun freshInstallReadinessTimeoutNeverReplaysAuthentication() = runTest {
+        val actions = mutableListOf<String>()
+        val coordinator = RouterWizardCoordinator(transport(initialPin = true,
+            readinessUnavailableResponses = 1000, requestActions = actions), Store(), "Phone",
+            installingSetup { RouterInstallResult(identity, "947215".toCharArray()) },
+            provisioner { RouterWizardResult(it.id) }, { null }, { true })
+        preparedSetup(coordinator)
+        coordinator.install()
+        assertEquals(5000L, testScheduler.currentTime)
+        assertEquals(RouterWizardError.UNAVAILABLE, coordinator.state.value.error)
+        assertTrue(actions.isNotEmpty() && actions.all { it == "package.status" })
+        assertFalse(coordinator.state.value.initialPinRequired)
+        coordinator.close()
+    }
+
+    @Test fun freshInstallReadinessStopPreventsBootstrapAndFurtherProbes() = runTest {
+        val actions = mutableListOf<String>()
+        val coordinator = RouterWizardCoordinator(transport(initialPin = true,
+            readinessUnavailableResponses = 1000, requestActions = actions), Store(), "Phone",
+            installingSetup { RouterInstallResult(identity, "947215".toCharArray()) },
+            provisioner { RouterWizardResult(it.id) }, { null }, { true })
+        preparedSetup(coordinator)
+        val action = launch { coordinator.install() }
+        runCurrent()
+        assertEquals(listOf("package.status"), actions)
+        coordinator.close()
+        action.join()
+        assertTrue(action.isCancelled)
+        assertEquals(listOf("package.status"), actions)
+    }
+
+    private fun installingSetup(install: suspend () -> RouterInstallResult) = object : RouterPrecheckedSetupFixture() {
         override val installCatalog = RouterInstallCatalogTest.catalog(setOf(RouterInstallProtocol.HYSTERIA2))
         override suspend fun inspectSshIdentity(address: String) = byteArrayOf(1)
         override suspend fun inspect(address: String, hostKey: ByteArray, password: CharArray,
@@ -630,8 +711,9 @@ class RouterWizardCoordinatorTest {
         coordinator.begin(RouterWizardPath.SETUP, "NL")
         coordinator.inspectAddress("192.168.1.1")
         coordinator.acceptIdentity()
-        coordinator.confirmInstallProtocols()
         coordinator.login("fixture".toCharArray())
+        coordinator.confirmCompatibility()
+        coordinator.confirmInstallProtocols()
         assertEquals(RouterWizardStage.INSTALL, coordinator.state.value.stage)
         coordinator.options(coordinator.state.value.options.copy(licenseAccepted = true))
     }

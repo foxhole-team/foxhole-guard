@@ -1,4 +1,6 @@
 package com.foxhole.guard.runtime
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.currentCoroutineContext
 
 import android.app.NotificationManager
 import android.content.Context
@@ -348,7 +350,10 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
                         if (prepareRuntimeOwnerForCommand()) execute(accepted)
                     }
                 },
-                connect = ::connect,
+                connect = { id, start, option, previous, prepared, freeze, replace ->
+                    routerSmartStartOwner = null
+                    connect(id, start, option, previous, prepared, freeze, replace)
+                },
                 disconnect = { commandStartId, suppressLocalGuard, preserveSmartStartAnalysis ->
                     disconnect(
                         commandStartId = commandStartId,
@@ -361,6 +366,8 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
                 startLocalGuard = ::startLocalGuard,
                 activeProfileSessionPresent = { (activeSession?.profileId ?: 0L) > 0L },
                 failClosedTeardown = ::failClosedTeardown,
+                disconnectOwned = ::disconnectRouterOwned,
+                connectOwned = ::connectRouterSmartOwned,
             ),
         )
     }
@@ -558,7 +565,14 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
 
     override fun hasVpnPermission(): Boolean = VpnService.prepare(this) == null
 
-    override fun createTunBuilder(): Builder = Builder()
+    @Volatile private var routerSmartStartOwner: RouterOwnedResume? = null
+    override fun createTunBuilder(): Builder {
+        val owner = routerSmartStartOwner ?: return Builder()
+        return object : Builder() {
+            override fun establish(): android.os.ParcelFileDescriptor? =
+                container.connectionController.establishRouterSmartTun(owner) { super.establish() }
+        }
+    }
 
     override fun signingDigestForPackage(packageName: String): String? =
         AndroidApplicationIdentityResolver(this).signingCertificateSha256(packageName)
@@ -650,6 +664,59 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         )
         updateActiveVpnUnderlyingNetwork(currentUpstreamNetworkOrNull())
         runtime.onDefaultNetworkAvailable()
+    }
+
+    private suspend fun connectRouterSmartOwned(owner: RouterOwnedResume, commandStartId: Int) {
+        val controller = container.connectionController
+        val prepared = controller.prepareRouterSmartStart(owner)
+        if (prepared == null || activeSession != null || activeLocalGuardMode != null) {
+            controller.consumeRouterSmartStart(owner)
+            if (activeSession == null && activeLocalGuardMode == null && !runtimeInstanceStore.nativeSnapshot().hasEngineHandle)
+                stopSelfResult(commandStartId)
+            return
+        }
+        routerSmartStartOwner = owner
+        try { connect(owner.profileId, commandStartId, owner.protocolOptionId, smartPrepared = prepared) }
+        finally {
+            controller.consumeRouterSmartStart(owner)
+            if (routerSmartStartOwner == owner) routerSmartStartOwner = null
+        }
+    }
+    private suspend fun disconnectRouterOwned(owner: RouterOwnedDisconnect, commandStartId: Int) {
+        // Only the explicitly opted-in Smart receipt may stop this session. Missing or stale
+        // tokens are scoped no-ops; they never fall back to the unconditional stop path.
+        if (owner.smartToken == null || !validRouterSmartToken(owner.smartToken)) return
+        val native = runtimeInstanceStore.nativeSnapshot()
+        val session = activeSession
+        val generation = native.nativeGeneration.takeIf {
+            it > 0 && native.hasEngineHandle && native.hasTunFileDescriptor && !native.cleanupDraining
+        }
+        val controller = (application as? com.foxhole.guard.FoxholeApplication)
+            ?.appGraph?.connectionController ?: return
+        val wifi = try {
+            com.foxhole.guard.router.requireRouterLocalNetworkAccess(this)
+            if (container.settingsRepository.settings.value.expert.bypassLan) return
+            com.foxhole.guard.router.RouterWifiConnection.select(
+                requireNotNull(getSystemService(android.net.ConnectivityManager::class.java)),
+                com.foxhole.guard.router.RouterEndpoint(owner.lanAddress, owner.lanPort)).also { it.requireCurrent() }
+        } catch (_: Exception) { return }
+        if (!runtimeInstanceStore.isCurrentServiceOwner(runtimeServiceOwner) ||
+            !owner.matches(FoxholeVpnRuntimeBridge.snapshot.value, session?.profileId, session?.protocolOptionId,
+                generation, currentVpnNetworkOrNull()?.networkHandle, controller.routerRequestGeneration(),
+                wifi.network.networkHandle, android.os.SystemClock.elapsedRealtime(),
+                com.foxhole.guard.router.EncryptedRouterPairingStore(this).startRevision)) return
+        val settings = container.settingsRepository.settings.value
+        if (!routerSmartVpnOnly(settings, session)) return
+        if (!controller.acknowledgeRouterSmartPause(owner, session, settings)) return
+        currentCoroutineContext().ensureActive()
+        if (!owner.matches(FoxholeVpnRuntimeBridge.snapshot.value, activeSession?.profileId, activeSession?.protocolOptionId,
+                runtimeInstanceStore.nativeSnapshot().nativeGeneration.takeIf { it > 0 }, currentVpnNetworkOrNull()?.networkHandle, controller.routerRequestGeneration(),
+                wifi.network.networkHandle, android.os.SystemClock.elapsedRealtime(),
+                com.foxhole.guard.router.EncryptedRouterPairingStore(this).startRevision)) return
+        if (!runtimeInstanceStore.isCurrentServiceOwner(runtimeServiceOwner)) return
+        if (!controller.acknowledgeRouterSmartPauseNow(owner)) return
+        // No suspension between the final session/material fences and teardown initiation.
+        disconnect(commandStartId = commandStartId, suppressLocalGuard = false)
     }
 
     @Suppress("CyclomaticComplexMethod")

@@ -35,6 +35,10 @@ class CliSentinelJournalAndroidTest {
     @Test
     fun journalKeepsOlderInstallationsBeyondTheStatisticsPreview() {
         render(HomeUiState(installedApps = apps, installedAppsLoaded = true))
+        val section = context.getString(R.string.sentinel_assessment_section)
+        compose.onNodeWithTag(CLI_SENTINEL_JOURNAL_TAG).performScrollToNode(hasText(section))
+        compose.onNodeWithText(section, ignoreCase = true).performClick()
+        compose.onNodeWithText(context.getString(R.string.sentinel_assessment_applications), ignoreCase = true).performClick()
         compose.onNodeWithTag(CLI_SENTINEL_JOURNAL_TAG).performScrollToNode(hasText(apps.first().label))
         compose.onNodeWithText(apps.first().label).assertIsDisplayed()
         compose.onNodeWithTag(CLI_SENTINEL_JOURNAL_TAG).performScrollToNode(hasText(apps.last().label))

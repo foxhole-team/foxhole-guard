@@ -52,6 +52,7 @@ class RouterControlCoordinatorTest {
         var revoked = false
         var proofConnected = true
         var wanCountry: String? = null
+        var homeServerEnabled: Boolean? = null
         var network: JsonObject? = null
         var installedProtocols: JsonObject? = null
         var clients = JsonArray(emptyList())
@@ -59,7 +60,7 @@ class RouterControlCoordinatorTest {
         val actions = mutableListOf<String>()
         fun state() = buildJsonObject {
             put("schema", 1); put("revision", revision)
-            put("settings", buildJsonObject { put("localRules", true); put("localScope", "all") })
+            put("settings", buildJsonObject { put("localRules", true); put("localScope", "all"); homeServerEnabled?.let { put("vpnServerEnabled", it) } })
             put("countries", countries); put("devices", JsonArray(emptyList())); put("sites", JsonArray(emptyList())); put("clients", clients)
             network?.let { put("network", it) }
             installedProtocols?.let { put("installedProtocols", it) }
@@ -205,7 +206,7 @@ class RouterControlCoordinatorTest {
         assertEquals(RouterControlStage.CONNECTED, coordinator.state.value.stage)
         assertEquals("DE", preferences.value.countryCode)
         assertEquals("DE", coordinator.state.value.routerCountryCode)
-        assertEquals(true, coordinator.state.value.countryDirectEffective)
+        assertEquals(false, coordinator.state.value.countryDirectEffective)
         coordinator.setCountry("GB", true)
         assertFalse(preferences.value.countryAuto)
         fixture.wanCountry = "NL"
@@ -217,7 +218,7 @@ class RouterControlCoordinatorTest {
         assertEquals("NL", preferences.value.countryCode)
     }
 
-    @Test fun enablingControlPreservesTheFreshlyAppliedAutomaticCountry() = runTest {
+    @Test fun enablingControlPreservesTheFreshlyObservedAutomaticCountryWithoutWritingRules() = runTest {
         val fixture = Fixture().also { it.wanCountry = "NL" }
         val preferences = Preferences(RouterControlPreferences(pair.id, countryCode = "DE"))
         val coordinator = RouterControlCoordinator(transport(fixture), PairStore(pair), preferences,
@@ -227,13 +228,122 @@ class RouterControlCoordinatorTest {
         assertEquals(null, coordinator.state.value.error)
         assertEquals("NL", preferences.value.countryCode)
         assertEquals("NL", coordinator.state.value.preferences?.countryCode)
-        assertEquals(true, coordinator.state.value.countryDirectEffective)
+        assertEquals(false, coordinator.state.value.countryDirectEffective)
         coordinator.setEnabled(false)
         fixture.wanCountry = "GB"
         coordinator.setEnabled(true)
         assertEquals("GB", preferences.value.countryCode)
         assertEquals("GB", coordinator.state.value.preferences?.countryCode)
         assertTrue(preferences.value.countryAuto)
+        coordinator.close()
+    }
+
+    @Test fun unknownWanCanDisableTheOnlyExplicitDirectCountryWithoutGuessingLocation() = runTest {
+        val fixture = Fixture()
+        fixture.countries = JsonArray(listOf(buildJsonObject { put("code", "RU"); put("route", "direct") }))
+        val preferences = Preferences(RouterControlPreferences(pair.id, enabled = true))
+        val coordinator = RouterControlCoordinator(transport(fixture), PairStore(pair), preferences,
+            RouterHttpProvisioner(localAddress = { "192.168.1.101" }, io = StandardTestDispatcher(testScheduler)), copyProfile = {})
+        coordinator.open()
+        assertEquals(null, coordinator.state.value.routerCountryCode)
+        coordinator.setCountryDirect(false)
+        assertEquals(null, coordinator.state.value.error)
+        assertEquals("vpn", fixture.countries.single().jsonObject["route"]?.jsonPrimitive?.content)
+        assertEquals("RU", fixture.countries.single().jsonObject["code"]?.jsonPrimitive?.content)
+        assertEquals(JsonPrimitive(true), coordinator.state.value.snapshot?.settings?.get("localRules"))
+        assertEquals(null, coordinator.state.value.routerCountryCode)
+        assertFalse(preferences.value.countrySitesDirect)
+        coordinator.close()
+    }
+
+    @Test fun knownWanNeverReenablesAnExternallyDisabledCountryRuleOnOpenOrRefresh() = runTest {
+        val fixture = Fixture().also { it.wanCountry = "RU" }
+        fixture.countries = JsonArray(listOf(buildJsonObject { put("code", "RU"); put("route", "vpn") }))
+        val preferences = Preferences(RouterControlPreferences(pair.id, enabled = true, countrySitesDirect = true))
+        val coordinator = RouterControlCoordinator(transport(fixture), PairStore(pair), preferences,
+            RouterHttpProvisioner(localAddress = { "192.168.1.101" }, io = StandardTestDispatcher(testScheduler)), copyProfile = {})
+        coordinator.open(); coordinator.refresh()
+        assertFalse(fixture.actions.contains("settings"))
+        assertEquals("vpn", fixture.countries.single().jsonObject["route"]?.jsonPrimitive?.content)
+        assertEquals(false, coordinator.state.value.countryDirectEffective)
+        coordinator.setCountry("DE", false)
+        coordinator.setCountryAuto(true)
+        assertFalse(fixture.actions.contains("settings"))
+        assertEquals("vpn", fixture.countries.single().jsonObject["route"]?.jsonPrimitive?.content)
+        coordinator.close()
+    }
+
+    @Test fun onlyAnInteractivePinnedLanOpenCanEnableTheHiddenLocalManagementPreference() = runTest {
+        val fixture = Fixture()
+        val preferences = Preferences(RouterControlPreferences(pair.id, enabled = false))
+        val coordinator = RouterControlCoordinator(transport(fixture), PairStore(pair), preferences,
+            RouterHttpProvisioner(localAddress = { "192.168.1.101" }, io = StandardTestDispatcher(testScheduler)), copyProfile = {})
+        coordinator.open()
+        assertFalse(preferences.value.enabled)
+        coordinator.openUserManagement { false }
+        assertFalse(preferences.value.enabled)
+        coordinator.openUserManagement { true }
+        assertEquals(RouterControlStage.CONNECTED, coordinator.state.value.stage)
+        assertTrue(preferences.value.enabled)
+        assertFalse(fixture.actions.contains("settings"))
+        coordinator.close()
+    }
+
+    @Test fun leavingInteractiveManagementBeforeAuthenticatedSnapshotDoesNotSaveConsent() = runTest {
+        val fixture = Fixture().apply { hold = "state" }
+        val preferences = Preferences(RouterControlPreferences(pair.id, enabled = false))
+        val coordinator = RouterControlCoordinator(transport(fixture), PairStore(pair), preferences,
+            RouterHttpProvisioner(localAddress = { "192.168.1.101" }, io = StandardTestDispatcher(testScheduler)), copyProfile = {})
+        var visible = true
+        val open = launch { coordinator.openUserManagement { visible } }
+        runCurrent()
+        assertFalse(preferences.value.enabled)
+        visible = false
+        fixture.hold = null
+        requireNotNull(fixture.delayed).invoke()
+        open.join()
+        assertFalse(preferences.value.enabled)
+        assertEquals(RouterControlStage.DISABLED, coordinator.state.value.stage)
+        assertFalse(coordinator.state.value.controlsAvailable)
+        coordinator.close()
+    }
+
+    @Test fun smartOnRequiresVisibleUserActionAndAcknowledgedServerWithExplicitConsents() = runTest {
+        val fixture = Fixture().also { it.homeServerEnabled = true }
+        val preferences = Preferences(RouterControlPreferences(pair.id, enabled = true, publicIpConfirmed = true, homeVpnManagementEnabled = true))
+        var callbacks = 0
+        var active = false
+        val coordinator = RouterControlCoordinator(transport(fixture), PairStore(pair), preferences,
+            RouterHttpProvisioner(localAddress = { "192.168.1.101" }, io = StandardTestDispatcher(testScheduler)), copyProfile = {},
+            smartHomeAvailable = true, applySmartHome = { callbacks++; active = it }, smartHomeActive = { active })
+        coordinator.open()
+        coordinator.setSmartHome(true) { false }
+        assertEquals(0, callbacks); assertFalse(preferences.value.homeAutodetection)
+        coordinator.setSmartHome(true) { true }
+        assertEquals(1, callbacks); assertTrue(preferences.value.homeAutodetection); assertTrue(coordinator.state.value.homeAutomationEffective)
+        coordinator.setSmartHome(false)
+        assertEquals(2, callbacks); assertFalse(preferences.value.homeAutodetection); assertFalse(coordinator.state.value.homeAutomationEffective)
+        coordinator.close()
+    }
+    @Test fun unknownHomeServerOrMissingMobileConsentCannotStartSmartForegroundWork() = runTest {
+        val fixture = Fixture()
+        val preferences = Preferences(RouterControlPreferences(pair.id, enabled = true, publicIpConfirmed = true, homeVpnManagementEnabled = true))
+        var starts = 0
+        val coordinator = RouterControlCoordinator(transport(fixture), PairStore(pair), preferences,
+            RouterHttpProvisioner(localAddress = { "192.168.1.101" }, io = StandardTestDispatcher(testScheduler)), copyProfile = {},
+            smartHomeAvailable = true, applySmartHome = { if (it) starts++ })
+        coordinator.open(); coordinator.setSmartHome(true) { true }
+        assertEquals(0, starts); assertFalse(preferences.value.homeAutodetection)
+        coordinator.close()
+    }
+    @Test fun revokedPairingCannotEnableHiddenManagementThroughInteractiveOpen() = runTest {
+        val fixture = Fixture().also { it.revoked = true }
+        val preferences = Preferences(RouterControlPreferences(pair.id, enabled = false))
+        val coordinator = RouterControlCoordinator(transport(fixture), PairStore(pair), preferences,
+            RouterHttpProvisioner(localAddress = { "192.168.1.101" }, io = StandardTestDispatcher(testScheduler)), copyProfile = {})
+        coordinator.openUserManagement { true }
+        assertFalse(preferences.value.enabled)
+        assertFalse(coordinator.state.value.controlsAvailable)
         coordinator.close()
     }
 
@@ -468,6 +578,74 @@ class RouterControlCoordinatorTest {
         assertEquals(listOf(RouterInstallProtocol.HYSTERIA2),
             routerInstalledProtocols(coordinator.state.value.snapshot?.installedProtocols, null))
         assertFalse(fixture.actions.any { it in setOf("settings", "phone.provision", "client.save", "server.start", "server.stop", "engines.status") })
+        coordinator.close()
+    }
+
+    @Test fun liveStatusRefreshObservesEstablishedTunnelWithoutRestartOrReopen() = runTest {
+        val fixture = Fixture().apply { proofConnected = false }
+        val coordinator = RouterControlCoordinator(transport(fixture), PairStore(pair),
+            Preferences(RouterControlPreferences(pair.id, true, "NL")),
+            RouterHttpProvisioner(localAddress = { "192.168.1.101" }, io = StandardTestDispatcher(testScheduler)), copyProfile = {})
+        try {
+            coordinator.open(); coordinator.setVpn(true)
+            assertFalse(requireNotNull(coordinator.state.value.snapshot).connected)
+            fixture.actions.clear(); fixture.proofConnected = true
+            coordinator.refreshRuntimeStatus()
+            assertTrue(requireNotNull(coordinator.state.value.snapshot).connected)
+            assertFalse(coordinator.state.value.busy)
+            assertEquals(listOf("state"), fixture.actions)
+        } finally { coordinator.close() }
+    }
+    @Test fun anOlderStatusReplyCannotReplaceCurrentRouterRevision() = runTest {
+        val fixture = Fixture()
+        val coordinator = RouterControlCoordinator(transport(fixture), PairStore(pair),
+            Preferences(RouterControlPreferences(pair.id, true, "NL")),
+            RouterHttpProvisioner(localAddress = { "192.168.1.101" }, io = StandardTestDispatcher(testScheduler)), copyProfile = {})
+        try {
+            coordinator.open(); coordinator.setVpn(true)
+            val before = coordinator.state.value.snapshot
+            fixture.revision = 0; fixture.proofConnected = false
+            coordinator.refreshRuntimeStatus()
+            assertEquals(before, coordinator.state.value.snapshot)
+        } finally { coordinator.close() }
+    }
+
+    @Test fun countryExceptionDoesNotMutateUntilConfirmedAndCancelledConsentCannotReplay() = runTest {
+        val fixture = Fixture()
+        fixture.countries = JsonArray(listOf(buildJsonObject { put("code", "RU"); put("route", "direct") }))
+        val preferences = Preferences(RouterControlPreferences(pair.id, enabled = true))
+        val coordinator = RouterControlCoordinator(transport(fixture), PairStore(pair), preferences,
+            RouterHttpProvisioner(localAddress = { "192.168.1.101" }, io = StandardTestDispatcher(testScheduler)), copyProfile = {})
+        coordinator.open()
+        val count = fixture.actions.size
+        val cancelled = requireNotNull(coordinator.requestCountryDirectChange(false))
+        assertEquals(count, fixture.actions.size)
+        assertEquals("direct", fixture.countries.single().jsonObject["route"]?.jsonPrimitive?.content)
+        coordinator.cancelCountryDirectChange(cancelled)
+        coordinator.confirmCountryDirectChange(cancelled)
+        assertEquals(count, fixture.actions.size)
+        val approved = requireNotNull(coordinator.requestCountryDirectChange(false))
+        coordinator.confirmCountryDirectChange(approved)
+        assertEquals("vpn", fixture.countries.single().jsonObject["route"]?.jsonPrimitive?.content)
+        val after = fixture.actions.size
+        coordinator.confirmCountryDirectChange(approved)
+        assertEquals(after, fixture.actions.size)
+        coordinator.close()
+    }
+    @Test fun changedNativeRevisionInvalidatesCountryConsentBeforeAnyMutation() = runTest {
+        val fixture = Fixture()
+        fixture.countries = JsonArray(listOf(buildJsonObject { put("code", "RU"); put("route", "direct") }))
+        val preferences = Preferences(RouterControlPreferences(pair.id, enabled = true))
+        val coordinator = RouterControlCoordinator(transport(fixture), PairStore(pair), preferences,
+            RouterHttpProvisioner(localAddress = { "192.168.1.101" }, io = StandardTestDispatcher(testScheduler)), copyProfile = {})
+        coordinator.open()
+        val approved = requireNotNull(coordinator.requestCountryDirectChange(false))
+        fixture.revision++
+        coordinator.refresh()
+        val count = fixture.actions.size
+        coordinator.confirmCountryDirectChange(approved)
+        assertEquals(count, fixture.actions.size)
+        assertEquals("direct", fixture.countries.single().jsonObject["route"]?.jsonPrimitive?.content)
         coordinator.close()
     }
 

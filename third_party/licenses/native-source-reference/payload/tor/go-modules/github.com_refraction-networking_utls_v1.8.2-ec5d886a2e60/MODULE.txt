@@ -1,0 +1,2 @@
+github.com/refraction-networking/utls
+v1.8.2

@@ -1,0 +1,2 @@
+github.com/dchest/siphash
+v1.2.3

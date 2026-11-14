@@ -120,8 +120,10 @@ def derived_native_component(name, path, data, archive, notices, root):
 def internal_project_component(item, root):
     projects = {"project::core:" + name: name for name in
                 ("importer", "model", "network", "profile", "runtime", "sentinel")}
+    version = root.get("version") if isinstance(root, dict) else None
     return (item.get("type") == "library" and "purl" not in item and isinstance(root, dict) and
-            root.get("bom-ref") == "project::app" and root.get("version") == "1.0.0" and
+            root.get("bom-ref") == "project::app" and isinstance(version, str) and len(version) <= 80 and
+            re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+(?:[-+][A-Za-z0-9][A-Za-z0-9.+-]*)?", version) is not None and
             item.get("bom-ref") in projects and item.get("name") == projects[item["bom-ref"]] and
             item.get("version") == root["version"] and
             item.get("licenses") == [{"license": {"id": "GPL-3.0-or-later"}}])

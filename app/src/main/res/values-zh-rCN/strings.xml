@@ -1045,7 +1045,7 @@
     <string name="cli_help_routing_title">路由规则</string>
     <string name="cli_help_routing_body">应用和网站资源的流量路由规则原子应用。\n“整个设备”场景将 VPN 设为主要路由。适用的应用例外和拦截以及网站规则仍然保留。VPN 的应用选择列表用于代理场景。\n应用网络拦截在 VPN/Tor 隧道活动或防火墙开启时生效。\n注意：I2P 启动的透明防火墙不应用通用路由规则，拦截和 DNS 截获均禁用，仅路由 .i2p 域名流量。</string>
     <string name="cli_help_logs_title">事件日志</string>
-    <string name="cli_help_logs_body">主日志记录应用诊断、模块状态变化和系统事件。网络日志记录观察到的应用流量：时间戳、可用的 UID/软件包归属、TCP/UDP、目的地国家和字节数。观察记录不代表连接成功。共享或未知归属会明确标示；国家对应观察到的目的地。安全日志记录 FoxHole Sentinel 发现、观察到的安装/更新/移除、监测间断，以及结构化的内核拒绝或确认事件。原因说明已知的起因、结果和后续操作；陌生代码并不表示操作成功。\n日志保留在本地。导出按所选隐私策略清理标识和端点。清除网络历史会阻止旧排队写入；边界处的一批轮询可能不计入历史，但汇总流量计数继续。</string>
+    <string name="cli_help_logs_body">主日志记录应用诊断、模块状态变化和系统事件。网络日志记录观察到的应用流量：时间戳、可用的 UID/软件包归属、TCP/UDP、目的地国家和字节数。观察记录不代表连接成功。共享或未知归属会明确标示；国家对应观察到的目的地。安全日志记录 FoxHole Sentinel 发现、观察到的安装/更新/移除、监测间断，以及结构化的网络内核拒绝或确认事件。\n日志保留在本地。导出按所选隐私策略清理标识和端点。清除网络历史会阻止旧排队写入；边界处的一批轮询可能不计入历史，但汇总流量计数继续。</string>
     <string name="cli_help_stats_title">统计</string>
     <string name="cli_help_stats_body">统计模块在本地收集流量、活动会话和 DNS 查询指标，可分析所选时间段内的 VPN 配置、应用、DNS 拦截、防火墙事件及 Tor/I2P 网络。默认关闭；启用后可配置收集间隔、保留时长和各项指标。数据按日、周、月汇总，仅存储在设备上。</string>
     <string name="cli_help_firewall_title">防火墙与应用隔离</string>
@@ -1058,11 +1058,11 @@
     <string name="cli_help_backup_title">备份</string>
     <string name="cli_help_backup_body">设置 → 应用 → 应用数据库。导出包含所选配置和可迁移设置。“加密备份”默认关闭，文件为明文且不要求密码。启用后创建带密码的 AES 加密文件。配置可能包含访问凭据；请保密明文文件，将加密文件与密码分开存储。遗忘的密码无法恢复。\n导入自动识别格式，仅对加密文件要求密码。恢复前请检查备份摘要并确认。以下设备本地值留在本设备：FoxHole Guard PIN、更新令牌、系统权限（使用情况访问）、自动生成的本地代理密码和本地 FoxHole Sentinel 数据库。\n此处还提供日志、统计和配置的选择性清理，以及完全且不可逆的恢复出厂设置。</string>
     <string name="cli_help_dns_title">DNS 管理</string>
-    <string name="cli_help_dns_body">DNS 设置在受支持隧道内生效。设备 DNS 保护即使没有活动 VPN 或 Tor，也会启动本地解析器。广告、跟踪器、厂商遥测和恶意域名各有独立开关。经验证的内置列表支持离线准备；下载保留签名、哈希和版本检查。已准备更新与内核实际应用的数据分别显示。所需数据缺失会明确报告。\n普通跟踪列表结合 EasyPrivacy 和 AdGuard 第三方跟踪的无条件规则；专业版增加 AdGuard 第一方和移动跟踪。遥测覆盖指定的华为、三星、OPPO/Realme、Vivo 和小米列表，不涵盖所有 Android 应用或全部 Google 遥测。恶意域名中等/完整选择相应 HaGezi 威胁情报列表；完整列表需要更多存储和下载量。不支持的上下文、路径和正则规则被省略。\n应用/域名排除是独立明确策略。当前 WireGuard/AmneziaWG 数据包隧道路径不支持 DNS 过滤，提供商 DNS 遵循配置。DNS 服务器变更只是安全日志中的观察，不是入侵证据。</string>
+    <string name="cli_help_dns_body">DNS 设置在受支持隧道内生效。设备 DNS 保护即使没有活动 VPN 或 Tor，也会启动本地解析器。广告、跟踪器、厂商遥测和恶意域名各有独立开关。经验证的内置列表支持离线准备；下载保留签名、哈希和版本检查。已准备更新与内核实际应用的数据分别显示。所需数据缺失会明确报告。\n普通跟踪列表结合 EasyPrivacy 和 AdGuard 第三方跟踪的无条件规则；专业版增加 AdGuard 第一方和移动跟踪。遥测覆盖指定的华为、三星、OPPO/Realme、Vivo 和小米列表，不涵盖所有 Android 应用或全部 Google 遥测。恶意域名中等/完整选择相应 HaGezi 威胁情报列表；完整列表需要更多存储和下载量。不支持的上下文、路径和正则规则被省略。\n应用/域名排除是独立策略。当前 WireGuard/AmneziaWG 数据包隧道路径不支持 DNS 过滤，提供商 DNS 遵循配置。DNS 服务器变更只是安全日志中的观察，不是入侵证据。</string>
     <string name="cli_help_net_rules_title">不同网络的 VPN 规则</string>
-    <string name="cli_help_net_rules_body">此功能将特定 VPN 配置绑定到 Wi-Fi 或移动网络。网络接口变化时，FoxHole Guard 会通知建议启用该配置，或自动连接所选 VPN 配置。</string>
+    <string name="cli_help_net_rules_body">此功能将特定 VPN 配置绑定到 Wi-Fi 网络 或移动网络。网络接口变化时，FoxHole Guard 会通知建议启用该配置，或自动连接所选 VPN 配置。</string>
     <string name="cli_help_lan_proxy_title">本地代理服务器</string>
-    <string name="cli_help_lan_proxy_body">内置代理通过 SOCKS5 或 HTTP，将局域 Wi-Fi 中其他设备的流量经本设备活动 VPN 或 Tor 隧道转发。\n安全要求：本地代理必须验证身份，密码为空时无法启动。\n注意：FoxHole Guard 不加密客户端设备与手机之间的流量。请仅在可信局域网中使用。</string>
+    <string name="cli_help_lan_proxy_body">内置代理通过 SOCKS5 或 HTTP，将局域 Wi-Fi 网络 中其他设备的流量经本设备活动 VPN 或 Tor 隧道转发。\n安全要求：本地代理必须验证身份，密码为空时无法启动。\n注意：FoxHole Guard 不加密客户端设备与手机之间的流量。请仅在可信局域网中使用。</string>
     <string name="cli_help_editor_title">编辑 VPN 配置</string>
     <string name="cli_help_editor_body">长按已保存配置可选择、重命名、编辑或删除。保存或分享时，先选中配置再使用下方控件。单个配置和 v2raytun 订阅支持二维码分享。VPN 配置中的“+”按钮使用空白模板创建配置，并可选择协议类型。\n智能配置中的每个协议独立保存和配置。\n安全：不验证证书的连接（Insecure TLS/AllowInsecure）需要用户明确确认；授权仅在本地保存，仅适用于正在编辑的配置。</string>
     <string name="cli_help_transfer_title">导入与导出配置</string>
@@ -1292,7 +1292,7 @@
     <string name="cli_lan_proxy_upstream_mixed">socks → VPN, http → Tor</string>
     <string name="cli_lan_proxy_reason_no_session">请先连接 VPN 或 Tor</string>
     <string name="cli_lan_proxy_reason_no_wifi">没有具有 IPv4 地址的 Wi-Fi</string>
-    <string name="cli_lan_proxy_reason_no_credentials">警告！未配置身份验证。当前局域网中任何主机都可无限制访问代理服务器。</string>
+    <string name="cli_lan_proxy_reason_no_credentials">LAN 代理无法在未启用身份验证的情况下启动。请在 LAN 代理设置中配置凭据。</string>
     <string name="cli_lan_proxy_reason_packet_tunnel">局域网代理不支持 WireGuard/AmneziaWG 配置</string>
     <string name="cli_lan_proxy_reason_network_refused">网络不安全：代理服务器仅在可信 Wi-Fi 下启动</string>
     <string name="cli_lan_proxy_reason_bind_failed">端口已被占用，请更改端口</string>

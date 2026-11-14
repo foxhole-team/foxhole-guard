@@ -1,9 +1,9 @@
 <resources>
     <string name="sentinel_static_expert">Экспертные настройки проверки APK</string>
-    <string name="sentinel_static_title">Проверка APK</string>
+    <string name="sentinel_static_title">Проверка приложений</string>
     <string name="sentinel_static_reference_summary">%1$s: категорий статических ссылок API — %2$s, совпадений правил — %3$s. Эти наблюдения не доказывают выполнение кода или наличие вредоносного ПО.</string>
     <string name="sentinel_static_notification_title">FoxHole Sentinel: статические наблюдения</string>
-    <string name="sentinel_static_select_app">Приложение</string>
+    <string name="sentinel_static_select_app">Выбрать приложение</string>
     <string name="sentinel_static_run">Проверить выбранное приложение</string>
     <string name="sentinel_static_baseline">Проверить установленные приложения</string>
     <string name="sentinel_static_cancel">Отменить проверку</string>
@@ -30,4 +30,5 @@
     <string name="sentinel_static_status_unsupported">Формат APK не поддерживается</string>
     <string name="sentinel_static_engine_unavailable">В сборке нет доступного движка проверки для этого устройства.</string>
     <string name="sentinel_static_type_label">Статические ссылки</string>
+    <string name="sentinel_static_search_app">Поиск приложений</string>
 </resources>

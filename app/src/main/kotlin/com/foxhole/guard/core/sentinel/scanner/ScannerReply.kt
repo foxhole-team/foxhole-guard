@@ -20,6 +20,7 @@ internal fun scannerInspectionReply(owner: ScannerRequestOwner, inspection: ApkI
     putLong("elapsed_ms", inspection.elapsedMillis)
     putLong("work_units", inspection.workUnits)
     putLong("expanded_bytes", inspection.expandedBytes)
+    putScannerArtifactCoverage(inspection)
     val observations = inspection.dexEntries.flatMap { it.inspection.observations }.groupBy { it.kind }
     val weakCodes = DexObservationKind.entries.filter { it in observations }.map { it.name }
     putStringArrayList("weak_observations", ArrayList(weakCodes))

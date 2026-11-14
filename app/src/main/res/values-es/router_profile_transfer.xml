@@ -1,0 +1,12 @@
+<resources>
+    <string name="router_transfer_title">Seleccionar perfiles VPN</string>
+    <string name="router_transfer_body">Los perfiles VPN seleccionados se enviarán al router.</string>
+    <string name="router_transfer_empty">No hay perfiles VPN guardados compatibles.</string>
+    <string name="router_transfer_failed">No se pudieron comprobar los perfiles VPN disponibles.</string>
+    <string name="router_transfer_retry">Actualizar</string>
+    <string name="router_transfer_done">Perfiles enviados: %1$d</string>
+    <string name="router_transfer_partial">Se enviaron %1$d de %2$d perfiles.</string>
+    <string name="router_transfer_add">Añadir perfiles VPN</string>
+    <string name="router_transfer_save">Transferir</string>
+    <string name="router_transfer_cancel">Cancelar</string>
+</resources>

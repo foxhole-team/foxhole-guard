@@ -27,6 +27,6 @@
     <string name="guard_router_router_updates_device_download">Das FoxHole-Paket wird über Ihr Gerät heruntergeladen</string>
     <string name="guard_router_settings_info">Die App verwendet Ihr lokales Netzwerk, um den OpenWrt-Router zu finden und sein VPN von diesem Telefon aus zu verwalten. Wenn Sie die Verwaltung ausschalten, läuft das VPN des Routers weiter.</string>
     <string name="guard_router_settings_pair_first">Richten Sie einen Router ein oder koppeln Sie ihn, um die Verwaltung zu aktivieren.</string>
-    <string name="guard_router_vpn_router_error_home_vpn">Es gibt keine verifizierte VPN-Route zum gekoppelten Router. Verbinden Sie sich mit dessen VPN und aktivieren Sie die Verwaltung über das Heim-VPN in den Routereinstellungen.</string>
+    <string name="guard_router_vpn_router_error_home_vpn">Es gibt keine verifizierte VPN-Route zum gekoppelten Router. Verbinden Sie sich mit dessen VPN und aktivieren Sie die Verwaltung über das Heim-VPN in den Routereinstellungen. Deaktivieren Sie die LAN-Umgehung in Guard, um den Router über das Heim-VPN zu verwalten.</string>
     <string name="guard_router_wifi_status_label">WLAN-Status</string>
 </resources>

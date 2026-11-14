@@ -1,23 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="cli_release_notes_title">Что нового</string>
-    <string name="cli_release_notes_runtime">Новые форматы подписок: совместимые Clash/Mihomo YAML/JSON и Outline JSON.</string>
-    <string name="cli_release_notes_sentinel_network">Импорт ссылок v2rayTun, JSON-профилей FoxHole Guard и прямая вставка SIP008 JSON.</string>
-    <string name="cli_release_notes_sentinel_apps">Импорт ссылок v2rayTun, JSON-профилей FoxHole Guard и прямая вставка SIP008 JSON.</string>
-    <string name="cli_release_notes_backup">Добавлены пользовательский и экспертный режимы интерфейса.</string>
-    <string name="cli_release_notes_core">Поддержка установки и управления VPN на роутере с установленным пакетом FoxHole OpenWrt Client прямо из приложения.</string>
+    <string name="cli_release_notes_runtime">Новые форматы подписок: совместимые Clash/Mihomo YAML/JSON и Outline JSON</string>
+    <string name="cli_release_notes_sentinel_network">Импорт ссылок v2rayTun, JSON-профилей FoxHole Guard и прямая вставка SIP008 JSON</string>
+    <string name="cli_release_notes_sentinel_apps">Импорт ссылок v2rayTun, JSON-профилей FoxHole Guard и прямая вставка SIP008 JSON</string>
+    <string name="cli_release_notes_backup">Добавлены пользовательский и экспертный режимы интерфейса</string>
+    <string name="cli_release_notes_core">Поддержка установки и управления VPN на роутере с установленным пакетом FoxHole OpenWrt Client прямо из приложения</string>
     <string name="cli_release_notes_details">Подробнее</string>
-    <string name="cli_release_notes_details_body">Также улучшены обновление подписок, DNS, резервные копии и проверки приложений FoxHole Sentinel.\nClash/Mihomo импортирует поддерживаемые серверы из YAML/JSON; правила клиента и внешние провайдеры не переносятся. Для Outline поддержаны стандартный JSON и динамические ключи ssconf://.\nПереключатель OpenWrt управляет доступом с телефона после настройки или сопряжения. Его выключение сохраняет работающий VPN роутера.</string>
-    <string name="cli_release_notes_ack_failed">Не удалось сохранить выбор. Попробуйте ещё раз.</string>
-    <string name="cli_release_notes_router_setup">Исправлены поиск роутера, сопряжение и проверка OpenWrt по SSH, так же добавлена поддержка SSH ключей.</string>
-    <string name="cli_release_notes_app_updates">Исправлены ошибки обновления приложения с Github.</string>
-    <string name="cli_release_notes_notices">Добавлены таймер закрытия уведомлений и закрытие свайпом вверх.</string>
-    <string name="cli_release_notes_help">Доработаны документация и раздел помощи; обновлены подсказки по управлению роутером.</string>
-    <string name="cli_release_notes_vless_reality">Исправлена совместимость VLESS + REALITY.</string>
-    <string name="cli_release_notes_router_management">Упрощены настройка OpenWrt и управление домашними устройствами и VPN-клиентами.</string>
-    <string name="cli_release_notes_pin6">Добавлены шестизначный PIN с подтверждением при установке и поддержка до 10 роутеров.</string>
-    <string name="cli_release_notes_db_auto">Добавлена поддержка автообновления базы данных FoxHole DB.</string>
-    <string name="cli_release_notes_router_pairing_version">Исправлен баг проверки версии OpenWRT при сопряжении с роутером.</string>
-    <string name="cli_release_notes_core_104">Обновлён FoxHole Core до 1.0.3 с исправлениями DNS-кеширования.</string>
-    <string name="cli_release_notes_atomic_104">Исправлено атомарное применение правил и сценариев маршрутизации.</string>
+    <string name="cli_release_notes_details_body">Также улучшены обновление подписок, DNS, резервные копии и проверки приложений FoxHole Sentinel.\nClash/Mihomo импортирует поддерживаемые серверы из YAML/JSON; правила клиента и внешние провайдеры не переносятся. Для Outline поддержаны стандартный JSON и динамические ключи ssconf://.\nПереключатель OpenWrt управляет доступом с телефона после настройки или сопряжения. Его выключение сохраняет работающий VPN роутера</string>
+    <string name="cli_release_notes_ack_failed">Не удалось сохранить выбор. Попробуйте ещё раз</string>
+    <string name="cli_release_notes_router_setup">Исправлены поиск роутера, сопряжение и проверка OpenWrt по SSH, так же добавлена поддержка SSH ключей</string>
+    <string name="cli_release_notes_app_updates">Исправлены ошибки обновления приложения с Github</string>
+    <string name="cli_release_notes_notices">Добавлены таймер закрытия уведомлений и закрытие свайпом вверх</string>
+    <string name="cli_release_notes_help">Доработаны документация и раздел помощи; обновлены подсказки по управлению роутером</string>
+    <string name="cli_release_notes_vless_reality">Исправлена совместимость VLESS + REALITY</string>
+    <string name="cli_release_notes_router_management">Упрощены настройка OpenWrt и управление домашними устройствами и VPN-клиентами</string>
+    <string name="cli_release_notes_pin6">Добавлены шестизначный PIN с подтверждением при установке и поддержка до 10 роутеров</string>
+    <string name="cli_release_notes_db_auto">Добавлена поддержка автообновления базы данных FoxHole DB</string>
+    <string name="cli_release_notes_router_pairing_version">Исправлен баг проверки версии OpenWRT при сопряжении с роутером</string>
+    <string name="cli_release_notes_core_104">Обновлён FoxHole Core до 1.0.3 с исправлениями DNS-кеширования</string>
+    <string name="cli_release_notes_atomic_104">Исправлено атомарное применение правил и сценариев маршрутизации</string>
 </resources>

@@ -1,0 +1,12 @@
+<resources>
+    <string name="router_transfer_title">Выберите профиль VPN</string>
+    <string name="router_transfer_body">Выбранные профили VPN будут переданы на роутер.</string>
+    <string name="router_transfer_empty">Нет совместимых сохранённых профилей VPN.</string>
+    <string name="router_transfer_failed">Не удалось проверить доступные профили VPN.</string>
+    <string name="router_transfer_retry">Обновить</string>
+    <string name="router_transfer_done">Передано профилей: %1$d</string>
+    <string name="router_transfer_partial">Передано %1$d из %2$d профилей.</string>
+    <string name="router_transfer_add">Добавить профили VPN</string>
+    <string name="router_transfer_save">Передать</string>
+    <string name="router_transfer_cancel">Отмена</string>
+</resources>

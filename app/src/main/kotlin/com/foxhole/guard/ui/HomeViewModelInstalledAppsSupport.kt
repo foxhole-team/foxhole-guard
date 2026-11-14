@@ -80,6 +80,14 @@ internal fun HomeViewModel.loadInstalledApps(force: Boolean = false) {
                 installedAppsMutable.value = installed
                 installedAppsLoadedMutable.value = true
                 container.settingsRepository.recordInstalledAppInventory(installed)
+                val assessments = container.settingsRepository.current().installedAppInventoryAudit.packages.associateBy { it.packageName }
+                installedAppsMutable.value = installed.map { app ->
+                    assessments[app.packageName]?.let { assessed -> app.copy(
+                        riskLevel = assessed.riskLevel,
+                        riskSignals = assessed.riskSignals,
+                        assessment = assessed.assessment,
+                    ) } ?: app
+                }
             } catch (error: CancellationException) {
                 throw error
             } catch (error: RuntimeException) {

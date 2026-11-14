@@ -2,4 +2,7 @@
 <resources>
     <string name="router_management_disconnect_vpn">افصل اتصال VPN الحالي لإدارة الموجّه أو إعداده.</string>
     <string name="router_management_unavailable_home">الموجّه غير متاح مؤقتًا. اتصل بشبكة Wi-Fi المنزلية.</string>
+    <string name="router_management_unavailable_title">الموجّه غير متاح</string>
+    <string name="router_management_unavailable_home_network">اتصل بشبكة Wi-Fi المنزلية للموجّه (حتى عند استخدام بيانات الهاتف).</string>
+    <string name="router_management_unavailable_vpn">افصل الاتصال بشبكة VPN.</string>
 </resources>

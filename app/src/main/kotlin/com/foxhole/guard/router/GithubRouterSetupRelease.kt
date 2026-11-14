@@ -74,6 +74,41 @@ internal class GithubRouterSetupRelease(
         loadedCatalog = candidate
     }
 
+    override suspend fun verifyCompatibility(system: RouterSystemInspection) = routerReleasePhase { withContext(io) {
+        val current = catalog ?: throw RouterSetupFailure(RouterWizardError.UNAVAILABLE)
+        if (current.schema == 2) {
+            val platform = current.compactPlatforms.singleOrNull { it.architecture == system.platform.architecture &&
+                system.platform.target in it.supportedTargets && system.openWrtVersion in it.supportedOpenWrt }
+                ?: throw RouterSetupFailure(RouterWizardError.UNSUPPORTED)
+            val universe = routerCompactDocument(readVerified(platform.packageUniverse.file, 2097152), 2097152)
+            universe.compactExact("schema", "kind", "architecture", "supportedTargets", "supportedOpenWrt", "verification", "packages",
+                "packageAuthentications", "repositoryIndexes", "trustKeys", "filesSha256", "requires", "server", "baseRuntimeMemoryBytes",
+                "flashReserveBytes", "ramReserveBytes", "memoryEvidence")
+            require(universe.compactLong("schema") == 2L && universe.compactText("kind") == "compact-package-universe-v1")
+            require(universe.compactText("architecture") == platform.architecture &&
+                universe.compactStrings("supportedTargets", 1..1) == platform.supportedTargets.toList() &&
+                universe.compactStrings("supportedOpenWrt", 1..32) == platform.supportedOpenWrt.toList())
+            val verification = universe.compactObject("verification")
+            require(verification.compactBoolean("signatures") && verification.compactText("resolver") == "apk add --simulate --no-network")
+            val kernel = universe.compactObjects("packages", 1..512).singleOrNull { it.compactText("name") == "kernel" }
+                ?: throw RouterSetupFailure(RouterWizardError.UNSUPPORTED)
+            require(system.kernelVersion != null && kernel.compactText("version") == system.kernelVersion)
+        } else {
+            val variants = current.variants.filter { it.architecture == system.platform.architecture &&
+                system.platform.target in it.supportedTargets && system.openWrtVersion in it.supportedOpenWrt }
+            require(variants.isNotEmpty() && system.kernelVersion != null)
+            for (variant in variants) {
+                val server = variant.serverProducer?.let { asset ->
+                    verifyRouterServerProducer(routerInstallDocument(readVerified(asset.file, 131072), 131072), variant)
+                }
+                for ((mode, asset) in variant.modes) {
+                    val budget = routerInstallDocument(readVerified(asset.file, 1048576), 1048576)
+                    verifyRouterModeBudget(budget, mode, variant, system, entries, server)
+                }
+            }
+        }
+    } }
+
     override suspend fun payload(system: RouterSystemInspection, selection: RouterInstallProtocolSelection): RouterSetupPayload =
         payload(system, selection) {}
 

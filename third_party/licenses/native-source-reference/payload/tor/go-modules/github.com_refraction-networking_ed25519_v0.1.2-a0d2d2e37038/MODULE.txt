@@ -1,0 +1,2 @@
+github.com/refraction-networking/ed25519
+v0.1.2

@@ -9,10 +9,12 @@ import com.foxhole.guard.core.security.FoxholeSecurityComponents
 import com.foxhole.guard.core.sentinel.AndroidKeystoreFileCipher
 import com.foxhole.guard.core.sentinel.anomaly.AnomalyRepository
 import com.foxhole.guard.core.settings.SettingsRepository
+import com.foxhole.guard.BuildConfig
 import com.foxhole.guard.guardian.GuardEventType
 import com.foxhole.guard.guardian.GuardPackageAdmission
 import com.foxhole.guard.guardian.GuardPackageWorkStore
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withContext
 import java.io.File
 
@@ -25,6 +27,11 @@ internal class SentinelScanGateway(
     private val appContext = context.applicationContext
     private val rules = BundledScannerRuleSource(appContext)
     private val backend = InstalledSentinelScanBackend(appContext, rules::current)
+    private val reportStore = SentinelScanReportStore(
+        File(appContext.noBackupFilesDir, "sentinel-scan-reports.aead"),
+        AndroidKeystoreFileCipher("foxhole.sentinel.scan.reports"),
+    )
+    val reportHistory = reportStore.history
     val controller = SentinelScanController(
         policyCurrent = { policy -> settingsRepository.settings.value.scanWorkPolicy(policy.ruleEpoch) == policy },
         capture = { packageName ->
@@ -48,6 +55,17 @@ internal class SentinelScanGateway(
                     ScannerJournalOutcome.COMMITTED
                 } else {
                     ScannerJournalOutcome.REJECTED
+                }
+            }
+        },
+        appVersion = BuildConfig.VERSION_NAME,
+        persistReport = { report ->
+            withContext(Dispatchers.IO) {
+                try { reportStore.save(report); true } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    reportStore.unavailable()
+                    false
                 }
             }
         },
@@ -100,6 +118,11 @@ internal class SentinelScanGateway(
     }
 
     suspend fun refreshPolicy() {
+        withContext(Dispatchers.IO) {
+            try { reportStore.restore(controller.reportOwner) } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) { reportStore.unavailable() }
+        }
         val settings = settingsRepository.current()
         val scan = settings.anomaly.apkScan
         val ruleEpoch = if (settings.anomaly.enabled && scan.yaraEnabled) rules.current().sha256 else "dex-only"
@@ -107,13 +130,25 @@ internal class SentinelScanGateway(
     }
 
     suspend fun requestPackage(packageName: String) {
-        refreshPolicy()
-        controller.requestPackage(packageName)
+        if (refreshForRequest(packageName)) controller.requestPackage(packageName)
     }
 
     suspend fun requestBaseline() {
+        if (refreshForRequest(null)) controller.requestVisibleBaseline()
+    }
+
+    private suspend fun refreshForRequest(packageName: String?): Boolean = try {
         refreshPolicy()
-        controller.requestVisibleBaseline()
+        true
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (_: Exception) {
+        controller.recordUnavailableRequest(packageName, "SCAN_POLICY_UNAVAILABLE")
+        false
+    }
+
+    suspend fun clearReports() = controller.clearReports {
+        withContext(Dispatchers.IO) { reportStore.clear() }
     }
 
     private fun environment(): SentinelScanEnvironment {

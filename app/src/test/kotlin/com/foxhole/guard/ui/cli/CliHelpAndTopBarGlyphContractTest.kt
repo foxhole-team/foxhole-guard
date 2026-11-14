@@ -7,37 +7,17 @@ import java.io.File
 
 class CliHelpAndTopBarGlyphContractTest {
     @Test
-    fun `help screen routes every topic glyph through the info colour`() {
+    fun `help preserves topic information glyphs and the system VPN settings action`() {
         val help = cli("settings/CliHelpSubScreen.kt")
-        val topicIcon = help
-            .substringAfter("private fun CliHelpTopicIcon(")
-            .substringBefore("private fun helpGlossaryTerm(")
-        val helpCard = help
-            .substringAfter("private fun CliHelpCard(")
-            .substringBefore("private fun CliHelpBody(")
-        val disclosure = helpCard
-            .substringAfter("text = if (expanded) \"▾\" else \"▸\",")
-            .substringBefore("            }")
-        val killSwitchAction = helpCard
-            .substringAfter("if (section.key == HELP_KEY_KILLSWITCH)")
-            .substringBefore("onTap =")
-        val contextHelp = cli("components/CliContextHelp.kt")
-        val headerHelp = contextHelp
-            .substringAfter("internal fun CliHeaderHelpButton(")
-            .substringBefore("internal fun CliTopBarIconButton(")
-
-        assertTrue(help.contains("iconColor = colors.info"))
-        assertTrue(help.contains("CliQuickStartItems("))
-        assertTrue(help.contains("smartBody = stringResource(R.string.cli_help_smart_body)"))
-        assertTrue(help.contains("detailsBody = stringResource(R.string.cli_help_start_details)"))
-        assertTrue(topicIcon.contains("tint = LocalCliColors.current.info"))
+        val topics = com.foxhole.guard.ui.cli.help.guardHelpTopics()
+        assertTrue(topics.all { it.icon != 0 })
         assertTrue(help.contains("CliHelpTopicIcon(section.icon)"))
-        assertTrue(help.contains("CliHelpTopicIcon(icon)"))
-        assertFalse(topicIcon.contains("colors.accent"))
-        assertTrue(disclosure.contains("color = colors.info"))
-        assertTrue(killSwitchAction.contains("actionColor = colors.info"))
-        assertTrue(killSwitchAction.contains("labelColor = colors.fg"))
-        assertTrue(headerHelp.contains("tint = colors.info"))
+        assertTrue(help.contains("tint = LocalCliColors.current.info"))
+        val action = com.foxhole.guard.ui.cli.help.guardHelpTopic("killswitch").blocks
+            .filterIsInstance<com.foxhole.guard.ui.cli.help.HelpBlock.Link>().single()
+        org.junit.Assert.assertEquals(com.foxhole.guard.ui.cli.help.HelpDestination.ANDROID_VPN_SETTINGS, action.destination)
+        val context = cli("components/CliContextHelp.kt")
+        assertTrue(context.contains("tint = colors.info"))
     }
 
     @Test

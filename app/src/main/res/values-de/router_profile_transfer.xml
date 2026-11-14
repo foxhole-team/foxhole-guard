@@ -1,0 +1,12 @@
+<resources>
+    <string name="router_transfer_title">VPN-Profile auswählen</string>
+    <string name="router_transfer_body">Die ausgewählten VPN-Profile werden an den Router gesendet.</string>
+    <string name="router_transfer_empty">Keine kompatiblen gespeicherten VPN-Profile.</string>
+    <string name="router_transfer_failed">Die verfügbaren VPN-Profile konnten nicht geprüft werden.</string>
+    <string name="router_transfer_retry">Aktualisieren</string>
+    <string name="router_transfer_done">Übertragene Profile: %1$d</string>
+    <string name="router_transfer_partial">%1$d von %2$d Profilen übertragen.</string>
+    <string name="router_transfer_add">VPN-Profile hinzufügen</string>
+    <string name="router_transfer_save">Übertragen</string>
+    <string name="router_transfer_cancel">Abbrechen</string>
+</resources>

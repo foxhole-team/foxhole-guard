@@ -273,7 +273,7 @@ private val CLI_DOCK_MIN_HEIGHT = 61.dp
 private val CLI_DOCK_MIN_HEIGHT_COMPACT = 51.dp
 private val CLI_DOCK_LIFT_TOP = 0.dp
 private val CLI_DOCK_LIFT_BOTTOM = 0.dp
-private val CLI_DOCK_VISUAL_DROP = 2.dp
+internal val CliDockVisualDrop = 2.dp
 private const val CLI_DOCK_DROP_ALPHA = 0.16f
 private const val CLI_DOCK_PRESS_SCALE = 0.90f
 private const val CLI_DOCK_PRESS_GLOW_ALPHA = 0.10f
@@ -283,7 +283,7 @@ internal const val CLI_DOCK_TAG = "cli_dock"
 internal fun cliDockItemTag(screen: CliScreen): String = "cli_dock_${screen.name.lowercase()}"
 
 private fun Modifier.cliDockVisualDrop(): Modifier = drawWithContent {
-    translate(top = CLI_DOCK_VISUAL_DROP.toPx()) {
+    translate(top = CliDockVisualDrop.toPx()) {
         this@drawWithContent.drawContent()
     }
 }

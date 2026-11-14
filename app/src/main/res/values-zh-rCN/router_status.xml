@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="router_status_title">状态</string>
+    <string name="router_status_connected">已连接到 VPN 网络</string>
+    <string name="router_status_disconnected">已断开 VPN 网络连接</string>
+    <string name="router_status_profile">VPN 配置文件</string>
+    <string name="router_status_location">不经过 VPN 的流量</string>
+    <string name="router_status_no_profile">未选择</string>
+    <string name="router_status_local_off">已关闭</string>
+</resources>

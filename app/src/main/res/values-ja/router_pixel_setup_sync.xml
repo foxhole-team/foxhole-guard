@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="router_discovery_cancel">キャンセル</string>
+    <string name="router_discovery_continue">続行</string>
+    <string name="router_discovery_ready_to_pair">ルーターのペアリング準備ができました</string>
+    <string name="router_discovery_setup_question">FoxHole OpenWrt パッケージのインストールウィザードを開始しますか？</string>
+    <string name="router_setup_compatibility_title">インストールの互換性</string>
+    <string name="router_setup_supported_versions">インストール対応バージョン</string>
+</resources>

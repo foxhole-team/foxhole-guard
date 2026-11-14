@@ -28,25 +28,32 @@ internal data class RouterControlState(
     val remoteClients: List<RouterRemoteClientStatus> = emptyList(),
     val savedRouters: List<RouterSavedSummary> = emptyList(),
     val selectedRouterId: String? = null,
+    val vpnServer: RouterVpnServerControlState = RouterVpnServerControlState(),
+    val about: RouterPackageStatus? = null,
+    val aboutPairingId: String? = null,
     val engines: RouterEngineControlState = RouterEngineControlState(),
     val updates: RouterUpdateControlState = RouterUpdateControlState(),
 ) {
+    val managementAccessUnavailable: Boolean get() = entryAccess in setOf(
+        RouterManagementAccess.VPN_ACTIVE, RouterManagementAccess.UNAVAILABLE)
+    val managementAccessBlockedByVpn: Boolean get() = entryAccess == RouterManagementAccess.VPN_ACTIVE
     val managementLanding: RouterManagementLanding? get() = when {
         hasConfirmedDirectIp -> RouterManagementLanding.HUB
         snapshot != null -> RouterManagementLanding.SETTINGS
         else -> null
     }
     val hasConfirmedDirectIp: Boolean get() = preferences?.publicIpConfirmed == true || snapshot?.publicIpv4Available == true
-    val remoteClientHubAvailable: Boolean get() = hasConfirmedDirectIp || snapshot?.clients?.isNotEmpty() == true
+    val remoteClientHubAvailable: Boolean get() = routerVpnServerEnabled(snapshot) != false &&
+        (hasConfirmedDirectIp || snapshot?.clients?.isNotEmpty() == true)
     val managementConfigured: Boolean get() = preferences != null &&
         selectedRouterId == preferences.pairingId && savedRouters.any { it.id == selectedRouterId } &&
         stage in setOf(RouterControlStage.DISABLED, RouterControlStage.CONNECTING, RouterControlStage.OFFLINE, RouterControlStage.CONNECTED)
     val managementEnabled: Boolean get() = managementConfigured && preferences?.enabled == true
     val canToggleManagement: Boolean get() = managementConfigured && stage != RouterControlStage.CONNECTING &&
-        !busy && !updates.running && !engines.running
+        !busy && !updates.running && !engines.running && !vpnServer.running && !vpnServer.requiresRecovery
     val canAddRouter: Boolean get() = !busy && savedRouters.size < MAX_SAVED_ROUTERS
     val packageRemovalAvailable: Boolean get() = controlsAvailable && snapshot?.packageRemovalAvailable == true
-    val controlsAvailable: Boolean get() = stage == RouterControlStage.CONNECTED && !busy && !updates.running && snapshot != null
+    val controlsAvailable: Boolean get() = stage == RouterControlStage.CONNECTED && !busy && !updates.running && !vpnServer.running && !vpnServer.requiresRecovery && snapshot != null
     val canStopVpn: Boolean get() = stage == RouterControlStage.CONNECTED && !busy &&
         preferences?.enabled == true && snapshot?.desiredServerId != null
     val vpnButtonStarts: Boolean get() {

@@ -30,9 +30,12 @@ internal fun Profile.routerSummary() = GuardRouterProfileSummary(
 
 internal class GuardRouterProfiles(private val access: GuardRouterProfileAccess, private val pairings: EncryptedRouterPairingStore? = null) {
     constructor(repository: ProfileRepository, pairings: EncryptedRouterPairingStore? = null) : this(GuardRouterRepositoryProfileAccess(repository), pairings)
-    suspend fun selected(profileId: String): RouterProfileSelection = withContext(Dispatchers.IO) {
+    suspend fun selected(profileId: String): RouterProfileSelection = export(profileId, null, false)
+    suspend fun requested(request: RouterPhoneTransferRequest): RouterProfileSelection = export(request.profileId, request.optionId, true)
+
+    private suspend fun export(profileId: String, optionId: String?, specific: Boolean): RouterProfileSelection = withContext(Dispatchers.IO) {
         val id = profileId.toLongOrNull()?.takeIf { it > 0 } ?: unsupported()
-        val capture = access.capture(id)
+        val capture = if (specific) access.captureOption(id, optionId) else access.capture(id)
         val before = capture.profile
         val secret = capture.secret
         val option = capture.selected
@@ -73,7 +76,7 @@ internal class GuardRouterProfiles(private val access: GuardRouterProfileAccess,
     suspend fun connectedProfile(profileId: Long, optionId: String?, generation: String, networkHandle: Long): RouterConnectedProfile? {
         val capture = access.capture(profileId)
         if (optionId != null && optionId != capture.selected?.id || !access.isCurrent(capture)) return null
-        return RouterConnectedProfile(profileId.toString(), routerProfileDigest(capture.rawConfig), generation, networkHandle)
+        return RouterConnectedProfile(profileId.toString(), routerProfileDigest(capture.rawConfig), generation, networkHandle, capture.materialGeneration)
     }
 
     private fun unsupported(): Nothing = throw RouterApiFailure(RouterApiError.UNSUPPORTED)

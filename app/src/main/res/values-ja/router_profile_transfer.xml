@@ -1,0 +1,12 @@
+<resources>
+    <string name="router_transfer_title">VPNプロファイルを選択</string>
+    <string name="router_transfer_body">選択した VPN プロファイルをルーターに送信します。</string>
+    <string name="router_transfer_empty">互換性のある保存済み VPN プロファイルはありません。</string>
+    <string name="router_transfer_failed">利用可能な VPN プロファイルを確認できませんでした。</string>
+    <string name="router_transfer_retry">更新</string>
+    <string name="router_transfer_done">送信したプロファイル数：%1$d</string>
+    <string name="router_transfer_partial">%2$d 件中 %1$d 件のプロファイルを送信しました。</string>
+    <string name="router_transfer_add">VPNプロファイルを追加</string>
+    <string name="router_transfer_save">転送</string>
+    <string name="router_transfer_cancel">キャンセル</string>
+</resources>

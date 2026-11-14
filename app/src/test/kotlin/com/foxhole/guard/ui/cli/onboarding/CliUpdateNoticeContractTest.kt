@@ -22,15 +22,19 @@ class CliUpdateNoticeContractTest {
         }
     }
 
-    @Test fun currentReleaseShowsAndroid7SupportInEveryLanguageAndChannel() {
+    @Test fun currentReleaseShowsRouterSetupFixInEveryLanguageAndChannel() {
         val expected = listOf(
-            R.string.cli_release_notes_android7_106,
-            R.string.cli_release_notes_web_filters,
-            R.string.cli_release_notes_notice_style,
+            R.string.cli_release_notes_router_setup_107, R.string.cli_release_notes_transport_components_107,
+            R.string.cli_release_notes_help_107, R.string.cli_release_notes_sentinel_107,
+            R.string.cli_release_notes_router_interface_107, R.string.cli_release_notes_general_interface_107,
+            R.string.cli_release_notes_sentinel_apps_data_107, R.string.cli_release_notes_user_modules_107,
         )
         listOf("values", "values-ru", "values-de", "values-fr", "values-es", "values-ja", "values-zh-rCN", "values-ar").forEach { qualifier ->
             val copy = releaseNoteCopy(qualifier)
-            listOf("cli_release_notes_android7_106").forEach { key ->
+            listOf("cli_release_notes_router_setup_107", "cli_release_notes_transport_components_107",
+                "cli_release_notes_help_107", "cli_release_notes_sentinel_107",
+                "cli_release_notes_router_interface_107", "cli_release_notes_general_interface_107",
+                "cli_release_notes_sentinel_apps_data_107", "cli_release_notes_user_modules_107").forEach { key ->
                 assertTrue("Missing current release copy in $qualifier/$key", copy.getValue(key).isNotBlank())
             }
         }
@@ -46,6 +50,8 @@ class CliUpdateNoticeContractTest {
         val en = releaseNoteCopy("values")
         assertEquals("Доработаны фильтры для маршрутизации web-адресов", ru.getValue("cli_release_notes_web_filters"))
         assertEquals("Доработан визуальный стиль уведомлений", ru.getValue("cli_release_notes_notice_style"))
+        assertEquals("Обновление интерфейса взаимодействия с роутером", ru.getValue("cli_release_notes_router_interface_107"))
+        assertEquals("Общие улучшения интерфейса", ru.getValue("cli_release_notes_general_interface_107"))
         assertEquals("Improved web-address routing filters.", en.getValue("cli_release_notes_web_filters"))
         assertEquals("Improved the visual style of notifications.", en.getValue("cli_release_notes_notice_style"))
     }

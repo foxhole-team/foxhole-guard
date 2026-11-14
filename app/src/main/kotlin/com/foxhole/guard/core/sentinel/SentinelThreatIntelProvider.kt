@@ -3,6 +3,7 @@ package com.foxhole.guard.core.sentinel
 import android.content.Context
 import com.foxhole.core.model.ThreatIntelDocument
 import com.foxhole.core.sentinel.detection.InstalledAppThreatIntel
+import com.foxhole.core.sentinel.detection.InstalledThreatIntelSource
 import com.foxhole.core.sentinel.detection.NetworkIocMatcher
 import com.foxhole.core.sentinel.detection.toThreatIntel
 import com.foxhole.guard.runtime.FileThreatIntelStore
@@ -52,7 +53,10 @@ class SentinelThreatIntelProvider(
 
     private fun bundledSeed(): InstalledAppThreatIntel =
         bundled ?: synchronized(this) {
-            bundled ?: bundledDocument().toThreatIntel().also { bundled = it }
+            bundled ?: bundledDocument().let { document ->
+                if (document === EMPTY_DOCUMENT) InstalledAppThreatIntel.EMPTY else
+                    document.toThreatIntel(InstalledThreatIntelSource(sourceId = "asset:$BUNDLED_ASSET_PATH"))
+            }.also { bundled = it }
         }
 
     private fun bundledDocument(): ThreatIntelDocument =

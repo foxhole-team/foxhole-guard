@@ -64,6 +64,7 @@ private class ScannerBindingSession(
     private val remote = AtomicReference<Messenger?>()
     private var bound = false
     private lateinit var request: Bundle
+    private var inputClaims: List<ScannerDescriptorClaim> = emptyList()
     private val replies = Messenger(Handler(Looper.getMainLooper(), ::receive))
     private val connection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName, binder: IBinder) = connected(binder)
@@ -75,6 +76,7 @@ private class ScannerBindingSession(
     suspend fun start(inputs: List<ScannerInputFile>, yaraSource: ScannerYaraSource?, maxArtifactBytes: Int) {
         withContext(Dispatchers.IO) { openScannerInputs(inputs, descriptors) }
         request = scannerRequestBundle(inputs.map { it.claim }, descriptors, owner)
+        inputClaims = inputs.map { it.claim }
         request.putInt("max_artifact_bytes", maxArtifactBytes)
         if (yaraSource != null) {
             withContext(Dispatchers.IO) {
@@ -122,7 +124,7 @@ private class ScannerBindingSession(
     private fun receive(message: Message): Boolean {
         if (message.what != ScannerIpcCodes.RESULT || result.isCompleted) return true
         try {
-            val decoded = decodeScannerStaticReply(message.data, message.sendingUid, owner)
+            val decoded = decodeScannerStaticReply(message.data, message.sendingUid, owner, inputClaims)
             if (publication.mayPublish(owner, currentOwner())) {
                 result.complete(decoded)
             } else {

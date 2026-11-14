@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="router_discovery_cancel">Отмена</string>
+    <string name="router_discovery_continue">Продолжить</string>
+    <string name="router_discovery_ready_to_pair">Роутер готов к сопряжению</string>
+    <string name="router_discovery_setup_question">Запустить мастер установки пакета FoxHole OpenWrt?</string>
+    <string name="router_setup_compatibility_title">Совместимость установки</string>
+    <string name="router_setup_supported_versions">Версии для установки</string>
+</resources>

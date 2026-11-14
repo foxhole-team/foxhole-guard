@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="router_local_traffic_enable_title">هل تريد تفعيل استثناء حركة البيانات المحلية داخل بلدك من VPN؟</string>
+    <string name="router_local_traffic_disable_title">هل تريد تعطيل استثناء حركة البيانات المحلية داخل بلدك من VPN؟</string>
+    <string name="router_local_traffic_confirm">تأكيد</string>
+</resources>

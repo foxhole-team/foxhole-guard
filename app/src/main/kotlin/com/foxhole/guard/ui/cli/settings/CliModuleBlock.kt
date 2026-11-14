@@ -36,6 +36,7 @@ internal fun CliModuleBlock(
     settingsAttentionColor: Color = Color.Unspecified,
     settingsModifier: Modifier = Modifier,
     infoAlwaysActive: Boolean = false,
+    infoContent: (@Composable () -> Unit)? = null,
 ) {
     val colors = LocalCliColors.current
     val settingsActionColor = colors.accent
@@ -47,6 +48,7 @@ internal fun CliModuleBlock(
             onToggle = onToggle,
             note = note,
             infoText = infoText,
+            infoContent = infoContent,
             enabled = toggleEnabled,
             infoAlwaysActive = infoAlwaysActive,
         )

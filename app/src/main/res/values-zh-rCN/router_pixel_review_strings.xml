@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="router_local_traffic_enable_title">启用将您所在国家的本地流量排除在 VPN 之外的设置？</string>
+    <string name="router_local_traffic_disable_title">停用将您所在国家的本地流量排除在 VPN 之外的设置？</string>
+    <string name="router_local_traffic_confirm">确认</string>
+</resources>

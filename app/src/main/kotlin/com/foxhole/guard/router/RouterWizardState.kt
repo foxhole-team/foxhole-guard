@@ -1,7 +1,7 @@
 package com.foxhole.guard.router
 
 internal enum class RouterWizardPath { SETUP, PAIR }
-internal enum class RouterWizardStage { ENTRY, ADDRESS, IDENTITY, PROTOCOLS, LOGIN, CHECKING, INSTALL, NEW_PIN, OPTIONS, FINISHING, COMPLETE, PIN_SETUP_REQUIRED, INSPECTED }
+internal enum class RouterWizardStage { ENTRY, ADDRESS, IDENTITY, PROTOCOLS, LOGIN, CHECKING, COMPATIBILITY, INSTALL, NEW_PIN, OPTIONS, FINISHING, COMPLETE, PIN_SETUP_REQUIRED, INSPECTED }
 internal enum class RouterWizardError { WIFI, VPN_ACTIVE, HOME_VPN, LOCAL_NETWORK_PERMISSION, SSH_UNAVAILABLE, ADDRESS, IDENTITY, PASSWORD, PIN, LOCKED, UNSUPPORTED, STORAGE, INSTALL, NETWORK, SAVE, PROFILE, PROFILE_EXPORT, UNAVAILABLE, LICENSE, LIMIT }
 internal class RouterSetupFailure(val kind: RouterWizardError) : java.io.IOException("router_setup_failed")
 
@@ -20,7 +20,8 @@ internal data class RouterWizardOptions(
     val localRules: Boolean? = null,
 ) {
     val valid: Boolean get() = (countryAuto && countryCode.isEmpty() || countryCode.matches(Regex("[A-Z]{2}"))) &&
-        (!createRemoteProfile || publicIp)
+        (!createRemoteProfile || publicIp) &&
+        (!homeAutodetection || publicIp && createRemoteProfile)
 }
 
 internal data class RouterWizardState(
@@ -32,6 +33,7 @@ internal data class RouterWizardState(
     val openWrtVersion: String = "",
     val architecture: String = "",
     val storageMode: RouterStorageMode? = null,
+    val compatibility: RouterSystemInspection? = null,
     val installSelection: RouterInstallProtocolSelection? = null,
     val options: RouterWizardOptions = RouterWizardOptions(),
     val routerCountryCode: String? = null,
@@ -74,6 +76,16 @@ internal interface RouterSetupService {
     suspend fun inspectSshIdentity(address: String): ByteArray
     suspend fun inspectDiscoverySshIdentity(address: String): ByteArray = inspectSshIdentity(address)
     suspend fun prepareInstallation() = Unit
+    suspend fun precheck(address: String, hostKey: ByteArray, password: CharArray): RouterSetupInspection {
+        password.fill('\u0000'); throw RouterSetupFailure(RouterWizardError.UNSUPPORTED)
+    }
+    suspend fun precheckWithKey(address: String, hostKey: ByteArray, privateKey: ByteArray,
+        passphrase: CharArray): RouterSetupInspection {
+        privateKey.fill(0); passphrase.fill('\u0000'); throw RouterSetupFailure(RouterWizardError.UNSUPPORTED)
+    }
+    suspend fun planInspection(inspection: RouterSetupInspection, selection: RouterInstallProtocolSelection,
+        onProgress: (RouterInstallProgress) -> Unit): RouterInstallProposal =
+        throw RouterSetupFailure(RouterWizardError.UNSUPPORTED)
     suspend fun inspect(address: String, hostKey: ByteArray, password: CharArray,
         selection: RouterInstallProtocolSelection): RouterInstallProposal
     suspend fun inspectWithKey(address: String, hostKey: ByteArray, privateKey: ByteArray, passphrase: CharArray,

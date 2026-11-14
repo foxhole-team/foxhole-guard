@@ -3,6 +3,7 @@ package com.foxhole.guard.runtime
 import android.content.Context
 import com.foxhole.core.model.ThreatIntelDocument
 import com.foxhole.core.sentinel.detection.InstalledAppThreatIntel
+import com.foxhole.core.sentinel.detection.InstalledThreatIntelSource
 import com.foxhole.core.sentinel.detection.toThreatIntel
 import kotlinx.serialization.json.Json
 import java.io.File
@@ -23,6 +24,8 @@ class FileThreatIntelStore(
 
     override fun installedGeneratedAt(): String? = runCatching(disk::generation).getOrNull()
 
+    override fun installedArtifactSha256(): String? = runCatching { disk.read()?.bytes?.sha256Hex() }.getOrNull()
+
     fun loadRemoteIntel(): InstalledAppThreatIntel = cachedRemote()?.intel ?: InstalledAppThreatIntel.EMPTY
 
     fun loadRemoteDocument(): ThreatIntelDocument? = cachedRemote()?.document
@@ -34,7 +37,16 @@ class FileThreatIntelStore(
             val snapshot = disk.read() ?: return null
             val document = json.decodeFromString<ThreatIntelDocument>(snapshot.bytes.toString(Charsets.UTF_8))
             if (!ThreatIntelDocument.supportsSchema(document.schema)) return null
-            CachedIntel(snapshot.key, document, document.toThreatIntel()).also { cached = it }
+            CachedIntel(
+                snapshot.key,
+                document,
+                document.toThreatIntel(
+                    InstalledThreatIntelSource(
+                        sourceId = "local:sentinel/threat-intel",
+                        feedVersion = snapshot.generation,
+                    ),
+                ),
+            ).also { cached = it }
         }.getOrNull()
 
     private data class CachedIntel(

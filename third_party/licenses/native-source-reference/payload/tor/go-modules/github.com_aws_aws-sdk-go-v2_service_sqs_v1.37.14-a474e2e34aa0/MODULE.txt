@@ -1,0 +1,2 @@
+github.com/aws/aws-sdk-go-v2/service/sqs
+v1.37.14

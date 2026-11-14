@@ -158,24 +158,33 @@ def library_entry(name, header):
     return parts[1], parts[2]
 
 
-def merged_library_inventory(merged):
+def merged_library_inventory(merged, native_abis=None):
     root = merged / 'lib'
     if root.is_symlink() or not root.is_dir():
         raise ValueError('Merged native library inventory is missing')
+    selected = set(SUPPORTED_ABIS if native_abis is None else native_abis)
+    if not selected or not selected.issubset(SUPPORTED_ABIS):
+        raise ValueError('Invalid native ABI profile')
     inventory = {}
     for path in root.rglob('*'):
         if path.is_symlink():
             raise ValueError('Merged native library is a link')
         if path.is_dir():
             continue
+        relative = path.relative_to(root)
+        # AGP retains dependency ABIs here until packaging applies abiFilters.
+        # Final APK entries still use the strict library_entry() allowlist below.
+        if len(relative.parts) == 2 and relative.parts[0] in {'armeabi', 'mips', 'mips64'} and path.suffix == '.so':
+            continue
         with path.open('rb') as stream:
-            abi, library = library_entry('lib/' + path.relative_to(root).as_posix(), stream.read(20))
-        inventory.setdefault(abi, set()).add(library)
+            abi, library = library_entry('lib/' + relative.as_posix(), stream.read(20))
+        if abi in selected:
+            inventory.setdefault(abi, set()).add(library)
     return inventory
 
 
 def verify_delivery_inventory(merged, native_abis, delivery_abis, apk_directory):
-    expected = merged_library_inventory(merged) if merged is not None else None
+    expected = merged_library_inventory(merged, native_abis) if merged is not None else None
     if expected is not None and set(expected) != set(native_abis):
         raise ValueError('Merged native ABI inventory differs from native profile')
     if apk_directory is None:

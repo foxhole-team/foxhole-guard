@@ -13,6 +13,8 @@ import com.foxhole.core.model.Settings
 import com.foxhole.core.model.packages
 import com.foxhole.core.model.tunnelSelectedPackages
 import com.foxhole.guard.R
+import com.foxhole.guard.ui.cli.help.GuardHelpBlocks
+import com.foxhole.guard.ui.cli.help.guardHelpTopic
 import com.foxhole.guard.ui.HomeViewModel
 import com.foxhole.guard.ui.VpnRoutingScenario
 import com.foxhole.guard.ui.cli.LocalCliColors
@@ -60,6 +62,7 @@ internal fun CliVpnModeSection(
         title = stringResource(R.string.cli_route_apps_traffic_title),
         modifier = Modifier.fillMaxWidth(),
         infoText = stringResource(R.string.cli_help_routing_body),
+        infoContent = { GuardHelpBlocks(guardHelpTopic("routing").blocks, scope = "routing") },
     ) {
         CliDropdownRow(
             label = stringResource(R.string.cli_route_vpn_conn),

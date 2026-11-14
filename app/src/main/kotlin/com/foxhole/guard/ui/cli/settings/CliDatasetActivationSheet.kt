@@ -120,8 +120,8 @@ private fun DatasetSourceStep(
     )
     Spacer(modifier = Modifier.height(CliSpacing.sm))
     CliSheetActionsRow(
-        actions = listOf(
-            CliSheetAction(
+        actions = listOfNotNull(
+            if (state.feature == DatasetActivationFeature.FOXHOLE_SENTINEL) null else CliSheetAction(
                 label = stringResource(R.string.cli_dataset_do_not_use),
                 onClick = { onSkipAndDismiss(onSkip, onDismiss) },
                 tone = CliSheetActionTone.ACCENT,
@@ -149,8 +149,8 @@ private fun DatasetRequiredStep(
     Text(text = stringResource(R.string.cli_dataset_signature_note), style = CliType.small, color = colors.info)
     Spacer(modifier = Modifier.height(CliSpacing.md))
     CliSheetActionsRow(
-        actions = listOf(
-            CliSheetAction(
+        actions = listOfNotNull(
+            if (state.feature == DatasetActivationFeature.FOXHOLE_SENTINEL) null else CliSheetAction(
                 label = stringResource(R.string.cli_dataset_do_not_use),
                 onClick = { onSkipAndDismiss(onSkip, onDismiss) },
                 tone = CliSheetActionTone.ACCENT,
@@ -191,8 +191,8 @@ private fun DatasetFailedStep(
     Text(text = stringResource(R.string.cli_dataset_verification_failed), style = CliType.body, color = colors.err)
     Spacer(modifier = Modifier.height(CliSpacing.md))
     CliSheetActionsRow(
-        actions = listOf(
-            CliSheetAction(
+        actions = listOfNotNull(
+            if (state.feature == DatasetActivationFeature.FOXHOLE_SENTINEL) null else CliSheetAction(
                 label = stringResource(R.string.cli_dataset_do_not_use),
                 onClick = { onSkipAndDismiss(onSkip, onDismiss) },
                 tone = CliSheetActionTone.ACCENT,

@@ -25,7 +25,7 @@ def main():
     spec.loader.exec_module(module)
     producer = module.read(root / "config/foxcore-revision.txt").decode().strip()
     material = module.load(
-        root / "third_party/licenses/source-legal/android4/snapshot.json", root,
+        root / "third_party/licenses/current-core-snt/android4/snapshot.json", root,
         args.core_root.absolute(), producer, "android4",
         root / "app/build/fdroidNativeSource/core",
         root / "app/build/fdroidNativeSource/sentinel/jniLibs", args.manifest.absolute(), True,

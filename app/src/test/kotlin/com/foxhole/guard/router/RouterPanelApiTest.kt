@@ -442,4 +442,15 @@ class RouterPanelApiTest {
         catch (_: IllegalArgumentException) { assertTrue(requests.isEmpty()); assertTrue(secret.all { it == '\u0000' }) }
         finally { session.close() }
     }
+    @Test fun packageStatusLicenseReadinessIsTypedAndMissingDoesNotMeanAccepted() = runTest {
+        val base = "\"schema\":1,\"product\":\"foxhole\",\"installed\":true,\"pinConfigured\":true,\"resetSupported\":true"
+        assertEquals(null, api("{$base}").packageStatus().licenseRequired)
+        assertEquals(false, api("{$base,\"licenseRequired\":false}").packageStatus().licenseRequired)
+        assertEquals(true, api("{$base,\"licenseRequired\":true}").packageStatus().licenseRequired)
+        for (invalid in listOf("null", "1", "\"false\"")) {
+            try { api("{$base,\"licenseRequired\":$invalid}").packageStatus(); error("untyped license accepted") }
+            catch (failure: RouterApiFailure) { assertEquals(RouterApiError.INVALID_RESPONSE, failure.kind) }
+        }
+    }
+
 }

@@ -83,6 +83,8 @@ internal fun CliBottomSheet(
     footerTrailing: (@Composable RowScope.() -> Unit)? = null,
     footerContent: (@Composable ColumnScope.() -> Unit)? = null,
     heightFraction: Float? = null,
+    closeEnabled: Boolean = true,
+    titleMaxLines: Int = 2,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val colors = LocalCliColors.current
@@ -179,7 +181,7 @@ internal fun CliBottomSheet(
                             text = shownTitle,
                             style = cliTitleStyle(shownTitle),
                             color = colors.fg,
-                            maxLines = 2,
+                            maxLines = titleMaxLines,
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier
                                 .weight(1f, fill = trailing != null)
@@ -191,6 +193,7 @@ internal fun CliBottomSheet(
                                 modifier = Modifier
                                     .height(CliHeaderControlSlotHeight)
                                     .offset(
+                                        x = CliTrailingIconInset,
                                         y = cliModalHeaderControlOffsetFor(
                                             shownTitle,
                                             pixelArtEnabled,
@@ -220,7 +223,7 @@ internal fun CliBottomSheet(
                 )
                 footerContent?.invoke(this)
                 Spacer(modifier = Modifier.height(CliSpacing.md))
-                CliSheetFooter(footerLeading, footerTrailing, requestDismiss, closeLabel, closeActionTag)
+                CliSheetFooter(footerLeading, footerTrailing, requestDismiss, closeLabel, closeActionTag, closeEnabled)
             }
             }
         }
@@ -234,10 +237,12 @@ private fun CliSheetFooter(
     onDismiss: () -> Unit,
     closeLabel: String?,
     closeActionTag: String?,
+    closeEnabled: Boolean,
 ) {
     if (leading == null && trailing == null) {
         CliModalCloseButton(
             onClick = onDismiss,
+            enabled = closeEnabled,
             label = closeLabel,
             modifier = Modifier
                 .fillMaxWidth()
@@ -254,6 +259,7 @@ private fun CliSheetFooter(
             leading?.invoke(this)
             CliModalCloseButton(
                 onClick = onDismiss,
+            enabled = closeEnabled,
                 label = closeLabel,
                 modifier = Modifier
                     .weight(1f)

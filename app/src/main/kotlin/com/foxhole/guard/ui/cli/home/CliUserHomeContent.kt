@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -55,7 +56,7 @@ import com.foxhole.guard.ui.cli.CliType
 import com.foxhole.guard.ui.cli.LocalCliBottomChromeClearance
 import com.foxhole.guard.ui.cli.LocalCliColors
 import com.foxhole.guard.ui.cli.components.CliButton
-import com.foxhole.guard.ui.cli.components.CliChromeTailSpacer
+import com.foxhole.guard.ui.cli.components.cliDockAlignedActionClearance
 import com.foxhole.guard.ui.cli.components.CliIcon
 import com.foxhole.guard.ui.cli.components.CliProtocolBadge
 import com.foxhole.guard.ui.cli.map.CliMapOverviewPanel
@@ -150,7 +151,7 @@ private fun CliUserConnectionControls(
                 modifier = Modifier.fillMaxWidth(),
             )
         }
-        CliChromeTailSpacer()
+        Spacer(Modifier.height(cliDockAlignedActionClearance()))
     }
 }
 

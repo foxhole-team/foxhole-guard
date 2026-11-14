@@ -51,6 +51,8 @@ class ProfileRepository(
     internal val database: ProfileDatabase by lazy(LazyThreadSafetyMode.SYNCHRONIZED, databaseProvider)
 
     internal val dao by lazy(LazyThreadSafetyMode.SYNCHRONIZED) { database.profileDao() }
+    private val smartSelectionRevision = java.util.concurrent.atomic.AtomicLong()
+    internal fun routerSmartSelectionGeneration(): Long = smartSelectionRevision.get()
     internal val secretMutationMutex get() = mutationCoordinator.secretMutex
     internal val mutationCoordinator = settingsRepository.profileMutationCoordinator
     internal val profileImportMutex get() = mutationCoordinator.mutex
@@ -328,6 +330,7 @@ class ProfileRepository(
 
     internal suspend fun setActiveProfileLocked(profileId: Long, owner: ProfileMutationLease) {
         owner.requireOwner(mutationCoordinator)
+        smartSelectionRevision.incrementAndGet()
         withContext(NonCancellable) {
             owner.transaction(database) { dao.setActiveProfileIfPresent(profileId) }
             owner.markLocalCommit()

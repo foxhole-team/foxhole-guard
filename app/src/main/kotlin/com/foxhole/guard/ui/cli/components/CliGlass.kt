@@ -44,6 +44,7 @@ import androidx.compose.ui.unit.dp
 import com.foxhole.core.model.PanelAppearance
 import com.foxhole.guard.ui.cli.CliSpacing
 import com.foxhole.guard.ui.cli.CliTopContentGap
+import com.foxhole.guard.ui.cli.CliTopBarLift
 import com.foxhole.guard.ui.cli.LocalCliBottomChromeClearance
 import com.foxhole.guard.ui.cli.LocalCliColors
 import com.foxhole.guard.ui.cli.LocalCliPanelAppearance
@@ -200,6 +201,12 @@ internal fun CliGlassHeaderScreen(
         }
     }
 }
+
+// These two action screens retain the shared top lift. Compensate that lift and
+// the dock's visual translation so their visible bottom gap matches the content gap.
+@Composable
+internal fun cliDockAlignedActionClearance(): Dp =
+    (LocalCliBottomChromeClearance.current - CliTopBarLift - CliDockVisualDrop).coerceAtLeast(0.dp)
 
 @Composable
 internal fun CliChromeTailSpacer(extraGap: Dp = CliSpacing.xs) {

@@ -416,7 +416,7 @@ class ReleaseEngineeringContractTest {
             "foxcore/foxcore-aarch64-linux-android.cdx.json",
             "i2pd/Android-NDK-29-NOTICE.toolchain.txt",
             "i2pd/Boost-1.84.0-BSL-1.0.txt",
-            "i2pd/OpenSSL-3.5.8-Apache-2.0.txt",
+            "i2pd/OpenSSL-3.5.9-Apache-2.0.txt",
             "i2pd/i2pd-BSD-3-Clause.txt",
             "tor/conjure-client-BSD-3-Clause.txt",
             "tor/lyrebird-BSD-3-Clause.txt",
@@ -432,7 +432,7 @@ class ReleaseEngineeringContractTest {
                         "\"foxcore/foxcore-\" + primary + \".cdx.json\""
                     required == "i2pd/Boost-1.84.0-BSL-1.0.txt" ->
                         "f\"i2pd/Boost-{boost_version}-BSL-1.0.txt\""
-                    required == "i2pd/OpenSSL-3.5.8-Apache-2.0.txt" ->
+                    required == "i2pd/OpenSSL-3.5.9-Apache-2.0.txt" ->
                         "f\"i2pd/OpenSSL-{openssl_version}-Apache-2.0.txt\""
                     else -> required
                 }

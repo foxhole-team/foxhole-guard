@@ -1,0 +1,9 @@
+allprojects { project ->
+    project.plugins.withId('com.android.application') {
+        project.extensions.getByName('android').packaging.jniLibs.excludes.addAll([
+            'lib/armeabi/libjnidispatch.so',
+            'lib/mips/libjnidispatch.so',
+            'lib/mips64/libjnidispatch.so',
+        ])
+    }
+}

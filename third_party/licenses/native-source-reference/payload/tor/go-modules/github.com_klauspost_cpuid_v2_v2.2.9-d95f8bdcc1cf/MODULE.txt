@@ -1,0 +1,2 @@
+github.com/klauspost/cpuid/v2
+v2.2.9

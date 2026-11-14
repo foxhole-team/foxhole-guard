@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -31,6 +32,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.foxhole.guard.R
+import com.foxhole.guard.ui.cli.help.GuardHelpBlocks
+import com.foxhole.guard.ui.cli.help.guardHelpTopicForResource
 import com.foxhole.guard.ui.cli.CLI_ICON_OPTICAL_OFFSET
 import com.foxhole.guard.ui.cli.CliRadius
 import com.foxhole.guard.ui.cli.CliSpacing
@@ -38,7 +41,6 @@ import com.foxhole.guard.ui.cli.CliType
 import com.foxhole.guard.ui.cli.LocalCliColors
 import com.foxhole.guard.ui.cli.LocalCliPixelArtEnabled
 import com.foxhole.guard.ui.cli.cliHeadingGlyphOpticalOffsetFor
-import com.foxhole.guard.ui.cli.cliLabelText
 
 @Composable
 internal fun CliContextHelpButton(
@@ -63,7 +65,9 @@ internal fun CliContextHelpButton(
             icon = R.drawable.lin_help,
             headerIconRole = CliSheetHeaderIconRole.INFORMATION,
         ) {
-            CliHelpNote(text = stringResource(bodyRes))
+            val topic = guardHelpTopicForResource(bodyRes)
+            if (topic != null) GuardHelpBlocks(topic.blocks, scope = topic.id)
+            else CliHelpNote(text = stringResource(bodyRes))
         }
     }
 }
@@ -93,8 +97,8 @@ internal fun CliHelpNote(
             Spacer(modifier = Modifier.width(CLI_HELP_NOTE_ICON_GAP))
         }
         Text(
-            text = cliLabelText(text),
-            style = CliType.small,
+            text = text,
+            style = MaterialTheme.typography.bodyMedium,
             color = colors.fg,
             textAlign = TextAlign.Start,
             modifier = Modifier.weight(1f),
@@ -130,7 +134,10 @@ internal fun CliTopBarHelpButton(
             icon = presentation.icon,
             headerIconRole = CliSheetHeaderIconRole.INFORMATION,
         ) {
-            if (presentation.itemIcons.isEmpty()) {
+            val topic = guardHelpTopicForResource(bodyRes)
+            if (topic != null) {
+                GuardHelpBlocks(topic.blocks, scope = topic.id)
+            } else if (presentation.itemIcons.isEmpty()) {
                 CliHelpNote(text = cliTopBarHelpBody(body))
             } else {
                 val items = remember(body, presentation.itemIcons) {
@@ -177,11 +184,11 @@ internal fun CliHeaderHelpButton(
         contentDescription = contentDescription,
         onClick = onClick,
         modifier = modifier,
-        controlSize = if (topBar) CliTopBarControlSize else CliSectionHeaderControlSize,
+        controlSize = 48.dp,
         iconSize = if (topBar) {
             topBarIconSize
         } else {
-            iconSize ?: CLI_SECTION_HEADER_ICON_SIZE
+            iconSize ?: CLI_TOP_BAR_ACTION_ICON_SIZE
         },
         tint = colors.info,
         contentAlignment = when {
@@ -344,7 +351,8 @@ internal fun cliTopBarIconLiftFor(pixelArtEnabled: Boolean = true): Dp =
 
 internal val CliSectionHeaderControlSize = 21.dp
 internal val CliTopBarControlSize = 48.dp
-internal val CLI_TOP_BAR_ACTION_ICON_SIZE = 20.dp
+internal val CLI_TOP_BAR_ACTION_ICON_SIZE = 28.dp
+internal val CliTrailingIconInset = (CliTopBarControlSize - CLI_TOP_BAR_ACTION_ICON_SIZE) / 2
 internal val CliTopBarIconSize = CLI_TOP_BAR_ACTION_ICON_SIZE
 internal val CLI_TOP_BAR_ICON_LIFT = (-7).dp
 internal val CLI_SECTION_HEADER_ICON_SIZE = 18.dp

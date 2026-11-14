@@ -17,7 +17,7 @@ internal fun routerLocalProfileMatches(profileId: String, configSha256: String, 
     storedConfigSha256: String): Boolean = profileId == storedProfileId && configSha256 == storedConfigSha256
 
 internal data class RouterConnectedProfile(val id: String, val configSha256: String,
-    val connectionGeneration: String, val networkHandle: Long) {
+    val connectionGeneration: String, val networkHandle: Long, val materialGeneration: String? = null) {
     override fun toString(): String = "RouterConnectedProfile"
 }
 

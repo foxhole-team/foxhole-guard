@@ -5,7 +5,6 @@ import com.foxhole.core.network.RemoteHostResolver
 import com.foxhole.core.network.ensurePublicHttpsUrl
 import com.foxhole.core.network.requirePublicHttpsUrl
 import com.foxhole.core.runtime.RuntimeDnsRuleSetInstallOutcome
-import com.foxhole.core.runtime.network.PublicRemoteDns
 import com.foxhole.guard.BuildConfig
 import com.foxhole.guard.core.data.withBoundedRemoteFetchTimeouts
 import kotlinx.coroutines.CancellationException
@@ -352,7 +351,7 @@ class DnsFilterUpdateClient(
                 readTimeoutMs = DNS_FILTER_READ_TIMEOUT_MS,
                 callTimeoutMs = DNS_FILTER_CALL_TIMEOUT_MS,
             ).newBuilder()
-            .dns(PublicRemoteDns(httpClient.dns::lookup))
+            .dns(publicUpdateDns(httpClient, resolver))
             .connectTimeout(DNS_FILTER_CONNECT_TIMEOUT_MS, TimeUnit.MILLISECONDS)
             .readTimeout(DNS_FILTER_READ_TIMEOUT_MS, TimeUnit.MILLISECONDS)
             .callTimeout(DNS_FILTER_CALL_TIMEOUT_MS, TimeUnit.MILLISECONDS)

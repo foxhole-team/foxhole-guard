@@ -34,13 +34,6 @@ class CliSentinelPresentationTest {
         )
     }
 
-    @Test
-    fun `Sentinel presentation caps visible detection rows`() {
-        assertEquals(0, sentinelVisibleDetectionRowCount(-1))
-        assertEquals(4, sentinelVisibleDetectionRowCount(4))
-        assertEquals(10, sentinelVisibleDetectionRowCount(42))
-    }
-
     private fun appWindow(packageName: String, at: Long, bytes: Long) =
         AppTrafficWindow(
             packageName = packageName,

@@ -11,6 +11,8 @@ import com.foxhole.guard.R
 import com.foxhole.guard.ui.cli.CliSpacing
 import com.foxhole.guard.ui.cli.LocalCliColors
 import com.foxhole.guard.ui.cli.components.CliBottomSheet
+import com.foxhole.guard.ui.cli.components.CliIconTextItem
+import com.foxhole.guard.ui.cli.components.CliIconTextItems
 import com.foxhole.guard.ui.cli.components.cliMarchingBorder
 
 @Composable
@@ -44,20 +46,20 @@ internal fun CliBetaNoticeSheet(onAcknowledge: () -> Unit) {
     }
 }
 
-internal fun betaNoticeItems(body: String, dnsLimit: String): List<CliQuickStartItem> =
+internal fun betaNoticeItems(body: String, dnsLimit: String): List<CliIconTextItem> =
     body.lineSequence()
         .map(String::trim)
         .filter(String::isNotEmpty)
         .mapIndexed { index, text ->
-            CliQuickStartItem(
+            CliIconTextItem(
                 text = text,
                 icon = BETA_NOTICE_ICONS.getOrElse(index) { R.drawable.lin_info },
             )
         }
         .toList()
-        .let(::donationFirst) + CliQuickStartItem(dnsLimit.trim(), R.drawable.lin_dns)
+        .let(::donationFirst) + CliIconTextItem(dnsLimit.trim(), R.drawable.lin_dns)
 
-private fun donationFirst(items: List<CliQuickStartItem>): List<CliQuickStartItem> {
+private fun donationFirst(items: List<CliIconTextItem>): List<CliIconTextItem> {
     if (items.size <= DONATION_SOURCE_INDEX) return items
     val donation = items[DONATION_SOURCE_INDEX]
     return listOf(donation) + items.filterIndexed { index, _ -> index != DONATION_SOURCE_INDEX }

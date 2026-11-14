@@ -1,0 +1,40 @@
+{
+  "schema": 1,
+  "kind": "exact-current181-stock-fdroid-signing-content-projection",
+  "versionCode": 181,
+  "versionName": "1.0.7",
+  "stockToolCommit": "cdfdce835a8231996b02392bc79c1879e6bef501",
+  "stockCommonSHA256": "be1dc43a5607aad2008ddf86d8f129ff053c79a88303efe0367a14db023418a6",
+  "normalProducerSHA256": "da5e5f2394c918a00a216646408a8a9e7a5e5eb837a2c90c9701d99c15b79005",
+  "before": {
+    "build.gradle.kts": "2a7d3a0d4f5f2e7a2161ba9db48bed7033dab88601ad539cb5809dcdef7a26e8",
+    "core/importer/build.gradle.kts": "c99dd464e1135c2bc7942911d4908d06424e5a5790d65009397026e29d077de8",
+    "core/sentinel/build.gradle.kts": "a74a2d6df5b3bc0d232a59dc4e7c78eda1a3b973e9d8b474f64bea8edff863b8",
+    "gradle/verification-metadata.xml": "5001c83ed973a5abd27a02bf05ca143825bcec29446f2104906f78cc0deda9f3",
+    "core/model/build.gradle.kts": "fc3fe8dc73fdc65871eeb5120ba2c96d0ee97205b1f11f170cc18a959aeb0a69",
+    "core/runtime/build.gradle.kts": "6c0a95b7c5e3fda84dca2b8e743c22c49854ec097063ee52d216b96a950c7787",
+    "settings.gradle.kts": "1ed609b2ea8f4bc9aeb00aa84799d90a6d3abc08a072d5a8b5373515e645e363",
+    "gradle/sbom.gradle.kts": "5e89c506e72f2df04693bd7b45d8f6c93bff2f867ce913fd3148893dc422cf5e",
+    "gradle.properties": "6e4df59398dc356f917839ee3b605c021f7089e6627e3f484597916c334b0a81",
+    "app/build.gradle.kts": "633f3b0609e2b4acffac2921c71d2a3aaeb0cbf1f93b36ad87e80f6023a0e605",
+    "gradle/libs.versions.toml": "1e0762a98ed5a4b9921289551950c0bbc58ee5fa89b6ad5fe76c852cb1217572",
+    "core/network/build.gradle.kts": "37caa5cb68e71d03ef64fcb61fa87628f778393c7e186541714ff6a2ea1853a0",
+    "core/profile/build.gradle.kts": "8c5544bf9f18b499b2f6a4976bc8fc21bfa72be94beb8d06288ffdfde0750f5c"
+  },
+  "after": {
+    "build.gradle.kts": "2a7d3a0d4f5f2e7a2161ba9db48bed7033dab88601ad539cb5809dcdef7a26e8",
+    "core/importer/build.gradle.kts": "c99dd464e1135c2bc7942911d4908d06424e5a5790d65009397026e29d077de8",
+    "core/sentinel/build.gradle.kts": "a74a2d6df5b3bc0d232a59dc4e7c78eda1a3b973e9d8b474f64bea8edff863b8",
+    "gradle/verification-metadata.xml": "5001c83ed973a5abd27a02bf05ca143825bcec29446f2104906f78cc0deda9f3",
+    "core/model/build.gradle.kts": "fc3fe8dc73fdc65871eeb5120ba2c96d0ee97205b1f11f170cc18a959aeb0a69",
+    "core/runtime/build.gradle.kts": "6c0a95b7c5e3fda84dca2b8e743c22c49854ec097063ee52d216b96a950c7787",
+    "settings.gradle.kts": "1ed609b2ea8f4bc9aeb00aa84799d90a6d3abc08a072d5a8b5373515e645e363",
+    "gradle/sbom.gradle.kts": "5e89c506e72f2df04693bd7b45d8f6c93bff2f867ce913fd3148893dc422cf5e",
+    "gradle.properties": "6e4df59398dc356f917839ee3b605c021f7089e6627e3f484597916c334b0a81",
+    "app/build.gradle.kts": "c27347b6e1f4a4bf6cc2df72ae2e12e580982e9b797de202c38b910024b629c7",
+    "gradle/libs.versions.toml": "1e0762a98ed5a4b9921289551950c0bbc58ee5fa89b6ad5fe76c852cb1217572",
+    "core/network/build.gradle.kts": "37caa5cb68e71d03ef64fcb61fa87628f778393c7e186541714ff6a2ea1853a0",
+    "core/profile/build.gradle.kts": "8c5544bf9f18b499b2f6a4976bc8fc21bfa72be94beb8d06288ffdfde0750f5c"
+  },
+  "scope": "Exact signing configuration removal only; existing normal dependency graph and original notices retained. This content projection is not native production, a full F-Droid build or official acceptance."
+}

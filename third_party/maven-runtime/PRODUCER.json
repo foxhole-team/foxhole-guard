@@ -1,24 +1,25 @@
 {
   "schema": 2,
   "kind": "fresh-guard-runtime-and-desugaring-producer",
-  "versionCode": 180,
-  "versionName": "1.0.6",
+  "sbomIdentityVersion": 2,
+  "versionCode": 181,
+  "versionName": "1.0.7",
   "gradleVersion": "9.6.1",
-  "sourceManifestSha256": "df1c98d35f11aa241ccf5921c35d8810c87904da5fec42348b9b53f233c42848",
+  "sourceManifestSha256": "74207374cda93b4074b1f07cf58e5d5abaa6c362a33c1d0b88ac288bf7535eef",
   "sourceInputs": {
-    "settings.gradle.kts": "1ed609b2ea8f4bc9aeb00aa84799d90a6d3abc08a072d5a8b5373515e645e363",
-    "core/profile/build.gradle.kts": "8c5544bf9f18b499b2f6a4976bc8fc21bfa72be94beb8d06288ffdfde0750f5c",
-    "core/importer/build.gradle.kts": "c99dd464e1135c2bc7942911d4908d06424e5a5790d65009397026e29d077de8",
-    "gradle/sbom.gradle.kts": "5e89c506e72f2df04693bd7b45d8f6c93bff2f867ce913fd3148893dc422cf5e",
     "gradle/verification-metadata.xml": "5001c83ed973a5abd27a02bf05ca143825bcec29446f2104906f78cc0deda9f3",
-    "gradle.properties": "6e4df59398dc356f917839ee3b605c021f7089e6627e3f484597916c334b0a81",
     "core/network/build.gradle.kts": "37caa5cb68e71d03ef64fcb61fa87628f778393c7e186541714ff6a2ea1853a0",
-    "build.gradle.kts": "fedaee22103447b4f1086405a10946cb19cbccd92c5bb73eea3c1b660d6636f3",
-    "app/build.gradle.kts": "57b9d60f82c42241fa5ebebf824c22f71cd4f6c35e995ac9dc6a3966e00d7f1b",
-    "core/sentinel/build.gradle.kts": "a74a2d6df5b3bc0d232a59dc4e7c78eda1a3b973e9d8b474f64bea8edff863b8",
+    "build.gradle.kts": "2a7d3a0d4f5f2e7a2161ba9db48bed7033dab88601ad539cb5809dcdef7a26e8",
+    "core/runtime/build.gradle.kts": "6c0a95b7c5e3fda84dca2b8e743c22c49854ec097063ee52d216b96a950c7787",
     "core/model/build.gradle.kts": "fc3fe8dc73fdc65871eeb5120ba2c96d0ee97205b1f11f170cc18a959aeb0a69",
     "gradle/libs.versions.toml": "1e0762a98ed5a4b9921289551950c0bbc58ee5fa89b6ad5fe76c852cb1217572",
-    "core/runtime/build.gradle.kts": "6c0a95b7c5e3fda84dca2b8e743c22c49854ec097063ee52d216b96a950c7787"
+    "app/build.gradle.kts": "bb3fc5290b204bb9dad942787ba64c7949cf19cf0e46876749238e6ba9cbfd31",
+    "gradle/sbom.gradle.kts": "5e89c506e72f2df04693bd7b45d8f6c93bff2f867ce913fd3148893dc422cf5e",
+    "core/importer/build.gradle.kts": "c99dd464e1135c2bc7942911d4908d06424e5a5790d65009397026e29d077de8",
+    "settings.gradle.kts": "1ed609b2ea8f4bc9aeb00aa84799d90a6d3abc08a072d5a8b5373515e645e363",
+    "gradle.properties": "6e4df59398dc356f917839ee3b605c021f7089e6627e3f484597916c334b0a81",
+    "core/profile/build.gradle.kts": "8c5544bf9f18b499b2f6a4976bc8fc21bfa72be94beb8d06288ffdfde0750f5c",
+    "core/sentinel/build.gradle.kts": "a74a2d6df5b3bc0d232a59dc4e7c78eda1a3b973e9d8b474f64bea8edff863b8"
   },
   "counts": {
     "components": 176,
@@ -28,7 +29,7 @@
   },
   "previousProducerRelabelled": false,
   "retainedProducerManifestSha256": "89476592db530b111b041d5b5795cbe186b3913ee9f363207d8ba4633682012f",
-  "previousCurrentManifestSha256": "33616910185055ed89995fe2bb8a3c1c5e125383531ab59acba4b012db25fc31",
+  "previousCurrentManifestSha256": "a54573ee550981b63ff7a970bc99fdb1720de8326782059d3f110815457c4589",
   "retainedOriginalFiles": [
     {
       "path": "files/maven/androidx.activity/activity-compose/1.13.0/activity-compose-1.13.0.aar/META-INF/androidx/activity/activity-compose/LICENSE.txt",
@@ -1328,17 +1329,22 @@
   ],
   "sqlcipher420PublisherSourceEvidenceSha256": "ded351cabbb6af4308f9fbdf0a1c2803d755e1d2209acb8282d21b608494c23b",
   "sqlcipherLegalDeltaProgramSha256": "0a59a62db3617ac6c1ffaf5f8c24865641e76154cc93e62624c4c2e2315267ce",
-  "typedRawCaptureRole": "new-actual-guard420-verifier-refresh-raw-runtime-v2-typed-role",
-  "typedRawCapturePolicySha256": "3dfc9526610e74777416d179a3c06a7c353dd852191b64312060b460d4a38a0b",
-  "typedRawCaptureReaderSha256": "d903cb6554f58e591d64148644222ee4ec3c399a74bbf7c7694976a4b2982c3d",
-  "typedRawCaptureIntakeSha256": "82255ea03a1cb061e1ded228da0d45f008e83618d29d04453561a49d69d28edd",
-  "producerProgramSha256": "309207141216cfa543fa52bc78de7f098e2a3230c3ca12ffb807d4d1753361c3",
-  "contractProgramSha256": "c87692212fd01b7c73aace8e81397886bbc95b34b654960583a71ab6bec95c1b",
-  "actualCollectorReportSha256": "50859c64a19c2684500026099d4c83a9bd1668e39676f3a94307d6b7c3c15b3b",
+  "typedRawCaptureRole": {
+    "kind": "newRootownedactualMCPmetadataCapture",
+    "bytes": 1068951,
+    "maxBytes": 2097152,
+    "sha256": "2ad52483c1f0fd26035daa304c4bc47b690e4f1dfe7a9b24a2d05dda3eee903b"
+  },
+  "typedRawCapturePolicySha256": "044eea7bbbb8a85686ef7c8f470e40e4fb146cd77f794850bdceb9f45a558677",
+  "typedRawCaptureReaderSha256": "4cd9ec4b455cd70b6f5c0ef301b0ba00ca60d2f4a1620ded5ba0468c47a5284f",
+  "typedRawCaptureIntakeSha256": "2668b547e5a6253ba1aab379eaa62f7ddaf7e3d765b63828143a81e30e69df74",
+  "producerProgramSha256": "4cd9ec4b455cd70b6f5c0ef301b0ba00ca60d2f4a1620ded5ba0468c47a5284f",
+  "contractProgramSha256": "5288bd33afe45f97627ca20f2689caa935f49f98f71f8c93b8b1f636eed2c0ac",
+  "actualCollectorReportSha256": "bda858c332a4cf490ae8bb2f86ffc8630f0c5f68476d6f803dd9b9d2f65e8520",
   "capture": {
-    "actualSha256": "cd08b084f628f01e1958906f4408428fed2b638cca20e46040364147820baa4d",
-    "portableSha256": "960547e1b3a220d72572e7fe885562b9de4c069f7db69e3c5e9982b94fa00453",
-    "terminalSha256": "aad1f2887c256413f2d14b56719818cdb54e53723e59aa0a2eebb7440168150b"
+    "actualSha256": "2ad52483c1f0fd26035daa304c4bc47b690e4f1dfe7a9b24a2d05dda3eee903b",
+    "portableSha256": "960523348984859393ff87d91d6d85d34bf9a828280052ca0ce71bafefc2b6be",
+    "terminalSha256": "2668b547e5a6253ba1aab379eaa62f7ddaf7e3d765b63828143a81e30e69df74"
   },
   "scopes": {
     "runtime": {
@@ -1349,7 +1355,7 @@
         "pom_files": 169,
         "edges": 988
       },
-      "portableScopeViewSha256": "31efae9999d2b1450a95a8ca19507110140371acdcaa5237f74ebc8c32c236c4"
+      "portableScopeViewSha256": "6cd071ea4124e8cb8f87177c2446dd9a601b9559f2527e8074d33dca8a98e843"
     },
     "desugaring": {
       "configuration": ":app:coreLibraryDesugaring",
@@ -1359,14 +1365,14 @@
         "pom_files": 2,
         "edges": 2
       },
-      "portableScopeViewSha256": "441abe9e5b74b9d3369c99df71f9595f595725f7521d07bdf18a3a608c80c57c"
+      "portableScopeViewSha256": "4c112d0a36ceb478dc2fc8585aaaa33dbdb2c6fe0484541d059a953e515fc871"
     }
   },
   "payloadFiles": [
     {
       "path": "L8-INPUTS.json",
-      "bytes": 526,
-      "sha256": "9c884447be1794139f6b5251453d2c6a85e50c8d65267db06f833e8a0d89b781"
+      "bytes": 542,
+      "sha256": "fc88e94b455db7de1144713373ddc39fbe2aba242775062ef4ee437562088c4b"
     },
     {
       "path": "NIO-CONFIGURATION.json",
@@ -1811,12 +1817,12 @@
     {
       "path": "maven-notice-report.json",
       "bytes": 235985,
-      "sha256": "336874fd6bfe291d7bc38a878b6253f90297df4c3ad5851054281231c23b323c"
+      "sha256": "c94e85946eee7734065c3093acd5a5e2ab2ff5ee01db633f48c7dd398cc91f99"
     },
     {
       "path": "maven-runtime.cdx.json",
-      "bytes": 182409,
-      "sha256": "379725597fd274f59253f72b73f50ea8d60592e79472e8f0927177534e131dbc"
+      "bytes": 194397,
+      "sha256": "c2f2f273f79866972d1341dda671647ca2e6bfe646cb6302e3b497f5462f3f7f"
     },
     {
       "path": "poms/014b9497197f5177e39543d6785e7e4c37cacab647f17d476d4f6224fa6c2372.pom",
@@ -2676,7 +2682,15 @@
     {
       "path": "runtime-inventory.json",
       "bytes": 876601,
-      "sha256": "960547e1b3a220d72572e7fe885562b9de4c069f7db69e3c5e9982b94fa00453"
+      "sha256": "960523348984859393ff87d91d6d85d34bf9a828280052ca0ce71bafefc2b6be"
     }
-  ]
+  ],
+  "metadataSuccessor": {
+    "kind": "actual-unchanged-graph-source-metadata-successor",
+    "previousProducerSHA256": "da5e5f2394c918a00a216646408a8a9e7a5e5eb837a2c90c9701d99c15b79005",
+    "previousManifestSHA256": "a54573ee550981b63ff7a970bc99fdb1720de8326782059d3f110815457c4589",
+    "actualMCPBuildId": "b-10",
+    "dependencyDelta": false,
+    "MavenPGPVerificationClaimed": false
+  }
 }

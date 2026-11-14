@@ -59,7 +59,8 @@ internal class PairedRouterManagementTransport(
     }
 
     private suspend fun remoteProfile(pairing: RouterPairing, preferences: RouterControlPreferences): RouterConnectedProfile? {
-        if (!routerHomeVpnManagementAllowed(pairing.id == preferences.pairingId, pairing.active,
+        if (preferences.authenticatedHomeServerEnabled != true ||
+            !routerHomeVpnManagementAllowed(pairing.id == preferences.pairingId, pairing.active,
                 preferences.enabled, preferences.publicIpConfirmed, preferences.homeVpnManagementEnabled)) return null
         val profile = connectedProfile() ?: return null
         val trusted = pairings?.trustedProfile(profile.id, profile.configSha256) ?: return null

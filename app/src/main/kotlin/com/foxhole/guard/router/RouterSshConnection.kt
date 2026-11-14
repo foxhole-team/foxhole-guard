@@ -21,12 +21,14 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 
 internal class RouterSshTrustRequired(val key: ByteArray) : IOException("router_host_key_required")
-internal class RouterSshFailure : IOException("router_ssh_failed")
+internal class RouterSshFailure(val remoteExitStatus: Int? = null,
+    val codes: Set<RouterSshFailureCode> = emptySet()) : IOException("router_ssh_failed")
 internal class RouterSshAuthenticationFailed : IOException("router_ssh_authentication_failed")
 
-internal fun interface RouterSocketProvider { fun createSocket(): Socket }
+internal fun interface RouterSocketProvider { fun createSocket(): Socket; fun requireCurrent() = Unit }
 
 internal interface RouterSshClient : Closeable {
+    fun requireCurrent() = Unit
     fun connect(password: CharArray?)
     fun connectForDiscovery() = connect(null)
     fun connectWithKey(privateKey: ByteArray, passphrase: CharArray) {
@@ -35,7 +37,7 @@ internal interface RouterSshClient : Closeable {
     }
     fun read(command: RouterReadCommand): ByteArray
     fun internetAccess(): RouterInternetAccess = RouterInternetAccess.UNKNOWN
-    fun stageInstallBundle(bundle: RouterDeviceInstallBundle, facts: RouterBundleTransferFacts, requiredRam: Long,
+    fun stageInstallBundle(bundle: RouterDeviceInstallBundle, facts: RouterBundleTransferFacts, requiredRam: Long, requiredTmp: Long,
         onProgress: (RouterInstallProgress) -> Unit): RouterRemoteInstallBundle = throw RouterSshFailure()
     fun readCompactBackupBytes(): ByteArray = throw RouterInspectionFailure()
     fun install(script: RouterVerifiedInstallScript, command: RouterInstallCommand)
@@ -77,7 +79,7 @@ internal enum class RouterReadCommand(val script: String, val maximumOutputBytes
     """.trimIndent(), 256),
     BOARD("ubus call system board"),
     ARCHITECTURE("if [ -r /etc/apk/arch ]; then cat /etc/apk/arch; else opkg print-architecture; fi"),
-    KERNEL_PACKAGE("apk info -v kernel"),
+    KERNEL_PACKAGE("apk query --from installed --installed --match name --fields name,version --format json kernel"),
     FLASH("df -Pk /overlay"),
     MEMORY("cat /proc/meminfo"),
     CONFIGURATION("uci changes"),
@@ -132,6 +134,11 @@ internal class RouterSshConnection(
 
     init {
         require(!endpoint.isUnresolved && endpoint.port in 1..65535)
+    }
+
+    override fun requireCurrent() {
+        if (closed.get() || session.get()?.isConnected != true) throw RouterSshFailure()
+        socketProvider.requireCurrent()
     }
 
     override fun connect(password: CharArray?) {
@@ -226,10 +233,10 @@ internal class RouterSshConnection(
         return RouterInternetAccess.entries.singleOrNull { it.name == value } ?: RouterInternetAccess.UNKNOWN
     }
 
-    override fun stageInstallBundle(bundle: RouterDeviceInstallBundle, facts: RouterBundleTransferFacts, requiredRam: Long,
+    override fun stageInstallBundle(bundle: RouterDeviceInstallBundle, facts: RouterBundleTransferFacts, requiredRam: Long, requiredTmp: Long,
         onProgress: (RouterInstallProgress) -> Unit): RouterRemoteInstallBundle {
-        require(trusted && requiredRam > 0)
-        if (requiredRam > facts.availableRamBytes || requiredRam > facts.availableTmpBytes) throw RouterSetupFailure(RouterWizardError.STORAGE)
+        require(trusted && requiredRam > 0 && requiredTmp > 0)
+        if (requiredRam > facts.availableRamBytes || requiredTmp > facts.availableTmpBytes) throw RouterSetupFailure(RouterWizardError.STORAGE)
         bundle.plan.assets.forEach { verifyRouterBundleAsset(bundle.file(it), it) }
         val capability = read(RouterReadCommand.BUNDLE_UPLOAD_CAPABILITY).toString(Charsets.US_ASCII).trim()
         if (capability !in setOf("SFTP", "EXEC")) throw RouterSshFailure()
@@ -249,7 +256,7 @@ internal class RouterSshConnection(
                 sftp = opened
                 opened.connect(10000)
             }
-            execute(routerBundleCreateCommand(path, nonce, facts.bootId, ownerHash, requiredRam), ByteArrayInputStream(owner), 15_000_000_000L, 1024)
+            execute(routerBundleCreateCommand(path, nonce, facts.bootId, ownerHash, requiredRam, requiredTmp), ByteArrayInputStream(owner), 15_000_000_000L, 1024)
             created = true
             var completed = 0L
             val deadline = System.nanoTime() + 600_000_000_000L
@@ -310,13 +317,21 @@ internal class RouterSshConnection(
             channel.connect(10000)
             val deadline = System.nanoTime() + timeoutNs
             while (!channel.isClosed) {
-                if (closed.get() || output.overflowed || error.overflowed || System.nanoTime() >= deadline) throw RouterSshFailure()
+                if (output.overflowed || error.overflowed) throw RouterSshFailure(codes = setOf(RouterSshFailureCode.OUTPUT_LIMIT))
+                if (closed.get()) throw RouterSshFailure(codes = setOf(RouterSshFailureCode.CONNECTION_CLOSED))
+                if (System.nanoTime() >= deadline) throw RouterSshFailure(codes = setOf(RouterSshFailureCode.TIMEOUT))
                 Thread.sleep(20)
             }
-            if (channel.exitStatus != 0 || output.overflowed || error.overflowed) throw RouterSshFailure()
+            if (channel.exitStatus != 0 || output.overflowed || error.overflowed) {
+                val detail = error.bytes()
+                val codes = try { routerSshFailureCodes(detail) } finally { detail.fill(0) }
+                val limits = if (output.overflowed || error.overflowed) setOf(RouterSshFailureCode.OUTPUT_LIMIT) else emptySet()
+                throw RouterSshFailure(channel.exitStatus, codes + limits)
+            }
             return output.bytes()
-        } catch (_: Exception) {
+        } catch (failure: Exception) {
             close()
+            if (failure is RouterSshFailure) throw failure
             throw RouterSshFailure()
         } finally {
             channel.disconnect()

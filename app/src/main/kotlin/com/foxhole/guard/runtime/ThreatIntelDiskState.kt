@@ -90,8 +90,16 @@ internal class ThreatIntelDiskState(private val directory: File) {
             commitMutex.withLock {
                 currentCoroutineContext().ensureActive()
                 val installed = generation()?.let { runCatching { Instant.parse(it) }.getOrNull() }
-                check(installed == null || incoming.isAfter(installed)) {
-                    "threat intel generation is not newer than installed"
+                check(installed == null || !incoming.isBefore(installed)) {
+                    "threat intel generation is older than installed"
+                }
+                if (installed == incoming) {
+                    val previous = checkNotNull(read()) { "installed threat intel payload is missing" }
+                    check(MessageDigest.isEqual(digest(previous.bytes), digest(bytes))) {
+                        "threat intel content differs at the installed generation"
+                    }
+                    // A repeat is successful only for the same validated bytes; never rewrite a newer state.
+                    if (committed.isFile) return@withLock
                 }
                 currentCoroutineContext().ensureActive()
                 // One rename publishes metadata and the unchanged signed payload together.

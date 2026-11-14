@@ -6,11 +6,15 @@ import org.junit.Test
 class RouterManagementAccessTest {
     @Test fun cellularWithoutPairedRemoteVpnDoesNotDiscover() {
         assertEquals(RouterManagementAccess.UNAVAILABLE, routerManagementAccess(false, false, false, false))
-        assertEquals(RouterManagementAccess.UNAVAILABLE, routerManagementAccess(false, false, true, false))
+        val access = routerManagementAccess(false, false, true, false)
+        assertEquals(RouterManagementAccess.VPN_ACTIVE, access)
+        assertFalse(access.canDiscover)
     }
     @Test fun anotherWifiWithoutPairedRemoteVpnDoesNotDiscover() {
         assertEquals(RouterManagementAccess.UNAVAILABLE, routerManagementAccess(true, false, false, false))
-        assertEquals(RouterManagementAccess.UNAVAILABLE, routerManagementAccess(true, false, true, false))
+        val access = routerManagementAccess(true, false, true, false)
+        assertEquals(RouterManagementAccess.VPN_ACTIVE, access)
+        assertFalse(access.canDiscover)
     }
     @Test fun homeWifiRequiresDisconnectingVpn() {
         assertEquals(RouterManagementAccess.LOCAL, routerManagementAccess(true, true, false, false))

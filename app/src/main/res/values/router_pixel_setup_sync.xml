@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="router_discovery_cancel">Cancel</string>
+    <string name="router_discovery_continue">Continue</string>
+    <string name="router_discovery_ready_to_pair">Router ready to pair</string>
+    <string name="router_discovery_setup_question">Start the FoxHole OpenWrt package installation wizard?</string>
+    <string name="router_setup_compatibility_title">Installation compatibility</string>
+    <string name="router_setup_supported_versions">Installation versions</string>
+</resources>

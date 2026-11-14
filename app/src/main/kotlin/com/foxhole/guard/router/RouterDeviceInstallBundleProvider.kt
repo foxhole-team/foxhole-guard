@@ -10,14 +10,19 @@ import java.nio.file.Files
 import java.security.MessageDigest
 import java.util.concurrent.atomic.AtomicReference
 
-internal data class RouterBundleAsset(val name: String, val sha256: String, val bytes: Long, val contents: ByteArray? = null) {
-    init { require(name.matches(Regex("[A-Za-z0-9][A-Za-z0-9._-]{0,159}")) && sha256.matches(Regex("[a-f0-9]{64}")) && bytes in 1L..536870912L) }
+internal data class RouterBundleAsset(val name: String, val sha256: String, val bytes: Long, val contents: ByteArray? = null, val sourceUrl: String? = null) {
+    init {
+        require(name.matches(Regex("[A-Za-z0-9][A-Za-z0-9._-]{0,159}")) && sha256.matches(Regex("[a-f0-9]{64}")) && bytes in 1L..536870912L)
+        require(sourceUrl == null || contents == null && sourceUrl.length in 1..4096 && sourceUrl.none(Char::isISOControl))
+    }
 }
-internal data class RouterInstallBundlePlan(val baseUrl: String, val manifestSha256: String, val assets: List<RouterBundleAsset>) {
+internal data class RouterInstallBundlePlan(val baseUrl: String, val manifestSha256: String, val assets: List<RouterBundleAsset>,
+    val transportWorkingRamBytes: Long = 0L, val residentRuntimeBytes: Long = 0L) {
     val bytes: Long = assets.fold(0L) { sum, item -> Math.addExact(sum, item.bytes) }
     val stagingBytes: Long = Math.addExact(bytes, Math.multiplyExact(assets.size.toLong() + 2, 8192L))
     init {
         routerReleaseBaseUrl(baseUrl)
+        require(transportWorkingRamBytes in 0L..554696704L && residentRuntimeBytes in 0L..9007199254740991L)
         require(assets.size in 1..1024 && assets.map { it.name }.distinct().size == assets.size && bytes in 1L..536870912L)
         require(assets.single { it.name == "SHA256SUMS" }.sha256 == manifestSha256)
     }
@@ -45,8 +50,9 @@ internal class RouterDeviceInstallBundleProvider(private val cache: File,
         try {
             val result = withContext(Dispatchers.IO) {
                 val plan = release.bundlePlan(payload, proposal)
-                val needed = Math.addExact(workingRamBytes, plan.stagingBytes)
-                if (facts.availableRamBytes < needed || facts.availableTmpBytes < needed ||
+                val neededRam = routerInstallBundleRequiredRam(workingRamBytes, plan)
+                val neededTmp = routerInstallBundleRequiredTmp(workingRamBytes, plan)
+                if (facts.availableRamBytes < neededRam || facts.availableTmpBytes < neededTmp ||
                     cache.usableSpace < Math.addExact(plan.bytes, 16777216L)) throw RouterSetupFailure(RouterWizardError.STORAGE)
                 require(cache.isDirectory && !Files.isSymbolicLink(cache.toPath()))
                 val directory = Files.createTempDirectory(cache.toPath(), "router-install-").toFile()
@@ -58,7 +64,7 @@ internal class RouterDeviceInstallBundleProvider(private val cache: File,
                     require(file.createNewFile() && file.setReadable(false, false) && file.setWritable(false, false) &&
                         file.setReadable(true, true) && file.setWritable(true, true))
                     if (asset.contents != null) file.outputStream().use { it.write(asset.contents) }
-                    else http.downloadInstallAsset((plan.baseUrl.trimEnd('/') + "/" + asset.name).toHttpUrl(), asset.bytes, file) { count, _ ->
+                    else downloadRouterInstallAsset(http, plan, asset, file) { count, _ ->
                         progress(RouterInstallProgress(RouterInstallProgressStage.DOWNLOAD, completed + count, plan.bytes, viaDevice = true))
                     }
                     verifyRouterBundleAsset(file, asset)
@@ -70,6 +76,19 @@ internal class RouterDeviceInstallBundleProvider(private val cache: File,
             pending.compareAndSet(result, null)
             return result
         } finally { pending.getAndSet(null)?.close() }
+    }
+}
+
+internal suspend fun downloadRouterInstallAsset(http: RouterDeviceReleaseHttp, plan: RouterInstallBundlePlan,
+    asset: RouterBundleAsset, target: File, progress: (Long, Long?) -> Unit) {
+    require(asset in plan.assets && asset.contents == null)
+    val mirror = (plan.baseUrl.trimEnd('/') + "/" + asset.name).toHttpUrl()
+    try {
+        http.downloadInstallAsset(mirror, asset.bytes, target, progress)
+    } catch (failure: RouterReleaseUnavailable) {
+        val original = asset.sourceUrl?.toHttpUrl()
+        if (failure.statusCode != 404 || original == null || original == mirror || target.length() != 0L) throw failure
+        http.downloadInstallAsset(original, asset.bytes, target, progress)
     }
 }
 
@@ -95,12 +114,12 @@ internal suspend fun buildRouterInstallBundlePlan(catalog: RouterInstallCatalog,
         require(contents.size in 1..maximum && routerReleaseSha256(contents) == hash)
         result[name] = RouterBundleAsset(name, hash, contents.size.toLong(), contents)
     }
-    fun artifact(item: JsonObject, bytesField: String, maximum: Long) {
+    fun artifact(item: JsonObject, bytesField: String, maximum: Long, sourceUrl: String? = null) {
         val name = item.compactFile("file"); val hash = item.compactHash("sha256"); val bytes = item.compactLong(bytesField, 1L..maximum)
         require(manifest[name] == hash)
-        val asset = RouterBundleAsset(name, hash, bytes)
+        val asset = RouterBundleAsset(name, hash, bytes, sourceUrl = sourceUrl)
         val prior = result[name]
-        require(prior == null || prior.sha256 == hash && prior.bytes == bytes)
+        require(prior == null || prior.sha256 == hash && prior.bytes == bytes && prior.sourceUrl == sourceUrl)
         if (prior == null) result[name] = asset
     }
     metadata("SHA256SUMS", 1048576); metadata("package-catalog.json", 524288); metadata("install.sh", 1048576)
@@ -122,7 +141,8 @@ internal suspend fun buildRouterInstallBundlePlan(catalog: RouterInstallCatalog,
         variant.serverProducer?.let { metadata(it.file, 131072) }
         for (mode in variant.modes.values) metadata(mode.file, 1048576)
     }
-    for (item in document.engineObjects("packages", 512)) artifact(item, "archiveBytes", 536870912)
+    for (item in document.engineObjects("packages", 512)) artifact(item, "archiveBytes", 536870912,
+        routerBundlePackageSource(document, item, proposal.binding.architecture))
     for (item in document.engineObjects("repositoryIndexes", 16)) artifact(item, "bytes", 8388608)
     for (item in document.engineObjects("trustKeys", 32)) artifact(item, "bytes", 16384)
     if (catalog.schema == 2) for (item in document.engineObjects("volatile", 16)) artifact(item, "bytes", 67108864)
@@ -130,10 +150,17 @@ internal suspend fun buildRouterInstallBundlePlan(catalog: RouterInstallCatalog,
         document.engineNullableObject("volatileBinary")?.let { artifact(it, "bytes", 67108864) }
         if ("volatileDependencies" in document) for (item in document.engineObjects("volatileDependencies", 16)) artifact(item, "bytes", 67108864)
     }
+    val archive = if ("bundle-transport.json" in manifest || "native-install.tar" in manifest) {
+        require("bundle-transport.json" in manifest && "native-install.tar" in manifest)
+        for (name in listOf("bundle-transport-model.uc", "bundle-transport.uc", "bundle-transport.json")) metadata(name, 1048576)
+        parseRouterArchiveBundle(requireNotNull(result["bundle-transport.json"]?.contents), manifest).also { it.materialize(result) }
+    } else null
+    fun covered(name: String, hash: String) = result[name]?.sha256 == hash || archive?.entries?.get(name)?.sha256 == hash
     val selected = requireNotNull(payload.packagesByMode[proposal.storageMode])
-    require(selected.all { result[it.file]?.sha256 == it.sha256 } && selected.any { it.name == "foxhole-openwrt-client" })
+    require(selected.all { covered(it.file, it.sha256) } && selected.any { it.name == "foxhole-openwrt-client" })
     val expected = requireNotNull(document.engineNullableObject("filesSha256"))
-    require(expected.keys.all { result[it]?.sha256 == expected.engineText(it) })
+    require(expected.keys.all { covered(it, expected.engineText(it)) })
     require(result.values.sumOf { it.contents?.size?.toLong() ?: 0L } <= 16777216L)
-    return RouterInstallBundlePlan(payload.baseUrl, proposal.manifestSha256, result.values.toList())
+    val residentRuntime = if (catalog.schema == 2) document.compactLong("runtimeMemoryBytes") else 0L
+    return RouterInstallBundlePlan(payload.baseUrl, proposal.manifestSha256, result.values.toList(), archive?.workingRamBytes ?: 0L, residentRuntime)
 }

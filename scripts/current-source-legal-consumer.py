@@ -139,8 +139,53 @@ def verify_native(root,rows):
         need(raw[:4]==b'\x7fELF'and len(raw)>=64 and raw[4]==bits and raw[5]==1 and int.from_bytes(raw[18:20],'little')==machine,'Original Sentinel static ELF identity differs')
 
 
+def reference_header(app):
+    app=Path(app).resolve()
+    anchor=document(read(app/'config/source-legal-consumer-bindings.json'))
+    need(set(anchor)=={'schema','kind','coverage','snapshotSHA256','inputJoinSHA256'}and type(anchor['schema'])is int and anchor['schema']==1
+         and anchor['kind']=='pinned-current-guard-source-native-legal-bindings'and anchor['coverage']=='complete'
+         and isinstance(anchor['snapshotSHA256'],str)and HASH.fullmatch(anchor['snapshotSHA256']),'Actual qualified current snapshot trust anchor required')
+    snapshot=app/'third_party/licenses/current-core-snt/android4/snapshot.json'
+    record=validate_record(document(read(snapshot,expected=anchor['snapshotSHA256'])))
+    need(record['inputJoinSHA256']==anchor['inputJoinSHA256'],'Current source/native joins differ')
+    return snapshot,record
+
+
+def source_build_provenance(manifest,app,core_native,sentinel_native):
+    app=Path(app).absolute();manifest=Path(manifest).absolute()
+    need(manifest==app/'app/build/reports/fdroid/native-source-build.json','Fixed source-native manifest path required')
+    value=document(read(manifest))
+    need(set(value)=={'schema','kind','sourceCommit','sourceTree','referenceProducerCommit',
+         'compiledSourceManifestSha256','androidDeliveryProfile','abis','targets','nativeLibraries'}
+         and type(value['schema'])is int and value['schema']==1
+         and value['kind']=='normal-fdroid-native-source-build','Exact source-native provenance role required')
+    need(value['sourceCommit']==CHECKOUT and value['sourceTree']==CHECKOUT_TREE
+         and value['referenceProducerCommit']==CORE and value['compiledSourceManifestSha256']==COMPILED
+         and value['androidDeliveryProfile']=='android4'and value['abis']==list(TARGETS.values())
+         and value['targets']==list(TARGETS),'Source-native checkout/compiled/four-ABI binding differs')
+    native=value['nativeLibraries'];need(isinstance(native,dict)and set(native)=={'core','sentinel'},'Both source-native products required')
+    roots={'core':Path(core_native).absolute(),'sentinel':Path(sentinel_native).absolute()}
+    allowed={'core':{app/'app/build/fdroidNativeSource/core',app/'app/build/generated/foxCoreNativeLibs'},
+             'sentinel':{app/'app/build/fdroidNativeSource/sentinel/jniLibs',app/'app/build/generated/sentinelNative/jniLibs'}}
+    for kind,root in roots.items():
+        need(root in allowed[kind],'Fixed source-native output root required')
+        name='libfoxhole_native.so'if kind=='core'else'libfoxhole_sentinel_yara.so'
+        need(isinstance(native[kind],dict)and set(native[kind])==set(TARGETS),'Source-native target omitted')
+        need({x.relative_to(root).as_posix()for x in root.rglob('*.so')}=={abi+'/'+name for abi in TARGETS.values()},'Foreign or missing source-native library')
+        for target,abi in TARGETS.items():
+            row=native[kind][target]
+            need(set(row)=={'abi','bytes','sha256'}and row['abi']==abi and type(row['bytes'])is int
+                 and 64<=row['bytes']<=128*1048576 and isinstance(row['sha256'],str)
+                 and HASH.fullmatch(row['sha256']),'Invalid source-native identity row')
+            body=read(root/abi/name,128*1048576,row['sha256'],row['bytes'])
+            bits,machine={'arm64-v8a':(2,183),'armeabi-v7a':(1,40),'x86':(1,3),'x86_64':(2,62)}[abi]
+            need(body[:4]==b'\x7fELF'and body[4]==bits and body[5]==1
+                 and int.from_bytes(body[18:20],'little')==machine,'Source-native ELF ABI differs')
+    return value
+
+
 def load(snapshot,app,core,revision,profile,core_native,sentinel_native,source_native_manifest=None):
-    need(revision==CORE and profile=='android4'and source_native_manifest is None,'New current mode accepts only separately qualified retained normal Guard4')
+    need(revision==CORE and profile=='android4','Exact current Guard4 source/profile required')
     app,core=Path(app).resolve(),Path(core).resolve();snapshot=Path(snapshot).absolute()
     anchor=document(read(app/'config/source-legal-consumer-bindings.json'))
     need(set(anchor)=={'schema','kind','coverage','snapshotSHA256','inputJoinSHA256'}and type(anchor['schema'])is int and anchor['schema']==1
@@ -149,26 +194,38 @@ def load(snapshot,app,core,revision,profile,core_native,sentinel_native,source_n
     raw=read(snapshot,expected=anchor['snapshotSHA256']);record=validate_record(document(raw))
     need(record['inputJoinSHA256']==anchor['inputJoinSHA256'],'Current source/native joins differ')
     verify_source(app,core,record)
+    reference_native={'core':record['core']['nativeLibraries'],'sentinel':record['sentinel']['nativeLibraries']}
+    provenance=None if source_native_manifest is None else source_build_provenance(source_native_manifest,app,core_native,sentinel_native)
+    actual_native=reference_native if provenance is None else provenance['nativeLibraries']
     normal=helper(app/'scripts/normal-core-native.py','current_normal_core')
     cfg=normal.config(app,'guard')
     need(cfg['normalRoleReceiptSHA256']==CORE_ROLE and cfg['features']=='shipped','Current Core normal role differs')
     for target,abi in TARGETS.items():
         row=record['core']['nativeLibraries'][target];need(cfg['libraries'][abi]=={'bytes':row['bytes'],'sha256':row['sha256']},'Current Core native/code binding differs')
-        normal.read(Path(core_native)/abi/'libfoxhole_native.so',128*1048576,row['bytes'],row['sha256'])
+        actual=actual_native['core'][target]
+        normal.read(Path(core_native)/abi/'libfoxhole_native.so',128*1048576,actual['bytes'],actual['sha256'])
     need({p.relative_to(Path(core_native)).as_posix()for p in Path(core_native).rglob('*.so')}=={a+'/libfoxhole_native.so'for a in TARGETS.values()},'Extra or missing current Core JNI refused')
-    verify_native(sentinel_native,record['sentinel']['nativeLibraries'])
+    verify_native(sentinel_native,actual_native['sentinel'])
     payload=snapshot.parent/'payload';need({p.relative_to(payload).as_posix()for p in payload.rglob('*')if p.is_file()or p.is_symlink()}==set(record['files']),'Current legal payload set differs')
     files={}
     for name,row in record['files'].items():
         body=read(payload/name,expected=row['sha256'],size=row['bytes']);body.decode('utf-8')
         need(not any(token in body for token in(b'/Users/',b'/srv/foxhole/',b'-----BEGIN PRIVATE KEY-----'))and not body.startswith((b'\x7fELF',b'PK\x03\x04',b'dex\n',b'\0asm')),'Private or binary material in current legal payload')
         files[name]=body
+    if provenance is not None:
+        files['FDROID-SOURCE-NATIVE.json']=encoded({'schema':1,'kind':'source-native-artifacts-and-reference-legal-context',
+            'sourceBuild':provenance,'referenceNativeLibraries':reference_native,
+            'referenceSnapshotSHA256':digest(raw),'referenceProducerReceipts':{'core':record['core']['normalReceiptSHA256'],'sentinel':record['sentinel']['normalReceiptSHA256']},
+            'scope':'Actual source-native byte bindings are separate from original qualified reference dependency graphs and legal text. Full source-build and runtime acceptance remain separate.'})
     return MappingProxyType({'files':MappingProxyType(files),'snapshotSha256':digest(raw),'coreCommit':CORE,'sourceCommit':CHECKOUT,'sourceTree':CHECKOUT_TREE,
         'appRoot':app,'profile':'android4','currentMode':KIND,'record':record,'snapshotPath':snapshot,
-        'roots':{'core':Path(core_native),'sentinel':Path(sentinel_native)},'nativeLibraries':{'core':record['core']['nativeLibraries'],'sentinel':record['sentinel']['nativeLibraries']},
-        'referenceNativeLibraries':{'core':record['core']['nativeLibraries'],'sentinel':record['sentinel']['nativeLibraries']},'sourceNativeProvenance':None})
+        'roots':{'core':Path(core_native),'sentinel':Path(sentinel_native)},'nativeLibraries':actual_native,
+        'referenceNativeLibraries':reference_native,'sourceNativeProvenance':provenance,
+        'sourceNativeManifestPath':None if source_native_manifest is None else Path(source_native_manifest).absolute()})
 
 
 def recheck(material,core):
-    current=load(material['snapshotPath'],material['appRoot'],core,CORE,'android4',material['roots']['core'],material['roots']['sentinel'])
+    current=load(material['snapshotPath'],material['appRoot'],core,CORE,'android4',material['roots']['core'],material['roots']['sentinel'],material.get('sourceNativeManifestPath'))
     need(current['snapshotSha256']==material['snapshotSha256'],'Current consumer snapshot changed')
+
+    need(current['sourceNativeProvenance']==material['sourceNativeProvenance']and current['nativeLibraries']==material['nativeLibraries']and current['files']==material['files'],'Current source-native proof or material changed')

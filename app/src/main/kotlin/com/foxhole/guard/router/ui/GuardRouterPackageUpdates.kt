@@ -7,32 +7,30 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.selection.toggleable
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import com.foxhole.guard.ui.cli.components.CliButton
-import androidx.compose.ui.graphics.RectangleShape
+import com.foxhole.guard.ui.cli.components.CliPixelProgressBar
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
-import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.semantics.progressBarRangeInfo
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.foxhole.guard.R
 import com.foxhole.guard.router.RouterEngineImpact
-import com.foxhole.guard.router.RouterEngineJobState
 import com.foxhole.guard.router.RouterUpdateAvailability
 import com.foxhole.guard.router.RouterUpdateControlState
 import com.foxhole.guard.router.RouterUpdateFailureReason
-import com.foxhole.guard.router.RouterUpdateStep
+import com.foxhole.guard.router.RouterUpdateOperation
 
 @Composable
 internal fun GuardRouterPackageUpdateRow(state: RouterUpdateControlState, enabled: Boolean, onOpen: () -> Unit) {
@@ -50,94 +48,66 @@ internal fun GuardRouterPackageUpdateRow(state: RouterUpdateControlState, enable
 }
 
 @Composable
-internal fun GuardRouterPackageUpdates(state: RouterUpdateControlState, enabled: Boolean, onAuto: (Boolean) -> Unit) {
+internal fun GuardRouterPackageUpdates(state: RouterUpdateControlState, enabled: Boolean, onAuto: (Boolean) -> Unit,
+    checking: Boolean = false) {
     val status = state.status
-    Text(stringResource(R.string.guard_router_router_updates_scope), style = MaterialTheme.typography.bodyMedium)
-    if (status != null) {
-        status.currentVersion?.let { Text(stringResource(R.string.guard_router_router_updates_current_version, it)) }
-        status.availableVersion?.takeIf { it != status.currentVersion }?.let { Text(stringResource(R.string.guard_router_router_updates_available_version, it)) }
+    val failure = if (state.deviceCheckedCurrent) null else status?.autoUpdate?.suspendedReason ?: status?.failureReason ?: state.failure
+    val statusLabel = when {
+        failure != null -> updateFailureLabel(failure)
+        state.unreachable -> R.string.guard_router_router_updates_unreachable
+        else -> updateAvailabilityLabel(state, checking)
     }
-    Text(stringResource(updateAvailabilityLabel(state)), style = MaterialTheme.typography.titleSmall)
-    if (state.deviceDownloading) {
-        Column(Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite }, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            val percent = state.deviceProgressPercent
-            if (percent == null) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-            else LinearProgressIndicator(progress = { percent / 100f }, modifier = Modifier.fillMaxWidth())
-        }
+    Text(stringResource(statusLabel), style = MaterialTheme.typography.titleSmall,
+        color = if (failure != null || state.unreachable) MaterialTheme.colorScheme.error else androidx.compose.material3.LocalContentColor.current,
+        modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+    status?.takeIf { it.availability == RouterUpdateAvailability.AVAILABLE }?.availableVersion?.let {
+        Text(stringResource(R.string.guard_router_router_updates_available_version, it), style = MaterialTheme.typography.bodyMedium)
     }
-    if (state.pending != null || state.reconnecting) Text(stringResource(R.string.guard_router_router_updates_uncertain))
-    if (state.unreachable) Text(stringResource(R.string.guard_router_router_updates_unreachable))
-    val progress = if (state.deviceDownloading || state.deviceCheckedCurrent) null else state.job?.progress?.takeIf { it.running } ?: status?.activeAutomaticJob ?:
-        state.job?.progress?.takeIf { state.pending == null && !state.reconnecting }
+    val progress = state.job?.progress?.takeIf { it.running && it.operation == RouterUpdateOperation.APPLY }
+        ?: status?.activeAutomaticJob?.takeIf { it.running && it.operation == RouterUpdateOperation.APPLY }
     if (progress != null) {
-        if (progress.automatic) Text(stringResource(R.string.guard_router_router_updates_automatic_job))
         Column(Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite }, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(stringResource(updateStepLabel(progress.step)))
-            LinearProgressIndicator(progress = { progress.progressPercent / 100f }, modifier = Modifier.fillMaxWidth())
+            CliPixelProgressBar(fraction = progress.progressPercent / 100f,
+                modifier = Modifier.fillMaxWidth().semantics {
+                    progressBarRangeInfo = ProgressBarRangeInfo(progress.progressPercent / 100f, 0f..1f)
+                })
             Text(stringResource(R.string.guard_router_router_updates_progress, progress.progressPercent))
         }
-        if (progress.state == RouterEngineJobState.SUCCEEDED) Text(stringResource(R.string.guard_router_router_updates_done))
-        if (progress?.automatic == false && state.job?.previousConnectionRestored == true) Text(stringResource(R.string.guard_router_router_engines_restored))
     }
-    state.plan?.let { plan ->
-        Text(stringResource(R.string.guard_router_router_updates_changes), style = MaterialTheme.typography.titleSmall)
-        plan.changes.forEach { change ->
-            GuardRouterTableRow(Modifier.fillMaxWidth()) {
-                Text(if (change.id == "foxhole") "FoxHole" else when (change.id) {
-                    "hysteria2" -> "Hysteria2"; "vless" -> "VLESS"; else -> "WireGuard"
-                }, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
-                Text(stringResource(R.string.guard_router_router_updates_version_change, change.fromVersion, change.toVersion),
-                    Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
-            }
-        }
-        Text(stringResource(if (plan.impact == RouterEngineImpact.RECONNECT_REQUIRED) R.string.guard_router_router_updates_reconnect_note
-            else R.string.guard_router_router_engines_keep_active), style = MaterialTheme.typography.bodySmall)
+    if (state.canApply && state.plan?.impact == RouterEngineImpact.RECONNECT_REQUIRED) {
+        Text(stringResource(R.string.guard_router_router_updates_reconnect_note), style = MaterialTheme.typography.bodySmall)
     }
-    val failure = if (state.deviceCheckedCurrent) null else status?.autoUpdate?.suspendedReason ?: status?.failureReason ?: state.failure
-    failure?.let { Text(stringResource(updateFailureLabel(it)), color = MaterialTheme.colorScheme.error) }
-    val auto = status?.autoUpdate
-    Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).semantics(mergeDescendants = true) {}.toggleable(value = auto?.enabled == true,
-        enabled = enabled && state.canSetAuto, role = Role.Checkbox, onValueChange = onAuto), verticalAlignment = Alignment.CenterVertically) {
-        Checkbox(checked = auto?.enabled == true, onCheckedChange = null, enabled = enabled && state.canSetAuto)
-        Text(stringResource(R.string.guard_router_router_updates_auto), style = MaterialTheme.typography.bodyMedium)
+    val autoLabel = stringResource(R.string.guard_router_router_updates_auto)
+    Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).semantics(mergeDescendants = true) {},
+        verticalAlignment = Alignment.CenterVertically) {
+        Text(autoLabel, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+        GuardRouterSwitch(checked = status?.autoUpdate?.enabled == true, onCheckedChange = onAuto, enabled = enabled && state.canSetAuto,
+            modifier = Modifier.semantics { contentDescription = autoLabel })
     }
-    Text(stringResource(R.string.guard_router_router_updates_auto_help), style = MaterialTheme.typography.bodySmall, color = LocalGuardRouterColors.current.muted)
 }
 
 @Composable
 internal fun GuardRouterPackageUpdateFooter(state: RouterUpdateControlState, enabled: Boolean, onCheck: () -> Unit,
     onApply: () -> Unit, onRefresh: () -> Unit) {
-    if (state.canApply) CliButton(
-        label = stringResource(R.string.guard_router_router_updates_apply),
-        onClick = onApply,
-        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-        enabled = enabled,
-        filled = false,
-    )
-    if (state.running || state.unreachable || state.supported == null ||
-        state.status?.availability == RouterUpdateAvailability.AVAILABLE && state.plan == null) CliButton(
-            label = stringResource(R.string.guard_router_router_updates_status),
-            onClick = onRefresh,
-            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-            enabled = enabled,
-            filled = false,
-        )
-    else CliButton(
-        label = stringResource(R.string.guard_router_router_updates_check),
-        onClick = onCheck,
-        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-        enabled = enabled && state.canCheck,
+    val refresh = state.running || state.unreachable || state.supported == null ||
+        state.status?.availability == RouterUpdateAvailability.AVAILABLE && state.plan == null
+    CliButton(
+        label = stringResource(if (state.canApply) R.string.guard_router_router_updates_apply else R.string.guard_router_router_updates_check),
+        onClick = when { state.canApply -> onApply; refresh -> onRefresh; else -> onCheck },
+        modifier = Modifier.fillMaxWidth().heightIn(min = GuardRouterActionHeight),
+        enabled = enabled && (state.canApply || refresh || state.canCheck),
         filled = false,
     )
 }
 
-private fun updateAvailabilityLabel(state: RouterUpdateControlState): Int = when {
-    state.deviceDownloading -> R.string.guard_router_router_updates_device_download
+private fun updateAvailabilityLabel(state: RouterUpdateControlState, checking: Boolean = false): Int = when {
+    state.deviceDownloading || checking -> R.string.guard_router_router_updates_checking
     state.deviceCheckedCurrent -> R.string.guard_router_router_updates_current
+    state.pending?.operation == RouterUpdateOperation.CHECK ||
+        state.job?.progress?.let { it.running && it.operation == RouterUpdateOperation.CHECK } == true ||
+        state.status?.activeAutomaticJob?.let { it.running && it.operation == RouterUpdateOperation.CHECK } == true -> R.string.guard_router_router_updates_checking
     state.pending != null || state.reconnecting -> R.string.guard_router_router_updates_waiting
     state.job?.running == true || state.status?.busy == true || state.status?.activeAutomaticJob?.running == true -> R.string.guard_router_router_updates_running
-    state.status?.availability == RouterUpdateAvailability.NOT_CHECKED &&
-        state.status?.coreAvailability == com.foxhole.guard.router.RouterCoreUpdateAvailability.CURRENT -> R.string.guard_router_router_updates_core_current
     state.supported == false -> R.string.guard_router_router_updates_unsupported
     else -> when (state.status?.availability) {
         RouterUpdateAvailability.CURRENT -> R.string.guard_router_router_updates_current
@@ -146,21 +116,6 @@ private fun updateAvailabilityLabel(state: RouterUpdateControlState): Int = when
         RouterUpdateAvailability.CHECK_FAILED -> R.string.guard_router_router_updates_check_failed
         else -> R.string.guard_router_router_updates_not_checked
     }
-}
-
-private fun updateStepLabel(step: RouterUpdateStep): Int = when (step) {
-    RouterUpdateStep.PREPARING -> R.string.guard_router_router_updates_step_preparing
-    RouterUpdateStep.CHECKING_RELEASE -> R.string.guard_router_router_updates_step_release
-    RouterUpdateStep.DOWNLOADING_INDEX -> R.string.guard_router_router_updates_step_index
-    RouterUpdateStep.DOWNLOADING_PACKAGE -> R.string.guard_router_router_updates_step_download
-    RouterUpdateStep.VERIFYING_PACKAGE -> R.string.guard_router_router_updates_step_verifying
-    RouterUpdateStep.BACKING_UP -> R.string.guard_router_router_updates_step_backup
-    RouterUpdateStep.INSTALLING_PACKAGE -> R.string.guard_router_router_updates_step_installing
-    RouterUpdateStep.CHECKING_PACKAGE -> R.string.guard_router_router_updates_step_check
-    RouterUpdateStep.RECONNECTING_VPN -> R.string.guard_router_router_updates_step_reconnect
-    RouterUpdateStep.COMPLETED -> R.string.guard_router_router_updates_done
-    RouterUpdateStep.FAILED -> R.string.guard_router_router_engines_failed
-    RouterUpdateStep.RECOVERY_REQUIRED -> R.string.guard_router_router_engines_recovery
 }
 
 private fun updateFailureLabel(reason: RouterUpdateFailureReason): Int = when (reason) {

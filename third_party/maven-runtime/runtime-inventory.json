@@ -8054,8 +8054,8 @@
   },
   "app_identity": {
     "applicationId": "com.foxhole.guard",
-    "versionName": "1.0.6",
-    "versionCode": 180
+    "versionName": "1.0.7",
+    "versionCode": 181
   },
   "gradle_version": "9.6.1",
   "offline": true,
@@ -9248,49 +9248,49 @@
       "id": "project::app",
       "kind": "project",
       "name": "app",
-      "version": "1.0.6",
+      "version": "1.0.7",
       "projectPath": ":app"
     },
     {
       "id": "project::core:importer",
       "kind": "project",
       "name": "importer",
-      "version": "1.0.6",
+      "version": "1.0.7",
       "projectPath": ":core:importer"
     },
     {
       "id": "project::core:model",
       "kind": "project",
       "name": "model",
-      "version": "1.0.6",
+      "version": "1.0.7",
       "projectPath": ":core:model"
     },
     {
       "id": "project::core:network",
       "kind": "project",
       "name": "network",
-      "version": "1.0.6",
+      "version": "1.0.7",
       "projectPath": ":core:network"
     },
     {
       "id": "project::core:profile",
       "kind": "project",
       "name": "profile",
-      "version": "1.0.6",
+      "version": "1.0.7",
       "projectPath": ":core:profile"
     },
     {
       "id": "project::core:runtime",
       "kind": "project",
       "name": "runtime",
-      "version": "1.0.6",
+      "version": "1.0.7",
       "projectPath": ":core:runtime"
     },
     {
       "id": "project::core:sentinel",
       "kind": "project",
       "name": "sentinel",
-      "version": "1.0.6",
+      "version": "1.0.7",
       "projectPath": ":core:sentinel"
     }
   ],
@@ -21741,10 +21741,10 @@
   ],
   "pom_errors": [],
   "source_sha256": {
-    "build.gradle.kts": "fedaee22103447b4f1086405a10946cb19cbccd92c5bb73eea3c1b660d6636f3",
+    "build.gradle.kts": "2a7d3a0d4f5f2e7a2161ba9db48bed7033dab88601ad539cb5809dcdef7a26e8",
     "settings.gradle.kts": "1ed609b2ea8f4bc9aeb00aa84799d90a6d3abc08a072d5a8b5373515e645e363",
     "gradle.properties": "6e4df59398dc356f917839ee3b605c021f7089e6627e3f484597916c334b0a81",
-    "app/build.gradle.kts": "57b9d60f82c42241fa5ebebf824c22f71cd4f6c35e995ac9dc6a3966e00d7f1b",
+    "app/build.gradle.kts": "bb3fc5290b204bb9dad942787ba64c7949cf19cf0e46876749238e6ba9cbfd31",
     "core/model/build.gradle.kts": "fc3fe8dc73fdc65871eeb5120ba2c96d0ee97205b1f11f170cc18a959aeb0a69",
     "core/network/build.gradle.kts": "37caa5cb68e71d03ef64fcb61fa87628f778393c7e186541714ff6a2ea1853a0",
     "core/importer/build.gradle.kts": "c99dd464e1135c2bc7942911d4908d06424e5a5790d65009397026e29d077de8",

@@ -60,7 +60,7 @@ private fun verifyRouterRepositoryAuthenticationFor(value: JsonObject, packageVa
         require(file.matches(REPOSITORY_FILE) && file !in packages && file !in keys)
         val role = index.repositoryText("role")
         require(role in setOf("foxhole", "upstream"))
-        repositorySource(index.repositoryText("sourceUrl"), role, value, architecture)
+        requireRouterRepositorySource(index.repositoryText("sourceUrl"), role, value, architecture)
         val trusted = index.repositoryStrings("trustKeyFiles", 1..16)
         require(trusted.toSet().size == trusted.size)
         if (role == "foxhole") require(trusted == listOf(CANONICAL_REPOSITORY_KEY_FILE))
@@ -86,9 +86,15 @@ private fun verifyRouterRepositoryAuthenticationFor(value: JsonObject, packageVa
             authentication.repositoryText("packageIdentity").matches(REPOSITORY_HASH))
         val expectedRole = if (packageValue.repositoryText("name") in ownPackages) "foxhole" else "upstream"
         require(index.repositoryText("role") == expectedRole)
+        if (expectedRole == "foxhole" && index.repositoryText("sourceUrl").startsWith("https://github.com/foxhole-team/foxhole-core/"))
+            requireRouterCoreModuleOrigin(index.repositoryText("sourceUrl"), packageValue.repositoryText("name"), packageValue.repositoryText("version"))
         file
     }
     require(authenticated.size == authentications.size && authenticated.keys == packages.keys)
+    val moduleOrigins = authentications.filter { it.repositoryText("name").startsWith("foxcore-engine-") }.map {
+        routerModuleReleaseOrigin(requireNotNull(indexes[it.repositoryText("indexFile")]).repositoryText("sourceUrl"))
+    }.distinct()
+    require(moduleOrigins.size <= 1)
     val expectedFiles = packages.mapValues { it.value.repositoryText("sha256") } +
         indexes.mapValues { it.value.repositoryText("sha256") } + keys.mapValues { it.value.repositoryText("sha256") }
     val declared = value["filesSha256"] as? JsonObject ?: repositoryInvalid()
@@ -103,14 +109,17 @@ private fun verifyRouterRepositoryAuthenticationFor(value: JsonObject, packageVa
     return RouterRepositoryBytes(indexBytes, keyBytes)
 }
 
-private fun repositorySource(raw: String, role: String, value: JsonObject, architecture: String) {
+internal fun requireRouterRepositorySource(raw: String, role: String, value: JsonObject, architecture: String) {
+    require(role in setOf("foxhole", "upstream"))
     require(raw.length in 1..4096 && raw.none(Char::isISOControl))
     val uri = try { URI(raw) } catch (_: Exception) { repositoryInvalid() }
     val path = uri.rawPath ?: repositoryInvalid()
     require(uri.scheme == "https" && uri.userInfo == null && uri.port == -1 && uri.rawQuery == null && uri.rawFragment == null &&
         !uri.isOpaque && '%' !in path && path.split('/').none { it == "." || it == ".." })
     if (role == "foxhole") {
-        require(uri.host == "github.com" && uri.rawPath.matches(Regex("/foxhole-team/foxhole-openwrt-client/releases/download/v[0-9]+\\.[0-9]+\\.[0-9]+(?:[-+][A-Za-z0-9.-]+)?/[A-Za-z0-9][A-Za-z0-9._-]{0,159}\\.adb")))
+        require(uri.host == "github.com")
+        if (uri.rawPath.startsWith("/foxhole-team/foxhole-core/")) routerModuleReleaseOrigin(raw)
+        else require(uri.rawPath.matches(Regex("/foxhole-team/foxhole-openwrt-client/releases/download/v[0-9]+\\.[0-9]+\\.[0-9]+(?:[-+][A-Za-z0-9.-]+)?/[A-Za-z0-9][A-Za-z0-9._-]{0,159}\\.adb")))
     } else {
         require(uri.host == "downloads.openwrt.org")
         val parts = uri.rawPath.removePrefix("/").split('/')

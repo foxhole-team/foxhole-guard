@@ -1,0 +1,8 @@
+- Fixed initial router installation and setup through the app
+- Updated Tor transports Lyrebird and conjure-client
+- Updated help sections
+- Improved Sentinel reports and scan history
+- Updated the router management interface
+- General interface improvements
+- Improved Sentinel app selection and data downloads
+- Tor, I2P, firewall and Sentinel settings are available in user mode

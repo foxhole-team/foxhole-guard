@@ -18,15 +18,14 @@
     <string name="site_mask_required">请输入网页地址、域名掩码或 IP 规则。</string>
     <string name="site_mask_unsupported">当前引擎不支持关键词 (kw:) 和正则表达式 (re:) 规则。</string>
     <string name="site_mask_legacy_unsupported">此已保存的 kw:/re: 规则不受当前引擎支持。规则已保留；请删除或替换为支持的主机/IP 规则。</string>
-    <string name="cli_release_notes_web_filters">改进了网页地址路由筛选器。</string>
-    <string name="cli_release_notes_notice_style">改进了通知的视觉样式。</string>
-    <string name="guard_router_router_updates_core_current">Core 模块已是最新；等待检查软件包</string>
-    <string name="site_mask_exact_example">example.com\nfull:example.com</string>
-    <string name="site_mask_suffix_example">*.example.com\n.example.com\n+.example.com\ndomain:example.com\nsuffix:example.com</string>
-    <string name="site_mask_zone_example">ru · .ru · *.ru\nzone:ru · suffix:ru\n*.co.uk</string>
-    <string name="site_mask_url_example">https://example.com:443/page?q=1\nexample.com/path</string>
-    <string name="site_mask_idn_example">пример.рф\nfaß.de</string>
-    <string name="site_mask_ip_example">192.0.2.1\n2001:db8::1</string>
-    <string name="site_mask_cidr_example">192.0.2.99/24\ncidr:2001:db8::/32</string>
-    <string name="site_mask_range_example">192.0.2.3-192.0.2.9\nrange:2001:db8::1-2001:db8::ffff</string>
+    <string name="cli_release_notes_web_filters">改进了网页地址路由筛选器</string>
+    <string name="cli_release_notes_notice_style">改进了通知的视觉样式</string>
+<string name="site_mask_exact_example">example.com full:example.com</string>
+    <string name="site_mask_suffix_example">*.example.com .example.com +.example.com domain:example.com suffix:example.com</string>
+    <string name="site_mask_zone_example">ru · .ru · *.ru zone:ru · suffix:ru *.co.uk</string>
+    <string name="site_mask_url_example">https://example.com:443/page?q=1 example.com/path</string>
+    <string name="site_mask_idn_example">пример.рф faß.de</string>
+    <string name="site_mask_ip_example">192.0.2.1 2001:db8::1</string>
+    <string name="site_mask_cidr_example">192.0.2.99/24 cidr:2001:db8::/32</string>
+    <string name="site_mask_range_example">192.0.2.3-192.0.2.9 range:2001:db8::1-2001:db8::ffff</string>
 </resources>

@@ -1,0 +1,12 @@
+<resources>
+    <string name="router_transfer_title">اختيار ملفات VPN</string>
+    <string name="router_transfer_body">ستُرسل ملفات VPN المحددة إلى الموجّه.</string>
+    <string name="router_transfer_empty">لا توجد ملفات VPN محفوظة ومتوافقة.</string>
+    <string name="router_transfer_failed">تعذّر التحقق من ملفات VPN المتاحة.</string>
+    <string name="router_transfer_retry">تحديث</string>
+    <string name="router_transfer_done">الملفات المرسلة: %1$d</string>
+    <string name="router_transfer_partial">تم إرسال %1$d من أصل %2$d من الملفات.</string>
+    <string name="router_transfer_add">إضافة ملفات VPN</string>
+    <string name="router_transfer_save">نقل</string>
+    <string name="router_transfer_cancel">إلغاء</string>
+</resources>

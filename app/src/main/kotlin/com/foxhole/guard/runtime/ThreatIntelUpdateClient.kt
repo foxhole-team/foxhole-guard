@@ -4,7 +4,6 @@ import com.foxhole.core.model.ThreatIntelDocument
 import com.foxhole.core.network.RemoteHostResolver
 import com.foxhole.core.network.ensurePublicHttpsUrl
 import com.foxhole.core.network.requirePublicHttpsUrl
-import com.foxhole.core.runtime.network.PublicRemoteDns
 import com.foxhole.guard.BuildConfig
 import com.foxhole.guard.core.data.executeCancellableResponse
 import com.foxhole.guard.core.data.withBoundedRemoteFetchTimeouts
@@ -35,6 +34,9 @@ interface ThreatIntelStore {
     ): String
 
     fun installedGeneratedAt(): String? = null
+
+    // A validated local payload identity permits a verified repeat download without allowing equivocation.
+    fun installedArtifactSha256(): String? = null
 }
 
 @Serializable
@@ -119,7 +121,7 @@ class ThreatIntelUpdateClient(
                             readTimeoutMs = THREAT_INTEL_READ_TIMEOUT_MS,
                             callTimeoutMs = THREAT_INTEL_CALL_TIMEOUT_MS,
                         ).newBuilder()
-                        .dns(PublicRemoteDns(httpClient.dns::lookup))
+                        .dns(publicUpdateDns(httpClient, resolver))
                         .connectTimeout(THREAT_INTEL_CONNECT_TIMEOUT_MS, TimeUnit.MILLISECONDS)
                         .readTimeout(THREAT_INTEL_READ_TIMEOUT_MS, TimeUnit.MILLISECONDS)
                         .callTimeout(THREAT_INTEL_CALL_TIMEOUT_MS, TimeUnit.MILLISECONDS)
@@ -134,7 +136,7 @@ class ThreatIntelUpdateClient(
                 requireVerifiedManifestSignature(manifestBytes, signatureBytes)
                 val manifest = json.decodeFromString<ThreatIntelManifest>(manifestBytes.toString(Charsets.UTF_8))
                 manifest.requireValid()
-                manifest.requireNotARollbackOf(store.installedGeneratedAt())
+                manifest.requireNotARollbackOf(store)
                 val artifactUrl =
                     requireNotNull(manifestHttpUrl.resolve(manifest.artifact.file)) {
                         "invalid artifact url"
@@ -195,18 +197,22 @@ class ThreatIntelUpdateClient(
         }
     }
 
-    private fun ThreatIntelManifest.requireNotARollbackOf(installedGeneratedAt: String?) {
+    private fun ThreatIntelManifest.requireNotARollbackOf(store: ThreatIntelStore) {
+        val installedGeneratedAt = store.installedGeneratedAt()
         val installed =
             installedGeneratedAt
                 ?.let { stamp -> runCatching { Instant.parse(stamp) }.getOrNull() }
                 ?: return
         val incoming = Instant.parse(generatedAt)
-        if (!incoming.isAfter(installed)) {
+        if (incoming.isBefore(installed)) {
             throw ThreatIntelUpdateException(
                 "threat intel feed is not newer than the installed one " +
                     "(incoming=$generatedAt installed=$installedGeneratedAt)",
                 retryable = false,
             )
+        }
+        if (incoming == installed && store.installedArtifactSha256() != artifact.sha256) {
+            throw ThreatIntelUpdateException("threat intel content differs at the installed generation", retryable = false)
         }
     }
 

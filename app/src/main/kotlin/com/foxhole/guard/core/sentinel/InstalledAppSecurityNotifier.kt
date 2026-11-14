@@ -42,18 +42,15 @@ class InstalledAppSecurityNotifier(
         ensureChannel()
         val source =
             summary.installerPackageName
-                ?: appContext.getString(R.string.installed_app_source_unknown)
-        val risk = appContext.getString(summary.riskLevel.labelRes())
-        val signals = summary.riskSignals.joinToString(", ") { signal -> appContext.getString(signal.labelRes()) }
-            .ifBlank { appContext.getString(R.string.installed_app_risk_signals_none) }
-        val body =
-            appContext.getString(
-                R.string.installed_app_notification_body,
-                summary.label,
-                source,
-                risk,
-                signals,
-            )
+                ?: appContext.getString(R.string.sentinel_assessment_installer_unknown)
+        val body = appContext.getString(
+            R.string.sentinel_assessment_notification_body,
+            summary.label,
+            source,
+            appContext.getString(summary.assessment.status.assessmentStatusLabelRes()),
+            appContext.getString(summary.assessment.threatConfidence.confidenceLabelRes()),
+            appContext.getString(R.string.sentinel_assessment_context),
+        )
         val builder =
             NotificationCompat.Builder(appContext, CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_notification_app_guard)

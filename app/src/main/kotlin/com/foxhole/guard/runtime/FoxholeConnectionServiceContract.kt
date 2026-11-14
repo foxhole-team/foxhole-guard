@@ -39,6 +39,17 @@ internal enum class ForegroundServiceStartBlockReason {
 internal object FoxholeConnectionServiceContract {
     const val ACTION_CONNECT = "com.foxhole.guard.action.CONNECT"
     const val ACTION_DISCONNECT = "com.foxhole.guard.action.DISCONNECT"
+    const val ACTION_ROUTER_OWNED_CONNECT = "com.foxhole.guard.action.ROUTER_OWNED_CONNECT"
+    private const val EXTRA_ROUTER_SMART_TOKEN = "router_smart_token"
+    const val ACTION_ROUTER_OWNED_DISCONNECT = "com.foxhole.guard.action.ROUTER_OWNED_DISCONNECT"
+    private const val EXTRA_ROUTER_NATIVE_GENERATION = "router_native_generation"
+    private const val EXTRA_ROUTER_NETWORK_HANDLE = "router_network_handle"
+    private const val EXTRA_ROUTER_REQUEST_GENERATION = "router_request_generation"
+    private const val EXTRA_ROUTER_WIFI_HANDLE = "router_wifi_handle"
+    private const val EXTRA_ROUTER_LAN_ADDRESS = "router_lan_address"
+    private const val EXTRA_ROUTER_LAN_PORT = "router_lan_port"
+    private const val EXTRA_ROUTER_VERIFIED_AT = "router_verified_at"
+    private const val EXTRA_ROUTER_AUTHORITY_REVISION = "router_authority_revision"
     const val ACTION_KILL = "com.foxhole.guard.action.KILL"
     const val ACTION_KILL_TOR = "com.foxhole.guard.action.KILL_TOR"
     const val ACTION_RELOAD = "com.foxhole.guard.action.RELOAD"
@@ -84,6 +95,66 @@ internal object FoxholeConnectionServiceContract {
                 if (protocolTestTrafficFreeze) putExtra(EXTRA_PROTOCOL_TEST_TRAFFIC_FREEZE, true)
                 if (replaceActiveTunnel) putExtra(EXTRA_REPLACE_ACTIVE_TUNNEL, true)
             }
+
+    fun routerOwnedDisconnectIntent(context: Context, owner: RouterOwnedDisconnect): Intent =
+        Intent(context, serviceClass()).setAction(ACTION_ROUTER_OWNED_DISCONNECT)
+            .putExtra(EXTRA_PROFILE_ID, owner.profileId)
+            .putExtra(EXTRA_PROTOCOL_OPTION_ID, owner.protocolOptionId)
+            .putExtra(EXTRA_ROUTER_NATIVE_GENERATION, owner.nativeGeneration)
+            .putExtra(EXTRA_ROUTER_NETWORK_HANDLE, owner.networkHandle)
+            .putExtra(EXTRA_ROUTER_REQUEST_GENERATION, owner.requestGeneration)
+            .putExtra(EXTRA_ROUTER_WIFI_HANDLE, owner.wifiNetworkHandle)
+            .putExtra(EXTRA_ROUTER_LAN_ADDRESS, owner.lanAddress)
+            .putExtra(EXTRA_ROUTER_LAN_PORT, owner.lanPort)
+            .putExtra(EXTRA_ROUTER_VERIFIED_AT, owner.verifiedAtElapsedMs)
+            .putExtra(EXTRA_ROUTER_AUTHORITY_REVISION, owner.authorityRevision)
+            .putExtra(EXTRA_ROUTER_SMART_TOKEN, owner.smartToken)
+
+    fun routerOwnedDisconnect(intent: Intent): RouterOwnedDisconnect? {
+        if (intent.action != ACTION_ROUTER_OWNED_DISCONNECT) return null
+        val profile = intent.getLongExtra(EXTRA_PROFILE_ID, -1L)
+        val native = intent.getLongExtra(EXTRA_ROUTER_NATIVE_GENERATION, -1L)
+        val network = intent.getLongExtra(EXTRA_ROUTER_NETWORK_HANDLE, -1L)
+        val request = intent.getLongExtra(EXTRA_ROUTER_REQUEST_GENERATION, -1L)
+        val wifi = intent.getLongExtra(EXTRA_ROUTER_WIFI_HANDLE, -1L)
+        val address = intent.getStringExtra(EXTRA_ROUTER_LAN_ADDRESS) ?: return null
+        val port = intent.getIntExtra(EXTRA_ROUTER_LAN_PORT, -1)
+        val verifiedAt = intent.getLongExtra(EXTRA_ROUTER_VERIFIED_AT, -1L)
+        val authority = intent.getLongExtra(EXTRA_ROUTER_AUTHORITY_REVISION, -1L)
+        if (profile <= 0 || native <= 0 || network <= 0 || request < 0 || wifi <= 0 || verifiedAt < 0 || authority < 0 ||
+            port !in 1..65535 || com.foxhole.guard.router.routerLanAddress(address) == null) return null
+        val smart = intent.getStringExtra(EXTRA_ROUTER_SMART_TOKEN)
+        if (smart != null && !validRouterSmartToken(smart)) return null
+        return RouterOwnedDisconnect(profile, intent.getStringExtra(EXTRA_PROTOCOL_OPTION_ID), native, network, request,
+            wifi, address, port, verifiedAt, authority, smart)
+    }
+
+    fun routerOwnedConnectIntent(context: Context, owner: RouterOwnedResume): Intent =
+        Intent(context, serviceClass()).setAction(ACTION_ROUTER_OWNED_CONNECT)
+            .putExtra(EXTRA_ROUTER_SMART_TOKEN, owner.token).putExtra(EXTRA_PROFILE_ID, owner.profileId)
+            .putExtra(EXTRA_PROTOCOL_OPTION_ID, owner.protocolOptionId)
+            .putExtra(EXTRA_ROUTER_REQUEST_GENERATION, owner.requestGeneration)
+            .putExtra(EXTRA_ROUTER_AUTHORITY_REVISION, owner.authorityRevision)
+    fun routerOwnedConnect(intent: Intent): RouterOwnedResume? {
+        if (intent.action != ACTION_ROUTER_OWNED_CONNECT) return null
+        val token = intent.getStringExtra(EXTRA_ROUTER_SMART_TOKEN) ?: return null
+        val profile = intent.getLongExtra(EXTRA_PROFILE_ID, -1)
+        val request = intent.getLongExtra(EXTRA_ROUTER_REQUEST_GENERATION, -1)
+        val authority = intent.getLongExtra(EXTRA_ROUTER_AUTHORITY_REVISION, -1)
+        val option = intent.getStringExtra(EXTRA_PROTOCOL_OPTION_ID)
+        return routerOwnedResumeFromFields(token, profile, option, request, authority)
+    }
+    fun requestRouterOwnedConnect(context: Context, owner: RouterOwnedResume): Boolean =
+        startForegroundServiceSafely(context, TrafficMode.TUNNEL, ACTION_ROUTER_OWNED_CONNECT,
+            routerOwnedConnectIntent(context, owner)) is ForegroundRuntimeStartResult.Started
+
+    fun requestRouterOwnedDisconnect(context: Context, owner: RouterOwnedDisconnect) {
+        // This automatic operation never starts a new foreground runtime or publishes a generic stop.
+        if (!serviceLive.get()) return
+        try { context.startService(routerOwnedDisconnectIntent(context, owner)) }
+        catch (_: IllegalStateException) { /* Already stopped or background start rejected: leave VPN alone. */ }
+        catch (_: SecurityException) { /* Never substitute an unconditional stop on failure. */ }
+    }
 
     fun disconnectIntent(
         context: Context,

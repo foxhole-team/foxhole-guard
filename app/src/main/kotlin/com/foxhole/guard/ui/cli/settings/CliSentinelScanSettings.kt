@@ -14,9 +14,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.foxhole.core.model.ApkScanCost
-import com.foxhole.core.model.InterfaceMode
 import com.foxhole.guard.R
 import com.foxhole.guard.core.sentinel.scanner.SentinelScanStage
+import com.foxhole.guard.ui.cli.sentinel.SentinelScanActions
 import com.foxhole.guard.ui.HomeViewModel
 import com.foxhole.guard.ui.cancelSentinelScan
 import com.foxhole.guard.ui.cli.CliSpacing
@@ -32,54 +32,39 @@ import com.foxhole.guard.ui.requestSentinelBaseline
 import com.foxhole.guard.ui.requestSentinelPackage
 import com.foxhole.guard.ui.sentinelScanAvailable
 import com.foxhole.guard.ui.sentinelScanState
+import com.foxhole.guard.ui.sentinelReportHistory
+import com.foxhole.guard.ui.cli.sentinel.SentinelReportDetailSheet
 import com.foxhole.guard.ui.updateSentinelScanSettings
 
 @Composable
 internal fun CliSentinelScanSettings(viewModel: HomeViewModel) {
     val ui by viewModel.uiState.collectAsStateWithLifecycle()
     val scanState by viewModel.sentinelScanState.collectAsStateWithLifecycle()
+    val reportHistory by viewModel.sentinelReportHistory.collectAsStateWithLifecycle()
+    var selectedReport by rememberSaveable { mutableStateOf<String?>(null) }
+    val report = scanState.lastReport?.takeIf { it.id == selectedReport }
+        ?: reportHistory.reports.firstOrNull { it.id == selectedReport }
+    report?.let { SentinelReportDetailSheet(it, onDismiss = { selectedReport = null }) }
     val policy = ui.settings.anomaly.apkScan
     val available = viewModel.sentinelScanAvailable
-    val running = scanState.stage == SentinelScanStage.RUNNING
-    var selected by remember { mutableStateOf<String?>(null) }
     var expertExpanded by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(ui.settings.anomaly.enabled, policy) { viewModel.refreshSentinelScanPolicy() }
     CliPanel(title = stringResource(R.string.sentinel_static_title), icon = R.drawable.lin_shield) {
-        CliDropdownRow(
-            label = stringResource(R.string.sentinel_static_select_app),
-            value = ui.installedApps.firstOrNull { it.packageName == selected }?.label ?: "—",
-            options = ui.installedApps.map { CliDropdownOption(it.packageName, it.label) },
-            selectedId = selected.orEmpty(),
-            onSelect = { selected = it },
+        SentinelScanActions(
+            ui.installedApps, scanState, ui.settings.anomaly.enabled, available,
+            viewModel::requestSentinelPackage, viewModel::requestSentinelBaseline, viewModel::cancelSentinelScan,
         )
-        CliActionRow(
-            label = stringResource(R.string.sentinel_static_run),
-            onTap = { selected?.let(viewModel::requestSentinelPackage) },
-            enabled = ui.settings.anomaly.enabled && available && selected != null && !running,
-        )
-        CliActionRow(
-            label = stringResource(R.string.sentinel_static_baseline),
-            onTap = viewModel::requestSentinelBaseline,
-            enabled = ui.settings.anomaly.enabled && available && !running,
-        )
-        if (running) {
-            CliActionRow(
-                label = stringResource(R.string.sentinel_static_cancel),
-                onTap = viewModel::cancelSentinelScan
-            )
+        scanState.lastReport?.let { current ->
+            CliActionRow(stringResource(R.string.sentinel_report_open), onTap = { selectedReport = current.id })
         }
-        Text(
-            stringResource(scanState.stage.scanStageResource()),
-            style = CliType.small,
-            color = LocalCliColors.current.dim
-        )
-        CliSentinelScanProgress(scanState, ui.installedApps)
         if (scanState.journalDeferred) {
             Text(
                 stringResource(R.string.sentinel_static_journal_deferred),
                 style = CliType.small
             )
         }
+        if (scanState.reportDeferred) Text(stringResource(R.string.sentinel_report_unsaved), style = CliType.small, color = LocalCliColors.current.warn)
+        if (reportHistory.unavailable) Text(stringResource(R.string.sentinel_report_unavailable), style = CliType.small, color = LocalCliColors.current.warn)
         if (!available) Text(stringResource(R.string.sentinel_static_engine_unavailable), style = CliType.small)
         Text(
             stringResource(R.string.sentinel_static_coverage_note),
@@ -87,7 +72,6 @@ internal fun CliSentinelScanSettings(viewModel: HomeViewModel) {
             color = LocalCliColors.current.dim
         )
     }
-    if (ui.settings.ui.interfaceMode != InterfaceMode.EXPERT) return
     CliToggleRow(
         label = stringResource(R.string.sentinel_static_expert),
         checked = expertExpanded,

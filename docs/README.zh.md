@@ -2,7 +2,7 @@
 
 <div align="center">
 
-**FoxHole Guard** 是 Android 网络防护、隐私保护和本地网络活动管理工具。
+**FoxHole Guard** 是一款Android应用，提供VPN、Tor、I2P、应用流量路由和本地网络活动监控。
 
 </div>
 
@@ -17,7 +17,7 @@
 
 <div align="center">
 
-[English](../README.md) · [Русский](README.ru.md) · [Deutsch](README.de.md) · [Français](README.fr.md) · [Español](README.es.md) · [日本語](README.ja.md) · [简体中文](README.zh.md) · [العربية](README.ar.md)
+[🇬🇧 English](../README.md) · [🇷🇺 Русский](README.ru.md) · [🇩🇪 Deutsch](README.de.md) · [🇫🇷 Français](README.fr.md) · [🇪🇸 Español](README.es.md) · [🇯🇵 日本語](README.ja.md) · [🇨🇳 **简体中文**](README.zh.md) · [🇸🇦 العربية](README.ar.md)
 
 </div>
 
@@ -28,23 +28,50 @@
   <a href="https://apps.obtainium.imranr.dev/redirect?r=obtainium://app/%7B%22id%22%3A%22com.foxhole.guard%22%2C%22url%22%3A%22https%3A%2F%2Fgithub.com%2Ffoxhole-team%2Ffoxhole-guard%22%2C%22author%22%3A%22FoxHole%20Team%22%2C%22name%22%3A%22FoxHole%20Guard%22%2C%22preferredApkIndex%22%3A0%2C%22additionalSettings%22%3A%22%7B%5C%22apkFilterRegEx%5C%22%3A%5C%22arm64-v8a%5B.%5Dapk%24%5C%22%2C%5C%22invertAPKFilter%5C%22%3Afalse%2C%5C%22verifyLatestTag%5C%22%3Atrue%7D%22%2C%22overrideSource%22%3A%22GitHub%22%7D" title="Obtainium · ARM64"><img src="https://img.shields.io/badge/Obtainium-add%20app-1A73E8?style=flat-square" alt="Get it on Obtainium · ARM64"></a>
 </p>
 
+<div align="center">
+
 ![Platform](https://img.shields.io/badge/platform-Android-3DDC84?style=flat-square&logo=android&logoColor=white)
 ![Core](https://img.shields.io/badge/core-Rust-000000?style=flat-square&logo=rust&logoColor=white)
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-007ec6?style=flat-square)](https://www.gnu.org/licenses/gpl-3.0.html)
 ![Telemetry](https://img.shields.io/badge/telemetry-none-success?style=flat-square)
 ![❤️ We support I2P](https://img.shields.io/badge/❤️_We_support-I2P-7B1FA2?style=flat-square)
 
-<p align="center">
-  <strong>仅 VPN 版本</strong><br>
-  <strong>FoxHole VPN</strong> — 基于 FoxHole Core 的精简版 Android VPN 客户端，<br>
-  不包含 Guard 的额外防护和监控工具。
-</p>
+</div>
 
-<p align="center">
-  <a href="https://github.com/foxhole-team/foxhole-vpn"><strong>了解更多 FoxHole VPN 信息 →</strong></a>
-  &nbsp;·&nbsp;
-  <a href="https://github.com/foxhole-team/foxhole-vpn/releases">下载 APK</a>
-</p>
+<a id="ecosystem"></a>
+<a id="-foxhole生态系统"></a>
+
+<div align="center">
+
+**FoxHole ecosystem**
+
+[**FoxHole Guard**](https://github.com/foxhole-team/foxhole-guard) · [FoxHole VPN](https://github.com/foxhole-team/foxhole-vpn) · [FoxHole Core](https://github.com/foxhole-team/foxhole-core) · [FoxHole OpenWRT](https://github.com/foxhole-team/foxhole-openwrt-client) · [FoxHole DB](https://github.com/foxhole-team/foxhole-db)
+
+<details>
+<summary>项目职责</summary>
+
+| 项目 | 用途 |
+| --- | --- |
+| [**FoxHole Guard**](https://github.com/foxhole-team/foxhole-guard) | Android：VPN、Tor/I2P、流量规则和本地监控 |
+| [FoxHole VPN](https://github.com/foxhole-team/foxhole-vpn) | Android：简洁VPN客户端及已配对OpenWrt管理 |
+| [FoxHole Core](https://github.com/foxhole-team/foxhole-core) | 共用Rust网络核心；功能取决于构建 |
+| [FoxHole OpenWrt](https://github.com/foxhole-team/foxhole-openwrt-client) | 路由器VPN及局域网管理 |
+| [FoxHole DB](https://github.com/foxhole-team/foxhole-db) | 签名规则和参考数据 |
+
+</details>
+
+</div>
+
+
+我们利用自己的时间和资源开发和维护FoxHole Guard，并在开发中使用AI工具。您的支持能让我们为项目投入更多时间。[支持开发 →](#cryptocurrency-wallets)
+
+<div align="center">
+
+🔗 **VPN 专用客户端:** [FoxHole VPN](https://github.com/foxhole-team/foxhole-vpn) · [下载 APK →](https://github.com/foxhole-team/foxhole-vpn/releases)
+
+更简单的 Android 客户端，用于 VPN 连接和管理已配对的 OpenWrt 路由器，不含 Guard 的额外保护与监控工具。
+
+</div>
 
 已发布版本和 APK 列在 [GitHub Releases](https://github.com/foxhole-team/foxhole-guard/releases) 中。
 
@@ -64,11 +91,18 @@
 
 <a id="whats-new"></a>
 
-> **🆕 更新内容 - 1.0.6 Stable**
+> **🆕 更新内容 - 1.0.7 Stable**
 >
-> - 新增 Android 7 支持。
-> - 改进了网页地址路由筛选器。
-> - 改进了通知的视觉样式。
+> - 修复了通过应用首次安装和设置路由器的问题
+> - 已更新Tor传输组件Lyrebird和conjure-client
+> - 更新了帮助章节
+> - 改进了 Sentinel 报告和扫描历史记录
+> - 更新了路由器管理界面
+> - 改进整体界面
+> - 改进 Sentinel 应用选择和数据下载
+> - 用户模式下可使用 Tor、I2P、防火墙及 Sentinel 设置
+
+[完整更改日志](CHANGELOG.md) · [应用更新连续性与限制](app-update-continuation.md).
 
 <a id="quickstart"></a>
 
@@ -176,6 +210,21 @@ modules  ·  extensions  ·  background services
 
 VPN 活动时，将全设备流量同时交给 Tor 存在限制。如果 Tor 在活动 VPN 隧道之外运行，将使用指定应用场景。局域网代理的 Mixed 模式将 SOCKS5 流量交给 VPN，将 HTTP CONNECT 流量交给 Tor。
 
+“整个设备”定义捕获范围，仍受路由例外约束，并不表示所有协议均经过 Tor。在 Tor + VPN 模式下，UDP 默认经过 VPN，不获得 Tor 匿名性；UDP 策略也可将其阻止。仅 Tor 模式会阻止非 DNS 的 UDP。
+
+<a id="route-capabilities"></a>
+
+### 路由兼容性
+
+| 功能 | 兼容的流代理路由 | WireGuard / AmneziaWG 数据包隧道 |
+| --- | --- | --- |
+| DNS 解析器 | 所选路由支持的 Guard DNS | 必须提供配置中的数字 DNS 地址，以 `real_ip` 模式向 Android 声明 |
+| 本地 DNS 拦截 / 过滤 | 已启用且路由支持时可用 | 不可用 |
+| DoQ / DoH3 最终解析器 | 仅限兼容路由 | 拒绝 |
+| I2P 路径 / 局域网代理 | 须满足各自前提条件 | 不可用 |
+
+如果已启用的必需 DNS 过滤类别无法在原生配置中表达，会拒绝准备会话，不会静默绕过过滤。此表描述 Guard 当前应用路径，并不代表其他 Core 构建的全部能力。
+
 ### 🔀 流量路由规则
 
 规则在当前模式与场景中生效：
@@ -195,7 +244,9 @@ VPN 活动时，将全设备流量同时交给 Tor 存在限制。如果 Tor 在
 | 网站地址规则 | 应用 | 应用 |
 在**整个设备**场景中，不应用单独为应用分配VPN或Tor的规则。应用阻止、排除规则及Web地址规则仍在活动路由范围内生效。应用阻止需要系统隧道和防火墙运行。
 
-路由规则以原子方式应用。场景更改默认也以原子方式应用，可在设置中关闭此行为。
+受支持的规则策略重载会原子发布。应用侧受保护的实时切换要求 runtime 正在运行、不使用应用包含/排除列表的 IPv4/IPv6 全设备捕获，以及不变的 TUN 计划和原生不可变配置。忙碌或不支持的切换可能被拒绝：请停止 VPN 后重试。场景切换有单独的可选原子设置，默认启用。原生策略的原子发布与该切换设置相互独立，并不保证每次规则编辑都具有覆盖全设备的 Android 屏障。
+
+[网站规则格式与限制](website-routing-formats.md).
 
 ---
 
@@ -286,6 +337,8 @@ FoxHole Core提供实验性的onion service发布API。核心中存在该API不�
 
 ### 🕸️ I2P 接入
 
+各协议限制请参阅[路由兼容性](#route-capabilities)。
+
 I2P 并未在 FoxHole Core 内实现。
 
 它使用仅支持 TCP 的回环 SOCKS5 接口连接独立 `i2pd` 进程。
@@ -313,6 +366,8 @@ I2P 路由条件采用失败即阻断的检查方式：
 - 断线保护；
 - 添加拒绝规则后，立即定向撤销活动流代理；L3 数据包隧道流在空闲超时后重新评估；
 - 无效重载返回类型化错误。
+
+软件断网保护仅在应用与 Core 运行期间工作。Android 的“阻止不使用 VPN 的连接”须在系统 VPN 设置中单独启用；Guard 的开关不会开启系统锁定。上述流终止行为取决于传输方式，不保证在所有 L3/L4 模式下立即重置 TCP。
 
 ### 🛡️ FoxHole Sentinel
 
@@ -370,6 +425,8 @@ FoxHole Core 不保存持久的用户 Guard 日志。Core 暴露有界事件流�
 
 ## 🔌 支持的协议
 
+各协议限制请参阅[路由兼容性](#route-capabilities)。
+
 | 协议 / 模式 | 支持范围 |
 | --- | --- |
 | **VLESS** | raw, WebSocket, HTTP Upgrade, gRPC/HTTP-2, XHTTP stream-one (HTTP/2), TLS, Reality, Vision, UDP-over-stream, XUDP, packetaddr |
@@ -411,6 +468,8 @@ Outline 被视为 Shadowsocks 变体。
 ---
 
 ## 🌐 DNS
+
+各协议限制请参阅[路由兼容性](#route-capabilities)。
 
 ### 🧭 DNS 管理
 
@@ -492,6 +551,8 @@ connect / send
 
 ### 🔗 代理服务器
 
+各协议限制请参阅[路由兼容性](#route-capabilities)。
+
 向当前 Wi-Fi 的其他设备共享活动路由。
 
 - SOCKS5 和 HTTP CONNECT；
@@ -528,7 +589,7 @@ connect / send
 ## 🛜 路由器管理公开测试版
 
 > [!NOTE]
-> 暂不支持在 VPN 连接处于活动状态时管理路由器。
+> 本地发现、设置和新配对须在关闭 VPN 后使用规定的 Wi-Fi/LAN 流程。现有配对可以在满足下述信任与同意条件时，单独选择通过家庭 VPN 管理。
 
 在设置中打开 OpenWrt，即可配对路由器并管理其 VPN 配置、设备路由、协议软件包和 FoxHole 更新。设备兼容性及安装和更新流程仍在验证中。管理开关仅适用于所选的已保存配对；关闭它不会停止路由器 VPN。
 
@@ -563,7 +624,7 @@ FoxHole Guard 使用两个独立后台服务。
 | **`foxhole watchdog web`** | 检查并投递已添加网页应用的通知。 |
 | **`foxhole watchdog guard`** | 监控事件，在受保护日志中记录安装/卸载和网络异常。 |
 
-加固模式下，`foxhole watchdog guard` 在没有活动连接时创建前台服务以驻留内存，检测到活动连接后停止。节能模式使用定期 WorkManager 轮询。
+加固模式下，由已附加的应用 runtime 服务承载 Sentinel 监控；没有其他 host 时，由独立的前台服务 `foxhole watchdog guard` 接管。监控所有权在服务之间转移；仅连接互联网或 Wi-Fi 不会停止监控。节能模式使用定期 WorkManager 轮询。
 
 ---
 
@@ -593,25 +654,14 @@ FoxHole DB 提供五个独立签名的数据集，由对应功能按需下载。
 
 ---
 
-<a id="ecosystem"></a>
+[APK 交付与 ABI](apk-delivery-abis.md) · [F-Droid 源码构建](fdroid-source-build.md).
 
-## 🔗 FoxHole生态系统
-
-| 项目 | 用途 |
-| --- | --- |
-| [**FoxHole Guard**](https://github.com/foxhole-team/foxhole-guard) | Android：VPN、Tor/I2P、流量规则和本地监控 |
-| [FoxHole VPN](https://github.com/foxhole-team/foxhole-vpn) | Android：简洁VPN客户端及已配对OpenWrt管理 |
-| [FoxHole Core](https://github.com/foxhole-team/foxhole-core) | 共用Rust网络核心；功能取决于构建 |
-| [FoxHole OpenWrt](https://github.com/foxhole-team/foxhole-openwrt-client) | 路由器VPN及局域网管理 |
-| [FoxHole DB](https://github.com/foxhole-team/foxhole-db) | 签名规则和参考数据 |
 
 ## 🤝 参与开发
 
 请通过[Issues](https://github.com/foxhole-team/foxhole-guard/issues)报告错误或提出修改建议。
 
 ## 💖 支持开发
-
-我们完全利用自己的时间和资源开发和维护FoxHole Guard，并在开发中使用AI工具。您的支持能让我们为项目投入更多时间，加快开发进度。
 
 <a id="cryptocurrency-wallets"></a>
 

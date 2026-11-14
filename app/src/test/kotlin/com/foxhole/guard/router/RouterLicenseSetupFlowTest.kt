@@ -54,6 +54,25 @@ class RouterLicenseSetupFlowTest {
             options: RouterWizardOptions, selectedProfile: RouterProfileSelection?) = error("unexpected finish")
     }, { null }, { false }, readonlyInspector = readonly)
 
+    @Test fun helpCapabilitiesDistinguishInspectionFromAQualifiedInstaller() {
+        val absent = wizard(null)
+        assertFalse(absent.canInspectRouter)
+        assertFalse(absent.canInstallRouter)
+        val installer = wizard(Setup())
+        assertTrue(installer.canInstallRouter)
+        assertFalse(installer.canInspectRouter)
+        val inspector = object : RouterReadonlySshInspector {
+            override suspend fun inspectSshIdentity(address: String) = error("not invoked")
+            override suspend fun inspect(address: String, hostKey: ByteArray, password: CharArray) = error("not invoked")
+            override suspend fun inspectWithKey(address: String, hostKey: ByteArray, privateKey: ByteArray, passphrase: CharArray) = error("not invoked")
+        }
+        val inspection = wizard(null, inspector)
+        assertTrue(inspection.setupAvailable)
+        assertTrue(inspection.canInspectRouter)
+        assertFalse(inspection.canInstallRouter)
+        absent.close(); installer.close(); inspection.close()
+    }
+
     private suspend fun loginStage(wizard: RouterWizardCoordinator) {
         wizard.begin(RouterWizardPath.SETUP, "NL")
         wizard.inspectAddress("192.168.1.1"); wizard.acceptIdentity(); wizard.confirmInstallProtocols()

@@ -1,5 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="cli_release_notes_translations_105">Added Arabic language and RTL support, adapted the widget, and fixed translations and router settings.</string>
-    <string name="cli_release_notes_router_cleanup_105">Improved router setup cleanup and error reporting.</string>
+    <string name="cli_release_notes_translations_105">Added Arabic language and RTL support, adapted the widget, and fixed translations and router settings</string>
+    <string name="cli_release_notes_router_cleanup_105">Improved router setup cleanup and error reporting</string>
+    <string name="cli_release_notes_router_setup_107">Fixed initial router installation and setup through the app</string>
+    <string name="cli_release_notes_transport_components_107">Updated Tor transports Lyrebird and conjure-client</string>
+    <string name="cli_release_notes_help_107">Updated help sections</string>
+    <string name="cli_release_notes_sentinel_107">Improved Sentinel reports and scan history</string>
+    <string name="cli_release_notes_router_interface_107">Updated the router management interface</string>
+    <string name="cli_release_notes_general_interface_107">General interface improvements</string>
+    <string name="cli_release_notes_sentinel_apps_data_107">Improved Sentinel app selection and data downloads</string>
+    <string name="cli_release_notes_user_modules_107">Tor, I2P, firewall and Sentinel settings are available in user mode</string>
 </resources>

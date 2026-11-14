@@ -6,6 +6,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import com.foxhole.core.model.Settings
 import com.foxhole.guard.R
+import com.foxhole.guard.ui.cli.help.GuardHelpBlocks
+import com.foxhole.guard.ui.cli.help.guardHelpTopic
 import com.foxhole.guard.router.ui.GuardRouterSettingsEntry
 import com.foxhole.guard.ui.cli.LocalCliColors
 import com.foxhole.guard.ui.cli.components.CliDivider
@@ -37,6 +39,7 @@ internal fun CliExtrasSection(
             label = stringResource(R.string.cli_extras_webapps),
             icon = R.drawable.lin_webapps,
             infoText = stringResource(R.string.cli_help_webapps_body),
+        infoContent = { GuardHelpBlocks(guardHelpTopic("webapps").blocks, scope = "webapps") },
             checked = settings.webApps.enabled,
             onToggle = onWebAppsEnabledChanged,
             onOpenSettings = onOpenWebApps,
@@ -47,6 +50,7 @@ internal fun CliExtrasSection(
             label = stringResource(R.string.cli_extras_proxy_server),
             icon = R.drawable.lin_device,
             infoText = stringResource(R.string.cli_help_lan_proxy_body),
+        infoContent = { GuardHelpBlocks(guardHelpTopic("lan_proxy").blocks, scope = "lan_proxy") },
             checked = settings.expert.localSurfaces.allowLanAccess,
             onToggle = onProxyServerEnabledChanged,
             onOpenSettings = onOpenProxyServer,

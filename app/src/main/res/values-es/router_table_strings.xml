@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="router_table_router">Router</string>
-    <string name="router_table_version">Versión de FoxHole</string>
+    <string name="router_table_version">Versión de FoxHole OpenWrt</string>
     <string name="router_table_actions">Acciones</string>
     <string name="router_table_rename">Cambiar nombre del router</string>
     <string name="router_table_name">Nombre del router</string>

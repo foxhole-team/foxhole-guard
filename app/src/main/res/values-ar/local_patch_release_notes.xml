@@ -1,5 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="cli_release_notes_translations_105">أُضيف دعم اللغة العربية والاتجاه من اليمين إلى اليسار، وكُيّفت الأداة، وأُصلحت الترجمات وإعدادات الموجّه.</string>
-    <string name="cli_release_notes_router_cleanup_105">حُسّن تنظيف إعداد الموجّه والإبلاغ عن الأخطاء.</string>
+    <string name="cli_release_notes_translations_105">أُضيف دعم اللغة العربية والاتجاه من اليمين إلى اليسار، وكُيّفت الأداة، وأُصلحت الترجمات وإعدادات الموجّه</string>
+    <string name="cli_release_notes_router_cleanup_105">حُسّن تنظيف إعداد الموجّه والإبلاغ عن الأخطاء</string>
+    <string name="cli_release_notes_router_setup_107">تم إصلاح التثبيت والإعداد الأولي للموجّه من التطبيق</string>
+    <string name="cli_release_notes_transport_components_107">تم تحديث وسائل نقل Tor، وهي Lyrebird وconjure-client</string>
+    <string name="cli_release_notes_help_107">تم تحديث أقسام المساعدة</string>
+    <string name="cli_release_notes_sentinel_107">تم تحسين تقارير Sentinel وسجل الفحوصات</string>
+    <string name="cli_release_notes_router_interface_107">تحديث واجهة إدارة الموجّه</string>
+    <string name="cli_release_notes_general_interface_107">تحسينات عامة على الواجهة</string>
+    <string name="cli_release_notes_sentinel_apps_data_107">تحسين اختيار التطبيقات وتنزيل بيانات Sentinel</string>
+    <string name="cli_release_notes_user_modules_107">إتاحة إعدادات Tor وI2P والجدار الناري وSentinel في وضع المستخدم</string>
 </resources>

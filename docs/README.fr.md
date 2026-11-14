@@ -2,7 +2,7 @@
 
 <div align="center">
 
-**FoxHole Guard** réunit protection réseau, confidentialité et contrôle local de l’activité réseau sur Android.
+**FoxHole Guard** est une application Android pour le VPN, Tor, I2P, le routage du trafic des applications et la surveillance locale de l’activité réseau.
 
 </div>
 
@@ -17,7 +17,7 @@
 
 <div align="center">
 
-[English](../README.md) · [Русский](README.ru.md) · [Deutsch](README.de.md) · [Français](README.fr.md) · [Español](README.es.md) · [日本語](README.ja.md) · [简体中文](README.zh.md) · [العربية](README.ar.md)
+[🇬🇧 English](../README.md) · [🇷🇺 Русский](README.ru.md) · [🇩🇪 Deutsch](README.de.md) · [🇫🇷 **Français**](README.fr.md) · [🇪🇸 Español](README.es.md) · [🇯🇵 日本語](README.ja.md) · [🇨🇳 简体中文](README.zh.md) · [🇸🇦 العربية](README.ar.md)
 
 </div>
 
@@ -28,23 +28,50 @@
   <a href="https://apps.obtainium.imranr.dev/redirect?r=obtainium://app/%7B%22id%22%3A%22com.foxhole.guard%22%2C%22url%22%3A%22https%3A%2F%2Fgithub.com%2Ffoxhole-team%2Ffoxhole-guard%22%2C%22author%22%3A%22FoxHole%20Team%22%2C%22name%22%3A%22FoxHole%20Guard%22%2C%22preferredApkIndex%22%3A0%2C%22additionalSettings%22%3A%22%7B%5C%22apkFilterRegEx%5C%22%3A%5C%22arm64-v8a%5B.%5Dapk%24%5C%22%2C%5C%22invertAPKFilter%5C%22%3Afalse%2C%5C%22verifyLatestTag%5C%22%3Atrue%7D%22%2C%22overrideSource%22%3A%22GitHub%22%7D" title="Obtainium · ARM64"><img src="https://img.shields.io/badge/Obtainium-add%20app-1A73E8?style=flat-square" alt="Get it on Obtainium · ARM64"></a>
 </p>
 
+<div align="center">
+
 ![Platform](https://img.shields.io/badge/platform-Android-3DDC84?style=flat-square&logo=android&logoColor=white)
 ![Core](https://img.shields.io/badge/core-Rust-000000?style=flat-square&logo=rust&logoColor=white)
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-007ec6?style=flat-square)](https://www.gnu.org/licenses/gpl-3.0.html)
 ![Telemetry](https://img.shields.io/badge/telemetry-none-success?style=flat-square)
 ![❤️ We support I2P](https://img.shields.io/badge/❤️_We_support-I2P-7B1FA2?style=flat-square)
 
-<p align="center">
-  <strong>Version VPN uniquement</strong><br>
-  <strong>FoxHole VPN</strong> — un client VPN simplifié pour Android basé sur FoxHole Core,<br>
-  sans les outils supplémentaires de protection et de surveillance de Guard.
-</p>
+</div>
 
-<p align="center">
-  <a href="https://github.com/foxhole-team/foxhole-vpn"><strong>En savoir plus sur FoxHole VPN →</strong></a>
-  &nbsp;·&nbsp;
-  <a href="https://github.com/foxhole-team/foxhole-vpn/releases">Télécharger l’APK</a>
-</p>
+<a id="ecosystem"></a>
+<a id="-écosystème-foxhole"></a>
+
+<div align="center">
+
+**FoxHole ecosystem**
+
+[**FoxHole Guard**](https://github.com/foxhole-team/foxhole-guard) · [FoxHole VPN](https://github.com/foxhole-team/foxhole-vpn) · [FoxHole Core](https://github.com/foxhole-team/foxhole-core) · [FoxHole OpenWRT](https://github.com/foxhole-team/foxhole-openwrt-client) · [FoxHole DB](https://github.com/foxhole-team/foxhole-db)
+
+<details>
+<summary>Rôles des projets</summary>
+
+| Projet | Rôle |
+| --- | --- |
+| [**FoxHole Guard**](https://github.com/foxhole-team/foxhole-guard) | Android : VPN, Tor/I2P, règles de trafic et surveillance locale |
+| [FoxHole VPN](https://github.com/foxhole-team/foxhole-vpn) | Android : client VPN simple et gestion OpenWrt appairée |
+| [FoxHole Core](https://github.com/foxhole-team/foxhole-core) | Cœur réseau Rust commun ; fonctions selon la compilation |
+| [FoxHole OpenWrt](https://github.com/foxhole-team/foxhole-openwrt-client) | VPN de routeur et gestion du réseau local |
+| [FoxHole DB](https://github.com/foxhole-team/foxhole-db) | Règles signées et données de référence |
+
+</details>
+
+</div>
+
+
+Nous développons et maintenons FoxHole Guard avec notre propre temps et nos propres ressources, en utilisant des outils d’IA. Votre soutien nous aide à consacrer plus de temps au projet. [Soutenir le développement →](#cryptocurrency-wallets)
+
+<div align="center">
+
+🔗 **Client VPN seul:** [FoxHole VPN](https://github.com/foxhole-team/foxhole-vpn) · [Télécharger l’APK →](https://github.com/foxhole-team/foxhole-vpn/releases)
+
+Un client Android plus simple pour les connexions VPN et la gestion des routeurs OpenWrt appairés, sans les outils supplémentaires de protection et de surveillance de Guard.
+
+</div>
 
 Les versions publiées et les APK figurent dans [GitHub Releases](https://github.com/foxhole-team/foxhole-guard/releases).
 
@@ -64,11 +91,18 @@ Le projet propose une application unique pour la protection quotidienne, l’acc
 
 <a id="whats-new"></a>
 
-> **🆕 Nouveautés - 1.0.6 Stable**
+> **🆕 Nouveautés - 1.0.7 Stable**
 >
-> - Ajout de la prise en charge d’Android 7.
-> - Filtres de routage des adresses web améliorés.
-> - Style visuel des notifications amélioré.
+> - Correction de l’installation et de la configuration initiale du routeur depuis l’application
+> - Mise à jour des transports Tor Lyrebird et conjure-client
+> - Mise à jour des rubriques d’aide
+> - Amélioration des rapports et de l’historique des analyses Sentinel
+> - Interface de gestion du routeur mise à jour
+> - Améliorations générales de l’interface
+> - Amélioration du choix des applications et du téléchargement des données Sentinel
+> - Les réglages Tor, I2P, pare-feu et Sentinel sont disponibles en mode utilisateur
+
+[Journal complet des modifications](CHANGELOG.md) · [Continuité et limites des mises à jour de l’application](app-update-continuation.md).
 
 <a id="quickstart"></a>
 
@@ -176,6 +210,21 @@ Un scénario contrôle le mode. En mode **VPN et Tor**, les scénarios sont ind�
 
 Le routage de tout l’appareil via Tor est soumis à des restrictions si un VPN est actif. Si Tor fonctionne hors du tunnel VPN pendant cette connexion, le scénario d’applications sélectionnées est utilisé. En mode Mixed du mandataire local, SOCKS5 passe par le VPN et HTTP CONNECT par Tor.
 
+« Appareil entier » définit la capture, sous réserve des exceptions de routage ; cela ne fait pas passer tous les protocoles par Tor. En mode Tor + VPN, UDP utilise le VPN par défaut, sans anonymat Tor ; la politique UDP peut le bloquer à la place. En mode Tor seul, UDP hors DNS est bloqué.
+
+<a id="route-capabilities"></a>
+
+### Compatibilité des routes
+
+| Fonction | Routes mandataires de flux compatibles | Tunnel de paquets WireGuard / AmneziaWG |
+| --- | --- | --- |
+| Résolveur DNS | DNS Guard selon la route choisie | Adresse DNS numérique du profil obligatoire, annoncée à Android en mode `real_ip` |
+| Interception / filtrage DNS local | Si activé et pris en charge par la route | Indisponible |
+| Résolveur final DoQ / DoH3 | Uniquement sur une route compatible | Refusé |
+| Route I2P / mandataire LAN | Selon leurs conditions respectives | Indisponible |
+
+Si les catégories DNS activées et obligatoires ne sont pas représentables dans la configuration native, la préparation de la session est refusée ; le filtrage n’est pas contourné silencieusement. Ce tableau décrit le chemin actuel de l’application Guard, pas toutes les capacités d’une autre compilation de Core.
+
 ### 🔀 Règles de routage du trafic
 
 Les règles s’appliquent dans le mode et le scénario actifs :
@@ -195,7 +244,9 @@ Les règles s’appliquent dans le mode et le scénario actifs :
 | règles d’adresses web | appliquées | appliquées |
 Dans le scénario **Tout l’appareil**, les affectations individuelles des applications à VPN ou Tor ne sont pas appliquées. Les règles de blocage et d’exclusion des applications et celles des adresses web restent applicables au trajet actif. Le blocage des applications nécessite le tunnel système et le pare-feu actifs.
 
-Les règles sont appliquées atomiquement. Les changements de scénario le sont aussi par défaut ; ce comportement peut être désactivé dans les paramètres.
+Les rechargements de règles pris en charge publient la politique atomiquement. Une transition à chaud protégée par l’application exige un runtime actif, une capture IPv4/IPv6 complète sans listes d’inclusion/exclusion d’applications, et un plan TUN ainsi qu’une configuration native immuable inchangés. Une transition occupée ou non prise en charge peut être refusée : arrêtez le VPN puis réessayez. Les changements de scénario ont un réglage atomique facultatif, activé par défaut. La publication atomique de la politique native est distincte de ce réglage et ne garantit pas une barrière Android sur tout l’appareil pour chaque modification de règle.
+
+[Formats et limites des règles de sites](website-routing-formats.md).
 
 ---
 
@@ -286,6 +337,8 @@ FoxHole Core propose une API expérimentale de publication de services onion. Sa
 
 ### 🕸️ Accès I2P
 
+Voir la [compatibilité des routes](#route-capabilities) pour les limites par protocole.
+
 I2P n’est pas implémenté dans FoxHole Core.
 
 Une interface SOCKS5 en boucle locale, limitée à TCP, relie un processus `i2pd` distinct.
@@ -313,6 +366,8 @@ Prise en charge :
 - coupe-circuit ;
 - révocation ciblée immédiate des flux mandataires actifs après une règle de refus ; les flux L3 du tunnel de paquets réévaluent la politique après leur délai d’inactivité ;
 - erreurs typées lors des rechargements invalides.
+
+Le coupe-circuit logiciel fonctionne tant que l’application et Core fonctionnent. Activez séparément « Bloquer les connexions sans VPN » dans les réglages VPN d’Android ; le bouton Guard n’active pas ce verrouillage système. La terminaison décrite ci-dessus dépend du transport ; un reset TCP immédiat dans tous les modes L3/L4 n’est pas garanti.
 
 ### 🛡️ FoxHole Sentinel
 
@@ -370,6 +425,8 @@ Une chaîne de hachage permet de vérifier son intégrité.
 
 ## 🔌 Protocoles pris en charge
 
+Voir la [compatibilité des routes](#route-capabilities) pour les limites par protocole.
+
 | Protocole / mode | Prise en charge |
 | --- | --- |
 | **VLESS** | raw, WebSocket, HTTP Upgrade, gRPC/HTTP-2, XHTTP stream-one (HTTP/2), TLS, Reality, Vision, UDP-over-stream, XUDP, packetaddr |
@@ -411,6 +468,8 @@ Prise en charge :
 ---
 
 ## 🌐 DNS
+
+Voir la [compatibilité des routes](#route-capabilities) pour les limites par protocole.
 
 ### 🧭 Gestion DNS
 
@@ -492,6 +551,8 @@ Les extensions complètent l’application principale.
 
 ### 🔗 Serveur mandataire
 
+Voir la [compatibilité des routes](#route-capabilities) pour les limites par protocole.
+
 Le serveur partage la route active avec les autres appareils du Wi-Fi actuel.
 
 - SOCKS5 et HTTP CONNECT ;
@@ -528,7 +589,7 @@ Un service distinct distribue les notifications web.
 ## 🛜 Gestion du routeur en bêta publique
 
 > [!NOTE]
-> La gestion du routeur pendant qu’une connexion VPN est active n’est pas encore prise en charge.
+> La recherche locale, la configuration et tout nouvel appairage exigent le parcours Wi-Fi/LAN prévu avec le VPN arrêté. Un appairage existant peut utiliser l’option distincte de gestion via le VPN domestique, selon les conditions de confiance et de consentement ci-dessous.
 
 Ouvrez OpenWrt dans les paramètres pour associer un routeur et gérer ses profils VPN, routes des appareils, paquets de protocoles et mises à jour FoxHole. La compatibilité et les procédures d’installation et de mise à jour restent en validation. L’interrupteur de gestion s’applique à l’association enregistrée sélectionnée ; le désactiver n’arrête pas le VPN du routeur.
 
@@ -563,7 +624,7 @@ Deux services indépendants sont utilisés.
 | **`foxhole watchdog web`** | Vérifie et distribue les notifications des applications web ajoutées. |
 | **`foxhole watchdog guard`** | Surveille les événements et consigne installations/suppressions et anomalies réseau dans le journal protégé. |
 
-En mode renforcé, `foxhole watchdog guard` démarre un service au premier plan lorsqu’aucune connexion n’est active, puis l’arrête dès qu’une connexion est détectée. Le mode économie d’énergie utilise des passages WorkManager périodiques.
+En mode renforcé, un service runtime de l’application héberge la surveillance Sentinel, ou le service de premier plan autonome `foxhole watchdog guard` si aucun autre hôte n’est attaché. La responsabilité passe entre ces services ; une connexion Internet ou Wi-Fi seule n’arrête pas la surveillance. Le mode économie utilise des interrogations périodiques WorkManager.
 
 ---
 
@@ -593,25 +654,14 @@ Les compilations natives utilisent des outils Rust/NDK épinglés et exigent des
 
 ---
 
-<a id="ecosystem"></a>
+[Distribution APK et ABI](apk-delivery-abis.md) · [Compilation F-Droid depuis les sources](fdroid-source-build.md).
 
-## 🔗 Écosystème FoxHole
-
-| Projet | Rôle |
-| --- | --- |
-| [**FoxHole Guard**](https://github.com/foxhole-team/foxhole-guard) | Android : VPN, Tor/I2P, règles de trafic et surveillance locale |
-| [FoxHole VPN](https://github.com/foxhole-team/foxhole-vpn) | Android : client VPN simple et gestion OpenWrt appairée |
-| [FoxHole Core](https://github.com/foxhole-team/foxhole-core) | Cœur réseau Rust commun ; fonctions selon la compilation |
-| [FoxHole OpenWrt](https://github.com/foxhole-team/foxhole-openwrt-client) | VPN de routeur et gestion du réseau local |
-| [FoxHole DB](https://github.com/foxhole-team/foxhole-db) | Règles signées et données de référence |
 
 ## 🤝 Contribuer
 
 Signalez les erreurs et proposez des modifications via [Issues](https://github.com/foxhole-team/foxhole-guard/issues).
 
 ## 💖 Soutenir le développement
-
-Nous développons et maintenons FoxHole Guard entièrement avec notre propre temps et nos propres ressources, en utilisant des outils d’IA pendant le développement. Votre soutien nous aide à consacrer plus de temps au projet et à accélérer le développement.
 
 <a id="cryptocurrency-wallets"></a>
 

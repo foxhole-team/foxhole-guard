@@ -14,8 +14,6 @@ import com.foxhole.guard.ui.cli.home.shouldAutoScrollTerminal
 import com.foxhole.guard.ui.cli.home.terminalBottomScrollOffset
 import com.foxhole.guard.ui.cli.home.terminalOutputBottomIndex
 import com.foxhole.guard.ui.cli.onboarding.betaNoticeItems
-import com.foxhole.guard.ui.cli.onboarding.quickStartItems
-import com.foxhole.guard.ui.cli.onboarding.quickStartTable
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -371,12 +369,11 @@ class CliVisualPolishContractTest {
     }
 
     @Test
-    fun `help titles marquee only inside their clipped title slot`() {
+    fun `help titles remain readable without a marquee`() {
         val card = cli("settings/CliHelpSubScreen.kt").substringAfter("private fun CliHelpCard")
-        assertTrue(card.contains("overflow = TextOverflow.Clip"))
-        assertTrue(card.contains("basicMarquee("))
-        assertTrue(card.contains("initialDelayMillis = HELP_MARQUEE_INITIAL_DELAY_MS"))
-        assertTrue(card.contains("private const val HELP_MARQUEE_INITIAL_DELAY_MS = 1_200"))
+        assertTrue(card.contains("maxLines = 2"))
+        assertTrue(card.contains("stateDescription = state"))
+        assertFalse(card.contains("basicMarquee"))
     }
 
     @Test
@@ -476,33 +473,22 @@ class CliVisualPolishContractTest {
     }
 
     @Test
-    fun `quick start uses the same action and smart profile tables in first run and help`() {
+    fun `quick start and contextual smart help reuse typed topic content`() {
         val firstRun = cli("onboarding/CliQuickStartSheet.kt")
-        val help = cli("settings/CliHelpSubScreen.kt")
         assertTrue(firstRun.contains("CliQuickStartItems("))
-        assertTrue(firstRun.contains("framed = true"))
-        assertTrue(firstRun.contains("smartBody = smartBody"))
-        assertTrue(firstRun.contains("detailsBody = detailsBody"))
-        assertFalse(firstRun.contains("CliFoxHero"))
         assertTrue(firstRun.contains("sheetGesturesEnabled = false"))
-        assertTrue(help.contains("CliQuickStartItems("))
-        assertTrue(help.contains("framed = false"))
-        assertTrue(help.contains("smartBody = stringResource(R.string.cli_help_smart_body)"))
-        assertTrue(help.contains("detailsBody = stringResource(R.string.cli_help_start_details)"))
-
+        val entry = cli("onboarding/CliQuickStartItem.kt")
+        assertTrue(entry.contains("guardHelpTopic(\"quick_actions\").blocks"))
+        assertTrue(entry.contains("guardHelpTopic(\"smart\").blocks"))
+        val actions = com.foxhole.guard.ui.cli.help.guardHelpTopic("quick_actions").blocks
+            .filterIsInstance<com.foxhole.guard.ui.cli.help.HelpBlock.Comparison>().single()
+        assertEquals(4, actions.rows.size)
+        val smart = com.foxhole.guard.ui.cli.help.guardHelpTopic("smart").blocks
+            .filterIsInstance<com.foxhole.guard.ui.cli.help.HelpBlock.Comparison>()
+        assertEquals(listOf(3, 4), smart.map { it.rows.size })
         val profiles = cli("profiles/CliProfilesScreen.kt")
         assertTrue(profiles.contains("additionalContent = {"))
         assertTrue(profiles.contains("CliSmartHelpBody("))
-        assertTrue(profiles.contains("body = stringResource(R.string.cli_help_smart_body)"))
-
-        val sample = quickStartItems("first sentence.\n\nsecond sentence.\nthird sentence.")
-        assertEquals(listOf("first sentence.", "second sentence.", "third sentence."), sample.map { it.text })
-        assertTrue(sample.all { item -> item.icon != 0 })
-
-        val table = quickStartTable("Area|Tap|Hold\nVPN profile|add or open|—")
-        assertEquals(listOf("VPN profile"), table?.rows?.map { it.area })
-        assertEquals("add or open", table?.rows?.single()?.tap)
-        assertEquals("—", table?.rows?.single()?.hold)
     }
 
     @Test
@@ -596,7 +582,7 @@ class CliVisualPolishContractTest {
     }
 
     @Test
-    fun `beta and every help article use the same icon row grammar`() {
+    fun `beta retains icon rows while help uses one topic icon and structured blocks`() {
         val beta = cli("onboarding/CliBetaNoticeSheet.kt")
         val help = cli("settings/CliHelpSubScreen.kt")
         val items = betaNoticeItems("first\nsecond", "dns limit")
@@ -612,9 +598,9 @@ class CliVisualPolishContractTest {
         assertTrue(beta.contains("framed = true"))
         assertTrue(beta.contains(".cliMarchingBorder(colors.accent)"))
         assertTrue(beta.contains("items = items.drop(1)"))
-        assertTrue(help.contains("CliHelpBody(body = body, icon = section.icon)"))
-        assertTrue(help.contains("CliHelpTopicIcon(icon)"))
-        assertTrue(help.contains("modifier = Modifier.weight(1f)"))
+        assertTrue(help.contains("CliHelpTopicIcon(section.icon)"))
+        assertTrue(help.contains("GuardHelpBlocks(section.blocks"))
+        assertFalse(help.contains("paragraph.lineSequence()"))
         assertFalse(help.contains("CliRowDivider(modifier = Modifier.padding(bottom = CliSpacing.xs))"))
 
         val english = resource("values/strings.xml")

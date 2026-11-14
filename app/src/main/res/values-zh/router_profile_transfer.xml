@@ -1,0 +1,12 @@
+<resources>
+    <string name="router_transfer_title">选择 VPN 配置</string>
+    <string name="router_transfer_body">选定的 VPN 配置将发送到路由器。</string>
+    <string name="router_transfer_empty">没有兼容的已保存 VPN 配置。</string>
+    <string name="router_transfer_failed">无法检查可用的 VPN 配置。</string>
+    <string name="router_transfer_retry">刷新</string>
+    <string name="router_transfer_done">已发送配置：%1$d</string>
+    <string name="router_transfer_partial">已发送 %1$d 个配置，共 %2$d 个。</string>
+    <string name="router_transfer_add">添加 VPN 配置</string>
+    <string name="router_transfer_save">传送</string>
+    <string name="router_transfer_cancel">取消</string>
+</resources>

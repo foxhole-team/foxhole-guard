@@ -1,5 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="cli_release_notes_translations_105">Добавлена поддержка арабского языка и RTL, адаптирован виджет, исправлены переводы и настройки роутера.</string>
-    <string name="cli_release_notes_router_cleanup_105">Улучшена обработка ошибок и освобождение ресурсов при настройке роутера.</string>
+    <string name="cli_release_notes_translations_105">Добавлена поддержка арабского языка и RTL, адаптирован виджет, исправлены переводы и настройки роутера</string>
+    <string name="cli_release_notes_router_cleanup_105">Улучшена обработка ошибок и освобождение ресурсов при настройке роутера</string>
+    <string name="cli_release_notes_router_setup_107">Исправлена первоначальная установка и настройка роутера через приложение</string>
+    <string name="cli_release_notes_transport_components_107">Обновлены Tor-транспорты Lyrebird и conjure-client</string>
+    <string name="cli_release_notes_help_107">Обновление разделов помощи</string>
+    <string name="cli_release_notes_sentinel_107">Доработаны отчёты и история сканирования Sentinel</string>
+    <string name="cli_release_notes_router_interface_107">Обновлен интерфейс управления роутером</string>
+    <string name="cli_release_notes_general_interface_107">Общие улучшения интерфейса</string>
+    <string name="cli_release_notes_sentinel_apps_data_107">Улучшены выбор приложений и загрузка данных Sentinel</string>
+    <string name="cli_release_notes_user_modules_107">Настройки Tor, I2P, фаервола и Sentinel доступны в пользовательском режиме</string>
 </resources>

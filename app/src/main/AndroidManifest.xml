@@ -99,6 +99,11 @@
             </intent-filter>
         </activity-alias>
 
+        <service android:name=".router.RouterSmartHomeService" android:exported="false"
+            android:foregroundServiceType="specialUse" android:stopWithTask="false">
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="User-enabled trusted home-router VPN transition monitor, preserving exact profile ownership and explicit consent while switching between authenticated home Wi-Fi and cellular connectivity." />
+        </service>
         <service
             android:name=".core.sentinel.scanner.IsolatedSentinelScannerService"
             android:exported="false"

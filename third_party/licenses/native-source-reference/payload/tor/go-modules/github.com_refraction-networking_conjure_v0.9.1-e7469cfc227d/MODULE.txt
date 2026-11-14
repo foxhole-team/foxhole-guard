@@ -1,0 +1,2 @@
+github.com/refraction-networking/conjure
+v0.9.1

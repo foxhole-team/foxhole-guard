@@ -41,8 +41,10 @@ import kotlinx.coroutines.launch
 internal suspend fun FoxholeVpnService.startRuntimeWithHealthMetrics(
     session: VpnSession,
     owner: String,
+    ownedAuthority: () -> Boolean = { true },
 ): Result<Unit> {
     tlsFingerprintInstallGate.awaitReady()
+    if (!ownedAuthority()) throw CancellationException("router_smart_start_superseded")
     val runtimeStartAtMs = SystemClock.elapsedRealtime()
     val runtimeStartTimeoutMs = runtimeStartTimeoutMsForSession(session)
     val result =
@@ -432,23 +434,21 @@ internal suspend fun FoxholeVpnService.connect(
     subscriptionRefreshPrepared: Boolean = false,
     protocolTestTrafficFreeze: Boolean = false,
     replaceActiveTunnel: Boolean = false,
+    smartPrepared: RouterSmartPreparedStart? = null,
 ) {
     if (runtimeInstanceStore.current()?.atomicPolicyUpdateActive == true) {
+        if (smartPrepared != null) return
         fail(getString(R.string.guard_atomic_update_failed), commandStartId)
         return
     }
-    val start =
-        resolveVpnStartOrReject(
-            requestedProfileId = profileId,
-            protocolOptionId = protocolOptionIdOverride,
-            commandStartId = commandStartId,
-            subscriptionRefreshPrepared = subscriptionRefreshPrepared,
-            protocolTestTrafficFreeze = protocolTestTrafficFreeze,
-        ) ?: return
-    val settings = start.settings
-    val connectProfileId = start.profileId
-    val resolvedProtocolOptionId = start.protocolOptionId
-    val torOnlyConnect = start.torOnly
+    if (smartPrepared != null && !container.connectionController.routerSmartQueuedCurrent(smartPrepared.owner)) return
+    val start = if (smartPrepared == null) resolveVpnStartOrReject(
+        requestedProfileId = profileId, protocolOptionId = protocolOptionIdOverride, commandStartId = commandStartId,
+        subscriptionRefreshPrepared = subscriptionRefreshPrepared, protocolTestTrafficFreeze = protocolTestTrafficFreeze) ?: return else null
+    val settings = smartPrepared?.settings ?: requireNotNull(start).settings
+    val connectProfileId = smartPrepared?.owner?.profileId ?: requireNotNull(start).profileId
+    val resolvedProtocolOptionId = smartPrepared?.owner?.protocolOptionId ?: start?.protocolOptionId
+    val torOnlyConnect = smartPrepared == null && requireNotNull(start).torOnly
     val trafficMode = if (torOnlyConnect) TrafficMode.TUNNEL else settings.traffic.mode
     if (trafficMode != TrafficMode.TUNNEL) {
         delegateConnectToForegroundService(
@@ -467,8 +467,8 @@ internal suspend fun FoxholeVpnService.connect(
             "strict route without Android VPN lockdown: tunnel carries everything, no system-level kill switch",
         )
     }
-    val privateDnsState = PrivateDnsSettings.currentState(this)
-    if (!validatePrivateDnsState(privateDnsState, commandStartId)) {
+    val privateDnsState = smartPrepared?.privateDnsState ?: PrivateDnsSettings.currentState(this)
+    if (smartPrepared == null && !validatePrivateDnsState(privateDnsState, commandStartId)) {
         return
     }
     val transitionGeneration = beginRuntimeTransition("connect")
@@ -479,10 +479,11 @@ internal suspend fun FoxholeVpnService.connect(
             torOnlyConnect = torOnlyConnect,
             trafficMode = trafficMode,
         )
-    applyI2pCarrierPlan(I2pTunnelTransition.TUNNEL_STARTING, settings)
+    if (smartPrepared == null) applyI2pCarrierPlan(I2pTunnelTransition.TUNNEL_STARTING, settings)
 
     val handover =
-        if (replaceActiveTunnel && activeSession != null) {
+        if (smartPrepared != null) RuntimeHandoverPreparation(true, null, null)
+        else if (replaceActiveTunnel && activeSession != null) {
             retireActiveTunnelForTunnelHandover()
         } else {
             retireActiveLocalGuardForTunnelHandover()
@@ -511,10 +512,12 @@ internal suspend fun FoxholeVpnService.connect(
             transitionGeneration = transitionGeneration,
             validationExcludedVpnNetworkHandle = validationExcludedVpnNetworkHandle,
             validationExcludedVpnInterfaceName = validationExcludedVpnInterfaceName,
+            smartPrepared = smartPrepared,
         )
     }
     val pendingTunnelValidation =
-        if (protocolTestTrafficFreeze) {
+        if (smartPrepared != null) establishNextInterface()
+        else if (protocolTestTrafficFreeze) {
             establishProtocolTestInterfaceThenStopRetiredOnSuccess(
                 reason = "protocol_test_handoff",
                 establishNextInterface = establishNextInterface,
@@ -543,8 +546,9 @@ private suspend fun FoxholeVpnService.establishTunnelSession(
     transitionGeneration: Long,
     validationExcludedVpnNetworkHandle: Long?,
     validationExcludedVpnInterfaceName: String?,
+    smartPrepared: RouterSmartPreparedStart? = null,
 ): PendingTunnelValidation? {
-    val session =
+    val session = smartPrepared?.session ?:
         buildConnectSession(
             torOnlyConnect = torOnlyConnect,
             resolvedProfileId = connectProfileId,
@@ -558,7 +562,8 @@ private suspend fun FoxholeVpnService.establishTunnelSession(
     if (!isCurrentRuntimeTransition(transitionGeneration, "connect_session_loaded")) {
         return null
     }
-    rememberI2pRelayNetworkClass()
+    if (smartPrepared != null && !container.connectionController.routerSmartQueuedCurrent(smartPrepared.owner)) return null
+    if (smartPrepared == null) rememberI2pRelayNetworkClass()
 
     pendingTorRouteUpgradeSessionId = if (deferTorRoute) session.correlationId else null
 
@@ -594,7 +599,7 @@ private suspend fun FoxholeVpnService.establishTunnelSession(
             torActive = session.torActive,
             appliedTorRoute = session.appliedTorRoute,
             message = FoxholeVpnRuntimeBridge.snapshot.value.message,
-            isSmartStartConnection = FoxholeVpnRuntimeBridge.snapshot.value.isSmartStartConnection,
+            isSmartStartConnection = smartPrepared != null || FoxholeVpnRuntimeBridge.snapshot.value.isSmartStartConnection,
         ),
     )
     updateNotification()
@@ -615,7 +620,12 @@ private suspend fun FoxholeVpnService.establishTunnelSession(
         fail(getString(R.string.status_child_component_degraded, "I2P"), commandStartId)
         return null
     }
-    val result = startRuntimeWithHealthMetrics(session = session, owner = "vpn")
+    if (smartPrepared != null && !container.connectionController.routerSmartQueuedCurrent(smartPrepared.owner)) {
+        if (activeSession?.correlationId == session.correlationId) activeSession = null
+        return null
+    }
+    val result = startRuntimeWithHealthMetrics(session = session, owner = "vpn",
+        ownedAuthority = { smartPrepared == null || container.connectionController.routerSmartQueuedCurrent(smartPrepared.owner) })
     if (result.nativeForceStopOutcomeOrNull() != null) {
         return null
     }

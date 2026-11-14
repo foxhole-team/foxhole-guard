@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="sentinel_static_expert">静的チェックの詳細設定</string>
-    <string name="sentinel_static_title">APK チェック</string>
+    <string name="sentinel_static_title">アプリのチェック</string>
     <string name="sentinel_static_reference_summary">%1$s: 静的 API 参照の分類 %2$s 件、ルール一致 %3$s 件。これらの観測は、コードの実行やマルウェアの存在を証明しません。</string>
     <string name="sentinel_static_notification_title">FoxHole Sentinel: 静的な観測結果</string>
-    <string name="sentinel_static_select_app">アプリ</string>
+    <string name="sentinel_static_select_app">アプリを選択</string>
     <string name="sentinel_static_run">選択したアプリをチェック</string>
     <string name="sentinel_static_baseline">インストール済みアプリをチェック</string>
     <string name="sentinel_static_cancel">チェックをキャンセル</string>
@@ -31,4 +31,5 @@
     <string name="sentinel_static_status_unsupported">APK 形式に対応していません</string>
     <string name="sentinel_static_engine_unavailable">同梱のスキャナーエンジンは、この端末では利用できません。</string>
     <string name="sentinel_static_type_label">静的な参照</string>
+    <string name="sentinel_static_search_app">アプリを検索</string>
 </resources>

@@ -37,4 +37,15 @@ class RouterSshConnectionTest {
         }
         assertArrayEquals(CharArray(value.size), value)
     }
+
+    @Test fun remoteDiagnosticCategoriesDoNotExposeRemoteTextOrCredentials() {
+        val secret = "owned-synthetic-secret"
+        val codes = routerSshFailureCodes(("ERROR: unable to select packages\n" + secret).toByteArray())
+        org.junit.Assert.assertEquals(setOf(RouterSshFailureCode.APK_RESOLUTION), codes)
+        val failure = RouterSshFailure(42, codes)
+        org.junit.Assert.assertEquals(42, failure.remoteExitStatus)
+        org.junit.Assert.assertEquals("router_ssh_failed", failure.message)
+        org.junit.Assert.assertFalse(failure.toString().contains(secret))
+        org.junit.Assert.assertTrue(routerSshFailureCodes(secret.toByteArray()).isEmpty())
+    }
 }

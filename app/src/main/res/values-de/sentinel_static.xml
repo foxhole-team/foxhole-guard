@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="sentinel_static_expert">Erweiterte Einstellungen für statische Prüfungen</string>
-    <string name="sentinel_static_title">APK-Prüfungen</string>
+    <string name="sentinel_static_title">App-Prüfung</string>
     <string name="sentinel_static_reference_summary">%1$s: %2$s Kategorien statischer API-Verweise und %3$s Regeltreffer. Diese Beobachtungen beweisen weder Ausführung noch Schadsoftware.</string>
     <string name="sentinel_static_notification_title">FoxHole Sentinel: statische Beobachtungen</string>
-    <string name="sentinel_static_select_app">Anwendung</string>
+    <string name="sentinel_static_select_app">App auswählen</string>
     <string name="sentinel_static_run">Ausgewählte App prüfen</string>
     <string name="sentinel_static_baseline">Installierte Apps prüfen</string>
     <string name="sentinel_static_cancel">Prüfung abbrechen</string>
@@ -31,4 +31,5 @@
     <string name="sentinel_static_status_unsupported">APK-Format nicht unterstützt</string>
     <string name="sentinel_static_engine_unavailable">Die mitgelieferte Scan-Engine ist auf diesem Gerät nicht verfügbar.</string>
     <string name="sentinel_static_type_label">Statische Verweise</string>
+    <string name="sentinel_static_search_app">Apps suchen</string>
 </resources>

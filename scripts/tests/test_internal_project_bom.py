@@ -23,6 +23,16 @@ class InternalProjectBomTest(unittest.TestCase):
   missing=[c for c in document['components']if 'purl'not in c];self.assertEqual(set('project::core:'+n for n in NAMES),{c['bom-ref']for c in missing})
   self.assertEqual('project::app',MODULE.validate_bom(document,'actual collected Maven BOM'))
   self.assertEqual(before,document)
+ def test_current_release_project_versions_are_bound_to_the_application_root(self):
+  document=self.internal_graph();document['metadata']['component']['version']='1.0.7'
+  for item in document['components']:
+   if item['bom-ref'].startswith('project::core:'):item['version']='1.0.7'
+  self.assertEqual('project::app',MODULE.validate_bom(document,'current release'))
+  for value in ('', '1.0', 'foreign', '1.0.7\nforeign'):
+   broken=copy.deepcopy(document);broken['metadata']['component']['version']=value
+   for item in broken['components']:
+    if item['bom-ref'].startswith('project::core:'):item['version']=value
+   with self.subTest(version=value),self.assertRaises(ValueError):MODULE.validate_bom(broken,'invalid release')
  def test_full_aggregate_keeps_projects_and_real_maven_native_owner(self):
   self.internal_graph();graphics='pkg:maven/androidx.graphics/graphics-path@1.0.1'
   self.maven['components'].append({'type':'library','bom-ref':graphics,'purl':graphics,'name':'graphics-path','version':'1.0.1'})

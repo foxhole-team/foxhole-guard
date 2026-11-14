@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="sentinel_static_expert">静态检查专家设置</string>
-    <string name="sentinel_static_title">APK 检查</string>
+    <string name="sentinel_static_title">应用检查</string>
     <string name="sentinel_static_reference_summary">%1$s：%2$s 类静态 API 引用和 %3$s 项规则匹配。这些观测不能证明代码已执行或存在恶意软件。</string>
     <string name="sentinel_static_notification_title">FoxHole Sentinel：静态观测</string>
-    <string name="sentinel_static_select_app">应用</string>
+    <string name="sentinel_static_select_app">选择应用</string>
     <string name="sentinel_static_run">检查所选应用</string>
     <string name="sentinel_static_baseline">检查已安装应用</string>
     <string name="sentinel_static_cancel">取消检查</string>
@@ -31,4 +31,5 @@
     <string name="sentinel_static_status_unsupported">不支持此 APK 格式</string>
     <string name="sentinel_static_engine_unavailable">此设备无法使用内置扫描引擎。</string>
     <string name="sentinel_static_type_label">静态引用</string>
+    <string name="sentinel_static_search_app">搜索应用</string>
 </resources>

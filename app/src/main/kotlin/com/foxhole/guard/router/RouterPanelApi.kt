@@ -36,7 +36,7 @@ import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
 internal enum class RouterApiError { NETWORK, IDENTITY, PIN, CHANGE_PIN, LOCKED, CONFLICT, LIMIT, UNSUPPORTED, INSECURE_TLS, UNAVAILABLE, INVALID_RESPONSE, PIN_SETUP, LICENSE }
-internal open class RouterApiFailure(val kind: RouterApiError) : IOException("router_api_${kind.name.lowercase()}")
+internal open class RouterApiFailure(val kind: RouterApiError, val httpStatus: Int? = null) : IOException("router_api_${kind.name.lowercase()}")
 internal class RouterApiTimeout : RouterApiFailure(RouterApiError.NETWORK)
 
 private fun routerApiIoFailure(error: IOException): RouterApiFailure = when (error) {
@@ -79,7 +79,13 @@ internal class RouterPanelApi internal constructor(val identity: RouterTlsIdenti
             throw RouterApiFailure(RouterApiError.INVALID_RESPONSE)
         }
         val version = (value["version"] as? JsonPrimitive)?.takeIf { it.isString }?.contentOrNull
-        return RouterPackageStatus(configured, reset, routerDiscoveryPackageVersion(version))
+        val storage = (value["storage"] as? JsonPrimitive)?.takeIf { it.isString }?.contentOrNull?.takeIf { it in setOf("RAM", "FLASH") }
+        val license = value["licenseRequired"]?.let { field ->
+            (field as? JsonPrimitive)?.takeIf { !it.isString }?.booleanOrNull
+                ?: throw RouterApiFailure(RouterApiError.INVALID_RESPONSE)
+        }
+        return RouterPackageStatus(configured, reset, routerDiscoveryPackageVersion(version), storage,
+            parseRouterHardwareInfo(value["routerInfo"]), license)
     }
 
     suspend fun beginDeviceUpdate(session: RouterPanelSession, expectedRevision: Long, requestId: String,
@@ -213,6 +219,9 @@ internal class RouterPanelApi internal constructor(val identity: RouterTlsIdenti
 
     suspend fun mobileRequest(action: RouterMobileAction, payload: JsonObject): JsonObject {
         val allowed = when (action) {
+            RouterMobileAction.VPN_SERVER_PLAN -> setOf("token")
+            RouterMobileAction.VPN_SERVER_SET -> setOf("token", "revision", "enabled", "confirmed", "planSha256", "removeComponent")
+            RouterMobileAction.VPN_SERVER_JOB -> setOf("token", "jobId")
             RouterMobileAction.UPDATES_STATUS -> setOf("token")
             RouterMobileAction.UPDATES_CHECK, RouterMobileAction.UPDATES_PLAN -> setOf("token", "expectedRevision")
             RouterMobileAction.UPDATES_APPLY -> setOf("token", "planId", "planSha256", "expectedRevision", "confirmed")
@@ -242,6 +251,18 @@ internal class RouterPanelApi internal constructor(val identity: RouterTlsIdenti
         val token = (payload["token"] as? JsonPrimitive)?.takeIf { it.isString }?.contentOrNull
         require(token?.matches(Regex("p1\\.[a-f0-9]{64}")) == true && payload.keys.all { it in allowed })
         payload["engine"]?.let { require((it as? JsonPrimitive)?.takeIf { it.isString }?.contentOrNull in setOf("", "core")) }
+        if (action == RouterMobileAction.VPN_SERVER_SET) {
+            val revision = (payload["revision"] as? JsonPrimitive)?.takeIf { !it.isString }?.longOrNull
+            val enable = (payload["enabled"] as? JsonPrimitive)?.takeIf { !it.isString }?.booleanOrNull
+            require(revision != null && revision >= 0 && enable != null)
+            val remove = payload["removeComponent"]?.let { (it as? JsonPrimitive)?.takeIf { !it.isString }?.booleanOrNull
+                ?: throw IllegalArgumentException("invalid_server_removal_choice") } ?: false
+            require(!remove || enable == false)
+            if (enable || remove) require((payload["confirmed"] as? JsonPrimitive)?.takeIf { !it.isString }?.booleanOrNull == true &&
+                (payload["planSha256"] as? JsonPrimitive)?.takeIf { it.isString }?.contentOrNull?.matches(Regex("[a-f0-9]{64}")) == true)
+        }
+        if (action == RouterMobileAction.VPN_SERVER_JOB) require(
+            (payload["jobId"] as? JsonPrimitive)?.takeIf { it.isString }?.contentOrNull?.matches(Regex("[A-Za-z0-9_-]{1,96}")) == true)
         validateUpdateRequest(action, payload)
         validateEngineRequest(action, payload)
         return request(action.action, payload)
@@ -313,12 +334,14 @@ internal class RouterPanelApi internal constructor(val identity: RouterTlsIdenti
 
     private suspend fun request(action: String, payload: JsonObject): JsonObject {
         check(!closed.get())
+        currentCoroutineContext().ensureActive()
+        requireTransportCurrent()
         val bytes = buildJsonObject { put("action", action); put("payload", payload) }.toString().toByteArray(Charsets.UTF_8)
         require(bytes.size <= 300000)
         try {
             val request = Request.Builder().url(url).header("Accept", "application/json")
                 .header("Cache-Control", "no-store").post(bytes.toRequestBody("application/json; charset=utf-8".toMediaType())).build()
-            return try {
+            val result: JsonObject = try {
                 withTimeout(30_000L) {
                     suspendCancellableCoroutine { continuation ->
                         val call = calls.newCall(request)
@@ -351,12 +374,16 @@ internal class RouterPanelApi internal constructor(val identity: RouterTlsIdenti
                 currentCoroutineContext().ensureActive()
                 throw RouterApiTimeout()
             }
+            currentCoroutineContext().ensureActive()
+            check(!closed.get())
+            requireTransportCurrent()
+            return result
         } finally { bytes.fill(0) }
     }
 
     private fun readResponse(response: Response, requestActive: () -> Boolean): JsonObject {
         if (!requestActive()) throw IOException("router_request_cancelled")
-        if (response.code !in 200..299) throw RouterApiFailure(RouterApiError.UNAVAILABLE)
+        if (response.code !in 200..299) throw RouterApiFailure(RouterApiError.UNAVAILABLE, response.code)
         if (response.body.contentType()?.subtype != "json" || response.body.contentLength() > 300000) {
             throw RouterApiFailure(RouterApiError.INVALID_RESPONSE)
         }

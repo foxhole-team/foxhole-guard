@@ -1,6 +1,6 @@
 0.1.1 public beta — security and reliability fixes
 
-- Protect notification/widget WebApp launches and wait for unlock.
-- Keep late Sentinel scans from restoring cleared journals; improve quarantine and notifications.
-- Simplify User home and share the saved-profile selector.
-- Update FoxCore 0.0.5, I2P/Tor, release checks and F-Droid builds.
+- Protect notification/widget WebApp launches and wait for unlock
+- Keep late Sentinel scans from restoring cleared journals; improve quarantine and notifications
+- Simplify User home and share the saved-profile selector
+- Update FoxCore 0.0.5, I2P/Tor, release checks and F-Droid builds

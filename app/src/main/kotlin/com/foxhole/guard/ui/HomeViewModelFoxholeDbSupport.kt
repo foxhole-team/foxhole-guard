@@ -76,9 +76,10 @@ internal fun threatIntelVerifiedSuccess(
     installedGeneratedAt: String?,
     baselineGeneratedAt: String?,
 ): Boolean =
-    phase == FoxholeUpdatePhase.DONE &&
-        installedGeneratedAt != null &&
-        installedGeneratedAt != baselineGeneratedAt
+    phase == FoxholeUpdatePhase.DONE && installedGeneratedAt != null && runCatching {
+        val installed = java.time.Instant.parse(installedGeneratedAt)
+        baselineGeneratedAt == null || !installed.isBefore(java.time.Instant.parse(baselineGeneratedAt))
+    }.getOrDefault(false)
 
 internal fun HomeViewModel.onFoxholeDbRefreshAll(settings: Settings) {
     if (settings.dns.dnsRuleSetFilteringEnabled()) {
@@ -98,6 +99,9 @@ internal data class FoxholeDbGroupUi(
     val enabled: Boolean,
     val updatedAtMs: Long?,
     val updateAvailable: Boolean = false,
+    val preparedPending: Boolean = false,
+    val checkingPreparation: Boolean = false,
 ) {
-    val needsData: Boolean get() = enabled && (updatedAtMs == null || updateAvailable)
+    val needsData: Boolean get() = enabled &&
+        (updatedAtMs == null && !preparedPending && !checkingPreparation || updateAvailable)
 }

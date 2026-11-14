@@ -10,12 +10,14 @@ import android.os.PersistableBundle
 import com.foxhole.guard.core.data.ProfileRepository
 import com.foxhole.guard.FoxholeApplication
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.withContext
 import java.io.FileNotFoundException
 import java.security.MessageDigest
 
 internal class GuardRouterRuntime(context: Context, repository: ProfileRepository) : AutoCloseable {
-    private val application = context.applicationContext
+    private val application = context.applicationContext as FoxholeApplication
     private val manager = requireNotNull(application.getSystemService(ConnectivityManager::class.java))
     private val pairing = EncryptedRouterPairingStore(application)
     private val preferences = LocalRouterControlPreferenceStore(application, pairings = pairing)
@@ -36,13 +38,17 @@ internal class GuardRouterRuntime(context: Context, repository: ProfileRepositor
     }
     val wizard = RouterWizardCoordinator(transport, pairing, Build.MODEL.take(128).ifBlank { "Android" }, setup, provisioner,
         exportProfile = profiles::selected, importRemoteProfile = profiles::importProfile, preferenceStore = preferences,
+        applySmartHome = application.routerProfileMonitor.smartHome::setEnabled,
         importAuthenticatedProfile = profiles::importAuthenticated,
         readonlyInspector = WifiRouterReadonlyInspector.forWifi(manager, protection, access))
     val control = RouterControlCoordinator(PairedRouterManagementTransport(transport, manager, access, pairing,
-        (application as FoxholeApplication).routerProfileMonitor::connectedProfile), pairing, preferences, provisioner,
+        application.routerProfileMonitor::connectedProfile), pairing, preferences, provisioner,
         deviceUpdateRelay = RouterDeviceUpdateRelay(RouterDeviceReleaseSource(application.cacheDir)),
         // This is also disabled in VPN until physical foreground-service acceptance.
-        homeAutomationAvailable = false, copyProfile = { value ->
+        homeAutomationAvailable = false,
+        smartHomeAvailable = true,
+        applySmartHome = application.routerProfileMonitor.smartHome::setEnabled,
+        smartHomeActive = { application.routerProfileMonitor.smartHome.isActive }, copyProfile = { value ->
             withContext(Dispatchers.Main) {
                 val clipboard = requireNotNull(application.getSystemService(ClipboardManager::class.java))
                 val clip = ClipData.newPlainText("VPN", value)
@@ -53,9 +59,15 @@ internal class GuardRouterRuntime(context: Context, repository: ProfileRepositor
             }
         }, importProfile = profiles::importProfile, importAuthenticatedProfile = profiles::importAuthenticated)
 
-    val profileProbe get() = (application as FoxholeApplication).routerProfileMonitor.profileProbe
+    private val smartStatus = application.appScope.launch {
+        application.routerProfileMonitor.smartHome.status.collect { control.smartMonitoringChanged(it) }
+    }
 
-    override fun close() { wizard.close(); control.close() }
+    suspend fun exportPhoneProfile(request: RouterPhoneTransferRequest): RouterProfileSelection = profiles.requested(request)
+
+    val profileProbe get() = application.routerProfileMonitor.profileProbe
+
+    override fun close() { smartStatus.cancel(); wizard.close(); control.close() }
 }
 
 private fun readGuardRouterReleaseAnchor(context: Context): RouterSetupRelease? {

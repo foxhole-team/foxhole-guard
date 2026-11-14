@@ -179,7 +179,38 @@ class ThreatIntelUpdateClientTest {
             assertEquals(false, nonRetryable.retryable)
         }
 
-    private class RecordingThreatIntelStore : ThreatIntelStore {
+    @Test
+    fun `repeat download still verifies signature and exact local artifact identity`() = runBlocking {
+        val keys = testKeyPair()
+        val document = testDocumentBytes()
+        val manifest = testManifest(document.size.toLong(), document.sha256Hex())
+        val encoded = json.encodeToString(manifest).toByteArray()
+        val store = RecordingThreatIntelStore(manifest.generatedAt, document.sha256Hex())
+        val client = ThreatIntelUpdateClient(testHttpClient(encoded, keys.sign(encoded), document), json,
+            publicKeyPem = keys.publicKeyPem(), resolver = { listOf(InetAddress.getByName("8.8.8.8")) })
+        assertEquals(ThreatIntelUpdateStatus.UPDATED, client.update(MANIFEST_URL, store).status)
+        assertArrayEquals(document, store.documentBytes)
+    }
+
+    @Test
+    fun `even a valid signature cannot change payload at the installed generation`() = runBlocking {
+        val keys = testKeyPair()
+        val document = testDocumentBytes()
+        val manifest = testManifest(document.size.toLong(), document.sha256Hex())
+        val encoded = json.encodeToString(manifest).toByteArray()
+        for (oldHash in listOf(null, "0".repeat(64))) {
+            val store = RecordingThreatIntelStore(manifest.generatedAt, oldHash)
+            val client = ThreatIntelUpdateClient(testHttpClient(encoded, keys.sign(encoded), document), json,
+                publicKeyPem = keys.publicKeyPem(), resolver = { listOf(InetAddress.getByName("8.8.8.8")) })
+            assertEquals(ThreatIntelUpdateStatus.FAILED, client.update(MANIFEST_URL, store).status)
+            assertNull(store.documentBytes)
+        }
+    }
+
+    private class RecordingThreatIntelStore(private val existingGeneration: String? = null,
+        private val existingHash: String? = null) : ThreatIntelStore {
+        override fun installedGeneratedAt(): String? = existingGeneration
+        override fun installedArtifactSha256(): String? = existingHash
         var documentBytes: ByteArray? = null
         var manifest: ThreatIntelManifest? = null
 

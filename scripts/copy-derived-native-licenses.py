@@ -39,11 +39,19 @@ def path_root(value, suffix):
 
 
 def producer_roots(component, steps):
-    # These shapes come from the fully verified, hash-bound producer recipe, not the consumer checkout.
+    # Accept the pinned NDK host tags used by Linux builders and macOS local builds.
+    # The resulting evidence still binds the exact NDK root as one normalized role.
     ndks = set()
+    suffixes = (
+        '/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip',
+        '/toolchains/llvm/prebuilt/darwin-arm64/bin/llvm-strip',
+        '/toolchains/llvm/prebuilt/darwin-x86_64/bin/llvm-strip',
+    )
     for step in steps:
-        if step['argv'][0].endswith('/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip'):
-            ndks.add(path_root(step['argv'][0], '/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip'))
+        for suffix in suffixes:
+            if step['argv'][0].endswith(suffix):
+                ndks.add(path_root(step['argv'][0], suffix))
+                break
     require(len(ndks) == 1, 'One bound producer NDK command root is required')
     if component == 'graphics':
         first = steps[0]['argv']

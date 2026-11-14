@@ -36,6 +36,8 @@ internal class GuardRouterViewModel(application: Application) : AndroidViewModel
     private var wizardJob: Job? = null
     private var openGeneration = 0L
 
+    suspend fun exportPhoneProfile(request: RouterPhoneTransferRequest): RouterProfileSelection = runtime.exportPhoneProfile(request)
+
     fun open() {
         closeScreen()
         loading.value = true

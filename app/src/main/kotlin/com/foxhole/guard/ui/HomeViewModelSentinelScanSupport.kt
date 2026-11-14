@@ -6,6 +6,7 @@ import com.foxhole.core.model.ApkScanSettings
 import com.foxhole.guard.FoxholeApplication
 import com.foxhole.guard.R
 import com.foxhole.guard.core.sentinel.scanner.SentinelScanControlState
+import com.foxhole.guard.core.sentinel.scanner.ScanReportHistoryState
 import com.foxhole.guard.core.sentinel.sentinelAttempt
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -14,6 +15,15 @@ internal val HomeViewModel.sentinelScanState: StateFlow<SentinelScanControlState
     get() = getApplication<FoxholeApplication>().appGraph.sentinelScanGateway.controller.state
 internal val HomeViewModel.sentinelScanAvailable: Boolean
     get() = getApplication<FoxholeApplication>().appGraph.sentinelScanGateway.engineAvailable
+internal val HomeViewModel.sentinelReportHistory: StateFlow<ScanReportHistoryState>
+    get() = getApplication<FoxholeApplication>().appGraph.sentinelScanGateway.reportHistory
+
+internal fun HomeViewModel.clearSentinelReports() {
+    viewModelScope.launch {
+        sentinelAttempt { getApplication<FoxholeApplication>().appGraph.sentinelScanGateway.clearReports() }
+            .onFailure { emitError(getApplication<Application>().getString(R.string.sentinel_report_unavailable)) }
+    }
+}
 
 internal fun HomeViewModel.refreshSentinelScanPolicy() {
     viewModelScope.launch {

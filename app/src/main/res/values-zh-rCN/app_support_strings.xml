@@ -27,6 +27,6 @@
     <string name="guard_router_router_updates_device_download">正在通过您的设备下载 FoxHole 软件包</string>
     <string name="guard_router_settings_info">本应用使用您的局域网查找 OpenWrt 路由器，并从此手机管理其 VPN。关闭管理不会停止路由器的 VPN。</string>
     <string name="guard_router_settings_pair_first">请先设置或配对路由器，以启用管理。</string>
-    <string name="guard_router_vpn_router_error_home_vpn">没有通往已配对路由器的已验证 VPN 路由。请连接到该路由器的 VPN，并在路由器设置中启用通过家庭 VPN 进行管理。</string>
+    <string name="guard_router_vpn_router_error_home_vpn">没有通往已配对路由器的已验证 VPN 路由。请连接到该路由器的 VPN，并在路由器设置中启用通过家庭 VPN 进行管理。 要通过家庭 VPN 管理路由器，请在 Guard 中关闭局域网绕过。</string>
     <string name="guard_router_wifi_status_label">Wi-Fi 状态</string>
 </resources>

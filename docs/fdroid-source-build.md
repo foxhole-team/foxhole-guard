@@ -4,6 +4,18 @@
 source build. It requires the pinned Core checkout, Rust, NDK and four Android
 ABIs. Guard also builds its pinned Go source before compiling Tor transports.
 
+The Guard recipe declares I2pd as a separate Git srclib at the revision in
+`third_party/i2pd.version` and exports `I2PD_SOURCE_DIR` in both preparation and
+build phases. Preserve that checkout's Git identity: a vendored copy without its
+own revision can inherit the application's commit time and change I2pd's
+embedded build timestamp.
+
+After stock F-Droid removes signing configuration, Maven attribution uses the
+exact content projection in `config/fdroid-signing-source-projection.json`.
+Only that captured signing change is admitted; the original dependency graph,
+archive checksums and notice files remain bound to their normal producer. This
+projection is source metadata and does not establish a successful F-Droid build.
+
 The compiled-source revision and canonical legal snapshot identify the original
 reference material. Their native checksums describe those reference binaries.
 Host-specific linker output can differ between Darwin and Linux. A source build

@@ -64,6 +64,7 @@ PY
   (
     cd "$clone"
     ./gradlew --no-daemon --console=plain --stacktrace \
+      --init-script scripts/fdroid-native-packaging.init.gradle \
       -Pfoxhole.splitApks=false -Pfoxhole.sbom=true \
       "-Pfoxhole.abis=${abis[$i]}" "-Pfoxhole.updateChannel=${channels[$i]}" \
       "-Pfoxhole.releaseSigningProperties=$signing_properties" \
@@ -81,7 +82,8 @@ PY
 done
 (
   cd "$work/github"
-  ./gradlew --no-daemon --console=plain --stacktrace -Pfoxhole.sbom=true \
+  ./gradlew --no-daemon --console=plain --stacktrace \
+      --init-script scripts/fdroid-native-packaging.init.gradle -Pfoxhole.sbom=true \
     -Pfoxhole.splitApks=false "-Pfoxhole.abis=arm64-v8a armeabi-v7a x86 x86_64" -Pfoxhole.updateChannel=github \
     "-Pfoxhole.releaseSigningProperties=$signing_properties" "-Pfoxhole.lastUploadedVersionCode=$1" \
     :app:validateReleaseSigningInputs :app:publicReleasePreflight

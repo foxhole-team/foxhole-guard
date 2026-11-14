@@ -1,0 +1,2 @@
+github.com/mroth/weightedrand
+v1.0.0

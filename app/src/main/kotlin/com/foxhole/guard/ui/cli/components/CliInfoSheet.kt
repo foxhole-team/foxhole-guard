@@ -15,6 +15,7 @@ internal val LocalCliInfoSheetBodyIconVisible = staticCompositionLocalOf { true 
 internal fun CliInfoSheet(
     text: String,
     onDismiss: () -> Unit,
+    helpContent: (@Composable () -> Unit)? = null,
 ) {
     CliBottomSheet(
         onDismiss = onDismiss,
@@ -22,7 +23,8 @@ internal fun CliInfoSheet(
         icon = R.drawable.lin_info,
         headerIconRole = CliSheetHeaderIconRole.INFORMATION,
     ) {
-        CliHelpNote(
+        if (helpContent != null) helpContent()
+        else CliHelpNote(
             text = text,
             icon = R.drawable.lin_info.takeIf { LocalCliInfoSheetBodyIconVisible.current },
         )

@@ -6,6 +6,7 @@ import com.foxhole.core.model.InstalledAppInventoryAudit
 import com.foxhole.core.model.InstalledAppInventoryChange
 import com.foxhole.core.model.InstalledAppInventoryEntry
 import com.foxhole.core.model.InstalledAppOption
+import com.foxhole.core.model.InstalledAppAssessment
 import com.foxhole.core.model.InstalledAppRiskLevel
 import com.foxhole.core.model.InstalledAppRiskSignal
 import com.foxhole.core.model.KnownApplicationIdentity
@@ -97,6 +98,7 @@ private fun SettingsRepository.installedAppInventoryEntry(app: InstalledAppOptio
         installerPackageName = security.installerPackageName,
         riskLevel = security.riskLevel,
         riskSignals = security.riskSignals,
+        assessment = security.assessment,
     )
 }
 
@@ -155,6 +157,7 @@ private fun InstalledAppInventoryEntry.toInstalledAppInventoryChange(
         installerPackageName = installerPackageName,
         riskLevel = riskLevel,
         riskSignals = riskSignals,
+        assessment = assessment,
     )
 
 suspend fun SettingsRepository.recordInstalledAppChange(
@@ -169,6 +172,7 @@ suspend fun SettingsRepository.recordInstalledAppChange(
     riskSignals: List<InstalledAppRiskSignal> = emptyList(),
     quarantineIdentity: KnownApplicationIdentity? = null,
     quarantineAnalysisComplete: Boolean = true,
+    assessment: InstalledAppAssessment = InstalledAppAssessment(),
 ) = update { current ->
     recordInstalledAppChangeIn(
         current = current,
@@ -183,6 +187,7 @@ suspend fun SettingsRepository.recordInstalledAppChange(
         riskSignals = riskSignals,
         quarantineIdentity = quarantineIdentity,
         quarantineAnalysisComplete = quarantineAnalysisComplete,
+        assessment = assessment,
     )
 }
 
@@ -199,6 +204,7 @@ internal fun recordInstalledAppChangeIn(
     riskSignals: List<InstalledAppRiskSignal> = emptyList(),
     quarantineIdentity: KnownApplicationIdentity? = null,
     quarantineAnalysisComplete: Boolean = true,
+    assessment: InstalledAppAssessment = InstalledAppAssessment(),
 ): Settings {
     if (packageName == BuildConfig.APPLICATION_ID) {
         return current
@@ -228,6 +234,7 @@ internal fun recordInstalledAppChangeIn(
                     riskLevel = riskLevel,
                     riskSignals = riskSignals.distinct(),
                     analysisComplete = quarantineAnalysisComplete,
+                    assessment = assessment,
                 )
             } else {
                 null
@@ -247,6 +254,7 @@ internal fun recordInstalledAppChangeIn(
             installerPackageName = installerPackageName?.trim()?.takeIf(String::isNotBlank),
             riskLevel = riskLevel,
             riskSignals = riskSignals.distinct(),
+            assessment = assessment,
         )
     return current.copy(
         connection = updatedConnection,
@@ -281,6 +289,7 @@ internal suspend fun SettingsRepository.enrichInstalledAppChange(
     riskLevel: InstalledAppRiskLevel,
     riskSignals: List<InstalledAppRiskSignal>,
     installedIdentity: KnownApplicationIdentity?,
+    assessment: InstalledAppAssessment = InstalledAppAssessment(),
 ): QuarantineEnrichmentOutcome {
     var outcome = QuarantineEnrichmentOutcome(pendingAfterCommit = false, routeChanged = false)
     update { current ->
@@ -295,6 +304,7 @@ internal suspend fun SettingsRepository.enrichInstalledAppChange(
             riskLevel = riskLevel,
             riskSignals = riskSignals,
             installedIdentity = installedIdentity,
+            assessment = assessment,
         ).also { enrichment -> outcome = enrichment.outcome }.settings
     }
     return outcome
@@ -311,6 +321,7 @@ internal fun enrichInstalledAppChangeIn(
     riskLevel: InstalledAppRiskLevel,
     riskSignals: List<InstalledAppRiskSignal>,
     installedIdentity: KnownApplicationIdentity?,
+    assessment: InstalledAppAssessment = InstalledAppAssessment(),
 ): InstalledAppChangeEnrichment {
     val normalizedPackageName = packageName.trim().takeIf(String::isNotBlank)
         ?: return InstalledAppChangeEnrichment(
@@ -341,6 +352,7 @@ internal fun enrichInstalledAppChangeIn(
             riskLevel = riskLevel,
             riskSignals = riskSignals.distinct(),
             analysisComplete = true,
+            assessment = assessment,
         )
     val expert =
         current.expert.afterInstalledAppEnrichment(
@@ -380,6 +392,7 @@ internal fun enrichInstalledAppChangeIn(
                     installerPackageName = enrichedDetails.installerPackageName,
                     riskLevel = riskLevel,
                     riskSignals = enrichedDetails.riskSignals,
+                    assessment = enrichedDetails.assessment,
                 ),
                 type = InstalledAppChangeType.INSTALLED,
                 detectedAt = detectedAt,
@@ -556,6 +569,7 @@ private fun InstalledAppInventoryAudit.withInstalledAppChange(
             installerPackageName = entry.installerPackageName,
             riskLevel = entry.riskLevel,
             riskSignals = entry.riskSignals,
+            assessment = entry.assessment,
         )
     return copy(
         capturedAt = detectedAt,
@@ -638,6 +652,7 @@ private suspend fun SettingsRepository.reconcileUnexpectedInstalledPackage(
         installerPackageName = security.installerPackageName,
         riskLevel = security.riskLevel,
         riskSignals = security.riskSignals,
+        assessment = security.assessment,
         quarantineIdentity = identity,
     )
 }

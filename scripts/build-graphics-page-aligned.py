@@ -5,6 +5,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import platform
 from pathlib import Path
 import shutil
 import subprocess
@@ -28,7 +29,18 @@ def main():
             raise ValueError('Frozen source/AAR/tool input differs: ' + name)
     if 'Pkg.Revision = 29.0.14206865' not in (args.ndk / 'source.properties').read_text():
         raise ValueError('Expected exact NDK29')
-    tools = args.ndk / 'toolchains/llvm/prebuilt/linux-x86_64/bin'
+    system = platform.system().lower()
+    if system == 'linux':
+        host_tags = ['linux-x86_64']
+    elif system == 'darwin':
+        host_tags = ['darwin-arm64', 'darwin-x86_64']
+    else:
+        raise ValueError('Unsupported NDK host')
+    prebuilt = args.ndk / 'toolchains/llvm/prebuilt'
+    host = next((tag for tag in host_tags if (prebuilt / tag / 'bin/llvm-strip').is_file()), None)
+    if host is None:
+        raise ValueError('Pinned NDK host tools are missing')
+    tools = prebuilt / host / 'bin'
     tool_names = ['clang', 'clang++', 'ld.lld', 'llvm-ar', 'llvm-ranlib', 'llvm-strip', 'llvm-nm', 'llvm-readelf']
     source = extract(inputs / 'graphics-path-1.0.1-native.tar', out / 'original-graphics')
     source_before = tree(source)

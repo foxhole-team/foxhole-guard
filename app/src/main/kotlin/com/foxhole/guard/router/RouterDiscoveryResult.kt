@@ -12,9 +12,11 @@ internal data class RouterDiscoveryResult(
     val discoveryId: String,
     val issue: RouterDiscoveryIssue? = null,
     val packageVersion: String? = null,
+    val licenseRequired: Boolean? = null,
 )
 
-internal data class RouterPackageStatus(val pinConfigured: Boolean, val resetSupported: Boolean, val packageVersion: String? = null)
+internal data class RouterPackageStatus(val pinConfigured: Boolean, val resetSupported: Boolean, val packageVersion: String? = null,
+    val storage: String? = null, val routerInfo: RouterHardwareInfo? = null, val licenseRequired: Boolean? = null)
 
 internal fun routerDiscoveryPackageVersion(value: String?): String? {
     if (value == null || value.length !in 1..64) return null

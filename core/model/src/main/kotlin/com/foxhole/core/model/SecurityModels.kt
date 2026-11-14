@@ -44,6 +44,7 @@ data class PendingQuarantineAppDetails(
     val riskSignals: List<InstalledAppRiskSignal> = emptyList(),
 
     val analysisComplete: Boolean = true,
+    val assessment: InstalledAppAssessment = InstalledAppAssessment(),
 )
 
 @Serializable
@@ -55,6 +56,7 @@ data class InstalledAppInventoryEntry(
     val installerPackageName: String? = null,
     val riskLevel: InstalledAppRiskLevel = InstalledAppRiskLevel.LOW,
     val riskSignals: List<InstalledAppRiskSignal> = emptyList(),
+    val assessment: InstalledAppAssessment = InstalledAppAssessment(),
 )
 
 @Serializable
@@ -68,6 +70,7 @@ data class InstalledAppInventoryChange(
     val installerPackageName: String? = null,
     val riskLevel: InstalledAppRiskLevel = InstalledAppRiskLevel.LOW,
     val riskSignals: List<InstalledAppRiskSignal> = emptyList(),
+    val assessment: InstalledAppAssessment = InstalledAppAssessment(),
 )
 
 @Serializable

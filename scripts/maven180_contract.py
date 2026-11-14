@@ -13,6 +13,11 @@ SOURCE_INPUTS = {
     'core/profile/build.gradle.kts', 'core/sentinel/build.gradle.kts', 'core/runtime/build.gradle.kts',
     'gradle/libs.versions.toml', 'gradle/sbom.gradle.kts', 'gradle/verification-metadata.xml',
 }
+# Exact results of pinned stock common.py cdfdce8 signing removal.
+FDROID_STOCK_SIGNING_TRANSFORMS = {
+    '633f3b0609e2b4acffac2921c71d2a3aaeb0cbf1f93b36ad87e80f6023a0e605': 'c27347b6e1f4a4bf6cc2df72ae2e12e580982e9b797de202c38b910024b629c7',
+    'bb3fc5290b204bb9dad942787ba64c7949cf19cf0e46876749238e6ba9cbfd31': '268d4249b99b10356c966daf07c757f9af80432bdfbaf412a0e275055fd57f39',
+}
 NIO = 'com.android.tools:desugar_jdk_libs_nio:2.1.5'
 NIO_CONFIG = 'com.android.tools:desugar_jdk_libs_configuration_nio:2.1.5'
 POM_LICENSES = {
@@ -240,7 +245,8 @@ def validate_merged(capture, admission, *, is_portable=False):
     need(counts(capture) == admission['counts'], 'actual merged counts differ')
 
 
-def make_sbom(capture, version):
+def make_sbom(capture, version, *, identity_version=1):
+    need(type(identity_version) is int and identity_version in (1, 2), "Unknown Maven SBOM identity version")
     components = []
     for row in capture['components']:
         if row['id'] == capture['root']:
@@ -248,6 +254,9 @@ def make_sbom(capture, version):
         item = dict(type='library', **{'bom-ref': row['id']}, name=row['name'], version=row['version'])
         if row['kind'] == 'maven':
             item['group'] = row['group']
+            if identity_version == 2:
+                from urllib.parse import quote
+                item['purl'] = 'pkg:maven/' + quote(row['group'], safe='') + '/' + quote(row['name'], safe='') + '@' + quote(row['version'], safe='')
             declaration = next(x for x in capture['licenses'] if x['component'] == row['id'])
             item['licenses'] = [{'license': {k: x[k] for k in ('name', 'url') if x.get(k)}} for x in declaration['licenses']]
         else:
@@ -267,7 +276,7 @@ def make_sbom(capture, version):
 
 
 
-def load_bundle(repo, bundle, expected_manifest, *, expected_producer=None):
+def load_bundle(repo, bundle, expected_manifest, *, expected_producer=None, fdroid_unsigned_source=False):
     """QA loader proposal; production integration must freeze the exact manifest pin."""
     need(not Path(bundle).is_symlink() and not Path(repo).is_symlink(), 'linked legal root')
     root = Path(bundle).resolve()
@@ -295,6 +304,12 @@ def load_bundle(repo, bundle, expected_manifest, *, expected_producer=None):
     if expected_producer is not None:
         need(sha(checked['PRODUCER.json']) == pin(expected_producer), 'producer pin differs')
     need(producer['schema'] == 2 and producer['kind'] == 'fresh-guard-runtime-and-desugaring-producer', 'producer role')
+    need(type(fdroid_unsigned_source) is bool, 'Explicit F-Droid source mode required')
+    if fdroid_unsigned_source:
+        # Exact signing-only transform captured with stock F-Droid common.py cdfdce8.
+        need(producer['versionCode'] == 181 and producer['versionName'] == '1.0.7' and
+             producer['sourceInputs'].get('app/build.gradle.kts') in FDROID_STOCK_SIGNING_TRANSFORMS,
+             'Unknown original source for F-Droid signing projection')
     payload = rows(producer['payloadFiles'], 'path')
     need(set(payload) == set(checked) - {'PRODUCER.json'}, 'producer payload closure differs')
     for name, row in payload.items():
@@ -335,7 +350,7 @@ def load_bundle(repo, bundle, expected_manifest, *, expected_producer=None):
                 need(sha(checked['files/' + row['path']]) == row['sha256'], 'original legal bytes/owner differ')
         for pom in view['pom_files']:
             need(sha(checked[pom['path']]) == pom['sha256'], 'original POM differs')
-    need(canonical(json.loads(checked['maven-runtime.cdx.json'])) == canonical(make_sbom(capture, producer['versionName'])), 'aggregate SBOM closure/scope differs')
+    need(canonical(json.loads(checked['maven-runtime.cdx.json'])) == canonical(make_sbom(capture, producer['versionName'], identity_version=producer.get('sbomIdentityVersion', 1))), 'aggregate SBOM closure/scope differs')
     l8 = json.loads(checked['L8-INPUTS.json'])
     source = json.loads(checked['NIO-PUBLISHER-SOURCE.json'])
     artifacts = rows(scope_view(capture, 'desugaring')['artifacts'], 'component')
@@ -345,6 +360,9 @@ def load_bundle(repo, bundle, expected_manifest, *, expected_producer=None):
          l8['sourceInputsSha256'] == sha(canonical(producer['sourceInputs'])) and
          sha(checked['NIO-CONFIGURATION.json']) == l8['configurationMemberSha256'], 'L8/NIO/source closure differs')
     for name, digest in producer['sourceInputs'].items():
-        need(sha(read(member(repo, name))) == pin(digest), 'current consumer source is stale: ' + name)
+        expected_source = digest
+        if fdroid_unsigned_source and name == 'app/build.gradle.kts':
+            expected_source = FDROID_STOCK_SIGNING_TRANSFORMS[digest]
+        need(sha(read(member(repo, name))) == pin(expected_source), 'current consumer source is stale: ' + name)
     # No unsigned source projection is invented; actual final180 stock-transform proof remains required.
     return checked, producer

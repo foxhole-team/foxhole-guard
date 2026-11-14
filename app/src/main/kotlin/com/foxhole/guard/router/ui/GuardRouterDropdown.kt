@@ -18,6 +18,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.Checkbox
@@ -122,7 +124,8 @@ internal fun GuardRouterProfileDropdown(
 
 @Composable
 internal fun GuardRouterCountryFlag(code: String, enabled: Boolean, onSelect: (String) -> Unit,
-    autoSelected: Boolean = false, onAuto: (() -> Unit)? = null) {
+    autoSelected: Boolean = false, onAuto: (() -> Unit)? = null,
+    selectionRequested: Boolean = false, onSelectionDismiss: () -> Unit = {}) {
     val locale = LocalConfiguration.current.locales[0]
     val countries = remember(locale) {
         Locale.getISOCountries().map { it to Locale("", it).getDisplayCountry(locale) }.sortedBy { it.second }
@@ -137,7 +140,7 @@ internal fun GuardRouterCountryFlag(code: String, enabled: Boolean, onSelect: (S
             modifier = Modifier.size(48.dp).semantics { contentDescription = description }) {
             RouterCountryAsset(normalizedCode, compact = true)
         }
-        if (expanded && enabled) CliBottomSheet(onDismiss = { expanded = false },
+        if ((expanded || selectionRequested) && enabled) CliBottomSheet(onDismiss = { expanded = false; onSelectionDismiss() },
             title = stringResource(R.string.guard_router_country_picker_title),
             icon = R.drawable.router_country_unknown, heightFraction = .5f,
             contentScrollEnabled = false, closeLabel = stringResource(R.string.cli_common_close_action)) {
@@ -147,7 +150,7 @@ internal fun GuardRouterCountryFlag(code: String, enabled: Boolean, onSelect: (S
                             text = { Text(stringResource(R.string.guard_router_router_review_country_auto), maxLines = 1, overflow = TextOverflow.Ellipsis) },
                             leadingIcon = { RouterCountryAsset(normalizedCode) },
                             trailingIcon = { Checkbox(autoSelected, onCheckedChange = null) },
-                            onClick = { expanded = false; onAuto() },
+                            onClick = { expanded = false; onAuto(); onSelectionDismiss() },
                         )
                         HorizontalDivider(color = LocalCliColors.current.border)
                     }
@@ -155,7 +158,7 @@ internal fun GuardRouterCountryFlag(code: String, enabled: Boolean, onSelect: (S
                         DropdownMenuItem(
                             text = { Text(name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                             leadingIcon = { RouterCountryAsset(iso) },
-                            onClick = { expanded = false; onSelect(iso) },
+                            onClick = { expanded = false; onSelect(iso); onSelectionDismiss() },
                         )
                         HorizontalDivider(color = LocalCliColors.current.border)
                     }
@@ -183,11 +186,11 @@ private fun RouterCountryAsset(country: String, compact: Boolean = false) {
 }
 
 @Composable
-private fun GuardRouterDropdownButton(label: String, enabled: Boolean, labelColor: Color? = null, onClick: () -> Unit) {
+private fun GuardRouterDropdownButton(label: String, enabled: Boolean, labelColor: Color? = null, compactWidth: Boolean = false, onClick: () -> Unit) {
     CliButton(
         label = label,
         onClick = onClick,
-        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+        modifier = (if (compactWidth) Modifier.width(IntrinsicSize.Min) else Modifier.fillMaxWidth()).heightIn(min = 48.dp),
         enabled = enabled,
         color = labelColor ?: androidx.compose.ui.graphics.Color.Unspecified,
         icon = R.drawable.lin_arrow_down,
@@ -201,11 +204,11 @@ internal fun GuardRouterDeviceRouteDropdown(route: String?, enabled: Boolean, on
     val usesVpn = routerLanDeviceUsesVpn(route)
     val label = stringResource(if (usesVpn) R.string.guard_router_router_review_device_vpn
         else R.string.guard_router_router_review_direct)
-    BoxWithConstraints(Modifier.fillMaxWidth()) {
+    BoxWithConstraints(Modifier.wrapContentWidth()) {
         val menuWidth = maxWidth
-        GuardRouterDropdownButton(label, enabled, if (usesVpn) routerConnectColor() else null) { expanded = !expanded }
+        GuardRouterDropdownButton(label, enabled, if (usesVpn) routerConnectColor() else null, compactWidth = true) { expanded = !expanded }
         DropdownMenu(expanded = expanded && enabled, onDismissRequest = { expanded = false },
-            modifier = Modifier.width(menuWidth).heightIn(max = 240.dp)) {
+            modifier = Modifier.widthIn(min = 100.dp, max = 180.dp).heightIn(max = 240.dp)) {
             DropdownMenuItem(text = { Text(stringResource(R.string.guard_router_router_review_device_vpn), color = routerConnectColor()) },
                 leadingIcon = { Icon(painterResource(R.drawable.lin_power), null, Modifier.size(20.dp), tint = routerConnectColor()) },
                 onClick = { expanded = false; onSelect(true) })

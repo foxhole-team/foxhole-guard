@@ -1,22 +1,26 @@
 #!/usr/bin/env python3
 """Exact fresh Maven producer loader. Generated only from a verified actual receipt."""
 import argparse
+import importlib.util
 from pathlib import Path
-import maven180_contract as contract
 
-EXPECTED_PUBLIC_MANIFEST_SHA256 = '6d446f908dd26f1f3a6c7a48d53ac30fbd1185b2b2388f98c20ff258d7473100'
-EXPECTED_PRODUCER_SHA256 = 'd4b00281d9c055d4ca788a46042624595bba99fc4f540cfa487afb25a97f731c'
+_contract_spec = importlib.util.spec_from_file_location('foxhole_maven_contract', Path(__file__).with_name('maven180_contract.py'))
+contract = importlib.util.module_from_spec(_contract_spec)
+_contract_spec.loader.exec_module(contract)
+
+EXPECTED_PUBLIC_MANIFEST_SHA256 = '75b66bb34265363b425b244c25ef9fcf46bd412dfce2dafc991dfb8282c87be2'
+EXPECTED_PRODUCER_SHA256 = 'd15be1746409265404e7d86bb64bd60a7bf97947ca8de2667abf12b24a12fb63'
 
 def load(repo, bundle, expected_manifest_sha256=EXPECTED_PUBLIC_MANIFEST_SHA256, *, allow_fdroid_unsigned_projection=False):
-    if allow_fdroid_unsigned_projection:
-        raise ValueError('Actual final180 stock unsigned source projection has not been bound')
-    return contract.load_bundle(repo, bundle, expected_manifest_sha256, expected_producer=EXPECTED_PRODUCER_SHA256)[0]
+    return contract.load_bundle(repo, bundle, expected_manifest_sha256, expected_producer=EXPECTED_PRODUCER_SHA256,
+        fdroid_unsigned_source=allow_fdroid_unsigned_projection)[0]
 
 def main():
     p = argparse.ArgumentParser()
     p.add_argument('--repo', type=Path, required=True)
     p.add_argument('--bundle', type=Path, required=True)
     p.add_argument('--output', type=Path, required=True)
+    p.add_argument('--previous-bundle', type=Path)
     p.add_argument('--fdroid-unsigned-source', action='store_true')
     a = p.parse_args()
     files = load(a.repo, a.bundle, allow_fdroid_unsigned_projection=a.fdroid_unsigned_source)

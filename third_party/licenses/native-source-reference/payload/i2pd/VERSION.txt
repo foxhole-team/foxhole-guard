@@ -1,0 +1,4 @@
+ref=2.61.0
+commit=635b013a612ff47278ef02acf8580a28e10e26c5
+repo=https://github.com/PurpleI2P/i2pd
+android_build=https://github.com/PurpleI2P/i2pd-android (tag 2.61.0)

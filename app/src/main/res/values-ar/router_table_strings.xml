@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="router_table_router">الموجّه</string>
-    <string name="router_table_version">إصدار FoxHole</string>
+    <string name="router_table_version">إصدار FoxHole OpenWrt</string>
     <string name="router_table_actions">الإجراءات</string>
     <string name="router_table_rename">إعادة تسمية الموجّه</string>
     <string name="router_table_name">اسم الموجّه</string>

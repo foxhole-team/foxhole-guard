@@ -1,0 +1,2 @@
+github.com/refraction-networking/obfs4
+v0.1.2

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="router_status_title">État</string>
+    <string name="router_status_connected">Connecté au réseau VPN</string>
+    <string name="router_status_disconnected">Déconnecté du réseau VPN</string>
+    <string name="router_status_profile">Profil VPN</string>
+    <string name="router_status_location">Trafic sans VPN</string>
+    <string name="router_status_no_profile">Non sélectionné</string>
+    <string name="router_status_local_off">Désactivé</string>
+</resources>

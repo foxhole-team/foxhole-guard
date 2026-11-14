@@ -147,4 +147,40 @@ class RouterCompactBootstrapCatalogTest {
         val HASH = "a".repeat(64)
         val MANIFEST = "b".repeat(64)
     }
+
+    @Test fun publishedCore104CatalogLoadsForFreshOpenWrt106Setup() {
+        val result = ReleasedRouterBootstrapFixtures.actual("openwrt-1.0.6-catalog.json")
+        assertEquals(setOf(RouterInstallProtocol.HYSTERIA2), result.defaultSelection?.protocols)
+        assertEquals(12, result.compactPlatforms.sumOf { it.clients.size })
+    }
+
+    @Test fun historicalOpenWrt105TagIsIndependentOfItsCore102Version() {
+        val result = ReleasedRouterBootstrapFixtures.actual("openwrt-1.0.5-catalog.json")
+        assertTrue(result.compactPlatforms.flatMap { it.clients }.all { it.entry.compactText("version") == "1.0.2" })
+    }
+
+    @Test fun coreBootstrapRejectsForeignTagVersionAndIndexRoles() {
+        val f = ReleasedRouterBootstrapFixtures
+        val value = f.current()
+        val variants = listOf(
+            f.entry(value) { f.origin(it, "foreign-core", "1.0.4") },
+            f.entry(value) { f.origin(it, "foxhole-core", "1.0.5") },
+            f.entry(value) { JsonObject(it + ("version" to JsonPrimitive("1.0.5"))) },
+            f.entry(value) { JsonObject(it + ("packageVersion" to JsonPrimitive("1.0.5-r1"))) },
+            f.entry(value) { JsonObject(it + ("indexUrl" to JsonPrimitive(it.compactText("indexUrl").replace("engines.adb", "base.adb")))) },
+            f.entry(value) { JsonObject(it + ("packageUrl" to JsonPrimitive(it.compactText("packageUrl").replace("/v1.0.4/", "/v1.0.5/")))) }
+        )
+        variants.forEach { assertThrows(RuntimeException::class.java) { f.parse(it) } }
+    }
+
+    @Test fun bootstrapCatalogCannotMixModuleOriginsOrVersions() {
+        val f = ReleasedRouterBootstrapFixtures
+        assertThrows(RuntimeException::class.java) { f.parse(f.entry(f.current()) { f.origin(it, "foxhole-openwrt-client", "1.0.4") }) }
+        val changed = f.entry(f.current()) {
+            val entry = JsonObject(it + mapOf("version" to JsonPrimitive("1.0.5"), "packageVersion" to JsonPrimitive("1.0.5-r1"),
+                "packageUrl" to JsonPrimitive(it.compactText("packageUrl").replace("1.0.4-r1", "1.0.5-r1").replace("1.0.4-r2", "1.0.5-r1"))))
+            f.origin(entry, "foxhole-core", "1.0.5")
+        }
+        assertThrows(RuntimeException::class.java) { f.parse(changed) }
+    }
 }

@@ -1,9 +1,9 @@
 <resources>
     <string name="sentinel_static_expert">Expert static-check settings</string>
-    <string name="sentinel_static_title">APK checks</string>
+    <string name="sentinel_static_title">Application scan</string>
     <string name="sentinel_static_reference_summary">%1$s: %2$s static API reference categories and %3$s rule matches. These observations do not prove execution or malware.</string>
     <string name="sentinel_static_notification_title">FoxHole Sentinel: static observations</string>
-    <string name="sentinel_static_select_app">Application</string>
+    <string name="sentinel_static_select_app">Choose an application</string>
     <string name="sentinel_static_run">Check selected app</string>
     <string name="sentinel_static_baseline">Check installed apps</string>
     <string name="sentinel_static_cancel">Cancel check</string>
@@ -30,4 +30,5 @@
     <string name="sentinel_static_status_unsupported">APK format not supported</string>
     <string name="sentinel_static_engine_unavailable">The packaged scanner engine is unavailable for this device.</string>
     <string name="sentinel_static_type_label">Static references</string>
+    <string name="sentinel_static_search_app">Search applications</string>
 </resources>

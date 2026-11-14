@@ -156,11 +156,12 @@ class SentinelNotificationAndroidTest {
             channelId = InstalledAppSecurityNotifier.CHANNEL_ID,
             title = localized.getString(R.string.installed_app_notification_title),
             body = localized.getString(
-                R.string.installed_app_notification_body,
+                R.string.sentinel_assessment_notification_body,
                 summary.label,
-                localized.getString(R.string.installed_app_source_unknown),
-                localized.getString(R.string.installed_app_risk_low),
-                localized.getString(R.string.installed_app_risk_signals_none),
+                localized.getString(R.string.sentinel_assessment_installer_unknown),
+                localized.getString(R.string.sentinel_assessment_status_unavailable),
+                localized.getString(R.string.sentinel_assessment_confidence_unknown),
+                localized.getString(R.string.sentinel_assessment_context),
             ),
             marker = marker,
         )

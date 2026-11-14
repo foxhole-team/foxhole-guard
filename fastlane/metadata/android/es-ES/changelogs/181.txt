@@ -1,0 +1,8 @@
+- Se corrigieron la instalación y la configuración inicial del router desde la aplicación
+- Actualizados los transportes Tor Lyrebird y conjure-client
+- Actualizadas las secciones de ayuda
+- Mejorados los informes y el historial de análisis de Sentinel
+- Interfaz de gestión del router actualizada
+- Mejoras generales de la interfaz
+- Mejorados el selector de apps y la descarga de datos de Sentinel
+- Controles de Tor, I2P, cortafuegos y Sentinel disponibles en modo usuario

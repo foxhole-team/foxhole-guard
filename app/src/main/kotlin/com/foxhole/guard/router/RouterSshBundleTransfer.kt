@@ -42,7 +42,7 @@ internal fun routerBundleOwner(bundle: RouterDeviceInstallBundle, facts: RouterB
         } }))
     }.toString().toByteArray(Charsets.UTF_8).also { require(it.size in 1..1048576) }
 
-internal fun routerBundleCreateCommand(path: String, nonce: String, bootId: String, ownerHash: String, requiredRam: Long): String {
+internal fun routerBundleCreateCommand(path: String, nonce: String, bootId: String, ownerHash: String, requiredRam: Long, requiredTmp: Long): String {
     val cleanup = routerBundleActionCommand(path, nonce, bootId, ownerHash, "cleanup")
     return """
         set -eu
@@ -53,7 +53,7 @@ internal fun routerBundleCreateCommand(path: String, nonce: String, bootId: Stri
         tmp=${'$'}(df -Pk /tmp | awk 'NR==2 {print ${'$'}4}')
         case "${'$'}ram:${'$'}tmp" in ''|*[!0-9:]*|:*|*:) exit 1 ;; esac
         [ "${'$'}ram" -ge $((($requiredRam + 1023) / 1024)) ]
-        [ "${'$'}tmp" -ge $((($requiredRam + 1023) / 1024)) ]
+        [ "${'$'}tmp" -ge $((($requiredTmp + 1023) / 1024)) ]
         ucode -e ${bundleQuote(BUNDLE_CREATE)} -- ${bundleQuote(path)} ${bundleQuote(nonce)} ${bundleQuote(bootId)}
     """.trimIndent() + "\n(trap '' HUP; sleep 1800; $cleanup) </dev/null >/dev/null 2>&1 &\n"
 }
@@ -98,8 +98,8 @@ private val BUNDLE_CREATE = """
     if(!fs.mkdir(path,0700))exit(1);
     let owner=null;
     try{
-      owner=fs.open(path+'/.owner','wxe',0600);if(!owner)throw 'owner';if(owner.write(raw)!=length(raw)||!owner.flush())throw 'owner';owner.close();owner=null;
-      for(let f in v.files){let fd=fs.open(path+'/'+f.name,'wxe',0600);if(!fd)throw 'file';fd.close();}
+      owner=fs.open(path+'/.owner','wxe',0600);if(!owner)die('owner');if(owner.write(raw)!=length(raw)||!owner.flush())die('owner');owner.close();owner=null;
+      for(let f in v.files){let fd=fs.open(path+'/'+f.name,'wxe',0600);if(!fd)die('file');fd.close();}
     }catch(e){
       if(owner)try{owner.close();}catch(_){}
       let names=map(v.files,f=>f.name);push(names,'.owner');

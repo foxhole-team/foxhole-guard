@@ -359,4 +359,25 @@ class GithubRouterSetupReleaseTest {
             }
         }
     }
+
+    @Test fun publishedCore104IndexRelationshipsAllowOnlyTheirModuleRoles() {
+        val f = ReleasedRouterBootstrapFixtures
+        assertEquals(true, f.verify(f.auth()).indexes > 0)
+        val legacy = f.index(f.auth(), "engines.adb", "https://github.com/foxhole-team/foxhole-openwrt-client/releases/download/v1.0.6/engines.adb")
+        assertEquals(true, f.verify(legacy).indexes > 0)
+        for ((file, url) in listOf(
+            "engines.adb" to "https://github.com/foxhole-team/foreign-core/releases/download/v1.0.4/engines.adb",
+            "engines.adb" to "https://github.com/foxhole-team/foxhole-core/releases/download/v1.0.5/engines.adb",
+            "engines.adb" to "https://github.com/foxhole-team/foxhole-core/releases/download/v1.0.4/base.adb",
+            "base.adb" to "https://github.com/foxhole-team/foxhole-core/releases/download/v1.0.6/engines.adb"
+        )) assertThrows(RuntimeException::class.java) { f.verify(f.index(f.auth(), file, url)) }
+    }
+
+    @Test fun oneBootstrapCannotAuthenticateModulesFromMixedRepositories() {
+        val f = ReleasedRouterBootstrapFixtures
+        val same = f.twoModuleAuthentication(mixed = false)
+        assertEquals(true, f.verify(same.first, same.second).indexes > 0)
+        val mixed = f.twoModuleAuthentication(mixed = true)
+        assertThrows(RuntimeException::class.java) { f.verify(mixed.first, mixed.second) }
+    }
 }

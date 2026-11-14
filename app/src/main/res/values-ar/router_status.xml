@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="router_status_title">الحالة</string>
+    <string name="router_status_connected">متصل بشبكة VPN</string>
+    <string name="router_status_disconnected">غير متصل بشبكة VPN</string>
+    <string name="router_status_profile">ملف VPN</string>
+    <string name="router_status_location">حركة البيانات بدون VPN</string>
+    <string name="router_status_no_profile">غير محدد</string>
+    <string name="router_status_local_off">معطّل</string>
+</resources>

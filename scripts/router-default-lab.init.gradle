@@ -1,0 +1,31 @@
+// This script is loaded only by an explicit --init-script invocation.
+allprojects { project ->
+    if (project.path == ':app') {
+        project.plugins.withId('com.android.application') {
+            def fixture = System.getenv('FOXHOLE_ROUTER_LAB_FIXTURE')
+            def fixtureId = System.getenv('FOXHOLE_ROUTER_LAB_FIXTURE_ID')
+            def suite = System.getenv('FOXHOLE_ROUTER_LAB_SUITE') ?: 'setup'
+            def patterns = [
+                'setup': '*.RouterDefaultSetupLabTest',
+                'update-readback': '*.RouterBuiltinBaseUpdateLabTest.configuredManagementReadbackPreservesProfilesAndPairing',
+                'update-apply': '*.RouterBuiltinBaseUpdateLabTest.builtinBaseApplyPreservesProfilesModulesPolicyAndExistingPairing',
+            ]
+            def source = project.file('src/routerLabTest/kotlin')
+            if (!fixture || !(fixtureId ==~ /[a-f0-9]{32}/) || !source.isDirectory() || !patterns.containsKey(suite)) {
+                throw new GradleException('Explicit owned router lab inputs required')
+            }
+            project.extensions.getByName('android').sourceSets.getByName('test').kotlin.srcDir(source)
+            project.tasks.withType(Test).configureEach {
+                maxParallelForks = 1
+                maxHeapSize = '1536m'
+                jvmArgs '-XX:ActiveProcessorCount=2'
+                environment 'FOXHOLE_ROUTER_LAB_FIXTURE', fixture
+                environment 'FOXHOLE_ROUTER_LAB_FIXTURE_ID', fixtureId
+                environment 'FOXHOLE_ROUTER_LAB_SUITE', suite
+                def cacheRoot = System.getenv('FOXHOLE_ROUTER_LAB_CACHE_ROOT')
+                if (cacheRoot) environment 'FOXHOLE_ROUTER_LAB_CACHE_ROOT', cacheRoot
+                filter { includeTestsMatching patterns[suite] }
+            }
+        }
+    }
+}

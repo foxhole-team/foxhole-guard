@@ -69,6 +69,7 @@ data class InstalledAppOption(
     val installerPackageName: String? = null,
     val riskLevel: InstalledAppRiskLevel = InstalledAppRiskLevel.LOW,
     val riskSignals: List<InstalledAppRiskSignal> = emptyList(),
+    val assessment: InstalledAppAssessment = InstalledAppAssessment(),
 )
 
 @Immutable

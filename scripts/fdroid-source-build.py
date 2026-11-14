@@ -17,10 +17,10 @@ import tomllib
 CONSUMER = "guard"
 CORE_URL = "https://github.com/foxhole-team/foxhole-core.git"
 GO_URL = "https://github.com/golang/go.git"
-GO_COMMIT = "4e8c85f5319d999bfd7617fdc191631e5634e3c5"
-GO_VERSION = "go1.26.10"
-BOOTSTRAP_SHA256 = "ccfe7ae822d2c2f41f4fe7c956199967a4dac22d0ee0d2b2bfdb440aab3b20c5"
-BOOTSTRAP_BYTES = 66936659
+GO_COMMIT = "26b4433366fce47e480679e0b5a30222b63996e0"
+GO_VERSION = "go1.26.11"
+BOOTSTRAP_SHA256 = "9849f4e04ee35303714e34fbc3ac8ab44ea3e448a95aa182f91e3b9b79c710ec"
+BOOTSTRAP_BYTES = 66999944
 ABIS = ["arm64-v8a", "armeabi-v7a", "x86", "x86_64"]
 TARGETS = ["aarch64-linux-android", "armv7-linux-androideabi", "i686-linux-android", "x86_64-linux-android"]
 FACTS = ("st_dev", "st_ino", "st_mode", "st_uid", "st_gid", "st_nlink", "st_size", "st_mtime_ns", "st_ctime_ns")
@@ -89,17 +89,24 @@ def headers(root):
          "Four-ABI source delivery config required")
     need(all(compiled.get(key) == value for key, value in shape.items()),
          "Compiled source delivery differs")
-    folder = "source-legal" if CONSUMER == "guard" else "vpn-source-legal"
-    snapshot_path = root / "third_party/licenses" / folder / "android4/snapshot.json"
-    snapshot = document(read(snapshot_path))
-    kind = "canonical-source-legal-delivery" if CONSUMER == "guard" else "canonical-vpn-source-legal-delivery"
-    need(snapshot.get("schema") == 1 and snapshot.get("kind") == kind and
-         snapshot.get("coreCommit") == producer and snapshot.get("sourceProducerProfile") == "android4" and
-         snapshot.get("compiledInputs") == inputs and all(snapshot.get(key) == value for key, value in shape.items()),
-         "Canonical legal producer or four-ABI coverage differs")
-    if CONSUMER == "vpn":
+    if CONSUMER == "guard":
+        current = module(root / "scripts/current-source-legal-consumer.py")
+        snapshot_path, snapshot = current.reference_header(root)
+        need(snapshot["source"] == {
+            "producerCommit": producer, "producerTree": current.TREE,
+            "checkoutCommit": binding["sourceCommit"], "checkoutTree": binding["sourceTree"],
+            "compiledManifestSHA256": digest(compiled_raw),
+        }, "Current source legal header differs from the compiled source binding")
+        native = {kind: snapshot[kind]["nativeLibraries"] for kind in ("core", "sentinel")}
+    else:
+        snapshot_path = root / "third_party/licenses/vpn-source-legal/android4/snapshot.json"
+        snapshot = document(read(snapshot_path))
+        need(snapshot.get("schema") == 1 and snapshot.get("kind") == "canonical-vpn-source-legal-delivery" and
+             snapshot.get("coreCommit") == producer and snapshot.get("sourceProducerProfile") == "android4" and
+             snapshot.get("compiledInputs") == inputs and all(snapshot.get(key) == value for key, value in shape.items()),
+             "Canonical legal producer or four-ABI coverage differs")
         need(snapshot.get("consumer") == "vpn", "VPN legal consumer differs")
-    native = snapshot.get("nativeLibraries")
+        native = snapshot.get("nativeLibraries")
     need(isinstance(native, dict), "Canonical native inventory missing")
     inventories = native.values() if CONSUMER == "guard" else [native]
     if CONSUMER == "guard":
@@ -294,8 +301,9 @@ def seed_maven_dependencies(root, env):
         argv = ["gradle", "--no-daemon", "--console=plain", "--dependency-verification=strict", "--no-build-cache", "--max-workers=1",
                 "-Dorg.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=512m -XX:ActiveProcessorCount=4 -Dfile.encoding=UTF-8",
                 "-Pfoxhole.splitApks=false", "-Pfoxhole.coreDocker=false", "-Pfoxhole.updateChannel=fdroid",
-                "-Pfoxhole.nativeOffline=true", "-Pfoxhole.abis=" + " ".join(ABIS), "--init-script", path,
-                ":foxholeFdroidResolveDependencies"]
+                "-Pfoxhole.nativeOffline=true", "-Pfoxhole.abis=" + " ".join(ABIS),
+                "--init-script", root / "scripts/fdroid-native-packaging.init.gradle", "--init-script", path,
+                ":foxholeFdroidResolveDependencies", ":app:generateReleaseLocaleConfig"]
         if CONSUMER == "vpn":
             argv.append("-Pfoxhole.nativeDocker=false")
         run(argv, env, timeout=1800, cwd=root)
@@ -370,10 +378,42 @@ def guard_source_native_manifest(root, core_root, context):
     return report
 
 
+def guard_privacy_source_manifest(root, source_manifest):
+    material = module(root / "scripts/native-source-license-material.py")
+    reference = root / "third_party/licenses/native-source-reference/manifest.json"
+    reference_raw = material.read(reference)
+    bindings = material.document(material.read(root / "config/native-source-material-bindings.json"))
+    need(material.digest(reference_raw) == bindings["manifestSHA256"], "Reference privacy legal manifest differs")
+    rows = []
+    for abi in ABIS:
+        for name in ("lyrebird", "conjure-client", "libi2pd.so"):
+            path = material.asset_path(root, abi, name)
+            body = material.read(path, 128 * 1048576, native=True)
+            rows.append({"abi": abi, "name": name, "bytes": len(body), "sha256": digest(body)})
+    report = root / "app/build/reports/fdroid/privacy-source-build.json"
+    need(not report.exists() and not report.is_symlink(), "Fresh privacy source report required")
+    report.write_text(json.dumps({"schema": 1, "kind": "normal-fdroid-privacy-source-build",
+        "coreNativeManifestSHA256": digest(material.read(source_manifest)),
+        "referenceMaterialManifestSHA256": digest(reference_raw),
+        "referenceProducerReceipts": material.PRODUCERS, "sourceInputs": bindings["sourceInputs"],
+        "abis": ABIS, "nativeLibraries": rows}, indent=2) + "\n")
+    report.chmod(0o600)
+    material.source_privacy_provenance(source_manifest, root,
+        root / "app/build/fdroidNativeSource/core",
+        root / "app/build/fdroidNativeSource/sentinel/jniLibs",
+        digest(reference_raw), bindings["sourceInputs"], {})
+    return report
+
+
 def build(root, core_root, go_root, context, env):
     context["helper"].resolve(root, core_root, context["producer"])
     env.update(CARGO_NET_OFFLINE="true", FOXHOLE_NATIVE_OFFLINE="1", GOPROXY="off", GOSUMDB="off")
     if CONSUMER == "guard":
+        material = module(root / "scripts/native-source-license-material.py")
+        for abi in ABIS:
+            for name in ("lyrebird", "conjure-client", "libi2pd.so"):
+                path = material.asset_path(root, abi, name)
+                need(not path.exists() and not path.is_symlink(), "Source privacy outputs must initially be absent")
         need(go_root is not None and git(go_root, "rev-parse", "HEAD") == GO_COMMIT, "Pinned Go source required")
         deps = Path(env["FOXHOLE_NATIVE_DEPS_DIR"])
         env.update(GOROOT_BOOTSTRAP=str(deps / GO_VERSION), GOCACHE=str(deps / "go-tool-source-cache"), GOFLAGS="-p=2")
@@ -402,7 +442,8 @@ def build(root, core_root, go_root, context, env):
     gradle = ["gradle", "--no-daemon", "--console=plain", "--dependency-verification=strict", "--offline", "--no-build-cache", "--max-workers=1",
               "-Dorg.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=512m -XX:ActiveProcessorCount=4 -Dfile.encoding=UTF-8",
               "-Pkotlin.compiler.execution.strategy=in-process", "-Pfoxhole.splitApks=false", "-Pfoxhole.coreDocker=false",
-              "-Pfoxhole.updateChannel=fdroid", "-Pfoxhole.nativeOffline=true", "-Pfoxhole.abis=" + " ".join(ABIS), ":app:assembleRelease"]
+              "-Pfoxhole.updateChannel=fdroid", "-Pfoxhole.nativeOffline=true", "-Pfoxhole.abis=" + " ".join(ABIS),
+              "--init-script", root / "scripts/fdroid-native-packaging.init.gradle", ":app:assembleRelease"]
     if CONSUMER == "vpn":
         gradle.extend(["-Pfoxhole.nativeDocker=false", ":app:verifyNativePayload"])
     else:
@@ -416,6 +457,12 @@ def build(root, core_root, go_root, context, env):
         run(["bash", core_root / "scripts/sentinel-android-build.sh"], sentinel_env, cwd=core_root)
         source_manifest = guard_source_native_manifest(root, core_root, context)
         gradle.insert(-1, "-Pfoxhole.sourceNativeManifest=" + str(source_manifest))
+        gradle.insert(-1, "-Pfoxhole.sourceLegalSnapshot=" + str(context["snapshotPath"]))
+        reference = root / "third_party/licenses/native-source-reference"
+        gradle.insert(-1, "-Pfoxhole.nativeSourceMaterialManifest=" + str(reference / "manifest.json"))
+        gradle.insert(-1, "-Pfoxhole.nativeSourceMaterialRoot=" + str(reference / "payload"))
+        run(gradle[:-1] + [":app:prepareBundledI2pd", ":app:prepareBundledTorTransports"], env)
+        guard_privacy_source_manifest(root, source_manifest)
     run(gradle, env)
 
 

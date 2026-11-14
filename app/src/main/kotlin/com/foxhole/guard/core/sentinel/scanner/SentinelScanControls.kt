@@ -28,7 +28,7 @@ internal data class SentinelScanWorkPolicy(
 }
 
 internal data class SentinelScanEnvironment(val charging: Boolean, val batteryNotLow: Boolean, val storageNotLow: Boolean, val criticalBattery: Boolean = false)
-internal data class SentinelScanSource(val packageName: String, val installationId: String, val journalEpoch: Long = 0L)
+internal data class SentinelScanSource(val packageName: String, val installationId: String, val journalEpoch: Long = 0L, val packageVersion: Long? = null)
 internal data class SentinelScanSummary(
     val source: SentinelScanSource,
     val complete: Boolean,
@@ -36,6 +36,11 @@ internal data class SentinelScanSummary(
     val ruleIds: Set<String>,
     val issues: Set<String> = emptySet(),
     val outcome: SentinelScanStage = if (complete) SentinelScanStage.COMPLETE else SentinelScanStage.PARTIAL,
+    val artifacts: List<ScanArtifactReport> = emptyList(),
+    val coverage: ScanCoverageReport = ScanCoverageReport(),
+    val limitations: Set<String> = emptySet(),
+    val analyzerVersion: String? = null,
+    val reportId: String? = null,
 ) {
     init {
         require(
@@ -54,4 +59,6 @@ internal data class SentinelScanControlState(
     val lastSummary: SentinelScanSummary? = null,
     val cached: Boolean = false,
     val journalDeferred: Boolean = false,
+    val lastReport: SentinelScanReport? = null,
+    val reportDeferred: Boolean = false,
 )

@@ -45,6 +45,8 @@ internal data class RuntimeServiceCommandHandlers(
     val startLocalGuard: suspend (LocalGuardMode, Int) -> Unit,
     val activeProfileSessionPresent: () -> Boolean,
     val failClosedTeardown: suspend (commandStartId: Int, action: String?) -> Unit,
+    val disconnectOwned: suspend (RouterOwnedDisconnect, Int) -> Unit = { _, _ -> },
+    val connectOwned: suspend (RouterOwnedResume, Int) -> Unit = { _, _ -> },
 )
 
 internal fun Service.handleForegroundRuntimeCommand(
@@ -58,6 +60,13 @@ internal fun Service.handleForegroundRuntimeCommand(
     handlers: RuntimeServiceCommandHandlers,
 ): Int {
     val action = intent?.action
+    if (isMalformedRouterOwnedRuntimeCommand(action,
+            resumeOwner = { intent?.let(FoxholeConnectionServiceContract::routerOwnedConnect) },
+            disconnectOwner = { intent?.let(FoxholeConnectionServiceContract::routerOwnedDisconnect) })) {
+        // A malformed private receipt must not start/stop the foreground service or
+        // publish an error over an unrelated active runtime.
+        return Service.START_NOT_STICKY
+    }
     ensureConnectionNotificationChannel(notificationManager)
     val notification = buildNotification(currentNotificationSnapshot())
     if (!startForegroundRuntimeSafely(action, startId, trafficMode, notification, container)) {
@@ -159,6 +168,9 @@ internal fun handleRuntimeServiceCommand(
     handlers: RuntimeServiceCommandHandlers,
 ) {
     val commandIntent = intent ?: return
+    if (dispatchRouterOwnedRuntimeCommand(commandIntent.action, startId, handlers,
+            resumeOwner = { FoxholeConnectionServiceContract.routerOwnedConnect(commandIntent) },
+            disconnectOwner = { FoxholeConnectionServiceContract.routerOwnedDisconnect(commandIntent) })) return
     when (commandIntent.action) {
         FoxholeConnectionServiceContract.ACTION_CONNECT ->
             dispatchConnectCommand(commandIntent, startId, trafficMode, handlers)
@@ -176,6 +188,31 @@ internal fun handleRuntimeServiceCommand(
         FoxholeConnectionServiceContract.ACTION_START_LOCAL_GUARD ->
             dispatchLocalGuardCommand(commandIntent, startId, trafficMode, container, handlers)
     }
+}
+
+internal fun isMalformedRouterOwnedRuntimeCommand(action: String?, resumeOwner: () -> RouterOwnedResume?,
+    disconnectOwner: () -> RouterOwnedDisconnect?): Boolean = when (action) {
+    FoxholeConnectionServiceContract.ACTION_ROUTER_OWNED_CONNECT -> resumeOwner() == null
+    FoxholeConnectionServiceContract.ACTION_ROUTER_OWNED_DISCONNECT ->
+        disconnectOwner()?.smartToken?.let(::validRouterSmartToken) != true
+    else -> false
+}
+
+// Return true even for malformed known owned commands: missing receipts must be
+// scoped drops, never generic fail-closed Kill commands against another session.
+internal fun dispatchRouterOwnedRuntimeCommand(action: String?, startId: Int, handlers: RuntimeServiceCommandHandlers,
+    resumeOwner: () -> RouterOwnedResume?, disconnectOwner: () -> RouterOwnedDisconnect?): Boolean = when (action) {
+    FoxholeConnectionServiceContract.ACTION_ROUTER_OWNED_CONNECT -> {
+        resumeOwner()?.let { owner -> handlers.dispatch(routerOwnedResumeCommand()) { handlers.connectOwned(owner, startId) } }
+        true
+    }
+    FoxholeConnectionServiceContract.ACTION_ROUTER_OWNED_DISCONNECT -> {
+        disconnectOwner()?.takeIf { it.smartToken?.let(::validRouterSmartToken) == true }?.let { owner ->
+            handlers.dispatch(routerOwnedDisconnectCommand()) { handlers.disconnectOwned(owner, startId) }
+        }
+        true
+    }
+    else -> false
 }
 
 private fun dispatchConnectCommand(
@@ -488,6 +525,8 @@ private val KNOWN_RUNTIME_SERVICE_ACTIONS =
 
         VpnService.SERVICE_INTERFACE,
         FoxholeConnectionServiceContract.ACTION_CONNECT,
+        FoxholeConnectionServiceContract.ACTION_ROUTER_OWNED_CONNECT,
+        FoxholeConnectionServiceContract.ACTION_ROUTER_OWNED_DISCONNECT,
         FoxholeConnectionServiceContract.ACTION_DISCONNECT,
         FoxholeConnectionServiceContract.ACTION_KILL,
         FoxholeConnectionServiceContract.ACTION_KILL_TOR,

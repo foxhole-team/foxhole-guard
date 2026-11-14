@@ -2,6 +2,7 @@
 <resources>
     <string name="router_loader_discovering">Detecting the router on the local network</string>
     <string name="router_loader_data">Loading data</string>
-    <string name="router_loader_paired_version">Last known version: %1$s</string>
-    <string name="router_loader_version_unknown">The paired router version has not been recorded yet.</string>
+    <string name="router_loader_paired_version">Version: %1$s</string>
+    <string name="router_loader_version_unknown">Could not determine the version.</string>
+    <string name="router_loader_connecting">Connecting</string>
 </resources>

@@ -31,6 +31,7 @@ internal enum class RouterMobileAction(val action: String) {
     PROFILE_TEST("server.test"), PROFILE_SAVE("server.save"), PROFILE_GET("server.get"), PROFILE_START("server.start"),
     PROFILE_STOP("server.stop"), PROFILE_DELETE("server.delete"), SETTINGS("settings"), PHONE_PROVISION("phone.provision"), PHONE_STATUS("phone.status"), PHONE_CAPABILITIES("phone.capabilities"), PHONE_HANDOFF("phone.handoff"), PHONE_RESOLVE("phone.resolve"),
     CLIENT_GET("client.get"), CLIENT_DELETE("client.delete"), CLIENT_CREATE("client.save"),
+    VPN_SERVER_PLAN("vpnServer.plan"), VPN_SERVER_SET("vpnServer.set"), VPN_SERVER_JOB("vpnServer.job"),
     DEVICE_LIST("device.list"), CLIENT_STATUS("client.status"), PACKAGE_REMOVE("package.remove"),
 }
 
@@ -198,7 +199,6 @@ internal class RouterHttpProvisioner(
         requirePaired(session)
         require(pairing.identity == api.identity)
         if (!options.valid) unsupported()
-        if (options.homeAutodetection) unsupported()
         val country = options.countryCode
         val applyCountry = country in COUNTRIES
         if (!applyCountry && !(options.countryAuto && country.isEmpty())) unsupported()
@@ -258,9 +258,59 @@ internal class RouterHttpProvisioner(
         return RouterWizardResult(pairing.id, profile, remoteReady = false, remoteProfileMarker = marker)
     }
 
+    suspend fun vpnServerPlan(api: RouterPanelApi, session: RouterPanelSession): RouterVpnServerPlan =
+        parseRouterVpnServerPlan(call(api, session, RouterMobileAction.VPN_SERVER_PLAN, JsonObject(emptyMap())))
+
+    suspend fun vpnServerSet(api: RouterPanelApi, session: RouterPanelSession, revision: Long, enabled: Boolean,
+        plan: RouterVpnServerPlan? = null, removeComponent: Boolean = false): RouterVpnServerJob? {
+        val reply = call(api, session, RouterMobileAction.VPN_SERVER_SET, buildJsonObject {
+            put("revision", revision); put("enabled", enabled)
+            put("removeComponent", removeComponent)
+            put("confirmed", enabled || removeComponent)
+            put("planSha256", if (enabled || removeComponent) requireNotNull(plan).planSha256 else "")
+        })
+        val job = (reply["job"] as? JsonObject) ?: reply.takeIf { "jobId" in it }
+        return job?.let(::parseRouterVpnServerJob)
+    }
+
+    suspend fun vpnServerJob(api: RouterPanelApi, session: RouterPanelSession, id: String): RouterVpnServerJob =
+        parseRouterVpnServerJob(call(api, session, RouterMobileAction.VPN_SERVER_JOB, buildJsonObject { put("jobId", id) }))
+
     suspend fun snapshot(api: RouterPanelApi, session: RouterPanelSession): RouterControlSnapshot {
         requirePaired(session)
         return parseSnapshot(api.state(session))
+    }
+
+    suspend fun phoneTransferCapabilities(api: RouterPanelApi, session: RouterPanelSession): RouterPanelCapabilities {
+        val capability = capabilities(api, session)
+        return routerPhoneTransferCapabilities(capability, snapshot(api, session).installedProtocols)
+    }
+
+    suspend fun canTransferPhoneSelection(selection: RouterProfileSelection, capability: RouterPanelCapabilities): Boolean {
+        if (selection.sourceUrl != null && !capability.subscriptionSelection) return false
+        return try {
+            compatibleConfiguration(selection, capability)
+            true
+        } catch (failure: RouterApiFailure) {
+            if (failure.kind in setOf(RouterApiError.UNSUPPORTED, RouterApiError.INSECURE_TLS)) false else throw failure
+        } catch (_: IllegalArgumentException) {
+            false
+        }
+    }
+
+    suspend fun validatePhoneSelection(api: RouterPanelApi, session: RouterPanelSession, selection: RouterProfileSelection) {
+        val capability = phoneTransferCapabilities(api, session)
+        if (selection.sourceUrl != null && !capability.subscriptionSelection) unsupported()
+        val selected = compatibleConfiguration(selection, capability)
+        val tested = call(api, session, RouterMobileAction.PROFILE_TEST, buildJsonObject {
+            put("config", selected.value)
+            if (selected.core) put("engine", "core")
+        })
+        if (!tested.boolean("valid") || tested.string("scope") != "config" || tested.string("code") != "validated") malformed()
+        val admitted = tested["configSha256"]?.let {
+            (it as? JsonPrimitive)?.takeIf { value -> value.isString }?.contentOrNull ?: malformed()
+        }
+        if (admitted != null && !admitted.matches(Regex("[a-f0-9]{64}")) || selected.core && admitted == null) malformed()
     }
 
     suspend fun sendSelection(api: RouterPanelApi, session: RouterPanelSession, pairing: RouterPairing,
@@ -271,8 +321,11 @@ internal class RouterHttpProvisioner(
         val capability = capabilities(api, session)
         if (selection.sourceUrl != null && !capability.subscriptionSelection) unsupported()
         val subscription = selection.sourceUrl?.let { subscriptionMetadata(selection) }
-        val selected = compatibleConfiguration(selection, capability)
-        val saved = savePhoneSelection(api, session, pairing, selection, selected, subscription, snapshot(api, session))
+        val prepared = compatibleConfiguration(selection, capability)
+        val current = snapshot(api, session)
+        val actual = routerPhoneTransferCapabilities(capability, current.installedProtocols)
+        val selected = if (actual.coreProtocols == capability.coreProtocols) prepared else compatibleConfiguration(selection, actual)
+        val saved = savePhoneSelection(api, session, pairing, selection, selected, subscription, current)
         val verified = snapshot(api, session)
         if (verified.revision < saved.snapshot.revision || verified.servers.none { it.string("id") == saved.profileId }) malformed()
         return RouterProfileTransfer(verified, saved.profileId)
@@ -676,7 +729,9 @@ internal fun parseRouterPanelCapabilities(value: JsonObject): RouterPanelCapabil
     val core = protocols("coreProtocols", RouterInstallProtocol.entries.map { it.canonical }.toSet())
     val legacy = protocols("legacyProtocols", setOf("hysteria2"))
     val inbound = protocols("inboundProtocols", setOf("hysteria2"))
-    if (value.boolean("phoneRemoteProvisioning") != inbound.isNotEmpty() || inbound.isNotEmpty() && "hysteria2" !in legacy) malformed()
+    val vpnServer = routerVpnServerCapability(value["vpnServer"])
+    if (value.boolean("phoneRemoteProvisioning") != inbound.isNotEmpty() ||
+        inbound.isNotEmpty() && (if (vpnServer == null) "hysteria2" !in legacy else !vpnServer.first || !vpnServer.second)) malformed()
     return RouterPanelCapabilities(core, legacy, inbound, value.boolean("subscriptionSelection"),
         value.boolean("independentPhoneChoices"), value.boolean("phoneRegistration"), value.boolean("homeProof"),
         value["phoneHandoff"]?.let { (it as? JsonPrimitive)?.takeIf { item -> !item.isString }?.booleanOrNull ?: malformed() } ?: false,

@@ -193,6 +193,28 @@ class NativeBindingTest(unittest.TestCase):
         BINDING.verify(self.repo, self.native, self.merged,
                        ['arm64-v8a', 'armeabi-v7a', 'x86', 'x86_64'], directory, delivery_abis=delivery)
 
+    def test_agp_legacy_dependency_abis_are_not_apk_delivery(self):
+        for abi in ['armeabi', 'mips', 'mips64']:
+            path = self.merged / 'lib' / abi / 'libdependency.so'
+            path.parent.mkdir()
+            path.write_bytes(self.native_header('arm64-v8a'))
+        self.project(self.apk(['arm64-v8a']))
+
+    def test_unselected_supported_dependency_abis_are_not_native_profile(self):
+        BINDING.verify_delivery_inventory(self.merged, ['arm64-v8a'], ['arm64-v8a'], self.apk(['arm64-v8a']))
+
+    def test_legacy_abi_in_final_apk_is_rejected(self):
+        directory = self.apk(['arm64-v8a'], {'lib/mips/libdependency.so': self.bytes})
+        with self.assertRaisesRegex(ValueError, 'native library path'):
+            self.project(directory)
+
+    def test_unknown_merged_abi_is_still_rejected(self):
+        path = self.merged / 'lib' / 'unknown-cpu' / 'libdependency.so'
+        path.parent.mkdir()
+        path.write_bytes(self.bytes)
+        with self.assertRaisesRegex(ValueError, 'native library path'):
+            self.project(self.apk(['arm64-v8a']))
+
     def test_arm64_delivery_retains_the_four_abi_native_corpus(self):
         self.project(self.apk(['arm64-v8a']))
 

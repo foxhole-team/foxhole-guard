@@ -29,7 +29,7 @@ class RouterCompactBootstrapServiceTest {
             RouterReadCommand.FLASH -> "Filesystem 1024-blocks Used Available Capacity Mounted on\n/dev/root 2000000 0 $flashKiB 0% /overlay\n".toByteArray()
             RouterReadCommand.MEMORY -> "MemAvailable: $memoryKiB kB\n".toByteArray()
             RouterReadCommand.CONFIGURATION -> byteArrayOf()
-            RouterReadCommand.KERNEL_PACKAGE -> "kernel-${RouterCompactBootstrapFixtures.KERNEL}\n".toByteArray()
+            RouterReadCommand.KERNEL_PACKAGE -> """[{"name":"kernel","version":"${RouterCompactBootstrapFixtures.KERNEL}"}]""".toByteArray()
             RouterReadCommand.PACKAGE_MANIFEST -> packageReceipt
             RouterReadCommand.MOBILE_CERTIFICATE -> requireNotNull(javaClass.getResourceAsStream("/router/router-fixture.crt")).use { it.readBytes() }
             else -> error("unexpected read")

@@ -21,6 +21,7 @@ internal data class RouterControlPreferences(
     val homeVpnDefaultPending: Boolean = false,
     val hideOfflineDevices: Boolean = true,
     val homeWifiHashes: Set<String> = emptySet(),
+    val authenticatedHomeServerEnabled: Boolean? = null,
 ) {
     fun afterSuccessfulPairing(): RouterControlPreferences = copy(enabled = true, homeVpnDefaultPending = false)
 

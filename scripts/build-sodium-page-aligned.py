@@ -4,6 +4,7 @@ import argparse
 import importlib.util
 import json
 import os
+import platform
 from pathlib import Path
 import re
 import shutil
@@ -29,7 +30,18 @@ def main():
     properties = (args.ndk / 'source.properties').read_text()
     if 'Pkg.Revision = 29.0.14206865' not in properties:
         raise ValueError('Expected exact NDK29 toolchain')
-    tools = args.ndk / 'toolchains/llvm/prebuilt/linux-x86_64/bin'
+    system = platform.system().lower()
+    if system == 'linux':
+        host_tags = ['linux-x86_64']
+    elif system == 'darwin':
+        host_tags = ['darwin-arm64', 'darwin-x86_64']
+    else:
+        raise ValueError('Unsupported NDK host')
+    prebuilt = args.ndk / 'toolchains/llvm/prebuilt'
+    host = next((tag for tag in host_tags if (prebuilt / tag / 'bin/llvm-strip').is_file()), None)
+    if host is None:
+        raise ValueError('Pinned NDK host tools are missing')
+    tools = prebuilt / host / 'bin'
     tool_names = ['clang', 'clang++', 'ld.lld', 'llvm-ar', 'llvm-ranlib', 'llvm-strip', 'llvm-nm']
     tool_hashes = {name: sha(tools / name) for name in tool_names}
     original_sodium = extract(inputs / 'libsodium-1.0.20.tar.gz', out / 'raw-sodium', 'libsodium-1.0.20')

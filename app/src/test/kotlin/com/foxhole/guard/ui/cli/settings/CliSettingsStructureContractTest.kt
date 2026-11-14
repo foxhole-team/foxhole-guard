@@ -191,18 +191,13 @@ class CliSettingsStructureContractTest {
     }
 
     @Test
-    fun `every help body line keeps its section glyph`() {
-        val help = cli("settings/CliHelpSubScreen.kt")
-        val body = help
-            .substringAfter("private fun CliHelpBody(")
-            .substringBefore("private fun helpGlossaryTerm")
-
-        assertTrue(
-            body.contains("paragraph.lineSequence().filter(String::isNotBlank).forEach { line ->"),
-        )
-        assertTrue(body.contains("CliHelpTextRow(text = line, icon = icon)"))
-        assertTrue(body.contains("CliHelpTopicIcon(icon)"))
-        assertTrue(body.contains("helpGlossaryTerm(text)"))
+    fun `help topics keep structured blocks without repeating sentence glyphs`() {
+        val topics = com.foxhole.guard.ui.cli.help.guardHelpTopics()
+        assertTrue(topics.all { it.blocks.isNotEmpty() })
+        val source = cli("settings/CliHelpSubScreen.kt")
+        assertTrue(source.contains("GuardHelpBlocks(section.blocks"))
+        assertFalse(source.contains("basicMarquee"))
+        assertFalse(source.contains("helpGlossaryTerm"))
     }
 
     @Test

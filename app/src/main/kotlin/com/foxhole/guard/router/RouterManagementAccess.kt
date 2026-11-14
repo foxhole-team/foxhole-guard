@@ -12,6 +12,7 @@ internal fun routerManagementAccess(wifi: Boolean, homeCandidate: Boolean, vpn: 
     pairedRemoteVpn: Boolean): RouterManagementAccess = when {
     wifi && homeCandidate -> if (vpn) RouterManagementAccess.VPN_ACTIVE else RouterManagementAccess.LOCAL
     pairedRemoteVpn -> RouterManagementAccess.REMOTE
+    vpn -> RouterManagementAccess.VPN_ACTIVE
     else -> RouterManagementAccess.UNAVAILABLE
 }
 

@@ -1,0 +1,12 @@
+<resources>
+    <string name="router_transfer_title">Select VPN profiles</string>
+    <string name="router_transfer_body">Selected VPN profiles will be sent to the router.</string>
+    <string name="router_transfer_empty">No compatible saved VPN profiles.</string>
+    <string name="router_transfer_failed">Could not check available VPN profiles.</string>
+    <string name="router_transfer_retry">Refresh</string>
+    <string name="router_transfer_done">Profiles transferred: %1$d</string>
+    <string name="router_transfer_partial">Transferred %1$d of %2$d profiles.</string>
+    <string name="router_transfer_add">Add VPN profiles</string>
+    <string name="router_transfer_save">Transfer</string>
+    <string name="router_transfer_cancel">Cancel</string>
+</resources>

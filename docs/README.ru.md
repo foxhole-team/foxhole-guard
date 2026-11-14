@@ -2,7 +2,7 @@
 
 <div align="center">
 
-**FoxHole Guard** - комплекс для защиты сети, приватности и локального контроля сетевой активности на Android.
+**FoxHole Guard** объединяет VPN, Tor, I2P, маршрутизацию трафика приложений и локальный мониторинг сетевой активности на Android.
 
 </div>
 
@@ -17,7 +17,7 @@
 
 <div align="center">
 
-[English](../README.md) · [Русский](README.ru.md) · [Deutsch](README.de.md) · [Français](README.fr.md) · [Español](README.es.md) · [日本語](README.ja.md) · [简体中文](README.zh.md) · [العربية](README.ar.md)
+[🇬🇧 English](../README.md) · [🇷🇺 **Русский**](README.ru.md) · [🇩🇪 Deutsch](README.de.md) · [🇫🇷 Français](README.fr.md) · [🇪🇸 Español](README.es.md) · [🇯🇵 日本語](README.ja.md) · [🇨🇳 简体中文](README.zh.md) · [🇸🇦 العربية](README.ar.md)
 
 </div>
 
@@ -29,23 +29,50 @@
 
 </p>
 
+<div align="center">
+
 ![Platform](https://img.shields.io/badge/platform-Android-3DDC84?style=flat-square&logo=android&logoColor=white)
 ![Core](https://img.shields.io/badge/core-Rust-000000?style=flat-square&logo=rust&logoColor=white)
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-007ec6?style=flat-square)](https://www.gnu.org/licenses/gpl-3.0.html)
 ![Telemetry](https://img.shields.io/badge/telemetry-none-success?style=flat-square)
 ![❤️ We support I2P](https://img.shields.io/badge/❤️_We_support-I2P-7B1FA2?style=flat-square)
 
-<p align="center">
-  <strong>VPN only версия</strong><br>
-  <strong>FoxHole VPN</strong> — упрощённый VPN-клиент для Android на базе FoxHole Core,<br>
-  без дополнительных инструментов защиты и мониторинга Guard.
-</p>
+</div>
 
-<p align="center">
-  <a href="https://github.com/foxhole-team/foxhole-vpn"><strong>Подробнее о FoxHole VPN →</strong></a>
-  &nbsp;·&nbsp;
-  <a href="https://github.com/foxhole-team/foxhole-vpn/releases">Скачать APK</a>
-</p>
+<a id="ecosystem"></a>
+<a id="-экосистема-foxhole"></a>
+
+<div align="center">
+
+**FoxHole ecosystem**
+
+[**FoxHole Guard**](https://github.com/foxhole-team/foxhole-guard) · [FoxHole VPN](https://github.com/foxhole-team/foxhole-vpn) · [FoxHole Core](https://github.com/foxhole-team/foxhole-core) · [FoxHole OpenWRT](https://github.com/foxhole-team/foxhole-openwrt-client) · [FoxHole DB](https://github.com/foxhole-team/foxhole-db)
+
+<details>
+<summary>Роли проектов</summary>
+
+| Проект | Роль |
+| --- | --- |
+| [**FoxHole Guard**](https://github.com/foxhole-team/foxhole-guard) | Android: VPN, Tor/I2P, правила трафика и локальный мониторинг |
+| [FoxHole VPN](https://github.com/foxhole-team/foxhole-vpn) | Android: простой VPN-клиент и управление сопряжённым OpenWrt |
+| [FoxHole Core](https://github.com/foxhole-team/foxhole-core) | Общее сетевое ядро на Rust; состав зависит от сборки |
+| [FoxHole OpenWrt](https://github.com/foxhole-team/foxhole-openwrt-client) | VPN для роутера и управление локальной сетью |
+| [FoxHole DB](https://github.com/foxhole-team/foxhole-db) | Подписанные правила и справочные данные |
+
+</details>
+
+</div>
+
+
+Мы разрабатываем и поддерживаем FoxHole Guard за счёт собственного времени и ресурсов, используя инструменты ИИ. Ваша поддержка помогает нам уделять проекту больше времени. [Поддержать разработку →](#cryptocurrency-wallets)
+
+<div align="center">
+
+🔗 **VPN-клиент:** [FoxHole VPN](https://github.com/foxhole-team/foxhole-vpn) · [Скачать APK →](https://github.com/foxhole-team/foxhole-vpn/releases)
+
+Более простой Android-клиент для VPN-подключений и управления сопряжённым роутером OpenWrt, без дополнительных средств защиты и мониторинга Guard.
+
+</div>
 
 Опубликованные версии и APK перечислены в [GitHub Releases](https://github.com/foxhole-team/foxhole-guard/releases).
 
@@ -59,11 +86,18 @@
 
 <a id="whats-new"></a>
 
-> **🆕 Что нового - 1.0.6 Stable**
+> **🆕 Что нового - 1.0.7 Stable**
 >
-> - Добавлена поддержка Android 7.
-> - Доработаны фильтры для маршрутизации web-адресов
-> - Доработан визуальный стиль уведомлений
+> - Исправлена первоначальная установка и настройка роутера через приложение
+> - Обновлены Tor-транспорты Lyrebird и conjure-client
+> - Обновление разделов помощи
+> - Доработаны отчёты и история сканирования Sentinel
+> - Обновлен интерфейс управления роутером
+> - Общие улучшения интерфейса
+> - Улучшены выбор приложений и загрузка данных Sentinel
+> - Настройки Tor, I2P, фаервола и Sentinel доступны в пользовательском режиме
+
+[Полный журнал изменений](CHANGELOG.md) · [Продолжение работы при обновлении приложения и ограничения](app-update-continuation.md).
 
 <a id="quickstart"></a>
 
@@ -182,6 +216,21 @@ e59de2486084c38f3c77e9df0eb5eff9a4559f3c68024f1208e0e9c04b0df665
 
 Ограничения относятся к направлению трафика всего устройства в Tor рядом с активным VPN-подключением. Если подключение к сети Tor запущено вне VPN-туннеля рядом с активным VPN-подключением, используется сценарий с выбранными приложениями. В Mixed-режиме прокси-сервера локальной сети трафик SOCKS5 маршрутизируется в VPN, а HTTP CONNECT - в Tor.
 
+«Всё устройство» задаёт охват захвата с учётом исключений маршрутизации, а не отправку любого протокола через Tor. В совместном режиме Tor + VPN UDP по умолчанию идёт через VPN и не получает анонимность Tor; политика UDP может вместо этого блокировать его. В режиме только Tor non-DNS UDP блокируется.
+
+<a id="route-capabilities"></a>
+
+### Совместимость маршрутов
+
+| Функция | Совместимые stream-proxy маршруты | Packet tunnel WireGuard / AmneziaWG |
+| --- | --- | --- |
+| DNS-резолвер | DNS Guard для выбранного маршрута | Обязателен числовой DNS из профиля; объявляется Android в режиме `real_ip` |
+| Локальный перехват / фильтрация DNS | При включении и поддержке маршрутом | Недоступны |
+| Конечный резолвер DoQ / DoH3 | Только на совместимом маршруте | Отклоняется |
+| I2P lane / LAN proxy | При выполнении их условий | Недоступны |
+
+Если включённые обязательные категории DNS-фильтрации нельзя представить в native-конфигурации, подготовка сессии отклоняется; незаметного обхода фильтрации нет. Матрица описывает текущий путь приложения Guard, а не все возможности иной сборки Core.
+
 ### 🔀 Правила маршрутизации трафика
 
 Внутри активного режима и сценария действуют правила маршрутизации трафика:
@@ -202,7 +251,9 @@ e59de2486084c38f3c77e9df0eb5eff9a4559f3c68024f1208e0e9c04b0df665
 
 В сценарии «Всё устройство» не применяются отдельные назначения приложений на VPN или Tor. Правила блокировки и исключения приложений, а также правила для web-адресов продолжают действовать в пределах активного маршрута. Если системный туннель или фаервол не работает, блокировка приложений не применяется.
 
-Все правила маршрутизации трафика применяются атомарно. Смена сценариев режимов работы приложения по умолчанию также применяется атомарно; это поведение можно отключить в настройках.
+Поддерживаемые обновления native-политики правил публикуются атомарно. Защищённому live-переходу приложения нужны работающий runtime, полный захват IPv4/IPv6 без списков включения/исключения приложений, неизменные TUN plan и immutable native-конфигурация. Занятый или неподдерживаемый переход может быть отклонён: остановите VPN и повторите. Для смены сценария есть отдельная атомарная настройка, включённая по умолчанию. Атомарная публикация native-политики отделена от этой настройки перехода и не гарантирует Android-барьер всего устройства для любой правки правила.
+
+[Форматы и ограничения правил сайтов](website-routing-formats.md).
 
 ---
 
@@ -292,6 +343,8 @@ Guard. Доступ к существующим `.onion`-сайтам - отде
 
 ### 🕸️ Доступ к сети I2P
 
+Ограничения протоколов см. в [матрице совместимости маршрутов](#route-capabilities).
+
 Доступ к сети I2P не реализуется внутри FoxHole Core.
 
 Используется TCP-only loopback SOCKS5-контракт с отдельным процессом `i2pd`.
@@ -319,6 +372,8 @@ Guard. Доступ к существующим `.onion`-сайтам - отде
 - kill switch;
 - немедленный адресный отзыв активных stream-proxy-потоков после появления запрещающего правила; L3-потоки пакетных туннелей пересматриваются после своего idle timeout;
 - типизированные отказы при некорректном reload.
+
+Программный kill switch работает, пока работают приложение и Core. Системное «Блокировать соединения без VPN» включается отдельно в настройках VPN Android; переключатель Guard не включает системный lockdown. Завершение потоков зависит от транспорта, как указано выше; немедленный TCP reset во всех режимах L3/L4 не гарантируется.
 
 ### 🛡️ FoxHole Sentinel
 
@@ -376,6 +431,8 @@ FoxHole Core не хранит постоянный пользовательск
 
 ## 🔌 Поддерживаемые протоколы
 
+Ограничения протоколов см. в [матрице совместимости маршрутов](#route-capabilities).
+
 | Протокол / режим | Поддержка |
 | --- | --- |
 | **VLESS** | raw, WebSocket, HTTP Upgrade, gRPC/HTTP-2, XHTTP stream-one по HTTP/2, TLS, Reality, Vision, UDP-over-stream, XUDP, packetaddr |
@@ -421,6 +478,8 @@ Outline рассматривается как вариант Shadowsocks.
 ---
 
 ## 🌐 DNS
+
+Ограничения протоколов см. в [матрице совместимости маршрутов](#route-capabilities).
 
 ### 🧭 Управление DNS
 
@@ -502,6 +561,8 @@ connect / send
 
 ### 🔗 Прокси-сервер
 
+Ограничения протоколов см. в [матрице совместимости маршрутов](#route-capabilities).
+
 Прокси-сервер делится активным маршрутом с другими устройствами в текущей Wi-Fi-сети.
 
 - SOCKS5 и HTTP CONNECT;
@@ -538,7 +599,7 @@ connect / send
 ## 🛜 Публичная бета-версия управления роутером
 
 > [!NOTE]
-> Управление роутером при активном VPN-соединении пока не поддерживается.
+> Локальные поиск, настройка и новое сопряжение требуют предусмотренного Wi-Fi/LAN-пути и выключенного VPN. Для существующего сопряжения доступен отдельный выбор управления через домашний VPN при условиях доверия и согласий, описанных ниже.
 
 Откройте OpenWrt в настройках, чтобы сопрячь роутер и управлять его VPN-профилями, маршрутами устройств, пакетами протоколов и обновлениями FoxHole. Совместимость устройств и сценарии установки и обновления ещё проверяются. Переключатель управления относится к выбранному сохранённому сопряжению; его выключение не останавливает VPN роутера.
 
@@ -573,7 +634,7 @@ FoxHole Guard использует два независимых фоновых 
 | **`foxhole watchdog web`** | Проверка и доставка уведомлений для добавленных web-приложений. |
 | **`foxhole watchdog guard`** | Мониторинг событий, запись установки и удаления приложений, а также аномалий сетевого трафика в защищённый журнал. |
 
-В усиленном режиме `foxhole watchdog guard` создаёт foreground service, чтобы оставаться в памяти, когда нет активного сетевого соединения, и останавливается после обнаружения активного подключения. Экономный режим использует периодический опрос WorkManager.
+В усиленном режиме мониторинг Sentinel ведёт присоединённый runtime-сервис приложения, а при отсутствии другого host — отдельный foreground service `foxhole watchdog guard`. Между ними передаётся владение мониторингом; само появление интернета или Wi-Fi его не останавливает. Экономный режим использует периодический опрос WorkManager.
 
 ---
 
@@ -603,25 +664,14 @@ FoxHole DB содержит пять независимых подписанны
 
 ---
 
-<a id="ecosystem"></a>
+[Доставка APK и ABI](apk-delivery-abis.md) · [Исходная сборка F-Droid](fdroid-source-build.md).
 
-## 🔗 Экосистема FoxHole
-
-| Проект | Роль |
-| --- | --- |
-| [**FoxHole Guard**](https://github.com/foxhole-team/foxhole-guard) | Android: VPN, Tor/I2P, правила трафика и локальный мониторинг |
-| [FoxHole VPN](https://github.com/foxhole-team/foxhole-vpn) | Android: простой VPN-клиент и управление сопряжённым OpenWrt |
-| [FoxHole Core](https://github.com/foxhole-team/foxhole-core) | Общее сетевое ядро на Rust; состав зависит от сборки |
-| [FoxHole OpenWrt](https://github.com/foxhole-team/foxhole-openwrt-client) | VPN для роутера и управление локальной сетью |
-| [FoxHole DB](https://github.com/foxhole-team/foxhole-db) | Подписанные правила и справочные данные |
 
 ## 🤝 Участие в разработке
 
 Сообщайте об ошибках и предлагайте изменения через [Issues](https://github.com/foxhole-team/foxhole-guard/issues).
 
 ## 💖 Поддержать разработку
-
-Мы разрабатываем и поддерживаем FoxHole Guard полностью за счёт собственного времени и ресурсов, с используя в разработке инструменты ИИ. Ваша поддержка помогает нам уделять проекту больше времени и ускорять разработку.
 
 <a id="cryptocurrency-wallets"></a>
 

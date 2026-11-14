@@ -1,5 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="cli_release_notes_translations_105">La prise en charge de l’arabe et du RTL a été ajoutée, le widget a été adapté et les traductions ainsi que les paramètres du routeur ont été corrigés.</string>
-    <string name="cli_release_notes_router_cleanup_105">Amélioration de la libération des ressources et du signalement des erreurs lors de la configuration du routeur.</string>
+    <string name="cli_release_notes_translations_105">La prise en charge de l’arabe et du RTL a été ajoutée, le widget a été adapté et les traductions ainsi que les paramètres du routeur ont été corrigés</string>
+    <string name="cli_release_notes_router_cleanup_105">Amélioration de la libération des ressources et du signalement des erreurs lors de la configuration du routeur</string>
+    <string name="cli_release_notes_router_setup_107">Correction de l’installation et de la configuration initiale du routeur depuis l’application</string>
+    <string name="cli_release_notes_transport_components_107">Mise à jour des transports Tor Lyrebird et conjure-client</string>
+    <string name="cli_release_notes_help_107">Mise à jour des rubriques d’aide</string>
+    <string name="cli_release_notes_sentinel_107">Amélioration des rapports et de l’historique des analyses Sentinel</string>
+    <string name="cli_release_notes_router_interface_107">Interface de gestion du routeur mise à jour</string>
+    <string name="cli_release_notes_general_interface_107">Améliorations générales de l’interface</string>
+    <string name="cli_release_notes_sentinel_apps_data_107">Amélioration du choix des applications et du téléchargement des données Sentinel</string>
+    <string name="cli_release_notes_user_modules_107">Les réglages Tor, I2P, pare-feu et Sentinel sont disponibles en mode utilisateur</string>
 </resources>

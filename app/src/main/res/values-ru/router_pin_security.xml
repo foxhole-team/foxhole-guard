@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="guard_router_router_setup_pin">PIN-код</string>
+    <string name="guard_router_router_setup_pin">Введите PIN-код</string>
     <string name="guard_router_router_setup_pin_repeat">Повторите PIN-код</string>
     <string name="guard_router_router_pin_cooldown">Повторите через %1$d с.</string>
     <string name="guard_router_router_setup_all_lan_vpn">VPN для всех домашних устройств</string>

@@ -23,7 +23,7 @@ internal class InstalledSentinelScanBackend(
         check(packagedEngineAvailable) { "Packaged scanner engine unavailable" }
         val source = sourceProvider.capture(packageName)
         captured = source
-        return SentinelScanSource(source.packageName, source.installationId)
+        return SentinelScanSource(source.packageName, source.installationId, packageVersion = source.versionCode)
     }
 
     suspend fun isCurrent(source: SentinelScanSource): Boolean {
@@ -53,20 +53,24 @@ internal class InstalledSentinelScanBackend(
         val result = client.inspect(inputs, owner, rules, policy.maxArtifactBytes) {
             if (current()) owner else owner.copy(installationId = "stale")
         }
-        val complete = result.status == InspectionStatus.COMPLETE && result.coverageComplete &&
+        val complete = result.status == InspectionStatus.COMPLETE && result.coverageComplete && result.artifactCoverageReported &&
             (!policy.yaraEnabled || result.yara?.verifiedDexComplete == true)
         return SentinelScanSummary(
             source,
             complete,
             result.weakObservations.map { it.name }.toSet(),
             result.yara?.matchedRuleIds.orEmpty().toSet(),
-            result.issues + scannerSummaryLimitations(result.limitations, result.yara?.verifiedDexComplete == true).map { it.name },
+            result.issues + if (result.artifactCoverageReported) emptySet() else setOf("ARTIFACT_COVERAGE_UNAVAILABLE"),
             outcome = when {
                 complete -> SentinelScanStage.COMPLETE
                 result.status == InspectionStatus.UNAVAILABLE -> SentinelScanStage.UNAVAILABLE
                 result.status == InspectionStatus.UNSUPPORTED -> SentinelScanStage.UNSUPPORTED
                 else -> SentinelScanStage.PARTIAL
             },
+            artifacts = result.artifacts,
+            coverage = result.coverageDetails,
+            limitations = scannerSummaryLimitations(result.limitations, result.yara?.verifiedDexComplete == true).map { it.name }.toSet(),
+            analyzerVersion = result.analyzerVersion,
         )
     }
 

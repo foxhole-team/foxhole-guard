@@ -36,13 +36,17 @@ internal class RouterWizardCoordinator(
     private val importAuthenticatedProfile: (suspend (RouterAuthenticatedProfileImport) -> Boolean)? = null,
     private val readonlyInspector: RouterReadonlySshInspector? = null,
     private val pinClock: () -> Long = ::routerPinClockMs,
+    private val applySmartHome: (suspend (Boolean) -> Unit)? = null,
 ) : AutoCloseable {
     private val mutableState = MutableStateFlow(RouterWizardState())
     val state: StateFlow<RouterWizardState> = mutableState.asStateFlow()
     val installationCatalog: RouterInstallCatalog? get() = setup?.installCatalog
+    internal val canInspectRouter: Boolean get() = readonlyInspector != null
+    internal val canInstallRouter: Boolean get() = setup != null
     val setupAvailable: Boolean get() = readonlyInspector != null || setup != null && (installationCatalog == null || installationCatalog?.defaultSelection != null ||
         installationCatalog?.let { it.schema == 2 && it.availableProtocols.isNotEmpty() } == true)
-    val supportsHomeAutodetection: Boolean get() = provisioner.supportsHomeAutodetection
+    val supportsHomeAutodetection: Boolean get() = if (mutableState.value.installedInThisWizard)
+        applySmartHome != null && "hysteria2" in mutableState.value.inboundProtocols else provisioner.supportsHomeAutodetection
     val supportsRemoteProfile: Boolean get() = "hysteria2" in mutableState.value.inboundProtocols
     private val mutex = Mutex()
     private val generation = AtomicLong()
@@ -58,6 +62,7 @@ internal class RouterWizardCoordinator(
     private var pairedSession: RouterPanelSession? = null
     private var pairing: RouterPairing? = null
     private var proposal: RouterInstallProposal? = null
+    private var inspection: RouterSetupInspection? = null
     private var operationRecovery: RouterWizardState? = null
     private var resetFoxHoleRequested = false
     private var resetPairingId: String? = null
@@ -71,6 +76,12 @@ internal class RouterWizardCoordinator(
     private var provisionedSetup: Pair<RouterWizardOptions, RouterWizardResult>? = null
     private var addingNew = false
     private var pairingRetry = false
+    private class WebSetupReturn(val generation: Long, val identity: RouterTlsIdentity,
+        val discoveryId: String, val client: RouterPanelApi) {
+        @Volatile var awaitingForeground = false
+    }
+    @Volatile private var webSetupReturn: WebSetupReturn? = null
+    private val webSetupRefresh = AtomicReference<Job?>()
     val isAddingRouter: Boolean get() = addingNew
 
     fun hasPhysicalWifi(): Boolean = transport.hasPhysicalWifi()
@@ -163,7 +174,7 @@ internal class RouterWizardCoordinator(
             lastDiscoveredEndpoint = candidate.endpoint
             publish(mutableState.value.copy(address = endpoint.address,
                 discovery = RouterDiscoveryResult(endpoint.address, RouterDiscoveryKind.INSTALLED,
-                    status.pinConfigured, status.resetSupported, UUID.randomUUID().toString(), packageVersion = status.packageVersion)))
+                    status.pinConfigured, status.resetSupported, UUID.randomUUID().toString(), packageVersion = status.packageVersion, licenseRequired = status.licenseRequired)))
             return true
         }
         for (endpoint in candidates) if (probe(endpoint)) return
@@ -218,7 +229,58 @@ internal class RouterWizardCoordinator(
         initialPinAttempted = false; provisionedSetup = null
         setupPairingSnapshot = null; setupPairingMetadataComplete = false
         publish(mutableState.value.copy(path = RouterWizardPath.PAIR, installedInThisWizard = false, autoUpdateUnconfirmed = false,
-            stage = if (found.pinConfigured == true) RouterWizardStage.LOGIN else RouterWizardStage.PIN_SETUP_REQUIRED))
+            stage = if (found.pinConfigured == true && found.licenseRequired != true) RouterWizardStage.LOGIN else RouterWizardStage.PIN_SETUP_REQUIRED))
+    }
+
+    fun prepareWebSetupReturn(): Boolean {
+        val current = mutableState.value
+        val selected = identity ?: return false
+        val discovered = current.discovery ?: return false
+        val client = api ?: return false
+        if (current.busy || current.stage != RouterWizardStage.PIN_SETUP_REQUIRED ||
+            current.path != RouterWizardPath.PAIR || discovered.kind != RouterDiscoveryKind.INSTALLED ||
+            selected.endpoint.address != current.address || client.identity != selected) return false
+        client.requireTransportCurrent()
+        webSetupRefresh.getAndSet(null)?.cancel()
+        webSetupReturn = WebSetupReturn(generation.get(), selected, discovered.discoveryId, client)
+        return true
+    }
+
+    fun webSetupBackgrounded() {
+        webSetupReturn?.awaitingForeground = true
+        webSetupRefresh.getAndSet(null)?.cancel()
+    }
+
+    suspend fun refreshWebSetupOnForeground() {
+        val requested = webSetupReturn?.takeIf { it.awaitingForeground } ?: return
+        operation {
+            if (webSetupReturn !== requested || !requested.awaitingForeground ||
+                requested.generation != generation.get()) return@operation
+            val current = mutableState.value
+            if (current.stage != RouterWizardStage.PIN_SETUP_REQUIRED || current.path != RouterWizardPath.PAIR ||
+                current.address != requested.identity.endpoint.address || current.discovery?.discoveryId != requested.discoveryId ||
+                identity != requested.identity || api !== requested.client) fail(RouterWizardError.IDENTITY)
+            requested.awaitingForeground = false
+            val job = currentCoroutineContext()[Job]
+            webSetupRefresh.set(job)
+            try {
+                val status = withTimeoutOrNull(5000) {
+                    requested.client.requireTransportCurrent()
+                    requested.client.packageStatus().also { requested.client.requireTransportCurrent() }
+                } ?: fail(RouterWizardError.NETWORK)
+                ensureOwner()
+                if (webSetupReturn !== requested || identity != requested.identity || api !== requested.client ||
+                    mutableState.value.discovery?.discoveryId != requested.discoveryId) throw CancellationException("router_web_setup_changed")
+                val ready = status.pinConfigured && status.licenseRequired == false
+                publish(mutableState.value.copy(
+                    discovery = requireNotNull(mutableState.value.discovery).copy(pinConfigured = status.pinConfigured,
+                        resetSupported = status.resetSupported, packageVersion = status.packageVersion, licenseRequired = status.licenseRequired),
+                    stage = if (ready) RouterWizardStage.LOGIN else RouterWizardStage.PIN_SETUP_REQUIRED,
+                    error = if (status.licenseRequired == null) RouterWizardError.UNAVAILABLE else null,
+                ))
+                if (ready) webSetupReturn = null
+            } finally { webSetupRefresh.compareAndSet(job, null) }
+        }
     }
 
     suspend fun installDiscovered() = operation {
@@ -235,8 +297,8 @@ internal class RouterWizardCoordinator(
         val catalog = installationCatalog ?: fail(RouterWizardError.UNAVAILABLE)
         val selected = catalog.defaultSelection
         if (selected == null && catalog.schema != 2) fail(RouterWizardError.UNAVAILABLE)
-        publish(mutableState.value.copy(path = RouterWizardPath.SETUP, stage = RouterWizardStage.PROTOCOLS,
-            address = found.address, installSelection = selected))
+        publish(mutableState.value.copy(path = RouterWizardPath.SETUP, stage = RouterWizardStage.LOGIN,
+            address = found.address, installSelection = selected, compatibility = null))
     }
 
     private fun unknownDiscovery(address: String, issue: RouterDiscoveryIssue = RouterDiscoveryIssue.PACKAGE_STATUS) =
@@ -271,6 +333,7 @@ internal class RouterWizardCoordinator(
         requireAdditionCapacity()
         val endpoint = try { RouterEndpoint(address.trim(), tlsPort) } catch (_: IllegalArgumentException) { fail(RouterWizardError.ADDRESS) }
         if (mutableState.value.path == RouterWizardPath.SETUP) {
+            inspection?.close(); inspection = null
             if (proposal != null) {
                 proposal?.close(); proposal = null
                 hostKey?.fill(0); hostKey = null
@@ -292,8 +355,8 @@ internal class RouterWizardCoordinator(
                 api?.close(); api = transport.api(installed)
                 publish(mutableState.value.copy(path = RouterWizardPath.PAIR, address = endpoint.address,
                     discovery = RouterDiscoveryResult(endpoint.address, RouterDiscoveryKind.INSTALLED,
-                        status.pinConfigured, status.resetSupported, UUID.randomUUID().toString(), packageVersion = status.packageVersion),
-                    stage = if (status.pinConfigured) RouterWizardStage.LOGIN else RouterWizardStage.PIN_SETUP_REQUIRED))
+                        status.pinConfigured, status.resetSupported, UUID.randomUUID().toString(), packageVersion = status.packageVersion, licenseRequired = status.licenseRequired),
+                    stage = if (status.pinConfigured && status.licenseRequired != true) RouterWizardStage.LOGIN else RouterWizardStage.PIN_SETUP_REQUIRED))
                 return
             }
             val candidate = readonlyInspector?.inspectSshIdentity(endpoint.address)
@@ -337,7 +400,7 @@ internal class RouterWizardCoordinator(
             val selected = mutableState.value.installSelection?.takeIf { it.catalogSha256 == catalog.sha256 && catalog.accepts(it.protocols, it.includeServer) }
                 ?: catalog.defaultSelection
             if (selected == null && catalog.schema != 2) fail(RouterWizardError.UNAVAILABLE)
-            publish(mutableState.value.copy(stage = RouterWizardStage.PROTOCOLS, installSelection = selected, error = null))
+            publish(mutableState.value.copy(stage = RouterWizardStage.LOGIN, installSelection = selected, compatibility = null, error = null))
         }
     }
 
@@ -347,12 +410,46 @@ internal class RouterWizardCoordinator(
         mutableState.value = mutableState.value.copy(installSelection = selected, error = null)
     }
 
+    suspend fun confirmCompatibility() = operation {
+        if (mutableState.value.stage != RouterWizardStage.COMPATIBILITY) fail(RouterWizardError.UNAVAILABLE)
+        val checked = inspection ?: fail(RouterWizardError.UNAVAILABLE)
+        try { checked.requireCurrent() } catch (failure: Exception) {
+            checked.close(); inspection = null
+            publish(mutableState.value.copy(stage = RouterWizardStage.LOGIN, compatibility = null))
+            operationRecovery = mutableState.value.copy(busy = false)
+            throw failure
+        }
+        val catalog = installationCatalog ?: fail(RouterWizardError.UNAVAILABLE)
+        if (checked.catalogSha256 != catalog.sha256 || checked.manifestSha256 != catalog.manifestSha256)
+            fail(RouterWizardError.UNSUPPORTED)
+        publish(mutableState.value.copy(stage = RouterWizardStage.PROTOCOLS, error = null))
+    }
+
     suspend fun confirmInstallProtocols() = operation {
         if (mutableState.value.stage != RouterWizardStage.PROTOCOLS) fail(RouterWizardError.UNAVAILABLE)
         val selected = mutableState.value.installSelection ?: fail(RouterWizardError.UNAVAILABLE)
         val catalog = installationCatalog ?: fail(RouterWizardError.UNAVAILABLE)
         if (selected.catalogSha256 != catalog.sha256 || !catalog.accepts(selected.protocols, selected.includeServer)) fail(RouterWizardError.UNSUPPORTED)
-        publish(mutableState.value.copy(stage = RouterWizardStage.LOGIN))
+        val checked = inspection ?: fail(RouterWizardError.UNAVAILABLE)
+        inspection = null
+        publish(mutableState.value.copy(stage = RouterWizardStage.CHECKING))
+        try {
+            val plan = requireNotNull(setup).planInspection(checked, selected, progressReporter())
+            try {
+                ensureOwner()
+                if (plan.binding.selection != selected || !catalog.matches(plan.binding, plan.openWrtVersion, plan.manifestSha256))
+                    fail(RouterWizardError.UNSUPPORTED)
+                proposal?.close(); proposal = plan
+            } catch (failure: Exception) { plan.close(); throw failure }
+            publish(mutableState.value.copy(stage = RouterWizardStage.INSTALL, openWrtVersion = plan.openWrtVersion,
+                architecture = plan.architecture, storageMode = plan.storageMode,
+                options = mutableState.value.options.copy(licenseAccepted = false,
+                    licenseGeneration = licenseGeneration.incrementAndGet())))
+        } catch (failure: Exception) {
+            publish(mutableState.value.copy(stage = RouterWizardStage.LOGIN, compatibility = null))
+            operationRecovery = mutableState.value.copy(busy = false)
+            throw failure
+        } finally { checked.close() }
     }
 
     suspend fun login(secret: CharArray) = loginCredentials(secret, null)
@@ -377,20 +474,20 @@ internal class RouterWizardCoordinator(
                     return@operation
                 }
                 val service = setup
-                val selected = mutableState.value.installSelection ?: fail(RouterWizardError.UNAVAILABLE)
                 publish(mutableState.value.copy(stage = RouterWizardStage.CHECKING))
-                val plan = if (privateKey == null) service.inspect(mutableState.value.address, requireNotNull(hostKey), secret, selected,
-                    false, progressReporter())
-                else service.inspectWithKey(mutableState.value.address, requireNotNull(hostKey), privateKey, secret, selected,
-                    false, progressReporter())
+                val checked = if (privateKey == null) service.precheck(mutableState.value.address, requireNotNull(hostKey), secret)
+                    else service.precheckWithKey(mutableState.value.address, requireNotNull(hostKey), privateKey, secret)
                 try {
                     ensureOwner()
-                    if (plan.binding.selection != selected || !requireNotNull(installationCatalog).matches(plan.binding,
-                            plan.openWrtVersion, plan.manifestSha256)) fail(RouterWizardError.UNSUPPORTED)
-                    proposal = plan
-                } catch (error: Exception) { plan.close(); throw error }
-                publish(mutableState.value.copy(stage = RouterWizardStage.INSTALL,
-                    openWrtVersion = plan.openWrtVersion, architecture = plan.architecture, storageMode = plan.storageMode,
+                    val catalog = installationCatalog ?: fail(RouterWizardError.UNAVAILABLE)
+                    if (checked.address != mutableState.value.address || checked.catalogSha256 != catalog.sha256 ||
+                        checked.manifestSha256 != catalog.manifestSha256) fail(RouterWizardError.UNSUPPORTED)
+                    checked.requireCurrent()
+                    inspection?.close(); inspection = checked
+                } catch (failure: Exception) { checked.close(); throw failure }
+                publish(mutableState.value.copy(stage = RouterWizardStage.COMPATIBILITY,
+                    openWrtVersion = checked.system.openWrtVersion, architecture = checked.system.platform.architecture,
+                    storageMode = null, compatibility = checked.system,
                     options = mutableState.value.options.copy(licenseAccepted = false,
                         licenseGeneration = licenseGeneration.incrementAndGet())))
             } else {
@@ -457,7 +554,9 @@ internal class RouterWizardCoordinator(
                 publish(mutableState.value.copy(stage = RouterWizardStage.LOGIN, path = RouterWizardPath.PAIR,
                     fingerprint = result.identity.displayFingerprint, identityChanged = false))
             } else try {
-                val session = requireNotNull(api).unlock(bootstrap)
+                val management = requireNotNull(api)
+                awaitInitialManagementReady(management)
+                val session = management.unlock(bootstrap)
                 try {
                     ensureOwner()
                     if (!session.changePinRequired) fail(RouterWizardError.IDENTITY)
@@ -471,6 +570,26 @@ internal class RouterWizardCoordinator(
                     licenseRequired = requireNotNull(pinSession).licenseRequired, licenseVersion = requireNotNull(pinSession).licenseVersion))
             } finally { bootstrap.fill('\u0000') }
         } finally { result.close() }
+    }
+
+    private suspend fun awaitInitialManagementReady(client: RouterPanelApi) {
+        // Enrollment restarts RPCD; probe readiness before sending the one-time PIN.
+        val ready = withTimeoutOrNull(5000) {
+            var available = false
+            while (!available) {
+                ensureOwner()
+                try {
+                    client.packageStatus()
+                    ensureOwner()
+                    available = true
+                } catch (failure: RouterApiFailure) {
+                    if (failure.kind != RouterApiError.UNAVAILABLE || failure.httpStatus != 503) throw failure
+                    kotlinx.coroutines.delay(100)
+                }
+            }
+            true
+        }
+        if (ready != true) throw RouterApiFailure(RouterApiError.UNAVAILABLE, 503)
     }
 
     suspend fun changePin(newPin: CharArray) = finish(newPin)
@@ -528,7 +647,8 @@ internal class RouterWizardCoordinator(
         val normalized = options.copy(
             countryCode = if (options.countryAuto) mutableState.value.routerCountryCode.orEmpty() else options.countryCode,
             createRemoteProfile = options.publicIp && supportsRemoteProfile && options.createRemoteProfile,
-            homeAutodetection = supportsHomeAutodetection && options.homeAutodetection,
+            homeAutodetection = supportsHomeAutodetection && options.homeAutodetection &&
+                options.publicIp && options.createRemoteProfile,
             licenseAccepted = if (current.initialPinRequired && options.licenseGeneration == current.options.licenseGeneration &&
                 current.options.licenseGeneration == licenseGeneration.get()) options.licenseAccepted else current.options.licenseAccepted,
             licenseGeneration = current.options.licenseGeneration)
@@ -583,10 +703,26 @@ internal class RouterWizardCoordinator(
         preferenceStore?.let { store ->
             val old = store.read(actualPairing.id)
             ensureOwner()
-            store.save(old.copy(publicIpConfirmed = options.publicIp, homeVpnManagementEnabled = options.publicIp && old.homeVpnManagementEnabled,
+            val installedHere = mutableState.value.installedInThisWizard
+            val manageViaVpn = options.publicIp && options.createRemoteProfile
+            val updated = old.copy(
+                publicIpConfirmed = options.publicIp,
+                homeVpnManagementEnabled = if (installedHere) manageViaVpn else options.publicIp && old.homeVpnManagementEnabled,
+                homeAutodetection = if (installedHere) options.homeAutodetection && manageViaVpn else old.homeAutodetection,
+                authenticatedHomeServerEnabled = if (installedHere) result.remoteProfileUri != null else old.authenticatedHomeServerEnabled,
                 countryCode = options.countryCode.ifEmpty { old.countryCode },
-                countryAuto = options.countryAuto, countrySitesDirect = options.countrySitesDirect))
+                countryAuto = options.countryAuto,
+                countrySitesDirect = options.countrySitesDirect)
+            store.save(updated)
             ensureOwner()
+            if (installedHere && updated.homeAutodetection) {
+                try { (applySmartHome ?: throw RouterSetupFailure(RouterWizardError.UNAVAILABLE)).invoke(true) }
+                catch (failure: Exception) {
+                    store.save(updated.copy(homeAutodetection = false))
+                    throw failure
+                }
+                ensureOwner()
+            }
         }
         val completed = mutableState.value.copy(stage = RouterWizardStage.COMPLETE, pairedId = result.pairedId,
             remoteProfileCreated = result.remoteProfileUri != null, remoteReady = result.remoteReady)
@@ -795,6 +931,8 @@ internal class RouterWizardCoordinator(
     }
 
     override fun close() {
+        webSetupReturn = null
+        webSetupRefresh.getAndSet(null)?.cancel()
         generation.incrementAndGet()
         licenseGeneration.incrementAndGet()
         progressGeneration.incrementAndGet()
@@ -804,6 +942,7 @@ internal class RouterWizardCoordinator(
         pairedSession?.close(); pairedSession = null
         pairing?.clear(); pairing = null
         proposal?.close(); proposal = null
+        inspection?.close(); inspection = null
         api?.close(); api = null
         addingNew = false
         pairingRetry = false
@@ -815,7 +954,7 @@ internal class RouterWizardCoordinator(
         resetPairingId = null
         freshPairingRequired = false
         operationRecovery = null
-        mutableState.update { it.copy(installProgress = null, busy = false, installedInThisWizard = false, autoUpdateUnconfirmed = false,
+        mutableState.update { it.copy(installProgress = null, compatibility = null, busy = false, installedInThisWizard = false, autoUpdateUnconfirmed = false,
             autoUpdateFailure = null, licenseRequired = false, licenseVersion = 0, initialPinRequired = false, pinCooldownUntilMs = null, options = it.options.copy(licenseAccepted = false, licenseGeneration = licenseGeneration.get())) }
     }
 

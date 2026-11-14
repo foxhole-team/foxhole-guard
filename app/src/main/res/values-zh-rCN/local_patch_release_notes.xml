@@ -1,5 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="cli_release_notes_translations_105">新增阿拉伯语和RTL支持，适配了小组件，并修复了翻译和路由器设置。</string>
-    <string name="cli_release_notes_router_cleanup_105">改进了路由器设置过程中的资源释放和错误提示。</string>
+    <string name="cli_release_notes_translations_105">新增阿拉伯语和RTL支持，适配了小组件，并修复了翻译和路由器设置</string>
+    <string name="cli_release_notes_router_cleanup_105">改进了路由器设置过程中的资源释放和错误提示</string>
+    <string name="cli_release_notes_router_setup_107">修复了通过应用首次安装和设置路由器的问题</string>
+    <string name="cli_release_notes_transport_components_107">已更新Tor传输组件Lyrebird和conjure-client</string>
+    <string name="cli_release_notes_help_107">更新了帮助章节</string>
+    <string name="cli_release_notes_sentinel_107">改进了 Sentinel 报告和扫描历史记录</string>
+    <string name="cli_release_notes_router_interface_107">更新了路由器管理界面</string>
+    <string name="cli_release_notes_general_interface_107">改进整体界面</string>
+    <string name="cli_release_notes_sentinel_apps_data_107">改进 Sentinel 应用选择和数据下载</string>
+    <string name="cli_release_notes_user_modules_107">用户模式下可使用 Tor、I2P、防火墙及 Sentinel 设置</string>
 </resources>

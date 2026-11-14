@@ -71,15 +71,17 @@ internal fun CliPanel(
     accentBorderColor: Color = Color.Unspecified,
     contentPadding: CliPanelContentPadding = CliPanelDefaultContentPadding,
     contentVerticalPadding: Dp = CLI_PANEL_VERTICAL_PADDING,
+    infoContent: (@Composable () -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val colors = LocalCliColors.current
     val panelAppearance = LocalCliPanelAppearance.current
     val shape = RoundedCornerShape(CliRadius.panel)
     var infoOpen by rememberSaveable { mutableStateOf(false) }
-    if (infoOpen && infoText != null) {
+    if (infoOpen && (infoText != null || infoContent != null)) {
         CliInfoSheet(
-            text = infoText,
+            text = infoText.orEmpty(),
+            helpContent = infoContent,
             onDismiss = { infoOpen = false },
         )
     }
@@ -107,7 +109,7 @@ internal fun CliPanel(
                 onToggleExpanded = onToggleExpanded,
                 attention = attention,
                 attentionColor = attentionColor,
-                hasInfo = infoText != null,
+                hasInfo = infoText != null || infoContent != null,
                 onInfoTap = { infoOpen = true },
             )
         }
@@ -154,7 +156,7 @@ internal fun CliPanel(
                                 color = headerColor,
                                 icon = icon,
                                 iconColor = iconColor,
-                                hasInfo = infoText != null,
+                                hasInfo = infoText != null || infoContent != null,
                                 onInfoTap = { infoOpen = true },
                                 modifier = Modifier
                                     .weight(1f)

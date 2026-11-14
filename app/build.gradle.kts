@@ -157,7 +157,7 @@ abstract class VerifyBundledLicenseAssetsInReleaseApkTask : DefaultTask() {
                 "assets/licenses/i2pd/i2pd-BSD-3-Clause.txt",
                 "assets/licenses/icons/Tabler-MIT.txt",
                 "assets/licenses/tor/GO-MODULES.json",
-                "assets/licenses/tor/Go-1.26.10-BSD-3-Clause.txt",
+                "assets/licenses/tor/Go-1.26.11-BSD-3-Clause.txt",
                 "assets/licenses/tor/conjure-client-BSD-3-Clause.txt",
                 "assets/licenses/tor/lyrebird-BSD-3-Clause.txt",
                 "assets/licenses/tor/lyrebird-GPL-3.0-or-later.txt",
@@ -276,7 +276,7 @@ val releaseSigningStoreFile =
                 }
             candidates.firstOrNull(File::isFile)
         }
-val baseAppVersionCode = 180
+val baseAppVersionCode = 181
 val localBuildNumber = providers.gradleProperty("foxhole.localBuildNumber").orNull?.let { raw ->
     requireNotNull(raw.toIntOrNull()?.takeIf { it in (baseAppVersionCode + 1)..2_100_000_000 }) {
         "foxhole.localBuildNumber must exceed $baseAppVersionCode and be at most 2100000000"
@@ -1121,7 +1121,8 @@ val verifyReleaseContainsNativeRuntime =
     tasks.register<VerifyBundledNativeRuntimeInReleaseApkTask>("verifyReleaseContainsNativeRuntime") {
     dependsOn("assembleRelease")
     apkDirectory.set(layout.buildDirectory.dir("outputs/apk/release"))
-    expectedAbis.set(shippedAndroidAbis)
+    // Delivery may be a subset of the qualified producer ABI set.
+    expectedAbis.set(apkDeliveryAbis)
 }
 
 val verifyReleaseContainsBaselineProfile = tasks.register<VerifyReleaseBaselineProfileInApkTask>("verifyReleaseContainsBaselineProfile") {

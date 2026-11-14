@@ -1,0 +1,2313 @@
+import groovy.json.JsonSlurper
+import org.gradle.api.DefaultTask
+import org.gradle.api.file.DirectoryProperty
+import org.gradle.api.provider.SetProperty
+import org.gradle.api.tasks.Input
+import org.gradle.api.tasks.InputDirectory
+import org.gradle.api.tasks.OutputDirectory
+import org.gradle.api.tasks.Exec
+import com.android.build.api.artifact.SingleArtifact
+import org.gradle.api.tasks.Sync
+import org.gradle.api.tasks.TaskAction
+import org.gradle.api.tasks.bundling.Zip
+import org.gradle.testing.jacoco.tasks.JacocoCoverageVerification
+import org.gradle.testing.jacoco.tasks.JacocoReport
+import java.security.MessageDigest
+import java.util.Properties
+import java.util.zip.ZipFile
+
+abstract class PreparePageAlignedNativeTask : Exec() {
+    @get:OutputDirectory
+    abstract val nativeDirectory: DirectoryProperty
+}
+
+abstract class VerifyBundledNativeRuntimeInReleaseApkTask : DefaultTask() {
+    @get:InputDirectory
+    abstract val apkDirectory: DirectoryProperty
+
+    @get:Input
+    abstract val expectedAbis: SetProperty<String>
+
+    @TaskAction
+    fun verify() {
+        val apks =
+            apkDirectory
+                .asFileTree
+                .matching { include("*.apk") }
+                .files
+                .sortedBy { it.name }
+        require(apks.isNotEmpty()) { "release APK is missing from ${apkDirectory.get().asFile}" }
+
+        val requiredLibraries =
+            listOf(
+                "libfoxhole_native.so",
+                "libfoxhole_sentinel_yara.so",
+                "liblyrebird.so",
+                "libconjure_client.so",
+                "libi2pd.so",
+            )
+        val abis = expectedAbis.get()
+        require(abis.isNotEmpty()) { "verifyReleaseContainsNativeRuntime has no ABIs to look for" }
+        val requiredEntries =
+            abis.flatMap { abi -> requiredLibraries.map { library -> "lib/$abi/$library" } }.toSet()
+        val discoveredEntries = linkedSetOf<String>()
+
+        apks.forEach { apk ->
+            ZipFile(apk).use { zip ->
+                zip.entries().asSequence()
+                    .map { entry -> entry.name }
+                    .filter { entryName ->
+                        entryName.endsWith("/libfoxhole_native.so") ||
+                            entryName.endsWith("/libfoxhole_sentinel_yara.so") ||
+                            entryName.endsWith("/liblyrebird.so") ||
+                            entryName.endsWith("/libconjure_client.so") ||
+                            entryName.endsWith("/libi2pd.so")
+                    }
+                    .forEach(discoveredEntries::add)
+            }
+        }
+
+        val missingEntries = requiredEntries - discoveredEntries
+        require(missingEntries.isEmpty()) {
+            buildString {
+                append("release APK was produced without required native runtime entries: ")
+                append(missingEntries.joinToString())
+                append(". Found release APKs: ")
+                append(apks.joinToString { it.name })
+                append(". Found native runtime entries: ")
+                append(discoveredEntries.joinToString().ifBlank { "none" })
+            }
+        }
+    }
+}
+
+abstract class VerifyReleaseBaselineProfileInApkTask : DefaultTask() {
+    @get:InputDirectory
+    abstract val apkDirectory: DirectoryProperty
+
+    @TaskAction
+    fun verify() {
+        val apks =
+            apkDirectory
+                .asFileTree
+                .matching { include("*.apk") }
+                .files
+                .sortedBy { it.name }
+        require(apks.isNotEmpty()) { "release APK is missing from ${apkDirectory.get().asFile}" }
+        apks.forEach { apk ->
+            val entries = ZipFile(apk).use { zip -> zip.entries().asSequence().map { it.name }.toSet() }
+            require("assets/dexopt/baseline.prof" in entries) {
+                "release APK ${apk.name} is missing assets/dexopt/baseline.prof"
+            }
+            require("assets/dexopt/baseline.profm" in entries) {
+                "release APK ${apk.name} is missing assets/dexopt/baseline.profm"
+            }
+            require(entries.any { it.startsWith("META-INF/androidx.profileinstaller_") }) {
+                "release APK ${apk.name} is missing ProfileInstaller metadata"
+            }
+        }
+    }
+}
+
+abstract class VerifyBundledLicenseAssetsInReleaseApkTask : DefaultTask() {
+    @get:InputDirectory
+    abstract val apkDirectory: DirectoryProperty
+
+    @get:Input
+    abstract val expectedAbis: SetProperty<String>
+
+    @TaskAction
+    fun verify() {
+        val apks =
+            apkDirectory
+                .asFileTree
+                .matching { include("*.apk") }
+                .files
+                .sortedBy { it.name }
+        require(apks.isNotEmpty()) { "release APK is missing from ${apkDirectory.get().asFile}" }
+        val requiredCoreInventory = when (expectedAbis.get()) {
+            setOf("armeabi-v7a") -> "assets/licenses/foxcore/foxcore-armv7-linux-androideabi.cdx.json"
+            setOf("arm64-v8a", "x86_64"),
+            setOf("arm64-v8a", "armeabi-v7a", "x86_64"),
+            setOf("arm64-v8a", "armeabi-v7a", "x86", "x86_64") -> "assets/licenses/foxcore/foxcore-aarch64-linux-android.cdx.json"
+            else -> error("Unsupported bundled license ABI profile: ${expectedAbis.get()}")
+        }
+        val required =
+            setOf(
+                "assets/licenses/FoxHole-Guard-GPL-3.0-or-later.txt",
+                "assets/licenses/MANIFEST.json",
+                "assets/licenses/THIRD_PARTY_NOTICES.md",
+                "assets/licenses/SHA256SUMS",
+                "assets/licenses/android/JNA-Apache-2.0.txt",
+                "assets/licenses/android/JNA-LGPL-2.1.txt",
+                "assets/licenses/android/JNA-LICENSE.txt",
+                "assets/licenses/android/SQLCipher-BSD-3-Clause.txt",
+                "assets/licenses/android/lazysodium-MPL-2.0.txt",
+                "assets/licenses/android/libsodium-ISC.txt",
+                "assets/licenses/flags/app-assets.sha256",
+                "assets/licenses/flags/flag-icons-LICENSE.txt",
+                "assets/licenses/fonts/JetBrainsMono-OFL.txt",
+                "assets/licenses/fonts/Tiny5-OFL.txt",
+                "assets/licenses/foxcore/FoxHole-Core-GPL-3.0-or-later.txt",
+                "assets/licenses/foxcore/THIRD_PARTY_NOTICES.md",
+                "assets/licenses/i2pd/Android-NDK-29-NOTICE.txt",
+                "assets/licenses/i2pd/Android-NDK-29-NOTICE.toolchain.txt",
+                "assets/licenses/i2pd/Boost-1.84.0-BSL-1.0.txt",
+                "assets/licenses/i2pd/OpenSSL-3.5.9-Apache-2.0.txt",
+                "assets/licenses/i2pd/i2pd-BSD-3-Clause.txt",
+                "assets/licenses/icons/Tabler-MIT.txt",
+                "assets/licenses/tor/GO-MODULES.json",
+                "assets/licenses/tor/Go-1.26.11-BSD-3-Clause.txt",
+                "assets/licenses/tor/conjure-client-BSD-3-Clause.txt",
+                "assets/licenses/tor/lyrebird-BSD-3-Clause.txt",
+                "assets/licenses/tor/lyrebird-GPL-3.0-or-later.txt",
+                "assets/licenses/tor-config/PROVENANCE.txt",
+                "assets/licenses/tor-config/assets.sha256",
+                "assets/licenses/tor-config/upstream-members/README.CONJURE.md",
+                "assets/licenses/tor-config/upstream-members/pt_config.json",
+                "assets/licenses/tor-config/upstream-members/torrc-defaults.txt",
+            ) + requiredCoreInventory
+        apks.forEach { apk ->
+            ZipFile(apk).use { zip ->
+                val entries = zip.entries().asSequence().map { it.name }.toSet()
+                require(entries.containsAll(required)) {
+                    "release APK ${apk.name} is missing license assets: ${(required - entries).joinToString()}"
+                }
+                val sums =
+                    zip.getInputStream(requireNotNull(zip.getEntry("assets/licenses/SHA256SUMS")))
+                        .bufferedReader()
+                        .readLines()
+                val checksumEntries =
+                    sums.map { line ->
+                        val match = requireNotNull(Regex("([0-9a-f]{64})  (.+)").matchEntire(line)) {
+                            "invalid license checksum line: $line"
+                        }
+                        val relative = match.groupValues[2]
+                        require(!relative.startsWith('/') && relative.split('/').none { segment -> segment == ".." }) {
+                            "unsafe license checksum path: $relative"
+                        }
+                        match.groupValues[1] to relative
+                    }
+                require(checksumEntries.map { (_, relative) -> relative }.distinct().size == checksumEntries.size) {
+                    "release APK ${apk.name} contains duplicate license checksum paths"
+                }
+                val expectedLicenseEntries =
+                    checksumEntries.map { (_, relative) -> "assets/licenses/$relative" }.toSet() +
+                        "assets/licenses/SHA256SUMS"
+                val actualLicenseEntries =
+                    entries.filter { entry -> entry.startsWith("assets/licenses/") && !entry.endsWith('/') }.toSet()
+                require(actualLicenseEntries == expectedLicenseEntries) {
+                    "release APK ${apk.name} license inventory does not match SHA256SUMS"
+                }
+                checksumEntries.forEach { (expected, relative) ->
+                    val entry = requireNotNull(zip.getEntry("assets/licenses/$relative")) {
+                        "license checksum references a missing APK asset: $relative"
+                    }
+                    val digest = MessageDigest.getInstance("SHA-256")
+                    val actual = zip.getInputStream(entry).use { input -> digest.digest(input.readBytes()) }
+                        .joinToString("") { byte -> "%02x".format(byte.toInt() and 0xff) }
+                    require(actual == expected) { "license asset checksum mismatch: $relative" }
+                }
+            }
+        }
+    }
+}
+
+plugins {
+    id("com.android.application")
+    id("com.google.devtools.ksp") version "2.3.10"
+    id("org.jetbrains.kotlin.plugin.compose") version "2.4.21"
+    id("org.jetbrains.kotlin.plugin.serialization") version "2.4.21"
+    jacoco
+}
+
+val enableAbiSplitApks = providers.gradleProperty("foxhole.splitApks").map(String::toBoolean).orElse(false).get()
+val enableReleaseProbe = providers.gradleProperty("foxhole.releaseProbe").map(String::toBoolean).orElse(false).get()
+val enableStrictMode = providers.gradleProperty("foxhole.strictMode").map(String::toBoolean).orElse(false).get()
+val publicApplicationId = "com.foxhole.guard"
+val lastUploadedVersionCodeProvided =
+    providers.gradleProperty("foxhole.lastUploadedVersionCode").isPresent
+val lastUploadedPublicVersionCode =
+    providers.gradleProperty("foxhole.lastUploadedVersionCode").map(String::toInt).orElse(1).get()
+val defaultReleaseSigningPropertiesFile =
+    rootProject.projectDir.parentFile.resolve("dev/signing/release-signing.properties")
+val releaseSigningPropertiesFile =
+    providers.gradleProperty("foxhole.releaseSigningProperties")
+        .orNull
+        ?.trim()
+        ?.takeIf(String::isNotEmpty)
+        ?.let(rootProject::file)
+        ?: defaultReleaseSigningPropertiesFile
+val releaseSigningProperties =
+    Properties().apply {
+        if (releaseSigningPropertiesFile.isFile) {
+            releaseSigningPropertiesFile.inputStream().use(::load)
+        }
+    }
+
+fun releaseSigningValue(
+    propertyName: String,
+    envName: String,
+): String? =
+    providers.environmentVariable(envName).orNull
+        ?: releaseSigningProperties.getProperty(propertyName)?.trim()?.takeIf(String::isNotEmpty)
+
+val releaseSigningStoreFilePath = releaseSigningValue("storeFile", "FOXHOLE_RELEASE_STORE_FILE")
+val releaseSigningStorePassword = releaseSigningValue("storePassword", "FOXHOLE_RELEASE_STORE_PASSWORD")
+val releaseSigningKeyAlias = releaseSigningValue("keyAlias", "FOXHOLE_RELEASE_KEY_ALIAS")
+val releaseSigningKeyPassword = releaseSigningValue("keyPassword", "FOXHOLE_RELEASE_KEY_PASSWORD")
+val releaseSigningStoreType = releaseSigningValue("storeType", "FOXHOLE_RELEASE_STORE_TYPE") ?: "PKCS12"
+val releaseSigningStoreFile =
+    releaseSigningStoreFilePath
+        ?.let { configuredPath ->
+            val configuredFile = File(configuredPath)
+            val candidates =
+                if (configuredFile.isAbsolute) {
+                    listOf(
+                        configuredFile,
+                        releaseSigningPropertiesFile.parentFile.resolve(configuredFile.name),
+                    )
+                } else {
+                    listOf(
+                        releaseSigningPropertiesFile.parentFile.resolve(configuredPath),
+                        rootProject.file(configuredPath),
+                        releaseSigningPropertiesFile.parentFile.resolve(configuredFile.name),
+                    )
+                }
+            candidates.firstOrNull(File::isFile)
+        }
+val baseAppVersionCode = 181
+val localBuildNumber = providers.gradleProperty("foxhole.localBuildNumber").orNull?.let { raw ->
+    requireNotNull(raw.toIntOrNull()?.takeIf { it in (baseAppVersionCode + 1)..2_100_000_000 }) {
+        "foxhole.localBuildNumber must exceed $baseAppVersionCode and be at most 2100000000"
+    }
+}
+
+val appUpdateChannel =
+    providers.gradleProperty("foxhole.updateChannel").orNull?.trim()?.takeIf(String::isNotEmpty) ?: "github"
+require(appUpdateChannel in setOf("github", "fdroid")) {
+    "foxhole.updateChannel must be github or fdroid"
+}
+val sourceNativeManifest =
+    providers.gradleProperty("foxhole.sourceNativeManifest").orNull?.let { rootProject.file(it) }
+require(sourceNativeManifest == null || appUpdateChannel == "fdroid") {
+    "Source-built native provenance is restricted to the F-Droid channel"
+}
+
+val appUpdateFloorVersionCode =
+    providers.gradleProperty("foxhole.updateFloorVersionCode").orNull?.trim()?.toLongOrNull() ?: 0L
+val appUpdateSupportedUntilEpochDay =
+    providers.gradleProperty("foxhole.updateSupportedUntilEpochDay").orNull?.trim()?.toLongOrNull() ?: 0L
+
+val foxCoreSourceRoot =
+    providers.gradleProperty("foxhole.foxCoreSourceRoot")
+        .orElse(providers.environmentVariable("FOXCORE_SOURCE_ROOT"))
+        .orNull
+        ?.trim()
+        ?.takeIf(String::isNotEmpty)
+        ?.let(rootProject::file)
+        ?: rootProject.projectDir.parentFile.resolve("foxhole-core")
+require(foxCoreSourceRoot.resolve("Cargo.toml").isFile) {
+    "FoxCore source is missing at ${foxCoreSourceRoot.absolutePath}. " +
+        "Set FOXCORE_SOURCE_ROOT or -Pfoxhole.foxCoreSourceRoot=<path>."
+}
+val pinnedFoxCoreRevision =
+    rootProject
+        .file("config/foxcore-revision.txt")
+        .takeIf(File::isFile)
+        ?.readText()
+        ?.trim()
+        ?.takeIf { revision -> revision.matches(Regex("^[0-9a-f]{40}$")) }
+        ?: error("config/foxcore-revision.txt must contain one full Git commit SHA")
+val pinnedFoxCoreCheckoutRevision =
+    if (rootProject.file("config/foxcore-source-checkout.json").isFile) {
+        providers.exec {
+            commandLine(
+                "python3", "-B", rootProject.file("scripts/core-source-binding.py").absolutePath,
+                "--app-root", rootProject.projectDir.absolutePath,
+                "--core-root", foxCoreSourceRoot.absolutePath,
+                "--producer-revision", pinnedFoxCoreRevision,
+                "--print-source-commit",
+            )
+        }.standardOutput.asText.get().trim().also { revision ->
+            check(revision.matches(Regex("^[0-9a-f]{40}$")))
+        }
+    } else {
+        pinnedFoxCoreRevision
+    }
+val checkedOutFoxCoreRevision: String? =
+    runCatching {
+        val git =
+            providers.exec {
+                commandLine("git", "-C", foxCoreSourceRoot.absolutePath, "rev-parse", "HEAD")
+                isIgnoreExitValue = true
+            }
+        git.standardOutput.asText
+            .get()
+            .trim()
+            .takeIf { head -> git.result.get().exitValue == 0 && head.matches(Regex("^[0-9a-f]{40}$")) }
+    }.getOrNull()
+val requirePinnedFoxCoreRevision =
+    providers.gradleProperty("foxhole.requirePinnedFoxCore").orNull?.trim()?.toBooleanStrictOrNull()
+        ?: gradle.startParameter.taskNames.any { task -> task.contains("elease") }
+when (checkedOutFoxCoreRevision) {
+    pinnedFoxCoreCheckoutRevision -> Unit
+    null ->
+        logger.warn(
+            "\n! FoxCore revision unverified: no Git HEAD readable at ${foxCoreSourceRoot.absolutePath}." +
+                "\n! config/foxcore-revision.txt pins $pinnedFoxCoreRevision and nothing here can confirm it.\n",
+        )
+
+    else -> {
+        val banner =
+            buildString {
+                append("\n")
+                append("!".repeat(96)).append("\n")
+                append("! FoxCore revision mismatch — this build would NOT be the pinned core.\n")
+                append("!   compiled producer: $pinnedFoxCoreRevision\n")
+                append("!   pinned checkout: $pinnedFoxCoreCheckoutRevision\n")
+                append("!   checked out (${foxCoreSourceRoot.absolutePath}): $checkedOutFoxCoreRevision\n")
+                append("! Fix with: git -C ${foxCoreSourceRoot.absolutePath} checkout $pinnedFoxCoreCheckoutRevision\n")
+                append("! or update config/foxcore-revision.txt if the new revision is the one to ship.\n")
+                append("!".repeat(96)).append("\n")
+            }
+        if (requirePinnedFoxCoreRevision) {
+            error(banner)
+        }
+        logger.error(banner)
+    }
+}
+
+val buildFoxCoreInDocker =
+    providers.gradleProperty("foxhole.coreDocker")
+        .map(String::toBooleanStrict)
+        .orElse(System.getProperty("os.name").startsWith("Mac"))
+val foxCoreAndroidBuildScript = foxCoreSourceRoot.resolve(
+    if (buildFoxCoreInDocker.get()) "scripts/docker-android.sh" else "scripts/android-build.sh",
+)
+val foxCoreVersion =
+    Regex("""(?m)^version\s*=\s*"([^"]+)"\s*$""")
+        .find(foxCoreSourceRoot.resolve("Cargo.toml").readText())
+        ?.groupValues
+        ?.get(1)
+        ?: error("FoxCore workspace version is missing")
+val generatedFoxCoreNativeLibs = layout.buildDirectory.dir("generated/foxCoreNativeLibs")
+val shippedAndroidAbis =
+    (providers.gradleProperty("foxhole.abis").orNull ?: "arm64-v8a armeabi-v7a x86 x86_64")
+        .split(" ", ",")
+        .map(String::trim)
+        .filter(String::isNotEmpty)
+require(shippedAndroidAbis.isNotEmpty() && shippedAndroidAbis.distinct().size == shippedAndroidAbis.size) {
+    "foxhole.abis must contain unique Android ABIs"
+}
+require(shippedAndroidAbis.all { it in setOf("arm64-v8a", "armeabi-v7a", "x86", "x86_64") }) {
+    "foxhole.abis supports arm64-v8a, armeabi-v7a, x86 and x86_64"
+}
+require(shippedAndroidAbis.toSet() != setOf("arm64-v8a", "armeabi-v7a", "x86_64") || appUpdateChannel == "fdroid") {
+    "The android3 ABI profile is reserved for the F-Droid channel"
+}
+
+val apkDeliveryAbis = providers.gradleProperty("foxhole.deliveryAbis").orNull
+    ?.split(' ', ',')?.map(String::trim)?.filter(String::isNotEmpty) ?: shippedAndroidAbis
+require(apkDeliveryAbis.isNotEmpty() && apkDeliveryAbis.distinct().size == apkDeliveryAbis.size &&
+    apkDeliveryAbis.all { it in shippedAndroidAbis }) {
+    "foxhole.deliveryAbis must be a nonempty unique subset of foxhole.abis"
+}
+
+val artiVersion =
+    Regex("""(?ms)\[\[package]]\s*name\s*=\s*"arti-client"\s*version\s*=\s*"([^"]+)"""")
+        .find(foxCoreSourceRoot.resolve("Cargo.lock").readText())
+        ?.groupValues
+        ?.get(1)
+        ?: error("Pinned arti-client version is missing from FoxCore Cargo.lock")
+val releaseSigningReady =
+    !releaseSigningStoreFilePath.isNullOrBlank() &&
+        !releaseSigningStorePassword.isNullOrBlank() &&
+        !releaseSigningKeyAlias.isNullOrBlank() &&
+        !releaseSigningKeyPassword.isNullOrBlank() &&
+        releaseSigningStoreFile?.isFile == true
+val validateReleaseSigningInputs = tasks.register("validateReleaseSigningInputs") {
+    group = "verification"
+    description = "Fail early when release signing inputs are incomplete or the configured keystore is missing."
+
+    doLast {
+        require(releaseSigningReady) {
+            "Release signing is incomplete. Configure " +
+                "-Pfoxhole.releaseSigningProperties=<path>, ${defaultReleaseSigningPropertiesFile.absolutePath}, " +
+                "or FOXHOLE_RELEASE_* env vars."
+        }
+        require(releaseSigningStoreFile?.isFile == true) {
+            "Release keystore is missing: $releaseSigningStoreFilePath"
+        }
+    }
+}
+val publicReleaseBuildConfigFile =
+    layout.buildDirectory.file("generated/source/buildConfig/publicRelease/com/foxhole/guard/BuildConfig.java")
+val releaseBuildConfigFile =
+    layout.buildDirectory.file("generated/source/buildConfig/release/com/foxhole/guard/BuildConfig.java")
+val publicReleaseBundleDir = layout.buildDirectory.dir("outputs/bundle/publicRelease")
+val publicReleaseMappingFile = layout.buildDirectory.file("outputs/mapping/publicRelease/mapping.txt")
+val publicReleaseMergedNativeLibsDir =
+    layout.buildDirectory.dir("intermediates/merged_native_libs/publicRelease/mergePublicReleaseNativeLibs/out/lib")
+val publicReleaseNativeSymbolsArchive =
+    layout.buildDirectory.file("outputs/native-debug-symbols/publicRelease/publicRelease-native-symbols.zip")
+val publicReleaseLocaleConfigFile =
+    layout.buildDirectory.file("generated/res/localeConfig/publicRelease/xml/_generated_res_locale_config.xml")
+val filteredMainAssetsDir = layout.buildDirectory.dir("generated/filteredMainAssets")
+val generatedLicenseAssetsDir = layout.buildDirectory.dir("generated/licenseAssets")
+
+fun publicReleaseBundleFile(): File {
+    val bundles =
+        publicReleaseBundleDir.get().asFile
+            .listFiles { file -> file.isFile && file.extension == "aab" }
+            .orEmpty()
+            .sortedBy { file -> file.name }
+    require(bundles.size == 1) {
+        "Expected exactly one publicRelease AAB under ${publicReleaseBundleDir.get().asFile}, found " +
+            bundles.joinToString { file -> file.name }.ifBlank { "none" }
+    }
+    return bundles.single()
+}
+
+val nativeBootstrapOffline =
+    providers.gradleProperty("foxhole.nativeOffline").orNull?.toBooleanStrictOrNull() ?: gradle.startParameter.isOffline
+
+val buildPrivacyNativeInDocker =
+    providers.gradleProperty("foxhole.nativeDocker")
+        .map(String::toBooleanStrict)
+        .orElse(System.getProperty("os.name").startsWith("Mac"))
+val dockerNativeBuildScript = rootProject.file("scripts/docker-native.sh")
+
+val prepareBundledI2pd = tasks.register("prepareBundledI2pd") {
+    val buildI2pdScript = rootProject.file("scripts/build-i2pd.sh")
+    val nativeDepsScript = rootProject.file("scripts/native-deps.sh")
+    val i2pdPatches = rootProject.fileTree("scripts/patches") { include("i2pd-*.patch") }
+    val i2pdSourceInputsScript = rootProject.file("scripts/i2pd-source-inputs.py")
+    val i2pdTrackedSourceFingerprint =
+        providers.exec {
+            workingDir(rootProject.projectDir)
+            commandLine(
+                "python3",
+                i2pdSourceInputsScript.absolutePath,
+                rootProject.file("third_party/i2pd").absolutePath,
+            )
+        }.standardOutput.asText.map(String::trim)
+    val i2pdLibraries = shippedAndroidAbis.map { abi -> file("src/main/jniLibs/$abi/libi2pd.so") }
+
+    inputs.files(buildI2pdScript, nativeDepsScript, dockerNativeBuildScript, rootProject.file("docker/Dockerfile.native"))
+    inputs.file(rootProject.file("scripts/verify-native-pages.py"))
+    inputs.file(rootProject.file("scripts/i2pd-build-cache.py"))
+    inputs.file(rootProject.file("third_party/i2pd.version"))
+    inputs.file(i2pdSourceInputsScript)
+    inputs.property("trackedSourceFingerprint", i2pdTrackedSourceFingerprint)
+    inputs.property("buildInDocker", buildPrivacyNativeInDocker)
+    inputs.property("abis", shippedAndroidAbis)
+    inputs.files(i2pdPatches)
+    outputs.files(i2pdLibraries)
+
+    doLast {
+        require(buildI2pdScript.isFile) { "missing i2pd bootstrap script: ${buildI2pdScript.absolutePath}" }
+        val process =
+            ProcessBuilder(
+                if (buildPrivacyNativeInDocker.get()) {
+                    listOf(dockerNativeBuildScript.absolutePath, "i2pd")
+                } else {
+                    listOf(buildI2pdScript.absolutePath)
+                },
+            )
+                .directory(rootProject.projectDir)
+                .also { builder ->
+                    builder.environment()["FOXHOLE_NATIVE_OFFLINE"] = if (nativeBootstrapOffline) "1" else "0"
+                    builder.environment()["I2PD_ABIS"] = shippedAndroidAbis.joinToString(" ")
+                }
+                .inheritIO()
+                .start()
+        val exitCode = process.waitFor()
+        check(exitCode == 0) { "i2pd bootstrap script failed with exit code $exitCode" }
+        val missing = i2pdLibraries.filterNot(File::isFile)
+        require(missing.isEmpty()) {
+            "i2pd bootstrap did not produce: ${missing.joinToString { library -> library.path }}"
+        }
+    }
+}
+
+val verifyBundledI2pdHostPaths = tasks.register("verifyBundledI2pdHostPaths") {
+    val verifyScript = rootProject.file("scripts/verify-native-host-paths.sh")
+    val i2pdLibraries = shippedAndroidAbis.map { abi -> file("src/main/jniLibs/$abi/libi2pd.so") }
+
+    group = "verification"
+    description = "Fail when a bundled i2pd binary embeds host-specific build paths."
+    dependsOn(prepareBundledI2pd)
+    inputs.file(verifyScript)
+    inputs.files(i2pdLibraries)
+
+    doLast {
+        require(verifyScript.isFile) { "missing native host-path verifier: ${verifyScript.absolutePath}" }
+        val command = listOf(verifyScript.absolutePath) + i2pdLibraries.map(File::getAbsolutePath)
+        val exitCode =
+            ProcessBuilder(command)
+                .directory(rootProject.projectDir)
+                .inheritIO()
+                .start()
+                .waitFor()
+        check(exitCode == 0) { "bundled i2pd host-path verification failed with exit code $exitCode" }
+    }
+}
+
+val prepareBundledTorTransports = tasks.register("prepareBundledTorTransports") {
+    val buildTransportsScript = rootProject.file("scripts/build-tor-transports.sh")
+    val transports =
+        shippedAndroidAbis.flatMap { abi ->
+            listOf("lyrebird", "conjure-client").map { name ->
+                file("src/main/assets/tor/$abi/tor/pluggable_transports/$name")
+            }
+        }
+
+    inputs.files(buildTransportsScript, rootProject.file("scripts/native-deps.sh"), rootProject.file("scripts/prepare-tor-dependency.py"), dockerNativeBuildScript, rootProject.file("docker/Dockerfile.native"))
+    inputs.file(rootProject.file("scripts/verify-native-pages.py"))
+    inputs.property("buildInDocker", buildPrivacyNativeInDocker)
+    inputs.files(rootProject.fileTree("config/native"))
+    inputs.property("abis", shippedAndroidAbis)
+    outputs.files(transports)
+
+    doLast {
+        require(buildTransportsScript.isFile) {
+            "missing Tor transport build script: ${buildTransportsScript.absolutePath}"
+        }
+        val process =
+            ProcessBuilder(
+                if (buildPrivacyNativeInDocker.get()) {
+                    listOf(dockerNativeBuildScript.absolutePath, "transports")
+                } else {
+                    listOf(buildTransportsScript.absolutePath)
+                },
+            )
+                .directory(rootProject.projectDir)
+                .also {
+                    it.environment()["TOR_TRANSPORT_ABIS"] = shippedAndroidAbis.joinToString(" ")
+                    it.environment()["FOXHOLE_NATIVE_OFFLINE"] = if (nativeBootstrapOffline) "1" else "0"
+                }
+                .inheritIO()
+                .start()
+        val exitCode = process.waitFor()
+        check(exitCode == 0) { "Tor transport build script failed with exit code $exitCode" }
+        val missing = transports.filterNot(File::isFile)
+        require(missing.isEmpty()) {
+            "Tor transport build did not produce: ${missing.joinToString { transport -> transport.path }}"
+        }
+    }
+}
+
+fun verifyFdroidSourceNative(manifest: File, kind: String) {
+    val command = listOf(
+        "python3", "-B", rootProject.file("scripts/verify-fdroid-source-native.py").absolutePath,
+        "--app-root", rootProject.projectDir.absolutePath,
+        "--core-root", foxCoreSourceRoot.absolutePath,
+        "--manifest", manifest.absolutePath,
+        "--install-kind", kind,
+    )
+    val log = layout.buildDirectory.file("reports/native/fdroid-$kind-verification.log").get().asFile
+    log.parentFile.mkdirs()
+    val process = ProcessBuilder(command).directory(rootProject.projectDir)
+        .redirectErrorStream(true).redirectOutput(log).start()
+    check(process.waitFor() == 0) {
+        "F-Droid source-built native verification failed:\n${log.readText().takeLast(8_000)}"
+    }
+}
+
+val prebuiltFoxCoreDirectory = providers.environmentVariable("FOXCORE_PREBUILT_DIR").orNull?.let(::File)
+require(prebuiltFoxCoreDirectory == null || sourceNativeManifest == null) {
+    "Reference prebuilt JNI and F-Droid source-built JNI cannot be combined"
+}
+
+val prepareFoxCoreNative = tasks.register("prepareFoxCoreNative") {
+    group = "build"
+    description = "Build the pinned FoxCore Rust JNI library for the explicitly selected Android ABIs."
+
+    inputs.files(
+        fileTree(foxCoreSourceRoot) {
+            include(
+                "Cargo.toml",
+                "Cargo.lock",
+                "rust-toolchain.toml",
+                "crates/**/Cargo.toml",
+                "crates/**/*.rs",
+                "vendor/rustls/**",
+                "config/source-forks/**",
+                "patches/rustls-0.23.46-chrome151.patch",
+                "scripts/android-build.sh",
+                "scripts/android-elf-gate.sh",
+                "scripts/android-path-leaks.py",
+                "scripts/docker-android.sh",
+                "docker/Dockerfile.android",
+            )
+            exclude("target/**", "android-testapp/**/build/**")
+        },
+    )
+    val expectedLibraries =
+        shippedAndroidAbis.map { abi ->
+            generatedFoxCoreNativeLibs.map { directory ->
+                directory.file("$abi/libfoxhole_native.so")
+            }
+        }
+    outputs.files(expectedLibraries)
+    inputs.property("buildInDocker", buildFoxCoreInDocker)
+    inputs.property("prebuiltCore", prebuiltFoxCoreDirectory?.absolutePath.orEmpty())
+    prebuiltFoxCoreDirectory?.let { inputs.dir(it) }
+    sourceNativeManifest?.let {
+        inputs.file(it)
+        inputs.file(rootProject.file("scripts/verify-fdroid-source-native.py"))
+        inputs.dir(layout.buildDirectory.dir("fdroidNativeSource/core"))
+    }
+
+    doLast {
+        sourceNativeManifest?.let { verifyFdroidSourceNative(it, "core"); return@doLast }
+        if (prebuiltFoxCoreDirectory != null) {
+            val command = listOf(
+                "python3", rootProject.file("scripts/verify-core-release.py").absolutePath,
+                foxCoreSourceRoot.absolutePath, prebuiltFoxCoreDirectory.absolutePath, pinnedFoxCoreRevision,
+                shippedAndroidAbis.joinToString(" "), generatedFoxCoreNativeLibs.get().asFile.absolutePath,
+            )
+            check(ProcessBuilder(command).directory(rootProject.projectDir).inheritIO().start().waitFor() == 0) {
+                "Prebuilt Core did not match the pinned release manifest"
+            }
+            check(ProcessBuilder(foxCoreSourceRoot.resolve("scripts/android-elf-gate.sh").absolutePath,
+                generatedFoxCoreNativeLibs.get().asFile.absolutePath).inheritIO().start().waitFor() == 0) {
+                "Prebuilt Core ELF verification failed"
+            }
+            return@doLast
+        }
+        require(foxCoreAndroidBuildScript.isFile) {
+            "missing FoxCore Android build script: ${foxCoreAndroidBuildScript.absolutePath}"
+        }
+        val outputDirectory = generatedFoxCoreNativeLibs.get().asFile
+        outputDirectory.mkdirs()
+        val buildLog = layout.buildDirectory.file("reports/native/foxcore-build.log").get().asFile
+        buildLog.parentFile.mkdirs()
+        val process =
+            ProcessBuilder(
+                if (buildFoxCoreInDocker.get()) {
+                    listOf(foxCoreAndroidBuildScript.absolutePath, "build")
+                } else {
+                    listOf(foxCoreAndroidBuildScript.absolutePath)
+                },
+            )
+                .directory(foxCoreSourceRoot)
+                .redirectErrorStream(true)
+                .redirectOutput(buildLog)
+                .apply {
+                    environment()["FOXCORE_JNI_OUTPUT"] = outputDirectory.absolutePath
+                    environment()["FOXCORE_ANDROID_ABIS"] = shippedAndroidAbis.joinToString(" ")
+                }.start()
+        val exitCode = process.waitFor()
+        check(exitCode == 0) {
+            "FoxCore Android build failed with exit code $exitCode:\n${buildLog.readText().takeLast(8_000)}"
+        }
+        val missing =
+            expectedLibraries
+                .map { it.get().asFile }
+                .filterNot(File::isFile)
+        require(missing.isEmpty()) {
+            "FoxCore Android build did not produce: ${missing.joinToString { library -> library.path }}"
+        }
+    }
+}
+
+val sentinelSource = foxCoreSourceRoot.resolve("native/sentinel-yara")
+val sentinelOutput = layout.buildDirectory.dir("generated/sentinelNative")
+val localOutput = layout.buildDirectory.dir("generated/localNativeLibs")
+
+val prepareLocalNativeLibs = tasks.register<Sync>("prepareLocalNativeLibs") {
+    dependsOn(prepareBundledI2pd)
+    from("src/main/jniLibs") {
+        exclude("**/libfoxhole_native.so", "**/libfoxhole_sentinel_yara.so")
+    }
+    into(localOutput)
+}
+
+val prepareSentinelNative = tasks.register("prepareSentinelNative") {
+    group = "build"
+    description = "Build the pinned isolated scanner from its locked source workspace."
+    inputs.files(fileTree(sentinelSource) { exclude("target/**") })
+    inputs.files(foxCoreSourceRoot.resolve("scripts/docker-sentinel-yara.sh"), foxCoreSourceRoot.resolve("scripts/sentinel-android-build.sh"))
+    inputs.property("androidAbis", shippedAndroidAbis.joinToString(" "))
+    inputs.property("buildInDocker", buildFoxCoreInDocker.get())
+    outputs.files(shippedAndroidAbis.map { abi -> sentinelOutput.map { it.file("jniLibs/$abi/libfoxhole_sentinel_yara.so") } })
+    sourceNativeManifest?.let {
+        inputs.file(it)
+        inputs.file(rootProject.file("scripts/verify-fdroid-source-native.py"))
+        inputs.dir(layout.buildDirectory.dir("fdroidNativeSource/sentinel/jniLibs"))
+    }
+    doLast {
+        sourceNativeManifest?.let { verifyFdroidSourceNative(it, "sentinel"); return@doLast }
+        require(sentinelSource.resolve("Cargo.lock").isFile) { "Pinned Sentinel source workspace is missing" }
+        val script = foxCoreSourceRoot.resolve(if (buildFoxCoreInDocker.get()) "scripts/docker-sentinel-yara.sh" else "scripts/sentinel-android-build.sh")
+        val args = mutableListOf("bash", script.absolutePath)
+        if (buildFoxCoreInDocker.get()) args.add("build")
+        val process = ProcessBuilder(args).directory(foxCoreSourceRoot).inheritIO().apply {
+            environment()["FOXCORE_SENTINEL_SOURCE_ROOT"] = sentinelSource.absolutePath
+            environment()["FOXCORE_SENTINEL_OUTPUT_ROOT"] = sentinelOutput.get().asFile.absolutePath
+            environment()["FOXCORE_SENTINEL_ABIS"] = shippedAndroidAbis.joinToString(" ")
+        }.start()
+        check(process.waitFor() == 0) { "Sentinel source build failed" }
+        require(shippedAndroidAbis.all { sentinelOutput.get().file("jniLibs/$it/libfoxhole_sentinel_yara.so").asFile.isFile }) {
+            "Sentinel source build did not produce every selected ABI"
+        }
+    }
+}
+
+tasks.matching { it.name.endsWith("JniLibFolders") || it.name.startsWith("merge") && it.name.endsWith("NativeLibs") }
+    .configureEach { dependsOn(prepareLocalNativeLibs, prepareSentinelNative) }
+
+val verifyFoxCoreJniSeam = tasks.register("verifyFoxCoreJniSeam") {
+    group = "verification"
+    description = "Compare the shipped FoxCore ELF exports with Java declarations and production Kotlin references."
+    dependsOn(prepareFoxCoreNative)
+
+    val seamScript = rootProject.file("scripts/verify-foxcore-jni-seam.sh")
+    inputs.file(seamScript)
+    inputs.file(rootProject.file("core/runtime/src/main/java/com/foxhole/core/runtime/FoxholeNativeEngine.java"))
+    inputs.files(
+        fileTree(rootProject.file("core/runtime/src/main/kotlin")) { include("**/*.kt") },
+        fileTree(rootProject.file("app/src/main/kotlin")) { include("**/*.kt") },
+    )
+    inputs.dir(generatedFoxCoreNativeLibs)
+
+    doLast {
+        val process =
+            ProcessBuilder(
+                seamScript.absolutePath,
+                generatedFoxCoreNativeLibs.get().asFile.absolutePath,
+                foxCoreSourceRoot.absolutePath,
+            ).directory(rootProject.projectDir)
+                .inheritIO()
+                .start()
+        val exitCode = process.waitFor()
+        check(exitCode == 0) { "FoxCore JNI seam verification failed with exit code $exitCode" }
+    }
+}
+
+val preparePrivacyNativeLibs = tasks.register<Sync>("preparePrivacyNativeLibs") {
+    dependsOn(prepareBundledTorTransports)
+    from("src/main/assets/tor") {
+        include("*/tor/pluggable_transports/lyrebird")
+        include("*/tor/pluggable_transports/conjure-client")
+        includeEmptyDirs = false
+        eachFile {
+            val abi = relativePath.segments.first()
+            path =
+                when (name) {
+                    "lyrebird" -> "$abi/liblyrebird.so"
+                    "conjure-client" -> "$abi/libconjure_client.so"
+                    else -> "$abi/$name"
+                }
+        }
+    }
+    // i2pd ships as a lib*.so executable because Android only executes from nativeLibraryDir.
+    from("src/main/assets/i2pd") {
+        include("*/libi2pd.so")
+        includeEmptyDirs = false
+        eachFile {
+            val abi = relativePath.segments.first()
+            path = "$abi/libi2pd.so"
+        }
+    }
+    into(layout.buildDirectory.dir("generated/privacyNativeLibs"))
+}
+
+val prepareBundledLicenseAssets = tasks.register("prepareBundledLicenseAssets") {
+    val generator = rootProject.file("scripts/generate-license-assets.py")
+    sourceNativeManifest?.let { inputs.file(it) }
+
+    val nativeSourceMaterialManifest =
+        providers.gradleProperty("foxhole.nativeSourceMaterialManifest").orNull?.let(rootProject::file)
+    val nativeSourceMaterialRoot =
+        providers.gradleProperty("foxhole.nativeSourceMaterialRoot").orNull?.let(rootProject::file)
+    require((nativeSourceMaterialManifest == null) == (nativeSourceMaterialRoot == null)) {
+        "Native source material manifest and payload root must be supplied together"
+    }
+    val nativeSourceMaterialBindings = rootProject.file("config/native-source-material-bindings.json")
+    inputs.files(nativeSourceMaterialBindings, rootProject.file("scripts/native-source-license-material.py"))
+    if (nativeSourceMaterialManifest != null && nativeSourceMaterialRoot != null) {
+        inputs.file(nativeSourceMaterialManifest)
+        inputs.dir(nativeSourceMaterialRoot)
+    }
+    outputs.upToDateWhen { false }
+    outputs.doNotCacheIf("Qualified external native material requires current consumer validation") { true }
+    doFirst {
+        require(nativeSourceMaterialManifest != null && nativeSourceMaterialRoot != null) {
+            "License generation requires explicit current qualified native source material; legacy Go/CPP fallback is disabled"
+        }
+        require(nativeSourceMaterialManifest.isFile && nativeSourceMaterialRoot.isDirectory) {
+            "Current native source material manifest or payload root is missing"
+        }
+        val bindings = JsonSlurper().parse(nativeSourceMaterialBindings) as? Map<*, *>
+            ?: error("Current native source material bindings are missing")
+        val digest = Regex("^[0-9a-f]{64}$")
+        val consumers = bindings["consumerBindings"] as? Map<*, *>
+        require(bindings["schema"] == 1 &&
+            bindings["kind"] == "qualified-go8-cpp4-consumer-material-bindings" &&
+            bindings["coverage"] == "complete" &&
+            (bindings["manifestSHA256"] as? String)?.matches(digest) == true &&
+            consumers?.keys == setOf("coreC3", "sentinel", "maven420") &&
+            consumers.values.all { (it as? String)?.matches(digest) == true }
+        ) {
+            "CoreC3, Sentinel and Maven420 native material consumer qualification is incomplete"
+        }
+    }
+
+    val selectedCoreSbom =
+        providers.gradleProperty("foxhole.licenseCoreSbom").orNull?.let { rootProject.file(it) }
+    val selectedCoreReceipt =
+        providers.gradleProperty("foxhole.licenseCoreSbomReceipt").orNull?.let { rootProject.file(it) }
+    require((selectedCoreSbom == null) == (selectedCoreReceipt == null)) {
+        "Selected FoxCore license inventory and its producer receipt must be supplied together"
+    }
+    if (selectedCoreSbom != null && selectedCoreReceipt != null) {
+        inputs.files(selectedCoreSbom, selectedCoreReceipt)
+        // The receipt binds external native/capture inputs, which must be revalidated on each generation.
+        outputs.upToDateWhen { false }
+        outputs.doNotCacheIf("Selected native legal inputs require validation") { true }
+    }
+    val selectedSentinelSbom =
+        providers.gradleProperty("foxhole.licenseSentinelSbom").orNull?.let { rootProject.file(it) }
+    val selectedSentinelReceipt =
+        providers.gradleProperty("foxhole.licenseSentinelSbomReceipt").orNull?.let { rootProject.file(it) }
+    require((selectedSentinelSbom == null) == (selectedSentinelReceipt == null)) {
+        "Selected Sentinel license inventory and its producer receipt must be supplied together"
+    }
+    if (selectedSentinelSbom != null && selectedSentinelReceipt != null) {
+        inputs.files(selectedSentinelSbom, selectedSentinelReceipt)
+        outputs.upToDateWhen { false }
+        outputs.doNotCacheIf("Selected Sentinel legal inputs require validation") { true }
+    }
+    val retainedSentinelRole =
+        providers.gradleProperty("foxhole.licenseSentinelRetainedRole").orNull?.let { rootProject.file(it) }
+    val retainedSentinelCurrentSource =
+        providers.gradleProperty("foxhole.licenseSentinelCurrentSourceManifest").orNull?.let { rootProject.file(it) }
+    val retainedSentinelCurrentProducer =
+        providers.gradleProperty("foxhole.licenseSentinelCurrentProducer").orNull?.let { rootProject.file(it) }
+    val retainedSentinelCurrentStage =
+        providers.gradleProperty("foxhole.licenseSentinelCurrentStage").orNull?.let { rootProject.file(it) }
+    val retainedSentinelInputs = listOf(
+        retainedSentinelRole, retainedSentinelCurrentSource, retainedSentinelCurrentProducer, retainedSentinelCurrentStage,
+    )
+    val canonicalDeliveryProfile = when (shippedAndroidAbis.toSet()) {
+        setOf("arm64-v8a") -> "android-arm64"
+        setOf("arm64-v8a", "x86_64") -> "android64"
+        setOf("armeabi-v7a") -> "android-armv7"
+        setOf("arm64-v8a", "armeabi-v7a", "x86_64") -> "android3"
+        setOf("arm64-v8a", "armeabi-v7a", "x86", "x86_64") -> "android4"
+        else -> null
+    }
+    val sourceLegalSnapshot =
+        providers.gradleProperty("foxhole.sourceLegalSnapshot").orNull?.let { rootProject.file(it) }
+            ?: if (selectedCoreSbom == null && selectedCoreReceipt == null &&
+                selectedSentinelSbom == null && selectedSentinelReceipt == null &&
+                retainedSentinelInputs.all { it == null }) {
+                canonicalDeliveryProfile?.let {
+                    rootProject.file("third_party/licenses/source-legal/$it/snapshot.json")
+                }
+            } else null
+    require(retainedSentinelInputs.all { it == null } || retainedSentinelInputs.all { it != null }) {
+        "Retained Sentinel role and all three current native proof files must be supplied together"
+    }
+    if (retainedSentinelRole != null) {
+        require(selectedCoreSbom != null && selectedCoreReceipt != null && selectedSentinelSbom != null && selectedSentinelReceipt != null) {
+            "Retained Sentinel requires both selected current Core and original Sentinel inventories/receipts"
+        }
+        require(shippedAndroidAbis == listOf("arm64-v8a", "x86_64")) {
+            "Retained Sentinel consumer requires exactly the android64 ABI profile"
+        }
+        inputs.files(retainedSentinelInputs.filterNotNull())
+        outputs.upToDateWhen { false }
+        outputs.doNotCacheIf("Retained Sentinel/current native proofs require validation") { true }
+    }
+    if (sourceLegalSnapshot != null) {
+        require(selectedCoreSbom == null && selectedCoreReceipt == null &&
+            selectedSentinelSbom == null && selectedSentinelReceipt == null &&
+            retainedSentinelInputs.all { it == null }) {
+            "Canonical source legal data and raw selected delivery inputs must be separate"
+        }
+        inputs.file(sourceLegalSnapshot)
+        inputs.dir(sourceLegalSnapshot.parentFile.resolve("payload"))
+        inputs.dir(generatedFoxCoreNativeLibs)
+        inputs.dir(sentinelOutput.map { it.dir("jniLibs") })
+        outputs.upToDateWhen { false }
+        outputs.doNotCacheIf("Canonical legal data requires fresh native validation") { true }
+        dependsOn(prepareFoxCoreNative, prepareSentinelNative)
+    }
+    dependsOn(prepareBundledI2pd)
+    dependsOn(prepareBundledTorTransports)
+    dependsOn("preparePageAlignedNative")
+    inputs.dir(layout.buildDirectory.dir("generated/pageAlignedNative"))
+    inputs.file(rootProject.file("scripts/copy-maven-runtime-licenses.py"))
+    inputs.file(rootProject.file("scripts/maven180_contract.py"))
+    inputs.dir(rootProject.file("third_party/maven-runtime"))
+    inputs.files(
+        generator,
+        rootProject.file("scripts/selected-license-sbom.py"),
+        rootProject.file("scripts/source-legal-snapshot.py"),
+        rootProject.file("scripts/android-delivery-profile.py"),
+        rootProject.file("scripts/rustls-fork-origin.py"),
+        rootProject.file("config/foxcore-android-delivery.json"),
+        rootProject.file("config/foxcore-source-manifest.json"),
+        rootProject.file("scripts/selected-sentinel-sbom.py"),
+        rootProject.file("scripts/retained-sentinel-role.py"),
+        rootProject.file("config/sentinel-retained-authority.json"),
+        rootProject.file("LICENSE"),
+        rootProject.file("THIRD_PARTY_NOTICES.md"),
+        rootProject.file("scripts/native-deps.sh"),
+        rootProject.file("scripts/prepare-tor-dependency.py"),
+        fileTree(rootProject.file("config/native")),
+        rootProject.file("config/foxcore-revision.txt"),
+        rootProject.file("gradle/libs.versions.toml"),
+        fileTree(rootProject.file("third_party/fonts")),
+        fileTree(rootProject.file("third_party/flags")),
+        fileTree(rootProject.file("third_party/icons")),
+        fileTree(rootProject.file("third_party/licenses")),
+        fileTree(rootProject.file("third_party/tor-config")),
+        rootProject.file("third_party/i2pd.version"),
+        rootProject.file("third_party/i2pd/LICENSE"),
+        foxCoreSourceRoot.resolve("LICENSE"),
+        foxCoreSourceRoot.resolve("THIRD_PARTY_NOTICES.md"),
+        foxCoreSourceRoot.resolve("sbom/foxcore-aarch64-linux-android.cdx.json"),
+        fileTree(foxCoreSourceRoot.resolve("native/sentinel-yara/third-party")),
+        foxCoreSourceRoot.resolve("sbom/sentinel-yara-all-targets.cdx.json"),
+        foxCoreSourceRoot.resolve("native/sentinel-yara/vendor/PROVENANCE.json"),
+        fileTree(foxCoreSourceRoot.resolve("native/sentinel-yara/vendor/patches")),
+    )
+    inputs.property("androidAbis", shippedAndroidAbis.joinToString(" "))
+    shippedAndroidAbis.forEach { abi ->
+        inputs.files(
+            rootProject.file("app/src/main/assets/tor/$abi/tor/pluggable_transports/lyrebird"),
+            rootProject.file("app/src/main/assets/tor/$abi/tor/pluggable_transports/conjure-client"),
+        )
+    }
+    outputs.dir(generatedLicenseAssetsDir)
+
+    doLast {
+        val output = generatedLicenseAssetsDir.get().asFile
+        delete(output)
+        val buildLog = layout.buildDirectory.file("reports/native/license-assets.log").get().asFile
+        buildLog.parentFile.mkdirs()
+        val arguments = mutableListOf(
+            "python3",
+            generator.absolutePath,
+            "--output",
+            output.absolutePath,
+            "--foxcore-root",
+            foxCoreSourceRoot.absolutePath,
+            "--android-abis",
+            shippedAndroidAbis.joinToString(" "),
+            "--derived-native-root",
+            layout.buildDirectory.dir("generated/pageAlignedNative").get().asFile.absolutePath,
+        )
+        sourceNativeManifest?.let {
+            arguments.addAll(listOf("--source-native-manifest", it.absolutePath))
+        }
+        arguments.addAll(
+            listOf(
+                "--native-source-material-manifest", requireNotNull(nativeSourceMaterialManifest).absolutePath,
+                "--native-source-material-root", requireNotNull(nativeSourceMaterialRoot).absolutePath,
+            ),
+        )
+        if (sourceLegalSnapshot != null) {
+            arguments.addAll(
+                listOf(
+                    "--source-legal-snapshot", sourceLegalSnapshot.absolutePath,
+                    "--fresh-core-native-root", generatedFoxCoreNativeLibs.get().asFile.absolutePath,
+                    "--fresh-sentinel-native-root", sentinelOutput.get().dir("jniLibs").asFile.absolutePath,
+                ),
+            )
+        }
+        if (selectedCoreSbom != null && selectedCoreReceipt != null) {
+            arguments.addAll(
+                listOf(
+                    "--core-delivery-profile",
+                    when (shippedAndroidAbis.toSet()) {
+                        setOf("arm64-v8a") -> "android-arm64"
+        setOf("arm64-v8a", "x86_64") -> "android64"
+                        setOf("armeabi-v7a") -> "android-armv7"
+                        setOf("arm64-v8a", "armeabi-v7a", "x86_64") -> "android3"
+                        setOf("arm64-v8a", "armeabi-v7a", "x86", "x86_64") -> "android4"
+                        else -> error("Selected Core delivery requires the exact android64, android-armv7, android3 or android4 ABI profile")
+                    },
+                    "--foxcore-sbom",
+                    selectedCoreSbom.absolutePath,
+                    "--foxcore-sbom-receipt",
+                    selectedCoreReceipt.absolutePath,
+                ),
+            )
+        }
+        if (selectedSentinelSbom != null && selectedSentinelReceipt != null) {
+            arguments.addAll(
+                listOf(
+                    "--sentinel-sbom",
+                    selectedSentinelSbom.absolutePath,
+                    "--sentinel-sbom-receipt",
+                    selectedSentinelReceipt.absolutePath,
+                ),
+            )
+        }
+        if (retainedSentinelRole != null) {
+            arguments.addAll(
+                listOf(
+                    "--sentinel-retained-role",
+                    retainedSentinelRole.absolutePath,
+                    "--sentinel-current-source-manifest",
+                    requireNotNull(retainedSentinelCurrentSource).absolutePath,
+                    "--sentinel-current-producer",
+                    requireNotNull(retainedSentinelCurrentProducer).absolutePath,
+                    "--sentinel-current-stage",
+                    requireNotNull(retainedSentinelCurrentStage).absolutePath,
+                ),
+            )
+        }
+        val process =
+            ProcessBuilder(arguments).directory(rootProject.projectDir)
+                .redirectErrorStream(true)
+                .redirectOutput(buildLog)
+                .start()
+        val exitCode = process.waitFor()
+        check(exitCode == 0) {
+            "license asset generator failed with exit code $exitCode:\n${buildLog.readText().takeLast(8_000)}"
+        }
+    }
+}
+
+val prepareFilteredMainAssets = tasks.register<Sync>("prepareFilteredMainAssets") {
+    dependsOn(prepareBundledTorTransports)
+    dependsOn(prepareBundledLicenseAssets)
+    from("src/main/assets") {
+        exclude("tor/**/tor/pluggable_transports/conjure-client")
+        exclude("tor/**/tor/pluggable_transports/lyrebird")
+        exclude("i2pd/**/libi2pd.so")
+        exclude("tor/**/data/geoip")
+        exclude("tor/**/data/geoip6")
+        exclude("maps/ne_50m_admin_0_countries.geojson")
+        val shipped = shippedAndroidAbis.toSet()
+        exclude { candidate ->
+            val segments = candidate.relativePath.segments
+            segments.size > 1 && segments[0] == "tor" && segments[1] !in shipped
+        }
+    }
+    from(generatedLicenseAssetsDir) {
+        into("licenses")
+    }
+    into(filteredMainAssetsDir)
+}
+
+tasks.matching { task -> task.name.endsWith("JniLibFolders") }.configureEach {
+    dependsOn(preparePrivacyNativeLibs)
+    dependsOn(verifyBundledI2pdHostPaths)
+    dependsOn(prepareFoxCoreNative)
+}
+
+tasks.matching { task -> task.name.startsWith("merge") && task.name.endsWith("NativeLibs") }.configureEach {
+    dependsOn(verifyBundledI2pdHostPaths)
+    dependsOn(prepareFoxCoreNative)
+}
+
+tasks.matching { task -> task.name.startsWith("merge") && task.name.endsWith("Assets") }.configureEach {
+    dependsOn(prepareFilteredMainAssets)
+}
+
+tasks.matching { task -> "Lint" in task.name || "lint" in task.name }.configureEach {
+    dependsOn(prepareFilteredMainAssets)
+}
+
+val verifyReleaseContainsNativeRuntime =
+    tasks.register<VerifyBundledNativeRuntimeInReleaseApkTask>("verifyReleaseContainsNativeRuntime") {
+    dependsOn("assembleRelease")
+    apkDirectory.set(layout.buildDirectory.dir("outputs/apk/release"))
+    // Delivery may be a subset of the qualified producer ABI set.
+    expectedAbis.set(apkDeliveryAbis)
+}
+
+val verifyReleaseContainsBaselineProfile = tasks.register<VerifyReleaseBaselineProfileInApkTask>("verifyReleaseContainsBaselineProfile") {
+    dependsOn("assembleRelease")
+    apkDirectory.set(layout.buildDirectory.dir("outputs/apk/release"))
+}
+
+val verifyReleaseContainsLicenseAssets =
+    tasks.register<VerifyBundledLicenseAssetsInReleaseApkTask>("verifyReleaseContainsLicenseAssets") {
+        dependsOn("assembleRelease")
+        apkDirectory.set(layout.buildDirectory.dir("outputs/apk/release"))
+        expectedAbis.set(shippedAndroidAbis)
+    }
+
+val verifyReleaseBuildConfigDefaults = tasks.register("verifyReleaseBuildConfigDefaults") {
+    dependsOn("generateReleaseBuildConfig")
+    inputs.file(releaseBuildConfigFile)
+    inputs.property("updateChannel", appUpdateChannel)
+
+    doLast {
+        val content = releaseBuildConfigFile.get().asFile.readText()
+        require("public static final String UPDATE_CHANNEL = \"$appUpdateChannel\";" in content) {
+            "release BuildConfig must use the requested update channel: $appUpdateChannel"
+        }
+        require(!enableReleaseProbe) {
+            "foxhole.releaseProbe is only supported by internalRelease; public release builds must keep probes off."
+        }
+        require("public static final boolean ALLOW_INSECURE_TLS_BY_DEFAULT = false;" in content) {
+            "release BuildConfig must set ALLOW_INSECURE_TLS_BY_DEFAULT=false"
+        }
+        require("public static final boolean ENABLE_DIAGNOSTIC_LOGCAT = false;" in content) {
+            "release BuildConfig must set ENABLE_DIAGNOSTIC_LOGCAT=false"
+        }
+        require("public static final boolean ENABLE_STRICT_MODE = false;" in content) {
+            "release BuildConfig must set ENABLE_STRICT_MODE=false"
+        }
+    }
+}
+
+val verifyPublicReleasePrivacy = tasks.register("verifyPublicReleasePrivacy") {
+    group = "verification"
+    description = "Fail when publicRelease can expose diagnostics, insecure TLS, or strict-mode debug flags."
+
+    dependsOn("generatePublicReleaseBuildConfig")
+    inputs.file(publicReleaseBuildConfigFile)
+
+    doLast {
+        require(!enableReleaseProbe) {
+            "foxhole.releaseProbe may only be used with internalRelease, never with publicRelease."
+        }
+        val content = publicReleaseBuildConfigFile.get().asFile.readText()
+        require("public static final boolean ENABLE_DIAGNOSTIC_LOGCAT = false;" in content) {
+            "publicRelease BuildConfig must set ENABLE_DIAGNOSTIC_LOGCAT=false"
+        }
+        require("public static final boolean ALLOW_INSECURE_TLS_BY_DEFAULT = false;" in content) {
+            "publicRelease BuildConfig must set ALLOW_INSECURE_TLS_BY_DEFAULT=false"
+        }
+        require("public static final boolean ENABLE_STRICT_MODE = false;" in content) {
+            "publicRelease BuildConfig must set ENABLE_STRICT_MODE=false"
+        }
+    }
+}
+
+val verifyPublicReleaseNativeInventory = tasks.register("verifyPublicReleaseNativeInventory") {
+    group = "verification"
+    description = "Fail when the public release bundle contains unknown native or executable assets."
+
+    dependsOn("bundlePublicRelease")
+    inputs.dir(publicReleaseBundleDir)
+
+    doLast {
+        val bundleFile = publicReleaseBundleFile()
+        require(bundleFile.isFile) { "publicRelease AAB is missing: ${bundleFile.absolutePath}" }
+        val entries = ZipFile(bundleFile).use { zip -> zip.entries().asSequence().map { it.name }.toList() }
+        val nativeEntries = entries.filter { entry -> entry.endsWith(".so") }
+        val nativeLibraries = nativeEntries.map { entry -> entry.substringAfterLast('/') }.toSet()
+        val allowedNativeLibraries =
+            setOf(
+                "libandroidx.graphics.path.so",
+                "libconjure_client.so",
+                "libdatastore_shared_counter.so",
+                "libfoxhole_native.so",
+                "libfoxhole_sentinel_yara.so",
+                "libi2pd.so",
+                "libjnidispatch.so",
+                "liblyrebird.so",
+                "libsodium.so",
+                "libsqlcipher.so",
+            )
+        val requiredRuntimeLibraries =
+            setOf(
+                "libconjure_client.so",
+                "libfoxhole_native.so",
+                "libfoxhole_sentinel_yara.so",
+                "libi2pd.so",
+                "liblyrebird.so",
+            )
+        val unknownNativeLibraries = nativeLibraries - allowedNativeLibraries
+        require(unknownNativeLibraries.isEmpty()) {
+            "publicRelease AAB contains unknown native libraries: ${unknownNativeLibraries.joinToString()}"
+        }
+        val missingRuntimeLibraries = requiredRuntimeLibraries - nativeLibraries
+        require(missingRuntimeLibraries.isEmpty()) {
+            "publicRelease AAB is missing bundled runtime libraries: ${missingRuntimeLibraries.joinToString()}"
+        }
+        val executableAssets =
+            entries.filter { entry ->
+                entry.startsWith("base/assets/") &&
+                    (entry.endsWith(".so") || entry.endsWith(".dex") || entry.endsWith(".jar"))
+            }
+        require(executableAssets.isEmpty()) {
+            "publicRelease AAB must not ship executable assets outside native lib packaging: " +
+                executableAssets.joinToString()
+        }
+    }
+}
+
+val collectPublicReleaseNativeSymbols = tasks.register<Zip>("collectPublicReleaseNativeSymbols") {
+    group = "build"
+    description = "Archive merged publicRelease native libraries before strip for release symbol retention."
+
+    dependsOn("mergePublicReleaseNativeLibs")
+    from(publicReleaseMergedNativeLibsDir)
+    archiveFileName.set("publicRelease-native-symbols.zip")
+    destinationDirectory.set(layout.buildDirectory.dir("outputs/native-debug-symbols/publicRelease"))
+}
+
+val verifyReleaseSbom = tasks.register("verifyReleaseSbom") {
+    group = "verification"
+    description = "Fail when the release dependency inventory is missing or omits release-critical coordinates."
+
+    if (rootProject.tasks.names.contains("cyclonedxBom")) {
+        dependsOn(rootProject.tasks.named("cyclonedxBom"))
+    }
+    val sbomJson = rootProject.layout.buildDirectory.file("reports/cyclonedx/bom.json")
+    inputs.file(sbomJson).optional()
+
+    doLast {
+        require(rootProject.tasks.names.contains("cyclonedxBom")) {
+            "Release SBOM task is unavailable. Run public release preflight with -Pfoxhole.sbom=true."
+        }
+        val sbomFile = sbomJson.get().asFile
+        require(sbomFile.isFile) { "Release SBOM is missing: ${sbomFile.absolutePath}" }
+        val sbomDocument = JsonSlurper().parse(sbomFile) as? Map<*, *>
+        val sbomMetadata = sbomDocument?.get("metadata") as? Map<*, *>
+        val sbomComponent = sbomMetadata?.get("component") as? Map<*, *>
+        require(sbomComponent?.get("name") == "foxhole-android") {
+            "Release SBOM metadata component must be foxhole-android"
+        }
+        val sbomVersion = sbomComponent?.get("version")
+        require(sbomVersion == rootProject.version.toString()) {
+            "Release SBOM metadata version $sbomVersion must match ${rootProject.version}"
+        }
+        val rawComponents = requireNotNull(sbomDocument?.get("components") as? List<*>) {
+            "Release SBOM has no dependency component array"
+        }
+        require(rawComponents.isNotEmpty()) { "Release SBOM has no dependency components" }
+        val inventory =
+            rawComponents.mapIndexed { index, rawComponent ->
+                val component = rawComponent as? Map<*, *>
+                    ?: error("Release SBOM component $index is not an object")
+                val reference = (component["bom-ref"] as? String).orEmpty()
+                val name = (component["name"] as? String).orEmpty()
+                val version = (component["version"] as? String).orEmpty()
+                val purl = (component["purl"] as? String).orEmpty()
+                require(reference.isNotBlank() && name.isNotBlank() && version.isNotBlank() && purl.isNotBlank()) {
+                    "Release SBOM component $index is missing bom-ref, name, version, or purl"
+                }
+                reference to Triple(name, version, purl)
+            }
+        require(inventory.map { (reference, _) -> reference }.distinct().size == inventory.size) {
+            "Release SBOM contains duplicate component references"
+        }
+        val requiredCoordinates =
+            mapOf(
+                "jna" to ("5.19.1" to "pkg:maven/net.java.dev.jna/jna@5.19.1"),
+                "lazysodium-android" to ("5.2.0" to "pkg:maven/com.goterl/lazysodium-android@5.2.0"),
+                "okhttp" to ("5.4.0" to "pkg:maven/com.squareup.okhttp3/okhttp@5.4.0"),
+                "jsch" to ("2.28.8" to "pkg:maven/com.github.mwiede/jsch@2.28.8"),
+                "sqlcipher-android" to ("4.20.0" to "pkg:maven/net.zetetic/sqlcipher-android@4.20.0"),
+                "zxing-android-embedded" to
+                    ("4.3.0" to "pkg:maven/com.journeyapps/zxing-android-embedded@4.3.0"),
+            )
+        requiredCoordinates.forEach { (requiredName, required) ->
+            val (requiredVersion, requiredPurl) = required
+            require(
+                inventory.any { (_, coordinate) ->
+                    val (name, version, purl) = coordinate
+                    name == requiredName && version == requiredVersion && purl.startsWith(requiredPurl)
+                },
+            ) {
+                "Release SBOM does not include required coordinate: $requiredName@$requiredVersion"
+            }
+        }
+    }
+}
+
+val publicReleasePreflight = tasks.register("publicReleasePreflight") {
+    doFirst {
+        require(localBuildNumber == null) { "Local QA builds cannot pass public release preflight" }
+    }
+    group = "verification"
+    description = "Verify public release signing, privacy flags, bundle contents, mapping, symbols, locale config, and SBOM."
+
+    dependsOn(
+        "bundlePublicRelease",
+        collectPublicReleaseNativeSymbols,
+        verifyBundledI2pdHostPaths,
+        verifyPublicReleasePrivacy,
+        verifyPublicReleaseNativeInventory,
+        verifyReleaseSbom,
+    )
+    inputs.dir(publicReleaseBundleDir)
+    inputs.file(publicReleaseBuildConfigFile)
+    inputs.file(publicReleaseMappingFile)
+    inputs.file(publicReleaseNativeSymbolsArchive)
+    inputs.file(publicReleaseLocaleConfigFile)
+
+    doLast {
+        require(releaseSigningReady) {
+            "publicRelease requires release signing. Configure " +
+                "-Pfoxhole.releaseSigningProperties=<path>, ${defaultReleaseSigningPropertiesFile.absolutePath}, " +
+                "or FOXHOLE_RELEASE_* env vars."
+        }
+        require(releaseSigningStoreFile?.isFile == true) {
+            "publicRelease keystore is missing: $releaseSigningStoreFilePath"
+        }
+        val bundleFile = publicReleaseBundleFile()
+        require(bundleFile.isFile) { "publicRelease AAB is missing: ${bundleFile.absolutePath}" }
+        val bundleEntries = ZipFile(bundleFile).use { zip -> zip.entries().asSequence().map { it.name }.toList() }
+        val signatureEntries =
+            bundleEntries.filter { entry ->
+                entry.startsWith("META-INF/") &&
+                    (entry.endsWith(".RSA") || entry.endsWith(".DSA") || entry.endsWith(".EC"))
+            }
+        require(signatureEntries.isNotEmpty()) {
+            "publicRelease AAB is not signed with a JAR signature block."
+        }
+        require(publicApplicationId == "com.foxhole.guard") {
+            "publicRelease applicationId must be com.foxhole.guard, was $publicApplicationId"
+        }
+        val versionCode = requireNotNull(android.defaultConfig.versionCode) { "publicRelease versionCode is missing" }
+        require(lastUploadedVersionCodeProvided) {
+            "publicReleasePreflight needs -Pfoxhole.lastUploadedVersionCode=<latest published public code> so the " +
+                "monotonicity check verifies against the real uploaded code instead of the hardcoded default. " +
+                "Resolve it from the latest published update manifest before building."
+        }
+        require(versionCode > lastUploadedPublicVersionCode) {
+            "publicRelease versionCode $versionCode must be greater than uploaded $lastUploadedPublicVersionCode"
+        }
+        val versionName = requireNotNull(android.defaultConfig.versionName) { "publicRelease versionName is missing" }
+        require(rootProject.version.toString() == versionName) {
+            "Gradle/SBOM version ${rootProject.version} must match publicRelease versionName $versionName"
+        }
+        require(!versionName.contains("debug", ignoreCase = true)) {
+            "publicRelease versionName must not contain Debug: $versionName"
+        }
+        require(!versionName.contains("internal", ignoreCase = true)) {
+            "publicRelease versionName must not contain internal: $versionName"
+        }
+        require(!versionName.contains("-dev", ignoreCase = true)) {
+            "publicRelease versionName must not use the developer-preview line: $versionName"
+        }
+        val buildConfig = publicReleaseBuildConfigFile.get().asFile.readText()
+        require("public static final boolean ENABLE_DIAGNOSTIC_LOGCAT = false;" in buildConfig) {
+            "publicRelease must keep diagnostic logcat disabled."
+        }
+        val mappingFile = publicReleaseMappingFile.get().asFile
+        require(mappingFile.isFile && mappingFile.length() > 0L) {
+            "publicRelease mapping file is missing or empty: ${mappingFile.absolutePath}"
+        }
+        val nativeSymbolsArchive = publicReleaseNativeSymbolsArchive.get().asFile
+        require(nativeSymbolsArchive.isFile && nativeSymbolsArchive.length() > 0L) {
+            "publicRelease native symbol archive is missing or empty: ${nativeSymbolsArchive.absolutePath}"
+        }
+        val localeConfig = publicReleaseLocaleConfigFile.get().asFile
+        require(localeConfig.isFile && "<locale-config" in localeConfig.readText() && "<locale " in localeConfig.readText()) {
+            "publicRelease generated locale config is missing or invalid: ${localeConfig.absolutePath}"
+        }
+    }
+}
+
+val verifyReleaseJniSurface = tasks.register("verifyReleaseJniSurface") {
+    group = "verification"
+    description = "Fail when a member the native runtime calls by name did not survive minification."
+
+    doLast {
+        val jniMembers = listOf("protectSocket", "signingDigestForPackage")
+        val apks =
+            layout.buildDirectory.dir("outputs/apk/release").get().asFile
+                .listFiles { file -> file.isFile && file.extension == "apk" }
+                .orEmpty()
+        require(apks.isNotEmpty()) { "no release APK to verify" }
+        apks.forEach { apk ->
+            val found = mutableSetOf<String>()
+            ZipFile(apk).use { zip ->
+                zip.entries()
+                    .toList()
+                    .filter { entry -> entry.name.startsWith("classes") && entry.name.endsWith(".dex") }
+                    .forEach { entry ->
+                        val text = String(zip.getInputStream(entry).readBytes(), Charsets.ISO_8859_1)
+                        jniMembers.filterTo(found) { member -> member in text }
+                    }
+            }
+            val missing = jniMembers - found
+            require(missing.isEmpty()) {
+                "minification removed or renamed ${missing.joinToString()} in ${apk.name}; the native " +
+                    "runtime resolves it by name and the build cannot protect its sockets without it"
+            }
+        }
+    }
+}
+
+tasks.matching { task -> task.name == "assembleRelease" }.configureEach {
+    finalizedBy(verifyReleaseContainsNativeRuntime)
+    finalizedBy(verifyReleaseContainsBaselineProfile)
+    finalizedBy(verifyReleaseContainsLicenseAssets)
+    finalizedBy(verifyReleaseBuildConfigDefaults)
+    finalizedBy(verifyReleaseJniSurface)
+}
+
+tasks.named("check") {
+    dependsOn(verifyReleaseBuildConfigDefaults)
+    dependsOn(verifyFoxCoreJniSeam)
+}
+
+verifyReleaseBuildConfigDefaults.configure {
+    dependsOn(verifyFoxCoreJniSeam)
+}
+
+tasks.matching { task ->
+    task.name in
+        setOf(
+            "lintAnalyzeDebug",
+            "lintAnalyzeDebugUnitTest",
+            "lintAnalyzeDebugAndroidTest",
+            "lintAnalyzeRelease",
+            "lintAnalyzeInternalRelease",
+            "lintAnalyzePublicRelease",
+        )
+}.configureEach {
+    dependsOn("kspDebugKotlin", "kspReleaseKotlin", "kspInternalReleaseKotlin", "kspPublicReleaseKotlin")
+}
+
+android {
+    namespace = "com.foxhole.guard"
+    compileSdk = 37
+    ndkVersion = "29.0.14206865"
+
+    defaultConfig {
+        applicationId = publicApplicationId
+        minSdk = 24
+        targetSdk = 37
+        versionCode = localBuildNumber ?: baseAppVersionCode
+        versionName = project.version.toString() + localBuildNumber?.let { "-Local.$it" }.orEmpty()
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        vectorDrawables.useSupportLibrary = true
+        buildConfigField("String", "DEFAULT_IP_INFO_ENDPOINT", "\"https://ipwho.is/\"")
+        buildConfigField("String", "UPDATE_CHANNEL", "\"$appUpdateChannel\"")
+        buildConfigField(
+            "String",
+            "UPDATE_MANIFEST_ASSET",
+            if (shippedAndroidAbis == listOf("armeabi-v7a")) "\"update-manifest-armeabi-v7a.json\"" else "\"update-manifest.json\"",
+        )
+        buildConfigField("long", "UPDATE_FLOOR_VERSION_CODE", "${appUpdateFloorVersionCode}L")
+        buildConfigField("long", "UPDATE_SUPPORTED_UNTIL_EPOCH_DAY", "${appUpdateSupportedUntilEpochDay}L")
+        buildConfigField("String", "DEFAULT_SUPPORT_BOT_HANDLE", "\"@foxhole_repo_support_bot\"")
+        buildConfigField("String", "FOXCORE_SOURCE_VERSION", "\"$foxCoreVersion\"")
+        buildConfigField("String", "ARTI_VERSION", "\"$artiVersion\"")
+        manifestPlaceholders["appLabel"] = "@string/app_name"
+    }
+
+    dependenciesInfo {
+        includeInApk = false
+        includeInBundle = false
+    }
+
+    ksp {
+        arg("room.schemaLocation", "$projectDir/schemas")
+        arg("room.incremental", "true")
+    }
+
+
+    buildTypes {
+        debug {
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-Debug"
+            manifestPlaceholders["appLabel"] = "FoxHole Guard Debug"
+            buildConfigField("boolean", "ALLOW_INSECURE_TLS_BY_DEFAULT", "true")
+            buildConfigField("boolean", "ENABLE_DIAGNOSTIC_LOGCAT", "true")
+            buildConfigField("boolean", "ENABLE_STRICT_MODE", enableStrictMode.toString())
+            if (!enableAbiSplitApks) {
+                ndk {
+                    abiFilters += apkDeliveryAbis
+                }
+            }
+        }
+        release {
+            isMinifyEnabled = true
+            isShrinkResources = true
+            buildConfigField("boolean", "ALLOW_INSECURE_TLS_BY_DEFAULT", "false")
+            buildConfigField("boolean", "ENABLE_DIAGNOSTIC_LOGCAT", "false")
+            buildConfigField("boolean", "ENABLE_STRICT_MODE", "false")
+            if (releaseSigningReady) {
+            }
+            if (!enableAbiSplitApks) {
+                ndk {
+                    abiFilters += apkDeliveryAbis
+                    debugSymbolLevel = "SYMBOL_TABLE"
+                }
+            }
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
+        }
+        create("internalRelease") {
+            initWith(getByName("release"))
+            matchingFallbacks += listOf("release")
+            applicationIdSuffix = ".internal"
+            versionNameSuffix = "-Internal"
+            buildConfigField("boolean", "ALLOW_INSECURE_TLS_BY_DEFAULT", "false")
+            buildConfigField("boolean", "ENABLE_DIAGNOSTIC_LOGCAT", if (enableReleaseProbe) "true" else "false")
+            buildConfigField("boolean", "ENABLE_STRICT_MODE", "false")
+        }
+        create("publicRelease") {
+            initWith(getByName("release"))
+            matchingFallbacks += listOf("release")
+            buildConfigField("boolean", "ALLOW_INSECURE_TLS_BY_DEFAULT", "false")
+            buildConfigField("boolean", "ENABLE_DIAGNOSTIC_LOGCAT", "false")
+            buildConfigField("boolean", "ENABLE_STRICT_MODE", "false")
+        }
+    }
+
+    compileOptions {
+        isCoreLibraryDesugaringEnabled = true
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    buildFeatures {
+        compose = true
+        buildConfig = true
+    }
+
+    androidResources {
+        generateLocaleConfig = true
+        localeFilters += listOf("en", "ru", "de", "fr", "es", "ja", "zh-rCN", "ar")
+    }
+
+    sourceSets {
+        getByName("main") {
+            jniLibs.directories.clear()
+            jniLibs.directories.add(layout.buildDirectory.dir("generated/localNativeLibs").get().asFile.path)
+            jniLibs.directories.add(layout.buildDirectory.dir("generated/sentinelNative/jniLibs").get().asFile.path)
+            jniLibs.directories.add(layout.buildDirectory.dir("generated/privacyNativeLibs").get().asFile.path)
+            jniLibs.directories.add(generatedFoxCoreNativeLibs.get().asFile.path)
+            assets.directories.clear()
+            assets.directories.add(filteredMainAssetsDir.get().asFile.path)
+        }
+        getByName("androidTest") {
+            assets.directories.add(file("schemas").path)
+        }
+    }
+
+    packaging {
+        resources {
+            excludes += "/META-INF/{AL2.0,LGPL2.1}"
+        }
+        jniLibs.useLegacyPackaging = true
+        jniLibs.pickFirsts += setOf("**/libandroidx.graphics.path.so", "**/libsodium.so")
+        jniLibs.keepDebugSymbols +=
+            listOf(
+                "**/libandroidx.graphics.path.so",
+                "**/libconjure_client.so",
+                "**/libdatastore_shared_counter.so",
+                "**/libfoxhole_native.so",
+                "**/libi2pd.so",
+                "**/liblyrebird.so",
+                "**/libsodium.so",
+                "**/libsqlcipher.so",
+            )
+        if (shippedAndroidAbis.toSet() == setOf("armeabi-v7a") ||
+            shippedAndroidAbis.toSet() == setOf("arm64-v8a", "armeabi-v7a", "x86_64")) {
+            jniLibs.keepDebugSymbols += "**/libfoxhole_sentinel_yara.so"
+        }
+    }
+
+    lint {
+        disable += "ChromeOsAbiSupport"
+        disable += setOf("AndroidGradlePluginVersion", "GradleDependency", "NewerVersionAvailable")
+    }
+
+    if (enableAbiSplitApks) {
+        splits {
+            abi {
+                isEnable = true
+                reset()
+                include(*apkDeliveryAbis.toTypedArray())
+                isUniversalApk = apkDeliveryAbis.toSet() == shippedAndroidAbis.toSet()
+            }
+        }
+    }
+
+    bundle {
+        abi {
+            enableSplit = true
+        }
+        language {
+            enableSplit = false
+        }
+    }
+
+    testOptions {
+        unitTests.isIncludeAndroidResources = true
+    }
+}
+
+val pageAlignedNdk = providers.environmentVariable("ANDROID_NDK_HOME")
+    .orElse(providers.environmentVariable("ANDROID_NDK_ROOT"))
+    .orElse(
+        providers.environmentVariable("ANDROID_SDK_ROOT")
+            .orElse(providers.environmentVariable("ANDROID_HOME"))
+            .map { "$it/ndk/29.0.14206865" },
+    )
+
+val preparePageAlignedNative = tasks.register<PreparePageAlignedNativeTask>("preparePageAlignedNative") {
+    nativeDirectory.set(layout.buildDirectory.dir("generated/pageAlignedNative"))
+    inputs.file(rootProject.file("config/native/page-aligned-native.json"))
+    inputs.dir(rootProject.file("config/native/libsodium"))
+    inputs.files(
+        listOf(
+            "build-page-aligned-native.sh", "prepare-page-aligned-native-inputs.py",
+            "build-graphics-page-aligned.py", "build-sodium-page-aligned.py", "page_aligned_native_common.py",
+            "verify-native-pages.py", "verify-native-host-paths.sh",
+        ).map { rootProject.file("scripts/$it") },
+    )
+    inputs.file(pageAlignedNdk.map { rootProject.file("$it/source.properties") })
+    inputs.files(pageAlignedNdk.map { ndk ->
+        listOf("clang", "clang++", "ld.lld", "llvm-strip", "llvm-ar", "llvm-ranlib", "llvm-nm", "llvm-readelf")
+            .map { rootProject.file("$ndk/toolchains/llvm/prebuilt/linux-x86_64/bin/$it") }
+    })
+    doFirst {
+        environment("FOXHOLE_NATIVE_OFFLINE", providers.gradleProperty("foxhole.nativeOffline").orElse("false").get().let {
+            if (it.toBoolean()) "1" else "0"
+        })
+        commandLine(
+            "bash", rootProject.file("scripts/build-page-aligned-native.sh").absolutePath,
+            nativeDirectory.get().asFile.absolutePath,
+            layout.buildDirectory.dir("pageAlignedNativeWork").get().asFile.absolutePath,
+            pageAlignedNdk.get(),
+        )
+    }
+}
+
+androidComponents {
+    onVariants { variant ->
+        variant.sources.jniLibs?.addGeneratedSourceDirectory(preparePageAlignedNative) { it.nativeDirectory }
+        val variantName = variant.name.replaceFirstChar(Char::uppercaseChar)
+        val verifyMerged = tasks.register<Exec>("verify${variantName}PageAlignedNative") {
+            dependsOn(preparePageAlignedNative)
+            val merged = variant.artifacts.get(SingleArtifact.MERGED_NATIVE_LIBS)
+            inputs.dir(merged)
+            inputs.dir(preparePageAlignedNative.flatMap { it.nativeDirectory })
+            doFirst {
+                commandLine(
+                    listOf(
+                        "python3", rootProject.file("scripts/verify-page-aligned-native.py").absolutePath,
+                        "--repo", rootProject.projectDir.absolutePath,
+                        "--native", preparePageAlignedNative.get().nativeDirectory.get().asFile.absolutePath,
+                        "--merged", merged.get().asFile.absolutePath,
+                        "--abis",
+                    ) + shippedAndroidAbis + listOf("--delivery-abis") + apkDeliveryAbis,
+                )
+            }
+        }
+        val verifyApk = tasks.register<Exec>("verify${variantName}PageAlignedNativeApk") {
+            dependsOn(preparePageAlignedNative)
+            val apks = variant.artifacts.get(SingleArtifact.APK)
+            val merged = variant.artifacts.get(SingleArtifact.MERGED_NATIVE_LIBS)
+            inputs.dir(apks)
+            inputs.dir(merged)
+            inputs.dir(preparePageAlignedNative.flatMap { it.nativeDirectory })
+            doFirst {
+                commandLine(
+                    listOf(
+                        "python3", rootProject.file("scripts/verify-page-aligned-native.py").absolutePath,
+                        "--repo", rootProject.projectDir.absolutePath,
+                        "--native", preparePageAlignedNative.get().nativeDirectory.get().asFile.absolutePath,
+                        "--apk-directory", apks.get().asFile.absolutePath,
+                        "--merged", merged.get().asFile.absolutePath,
+                        "--abis",
+                    ) + shippedAndroidAbis + listOf("--delivery-abis") + apkDeliveryAbis,
+                )
+            }
+        }
+        tasks.matching { it.name == "assemble$variantName" }.configureEach {
+            dependsOn(verifyMerged, verifyApk)
+        }
+        tasks.matching { it.name == "bundle$variantName" }.configureEach {
+            dependsOn(verifyMerged)
+        }
+        if (appUpdateChannel == "github") {
+            variant.sources.manifests.addStaticManifestFile("src/githubUpdater/AndroidManifest.xml")
+        }
+    }
+}
+
+val composeCompilerMetricsDir = layout.buildDirectory.dir("reports/compose/metrics")
+val composeCompilerReportsDir = layout.buildDirectory.dir("reports/compose/reports")
+
+composeCompiler {
+    includeComposeMappingFile.set(false)
+    includeTraceMarkers.set(true)
+    metricsDestination.set(composeCompilerMetricsDir)
+    reportsDestination.set(composeCompilerReportsDir)
+}
+
+val verifyComposeCompilerReports = tasks.register("verifyComposeCompilerReports") {
+    group = "verification"
+    description = "Fail when Compose compiler metrics/reports are not produced for debug UI builds."
+
+    dependsOn("compileDebugKotlin")
+    inputs.dir(composeCompilerMetricsDir).optional()
+    inputs.dir(composeCompilerReportsDir).optional()
+
+    doLast {
+        val metricFiles =
+            composeCompilerMetricsDir.get().asFile
+                .walkTopDown()
+                .filter { file -> file.isFile && file.extension == "json" }
+                .toList()
+        val reportFiles =
+            composeCompilerReportsDir.get().asFile
+                .walkTopDown()
+                .filter { file -> file.isFile && file.extension in setOf("txt", "csv", "json") }
+                .toList()
+        require(metricFiles.any { file -> file.name == "module.json" || file.name.endsWith("-module.json") }) {
+            "Compose compiler metrics did not include a module.json file in ${composeCompilerMetricsDir.get().asFile}"
+        }
+        require(reportFiles.isNotEmpty()) {
+            "Compose compiler reports were not produced in ${composeCompilerReportsDir.get().asFile}"
+        }
+    }
+}
+
+tasks.matching { task -> task.name == "compileDebugKotlin" }.configureEach {
+    outputs.upToDateWhen {
+        composeCompilerMetricsDir.get().asFile.isDirectory &&
+            composeCompilerReportsDir.get().asFile.isDirectory
+    }
+}
+
+tasks.named("check") {
+    dependsOn(verifyComposeCompilerReports)
+}
+
+jacoco {
+    toolVersion = "0.8.15"
+}
+
+val detektCli = configurations.create("detektCli") {
+    isCanBeConsumed = false
+    isCanBeResolved = true
+}
+
+val detektPlugins = configurations.create("detektPlugins") {
+    isCanBeConsumed = false
+    isCanBeResolved = true
+}
+
+tasks.register<JavaExec>("detekt") {
+    group = "verification"
+    description = "Run detekt analysis with the stable CLI."
+
+    val detektReportDir = layout.buildDirectory.dir("reports/detekt")
+    val detektConfig = rootProject.file("config/detekt/detekt.yml")
+    val detektBaseline = rootProject.file("config/detekt/baseline.xml")
+    val detektSources =
+        listOf(
+            "src/main/kotlin",
+            "src/test/kotlin",
+        ).map(::file) +
+            listOf("importer", "model", "network", "profile", "runtime", "sentinel")
+                .flatMap { module ->
+                    listOf(
+                        rootProject.file("core/$module/src/main/kotlin"),
+                        rootProject.file("core/$module/src/test/kotlin"),
+                    )
+                }
+                .filter(File::isDirectory)
+
+    mainClass.set("io.gitlab.arturbosch.detekt.cli.Main")
+    classpath = detektCli
+
+    inputs.files(detektSources)
+    inputs.files(detektConfig, detektBaseline)
+    outputs.dir(detektReportDir)
+
+    args(
+        "--build-upon-default-config",
+        "--config",
+        detektConfig.path,
+        "--baseline",
+        detektBaseline.path,
+        "--input",
+        detektSources.joinToString(separator = ",") { source -> source.path },
+    )
+    doFirst {
+        args(
+            "--plugins",
+            detektPlugins.files.joinToString(separator = ",") { plugin -> plugin.path },
+        )
+    }
+    listOf("html", "md", "sarif", "txt", "xml").forEach { reportId ->
+        args(
+            "--report",
+            "$reportId:${detektReportDir.get().file("detekt.$reportId").asFile.path}",
+        )
+    }
+}
+
+tasks.register<JavaExec>("detektFormat") {
+    group = "verification"
+    description = "Auto-correct detekt formatting findings (ktlint-backed) with the stable CLI."
+
+    val detektConfig = rootProject.file("config/detekt/detekt.yml")
+    val detektSources =
+        listOf(
+            "src/main/kotlin",
+            "src/test/kotlin",
+        ).map(::file) +
+            listOf("importer", "model", "network", "profile", "runtime", "sentinel")
+                .flatMap { module ->
+                    listOf(
+                        rootProject.file("core/$module/src/main/kotlin"),
+                        rootProject.file("core/$module/src/test/kotlin"),
+                    )
+                }
+                .filter(File::isDirectory)
+
+    mainClass.set("io.gitlab.arturbosch.detekt.cli.Main")
+    classpath = detektCli
+
+    args(
+        "--build-upon-default-config",
+        "--auto-correct",
+        "--config",
+        detektConfig.path,
+        "--input",
+        detektSources.joinToString(separator = ",") { source -> source.path },
+    )
+    doFirst {
+        args(
+            "--plugins",
+            detektPlugins.files.joinToString(separator = ",") { plugin -> plugin.path },
+        )
+    }
+    isIgnoreExitValue = true
+}
+
+tasks.register<JavaExec>("updateDetektBaseline") {
+    group = "verification"
+    description = "Regenerate the detekt baseline with the stable CLI."
+
+    val detektConfig = rootProject.file("config/detekt/detekt.yml")
+    val detektBaseline = rootProject.file("config/detekt/baseline.xml")
+    val detektSources =
+        listOf(
+            "src/main/kotlin",
+            "src/test/kotlin",
+        ).map(::file) +
+            listOf("importer", "model", "network", "profile", "runtime", "sentinel")
+                .flatMap { module ->
+                    listOf(
+                        rootProject.file("core/$module/src/main/kotlin"),
+                        rootProject.file("core/$module/src/test/kotlin"),
+                    )
+                }
+                .filter(File::isDirectory)
+
+    mainClass.set("io.gitlab.arturbosch.detekt.cli.Main")
+    classpath = detektCli
+
+    inputs.files(detektSources)
+    inputs.file(detektConfig)
+    outputs.file(detektBaseline)
+
+    args(
+        "--build-upon-default-config",
+        "--config",
+        detektConfig.path,
+        "--baseline",
+        detektBaseline.path,
+        "--create-baseline",
+        "--input",
+        detektSources.joinToString(separator = ",") { source -> source.path },
+    )
+    doFirst {
+        args(
+            "--plugins",
+            detektPlugins.files.joinToString(separator = ",") { plugin -> plugin.path },
+        )
+    }
+}
+
+val verifyDetektBaseline = tasks.register("verifyDetektBaseline") {
+    group = "verification"
+    description = "Fail when detekt baseline changes without an intentional threshold update."
+
+    val detektBaseline = rootProject.file("config/detekt/baseline.xml")
+    val expectedBaselineIssues = 0
+    inputs.file(detektBaseline)
+
+    doLast {
+        val issueCount = "<ID>".toRegex().findAll(detektBaseline.readText()).count()
+        require(issueCount == expectedBaselineIssues) {
+            "Detekt baseline has $issueCount issues; expected $expectedBaselineIssues. Update the threshold with an intentional baseline change."
+        }
+    }
+}
+
+tasks.named("detekt") {
+    finalizedBy(verifyDetektBaseline)
+}
+
+tasks.named("check") {
+    dependsOn("detekt")
+    dependsOn("compileDebugAndroidTestKotlin")
+}
+
+val jacocoExcludes =
+    listOf(
+        "**/R.class",
+        "**/R$*.class",
+        "**/BuildConfig.*",
+        "**/Manifest*.*",
+        "**/*Test*.*",
+        "**/*Preview*.*",
+        "**/*ComposableSingletons*.*",
+        "**/*\$serializer.*",
+        "**/*_Impl*.*",
+        "**/*Dao_Impl*.*",
+        "**/*Database_Impl*.*",
+    )
+
+val jacocoCoreModuleClassDirectories =
+    files(
+        fileTree(rootDir.resolve("core/network/build/classes/kotlin/main")) {
+            exclude(jacocoExcludes)
+        },
+        fileTree(rootDir.resolve("core/runtime/build/intermediates/built_in_kotlinc/debug/compileDebugKotlin/classes")) {
+            exclude(jacocoExcludes)
+        },
+        fileTree(rootDir.resolve("core/runtime/build/tmp/kotlin-classes/debug")) {
+            exclude(jacocoExcludes)
+        },
+    )
+
+val jacocoCoreModuleSourceDirectories =
+    files(
+        rootDir.resolve("core/network/src/main/kotlin"),
+        rootDir.resolve("core/runtime/src/main/kotlin"),
+    )
+
+val jacocoCoreModuleExecutionData =
+    fileTree(rootDir) {
+        include(
+            "core/network/build/jacoco/test.exec",
+            "core/runtime/build/outputs/unit_test_code_coverage/debugUnitTest/testDebugUnitTest.exec",
+            "core/runtime/build/jacoco/testDebugUnitTest.exec",
+        )
+    }
+
+val jacocoDebugClassDirectories =
+    files(
+        fileTree(layout.buildDirectory.dir("intermediates/built_in_kotlinc/debug/compileDebugKotlin/classes")) {
+            exclude(jacocoExcludes)
+        },
+        fileTree(layout.buildDirectory.dir("intermediates/javac/debug/compileDebugJavaWithJavac/classes")) {
+            exclude(jacocoExcludes)
+        },
+        fileTree(layout.buildDirectory.dir("tmp/kotlin-classes/debug")) {
+            exclude(jacocoExcludes)
+        },
+        fileTree(layout.buildDirectory.dir("intermediates/javac/debug/classes")) {
+            exclude(jacocoExcludes)
+        },
+        jacocoCoreModuleClassDirectories,
+    )
+
+val jacocoReleaseCriticalClassDirectories =
+    files(
+        fileTree(layout.buildDirectory.dir("intermediates/built_in_kotlinc/debug/compileDebugKotlin/classes")) {
+            include("com/foxhole/guard/core/**", "com/foxhole/core/runtime/**")
+            exclude(jacocoExcludes)
+        },
+        fileTree(layout.buildDirectory.dir("intermediates/javac/debug/compileDebugJavaWithJavac/classes")) {
+            include("com/foxhole/guard/core/**", "com/foxhole/core/runtime/**")
+            exclude(jacocoExcludes)
+        },
+        fileTree(layout.buildDirectory.dir("tmp/kotlin-classes/debug")) {
+            include("com/foxhole/guard/core/**", "com/foxhole/core/runtime/**")
+            exclude(jacocoExcludes)
+        },
+        fileTree(layout.buildDirectory.dir("intermediates/javac/debug/classes")) {
+            include("com/foxhole/guard/core/**", "com/foxhole/core/runtime/**")
+            exclude(jacocoExcludes)
+        },
+        fileTree(rootDir.resolve("core/runtime/build/intermediates/built_in_kotlinc/debug/compileDebugKotlin/classes")) {
+            include("com/foxhole/core/runtime/**")
+            exclude(jacocoExcludes)
+        },
+        fileTree(rootDir.resolve("core/runtime/build/tmp/kotlin-classes/debug")) {
+            include("com/foxhole/core/runtime/**")
+            exclude(jacocoExcludes)
+        },
+    )
+
+tasks.register<JacocoReport>("jacocoDebugUnitTestReport") {
+    dependsOn("testDebugUnitTest", ":core:network:test", ":core:runtime:testDebugUnitTest")
+    reports {
+        xml.required.set(true)
+        html.required.set(true)
+        csv.required.set(false)
+    }
+    classDirectories.setFrom(jacocoDebugClassDirectories)
+    sourceDirectories.setFrom(files("src/main/kotlin", "src/main/java"), jacocoCoreModuleSourceDirectories)
+    executionData.setFrom(
+        fileTree(layout.buildDirectory) {
+            include(
+                "jacoco/testDebugUnitTest.exec",
+                "outputs/unit_test_code_coverage/debugUnitTest/testDebugUnitTest.exec",
+            )
+        },
+        jacocoCoreModuleExecutionData,
+    )
+    doLast {
+        val xmlReport = reports.xml.outputLocation.get().asFile
+        require(xmlReport.readText().contains("<counter ")) {
+            "Jacoco debug unit test report did not include coverage counters: ${xmlReport.absolutePath}"
+        }
+    }
+}
+
+val verifyJacocoFocusedCoverage = tasks.register("verifyJacocoFocusedCoverage") {
+    group = "verification"
+    description = "Fail when release-critical unit coverage falls below focused package thresholds."
+
+    dependsOn("jacocoDebugUnitTestReport")
+    val xmlReport = layout.buildDirectory.file("reports/jacoco/jacocoDebugUnitTestReport/jacocoDebugUnitTestReport.xml")
+    inputs.file(xmlReport)
+
+    doLast {
+        val reportText = xmlReport.get().asFile.readText()
+        val packages =
+            Regex("""<package name="([^"]+)">([\s\S]*?)</package>""")
+                .findAll(reportText)
+                .associate { match -> match.groupValues[1] to match.groupValues[2] }
+        fun instructionCoverageForPrefixes(prefixes: List<String>): Double {
+            var missed = 0L
+            var covered = 0L
+            packages
+                .filterKeys { packageName -> prefixes.any(packageName::startsWith) }
+                .values
+                .forEach { packageXml ->
+                    Regex("""<counter type="INSTRUCTION" missed="(\d+)" covered="(\d+)"[^>]*/>""")
+                        .findAll(packageXml)
+                        .lastOrNull()
+                        ?.let { counter ->
+                            missed += counter.groupValues[1].toLong()
+                            covered += counter.groupValues[2].toLong()
+                        }
+                }
+            val total = missed + covered
+            require(total > 0L) {
+                "No Jacoco instruction counters found for package prefixes: ${prefixes.joinToString()}"
+            }
+            return covered.toDouble() / total.toDouble()
+        }
+
+        listOf(
+            Triple("traffic core instruction coverage", listOf("com/foxhole/guard/traffic"), 0.60),
+            Triple(
+                "network core instruction coverage",
+                listOf("com/foxhole/core/network"),
+                0.40,
+            ),
+            Triple(
+                "runtime vpn instruction coverage",
+                listOf("com/foxhole/core/runtime"),
+                0.28,
+            ),
+        ).forEach { (label, prefixes, minimum) ->
+            val actual = instructionCoverageForPrefixes(prefixes)
+            require(actual + 1e-9 >= minimum) {
+                "$label is ${"%.2f".format(actual * 100)}%; minimum is ${"%.2f".format(minimum * 100)}%"
+            }
+        }
+    }
+}
+
+tasks.register<JacocoCoverageVerification>("jacocoDebugUnitTestCoverageVerification") {
+    dependsOn("jacocoDebugUnitTestReport", "verifyRequiredBehaviorTests", verifyJacocoFocusedCoverage)
+    classDirectories.setFrom(jacocoReleaseCriticalClassDirectories)
+    sourceDirectories.setFrom(files("src/main/kotlin", "src/main/java"), jacocoCoreModuleSourceDirectories)
+    executionData.setFrom(
+        fileTree(layout.buildDirectory) {
+            include(
+                "jacoco/testDebugUnitTest.exec",
+                "outputs/unit_test_code_coverage/debugUnitTest/testDebugUnitTest.exec",
+            )
+        },
+        jacocoCoreModuleExecutionData,
+    )
+    violationRules {
+        rule {
+            limit {
+                minimum = "0.215".toBigDecimal()
+            }
+        }
+    }
+}
+
+tasks.register("verifyRequiredBehaviorTests") {
+    dependsOn("testDebugUnitTest", ":core:model:test", ":core:network:test", ":core:runtime:testDebugUnitTest")
+    doLast {
+        val requiredSuites =
+            listOf(
+                "com.foxhole.guard.core.data.BoundedPublicHttpFetchTest",
+                "com.foxhole.guard.core.data.LocalDataRepositoryTest",
+                "com.foxhole.guard.core.data.ProfileDatabaseMigrationsTest",
+                "com.foxhole.guard.core.data.ProfileImportPayloadLimitsTest",
+                "com.foxhole.guard.core.data.ProfileInsecureTlsSupportTest",
+                "com.foxhole.guard.core.data.ProtocolOptionRefreshSelectionTest",
+                "com.foxhole.guard.core.data.ProfileSecretMutationSupportTest",
+                "com.foxhole.guard.core.data.SubscriptionFetchUseCaseTest",
+                "com.foxhole.core.network.SubscriptionCertificateTrustTest",
+                "com.foxhole.core.model.DnsRuntimeStatsTest",
+                "com.foxhole.core.model.DiagnosticSanitizerTest",
+                "com.foxhole.core.model.DiagnosticSanitizerStorageTest",
+                "com.foxhole.guard.core.diagnostics.DiagnosticsLoggerTest",
+                "com.foxhole.guard.core.diagnostics.DiagnosticsSessionStoreTest",
+                "com.foxhole.core.runtime.network.IpInfoRepositoryTest",
+                "com.foxhole.core.network.PublicUrlPolicyTest",
+                "com.foxhole.guard.core.settings.SettingsRepositoryTest",
+                "com.foxhole.core.runtime.TorGeoIpCountryResolverTest",
+                "com.foxhole.guard.traffic.TrafficMapRepositoryAggregationTest",
+                "com.foxhole.guard.traffic.TrafficMapRepositoryStateTest",
+                "com.foxhole.guard.BuildConfigDiagnosticsTest",
+                "com.foxhole.guard.ReleaseEngineeringContractTest",
+                "com.foxhole.guard.ui.cli.home.CliTerminalStateTest",
+                "com.foxhole.guard.ui.cli.settings.CliDataScreenContractTest",
+                "com.foxhole.guard.ui.RouteStateIsolationTest",
+                "com.foxhole.guard.ui.cli.stats.CliStatsOverviewTest",
+                "com.foxhole.guard.ui.cli.map.CliRouteModeTest",
+                "com.foxhole.core.runtime.AppOwnedRequestPathTest",
+                "com.foxhole.core.runtime.BootReceiverTest",
+                "com.foxhole.core.runtime.DnsFilterUpdateClientTest",
+                "com.foxhole.core.runtime.FoxholeConnectionControllerLatencyTest",
+                "com.foxhole.core.runtime.FoxholeConnectionServiceContractTest",
+                "com.foxhole.core.runtime.RouteExcludeCompatibilityTest",
+                "com.foxhole.core.runtime.RuntimeAutoReconnectPolicyTest",
+                "com.foxhole.core.runtime.RuntimeSupervisorCommandQueueTest",
+                "com.foxhole.core.runtime.RuntimeSupervisorMailboxCleanupTimeoutTest",
+                "com.foxhole.core.runtime.RuntimeConfigAssemblerRouteRulesTest",
+                "com.foxhole.core.runtime.RuntimeConfigAssemblerInboundsTest",
+                "com.foxhole.core.runtime.RuntimeConfigAssemblerLocalGuardDnsTest",
+                "com.foxhole.core.runtime.RuntimeConfigAssemblerWireguardMtuTest",
+                "com.foxhole.core.runtime.RuntimeConfigAssemblerFingerprintTest",
+                "com.foxhole.core.runtime.RuntimeConfigAssemblerManagedRoutesTest",
+                "com.foxhole.core.runtime.RuntimeInstanceStoreTest",
+                "com.foxhole.core.runtime.RuntimeReloadRecoveryPolicyTest",
+                "com.foxhole.core.runtime.RuntimeServiceCommandSupportTest",
+                "com.foxhole.core.runtime.RuntimeStartTimeoutPolicyTest",
+                "com.foxhole.core.runtime.RuntimeStateReducerTest",
+                "com.foxhole.core.runtime.RuntimeStaticSafetyGuardTest",
+                "com.foxhole.core.runtime.RuntimeStopSupportTest",
+                "com.foxhole.core.runtime.RuntimeSupervisorTest",
+                "com.foxhole.core.runtime.RuntimeUpdatePolicyTest",
+                "com.foxhole.core.runtime.TunnelValidationPolicyTest",
+                "com.foxhole.core.runtime.VpnDnsServerSelectorTest",
+                "com.foxhole.core.runtime.VpnRuntimeErrorsTest",
+            )
+        val resultFiles =
+            listOf(
+                layout.buildDirectory.dir("test-results/testDebugUnitTest").get().asFile,
+                project(":core:model").layout.buildDirectory.dir("test-results/test").get().asFile,
+                project(":core:network").layout.buildDirectory.dir("test-results/test").get().asFile,
+                project(":core:runtime").layout.buildDirectory.dir("test-results/testDebugUnitTest").get().asFile,
+            ).flatMap { resultRoot ->
+                fileTree(resultRoot) {
+                    include("TEST-*.xml")
+                }.files
+            }.associateBy { file -> file.name.removePrefix("TEST-").removeSuffix(".xml") }
+        val missing = requiredSuites.filterNot(resultFiles::containsKey)
+        require(missing.isEmpty()) {
+            "Required behavior test suites did not run: ${missing.joinToString()}"
+        }
+        val invalid =
+            requiredSuites.mapNotNull { suite ->
+                val xml = requireNotNull(resultFiles[suite]).readText()
+                val tests = requireNotNull("tests=\"(\\d+)\"".toRegex().find(xml)) { "Missing tests counter for $suite" }.groupValues[1].toInt()
+                val failures = requireNotNull("failures=\"(\\d+)\"".toRegex().find(xml)) { "Missing failures counter for $suite" }.groupValues[1].toInt()
+                val errors = requireNotNull("errors=\"(\\d+)\"".toRegex().find(xml)) { "Missing errors counter for $suite" }.groupValues[1].toInt()
+                suite.takeIf { tests == 0 || failures != 0 || errors != 0 }
+            }
+        require(invalid.isEmpty()) {
+            "Required behavior test suites failed or reported zero tests: ${invalid.joinToString()}"
+        }
+    }
+}
+
+dependencies {
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs_nio:2.1.5")
+    implementation(project(":core:importer"))
+    implementation(project(":core:model"))
+    implementation(project(":core:network"))
+    implementation(project(":core:profile"))
+    implementation(project(":core:sentinel"))
+    implementation(project(":core:runtime"))
+
+    constraints {
+        listOf(
+            "protobuf-java",
+            "protobuf-javalite",
+            "protobuf-java-util",
+            "protobuf-kotlin",
+        ).forEach { moduleName ->
+            implementation("com.google.protobuf:$moduleName:4.35.1") {
+                because("Keep optional protobuf transitives on the current patched stable line")
+            }
+        }
+    }
+
+    implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.core.splashscreen)
+    implementation(libs.androidx.appcompat)
+    implementation(libs.androidx.activity.compose)
+    implementation(libs.androidx.lifecycle.runtime.ktx)
+    implementation(libs.androidx.lifecycle.runtime.compose)
+    implementation(libs.androidx.profileinstaller)
+    implementation(libs.androidx.room.runtime)
+    implementation(libs.androidx.room.ktx)
+    implementation(libs.androidx.work.runtime)
+    implementation(libs.androidx.webkit)
+    implementation(libs.androidx.glance.appwidget)
+    implementation(libs.androidx.datastore.preferences)
+    implementation(libs.androidx.security.crypto)
+    implementation(libs.sqlcipher.android)
+    implementation(libs.androidx.biometric)
+    implementation(libs.lazysodium.android) {
+        artifact { type = "aar" }
+        exclude(group = "net.java.dev.jna", module = "jna")
+    }
+    implementation(libs.jna) { artifact { type = "aar" } }
+    implementation(libs.errorprone.annotations)
+    implementation(libs.kotlinx.serialization.json)
+    implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.okhttp)
+    implementation("com.github.mwiede:jsch:2.28.8")
+    implementation(libs.zxing.android.embedded)
+
+    implementation(platform(libs.compose.bom))
+    implementation(libs.compose.ui)
+    implementation(libs.compose.ui.graphics)
+    implementation(libs.compose.material3)
+
+    ksp(libs.androidx.room.compiler)
+
+    testImplementation(libs.junit4)
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.11.0")
+    testImplementation(libs.konsist)
+    testImplementation(libs.androidx.test.core)
+
+    androidTestImplementation(platform(libs.compose.bom))
+    androidTestImplementation(libs.androidx.junit)
+    androidTestImplementation(libs.androidx.espresso.core)
+    androidTestImplementation(libs.androidx.test.uiautomator)
+    androidTestImplementation(libs.androidx.room.testing)
+    androidTestImplementation(libs.compose.ui.test.junit4)
+
+    debugImplementation(libs.compose.ui.tooling)
+    debugImplementation(libs.compose.ui.test.manifest)
+
+    detektCli(libs.detekt.cli)
+    detektPlugins(libs.detekt.formatting)
+}

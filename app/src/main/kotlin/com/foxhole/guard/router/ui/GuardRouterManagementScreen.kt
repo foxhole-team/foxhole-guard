@@ -48,7 +48,7 @@ import com.foxhole.guard.router.RouterWizardPath
 import com.foxhole.guard.router.RouterWizardError
 import com.foxhole.guard.router.RouterWizardStage
 import com.foxhole.guard.router.routerLocalNetworkAccessGranted
-import com.foxhole.guard.ui.cli.LocalCliBottomChromeClearance
+import com.foxhole.guard.ui.cli.components.cliDockAlignedActionClearance
 import com.foxhole.guard.ui.cli.LocalCliColors
 import com.foxhole.guard.ui.cli.LocalCliNoticeSink
 import com.foxhole.guard.ui.FoxholeBannerEvent
@@ -95,9 +95,25 @@ internal fun GuardRouterManagementScreen(onBack: () -> Unit, modifier: Modifier 
             }
         }
     }
-    fun close() { permissionAction = null; model.closeScreen(); onBack() }
+    var smartPermissionAction by remember { mutableStateOf<(() -> Unit)?>(null) }
+    val smartPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        val action = smartPermissionAction; smartPermissionAction = null
+        if (granted && com.foxhole.guard.router.routerSmartNotificationsAvailable(context)) action?.invoke()
+        else if (action != null) notices.show(noticeResources.getString(R.string.router_smart_permission), error = true)
+    }
+    fun requestSmart(action: () -> Unit) = requestAccess {
+        if (smartPermissionAction != null) return@requestAccess
+        if (com.foxhole.guard.router.routerSmartNotificationsAvailable(context)) action()
+        else if (android.os.Build.VERSION.SDK_INT >= 33 && androidx.core.content.ContextCompat.checkSelfPermission(context,
+                android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            smartPermissionAction = action
+            try { smartPermission.launch(android.Manifest.permission.POST_NOTIFICATIONS) }
+            catch (_: IllegalStateException) { smartPermissionAction = null; notices.show(noticeResources.getString(R.string.router_smart_permission), error = true) }
+        } else notices.show(noticeResources.getString(R.string.router_smart_permission), error = true)
+    }
+    fun close() { smartPermissionAction = null; permissionAction = null; model.closeScreen(); onBack() }
     LaunchedEffect(model) { model.open() }
-    DisposableEffect(model) { onDispose { permissionAction = null; model.closeScreen() } }
+    DisposableEffect(model) { onDispose { smartPermissionAction = null; permissionAction = null; model.closeScreen() } }
     LaunchedEffect(model, context) { model.notices.collect { notices.show(noticeResources.getString(it), error = true) } }
     LaunchedEffect(state.error) {
         val inlinePin = state.path == RouterWizardPath.PAIR && state.stage == RouterWizardStage.LOGIN &&
@@ -111,8 +127,8 @@ internal fun GuardRouterManagementScreen(onBack: () -> Unit, modifier: Modifier 
     LaunchedEffect(state.stage) { if (state.stage == RouterWizardStage.COMPLETE) model.completed() }
     BackHandler(enabled = !betaNoticeVisible) { if (page == GuardRouterPage.WIZARD) model.entry() else close() }
     CompositionLocalProvider(LocalGuardRouterNotices provides notices) { GuardRouterTypography {
-        // The measured dock clearance already includes navigation-bar padding.
-        Scaffold(modifier = modifier.fillMaxSize().padding(bottom = LocalCliBottomChromeClearance.current),
+        // Match the home action-to-dock gap, including the shared top lift and dock draw offset.
+        Scaffold(modifier = modifier.fillMaxSize().padding(bottom = cliDockAlignedActionClearance()),
             contentWindowInsets = ScaffoldDefaults.contentWindowInsets.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal),
             containerColor = LocalCliColors.current.bg) { insets ->
             Box(Modifier.fillMaxSize().padding(insets)) {
@@ -122,7 +138,7 @@ internal fun GuardRouterManagementScreen(onBack: () -> Unit, modifier: Modifier 
                             GuardRouterBetaNoticeSheet(betaNoticePreferences, onDismiss = { betaNoticeVisible = false })
                         } else if (initialising) CircularProgressIndicator(Modifier.align(Alignment.Center)) else when (page) {
                             GuardRouterPage.ENTRY -> GuardRouterEntrySheet(
-                                setupEnabled = model.wizard.setupAvailable, installationCatalog = model.wizard.installationCatalog,
+                                setupEnabled = model.wizard.setupAvailable, canInstallRouter = model.wizard.canInstallRouter, canInspectRouter = model.wizard.canInspectRouter, installationCatalog = model.wizard.installationCatalog,
                                 discovery = state.discovery, finding = state.busy,
                                 onFind = {
                                     if (!model.wizard.hasPhysicalWifi()) notices.show(
@@ -131,8 +147,14 @@ internal fun GuardRouterManagementScreen(onBack: () -> Unit, modifier: Modifier 
                                 },
                                 onSetup = { requestAccess { model.discovered(null) } },
                                 onPair = { model.manualPair() }, onConnect = { reset -> requestAccess { model.discovered(reset) } },
+                                onCancelDiscovery = { model.entry(adding = model.wizard.isAddingRouter) },
+                                onClose = ::close,
                             )
                             GuardRouterPage.CONTROL -> GuardRouterControlSheet(model.control,
+                                phoneProfileRequests = remember(profiles) { profiles.flatMap {
+                                    com.foxhole.guard.router.routerPhoneTransferRequests(it.id, it.protocolOptions.map { option -> option.id }) } },
+                                exportPhoneProfile = model::exportPhoneProfile,
+                                canInstallRouter = model.wizard.canInstallRouter, canInspectRouter = model.wizard.canInspectRouter,
                                 profileProbe = profileProbe,
                                 onRetryPairing = {
                                     if (!model.wizard.hasPhysicalWifi()) notices.show(
@@ -142,7 +164,8 @@ internal fun GuardRouterManagementScreen(onBack: () -> Unit, modifier: Modifier 
                                 onPair = { model.entry() }, onAddRouter = { model.entry(adding = true) },
                                 onUnpaired = { if (model.control.state.value.selectedRouterId == null) model.entry() },
                                 requestAccess = ::requestAccess,
-                                requestHomeEnable = { notices.show(unavailableError, error = true) },
+                                requestHomeEnable = ::requestSmart,
+                                onClose = ::close,
                             )
                             GuardRouterPage.WIZARD -> GuardRouterWizardSheet(state, profiles,
                                 model.wizard.supportsHomeAutodetection, model.wizard.supportsRemoteProfile, model.wizard.installationCatalog,
@@ -157,6 +180,7 @@ internal fun GuardRouterManagementScreen(onBack: () -> Unit, modifier: Modifier 
                                     installProtocols = { model.wizard.installProtocols(it) },
                                     installCompactSelection = { protocols, server -> model.wizard.installProtocols(protocols, server) },
                                     confirmInstallProtocols = { model.action { model.wizard.confirmInstallProtocols() } },
+                                    confirmCompatibility = { model.action { model.wizard.confirmCompatibility() } },
                                     login = { credential -> val owned = credential.copyOf(); model.action(owned) { model.wizard.login(owned) } },
                                     loginKey = { key, passphrase ->
                                         val ownedKey = key.copyOf()
@@ -167,9 +191,14 @@ internal fun GuardRouterManagementScreen(onBack: () -> Unit, modifier: Modifier 
                                     install = { model.action { model.wizard.install() } }, options = model.wizard::options,
                                     finish = { pin -> model.action(pin) { model.wizard.finish(pin) } },
                                     failure = { notices.show(networkError, error = true) },
+                                    foreground = model.wizard::refreshWebSetupOnForeground,
+                                    background = model.wizard::webSetupBackgrounded,
                                     openRouterSetup = {
                                         com.foxhole.guard.router.routerLanAddress(state.address)?.let { address ->
-                                            try { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("http://$address/cgi-bin/luci/admin/services/foxhole/pin"))) }
+                                            try {
+                                                if (!model.wizard.prepareWebSetupReturn()) throw IllegalStateException("router_web_setup_unavailable")
+                                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("http://$address/cgi-bin/luci/admin/services/foxhole/pin")))
+                                            }
                                             catch (_: Exception) { notices.show(unavailableError, error = true) }
                                         }
                                     },

@@ -1,0 +1,2 @@
+gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/ptutil
+v0.0.0-20250130151315-efaf4e0ec0d3

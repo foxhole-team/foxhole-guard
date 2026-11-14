@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="sentinel_static_expert">Ajustes avanzados de comprobación estática</string>
-    <string name="sentinel_static_title">Comprobaciones de APK</string>
+    <string name="sentinel_static_title">Análisis de aplicaciones</string>
     <string name="sentinel_static_reference_summary">%1$s: %2$s categorías de referencias estáticas a API y %3$s coincidencias de reglas. Estas observaciones no demuestran ejecución ni presencia de malware.</string>
     <string name="sentinel_static_notification_title">FoxHole Sentinel: observaciones estáticas</string>
-    <string name="sentinel_static_select_app">Aplicación</string>
+    <string name="sentinel_static_select_app">Elegir aplicación</string>
     <string name="sentinel_static_run">Comprobar aplicación seleccionada</string>
     <string name="sentinel_static_baseline">Comprobar aplicaciones instaladas</string>
     <string name="sentinel_static_cancel">Cancelar comprobación</string>
@@ -31,4 +31,5 @@
     <string name="sentinel_static_status_unsupported">Formato de APK no compatible</string>
     <string name="sentinel_static_engine_unavailable">El motor de análisis incluido no está disponible para este dispositivo.</string>
     <string name="sentinel_static_type_label">Referencias estáticas</string>
+    <string name="sentinel_static_search_app">Buscar aplicaciones</string>
 </resources>

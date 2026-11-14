@@ -31,16 +31,16 @@ class OsvPolicyTest(unittest.TestCase):
     def test_current_crypto_exception_cannot_exempt_other_versions_or_advisories(self):
         exception_policy = json.loads((pathlib.Path(__file__).parents[2] / "config/osv-exceptions.json").read_text())
         report = {"results": [{"source": {"path": "tor-source.cdx.json"}, "packages": [{
-            "package": {"name": "golang.org/x/crypto", "version": "v0.57.0", "ecosystem": "Go"},
+            "package": {"name": "golang.org/x/crypto", "version": "v0.58.0", "ecosystem": "Go"},
             "vulnerabilities": [{"id": "GO-2026-5932"}],
         }]}]}
         date = datetime.date(2026, 10, 12)
         self.assertFalse(policy.classify(report, exception_policy, date)[0])
         package = report["results"][0]["packages"][0]
-        for version in ("v0.56.0", "v0.58.0"):
+        for version in ("v0.57.0", "v0.59.0"):
             package["package"]["version"] = version
             self.assertTrue(policy.classify(report, exception_policy, date)[0])
-        package["package"]["version"] = "v0.57.0"
+        package["package"]["version"] = "v0.58.0"
         package["vulnerabilities"][0]["id"] = "UNREVIEWED-ADVISORY"
         self.assertTrue(policy.classify(report, exception_policy, date)[0])
 

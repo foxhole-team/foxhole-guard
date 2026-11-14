@@ -40,6 +40,8 @@ import com.foxhole.core.model.ThemeMode
 import com.foxhole.core.model.TrafficMode
 import com.foxhole.core.model.TunStack
 import com.foxhole.guard.R
+import com.foxhole.guard.ui.cli.help.GuardHelpState
+import com.foxhole.guard.ui.cli.help.rememberGuardHelpState
 import com.foxhole.guard.router.ui.GuardRouterManagementScreen
 import com.foxhole.guard.ui.HomeViewModel
 import com.foxhole.guard.ui.SettingsRouteUiState
@@ -109,6 +111,7 @@ internal fun CliSettingsScreen(
 ) {
     val state by viewModel.settingsRouteState.collectAsStateWithLifecycle()
     var subScreen by rememberSaveable { mutableStateOf<String?>(null) }
+    val helpState = rememberGuardHelpState()
     LaunchedEffect(openRouterRequested) {
         if (openRouterRequested) {
             subScreen = SUB_ROUTER
@@ -165,6 +168,7 @@ internal fun CliSettingsScreen(
             if (sub != null) {
                 CliCfgSubScreen(
                     key = sub,
+                    helpState = helpState,
                     viewModel = viewModel,
                     onBack = closeSubScreen,
                     modifier = Modifier
@@ -331,6 +335,7 @@ private fun CliSettingsRootColumn(
 @Composable
 private fun CliCfgSubScreen(
     key: String,
+    helpState: GuardHelpState,
     viewModel: HomeViewModel,
     onBack: () -> Unit,
     modifier: Modifier,
@@ -358,7 +363,7 @@ private fun CliCfgSubScreen(
                 .testTag(cliScreenTag(CliScreen.STATS)),
         )
         SUB_ABOUT -> CliAboutSubScreen(viewModel, modifier)
-        SUB_HELP -> CliHelpSubScreen(modifier)
+        SUB_HELP -> CliHelpSubScreen(modifier, helpState)
         else -> LaunchedEffect(key) { onBack() }
     }
 }

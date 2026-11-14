@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="router_local_traffic_enable_title">国内のローカルトラフィックをVPNから除外しますか？</string>
+    <string name="router_local_traffic_disable_title">国内のローカルトラフィックをVPNから除外する設定を無効にしますか？</string>
+    <string name="router_local_traffic_confirm">確認</string>
+</resources>

@@ -32,7 +32,7 @@ internal fun GuardRouterAddonSettingsButton(enabled: Boolean = true) {
         Icon(
             painterResource(R.drawable.lin_settings),
             stringResource(R.string.guard_router_addon_settings_title),
-            Modifier.size(22.dp),
+            Modifier.size(28.dp),
             tint = LocalGuardRouterColors.current.muted.copy(alpha = if (enabled) 1f else .38f),
         )
     }

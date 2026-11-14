@@ -11,10 +11,13 @@ import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.foxhole.core.model.Settings
 import com.foxhole.guard.R
+import com.foxhole.guard.ui.cli.help.GuardHelpBlocks
+import com.foxhole.guard.ui.cli.help.guardHelpTopic
 import com.foxhole.guard.ui.DatasetActivationFeature
 import com.foxhole.guard.ui.DatasetActivationSource
 import com.foxhole.guard.ui.DatasetActivationState
 import com.foxhole.guard.ui.HomeViewModel
+import com.foxhole.guard.ui.FoxholeUpdatePhase
 import com.foxhole.guard.ui.TorBridgePersistenceMarker
 import com.foxhole.guard.ui.cli.LocalCliColors
 import com.foxhole.guard.ui.cli.components.CliConfirmSheet
@@ -89,7 +92,8 @@ internal fun CliModulesSection(
             settings = settings,
             onOpenSettings = onOpenAnomaly,
             onActivationRequested = {
-                sentinelActivation = DatasetActivationState(DatasetActivationFeature.FOXHOLE_SENTINEL)
+                sentinelActivation = DatasetActivationState(DatasetActivationFeature.FOXHOLE_SENTINEL,
+                    step = com.foxhole.guard.ui.DatasetActivationStep.DOWNLOADING)
             },
         )
     }
@@ -123,6 +127,7 @@ private fun CliTorModuleBlock(
         label = stringResource(R.string.cli_cfg_tor_core),
         icon = R.drawable.lin_tor,
         infoText = stringResource(R.string.cli_help_tor_body),
+        infoContent = { GuardHelpBlocks(guardHelpTopic("tor").blocks, scope = "tor") },
         checked = settings.privacyRoute.permitted,
         onToggle = { enabled ->
             if (enabled) {
@@ -207,6 +212,7 @@ private fun CliFirewallModuleBlock(
         label = stringResource(R.string.cli_cfg_firewall),
         icon = R.drawable.lin_fire,
         infoText = stringResource(R.string.cli_help_firewall_body),
+        infoContent = { GuardHelpBlocks(guardHelpTopic("firewall").blocks, scope = "firewall") },
         checked = settings.expert.firewallEnabled,
         note = if (actionRequired) {
             stringResource(R.string.cli_firewall_pending_disable_note)
@@ -264,16 +270,15 @@ private fun CliAnomalyModuleBlock(
     onOpenSettings: () -> Unit,
     onActivationRequested: () -> Unit,
 ) {
-    val installedGeneratedAt = viewModel.threatIntelInstalledGeneratedAt()
     CliModuleBlock(
         label = stringResource(R.string.cli_cfg_more_anomaly),
         icon = R.drawable.lin_shield,
         infoText = stringResource(R.string.cli_help_sentinel_body),
+        infoContent = { GuardHelpBlocks(guardHelpTopic("sentinel").blocks, scope = "sentinel") },
         checked = settings.anomaly.enabled,
         onToggle = { value ->
             when {
                 !value -> viewModel.onAnomalyEnabledChanged(false)
-                installedGeneratedAt != null -> viewModel.onAnomalyEnabledChanged(true)
                 else -> onActivationRequested()
             }
         },
@@ -291,29 +296,76 @@ private fun CliSentinelDatasetActivationSheet(
     val phase by viewModel.threatIntelUpdatePhase.collectAsStateWithLifecycle()
     val progress by viewModel.threatIntelDownloadProgress.collectAsStateWithLifecycle()
     var baselineGeneratedAt by remember { mutableStateOf<String?>(null) }
-    val verified =
-        threatIntelVerifiedSuccess(
-            phase = phase,
+    var downloadRequested by remember { mutableStateOf(false) }
+    var requestEpoch by remember { androidx.compose.runtime.mutableLongStateOf(0L) }
+    var verifiedEpoch by remember { androidx.compose.runtime.mutableLongStateOf(-1L) }
+    fun startDownload() {
+        verifiedEpoch = -1L
+        downloadRequested = false
+        requestEpoch++
+        // Each enable/retry owns a real refresh, not a previous job's retained DONE value.
+        viewModel.onThreatIntelManualRefreshCancel()
+        baselineGeneratedAt = viewModel.threatIntelInstalledGeneratedAt()
+        viewModel.onThreatIntelManualRefresh()
+        downloadRequested = true
+    }
+    androidx.compose.runtime.LaunchedEffect(viewModel) { startDownload() }
+    // The explicit epoch reruns this effect even if a fast CHECKING→DONE is conflated into the old DONE.
+    androidx.compose.runtime.LaunchedEffect(viewModel, requestEpoch, phase, downloadRequested) {
+        val currentEpoch = requestEpoch
+        if (!downloadRequested) {
+            verifiedEpoch = -1L
+            return@LaunchedEffect
+        }
+        val ready = threatIntelVerifiedSuccess(
+            phase = viewModel.threatIntelUpdatePhase.value,
             installedGeneratedAt = viewModel.threatIntelInstalledGeneratedAt(),
             baselineGeneratedAt = baselineGeneratedAt,
         )
+        if (requestEpoch == currentEpoch && downloadRequested) {
+            verifiedEpoch = if (ready) currentEpoch else -1L
+        }
+    }
+    val verified = downloadRequested && requestEpoch > 0L && verifiedEpoch == requestEpoch
+    val activationEpoch = requestEpoch
     CliDatasetActivationSheet(
         state = flow,
-        phase = phase,
+        phase = if (downloadRequested) phase else FoxholeUpdatePhase.CHECKING,
         progress = progress,
         verifiedDownload = verified,
         onStateChange = onStateChange,
         onSkip = { viewModel.onAnomalyEnabledChanged(false) },
-        onStartDownload = {
-            baselineGeneratedAt = viewModel.threatIntelInstalledGeneratedAt()
-            viewModel.onThreatIntelManualRefresh()
+        onStartDownload = ::startDownload,
+        onCancelDownload = {
+            verifiedEpoch = -1L
+            downloadRequested = false
+            requestEpoch++
+            viewModel.onThreatIntelManualRefreshCancel()
         },
-        onCancelDownload = viewModel::onThreatIntelManualRefreshCancel,
-        onActivate = { source ->
-            if (source == DatasetActivationSource.FOXHOLE_DB) {
+        onActivate = activate@{ source ->
+            if (!downloadRequested || activationEpoch != requestEpoch) return@activate
+            // Activation is an event: re-read actual completion and committed data, never trust stale UI.
+            if (source == DatasetActivationSource.FOXHOLE_DB && sentinelEnableRequestVerified(
+                    requestEpoch, verifiedEpoch, downloadRequested,
+                    viewModel.threatIntelUpdatePhase.value,
+                    viewModel.threatIntelInstalledGeneratedAt(), baselineGeneratedAt,
+                )) {
                 viewModel.onAnomalyEnabledChanged(true)
+            } else {
+                verifiedEpoch = -1L
+                onStateChange(flow.copy(step = com.foxhole.guard.ui.DatasetActivationStep.FAILED))
             }
         },
         onDismiss = onDismiss,
     )
 }
+
+internal fun sentinelEnableRequestVerified(
+    requestEpoch: Long,
+    verifiedEpoch: Long,
+    requested: Boolean,
+    phase: FoxholeUpdatePhase,
+    installedGeneratedAt: String?,
+    baselineGeneratedAt: String?,
+): Boolean = requested && requestEpoch > 0L && requestEpoch == verifiedEpoch &&
+    threatIntelVerifiedSuccess(phase, installedGeneratedAt, baselineGeneratedAt)

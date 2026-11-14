@@ -19,9 +19,13 @@ internal data class ScannerStaticResult(
     val processId: Int,
     val processUid: Int,
     val yara: ScannerYaraResult? = null,
+    val artifacts: List<ScanArtifactReport> = emptyList(),
+    val coverageDetails: ScanCoverageReport = ScanCoverageReport(),
+    val artifactCoverageReported: Boolean = false,
+    val analyzerVersion: String? = null,
 )
 
-internal fun decodeScannerStaticReply(data: Bundle, senderUid: Int, owner: ScannerRequestOwner): ScannerStaticResult {
+internal fun decodeScannerStaticReply(data: Bundle, senderUid: Int, owner: ScannerRequestOwner, expected: List<ScannerDescriptorClaim>? = null): ScannerStaticResult {
     require(isStandardIsolatedScannerUid(senderUid))
     require(data.getInt("protocol", -1) == ScannerIpcCodes.PROTOCOL_VERSION)
     require(data.getString("request_id") == owner.requestId)
@@ -57,7 +61,10 @@ internal fun decodeScannerStaticReply(data: Bundle, senderUid: Int, owner: Scann
         null
     }
     require(data.keySet().all { it in RESULT_KEYS })
-    return ScannerStaticResult(status, complete, coverage, limitations, observations, issues, fingerprint, elapsed, pid, uid, yara)
+    val artifacts = decodeScannerArtifactCoverage(data, complete, expected)
+    val engine = data.getString("engine").also { require(it == null || it == "bounded-apk-dex-2") }
+    return ScannerStaticResult(status, complete, coverage, limitations, observations, issues, fingerprint, elapsed, pid, uid, yara,
+        artifacts.artifacts, artifacts.coverage, artifacts.reported, engine)
 }
 
 private fun boundedScannerCodes(data: Bundle, key: String, limit: Int): List<String> {
@@ -67,7 +74,7 @@ private fun boundedScannerCodes(data: Bundle, key: String, limit: Int): List<Str
     return values
 }
 
-private val RESULT_KEYS = setOf(
+private val RESULT_KEYS = ARTIFACT_RESULT_KEYS + setOf(
     "protocol", "request_id", "installation_id", "rule_epoch", "status", "engine", "coverage_complete", "coverage",
     "limitations", "issues", "source_fingerprint", "elapsed_ms", "work_units", "expanded_bytes", "weak_observations",
     "yara_requested", "yara_complete", "pid", "uid", "yara_scope", "yara_dex_scanned", "yara_dex_expected",

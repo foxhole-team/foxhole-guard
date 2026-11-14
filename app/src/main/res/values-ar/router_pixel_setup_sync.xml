@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="router_discovery_cancel">إلغاء</string>
+    <string name="router_discovery_continue">متابعة</string>
+    <string name="router_discovery_ready_to_pair">الموجّه جاهز للاقتران</string>
+    <string name="router_discovery_setup_question">هل تريد تشغيل معالج تثبيت حزمة FoxHole OpenWrt؟</string>
+    <string name="router_setup_compatibility_title">توافق التثبيت</string>
+    <string name="router_setup_supported_versions">إصدارات التثبيت</string>
+</resources>

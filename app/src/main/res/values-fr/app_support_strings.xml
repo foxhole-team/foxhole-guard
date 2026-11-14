@@ -27,6 +27,6 @@
     <string name="guard_router_router_updates_device_download">Téléchargement du paquet FoxHole via votre appareil</string>
     <string name="guard_router_settings_info">L’application utilise votre réseau local pour trouver le routeur OpenWrt et gérer son VPN depuis ce téléphone. Désactiver la gestion laisse le VPN du routeur en fonctionnement.</string>
     <string name="guard_router_settings_pair_first">Configurez ou associez un routeur pour activer la gestion.</string>
-    <string name="guard_router_vpn_router_error_home_vpn">Aucune route VPN vérifiée vers le routeur associé. Connectez-vous à son VPN et activez la gestion via le VPN domestique dans les paramètres du routeur.</string>
+    <string name="guard_router_vpn_router_error_home_vpn">Aucune route VPN vérifiée vers le routeur associé. Connectez-vous à son VPN et activez la gestion via le VPN domestique dans les paramètres du routeur. Désactivez le contournement du réseau local dans Guard pour gérer le routeur via son VPN domestique.</string>
     <string name="guard_router_wifi_status_label">État du Wi-Fi</string>
 </resources>

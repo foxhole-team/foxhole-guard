@@ -18,13 +18,13 @@ esac
 boost_us="boost_${boost_ver//./_}"
 boost_url="https://archives.boost.io/release/$boost_ver/source/$boost_us.tar.bz2"
 
-go_version="${TOR_TRANSPORT_GO:-go1.26.10}"
+go_version="${TOR_TRANSPORT_GO:-go1.26.11}"
 go_tarball_sha256_for() {
   case "$1" in
-    go1.26.10-linux-amd64)   echo ccfe7ae822d2c2f41f4fe7c956199967a4dac22d0ee0d2b2bfdb440aab3b20c5 ;;
-    go1.26.10-linux-arm64)   echo 3f4227ce7b206a513e794f1393adb473a07b46e94d18bd15d1c684bbb7319797 ;;
-    go1.26.10-darwin-amd64)  echo e820ab780c273ae4a340b79d0f3c4313b74ee029aa3874792145d44b9f4f91da ;;
-    go1.26.10-darwin-arm64)  echo 0b5183492292ada170f9b561a834863808dd02edba599e4ad0e89899330020b3 ;;
+    go1.26.11-linux-amd64)   echo 9849f4e04ee35303714e34fbc3ac8ab44ea3e448a95aa182f91e3b9b79c710ec ;;
+    go1.26.11-linux-arm64)   echo 6c2f29b458b5add0835f18b776f69c8881a6d88428f1484a6da55755e620757e ;;
+    go1.26.11-darwin-amd64)  echo 394baae971332f2bc783d6e2004ae57101479bd3b06ed8209a3fe3570d4ce498 ;;
+    go1.26.11-darwin-arm64)  echo e3a42e67a7a8acf450ebada2b074c7ca863000ca514907b7185b45e8f5cdff57 ;;
     *) return 1 ;;
   esac
 }

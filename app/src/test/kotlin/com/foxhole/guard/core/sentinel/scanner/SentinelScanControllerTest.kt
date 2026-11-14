@@ -178,7 +178,8 @@ class SentinelScanControllerTest {
         f.controller.requestVisibleBaseline()
         assertEquals(1, f.scans)
         assertEquals(2, f.controller.state.value.completedPackages)
-        assertEquals(SentinelScanStage.COMPLETE, f.controller.state.value.stage)
+        assertEquals(SentinelScanStage.PARTIAL, f.controller.state.value.stage)
+        assertEquals(false, f.controller.state.value.lastReport?.requestComplete)
     }
 
     @Test fun lockedJournalIsExplicitAndReusedCoverageCanPersistAfterUnlock() = runBlocking {
@@ -268,8 +269,118 @@ class SentinelScanControllerTest {
         assertEquals(1, f.persisted)
     }
 
+    @Test fun scanWithoutFindingsStillPersistsItsCoverageReport() = runBlocking {
+        val f = fixture()
+        f.controller.updatePolicy(SentinelScanWorkPolicy(masterEnabled = true))
+        f.controller.requestPackage("org.owned.app")
+        assertTrue(f.reports.any { it.status == ScanReportStatus.RUNNING })
+        val report = f.reports.last()
+        assertEquals(ScanReportStatus.COMPLETE, report.status)
+        assertTrue(report.observations.isEmpty())
+        assertTrue(report.ruleIds.isEmpty())
+        assertEquals("org.owned.app", report.packageName)
+    }
+
+    @Test fun cachedResultRetainsOriginalIdentityAndDateAndRetriesReportStorage() = runBlocking {
+        val f = fixture()
+        f.reportBlocked = true
+        f.controller.updatePolicy(SentinelScanWorkPolicy(masterEnabled = true))
+        f.controller.requestPackage("org.owned.app")
+        val original = requireNotNull(f.controller.state.value.lastReport)
+        assertTrue(f.controller.state.value.reportDeferred)
+        f.reportBlocked = false
+        f.clock = 200
+        f.controller.requestPackage("org.owned.app")
+        val cached = requireNotNull(f.controller.state.value.lastReport)
+        assertEquals(1, f.scans)
+        assertTrue(cached.cached)
+        assertEquals(original.id, cached.id)
+        assertEquals(original.startedAtMs, cached.startedAtMs)
+        assertEquals(original.finishedAtMs, cached.finishedAtMs)
+        assertFalse(f.controller.state.value.reportDeferred)
+        assertEquals(original.id, f.reports.last().id)
+        assertFalse(f.reports.last().cached)
+    }
+
+    @Test fun cancellationSettlesRunningReportWithoutPersistingFinding() = runBlocking {
+        val f = fixture()
+        f.pause = true
+        f.controller.updatePolicy(SentinelScanWorkPolicy(masterEnabled = true))
+        val active = async { f.controller.requestPackage("org.owned.app") }
+        withTimeout(3000) { f.entered.await() }
+        f.controller.cancel()
+        active.await()
+        assertEquals(ScanReportStatus.CANCELLED, f.reports.last().status)
+        assertTrue(f.reports.last().finishedAtMs != null)
+        assertEquals(0, f.persisted)
+    }
+
+    @Test fun clearingReportsCancelsWorkAndDoesNotAdmitQueuedWrites() = runBlocking {
+        val f = fixture()
+        f.pause = true
+        f.controller.updatePolicy(SentinelScanWorkPolicy(masterEnabled = true))
+        val active = async { f.controller.requestPackage("org.owned.app") }
+        withTimeout(3000) { f.entered.await() }
+        val clearing = CompletableDeferred<Unit>()
+        val releaseClear = CompletableDeferred<Unit>()
+        val clear = async { f.controller.clearReports {
+            f.reports.clear()
+            clearing.complete(Unit)
+            releaseClear.await()
+        } }
+        withTimeout(3000) { clearing.await() }
+        f.controller.requestPackage("org.owned.second")
+        f.controller.recordUnavailableRequest("org.owned.second", "SCAN_POLICY_UNAVAILABLE")
+        releaseClear.complete(Unit)
+        clear.await()
+        active.await()
+        assertEquals(1, f.scans)
+        assertTrue(f.reports.isEmpty())
+        assertEquals(SentinelScanStage.IDLE, f.controller.state.value.stage)
+    }
+
+    @Test fun failedBaselineEnumerationRecordsUnknownScopeRatherThanInventingPackages() = runBlocking {
+        val f = fixture()
+        f.enumerationUnavailable = true
+        f.controller.updatePolicy(SentinelScanWorkPolicy(masterEnabled = true))
+        f.controller.requestVisibleBaseline()
+        val report = f.reports.last()
+        assertEquals(ScanReportStatus.UNAVAILABLE, report.status)
+        assertEquals(null, report.packageName)
+        assertEquals(null, report.requestedPackages)
+        assertTrue("PACKAGE_ENUMERATION_UNAVAILABLE" in report.issues)
+        assertEquals(0, f.scans)
+    }
+
+    @Test fun singleComponentAndroidPackageDoesNotAbortRemainingBaseline() = runBlocking {
+        val f = fixture()
+        f.packages = listOf("android", "org.owned.app")
+        f.controller.updatePolicy(SentinelScanWorkPolicy(masterEnabled = true))
+        f.controller.requestVisibleBaseline()
+        assertEquals(1, f.scans)
+        assertTrue(f.reports.any { it.packageName == "android" && it.status == ScanReportStatus.UNAVAILABLE })
+        assertEquals(SentinelScanStage.PARTIAL, f.controller.state.value.stage)
+        assertEquals(2, f.controller.state.value.completedPackages)
+    }
+
+    @Test fun failedClearCannotLeaveCancelledScanPermanentlyRunning() = runBlocking {
+        val f = fixture()
+        f.pause = true
+        f.controller.updatePolicy(SentinelScanWorkPolicy(masterEnabled = true))
+        val active = async { f.controller.requestPackage("org.owned.app") }
+        withTimeout(3000) { f.entered.await() }
+        assertTrue(runCatching { f.controller.clearReports { throw IOException("owned delete failure") } }.isFailure)
+        active.await()
+        assertEquals(SentinelScanStage.CANCELLED, f.controller.state.value.stage)
+        assertEquals(ScanReportStatus.CANCELLED, f.controller.state.value.lastReport?.status)
+    }
+
     private fun fixture() = Fixture()
     private class Fixture {
+        var clock = 10L
+        var reportBlocked = false
+        val reports = mutableListOf<SentinelScanReport>()
+        var enumerationUnavailable = false
         var missing: String? = null
         var enumerations = 0
         var captures = 0
@@ -291,6 +402,10 @@ class SentinelScanControllerTest {
         var policyCurrent = true
         val controller = SentinelScanController(
             policyCurrent = { policyCurrent },
+            now = { clock },
+            persistReport = { report ->
+                if (reportBlocked) false else { reports += report; true }
+            },
             capture = { packageName ->
                 captures++
                 if (packageName == missing) throw IOException("owned missing package")
@@ -299,6 +414,7 @@ class SentinelScanControllerTest {
             isCurrent = { it.installationId == identity },
             visiblePackages = {
                 enumerations++
+                if (enumerationUnavailable) throw IOException("owned enumeration unavailable")
                 packages
             },
             environment = { environment },

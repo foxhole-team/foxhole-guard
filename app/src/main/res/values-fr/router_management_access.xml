@@ -1,4 +1,7 @@
 <resources>
     <string name="router_management_disconnect_vpn">Déconnectez le VPN actuel pour gérer ou configurer le routeur.</string>
     <string name="router_management_unavailable_home">Le routeur est temporairement indisponible. Connectez-vous à votre réseau Wi-Fi domestique.</string>
+    <string name="router_management_unavailable_title">Routeur indisponible</string>
+    <string name="router_management_unavailable_home_network">Connectez-vous au Wi-Fi domestique du routeur (y compris avec les données mobiles).</string>
+    <string name="router_management_unavailable_vpn">Déconnectez-vous du réseau VPN.</string>
 </resources>

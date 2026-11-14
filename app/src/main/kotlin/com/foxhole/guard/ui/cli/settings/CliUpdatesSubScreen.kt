@@ -23,6 +23,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.foxhole.core.model.Settings
 import com.foxhole.core.model.dnsRuleSetFilteringEnabled
 import com.foxhole.guard.BuildConfig
+import com.foxhole.guard.runtime.categorizedDnsSelection
 import com.foxhole.guard.R
 import com.foxhole.guard.runtime.AppUpdateBuildSignals
 import com.foxhole.guard.runtime.AppUpdateCheck
@@ -89,10 +90,12 @@ internal fun CliUpdatesSubScreen(
         viewModel.tlsFingerprintInstalledGeneratedAt()
     }
 
+    val dnsPrepared = rememberDnsPreparedPending(viewModel, settings, dnsPhase)
     val groups = foxholeDbGroups(
         settings = settings,
         geoIp = geoIp,
         dnsUpdateAvailable = dnsUpdateAvailable,
+        dnsPrepared = dnsPrepared,
         threatIntelGeneratedAt = threatIntelGeneratedAt,
         tlsFingerprintGeneratedAt = tlsFingerprintGeneratedAt,
     )
@@ -212,17 +215,18 @@ private data class FoxholeDbGroups(
     private val all get() = listOf(dns, bridges, security, geo, tlsFingerprints)
 
     val downloadRequired: Boolean
-        get() = all.any { group -> group.enabled && group.updatedAtMs == null }
+        get() = all.any { group -> group.enabled && group.updatedAtMs == null && !group.preparedPending && !group.checkingPreparation }
     val updatePending: Boolean
-        get() = all.any { group -> group.enabled && group.updatedAtMs != null && group.updateAvailable }
+        get() = all.any { group -> group.enabled && (group.preparedPending || group.checkingPreparation || group.updatedAtMs != null && group.updateAvailable) }
     val needsUpdate: Boolean
-        get() = all.any(FoxholeDbGroupUi::needsData)
+        get() = all.any { it.needsData || it.enabled && (it.preparedPending || it.checkingPreparation) }
 }
 
 private fun foxholeDbGroups(
     settings: Settings,
     geoIp: GeoIpDatabaseUiState,
     dnsUpdateAvailable: Boolean,
+    dnsPrepared: Boolean?,
     threatIntelGeneratedAt: String?,
     tlsFingerprintGeneratedAt: String?,
 ): FoxholeDbGroups =
@@ -231,6 +235,8 @@ private fun foxholeDbGroups(
             enabled = settings.dns.dnsRuleSetFilteringEnabled(),
             updatedAtMs = settings.dns.filtersUpdatedAt,
             updateAvailable = dnsUpdateAvailable,
+            preparedPending = dnsPrepared == true,
+            checkingPreparation = dnsPrepared == null,
         ),
         bridges = FoxholeDbGroupUi(
             enabled = settings.privacyRoute.permitted && settings.privacyRoute.bridgesEnabled,
@@ -368,19 +374,23 @@ private fun CliFoxholeDbGroupRow(
     }
 }
 
-private data class FoxholeDbGroupPresentation(
+internal data class FoxholeDbGroupPresentation(
     val labelRes: Int,
     val tone: FoxholeDbGroupTone,
 )
 
-private enum class FoxholeDbGroupTone { DIM, ERROR, WARNING, SUCCESS }
+internal enum class FoxholeDbGroupTone { DIM, ERROR, WARNING, SUCCESS }
 
-private fun foxholeDbGroupPresentation(
+internal fun foxholeDbGroupPresentation(
     group: FoxholeDbGroupUi,
     phase: FoxholeUpdatePhase,
 ): FoxholeDbGroupPresentation = when {
     phase == FoxholeUpdatePhase.FAILED ->
         FoxholeDbGroupPresentation(phase.statusLabelRes(), FoxholeDbGroupTone.ERROR)
+    group.enabled && group.checkingPreparation && !phase.isRunning ->
+        FoxholeDbGroupPresentation(R.string.cli_updates_phase_checking, FoxholeDbGroupTone.WARNING)
+    group.enabled && group.preparedPending && !phase.isRunning ->
+        FoxholeDbGroupPresentation(R.string.dns_category_prepared_short, FoxholeDbGroupTone.WARNING)
     phase == FoxholeUpdatePhase.DONE || phase == FoxholeUpdatePhase.NO_UPDATE ->
         FoxholeDbGroupPresentation(phase.statusLabelRes(), FoxholeDbGroupTone.SUCCESS)
     phase.isRunning ->
@@ -571,6 +581,7 @@ internal fun rememberCliUpdatesAttention(viewModel: HomeViewModel): Boolean {
     val state by viewModel.settingsRouteState.collectAsStateWithLifecycle()
     val geoIp by viewModel.geoIpDatabaseUiState.collectAsStateWithLifecycle()
     val dnsUpdateAvailable by viewModel.dnsFilterUpdateAvailable.collectAsStateWithLifecycle()
+    val dnsPhase by viewModel.dnsFilterUpdatePhase.collectAsStateWithLifecycle()
     val threatIntelPhase by viewModel.threatIntelUpdatePhase.collectAsStateWithLifecycle()
     val tlsFingerprintPhase by viewModel.tlsFingerprintUpdatePhase.collectAsStateWithLifecycle()
     val appUpdate by viewModel.container.appUpdateRepository.state.collectAsStateWithLifecycle()
@@ -581,10 +592,12 @@ internal fun rememberCliUpdatesAttention(viewModel: HomeViewModel): Boolean {
     val tlsFingerprintGeneratedAt = remember(tlsFingerprintPhase) {
         viewModel.tlsFingerprintInstalledGeneratedAt()
     }
+    val dnsPrepared = rememberDnsPreparedPending(viewModel, state.settings, dnsPhase)
     val groups = foxholeDbGroups(
         settings = state.settings,
         geoIp = geoIp,
         dnsUpdateAvailable = dnsUpdateAvailable,
+        dnsPrepared = dnsPrepared,
         threatIntelGeneratedAt = threatIntelGeneratedAt,
         tlsFingerprintGeneratedAt = tlsFingerprintGeneratedAt,
     )
@@ -592,10 +605,33 @@ internal fun rememberCliUpdatesAttention(viewModel: HomeViewModel): Boolean {
     val appUpdatePending =
         appUpdateChannelIsGithub &&
             (appUpdate is AppUpdateState.Available || appUpdate is AppUpdateState.Downloaded)
-    return groups.dns.needsData ||
+    return groups.dns.needsData || groups.dns.preparedPending ||
+        groups.dns.checkingPreparation ||
         groups.bridges.needsData ||
         groups.security.needsData ||
         (geoKnown && groups.geo.needsData) ||
         groups.tlsFingerprints.needsData ||
         appUpdatePending
 }
+
+@Composable
+private fun rememberDnsPreparedPending(viewModel: HomeViewModel, settings: Settings, phase: FoxholeUpdatePhase): Boolean? =
+    androidx.compose.runtime.key(viewModel, settings.dns, phase) {
+        val pending by androidx.compose.runtime.produceState<Boolean?>(initialValue = null) {
+            val dns = settings.dns
+            value = if (!dns.dnsRuleSetFilteringEnabled() || phase.isRunning || phase == FoxholeUpdatePhase.FAILED) false
+            else try {
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    val installer = viewModel.container.dnsFilterAssetInstaller
+                    val selection = dns.categorizedDnsSelection()
+                    val awaiting = dns.filtersUpdatedAt == null || installer.categorizedStore.pendingOrNull(selection.variant) != null
+                    awaiting && com.foxhole.guard.runtime.categorizedDnsPreparationReady(dns, installer.prepareCategorized(dns))
+                }
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                false
+            }
+        }
+        pending
+    }

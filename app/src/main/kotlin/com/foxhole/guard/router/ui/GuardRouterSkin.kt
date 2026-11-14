@@ -72,9 +72,9 @@ internal fun GuardRouterTypography(content: @Composable () -> Unit) {
 internal fun guardRouterDeleteColor(): Color = LocalCliColors.current.err
 
 @Composable
-internal fun GuardRouterSwitch(checked: Boolean, onCheckedChange: (Boolean) -> Unit, enabled: Boolean = true) {
+internal fun GuardRouterSwitch(checked: Boolean, onCheckedChange: (Boolean) -> Unit, enabled: Boolean = true, modifier: Modifier = Modifier) {
     val colors = LocalCliColors.current
-    Switch(checked, onCheckedChange, enabled = enabled, colors = SwitchDefaults.colors(
+    Switch(checked, onCheckedChange, modifier = modifier, enabled = enabled, colors = SwitchDefaults.colors(
         checkedThumbColor = colors.onAccent, checkedTrackColor = colors.accent,
         uncheckedThumbColor = colors.dim, uncheckedTrackColor = colors.panelAlt,
         uncheckedBorderColor = colors.border,

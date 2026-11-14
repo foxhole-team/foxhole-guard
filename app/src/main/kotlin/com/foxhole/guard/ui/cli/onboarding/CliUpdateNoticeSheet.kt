@@ -17,6 +17,8 @@ import com.foxhole.guard.ui.HomeViewModel
 import com.foxhole.guard.ui.onInterfaceModeSelected
 import com.foxhole.guard.ui.cli.CliSpacing
 import com.foxhole.guard.ui.cli.components.CliBottomSheet
+import com.foxhole.guard.ui.cli.components.CliIconTextItem
+import com.foxhole.guard.ui.cli.components.CliIconTextItems
 import com.foxhole.guard.ui.cli.components.CliPanel
 import com.foxhole.guard.ui.cli.settings.CliInterfaceModeRow
 
@@ -72,21 +74,29 @@ internal fun CliUpdateNoticeSheetContent(
 
 @Suppress("UNUSED_PARAMETER")
 internal fun releaseNoteKeys(apiLevel: Int, channel: String = com.foxhole.guard.BuildConfig.UPDATE_CHANNEL): List<Int> = listOf(
-    R.string.cli_release_notes_android7_106,
-    R.string.cli_release_notes_web_filters,
-    R.string.cli_release_notes_notice_style,
+    R.string.cli_release_notes_router_setup_107,
+    R.string.cli_release_notes_transport_components_107,
+    R.string.cli_release_notes_help_107,
+    R.string.cli_release_notes_sentinel_107,
+    R.string.cli_release_notes_router_interface_107,
+    R.string.cli_release_notes_general_interface_107,
+    R.string.cli_release_notes_sentinel_apps_data_107,
+    R.string.cli_release_notes_user_modules_107,
 )
 
-internal fun updateNoticeItems(body: String): List<CliQuickStartItem> =
+internal fun updateNoticeItems(body: String): List<CliIconTextItem> =
     body.lineSequence()
         .map(String::trim)
         .filter(String::isNotEmpty)
         .mapIndexed { index, text ->
-            CliQuickStartItem(
+            CliIconTextItem(
                 text = text,
                 icon = UPDATE_NOTICE_ICONS.getOrElse(index) { R.drawable.lin_info },
             )
         }
         .toList()
 
-private val UPDATE_NOTICE_ICONS = listOf(R.drawable.lin_help, R.drawable.lin_update, R.drawable.lin_apps, R.drawable.lin_help, R.drawable.lin_update)
+private val UPDATE_NOTICE_ICONS = listOf(
+    R.drawable.lin_help, R.drawable.lin_update, R.drawable.lin_help, R.drawable.lin_apps,
+    R.drawable.lin_router, R.drawable.lin_settings, R.drawable.lin_apps, R.drawable.lin_settings,
+)

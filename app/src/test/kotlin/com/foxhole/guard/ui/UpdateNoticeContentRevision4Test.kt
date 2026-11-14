@@ -7,11 +7,11 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class UpdateNoticeContentRevision4Test {
-    @Test fun updatedReleaseCopyIsShownOnceBeyondRevisionSix() {
-        assertEquals(8L, CURRENT_UPDATE_NOTICE.revision)
+    @Test fun sentinelAndHelpCopyIsShownOnceBeyondRevisionEight() {
+        assertEquals(9L, CURRENT_UPDATE_NOTICE.revision)
         val previous = UiSettings(
             updateNoticeAcknowledgedContentId = CURRENT_UPDATE_NOTICE.contentId,
-            updateNoticeAcknowledgedRevision = 6,
+            updateNoticeAcknowledgedRevision = 8,
         )
         assertTrue(shouldShowUpdateNotice(previous, CURRENT_UPDATE_NOTICE))
         val acknowledged = previous.copy(updateNoticeAcknowledgedRevision = CURRENT_UPDATE_NOTICE.revision)

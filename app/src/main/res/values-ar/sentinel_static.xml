@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="sentinel_static_expert">إعدادات الفحص الثابت للخبراء</string>
-    <string name="sentinel_static_title">فحوص APK</string>
+    <string name="sentinel_static_title">فحص التطبيقات</string>
     <string name="sentinel_static_reference_summary">%1$s: %2$s من فئات مراجع API الثابتة و%3$s من مطابقات القواعد. لا تثبت هذه الملاحظات التنفيذ أو وجود برمجيات ضارة.</string>
     <string name="sentinel_static_notification_title">FoxHole Sentinel: ملاحظات ثابتة</string>
-    <string name="sentinel_static_select_app">التطبيق</string>
+    <string name="sentinel_static_select_app">اختيار تطبيق</string>
     <string name="sentinel_static_run">فحص التطبيق المختار</string>
     <string name="sentinel_static_baseline">فحص التطبيقات المثبتة</string>
     <string name="sentinel_static_cancel">إلغاء الفحص</string>
@@ -31,4 +31,5 @@
     <string name="sentinel_static_status_unsupported">صيغة APK غير مدعومة</string>
     <string name="sentinel_static_engine_unavailable">محرك الفحص المضمّن غير متاح لهذا الجهاز.</string>
     <string name="sentinel_static_type_label">مراجع ثابتة</string>
+    <string name="sentinel_static_search_app">البحث عن التطبيقات</string>
 </resources>

@@ -19,7 +19,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 NATIVE_PINS = {
     "openssl": ("3.5.9", "603f5602e2eef00d77fbd429d34dcd5822bb301757a1bc9cdb24c670f1eb859a"),
     "boost": ("1.84.0", "cc4b893acf645c9d4b698e9a0f08ca8846aa5d6c68275c14c3e7949c24109454"),
-    "go": ("go1.26.10", None),
+    "go": ("go1.26.11", None),
     "lyrebird": ("0b10edbb61e0ca6fb70c7d57aeaabf315f1fade1", None),
     "conjure": ("0090962226b82aa4a8fc38506f9b98de67d0781e", None),
 }
@@ -90,7 +90,7 @@ def require_native_pins() -> None:
     required = (
         'openssl_ver="${I2PD_OPENSSL_VERSION:-3.5.9}"',
         'boost_ver="${I2PD_BOOST_VERSION:-1.84.0}"',
-        'go_version="${TOR_TRANSPORT_GO:-go1.26.10}"',
+        'go_version="${TOR_TRANSPORT_GO:-go1.26.11}"',
         'lyrebird_commit="0b10edbb61e0ca6fb70c7d57aeaabf315f1fade1"',
         'conjure_commit="0090962226b82aa4a8fc38506f9b98de67d0781e"',
     )
@@ -724,7 +724,11 @@ def generate(args: argparse.Namespace) -> None:
         spec = importlib.util.spec_from_file_location('strict_current_native_source_material', helper_path)
         native_material_module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(native_material_module)
-        native_material = native_material_module.load(native_source_manifest, native_source_root, REPO_ROOT, args.android_abis.split())
+        native_material = native_material_module.load(
+            native_source_manifest, native_source_root, REPO_ROOT, args.android_abis.split(),
+            source_native_manifest=getattr(args, 'source_native_manifest', None),
+            core_native_root=args.fresh_core_native_root,
+            sentinel_native_root=args.fresh_sentinel_native_root)
         for relative, body in native_material['files'].items():
             write(output, relative, body)
     else:

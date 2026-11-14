@@ -119,7 +119,7 @@ internal fun CliScreenHeader(
             }
             if (trailing != null) {
                 Box(
-                    modifier = Modifier.height(CliTopBarControlSize),
+                    modifier = Modifier.height(CliTopBarControlSize).offset(x = CliTrailingIconInset),
                     contentAlignment = Alignment.CenterEnd,
                 ) {
                     trailing()

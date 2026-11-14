@@ -33,9 +33,19 @@ internal fun inspectRouterSystem(client: RouterSshClient, supportedPlatforms: Se
 
 internal fun parseRouterKernelVersion(bytes: ByteArray): String {
     if (bytes.size !in 1..1024) throw RouterInspectionFailure()
-    val text = routerText(bytes).trim()
-    if (!text.matches(Regex("kernel-[A-Za-z0-9][A-Za-z0-9.+_~-]{0,159}"))) throw RouterInspectionFailure()
-    return text.removePrefix("kernel-")
+    return try {
+        val records = Json.parseToJsonElement(routerText(bytes)) as? kotlinx.serialization.json.JsonArray
+            ?: throw RouterInspectionFailure()
+        val record = records.singleOrNull() as? JsonObject ?: throw RouterInspectionFailure()
+        if (record.keys != setOf("name", "version") || record.string("name") != "kernel") throw RouterInspectionFailure()
+        record.string("version").also { version ->
+            if (!version.matches(Regex("[0-9][A-Za-z0-9.+_~-]{0,159}"))) throw RouterInspectionFailure()
+        }
+    } catch (failure: RouterInspectionFailure) {
+        throw failure
+    } catch (_: IllegalArgumentException) {
+        throw RouterInspectionFailure()
+    }
 }
 
 internal fun parseRouterSystem(

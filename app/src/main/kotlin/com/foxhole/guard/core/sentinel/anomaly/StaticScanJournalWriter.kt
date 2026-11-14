@@ -64,6 +64,6 @@ internal fun staticScanEvent(summary: SentinelScanSummary, now: Long): AnomalyEv
         "observations" to summary.observations.sorted().joinToString(",").take(1024),
         "rule_ids" to summary.ruleIds.sorted().joinToString(",").take(4096),
         "installation_id" to summary.source.installationId,
-    ),
+    ) + (summary.reportId?.let { mapOf("scan_report_id" to it) } ?: emptyMap()),
     packageName = summary.source.packageName,
 )

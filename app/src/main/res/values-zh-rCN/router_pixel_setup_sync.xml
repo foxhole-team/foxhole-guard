@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="router_discovery_cancel">取消</string>
+    <string name="router_discovery_continue">继续</string>
+    <string name="router_discovery_ready_to_pair">路由器已准备好配对</string>
+    <string name="router_discovery_setup_question">是否启动 FoxHole OpenWrt 软件包安装向导？</string>
+    <string name="router_setup_compatibility_title">安装兼容性</string>
+    <string name="router_setup_supported_versions">可安装版本</string>
+</resources>

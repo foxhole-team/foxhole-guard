@@ -87,6 +87,32 @@ class ThreatIntelDiskStateTest {
         }
     }
 
+    @Test
+    fun `same verified generation and payload may be downloaded again without losing committed data`() = runBlocking {
+        withDirectory { directory ->
+            val disk = ThreatIntelDiskState(directory)
+            val payload = "same signed payload".toByteArray()
+            val first = disk.install(payload, T1)
+            assertEquals(first, ThreatIntelDiskState(directory).install(payload, T1))
+            assertEquals(T1, disk.generation())
+            assertArrayEquals(payload, disk.read()!!.bytes)
+            assertTrue(directory.listFiles()!!.none { it.name.endsWith(".tmp") })
+        }
+    }
+
+    @Test
+    fun `same generation cannot replace data and older generation is still refused`() = runBlocking {
+        withDirectory { directory ->
+            val disk = ThreatIntelDiskState(directory)
+            val payload = "original signed payload".toByteArray()
+            disk.install(payload, T1)
+            assertTrue(runCatching { disk.install("different payload".toByteArray(), T1) }.isFailure)
+            assertTrue(runCatching { disk.install(payload, T0) }.isFailure)
+            assertEquals(T1, disk.generation())
+            assertArrayEquals(payload, disk.read()!!.bytes)
+        }
+    }
+
     private suspend fun withDirectory(block: suspend (File) -> Unit) {
         val directory = Files.createTempDirectory("sentinel-atomic-state").toFile()
         try { block(directory) } finally { directory.deleteRecursively() }

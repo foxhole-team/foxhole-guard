@@ -33,7 +33,7 @@ import com.foxhole.guard.router.RouterSavedSummary
 
 @Composable
 internal fun GuardRouterSavedSelector(routers: List<RouterSavedSummary>, selectedId: String?,
-    enabled: Boolean, showIllustration: Boolean, onSelect: (String) -> Unit) {
+    enabled: Boolean, showIllustration: Boolean, connected: Boolean = false, searching: Boolean = false, label: String? = null, onSelect: (String) -> Unit) {
     val selected = routers.singleOrNull { it.id == selectedId }
     var expanded by remember(selectedId) { mutableStateOf(false) }
     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally,
@@ -41,7 +41,7 @@ internal fun GuardRouterSavedSelector(routers: List<RouterSavedSummary>, selecte
         BoxWithConstraints(Modifier.fillMaxWidth()) {
             val menuWidth = maxWidth
             CliButton(
-                label = selected?.let { savedRouterName(it) } ?: stringResource(R.string.guard_router_router_review_choose_router),
+                label = label ?: (selected?.let { savedRouterName(it) } ?: stringResource(R.string.guard_router_router_review_choose_router)),
                 onClick = { expanded = !expanded },
                 modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
                 enabled = enabled,
@@ -65,7 +65,8 @@ internal fun GuardRouterSavedSelector(routers: List<RouterSavedSummary>, selecte
                 }
             }
         }
-        if (showIllustration) GuardRouterIllustration(Modifier.fillMaxWidth().height(128.dp).testTag("router-management-vector"))
+        if (showIllustration) GuardRouterIllustration(Modifier.fillMaxWidth().height(176.dp).testTag("router-management-vector"),
+            searching = searching, connected = connected)
     }
 }
 

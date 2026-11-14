@@ -9,6 +9,12 @@ import java.io.IOException
 import java.security.cert.CertificateFactory
 import java.security.cert.X509Certificate
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 internal data class RouterSetupPayload(
     val variant: RouterInstallVariant?,
@@ -23,6 +29,9 @@ internal interface RouterSetupRelease {
     val catalog: RouterInstallCatalog?
     val supportedPlatforms: Set<RouterPlatform>
     suspend fun initialize()
+    suspend fun verifyCompatibility(system: RouterSystemInspection) {
+        throw RouterSetupFailure(RouterWizardError.UNSUPPORTED)
+    }
     suspend fun bundlePlan(payload: RouterSetupPayload, proposal: RouterInstallProposal): RouterInstallBundlePlan =
         throw RouterSetupFailure(RouterWizardError.UNSUPPORTED)
     suspend fun payload(system: RouterSystemInspection, selection: RouterInstallProtocolSelection): RouterSetupPayload
@@ -38,6 +47,8 @@ internal class WifiRouterSetupService(
     private val commandSource: (RouterSshClient, RouterSetupPayload, RouterInstallProposal) -> RouterInstallCommandSource =
         { _, payload, _ -> RouterInstallCommandSource.github(payload.baseUrl) },
     private val deviceBundleProvider: RouterDeviceInstallBundleProvider? = null,
+    private val inspectionLifetimeMs: Long = 120_000,
+    private val elapsedMs: () -> Long = { System.nanoTime() / 1_000_000 },
 ) : RouterSetupService {
     override val installCatalog: RouterInstallCatalog? get() = release.catalog
 
@@ -63,6 +74,88 @@ internal class WifiRouterSetupService(
         } catch (_: RouterSshFailure) { throw RouterSetupFailure(RouterWizardError.SSH_UNAVAILABLE) }
         return try { if (initializeRelease) release.initialize(); observed }
         catch (failure: Exception) { observed.fill(0); throw failure }
+    }
+
+    override suspend fun precheck(address: String, hostKey: ByteArray, password: CharArray): RouterSetupInspection =
+        precheckCredentials(address, hostKey, password, null)
+
+    override suspend fun precheckWithKey(address: String, hostKey: ByteArray, privateKey: ByteArray,
+        passphrase: CharArray): RouterSetupInspection = precheckCredentials(address, hostKey, passphrase, privateKey)
+
+    private suspend fun precheckCredentials(address: String, hostKey: ByteArray, secret: CharArray,
+        privateKey: ByteArray?): RouterSetupInspection {
+        try {
+            requireAccess()
+            val catalog = release.catalog ?: throw RouterSetupFailure(RouterWizardError.UNAVAILABLE)
+            val inspected = retainedRouterIo(io) { register ->
+                val opened = connection(address, hostKey).also { register(it) }
+                if (privateKey == null) opened.connect(secret) else opened.connectWithKey(privateKey, secret)
+                InspectedRouter(opened, inspectRouterSystem(opened, release.supportedPlatforms))
+            }
+            try {
+                release.verifyCompatibility(inspected.facts)
+                return retainedRouterIo(io) { register ->
+                    register(inspected)
+                    inspected.client.requireCurrent()
+                    SshInspectionTransaction(address, inspected, catalog.sha256, catalog.manifestSha256,
+                        io, inspectionLifetimeMs, elapsedMs, requireAccess)
+                }
+            } catch (failure: Exception) { inspected.close(); throw failure }
+        } catch (_: RouterInspectionFailure) { throw RouterSetupFailure(RouterWizardError.UNSUPPORTED) }
+        catch (_: RouterSshAuthenticationFailed) { throw RouterSetupFailure(RouterWizardError.PASSWORD) }
+        catch (_: RouterSshFailure) { throw RouterSetupFailure(RouterWizardError.SSH_UNAVAILABLE) }
+        finally { secret.fill('\u0000'); privateKey?.fill(0) }
+    }
+
+    override suspend fun planInspection(inspection: RouterSetupInspection, selection: RouterInstallProtocolSelection,
+        onProgress: (RouterInstallProgress) -> Unit): RouterInstallProposal {
+        val owned = inspection as? SshInspectionTransaction ?: throw RouterSetupFailure(RouterWizardError.UNAVAILABLE)
+        try {
+            requireAccess()
+            val catalog = release.catalog ?: throw RouterSetupFailure(RouterWizardError.UNAVAILABLE)
+            require(selection.catalogSha256 == catalog.sha256 && catalog.accepts(selection.protocols, selection.includeServer) &&
+                owned.catalogSha256 == catalog.sha256 && owned.manifestSha256 == catalog.manifestSha256)
+            val system = retainedRouterIo(io) { register -> owned.take().also { register(it) } }
+            try {
+                val fresh = retainedRouterIo(io) { register ->
+                    register(system)
+                    system.client.requireCurrent()
+                    inspectRouterSystem(system.client, release.supportedPlatforms).let { facts ->
+                        require(facts.openWrtVersion == owned.system.openWrtVersion && facts.platform == owned.system.platform &&
+                            facts.kernelVersion == owned.system.kernelVersion)
+                        val selectedFacts = if (catalog.schema == 2)
+                            facts.copy(compactBackupBytes = parseRouterCompactBackupBytes(system.client.readCompactBackupBytes())) else facts
+                        InspectedRouter(system.takeClient(), selectedFacts)
+                    }
+                }
+                try {
+                    release.verifyCompatibility(fresh.facts)
+                    return createProposal(owned.address, fresh, selection, onProgress)
+                } catch (failure: Exception) { fresh.close(); throw failure }
+            } catch (_: RouterInspectionFailure) { throw RouterSetupFailure(RouterWizardError.UNSUPPORTED) }
+            catch (_: RouterSshFailure) { throw RouterSetupFailure(RouterWizardError.SSH_UNAVAILABLE) }
+            finally { system.close() }
+        } finally { owned.close() }
+    }
+
+    private suspend fun createProposal(address: String, system: InspectedRouter,
+        selection: RouterInstallProtocolSelection, onProgress: (RouterInstallProgress) -> Unit): RouterInstallProposal {
+        val catalog = release.catalog ?: throw RouterSetupFailure(RouterWizardError.UNAVAILABLE)
+        val payload = release.payload(system.facts, selection, onProgress)
+        system.client.requireCurrent()
+        val budget = completeRouterBudget(payload.budgets)
+        val mode = chooseRouterStorage(system.facts.resources, budget) ?: throw RouterSetupFailure(RouterWizardError.STORAGE)
+        val variant = payload.variant
+        val compact = payload.compact?.modes?.get(mode)?.binding
+        val binding = if (compact != null) RouterInstallBinding(selection, compact.platform.id, system.facts.platform.architecture,
+            mode, null, null, null, null, compact.budgetSha256, system.facts.platform.target, compact)
+        else requireNotNull(variant).let { RouterInstallBinding(selection, it.id, system.facts.platform.architecture, mode,
+            it.coreProducerSha256, it.coreBinarySha256, it.coreSourceSha256, it.capabilitiesSha256,
+            requireNotNull(it.modes[mode]).sha256, system.facts.platform.target) }
+        require(catalog.matches(binding, system.facts.openWrtVersion, catalog.manifestSha256))
+        val transaction = SshInstallTransaction(address, system.takeClient(), system.facts, payload, budget, binding)
+        return RouterInstallProposal(system.facts.openWrtVersion, binding.architecture, mode,
+            catalog.manifestSha256, transaction, binding)
     }
 
     override suspend fun inspect(address: String, hostKey: ByteArray, password: CharArray,
@@ -97,21 +190,7 @@ internal class WifiRouterSetupService(
                 })
             }
             try {
-                val payload = release.payload(system.facts, selection, onProgress)
-                val budget = completeRouterBudget(payload.budgets)
-                val mode = chooseRouterStorage(system.facts.resources, budget) ?: throw RouterSetupFailure(RouterWizardError.STORAGE)
-                val variant = payload.variant
-                val compact = payload.compact?.modes?.get(mode)?.binding
-                val binding = if (compact != null) RouterInstallBinding(selection, compact.platform.id, system.facts.platform.architecture,
-                    mode, null, null, null, null, compact.budgetSha256, system.facts.platform.target, compact)
-                else requireNotNull(variant).let { RouterInstallBinding(selection, it.id, system.facts.platform.architecture, mode,
-                    it.coreProducerSha256, it.coreBinarySha256, it.coreSourceSha256, it.capabilitiesSha256,
-                    requireNotNull(it.modes[mode]).sha256, system.facts.platform.target) }
-
-                require(catalog.matches(binding, system.facts.openWrtVersion, catalog.manifestSha256))
-                val transaction = SshInstallTransaction(address, system.client, system.facts, payload, budget, binding)
-                return RouterInstallProposal(system.facts.openWrtVersion, binding.architecture, mode,
-                    catalog.manifestSha256, transaction, binding)
+                return createProposal(address, system, selection, onProgress)
             } catch (failure: Exception) {
                 try { system.closeAndAwait() } catch (cleanup: Exception) { failure.addSuppressed(cleanup) }
                 throw failure
@@ -173,10 +252,17 @@ internal class WifiRouterSetupService(
                         val fresh = parseRouterBundleTransferFacts(transaction.client.read(RouterReadCommand.BUNDLE_TRANSFER_FACTS))
                         require(fresh.bootId == requireNotNull(transferFacts).bootId)
                         val workingRam = if (proposal.storageMode == RouterStorageMode.FLASH) budget.flashWorkingMemoryBytes else budget.ramWorkingMemoryBytes
-                        val requiredRam = Math.addExact(workingRam, downloaded.plan.stagingBytes)
-                        remoteBundle = transaction.client.stageInstallBundle(downloaded, fresh, requiredRam, onProgress)
+                        val requiredRam = routerInstallBundleRequiredRam(workingRam, downloaded.plan)
+                        val requiredTmp = routerInstallBundleRequiredTmp(workingRam, downloaded.plan)
+                        remoteBundle = transaction.client.stageInstallBundle(downloaded, fresh, requiredRam, requiredTmp, onProgress)
                         val staged = inspectRouterSystem(transaction.client, release.supportedPlatforms)
                         if (!routerStorageFits(staged.resources, budget, proposal.storageMode)) throw RouterSetupFailure(RouterWizardError.STORAGE)
+                        if (staged.resources.availableRamBytes < Math.addExact(workingRam, downloaded.plan.transportWorkingRamBytes))
+                            throw RouterSetupFailure(RouterWizardError.STORAGE)
+                        val stagedTransfer = parseRouterBundleTransferFacts(transaction.client.read(RouterReadCommand.BUNDLE_TRANSFER_FACTS))
+                        require(stagedTransfer.bootId == fresh.bootId)
+                        if (stagedTransfer.availableTmpBytes < requiredTmp - downloaded.plan.stagingBytes)
+                            throw RouterSetupFailure(RouterWizardError.STORAGE)
                         RouterInstallCommandSource.bundle(requireNotNull(remoteBundle).path)
                     } else commandSource(transaction.client, transaction.payload, proposal)
                     transaction.client.install(transaction.payload.installer, RouterInstallCommand(source,
@@ -235,10 +321,56 @@ private class RouterInstallConnectivity(private val transaction: SshInstallTrans
     override fun close() { transaction.close() }
 }
 
-private class InspectedRouter(val client: RouterSshClient, val facts: RouterSystemInspection) : AutoCloseable {
-    private val cleanup = RouterTransportCleanup(cleanup = { client.close() })
+private class InspectedRouter(client: RouterSshClient, val facts: RouterSystemInspection) : Closeable {
+    private val owned = AtomicReference<RouterSshClient?>(client)
+    val client: RouterSshClient get() = owned.get() ?: throw RouterSetupFailure(RouterWizardError.SSH_UNAVAILABLE)
+    fun takeClient(): RouterSshClient = owned.getAndSet(null) ?: throw RouterSetupFailure(RouterWizardError.SSH_UNAVAILABLE)
+    private val retired = AtomicReference<RouterSshClient?>()
+    private val cleanup = RouterTransportCleanup(invalidate = { retired.set(owned.getAndSet(null)) },
+        cleanup = { retired.getAndSet(null)?.close() })
     override fun close() { cleanup.close() }
     suspend fun closeAndAwait() { cleanup.closeAndAwait() }
+}
+
+private class SshInspectionTransaction(
+    override val address: String,
+    inspected: InspectedRouter,
+    override val catalogSha256: String,
+    override val manifestSha256: String,
+    io: CoroutineDispatcher,
+    lifetimeMs: Long,
+    private val elapsedMs: () -> Long,
+    private val requireAccess: () -> Unit,
+) : RouterSetupInspection, Closeable {
+    override val system = inspected.facts
+    private val owned = AtomicReference<InspectedRouter?>(inspected)
+    private val expiresMs = Math.addExact(elapsedMs(), lifetimeMs.also { require(it in 1..300_000) })
+    private val scope = CoroutineScope(SupervisorJob() + io)
+    init {
+        scope.launch {
+            while (owned.get() != null) {
+                delay(minOf(1000L, lifetimeMs))
+                try { requireCurrent() } catch (_: Exception) { close(); break }
+            }
+        }
+    }
+    override fun requireCurrent() {
+        try {
+            requireAccess()
+            if (elapsedMs() >= expiresMs) throw RouterSetupFailure(RouterWizardError.SSH_UNAVAILABLE)
+            (owned.get() ?: throw RouterSetupFailure(RouterWizardError.SSH_UNAVAILABLE)).client.requireCurrent()
+        } catch (failure: Exception) { close(); throw failure }
+    }
+    fun take(): InspectedRouter {
+        requireCurrent()
+        val result = owned.getAndSet(null) ?: throw RouterSetupFailure(RouterWizardError.SSH_UNAVAILABLE)
+        scope.cancel()
+        return result
+    }
+    override fun close() {
+        owned.getAndSet(null)?.close()
+        scope.cancel()
+    }
 }
 
 private class SshInstallTransaction(val address: String, val client: RouterSshClient, val system: RouterSystemInspection,

@@ -28,15 +28,17 @@ internal fun routerPublicReleaseClient(): OkHttpClient = OkHttpClient.Builder()
         }
     }).build()
 
+internal class RouterReleaseUnavailable(val statusCode: Int) : IOException("router_release_unavailable")
+
 internal class RouterDeviceReleaseHttp(private val calls: Call.Factory = routerPublicReleaseClient()) {
     suspend fun read(url: HttpUrl, maximum: Int): ByteArray {
         require(maximum in 1..4194304)
-        return fetch(url, maximum, null) { _, _ -> }.bytes
+        return fetch(url, maximum, null, progress = { _, _ -> }).bytes
     }
 
     suspend fun downloadInstallAsset(url: HttpUrl, expectedBytes: Long, target: File, progress: (Long, Long?) -> Unit) {
         require(expectedBytes in 1L..536870912L)
-        val reply = fetch(url, expectedBytes.toInt(), target, progress)
+        val reply = fetch(url, expectedBytes.toInt(), target, progress, allowUpstreamInstallPackage = true)
         require(reply.count == expectedBytes && target.length() == expectedBytes)
     }
 
@@ -46,14 +48,15 @@ internal class RouterDeviceReleaseHttp(private val calls: Call.Factory = routerP
         if (reply.count != expectedBytes || target.length() != expectedBytes) throw IOException("router_release_size")
     }
 
-    private suspend fun fetch(original: HttpUrl, maximum: Int, target: File?, progress: (Long, Long?) -> Unit): Reply {
+    private suspend fun fetch(original: HttpUrl, maximum: Int, target: File?, progress: (Long, Long?) -> Unit,
+        allowUpstreamInstallPackage: Boolean = false): Reply {
         require(maximum in 1..536870912 && (target != null || maximum <= 4194304))
-        requireSource(original)
+        requireSource(original, allowUpstreamInstallPackage)
         var destination = original
         repeat(4) {
             val reply = request(destination, maximum, target, progress)
             if (reply.code == 200) return reply
-            if (original.host == "api.github.com" || reply.code !in setOf(301, 302, 303, 307, 308)) throw IOException("router_release_unavailable")
+            if (original.host in setOf("api.github.com", "downloads.openwrt.org") || reply.code !in setOf(301, 302, 303, 307, 308)) throw RouterReleaseUnavailable(reply.code)
             val next = destination.resolve(reply.location ?: throw IOException("router_release_redirect"))
                 ?: throw IOException("router_release_redirect")
             require(next.isHttps && next.port == 443 && next.username.isEmpty() && next.password.isEmpty() && next.fragment == null)
@@ -63,7 +66,11 @@ internal class RouterDeviceReleaseHttp(private val calls: Call.Factory = routerP
         throw IOException("router_release_redirect_limit")
     }
 
-    private fun requireSource(url: HttpUrl) {
+    private fun requireSource(url: HttpUrl, allowUpstreamInstallPackage: Boolean) {
+        if (allowUpstreamInstallPackage && url.host == "downloads.openwrt.org") {
+            requireRouterUpstreamInstallPackage(url)
+            return
+        }
         require(url.isHttps && url.port == 443 && url.username.isEmpty() && url.password.isEmpty() && url.fragment == null)
         require(if (url.host == "api.github.com") url.toString() in setOf(ROUTER_DEVICE_RELEASE_METADATA, ROUTER_CORE_RELEASE_METADATA) else
             url.host == "github.com" && url.query == null && url.encodedPath.matches(Regex(

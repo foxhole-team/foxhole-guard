@@ -9,6 +9,11 @@ import android.content.pm.ApplicationInfo
 import android.content.pm.PackageInfo
 import android.content.pm.PackageManager
 import android.content.pm.Signature
+import android.content.pm.ComponentInfo
+import com.foxhole.core.model.InstalledAppAssessment
+import com.foxhole.core.model.InstalledAppAssessmentStatus
+import com.foxhole.core.model.InstalledAppCapability
+import com.foxhole.core.model.InstalledAppCapabilityExposure
 import android.net.VpnService
 import android.os.Build
 import android.os.PowerManager
@@ -30,6 +35,7 @@ data class InstalledAppSecuritySummary(
     val installerPackageName: String?,
     val riskLevel: InstalledAppRiskLevel,
     val riskSignals: List<InstalledAppRiskSignal>,
+    val assessment: InstalledAppAssessment = InstalledAppAssessment(),
 )
 
 class InstalledAppSecurityAnalyzer(
@@ -64,6 +70,10 @@ class InstalledAppSecurityAnalyzer(
                     hasBootReceiver = false,
                     signingCertSha256 = emptySet(),
                     signingCertSha1 = emptySet(),
+                ).copy(
+                    assessmentStatus = InstalledAppAssessmentStatus.UNAVAILABLE,
+                    collectionLimitations = listOf("PACKAGE_COLLECTION_UNAVAILABLE"),
+                    capabilityExposure = InstalledAppCapability.entries.map { InstalledAppCapabilityExposure(it) },
                 )
             val assessment = scoreInstalledApp(facts, threatIntelProvider())
             InstalledAppSecuritySummary(
@@ -73,6 +83,7 @@ class InstalledAppSecurityAnalyzer(
                 installerPackageName = null,
                 riskLevel = assessment.riskLevel,
                 riskSignals = assessment.riskSignals,
+                assessment = assessment.assessment,
             )
         }
 
@@ -84,10 +95,22 @@ class InstalledAppSecurityAnalyzer(
         sentinelAttempt {
             val appInfo = getApplicationInfo(packageName)
             val packageInfo = getPackageInfo(packageName)
+            val packageApplication = checkNotNull(packageInfo.applicationInfo) { "Package application identity unavailable" }
+            check(appInfo.uid == packageApplication.uid && appInfo.sourceDir == packageApplication.sourceDir &&
+                appInfo.splitSourceDirs.orEmpty().contentEquals(packageApplication.splitSourceDirs.orEmpty())
+            ) { "Package changed before collection" }
             val label = appInfo.loadLabel(packageManager).toString().takeIf(String::isNotBlank) ?: fallbackLabel
             val isSystemApp = appInfo.isSystemApp()
             val installerPackageName = installerPackageName(packageName)
-            val signingCertificateBytes = signatures(packageName).map(Signature::toByteArray)
+            val signing = signatures(packageInfo)
+            val signingCertificateBytes = signing.current.map(Signature::toByteArray)
+            val components = mapOf(
+                InstalledAppCapability.ACCESSIBILITY to serviceComponents(packageName, packageInfo, AccessibilityService.SERVICE_INTERFACE, Manifest.permission.BIND_ACCESSIBILITY_SERVICE),
+                InstalledAppCapability.NOTIFICATION_LISTENER to serviceComponents(packageName, packageInfo, NotificationListenerService.SERVICE_INTERFACE, Manifest.permission.BIND_NOTIFICATION_LISTENER_SERVICE),
+                InstalledAppCapability.DEVICE_ADMIN to receiverComponents(packageName, packageInfo, DeviceAdminReceiver.ACTION_DEVICE_ADMIN_ENABLED, Manifest.permission.BIND_DEVICE_ADMIN),
+                InstalledAppCapability.VPN to serviceComponents(packageName, packageInfo, VpnService.SERVICE_INTERFACE, Manifest.permission.BIND_VPN_SERVICE),
+                InstalledAppCapability.AUTOSTART to receiverComponents(packageName, packageInfo, Intent.ACTION_BOOT_COMPLETED, null),
+            )
             val facts =
                 collectFacts(
                     packageName = packageName,
@@ -96,40 +119,36 @@ class InstalledAppSecurityAnalyzer(
                     installerPackageName = installerPackageName,
                     packageInfo = packageInfo,
                     ignoresBatteryOptimizations = powerManager?.isIgnoringBatteryOptimizations(packageName) == true,
-                    hasAccessibilityService = hasServiceCapability(
-                        packageName,
-                        packageInfo,
-                        AccessibilityService.SERVICE_INTERFACE,
-                        Manifest.permission.BIND_ACCESSIBILITY_SERVICE,
-                    ),
-                    hasNotificationListener = hasServiceCapability(
-                        packageName,
-                        packageInfo,
-                        NotificationListenerService.SERVICE_INTERFACE,
-                        Manifest.permission.BIND_NOTIFICATION_LISTENER_SERVICE,
-                    ),
-                    hasDeviceAdmin = hasReceiverCapability(
-                        packageName,
-                        packageInfo,
-                        DeviceAdminReceiver.ACTION_DEVICE_ADMIN_ENABLED,
-                        Manifest.permission.BIND_DEVICE_ADMIN,
-                    ),
-                    hasVpnService = hasServiceCapability(
-                        packageName,
-                        packageInfo,
-                        VpnService.SERVICE_INTERFACE,
-                        Manifest.permission.BIND_VPN_SERVICE,
-                    ),
-                    hasBootReceiver = hasReceiverCapability(
-                        packageName,
-                        packageInfo,
-                        Intent.ACTION_BOOT_COMPLETED,
-                        null,
-                    ),
+                    hasAccessibilityService = components.getValue(InstalledAppCapability.ACCESSIBILITY).isNotEmpty(),
+                    hasNotificationListener = components.getValue(InstalledAppCapability.NOTIFICATION_LISTENER).isNotEmpty(),
+                    hasDeviceAdmin = components.getValue(InstalledAppCapability.DEVICE_ADMIN).isNotEmpty(),
+                    hasVpnService = components.getValue(InstalledAppCapability.VPN).isNotEmpty(),
+                    hasBootReceiver = components.getValue(InstalledAppCapability.AUTOSTART).isNotEmpty(),
                     signingCertSha256 = signingCertDigests(signingCertificateBytes, "SHA-256"),
                     signingCertSha1 = signingCertDigests(signingCertificateBytes, "SHA-1"),
+                ).copy(
+                    historicalSigningCertSha256 = signingCertDigests(signing.historical.map(Signature::toByteArray), "SHA-256"),
+                    historicalSigningCertSha1 = signingCertDigests(signing.historical.map(Signature::toByteArray), "SHA-1"),
+                    observedAtMs = System.currentTimeMillis(),
                 )
-            val assessment = scoreInstalledApp(facts, threatIntelProvider())
+            val collected = InstalledAppCapabilityCollector(appContext).collect(appInfo, packageInfo, facts, components)
+            val after = getPackageInfo(packageName)
+            check(androidx.core.content.pm.PackageInfoCompat.getLongVersionCode(packageInfo) ==
+                androidx.core.content.pm.PackageInfoCompat.getLongVersionCode(after) &&
+                packageInfo.lastUpdateTime == after.lastUpdateTime &&
+                packageInfo.firstInstallTime == after.firstInstallTime &&
+                packageInfo.applicationInfo?.uid == after.applicationInfo?.uid &&
+                packageInfo.applicationInfo?.sourceDir == after.applicationInfo?.sourceDir &&
+                packageInfo.applicationInfo?.splitSourceDirs.orEmpty().contentEquals(after.applicationInfo?.splitSourceDirs.orEmpty())
+            ) { "Package changed during collection" }
+            val assessment = scoreInstalledApp(
+                facts.copy(
+                    capabilityExposure = collected.exposure,
+                    assessmentStatus = collected.status,
+                    collectionLimitations = collected.limitations,
+                ),
+                threatIntelProvider(),
+            )
             InstalledAppSecuritySummary(
                 packageName = packageName,
                 label = label,
@@ -137,6 +156,7 @@ class InstalledAppSecurityAnalyzer(
                 installerPackageName = installerPackageName,
                 riskLevel = assessment.riskLevel,
                 riskSignals = assessment.riskSignals,
+                assessment = assessment.assessment,
             )
         }
 
@@ -181,28 +201,22 @@ class InstalledAppSecurityAnalyzer(
     ): Set<String> =
         signingCertificateBytes.map { bytes -> bytes.digestHex(algorithm) }.toSet()
 
-    private fun signatures(packageName: String): List<Signature> =
+    private data class SigningCertificates(val current: List<Signature>, val historical: List<Signature>)
+
+    private fun signatures(info: PackageInfo): SigningCertificates =
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            val info =
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    packageManager.getPackageInfo(
-                        packageName,
-                        PackageManager.PackageInfoFlags.of(PackageManager.GET_SIGNING_CERTIFICATES.toLong()),
-                    )
-                } else {
-                    @Suppress("DEPRECATION")
-                    packageManager.getPackageInfo(packageName, PackageManager.GET_SIGNING_CERTIFICATES)
-                }
             info.signingInfo?.let { signingInfo ->
-                if (signingInfo.hasMultipleSigners()) {
-                    signingInfo.apkContentsSigners
-                } else {
-                    signingInfo.signingCertificateHistory
-                }
-            }?.toList().orEmpty()
+                val current = signingInfo.apkContentsSigners?.toList().orEmpty()
+                check(current.isNotEmpty()) { "Current signing certificate unavailable" }
+                val history = if (signingInfo.hasMultipleSigners()) emptyList() else
+                    signingInfo.signingCertificateHistory?.toList().orEmpty().filter { it !in current }
+                SigningCertificates(current, history)
+            } ?: error("Signing certificates unavailable")
         } else {
             @Suppress("DEPRECATION")
-            packageManager.getPackageInfo(packageName, PackageManager.GET_SIGNATURES).signatures?.toList().orEmpty()
+            val current = info.signatures?.toList().orEmpty()
+            check(current.isNotEmpty()) { "Current signing certificate unavailable" }
+            SigningCertificates(current, emptyList())
         }
 
     private fun getApplicationInfo(packageName: String): ApplicationInfo =
@@ -215,10 +229,10 @@ class InstalledAppSecurityAnalyzer(
 
     private fun getPackageInfo(packageName: String): PackageInfo =
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            packageManager.getPackageInfo(packageName, PackageManager.PackageInfoFlags.of(PACKAGE_INFO_FLAGS.toLong()))
+            packageManager.getPackageInfo(packageName, PackageManager.PackageInfoFlags.of(packageInfoFlags().toLong()))
         } else {
             @Suppress("DEPRECATION")
-            packageManager.getPackageInfo(packageName, PACKAGE_INFO_FLAGS)
+            packageManager.getPackageInfo(packageName, packageInfoFlags())
         }
 
     private fun installerPackageName(packageName: String): String? =
@@ -232,38 +246,27 @@ class InstalledAppSecurityAnalyzer(
             }
         }.getOrNull()?.takeIf(String::isNotBlank)
 
-    private fun hasServiceCapability(
+    private fun serviceComponents(
         packageName: String,
         packageInfo: PackageInfo,
         action: String,
         requiredPermission: String?,
-    ): Boolean {
-        val byAction =
-            queryIntentServices(packageName, action)
-                .any { service -> requiredPermission == null || service.serviceInfo.permission == requiredPermission }
-        if (byAction) {
-            return true
-        }
+    ): List<ComponentInfo> = (
+        queryIntentServices(packageName, action).mapNotNull { it.serviceInfo }
+            .filter { requiredPermission == null || it.permission == requiredPermission } +
+            packageInfo.services.orEmpty().filter { requiredPermission != null && it.permission == requiredPermission }
+        ).distinctBy { it.name }
 
-        return packageInfo.services.orEmpty()
-            .any { service -> requiredPermission != null && service.permission == requiredPermission }
-    }
-
-    private fun hasReceiverCapability(
+    private fun receiverComponents(
         packageName: String,
         packageInfo: PackageInfo,
         action: String,
         requiredPermission: String?,
-    ): Boolean {
-        val byAction =
-            queryBroadcastReceivers(packageName, action)
-                .any { receiver -> requiredPermission == null || receiver.activityInfo.permission == requiredPermission }
-        if (byAction) {
-            return true
-        }
-        return packageInfo.receivers.orEmpty()
-            .any { receiver -> requiredPermission != null && receiver.permission == requiredPermission }
-    }
+    ): List<ComponentInfo> = (
+        queryBroadcastReceivers(packageName, action).mapNotNull { it.activityInfo }
+            .filter { requiredPermission == null || it.permission == requiredPermission } +
+            packageInfo.receivers.orEmpty().filter { requiredPermission != null && it.permission == requiredPermission }
+        ).distinctBy { it.name }
 
     private fun queryIntentServices(
         packageName: String,
@@ -311,3 +314,7 @@ private const val COMPONENT_QUERY_FLAGS =
     PackageManager.MATCH_DISABLED_COMPONENTS or
         PackageManager.MATCH_DIRECT_BOOT_AWARE or
         PackageManager.MATCH_DIRECT_BOOT_UNAWARE
+
+@Suppress("DEPRECATION")
+private fun packageInfoFlags(): Int = PACKAGE_INFO_FLAGS or
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) PackageManager.GET_SIGNING_CERTIFICATES else PackageManager.GET_SIGNATURES

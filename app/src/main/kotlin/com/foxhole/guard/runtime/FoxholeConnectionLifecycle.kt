@@ -53,7 +53,13 @@ internal class FoxholeConnectionLifecycle(
     private val nativeRuntimeSnapshot: () -> NativeRuntimeSnapshot,
 ) {
     private val routerStartGeneration = java.util.concurrent.atomic.AtomicLong()
+    private val routerManualGeneration = java.util.concurrent.atomic.AtomicLong()
+    internal fun routerSmartManualGeneration(): Long = routerManualGeneration.get()
+    internal fun reserveRouterSmartStart(expected: Long): Long? =
+        if (routerStartGeneration.compareAndSet(expected, expected + 1)) expected + 1 else null
     private val routerPersonalVpnStart by lazy { com.foxhole.guard.router.GuardRouterPersonalVpnStart(context, profileRepository) }
+
+    internal fun routerRequestGeneration(): Long = routerStartGeneration.get()
 
     suspend fun connect(
         profileId: Long,
@@ -65,13 +71,8 @@ internal class FoxholeConnectionLifecycle(
         protocolTestTrafficFreeze: Boolean = false,
         replaceActiveTunnel: Boolean = false,
     ) {
+        routerManualGeneration.incrementAndGet()
         val routerStart = routerStartGeneration.incrementAndGet()
-        try {
-            routerPersonalVpnStart.requireAway(profileId, protocolOptionId) { routerStartGeneration.get() == routerStart }
-        } catch (_: com.foxhole.guard.router.RouterPersonalVpnAtHome) {
-            FoxholeVpnRuntimeBridge.update(snapshot.value.copy(message = context.getString(R.string.guard_router_router_personal_vpn_at_home)))
-            return
-        }
         if (routerStartGeneration.get() != routerStart) return
         RuntimeResumeStateStore.clearRecentUserStop(context)
         val profile = profileRepository.getProfile(profileId) ?: error("profile not found")
@@ -117,6 +118,7 @@ internal class FoxholeConnectionLifecycle(
     }
 
     suspend fun connectTorOnly(statusMessage: String?) {
+        routerManualGeneration.incrementAndGet()
         routerStartGeneration.incrementAndGet()
         RuntimeResumeStateStore.clearRecentUserStop(context)
         val settings = settingsRepository.current()
@@ -291,6 +293,7 @@ internal class FoxholeConnectionLifecycle(
         preserveSmartStartAnalysis: Boolean = false,
         userInitiated: Boolean = true,
     ) {
+        routerManualGeneration.incrementAndGet()
         routerStartGeneration.incrementAndGet()
         clearAppliedRuntime()
         diagnosticsLogger.record("connection", "disconnect requested")

@@ -29,7 +29,7 @@ internal class RouterWifiConnection private constructor(
             create = { Socket().also { operation?.register(it) } })
     }
 
-    fun requireCurrent() {
+    override fun requireCurrent() {
         accessCheck()
         val capabilities = manager.getNetworkCapabilities(network) ?: throw RouterWifiRequired()
         val properties = manager.getLinkProperties(network) ?: throw RouterWifiRequired()

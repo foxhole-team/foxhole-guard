@@ -1,0 +1,2 @@
+gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/webtunnel
+v0.0.3-0.20250724131018-aab00213ba56

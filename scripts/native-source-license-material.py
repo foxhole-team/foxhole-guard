@@ -8,12 +8,13 @@ import re
 import stat
 import unicodedata
 import math
+import importlib.util
 
 ABIS = ('arm64-v8a', 'armeabi-v7a', 'x86', 'x86_64')
-PRODUCERS = {'go': '84bc4ecde8f838a4aa875b2c3bd8a8a53534b802ee0038c7e37e9711686d002a',
+PRODUCERS = {'go': 'b2c5190795c9b3e21615f79a05698f482b3b9ddc2c406e2ef63db5c249203287',
              'cpp': '7fea9f97a9bc7eb1419c241257f49b27a7447b45c04bcc9af11d8c337806c2fc'}
 CONSUMERS = {'coreC3', 'sentinel', 'maven420'}
-NON_MODULE_FILES = {'tor/Go-1.26.10-BSD-3-Clause.txt', 'tor/Go-1.26.10-PATENTS.txt', 'tor/lyrebird-BSD-3-Clause.txt',
+NON_MODULE_FILES = {'tor/Go-1.26.11-BSD-3-Clause.txt', 'tor/Go-1.26.11-PATENTS.txt', 'tor/lyrebird-BSD-3-Clause.txt',
     'tor/lyrebird-GPL-3.0-or-later.txt', 'tor/conjure-client-BSD-3-Clause.txt', 'tor/CONJURE-PATCH.json',
     'tor/CONJURE-PATCH.py', 'tor/GO-MODULES.json', 'i2pd/i2pd-BSD-3-Clause.txt', 'i2pd/VERSION.txt',
     'i2pd/OpenSSL-3.5.9-Apache-2.0.txt', 'i2pd/Boost-1.84.0-BSL-1.0.txt',
@@ -105,12 +106,76 @@ def module_directory(path, version):
     return readable[:100] + '-' + digest(value.encode())[:12]
 
 
-def remember(before, path, body):
+def remember(before, path, body, *, native=False):
+    maximum = 128 * 1048576 if native else 1048576
+    need(type(native) is bool and 0 < len(body) <= maximum, 'Native material remembered admission bound differs')
     path = Path(path).absolute()
-    before[str(path)] = (digest(body), facts(path.lstat()), facts(path.parent.lstat()))
+    before[str(path)] = (digest(body), facts(path.lstat()), facts(path.parent.lstat()), native)
 
 
-def load(manifest_path, payload_root, app_root, android_abis):
+def source_privacy_provenance(source_native_manifest, repo, core_root, sentinel_root,
+                              reference_manifest_sha256, source_inputs, before):
+    """Bind fresh source assets separately from retained original legal producers."""
+    repo = Path(repo).absolute()
+    manifest_path = Path(source_native_manifest).absolute()
+    need(manifest_path == repo / 'app/build/reports/fdroid/native-source-build.json',
+         'Fixed Core source-native manifest required')
+    helper = repo / 'scripts/current-source-legal-consumer.py'
+    helper_raw = read(helper)
+    remember(before, helper, helper_raw)
+    spec = importlib.util.spec_from_file_location('source_privacy_core_binding', helper)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    core = module.source_build_provenance(manifest_path, repo, core_root, sentinel_root)
+    core_raw = read(manifest_path)
+    remember(before, manifest_path, core_raw)
+    for kind, root, name in [('core', Path(core_root), 'libfoxhole_native.so'),
+                             ('sentinel', Path(sentinel_root), 'libfoxhole_sentinel_yara.so')]:
+        for row in core['nativeLibraries'][kind].values():
+            file = root / row['abi'] / name
+            body = read(file, 128 * 1048576, row['sha256'], native=True)
+            remember(before, file, body, native=True)
+    path = repo / 'app/build/reports/fdroid/privacy-source-build.json'
+    raw = read(path)
+    value = document(raw)
+    need(set(value) == {'schema', 'kind', 'coreNativeManifestSHA256',
+         'referenceMaterialManifestSHA256', 'referenceProducerReceipts', 'sourceInputs',
+         'abis', 'nativeLibraries'} and type(value['schema']) is int and value['schema'] == 1
+         and value['kind'] == 'normal-fdroid-privacy-source-build', 'Exact fresh privacy receipt required')
+    need(value['coreNativeManifestSHA256'] == digest(core_raw)
+         and value['referenceMaterialManifestSHA256'] == reference_manifest_sha256
+         and value['referenceProducerReceipts'] == PRODUCERS,
+         'Source privacy Core/reference producer binding differs')
+    need(set(source_inputs) == SOURCE_KEYS and value['sourceInputs'] == source_inputs
+         and value['abis'] == list(ABIS), 'Exact source privacy inputs/four ABIs required')
+    for name, pin in source_inputs.items():
+        need(isinstance(pin, str) and HASH.fullmatch(pin), 'Source privacy input digest missing')
+        body = read(repo / name, expected=pin)
+        remember(before, repo / name, body)
+    expected = {(abi, name) for abi in ABIS for name in ('lyrebird', 'conjure-client', 'libi2pd.so')}
+    rows = value['nativeLibraries']
+    need(isinstance(rows, list) and len(rows) == 12
+         and all(isinstance(row, dict) and set(row) == {'abi', 'name', 'bytes', 'sha256'} for row in rows)
+         and {(row['abi'], row['name']) for row in rows} == expected,
+         'Fresh privacy twelve-product closure differs')
+    for row in rows:
+        need(type(row['bytes']) is int and 64 <= row['bytes'] <= 128 * 1048576
+             and isinstance(row['sha256'], str) and HASH.fullmatch(row['sha256']),
+             'Invalid source privacy native row')
+        file = asset_path(repo, row['abi'], row['name'])
+        body = read(file, 128 * 1048576, row['sha256'], native=True)
+        bits, machine = {'arm64-v8a': (2, 183), 'armeabi-v7a': (1, 40),
+                         'x86': (1, 3), 'x86_64': (2, 62)}[row['abi']]
+        need(len(body) == row['bytes'] and body[:4] == b'\x7fELF' and body[4] == bits
+             and body[5] == 1 and int.from_bytes(body[18:20], 'little') == machine,
+             'Fresh privacy ELF ABI/size differs')
+        remember(before, file, body, native=True)
+    remember(before, path, raw)
+    return value
+
+
+def load(manifest_path, payload_root, app_root, android_abis, source_native_manifest=None,
+         core_native_root=None, sentinel_native_root=None):
     repo, payload = Path(app_root).absolute(), Path(payload_root).absolute()
     abis = tuple(android_abis)
     need(abis and len(set(abis)) == len(abis) and all(abi in ABIS for abi in abis), 'Invalid requested native material ABI scope')
@@ -148,7 +213,14 @@ def load(manifest_path, payload_root, app_root, android_abis):
     expected_natives = {(abi, name) for abi in ABIS for name in ('lyrebird', 'conjure-client', 'libi2pd.so')}
     need(isinstance(natives, list) and len(natives) == len(expected_natives)
          and {(row['abi'], row['name']) for row in natives} == expected_natives, 'Native material product coverage differs')
-    for row in natives:
+    source_privacy = None
+    if source_native_manifest is not None:
+        need(core_native_root is not None and sentinel_native_root is not None,
+             'Explicit fresh Core/Sentinel native roots required')
+        source_privacy = source_privacy_provenance(source_native_manifest, repo,
+            core_native_root, sentinel_native_root, digest(raw), source, before)
+    actual_natives = natives if source_privacy is None else source_privacy['nativeLibraries']
+    for row in actual_natives:
         need(set(row) == {'abi', 'name', 'bytes', 'sha256'} and type(row['bytes']) is int and 0 < row['bytes'] <= 128 * 1048576
              and isinstance(row['sha256'], str) and HASH.fullmatch(row['sha256']), 'Invalid native product row')
         if row['abi'] not in abis: continue
@@ -157,7 +229,7 @@ def load(manifest_path, payload_root, app_root, android_abis):
         machine = {'arm64-v8a': (2, 183), 'armeabi-v7a': (1, 40), 'x86': (1, 3), 'x86_64': (2, 62)}[row['abi']]
         need(len(body) == row['bytes'] and len(body) >= 64 and body[:4] == b'\x7fELF'
              and (body[4], int.from_bytes(body[18:20], 'little')) == machine and body[5] == 1, 'Current native asset ABI/size differs')
-        remember(before, file, body)
+        remember(before, file, body, native=True)
     modules = manifest['modules']
     need(isinstance(modules, list) and len(modules) == 76 and digest(encoded(modules)) == bindings['moduleInventorySHA256'],
          'Exact actual embedded module inventory differs')
@@ -196,7 +268,8 @@ def load(manifest_path, payload_root, app_root, android_abis):
     need(cpp.get('sourceCommit') == '635b013a612ff47278ef02acf8580a28e10e26c5'
          and cpp.get('OpenSSLArchiveSHA256') == '603f5602e2eef00d77fbd429d34dcd5822bb301757a1bc9cdb24c670f1eb859a'
          and cpp.get('BoostArchiveSHA256') == 'cc4b893acf645c9d4b698e9a0f08ca8846aa5d6c68275c14c3e7949c24109454'
-         and cpp.get('NDKVersion') == '29.0.14206865', 'Current CPP/NDK original source identity differs')
+         and cpp.get('NDKVersion') == '29.0.14206865'
+         and cpp.get('currentGoOnlyRecipeDeltaSHA256') == '44a0a23abd31c3c46f3c58c0260daeb99944374fc9570696936aaf4ea82d1e70', 'Current CPP/NDK original source identity differs')
     files, covered, local_license_bound = {}, set(), False
     rows = manifest['files']
     need(isinstance(rows, list) and 0 < len(rows) <= 4096, 'Native notice inventory missing')
@@ -236,26 +309,35 @@ def load(manifest_path, payload_root, app_root, android_abis):
     need(files['i2pd/VERSION.txt'] == read(repo / 'third_party/i2pd.version'), 'Copied i2pd source version differs')
     need(document(files['tor/GO-MODULES.json']) == modules, 'Copied actual declared/effective Go module inventory differs')
     std = origins['goStd']
-    need(std.get('sourceCommit') == '4e8c85f5319d999bfd7617fdc191631e5634e3c5'
-         and std.get('sourceArchiveSHA256') == '1e2d5e06a2f103d11f9ae23a39cf3f79d4c7ed6f1335b7715ac2e65894fe1405'
-         and std['authoritySHA256'] == '5f41fd9468bc246e78bd56952951dcb5f846a1b07a7b5399a00dd1bf82846704'
-         and digest(files['tor/Go-1.26.10-BSD-3-Clause.txt']) == '911f8f5782931320f5b8d1160a76365b83aea6447ee6c04fa6d5591467db9dad'
-         and digest(files['tor/Go-1.26.10-PATENTS.txt']) == '96f408bfae65bf137fc2525d3ecb030271c50c1e90799f87abf8846d8dd505cc',
+    need(std.get('sourceCommit') == '26b4433366fce47e480679e0b5a30222b63996e0'
+         and std.get('sourceArchiveSHA256') == 'd44101b0ff27ed2a4c75ad46c17b9c74359209e2eb2ca7c9df6cb4fdb68e1969'
+         and std['authoritySHA256'] == 'd9f39341ef44a2e20b173747b8c48e83aa699e1e1687a399dfa1e56a3e3f7476'
+         and digest(files['tor/Go-1.26.11-BSD-3-Clause.txt']) == '911f8f5782931320f5b8d1160a76365b83aea6447ee6c04fa6d5591467db9dad'
+         and digest(files['tor/Go-1.26.11-PATENTS.txt']) == '96f408bfae65bf137fc2525d3ecb030271c50c1e90799f87abf8846d8dd505cc',
          'Actual source-built Go standard-library notice origin differs')
     actual = {str(file.relative_to(payload)) for file in payload.rglob('*') if file.is_file() or file.is_symlink()}
     need(actual == set(files), 'Extra native original payload member')
     remember(before, manifest_path, raw)
+    if source_privacy is not None:
+        descriptor = {'schema': 1, 'kind': 'fdroid-privacy-source-native-and-reference-legal-attribution',
+            'referenceMaterialManifestSHA256': digest(raw),
+            'referenceProducerReceipts': PRODUCERS,
+            'actualSourcePrivacy': source_privacy,
+            'referenceOriginalLegalTextsUnchanged': True,
+            'referenceNativeBytesClaimedAsFresh': False}
+        files['FDROID-SOURCE-PRIVACY.json'] = encoded(descriptor) + b'\n'
     return MappingProxyType({'files': MappingProxyType(files), 'before': MappingProxyType(before), 'abis': abis,
-                             'payloadRoot': payload, 'payloadFiles': tuple(sorted(files)),
-                             'manifestSHA256': digest(raw), 'completeConsumerLegalQualification': False})
+                             'payloadRoot': payload, 'payloadFiles': tuple(sorted(actual)),
+                             'manifestSHA256': digest(raw), 'completeConsumerLegalQualification': False,
+                             'sourcePrivacyProvenance': source_privacy,
+                             'referenceNativeLibraries': natives, 'nativeLibraries': actual_natives})
 
 
 def recheck(material):
     payload = material['payloadRoot']
     need({str(file.relative_to(payload)) for file in payload.rglob('*') if file.is_file() or file.is_symlink()}
          == set(material['payloadFiles']), 'Native payload inventory changed during generation')
-    for name, (pin, before, parent) in material['before'].items():
+    for name, (pin, before, parent, native) in material['before'].items():
         file = Path(name)
         need(facts(file.lstat()) == before and facts(file.parent.lstat()) == parent, 'Native material F9 changed during generation')
-        read(file, 128 * 1048576 if file.name in ('lyrebird', 'conjure-client', 'libi2pd.so') else 1048576,
-             pin, native=file.name in ('lyrebird', 'conjure-client', 'libi2pd.so'))
+        read(file, 128 * 1048576 if native else 1048576, pin, native=native)

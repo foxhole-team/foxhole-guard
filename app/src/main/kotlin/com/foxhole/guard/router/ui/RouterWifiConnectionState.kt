@@ -15,6 +15,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.Surface
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.produceState
@@ -106,7 +113,10 @@ internal fun RouterWifiIndicator(connected: Boolean) {
 private fun RouterWifiGlyph(connected: Boolean, modifier: Modifier) {
     val label = stringResource(if (connected) R.string.guard_router_router_review_wifi_connected
         else R.string.guard_router_vpn_router_error_wifi)
-    val color = if (connected) routerConnectColor() else guardRouterDeleteColor()
+    val color = LocalGuardRouterColors.current.muted
+    var appeared by remember(connected) { mutableStateOf(false) }
+    LaunchedEffect(connected) { appeared = true }
+    val reveal by animateFloatAsState(if (appeared && connected) 1f else 0f, tween(240), label = "router-wifi-reveal")
     Canvas(modifier.semantics { contentDescription = label }) {
         // Keep layout fixed while the 16-unit optical ink fills the capital-letter height.
         withTransform({
@@ -114,12 +124,14 @@ private fun RouterWifiGlyph(connected: Boolean, modifier: Modifier) {
             scale(size.width / 16f, size.height / 16f, pivot = Offset.Zero)
         }) {
             val stroke = Stroke(width = 1.7f, cap = StrokeCap.Round)
-            val arcs = Path().apply {
-                moveTo(2f, 8f); cubicTo(7f, 3f, 17f, 3f, 22f, 8f)
-                moveTo(5f, 11f); cubicTo(9f, 7.5f, 15f, 7.5f, 19f, 11f)
-                moveTo(8.5f, 14.5f); cubicTo(10.5f, 12.5f, 13.5f, 12.5f, 15.5f, 14.5f)
+            val arcs = listOf(
+                Path().apply { moveTo(8.5f,14.5f); cubicTo(10.5f,12.5f,13.5f,12.5f,15.5f,14.5f) },
+                Path().apply { moveTo(5f,11f); cubicTo(9f,7.5f,15f,7.5f,19f,11f) },
+                Path().apply { moveTo(2f,8f); cubicTo(7f,3f,17f,3f,22f,8f) },
+            )
+            arcs.forEachIndexed { index, path ->
+                drawPath(path, color.copy(alpha = if (connected) routerSignalOpacity(reveal, index) else 1f), style = stroke)
             }
-            drawPath(arcs, color, style = stroke)
             drawCircle(color, radius = 1f, center = Offset(12f, 18f))
             if (!connected) drawLine(color, Offset(3f, 3f), Offset(21f, 21f), strokeWidth = 1.7f, cap = StrokeCap.Round)
         }

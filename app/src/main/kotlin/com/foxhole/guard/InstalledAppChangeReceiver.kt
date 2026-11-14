@@ -7,6 +7,7 @@ import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.os.Build
 import com.foxhole.core.model.InstalledAppChangeType
+import com.foxhole.core.model.InstalledAppAssessment
 import com.foxhole.core.model.InstalledAppRiskLevel
 import com.foxhole.core.model.InstalledAppRiskSignal
 import com.foxhole.core.model.KnownApplicationIdentity
@@ -219,6 +220,7 @@ private suspend fun FoxholeApplication.preflightPackageChange(
         installerPackageName = packageInfo.installerPackageName,
         riskLevel = packageInfo.riskLevel,
         riskSignals = packageInfo.riskSignals,
+        assessment = packageInfo.assessment,
         quarantineIdentity = quarantineIdentity,
         quarantineAnalysisComplete = !quarantinedInstall,
     )
@@ -258,6 +260,7 @@ private suspend fun FoxholeApplication.enrichPackageInventoryChange(prepared: Pr
         installerPackageName = securitySummary.installerPackageName ?: packageInfo.installerPackageName,
         riskLevel = securitySummary.riskLevel,
         riskSignals = securitySummary.riskSignals,
+        assessment = securitySummary.assessment,
         installedIdentity = quarantineIdentity ?: installedIdentity,
     )
     if (outcome.routeChanged) {
@@ -384,6 +387,7 @@ internal suspend fun FoxholeApplication.reconcilePendingQuarantineAnalyses(): Bo
                 installerPackageName = summary.installerPackageName,
                 riskLevel = summary.riskLevel,
                 riskSignals = summary.riskSignals,
+                assessment = summary.assessment,
                 installedIdentity = identity,
             )
         if (outcome.routeChanged) {
@@ -451,6 +455,7 @@ private data class PackageInventoryInfo(
     val installerPackageName: String? = null,
     val riskLevel: InstalledAppRiskLevel = InstalledAppRiskLevel.LOW,
     val riskSignals: List<InstalledAppRiskSignal> = emptyList(),
+    val assessment: InstalledAppAssessment = InstalledAppAssessment(),
 )
 
 private fun Context.packageInventoryInfo(
@@ -506,6 +511,7 @@ private fun Context.packageInventoryInfo(
         installerPackageName = previous?.installerPackageName,
         riskLevel = previous?.riskLevel ?: InstalledAppRiskLevel.LOW,
         riskSignals = previous?.riskSignals.orEmpty(),
+        assessment = previous?.assessment ?: InstalledAppAssessment(),
     )
 }
 

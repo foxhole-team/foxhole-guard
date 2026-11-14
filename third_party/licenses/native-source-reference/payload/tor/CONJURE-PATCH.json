@@ -1,0 +1,9 @@
+{
+  "module": "github.com/refraction-networking/conjure",
+  "version": "v0.9.1",
+  "imports": {
+    "pkg/registrars/registration/dns-registrar.go": "7a90947d42e5c3c351f4c0184b2e7e7f085734ef355224b6bbb1e971265c552b",
+    "pkg/transports/connecting/dtls/nat.go": "e4fde904aec27c162c8f8bf5e15e762eb743bb09880d63c64838958a58ffefb2"
+  },
+  "goModSha256": "e935748ed19b97fd1aa2864b5b72209c084478891db0f039b93ebbfb4c55a147"
+}

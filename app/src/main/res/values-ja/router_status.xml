@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="router_status_title">状態</string>
+    <string name="router_status_connected">VPN ネットワークに接続済み</string>
+    <string name="router_status_disconnected">VPN ネットワークから切断済み</string>
+    <string name="router_status_profile">VPNプロファイル</string>
+    <string name="router_status_location">VPN を使わない通信</string>
+    <string name="router_status_no_profile">未選択</string>
+    <string name="router_status_local_off">無効</string>
+</resources>

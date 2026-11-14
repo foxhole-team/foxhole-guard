@@ -1,0 +1,2 @@
+github.com/xtaci/kcp-go/v5
+v5.6.18

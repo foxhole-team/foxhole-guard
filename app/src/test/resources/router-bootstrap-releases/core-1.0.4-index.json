@@ -1,0 +1,173 @@
+{
+  "packages": [
+    {
+      "name": "foxcore-engine-hysteria2-flash-2115d70f38ccbe70165b38ec476ea33b48b63cad0ffe9f3f4dd5e53f4f588dd1",
+      "version": "1.0.4-r1",
+      "hashes": "ce98b7633f1511b3dcfeb19106da7d5e244313a2cffd756610462b0710467b3b",
+      "description": "One verified protocol producer in a versioned immutable slot. It has no init scripts, service hooks or replacement of another engine.",
+      "arch": "aarch64_cortex-a53",
+      "license": "GPL-3.0-or-later",
+      "origin": "/source/package/foxcore-engine",
+      "maintainer": "FoxHole Team",
+      "installed-size": 11394793,
+      "file-size": 4518175,
+      "depends": [
+        "libc"
+      ]
+    }, {
+      "name": "foxcore-engine-hysteria2-flash-65a29234e0e8129baac8ee61d74ac0d770e035d6d15d4a6ecf6dd44f01ab2182",
+      "version": "1.0.4-r1",
+      "hashes": "3668f7ce070e203636c143e94689bcef7b4b506fddc1ccfcf3d9501236993000",
+      "description": "One verified protocol producer in a versioned immutable slot. It has no init scripts, service hooks or replacement of another engine.",
+      "arch": "x86_64",
+      "license": "GPL-3.0-or-later",
+      "origin": "/source/package/foxcore-engine",
+      "maintainer": "FoxHole Team",
+      "installed-size": 13468191,
+      "file-size": 4896374,
+      "depends": [
+        "libc"
+      ]
+    }, {
+      "name": "foxcore-engine-hysteria2-ram-1956a46a95136259b2b67b15dac7c0f399d4b53ba69985260972800012bfa58a",
+      "version": "1.0.4-r2",
+      "hashes": "0353658febf64b0eb0216253efdae6db8394f1afcc490ceae36f8f91260c7f6e",
+      "description": "One verified protocol producer in a versioned immutable slot. It has no init scripts, service hooks or replacement of another engine.",
+      "arch": "x86_64",
+      "license": "GPL-3.0-or-later",
+      "origin": "/source/package/foxcore-engine",
+      "maintainer": "FoxHole Team",
+      "installed-size": 2872861,
+      "file-size": 281103,
+      "depends": [
+        "libc"
+      ]
+    }, {
+      "name": "foxcore-engine-hysteria2-ram-44de3bb0bee9bdb5f80ded196bea683937866484d078d03ccc82a4fef9ad1b93",
+      "version": "1.0.4-r2",
+      "hashes": "5d0d102545fede615ac78bd4875d2be712aec7b9759a56280e34a90614400c42",
+      "description": "One verified protocol producer in a versioned immutable slot. It has no init scripts, service hooks or replacement of another engine.",
+      "arch": "aarch64_cortex-a53",
+      "license": "GPL-3.0-or-later",
+      "origin": "/source/package/foxcore-engine",
+      "maintainer": "FoxHole Team",
+      "installed-size": 2872655,
+      "file-size": 281042,
+      "depends": [
+        "libc"
+      ]
+    }, {
+      "name": "foxcore-engine-vless-flash-37482b0a9f3fae5a6a1a9b9df94e3b867a4b0c292f3aa23f763d5bc86ec94d6b",
+      "version": "1.0.4-r1",
+      "hashes": "4a677949dfb3fdf18c2b3d5b9010374675b5430402d36e4ef214bcf7d969ddd2",
+      "description": "One verified protocol producer in a versioned immutable slot. It has no init scripts, service hooks or replacement of another engine.",
+      "arch": "x86_64",
+      "license": "GPL-3.0-or-later",
+      "origin": "/source/package/foxcore-engine",
+      "maintainer": "FoxHole Team",
+      "installed-size": 15044278,
+      "file-size": 5540226,
+      "depends": [
+        "libc"
+      ]
+    }, {
+      "name": "foxcore-engine-vless-flash-3f309bc8856eeb49fc7ba8baf57397b46ec24567967ffe751d08b591ce6b4a5b",
+      "version": "1.0.4-r1",
+      "hashes": "4f0335ddc798b07d77a68b94ebd81fde3f21c8f2a19762ce20032f63ad706483",
+      "description": "One verified protocol producer in a versioned immutable slot. It has no init scripts, service hooks or replacement of another engine.",
+      "arch": "aarch64_cortex-a53",
+      "license": "GPL-3.0-or-later",
+      "origin": "/source/package/foxcore-engine",
+      "maintainer": "FoxHole Team",
+      "installed-size": 12716936,
+      "file-size": 5131221,
+      "depends": [
+        "libc"
+      ]
+    }, {
+      "name": "foxcore-engine-vless-ram-1f775374d9141f0ebfe57ab6c8ad45e6ceef77db6f5a560c140946759ef8d0b8",
+      "version": "1.0.4-r2",
+      "hashes": "c97d06fd2be7b4910568966a38e5ac6f6d4d4620187346895629be56ec0d581e",
+      "description": "One verified protocol producer in a versioned immutable slot. It has no init scripts, service hooks or replacement of another engine.",
+      "arch": "x86_64",
+      "license": "GPL-3.0-or-later",
+      "origin": "/source/package/foxcore-engine",
+      "maintainer": "FoxHole Team",
+      "installed-size": 3015284,
+      "file-size": 293741,
+      "depends": [
+        "libc"
+      ]
+    }, {
+      "name": "foxcore-engine-vless-ram-f346957154f6a5773d485e89e3215a19f91874ce7c01507d30cdb035145856d3",
+      "version": "1.0.4-r2",
+      "hashes": "32a593382c9dac4fb56b5633a8e22bbf88a101ef6a0d85dea1303477df3cadfc",
+      "description": "One verified protocol producer in a versioned immutable slot. It has no init scripts, service hooks or replacement of another engine.",
+      "arch": "aarch64_cortex-a53",
+      "license": "GPL-3.0-or-later",
+      "origin": "/source/package/foxcore-engine",
+      "maintainer": "FoxHole Team",
+      "installed-size": 3015078,
+      "file-size": 293707,
+      "depends": [
+        "libc"
+      ]
+    }, {
+      "name": "foxcore-engine-wireguard-flash-3ec93dc1dc7826b23823cec08df65c8ca5072442844b1c96a2906447cf1ff767",
+      "version": "1.0.4-r1",
+      "hashes": "c53237c92a91d45f7c80516d7ce2c69718e5f0b8e2063164bcb8baa0a46f0172",
+      "description": "One verified protocol producer in a versioned immutable slot. It has no init scripts, service hooks or replacement of another engine.",
+      "arch": "aarch64_cortex-a53",
+      "license": "GPL-3.0-or-later",
+      "origin": "/source/package/foxcore-engine",
+      "maintainer": "FoxHole Team",
+      "installed-size": 11328159,
+      "file-size": 4486582,
+      "depends": [
+        "libc"
+      ]
+    }, {
+      "name": "foxcore-engine-wireguard-flash-cf92005b332debef34ff9177aa1b9e960f36bc602f4ce8e85c540562551636eb",
+      "version": "1.0.4-r1",
+      "hashes": "f24bc9795c2cb84b1640d45aaf9170248acaa30f69cd80f64ed82c834b297f85",
+      "description": "One verified protocol producer in a versioned immutable slot. It has no init scripts, service hooks or replacement of another engine.",
+      "arch": "x86_64",
+      "license": "GPL-3.0-or-later",
+      "origin": "/source/package/foxcore-engine",
+      "maintainer": "FoxHole Team",
+      "installed-size": 13413853,
+      "file-size": 4869393,
+      "depends": [
+        "libc"
+      ]
+    }, {
+      "name": "foxcore-engine-wireguard-ram-07ed4ae3fecac4712dd5a31a8e56e40ee53ece0ffefb6db0720d7b719622a747",
+      "version": "1.0.4-r2",
+      "hashes": "b1e3e7aecc76774403866cf9c01a0d168d518a697387fce28ed78454b55a7823",
+      "description": "One verified protocol producer in a versioned immutable slot. It has no init scripts, service hooks or replacement of another engine.",
+      "arch": "x86_64",
+      "license": "GPL-3.0-or-later",
+      "origin": "/source/package/foxcore-engine",
+      "maintainer": "FoxHole Team",
+      "installed-size": 2871771,
+      "file-size": 281051,
+      "depends": [
+        "libc"
+      ]
+    }, {
+      "name": "foxcore-engine-wireguard-ram-e8c5a6c7fba849304758305ee5e354707c26989bb50659519236296f2958babe",
+      "version": "1.0.4-r2",
+      "hashes": "9de7669eaab1e4171736d77ca124909c84acbe5656f42227911cf2f4eedf16db",
+      "description": "One verified protocol producer in a versioned immutable slot. It has no init scripts, service hooks or replacement of another engine.",
+      "arch": "aarch64_cortex-a53",
+      "license": "GPL-3.0-or-later",
+      "origin": "/source/package/foxcore-engine",
+      "maintainer": "FoxHole Team",
+      "installed-size": 2871565,
+      "file-size": 280991,
+      "depends": [
+        "libc"
+      ]
+    }
+  ]
+}

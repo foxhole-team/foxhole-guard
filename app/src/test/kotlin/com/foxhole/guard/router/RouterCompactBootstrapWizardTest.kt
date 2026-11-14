@@ -14,8 +14,9 @@ class RouterCompactBootstrapWizardTest {
         override suspend fun save(pairing: RouterPairing) = error("unexpected pairing")
         override suspend fun remove(expectedId: String) = Unit
     }
-    private class Setup(val fixture: RouterCompactBootstrapFixtures) : RouterSetupService {
+    private class Setup(val fixture: RouterCompactBootstrapFixtures) : RouterPrecheckedSetupFixture() {
         override val installCatalog get() = fixture.catalog
+        override val compatibilitySystem get() = fixture.system
         var inspected: RouterInstallProtocolSelection? = null
         override suspend fun inspectSshIdentity(address: String) = byteArrayOf(1, 2, 3)
         override suspend fun inspect(address: String, hostKey: ByteArray, password: CharArray, selection: RouterInstallProtocolSelection): RouterInstallProposal {
@@ -51,44 +52,48 @@ class RouterCompactBootstrapWizardTest {
         val setup = Setup(fixture); val wizard = wizard(setup)
         wizard.begin(RouterWizardPath.SETUP, "NL")
         wizard.inspectAddress("192.168.1.1"); wizard.acceptIdentity()
+        assertEquals(RouterWizardStage.LOGIN, wizard.state.value.stage)
+        val password = "synthetic".toCharArray(); wizard.login(password)
+        wizard.confirmCompatibility()
         assertEquals(RouterWizardStage.PROTOCOLS, wizard.state.value.stage)
         assertEquals(false, wizard.state.value.installSelection?.includeServer)
         assertNull(setup.inspected)
         wizard.confirmInstallProtocols()
-        val password = "synthetic".toCharArray(); wizard.login(password)
         assertEquals(false, setup.inspected?.includeServer)
         assertArrayEquals(CharArray(password.size), password)
         assertEquals(RouterWizardStage.INSTALL, wizard.state.value.stage)
         wizard.close()
     }
 
-    @Test fun explicitServerIntentAndExactModulesAreCapturedBeforeLoginAndResourcePlanning() = runTest {
+    @Test fun explicitServerIntentAndExactModulesAreCapturedBeforeFinalResourcePlanning() = runTest {
         val fixture = RouterCompactBootstrapFixtures(); fixture.release.initialize()
         val setup = Setup(fixture); val wizard = wizard(setup)
         wizard.begin(RouterWizardPath.SETUP, "NL"); wizard.inspectAddress("192.168.1.1"); wizard.acceptIdentity()
+        wizard.login("synthetic".toCharArray()); wizard.confirmCompatibility()
         val selected = setOf(RouterInstallProtocol.VLESS, RouterInstallProtocol.WIREGUARD)
         wizard.installProtocols(selected, true)
         assertEquals(true, wizard.state.value.installSelection?.includeServer)
         assertNull(setup.inspected)
         wizard.confirmInstallProtocols()
-        assertEquals(RouterWizardStage.LOGIN, wizard.state.value.stage)
-        wizard.login("synthetic".toCharArray())
+        assertEquals(RouterWizardStage.INSTALL, wizard.state.value.stage)
         assertEquals(selected, setup.inspected?.protocols)
         assertEquals(true, setup.inspected?.includeServer)
         assertEquals(RouterWizardStage.INSTALL, wizard.state.value.stage)
         wizard.close()
     }
 
-    @Test fun aVlessOnlyReleaseShowsSelectionInsteadOfInventingADefaultOrRequestingRootEarly() = runTest {
+    @Test fun aVlessOnlyReleaseChecksCompatibilityBeforeSelectionWithoutInventingADefault() = runTest {
         val fixture = RouterCompactBootstrapFixtures(ids = listOf("vless"), withServer = false); fixture.release.initialize()
         val setup = Setup(fixture); val wizard = wizard(setup)
         assertTrue(wizard.setupAvailable)
         wizard.begin(RouterWizardPath.SETUP, "NL"); wizard.inspectAddress("192.168.1.1"); wizard.acceptIdentity()
+        assertEquals(RouterWizardStage.LOGIN, wizard.state.value.stage)
+        wizard.login("synthetic".toCharArray()); wizard.confirmCompatibility()
         assertEquals(RouterWizardStage.PROTOCOLS, wizard.state.value.stage)
         assertNull(wizard.state.value.installSelection)
         assertNull(setup.inspected)
         wizard.installProtocols(setOf(RouterInstallProtocol.VLESS))
-        wizard.confirmInstallProtocols(); wizard.login("synthetic".toCharArray())
+        wizard.confirmInstallProtocols()
         assertEquals(setOf(RouterInstallProtocol.VLESS), setup.inspected?.protocols)
         assertEquals(false, setup.inspected?.includeServer)
         wizard.close()
@@ -98,6 +103,7 @@ class RouterCompactBootstrapWizardTest {
         val fixture = RouterCompactBootstrapFixtures(withServer = false); fixture.release.initialize()
         val setup = Setup(fixture); val wizard = wizard(setup)
         wizard.begin(RouterWizardPath.SETUP, "NL"); wizard.inspectAddress("192.168.1.1"); wizard.acceptIdentity()
+        wizard.login("synthetic".toCharArray()); wizard.confirmCompatibility()
         val original = wizard.state.value.installSelection
         wizard.installProtocols(setOf(RouterInstallProtocol.VLESS), true)
         assertEquals(original, wizard.state.value.installSelection)

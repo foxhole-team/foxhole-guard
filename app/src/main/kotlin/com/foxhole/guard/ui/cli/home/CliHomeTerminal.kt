@@ -594,7 +594,11 @@ internal fun CliTerminalHeader(
                 )
                 val colors = LocalCliColors.current
                 val connected = word in CONNECTED_STATUS_WORDS
-                val statusColor = if (connected) colors.ok else cliStatusWordColor(word)
+                val statusColor = when {
+                    connected -> colors.ok
+                    word == CliStatusWord.NONE || word == CliStatusWord.ERROR -> colors.err
+                    else -> cliStatusWordColor(word)
+                }
                 val baseStatusStyle = cliTypography(pixelArtEnabled = false).button.copy(
                     platformStyle = PlatformTextStyle(includeFontPadding = false),
                     lineHeightStyle = LineHeightStyle(
@@ -649,7 +653,7 @@ internal fun CliTerminalHeader(
                 val statusScale = with(density) {
                     cliStatusScale(
                         availableWidthPx = availableHeaderWidth.toPx(),
-                        textWidthPx = preferredTextWidth,
+                        textWidthPx = preferredTextWidth + baseStatusStyle.fontSize.toPx() * 1.4f,
                     )
                 }
                 val statusStyle = baseStatusStyle.copy(
@@ -679,12 +683,11 @@ internal fun CliTerminalHeader(
                                 maxLines = STATUS_WORD_MAX_LINES,
                             )
                         } else {
-                            Text(
-                                text = line,
-                                style = statusStyle,
+                            CliConnectionModeText(
+                                label = line.text, style = statusStyle, color = statusColor,
+                                icon = cliHeaderModeIcon(home.settings),
+                                modeDescription = stringResource(cliHeaderModeLabel(home.settings)),
                                 maxLines = STATUS_WORD_MAX_LINES,
-                                softWrap = false,
-                                overflow = TextOverflow.Ellipsis,
                             )
                         }
                     }
